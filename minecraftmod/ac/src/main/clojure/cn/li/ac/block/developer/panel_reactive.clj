@@ -13,10 +13,10 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -58,9 +58,7 @@
 
 (def ^:private classic-w 400.0)
 (def ^:private classic-h 187.0)
-(def ^:private info-w 93.0)
-(def ^:private info-h 177.0)
-(def ^:private root-w (+ classic-w 7.0 info-w))
+(def ^:private root-w classic-w)  ;; upstream developer has no info-area sidebar
 (def ^:private root-h classic-h)
 
 (def ^:private area-x 128.0) (def ^:private area-y 18.0)
@@ -155,12 +153,16 @@
                     (or (some-> cat :icon texture-path-from-category-icon)
                         (default-ability-icon-path))
                     (default-ability-icon-path))
-        exp-label (if has-category?
-                    (if (>= lvl 5) "MAX"
-                        (if thresh (format "EXP %.0f%%" (* 100.0 cat-prog01)) "EXP 0%"))
-                    "EXP 0%")
-        level-label (cond dev? "Learning"
-                          :else (format "Lv.%d" lvl))]  ;; matching original levelDesc
+        ;; Upstream (SkillTree.scala): "EXP " + (levelProgress*100).toInt + "%" —
+        ;; always shown (no "MAX"), truncated, using the raw 0..1 fraction. The
+        ;; 0.02 floor applies only to the progress BAR (cat-prog01), not the text.
+        exp-frac (if has-category?
+                   (cond (and thresh (pos? thresh)) (bal/clamp01 (/ level-prog thresh))
+                         (>= lvl 5) 1.0
+                         :else 0.0)
+                   0.0)
+        exp-label (format "EXP %d%%" (int (* 100.0 exp-frac)))
+        level-label (format "Level %d" lvl)]  ;; matches upstream AbilityLocalization.levelDesc → "Level N"
     {:has-category? has-category?
      :can-upgrade? can-upgrade?
      :ability-name ability-name
@@ -186,9 +188,22 @@
                         :energy energy :max-energy max-energy
                         :bandwidth (:bandwidth (developer/developer-spec developer-type) 0.7)})))
 
+(defn- panel-session-id
+  "Resolve the runtime-store session-id for this developer screen from the
+   container's canonical owner (set at menu-open). Unlike
+   require-player-state-session-id, this works on the client render thread:
+   the container screen pushes no per-frame session/owner context, so the
+   ThreadLocal *player-state-owner* is nil during flush!. The container map
+   carries the owner, so reading it here is stable and context-free. Falls back
+   to the bound owner for any caller without an enriched container."
+  [container]
+  (or (some-> (container-state/owner-from-container container)
+              runtime-owner/store-session-id)
+      (runtime-hooks/require-player-state-session-id "developer.panel")))
+
 (defn current-ui-model [container player]
   (current-ui-model-in-session
-    (runtime-hooks/require-player-state-session-id "developer.panel")
+    (panel-session-id container)
     container player))
 
 (defn skill-tree-render-context
@@ -210,7 +225,7 @@
   [_player-state container player]
   (let [uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state*
-                                (runtime-hooks/require-player-state-session-id "developer.panel")
+                                (panel-session-id container)
                                 uuid-str))
         ad (:ability-data pstate)
         has-cat? (boolean (:category-id ad))
@@ -251,8 +266,6 @@
     {:kind :group
      :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
      :children [page-spec
-                {:kind :group
-                 :props {:id :info-area :x (+ classic-w 7.0) :y 5.0 :w info-w :h info-h :clip? true}}
                 {:kind :box
                  :props {:id :dev-cover :x 0.0 :y 0.0 :w classic-w :h classic-h :fill 0x00000000}}]}))
 
@@ -296,46 +309,44 @@
   (let [clock (rt/clock-ms-sig rt)
         cat-prog (sig/signal-d 0.0)
         power (sig/signal-d 0.0)
-        sync-rate-sig (sig/signal-d 0.7)]
+        sync-rate-sig (sig/signal-d 0.7)
+        ;; Stable for the screen's lifetime — resolve once, not per frame.
+        session-id (panel-session-id container)
+        uuid-str (when player (uuid/player-uuid player))
+        last-ver (atom ::none)]
     (bind-box-width! rt :logo-progress 70.0 cat-prog)
     (bind-box-width! rt :progress-power 97.0 power)
     (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
     (set-tick! rt :model-tick
-      (sig/computed-d [clock]
+      (sig/computed-o [clock]
         (fn [_]
-          (let [{:keys [ability-name icon-path exp-label level-label
-                        cat-prog01 power01 sync-rate can-upgrade?]}
-                (current-ui-model container player)]
-            (ui/set-prop! rt :text-abilityname :text ability-name)
-            (ui/set-prop! rt :logo-ability :src icon-path)
-            (ui/set-prop! rt :text-exp :text exp-label)
-            (ui/set-prop! rt :text-level :text level-label)
-            (sig/sset-d! cat-prog cat-prog01)
-            (sig/sset-d! power power01)
-            (sig/sset-d! sync-rate-sig (double (or sync-rate 0.7)))
-            (let [^INode upg (rt/node-by-id rt :btn-upgrade)
-                  ^INode lvl (rt/node-by-id rt :text-level)]
-              (when upg (.setVisible upg (boolean can-upgrade?)) (.setFlag upg node/FLAG-LAYOUT-DIRTY))
-              (when lvl (.setVisible lvl (not can-upgrade?)) (.setFlag lvl node/FLAG-LAYOUT-DIRTY))))
+          ;; The whole model is a function of [ability-data energy max-energy
+          ;; developer-type]. Compute a cheap version from those and skip the
+          ;; recompute + prop writes on idle frames (the common case).
+          (let [pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+                energy (double (or @(:energy container) 0.0))
+                max-energy (double (or @(:max-energy container) 1.0))
+                dev-type (current-developer-type container)
+                ver [(hash (:ability-data pstate)) energy max-energy dev-type]]
+            (when (not= ver @last-ver)
+              (reset! last-ver ver)
+              (let [{:keys [ability-name icon-path exp-label level-label
+                            cat-prog01 power01 sync-rate can-upgrade?]}
+                    (current-ui-model container player)]
+                (ui/set-prop! rt :text-abilityname :text ability-name)
+                (ui/set-prop! rt :logo-ability :src icon-path)
+                (ui/set-prop! rt :text-exp :text exp-label)
+                (ui/set-prop! rt :text-level :text level-label)
+                (sig/sset-d! cat-prog cat-prog01)
+                (sig/sset-d! power power01)
+                (sig/sset-d! sync-rate-sig (double (or sync-rate 0.7)))
+                (let [^INode upg (rt/node-by-id rt :btn-upgrade)
+                      ^INode lvl (rt/node-by-id rt :text-level)]
+                  (when upg (.setVisible upg (boolean can-upgrade?)) (.setFlag upg node/FLAG-LAYOUT-DIRTY))
+                  (when lvl (.setVisible lvl (not can-upgrade?)) (.setFlag lvl node/FLAG-LAYOUT-DIRTY))))))
           nil)))
     (bind-hover-alpha! rt :btn-upgrade 0.698 1.0)
     (bind-hover-alpha! rt :button-wireless 0.698 1.0)))
-
-;; ============================================================================
-;; Info-area sidebar — reuses cn.li.ac.gui.info-area-reactive verbatim.
-;; :info-area group already built at our own position in root-spec, so
-;; ensure-shell!'s internal "when-not exists" check is a no-op here.
-;; ============================================================================
-
-(defn- attach-info-area! [^UiRt rt container]
-  (let [ctx (info-area/clear-area! rt)]
-    (info-area/add-histogram-energy! ctx
-      (fn [] (double (or @(:energy container) 0.0)))
-      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
-    (info-area/add-sepline! ctx "Developer")
-    (info-area/add-property! ctx "tier" (fn [] (str @(:tier container))))
-    (info-area/add-property! ctx "structure_ok" (fn [] (str @(:structure-valid container))))
-    (info-area/add-property! ctx "developing" (fn [] (str @(:is-developing container))))))
 
 ;; ============================================================================
 ;; Wireless node-name label refresh (native replacement for
@@ -363,6 +374,18 @@
     (.setVisible n visible?)
     (.setFlag n node/FLAG-LAYOUT-DIRTY)))
 
+(defn- cover-fullscreen! [^UiRt rt]
+  ;; :dev-cover is a child of :root, drawn at getGuiLeft/Top. The runtime is
+  ;; resized to the whole screen, so offset the cover by -getGuiLeft/-getGuiTop
+  ;; and size it to the screen — a full-screen dark backdrop + click catcher,
+  ;; matching upstream's blackCover(gui).
+  (let [^INode n (rt/node-by-id rt :dev-cover)
+        sw (double (rt/screen-w rt)) sh (double (rt/screen-h rt))]
+    (.setX n (- (/ (- sw classic-w) 2.0)))
+    (.setY n (- (/ (- sh classic-h) 2.0)))
+    (.setW n sw) (.setH n sh)
+    (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+
 (defn- cover-fill-signal [alpha-target clock]
   (let [smoothed-a (ranim/smoothed alpha-target clock 3.5)]
     (sig/computed-d [smoothed-a]
@@ -373,6 +396,18 @@
   (when-let [entries (rt/user-signal rt :embedded-runtimes)]
     (doseq [{:keys [child-rt]} @entries] (rt/dispose! child-rt))
     (rt/put-user-signal! rt :embedded-runtimes (atom []))))
+
+(defn- remove-embedded-runtimes!
+  "Dispose + drop only the embedded runtimes matching `pred`, keeping the rest.
+   The skill-tree area embed and the cover overlays share :embedded-runtimes, so
+   a blanket clear on overlay-close would also wipe the skill tree. Overlays are
+   tagged :overlay? — close-cover! removes those, a mode switch removes the rest."
+  [^UiRt rt pred]
+  (when-let [a (rt/user-signal rt :embedded-runtimes)]
+    (let [entries @a]
+      (doseq [{:keys [child-rt] :as e} entries]
+        (when (pred e) (rt/dispose! child-rt)))
+      (reset! a (vec (remove pred entries))))))
 
 (defn- add-embedded-runtime! [^UiRt rt entry]
   (let [a (or (rt/user-signal rt :embedded-runtimes) (atom []))]
@@ -391,10 +426,11 @@
     (rt/put-user-signal! rt :cover-fill-binding b)))
 
 (defn- close-cover!
-  "Close whatever overlay is currently open: dispose embedded runtimes,
-   clear active-modal, hide cover, clear the ticker user-signal."
+  "Close whatever overlay is currently open: dispose the overlay's embedded
+   runtime (leaving the persistent skill-tree area embed intact), clear
+   active-modal, hide cover, clear the ticker user-signal."
   [^UiRt rt]
-  (clear-embedded-runtimes! rt)
+  (remove-embedded-runtimes! rt :overlay?)
   (clear-modal! rt)
   (set-tick! rt :cover-tick nil)
   (set-cover-visible! rt false)
@@ -417,7 +453,7 @@
     (wireless-tab/attach-panel! wr {:role :receiver :container container
                                     :tab-logo-path (tex-path "guis/icons/icon_node.png")
                                     :connected-row-logo-path (tex-path "guis/icons/icon_node.png")})
-    (add-embedded-runtime! rt {:child-rt wr :x px :y py :w 176.0 :h 187.0 :visible?-fn nil})
+    (add-embedded-runtime! rt {:child-rt wr :x px :y py :w 176.0 :h 187.0 :visible?-fn nil :overlay? true})
     (rt/put-user-signal! rt :active-modal
       (atom {:child-rt wr :x px :y py :w 176.0 :h 187.0
              :on-close-outside
@@ -455,24 +491,28 @@
         skill-name (or (:name skill-spec) (name skill-id) "Unknown")
         skill-level (int (or (:level skill-spec) 1))
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* skill-level skill-level 0.5))))
-        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
         ad0 (get-ad)
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
-        cx 200.0 cy 93.0
-        ta-y (+ cy 20.0) btn-x (- cx 16.0) btn-y (+ ta-y 52.0)
+        cx 200.0 cy 93.5
+        btn-x (- cx 16.0) btn-y (+ cy 82.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
+        last-updated (atom nil)
         node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
                    :skill-icon skill-icon :skill-description skill-description
                    :learned (adata/is-learned? ad0 skill-id)
-                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))}
+                   :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))
+                   :conditions (learning-rules/conditions-with-status
+                                 skill-spec ad0 (int (or (:level ad0) 1)) dev-type)}
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
-    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (cover-fullscreen! rt)
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]
                (and (not (:learned (get-ad))) (not (:is-developing? s)) (nil? (:result s)))))
@@ -488,11 +528,11 @@
                       (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
-                dev-complete (boolean @(:development-complete? container))
+                dev-complete (boolean (some-> (:development-complete? container) deref))
                 prev @prev-dev-a]
             (cond
               is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
@@ -503,10 +543,27 @@
               :else nil)
             (reset! prev-dev-a is-dev)
             (let [ad (get-ad) learned? (adata/is-learned? ad skill-id)
+                  s @state-a
+                  ;; Learn prompt / development status line (upstream skillViewArea).
+                  message (cond
+                            (:is-developing? s) (str (i18n/translate "skill_tree.my_mod.progress")
+                                                      " " (int (* 100.0 (:progress s 0.0))) "%")
+                            (= (:result s) :success) (i18n/translate "skill_tree.my_mod.dev_successful")
+                            (= (:result s) :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
+                            (= (:error s) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
+                            (= (:error s) :low-level) (i18n/translate "skill_tree.my_mod.level_fail"
+                                                                      (int skill-level))
+                            (= (:error s) :cond-fail) (i18n/translate "skill_tree.my_mod.condition_fail")
+                            :else (i18n/translate "skill_tree.my_mod.learn_question"
+                                                  (str est-consumption)))
                   updated (assoc node-data :learned learned?
                                  :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
-                                 :dev-state @state-a)]
-              (skill-tree-view/refresh-detail-overlay! popup-rt updated)))
+                                 :message message
+                                 :dev-state s)]
+              ;; Rebuild the popup only when its content changes (idle = skip).
+              (when (not= updated @last-updated)
+                (reset! last-updated updated)
+                (skill-tree-view/refresh-detail-overlay! popup-rt updated))))
           nil)))))
 
 (defn- open-levelup-overlay! [^UiRt rt container player developer-type]
@@ -514,21 +571,23 @@
         fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
         dev-type (or (normalize-tier developer-type) :normal)
         dev-spec (developer/developer-spec dev-type)
-        session-id (runtime-hooks/require-player-state-session-id "developer.panel")
+        session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         pstate (when uuid-str (store/get-player-state* session-id uuid-str))
         ad (:ability-data pstate)
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
         est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
-        cx 200.0 cy 93.0
-        text-base-y (+ cy 25.0) btn-x (- cx 16.0) btn-y (+ text-base-y 40.0)
+        cx 200.0 cy 93.5
+        btn-x (- cx 16.0) btn-y (+ cy 70.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
+        last-state (atom nil)
         popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
-    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil})
+    (cover-fullscreen! rt)
+    (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))
       (fn []
@@ -539,11 +598,11 @@
                 (swap! state-a assoc :error nil)))))
       (fn [] (close-cover! rt)))
     (set-tick! rt :cover-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [is-dev (boolean @(:is-developing container))
                 dev-prog (double (or @(:development-progress container) 0.0))
-                dev-complete (boolean @(:development-complete? container))
+                dev-complete (boolean (some-> (:development-complete? container) deref))
                 prev @prev-dev-a]
             (cond
               is-dev (swap! state-a assoc :is-developing? true :progress dev-prog :error nil)
@@ -553,7 +612,11 @@
               (swap! state-a assoc :is-developing? false :result :failed)
               :else nil)
             (reset! prev-dev-a is-dev)
-            (skill-tree-view/refresh-levelup-overlay! popup-rt target-level @state-a))
+            ;; Rebuild the popup only when its state changes (idle = skip).
+            (let [s @state-a]
+              (when (not= s @last-state)
+                (reset! last-state s)
+                (skill-tree-view/refresh-levelup-overlay! popup-rt target-level s))))
           nil)))))
 
 ;; ============================================================================
@@ -564,32 +627,102 @@
 
 (defn- clear-area! [^UiRt rt]
   (rt/clear-children! rt (rt/node-by-id rt :area))
-  (clear-embedded-runtimes! rt))
+  (remove-embedded-runtimes! rt (complement :overlay?)))
+
+(defn- skill-under-pointer
+  "Skill-id whose widget contains the area-local point (cmx,cmy), applying the
+   same fit + parallax transform as the visible nodes. Computed on demand
+   (hover/click) — no shadow hit-boxes, no per-frame work (upstream-style: the
+   widget under the pointer is the target)."
+  [nodes cmx cmy fit-s fit-ox fit-oy]
+  (let [[pdx pdy] (skill-tree-view/parallax-offset cmx cmy area-w area-h)
+        sz (* skill-tree/widget-size fit-s)]
+    (some (fn [nd]
+            (let [vx (+ fit-ox (* (- (double (:x nd)) (double pdx)) fit-s))
+                  vy (+ fit-oy (* (- (double (:y nd)) (double pdy)) fit-s))]
+              (when (and (>= cmx vx) (< cmx (+ vx sz))
+                         (>= cmy vy) (< cmy (+ vy sz)))
+                (:skill-id nd))))
+          nodes)))
 
 (defn- build-skill-tree-area! [^UiRt rt container player]
-  (let [session-id (runtime-hooks/require-player-state-session-id "developer.panel")
-        {:keys [render-data dev-type]} (skill-tree-render-context session-id player container)
-        nodes (:skill-nodes render-data)
-        hw skill-tree/widget-size
-        embed-rt (skill-tree-reactive/create-embedded-runtime render-data (/ area-w 2.0) (/ area-h 2.0)
-                   area-w area-h nil)
-        hit-nodes (atom {})]
-    (add-embedded-runtime! rt {:child-rt embed-rt :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
-    (doseq [nd nodes
-            :when (and (or (:can-learn nd) (:learned nd)) (not (:locked? nd)))]
-      (let [id (keyword (str "skill-hit-" (name (:skill-id nd))))
-            spec (box id (:x nd) (:y nd) hw hw 0x00000000)
-            ^INode n (rt/build-child! rt spec (rt/node-by-id rt :area))]
-        (swap! hit-nodes assoc (.getIdx n) (:skill-id nd))
-        (events/on! rt id :left-click
-          (fn [_ _ _] (open-skill-detail-overlay! rt container player (:skill-id nd) dev-type)))))
+  (let [session-id (panel-session-id container)
+        uuid-str (when player (uuid/player-uuid player))
+        dev-type (current-developer-type container)
+        get-pstate #(when uuid-str (store/get-player-state* session-id uuid-str))
+        clickable-of (fn [rd] (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %)))
+                                       (:skill-nodes rd)))
+        pstate0 (get-pstate)
+        rd0 (skill-tree/build-render-data-for-player-state pstate0 dev-type)
+        ;; Node layout is stable (authored positions, learning doesn't move nodes),
+        ;; so the fit transform is computed once.
+        [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform (:skill-nodes rd0) area-w area-h)
+        rd-a (atom rd0)                       ;; render-data cache, refreshed on skill change
+        clickable-a (atom (clickable-of rd0)) ;; interactive nodes, refreshed with rd-a
+        open-ms (atom nil)
+        mouse-a (atom nil)   ;; area-local pointer for parallax
+        hover-a (atom nil)   ;; skill-id under the pointer (for highlight)
+        anim-settled? (atom false)
+        ;; Per-frame change detection — mutate only what changed, never rebuild
+        ;; unless the skill data itself changed.
+        last-ver (atom (hash (:ability-data pstate0)))
+        last-mouse (atom ::none)
+        last-hover (atom ::none)
+        ^INode area-node (rt/node-by-id rt :area)
+        embed-rt (rt/create-runtime)
+        ;; Tree structure built ONCE; handles are mutated for parallax/anim.
+        handles-a (atom (skill-tree-view/build-embedded! embed-rt rd0 area-w area-h))]
+    (skill-tree-view/apply-anim! embed-rt @handles-a 0.0)  ;; start hidden (fades in)
+    (skill-tree-view/apply-parallax! embed-rt @handles-a (/ area-w 2.0) (/ area-h 2.0) area-w area-h)
+    ;; On move: track area-local pointer + which skill is hovered (both on demand).
+    (rt/put-user-signal! rt :on-pointer-move
+      (fn [mx my]
+        (let [cmx (- (double mx) (.getAbsX area-node))
+              cmy (- (double my) (.getAbsY area-node))]
+          (reset! mouse-a [cmx cmy])
+          (reset! hover-a (skill-under-pointer @clickable-a cmx cmy fit-s fit-ox fit-oy)))))
+    ;; Single transparent input catcher over the whole area — resolves the clicked
+    ;; skill on click only. Replaces the per-node shadow hit-boxes entirely.
+    (rt/build-child! rt (box :skill-input 0.0 0.0 area-w area-h 0x00000000) area-node)
+    (events/on! rt :skill-input :left-click
+      (fn [_ _ evt]
+        (let [cmx (- (double (:x evt)) (.getAbsX area-node))
+              cmy (- (double (:y evt)) (.getAbsY area-node))]
+          (when-let [sid (skill-under-pointer @clickable-a cmx cmy fit-s fit-ox fit-oy)]
+            (open-skill-detail-overlay! rt container player sid dev-type)))))
+    (add-embedded-runtime! rt {:child-rt embed-rt :anchor-node area-node
+                               :x area-x :y area-y :w area-w :h area-h :visible?-fn nil})
     (set-tick! rt :skill-tree-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
-        (fn [_]
-          (let [{:keys [render-data]} (skill-tree-render-context session-id player container)
-                hover-id (get @hit-nodes (rt/hovered-idx rt))]
-            (skill-tree-reactive/refresh-embedded-runtime! embed-rt render-data
-              (/ area-w 2.0) (/ area-h 2.0) area-w area-h hover-id))
+      (sig/computed-o [(rt/clock-ms-sig rt)]
+        (fn [now-ms]
+          (when (nil? @open-ms) (reset! open-ms (double now-ms)))
+          (let [anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
+                anim-active? (< anim-s 1.0)          ;; reveal settles by ~0.92s
+                mouse (or @mouse-a [(/ area-w 2.0) (/ area-h 2.0)])
+                hv @hover-a
+                pstate (get-pstate)
+                ver (hash (:ability-data pstate))
+                skill-changed? (not= ver @last-ver)]
+            ;; Only a skill-data change rebuilds the tree structure.
+            (when skill-changed?
+              (reset! last-ver ver)
+              (let [rd (skill-tree/build-render-data-for-player-state pstate dev-type)]
+                (reset! rd-a rd)
+                (reset! clickable-a (clickable-of rd))
+                (reset! handles-a (skill-tree-view/build-embedded! embed-rt rd area-w area-h))))
+            ;; Reveal: mutate node alphas while the fade plays; settle once after.
+            (when (or anim-active? skill-changed? (not @anim-settled?))
+              (skill-tree-view/apply-anim! embed-rt @handles-a (when anim-active? anim-s))
+              (when-not anim-active? (reset! anim-settled? true)))
+            ;; Parallax: move the node container (+ re-layout) on pointer move / rebuild.
+            (when (or skill-changed? (not= mouse @last-mouse))
+              (reset! last-mouse mouse)
+              (skill-tree-view/apply-parallax! embed-rt @handles-a
+                (first mouse) (second mouse) area-w area-h))
+            ;; Hover: scale the node under the pointer (no tooltip); only on change.
+            (when (or skill-changed? (not= hv @last-hover))
+              (reset! last-hover hv)
+              (skill-tree-view/set-hover! embed-rt @handles-a hv)))
           nil)))))
 
 ;; ============================================================================
@@ -599,7 +732,7 @@
 (defn- attach-right-panel-dispatch! [^UiRt rt container player]
   (let [last-mode (atom nil)]
     (set-tick! rt :right-panel-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [_]
           (let [mode (right-panel-mode nil container player)]
             (when (not= mode @last-mode)
@@ -650,7 +783,6 @@
   (let [r (rt/create-runtime)]
     (rt/build! r (root-spec))
     (set-cover-visible! r false)
-    (attach-info-area! r container)
     (attach-model-bind! r container player)
     (attach-buttons! r container player)
     (attach-right-panel-dispatch! r container player)
@@ -665,5 +797,6 @@
      :runtime r
      :container container
      :menu menu
+     :no-slots? true  ;; developer is a full-screen UI; hide the menu's inventory slots
      :size-dx (- root-w 176.0)
      :size-dy (- root-h 166.0)}))

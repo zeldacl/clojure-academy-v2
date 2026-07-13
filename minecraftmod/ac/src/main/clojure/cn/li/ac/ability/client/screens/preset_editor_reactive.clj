@@ -46,7 +46,7 @@
 
 (def ^:private ui-spec
   {:kind :group :id :root
-   :props {:w panel-w :h panel-h :align-w :center :align-h :center}
+   :props {:w panel-w :h panel-h :align-w :center :align-h :middle}
    :children
    [{:kind :text :id :title
      :props {:x 10.0 :y 2.0 :w 200.0 :h 16.0 :text "Preset Editor"

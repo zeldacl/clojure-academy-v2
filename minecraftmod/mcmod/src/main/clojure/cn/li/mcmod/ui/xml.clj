@@ -77,11 +77,13 @@
    :box   {:pos parse-pos :size parse-size :fill parse-color :outline parse-color
            :outline-width (fn [s] (parse-double s 0.0)) :tint parse-color
            :hover-tint (fn [s] (parse-double s 0.0)) :z (fn [s] (parse-double s 0.0))}
-   :text  {:pos parse-pos :text str :font-size (fn [s] (parse-double s 14.0))
+   :text  {:pos parse-pos :size parse-size :text str :font-size (fn [s] (parse-double s 14.0))
            :color parse-color :font str :z (fn [s] (parse-double s 0.0))
+           :text-align (fn [s] {:align (keyword s)})
            :editable (fn [s] {:editable? (= "true" s)})
            :masked (fn [s] {:masked? (= "true" s)})}
    :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
+           :scale (fn [s] (or (parse-double s nil) 1.0))
            :tint parse-color :z (fn [s] (parse-double s 0.0))}
    :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}
    :list   {:pos parse-pos :size parse-size :spacing (fn [s] (parse-double s 4.0))

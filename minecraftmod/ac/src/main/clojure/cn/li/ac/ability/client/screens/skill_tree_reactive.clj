@@ -84,17 +84,6 @@
   (untrack-active! owner)
   (logic/close-screen! owner))
 
-(defn create-embedded-runtime
-  "UiRt for developer-panel embed (257×139 area)."
-  [render-data mx my w h hover-id]
-  (let [r (rt/create-runtime)]
-    (view/refresh-embedded! r render-data mx my w h hover-id)
-    r))
-
-(defn refresh-embedded-runtime!
-  [^UiRt r render-data mx my w h hover-id]
-  (view/refresh-embedded! r render-data mx my w h hover-id))
-
 (defn create-detail-overlay-runtime [node]
   (let [r (rt/create-runtime)]
     (view/refresh-detail-overlay! r node)

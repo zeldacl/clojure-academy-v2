@@ -261,7 +261,14 @@
                     1 (/ (- node-h (double font-size)) 2.0)
                     2 (- node-h (double font-size))
                     0.0)
-            x (+ (node-abs-x node) x-off)
+            ;; Horizontal alignment: draw-text!'s `align` treats x as the anchor
+            ;; (left→text start, center→text center, right→text end). x here is the
+            ;; node's LEFT edge, so center/right must anchor at the box center/right
+            ;; edge — otherwise centered/right text draws off the node box. Matches
+            ;; upstream TextBox.option.align (independent of the node's align-w).
+            node-w (* (.getW node) (.getCumScale node))
+            h-off (case align-kw :center (/ node-w 2.0) :right node-w 0.0)
+            x (+ (node-abs-x node) x-off h-off)
             y (+ (node-abs-y node) y-off v-off)]
         ;; Draw the text (masked if masked? already handled by display-text in bake-text!)
         (cgui-font/draw-text! gg (or font-desc {}) ^String text

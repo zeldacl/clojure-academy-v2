@@ -2,6 +2,7 @@
   "Native reactive skill tree UI — builds/refreshes UiRt nodes from render data.
    No draw-ops; shared by full-screen and developer-panel embed."
   (:require [cn.li.ac.ability.client.screens.skill-tree :as logic]
+            [cn.li.ac.ability.client.condition-icons :as condition-icons]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.texture-registry :as tex-reg]
             [cn.li.mcmod.i18n :as i18n]
@@ -19,7 +20,20 @@
   (when-let [path (tex-reg/get-texture-path registry-key)]
     (modid/namespaced-path (str path))))
 
-(defn- parallax-offset
+(defn- icon-src
+  "Namespace a raw skill :icon path (e.g. \"textures/abilities/.../x.png\") into
+   the mod's asset namespace. Skill :icon values are stored as bare relative
+   paths, so a bare :src resolves to the minecraft namespace and 404s. Pass
+   through when already namespaced or blank."
+  [icon]
+  (if (and (string? icon) (seq icon) (not (.contains ^String icon ":")))
+    (modid/namespaced-path icon)
+    icon))
+
+(defn parallax-offset
+  "Node parallax shift (±5px at the edges) from the pointer position — the tree
+   nodes are drawn at (x - pdx, y - pdy). Public so the developer panel can shift
+   its click hit-boxes by the same amount."
   [mx my w h]
   (let [mx01 (clamp01 (/ (double mx) (max 1.0 (double w))))
         my01 (clamp01 (/ (double my) (max 1.0 (double h))))]
@@ -54,36 +68,9 @@
                :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
                :color (line-color m-alpha child-learned?)}})))
 
-(defn- skill-node-spec
-  [{:keys [x y skill-icon learned exp m-alpha skill-id]} pdx pdy]
-  (let [sx (- (double x) pdx) sy (- (double y) pdy)
-        ta logic/total-size
-        pa logic/prog-align
-        ia logic/align
-        da logic/draw-align
-        alpha (float (clamp01 (or m-alpha 0.7)))
-        icon-alpha (float (clamp01 (* alpha 0.9)))]
-    {:kind :group
-     :props {:x sx :y sy :w ta :h ta}
-     :children
-     (vec
-       (remove nil?
-         [(merge {:kind :image :props {:x da :y da :w ta :h ta :src (tex-src :skill-back) :alpha alpha}})
-          (merge {:kind :image :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
-                                       :src (tex-src :skill-outline) :alpha (* alpha 0.6)}})
-          (merge {:kind :image :props {:x ia :y ia :w logic/icon-size :h logic/icon-size
-                                       :src skill-icon :alpha icon-alpha}})
-          (when learned
-            {:kind :shader-progress
-             :props {:x pa :y pa :w logic/prog-size :h logic/prog-size
-                     :progress (float (or exp 0.0))
-                     :shader-props {:shader-id :ring-progbar
-                                    :texture-0 (tex-src :skill-outline)
-                                    :texture-1 (tex-src :skill-mask)}}})]))}))
-
 (defn- shell-spec [w h]
   {:kind :group :id :root
-   :props {:w (double w) :h (double h) :align-w :center :align-h :center}
+   :props {:w (double w) :h (double h) :align-w :center :align-h :middle}
    :children
    [{:kind :image :id :bg :props {:x 0.0 :y 0.0 :w (double w) :h (double h)
                                   :src (tex-src :bg-area) :alpha 1.0}}
@@ -124,124 +111,173 @@
                                           (double (get-in ab [:overload :cur] 0.0))
                                           (double (get-in ab [:overload :max] 0.0)))))
 
-(defn- refresh-tooltip! [^UiRt rt rd]
-  (let [^INode tip (ui/node rt :tooltip)
-        hover-id (:hover-skill rd)
-        hover-node (when hover-id (first (filter #(= (:skill-id %) hover-id) (:skill-nodes rd))))]
-    (set-visible! tip (some? hover-node))
-    (when hover-node
-      (ui/set-prop! rt :tip-name :text (str (:skill-name hover-node)))
-      (ui/set-prop! rt :tip-desc :text (str (:skill-description hover-node)))
-      (ui/set-prop! rt :tip-prog :text (format "Progress: %d%%" (int (* 100.0 (:exp hover-node)))))
-      (ui/set-prop! rt :tip-state :text (if (:learned hover-node) "Learned" "Not learned"))
-      (ui/set-prop! rt :tip-state :color (if (:learned hover-node) 0xFF88FF88 0xFFFF8888)))))
-
 (defn- clear-popup! [^UiRt rt]
   (when-let [^INode layer (ui/node rt :popup-layer)]
     (rt/clear-children! rt layer)))
 
-(defn- refresh-detail-popup! [^UiRt rt node]
-  (clear-popup! rt)
-  (when-let [^INode layer (ui/node rt :popup-layer)]
-    (rt/build-child! rt
-      {:kind :box :props {:x 0.0 :y 0.0 :w 420.0 :h 260.0 :fill 0xB3000000}}
-      layer)
-    (let [cx 210.0 cy 130.0
-          back-sz 50.0 icon-sz 27.0
-          back-x (- cx 25.0) back-y (- cy 25.0)
-          icon-x (+ back-x 11.0) icon-y (+ back-y 11.0)
-          {:keys [skill-name skill-icon skill-level skill-description learned exp]} node]
-      (rt/build-child! rt {:kind :image :props {:x back-x :y back-y :w back-sz :h back-sz
-                                                 :src (tex-src :skill-back)}} layer)
-      (rt/build-child! rt {:kind :image :props {:x icon-x :y icon-y :w icon-sz :h icon-sz
-                                                 :src skill-icon}} layer)
-      (when learned
-        (rt/build-child! rt {:kind :shader-progress
-                              :props {:x back-x :y back-y :w back-sz :h back-sz
-                                      :progress (float (or exp 0.0))
-                                      :shader-props {:shader-id :ring-progbar
-                                                     :texture-0 (tex-src :skill-view-outline)
-                                                     :texture-1 (tex-src :skill-mask)}}}
-          layer))
-      (when-let [dev (:dev-state node)]
-        (when (:is-developing? dev)
-          (rt/build-child! rt {:kind :shader-progress
-                                :props {:x back-x :y back-y :w back-sz :h back-sz
-                                        :progress (float (:progress dev 0.0))
-                                        :shader-props {:shader-id :ring-progbar
-                                                       :texture-0 (tex-src :skill-view-outline)
-                                                       :texture-1 (tex-src :skill-mask)}}}
-            layer)))
-      (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 23.0) :w 200.0 :h 14.0
-                                                 :text (str skill-name " (LV " skill-level ")")
-                                                 :font-size 12.0 :color 0xFFFFFFFF}} layer)
-      (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 40.0) :w 280.0 :h 40.0
-                                                 :text (if learned
-                                                         (str (i18n/translate "skill_tree.my_mod.skill_exp") " "
-                                                              (int (* 100.0 (or exp 0.0))) "%")
-                                                         (i18n/translate "skill_tree.my_mod.skill_not_learned"))
-                                                 :font-size (if learned 8.0 10.0)
-                                                 :color (if learned 0xFFa1e1ff 0xFFff5555)}} layer)
-      (when (and learned skill-description)
-        (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 55.0) :w 280.0 :h 40.0
-                                                   :text skill-description :font-size 9.0 :color 0xFFDDDDDD}} layer))
-      (when (not learned)
-        (let [btn-x (- cx 16.0) btn-y (+ cy 92.0)]
-          (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
-                                                     :src (tex-src :tex-button)}} layer)
-          (rt/build-child! rt {:kind :text :props {:x cx :y (+ btn-y 4.0) :w 32.0 :h 12.0
-                                                   :text "LEARN" :font-size 9.0 :color 0xFF101010}} layer))))))
+(defn- wrap-text
+  "Word-aware wrap of `s` into lines of at most `max-chars` (approximate upstream
+   Font.drawSeperated width-wrap; CJK strings with no spaces fall through as one
+   run and are hard-chunked)."
+  [^String s max-chars]
+  (cond
+    (or (nil? s) (= "" s)) []
+    (<= (count s) max-chars) [s]
+    :else
+    (loop [words (seq (.split s " ")) line "" lines []]
+      (if (empty? words)
+        (if (= "" line) lines (conj lines line))
+        (let [w (first words)
+              cand (if (= "" line) w (str line " " w))]
+          (if (<= (count cand) (int max-chars))
+            (recur (next words) cand lines)
+            (recur (next words) w (conj lines line))))))))
 
-(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state]
+(defn- refresh-detail-popup!
+  "Skill detail popup — matches upstream skillViewArea. Centered on the w×h popup
+   (the developer overlay is 400×187, the full-screen tree 420×260). bg? draws
+   the dark backdrop; the developer overlay passes false and lets its full-screen
+   :dev-cover darken instead."
+  [^UiRt rt node w h bg?]
   (clear-popup! rt)
   (when-let [^INode layer (ui/node rt :popup-layer)]
-    (rt/build-child! rt {:kind :box :props {:x 0.0 :y 0.0 :w 420.0 :h 260.0 :fill 0xB3000000}} layer)
-    (let [cx 210.0 cy 130.0
+    (when bg?
+      (rt/build-child! rt
+        {:kind :box :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xB3000000}}
+        layer))
+    (let [cx (/ (double w) 2.0) cy (/ (double h) 2.0)
+          back-x (- cx 25.0) back-y (- cy 25.0)
+          {:keys [skill-name skill-icon skill-level skill-description learned exp message dev-state]} node
+          developing? (boolean (:is-developing? dev-state))
+          ;; Upstream centers all popup text on the icon column; center each label
+          ;; on cx by anchoring the node at cx - w/2 with center text alignment.
+          ctext (fn [y tw fs color s]
+                  (rt/build-child! rt {:kind :text
+                                       :props {:x (- cx (/ (double tw) 2.0)) :y y :w (double tw) :h 14.0
+                                               :text (str s) :font-size fs :color color :align "center"}} layer))]
+      (rt/build-child! rt {:kind :image :props {:x back-x :y back-y :w 50.0 :h 50.0
+                                                :src (tex-src :skill-back)}} layer)
+      (rt/build-child! rt {:kind :image :props {:x (+ back-x 11.5) :y (+ back-y 11.5) :w 27.0 :h 27.0
+                                                :src (icon-src skill-icon)}} layer)
+      ;; Progress ring: exp when learned, live dev progress while developing.
+      (when (or learned developing?)
+        (rt/build-child! rt {:kind :shader-progress
+                             :props {:x back-x :y back-y :w 50.0 :h 50.0
+                                     :progress (float (if developing? (:progress dev-state 0.0) (or exp 0.0)))
+                                     :shader-props {:shader-id :ring-progbar
+                                                    :texture-0 (tex-src :skill-view-outline)
+                                                    :texture-1 (tex-src :skill-mask)}}} layer))
+      ;; Title: learned → name; unlearned → "name (LV n)".
+      (ctext (+ cy 28.0) 260 12.0 0xFFFFFFFF
+             (if learned (str skill-name) (str skill-name " (LV " skill-level ")")))
+      (if learned
+        (do
+          (ctext (+ cy 40.0) 220 8.0 0xFFa1e1ff
+                 (str (i18n/translate "skill_tree.my_mod.skill_exp") " " (int (* 100.0 (or exp 0.0))) "%"))
+          (when skill-description
+            (doseq [[i line] (map-indexed vector (wrap-text skill-description 42))]
+              (ctext (+ cy 50.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
+        (do
+          (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate "skill_tree.my_mod.skill_not_learned"))
+          ;; Requirement icons (upstream: "Req." label + condition icons, greyed
+          ;; when not accepted). Centred row of 14px icons stepped by 16px.
+          (let [conds (:conditions node)
+                n (count conds)
+                step 16.0 isz 14.0
+                left (- cx (/ (* step (double n)) 2.0))]
+            (when (pos? n)
+              (rt/build-child! rt {:kind :text :props {:x (- left 44.0) :y (+ cy 52.0) :w 40.0 :h 12.0
+                                                       :text (i18n/translate "skill_tree.my_mod.req")
+                                                       :font-size 9.0 :color 0xFFAAAAAA :align "right"}} layer)
+              (doseq [[i c] (map-indexed vector conds)]
+                (when-let [info (condition-icons/condition-display-info c)]
+                  (rt/build-child! rt {:kind :image
+                                       :props {:x (+ left (* step (double i))) :y (+ cy 50.0) :w isz :h isz
+                                               :src (icon-src (:icon-path info))
+                                               :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))))
+          (when message (ctext (+ cy 66.0) 280 10.0 0xFFCCCCCC message))
+          (when-not developing?
+            (let [btn-x (- cx 16.0) btn-y (+ cy 82.0)]
+              (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
+                                                        :src (tex-src :tex-button)}} layer)
+              (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
+
+
+(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state w h bg?]
+  (clear-popup! rt)
+  (when-let [^INode layer (ui/node rt :popup-layer)]
+    (when bg?
+      (rt/build-child! rt {:kind :box :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xB3000000}} layer))
+    (let [cx (/ (double w) 2.0) cy (/ (double h) 2.0)
           icon-x (- cx 25.0) icon-y (- cy 25.0)
           cond-icon (modid/asset-path "textures" (str "abilities/condition/any" target-level ".png"))
           result (:result dev-state)
+          developing? (boolean (:is-developing? dev-state))
           progress (cond
-                     (:is-developing? dev-state) (double (:progress dev-state 0.0))
+                     developing? (double (:progress dev-state 0.0))
                      (= result :success) 1.0
                      :else 0.0)
           hint (cond
-                 (:is-developing? dev-state) (i18n/translate "skill_tree.my_mod.dev_developing")
+                 developing? (i18n/translate "skill_tree.my_mod.dev_developing")
                  (= result :success) (i18n/translate "skill_tree.my_mod.dev_successful")
                  (= result :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
                  (= (:error dev-state) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
-                 :else (i18n/translate "skill_tree.my_mod.level_question"))]
+                 :else (i18n/translate "skill_tree.my_mod.level_question"))
+          ctext (fn [y tw fs color s]
+                  (rt/build-child! rt {:kind :text
+                                       :props {:x (- cx (/ (double tw) 2.0)) :y y :w (double tw) :h 14.0
+                                               :text (str s) :font-size fs :color color :align "center"}} layer))]
       (rt/build-child! rt {:kind :image :props {:x icon-x :y icon-y :w 50.0 :h 50.0
-                                                 :src (tex-src :skill-back)}} layer)
+                                                :src (tex-src :skill-back)}} layer)
       (rt/build-child! rt {:kind :image :props {:x (+ icon-x 11.5) :y (+ icon-y 11.5) :w 27.0 :h 27.0
-                                                 :src cond-icon}} layer)
+                                                :src cond-icon}} layer)
       (rt/build-child! rt {:kind :shader-progress
-                            :props {:x icon-x :y icon-y :w 50.0 :h 50.0 :progress (float progress)
-                                    :shader-props {:shader-id :ring-progbar
-                                                   :texture-0 (tex-src :skill-view-outline)
-                                                   :texture-1 (tex-src :skill-mask)}}} layer)
-      (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 28.0) :w 200.0 :h 14.0
-                                                 :text (format (i18n/translate "skill_tree.my_mod.uplevel")
-                                                               (str "Lv." target-level))
-                                                 :font-size 12.0 :color 0xFFFFFFFF}} layer)
-      (when hint
-        (rt/build-child! rt {:kind :text :props {:x cx :y (+ cy 51.0) :w 240.0 :h 14.0
-                                                   :text hint :font-size 9.0 :color 0xAAFFFFFF}} layer))
-      (when (and (not (:is-developing? dev-state)) (nil? result))
+                           :props {:x icon-x :y icon-y :w 50.0 :h 50.0 :progress (float progress)
+                                   :shader-props {:shader-id :ring-progbar
+                                                  :texture-0 (tex-src :skill-view-outline)
+                                                  :texture-1 (tex-src :skill-mask)}}} layer)
+      (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
+             (i18n/translate "skill_tree.my_mod.uplevel" (str "Lv." target-level)))
+      (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
+      (when (and (not developing?) (nil? result))
         (let [btn-x (- cx 16.0) btn-y (+ cy 70.0)]
           (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
-                                                     :src (tex-src :tex-button)}} layer)
-          (rt/build-child! rt {:kind :text :props {:x cx :y (+ btn-y 4.0) :w 32.0 :h 12.0
-                                                   :text "LEARN" :font-size 9.0 :color 0xFF101010}} layer))))))
+                                                    :src (tex-src :tex-button)}} layer)
+          (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))
 
-(defn- rebuild-tree-layer! [^UiRt rt rd pdx pdy]
-  (when-let [^INode layer (ui/node rt :tree-layer)]
-    (rt/clear-children! rt layer)
-    (doseq [conn (:connections rd)]
-      (when-let [spec (connection-spec conn pdx pdy)]
-        (rt/build-child! rt spec layer)))
-    (doseq [n (:skill-nodes rd)]
-      (rt/build-child! rt (skill-node-spec n pdx pdy) layer))
-    (rt/mark-tree-dirty! rt)))
+(defn- tree-bbox
+  "Bounding box of all skill nodes in logic coords (node origin + total-size)."
+  [nodes]
+  (when (seq nodes)
+    (let [xs (map (comp double :x) nodes)
+          ys (map (comp double :y) nodes)]
+      {:minx (apply min xs) :maxx (+ (apply max xs) logic/total-size)
+       :miny (apply min ys) :maxy (+ (apply max ys) logic/total-size)})))
+
+(defn area-fit-transform
+  "Scale + offset that fits the skill-node bounding box into a w×h area, centered.
+   Returns [scale offset-x offset-y]; a node at logic (x,y) maps to
+   (offset-x + x*scale, offset-y + y*scale). Shared by the visible tree render
+   and the panel's invisible click hit-boxes so they stay aligned."
+  [nodes w h]
+  (if-let [bb (tree-bbox nodes)]
+    (let [bw (max 1.0 (- (:maxx bb) (:minx bb)))
+          bh (max 1.0 (- (:maxy bb) (:miny bb)))
+          pad 14.0
+          s (min 1.0 (/ (- (double w) pad) bw) (/ (- (double h) pad) bh))
+          bcx (/ (+ (:minx bb) (:maxx bb)) 2.0)
+          bcy (/ (+ (:miny bb) (:maxy bb)) 2.0)]
+      ;; Round the offset to whole pixels: images blit at integer coords while the
+      ;; exp-ring shader draws at float coords, so a fractional offset desyncs the
+      ;; icon from its ring. Integer offset keeps them on the same pixel grid.
+      [s
+       (double (Math/round (- (/ (double w) 2.0) (* bcx s))))
+       (double (Math/round (- (/ (double h) 2.0) (* bcy s))))])
+    [1.0 0.0 0.0]))
+
+;; Shared build-once/mutate core (defined below) — used by both the full-screen
+;; refresh-screen! and the developer-panel embed, so they don't diverge.
+(declare build-tree! apply-parallax! apply-anim! set-hover!)
 
 (defn refresh-screen!
   "Refresh full-screen skill tree (420×260)."
@@ -250,7 +286,6 @@
         _ (ensure-shell! rt w h)
         st (logic/screen-state-snapshot owner)
         rd (logic/build-screen-render-data owner)
-        [pdx pdy] (parallax-offset mx my w h)
         [bu bv] (bg-uv mx my w h)]
     (when rd
       (when-let [^INode bg (ui/node rt :bg)]
@@ -258,16 +293,30 @@
         (.setDSlot bg 2 (double bv))
         (.setFlag bg node/FLAG-RENDER-DIRTY))
       (refresh-header! rt (:ability-info rd))
-      (rebuild-tree-layer! rt rd pdx pdy)
-      (refresh-tooltip! rt rd)
+      ;; Shared build-once + mutate: rebuild the node tree only when the node/
+      ;; connection data changes; otherwise just move the camera (parallax). The
+      ;; handles persist on the runtime across the input-driven refreshes.
+      (let [ver (hash [(:skill-nodes rd) (:connections rd)])
+            handles (if (or (nil? (rt/user-signal rt :screen-tree-handles))
+                            (not= ver (rt/user-signal rt :screen-tree-ver)))
+                      (let [hs (build-tree! rt rd w h)]
+                        (rt/put-user-signal! rt :screen-tree-handles hs)
+                        (rt/put-user-signal! rt :screen-tree-ver ver)
+                        (apply-anim! rt hs nil)   ;; full alpha (no reveal fade on full-screen)
+                        hs)
+                      (rt/user-signal rt :screen-tree-handles))]
+        (apply-parallax! rt handles mx my w h)
+        ;; Shared hover-scale (same code as the embed) instead of a tooltip.
+        (set-hover! rt handles (:hover-skill rd)))
+      (set-visible! (ui/node rt :tooltip) false)
       (cond
         (:showing-level-up-popup? st)
         (refresh-levelup-popup! rt (inc (int (get-in rd [:ability-info :level] 1)))
-                                (:level-up-dev-state st))
+                                (:level-up-dev-state st) 420 260 true)
         (:selected-skill st)
         (let [sel (:selected-skill st)
               node (first (filter #(= (:skill-id %) sel) (:skill-nodes rd)))]
-          (if node (refresh-detail-popup! rt node) (clear-popup! rt)))
+          (if node (refresh-detail-popup! rt node 420 260 true) (clear-popup! rt)))
         :else (clear-popup! rt))
       (let [show-level? (and (get-in rd [:ability-info :can-level-up])
                              (not (:showing-level-up-popup? st)))]
@@ -275,21 +324,124 @@
         (set-visible! (ui/node rt :level-lbl) show-level?))
       (rt/mark-tree-dirty! rt))))
 
-(defn refresh-embedded!
-  "Refresh embedded skill tree (developer panel area)."
-  [^UiRt rt render-data mx my w h hover-id]
+;; ============================================================================
+;; Build-once + mutate — shared by the full-screen refresh-screen! and the
+;; developer-panel embed. The tree structure is built once and only rebuilt when
+;; skill data changes. Parallax moves the node container, hover updates the
+;; tooltip, and the reveal animation mutates node alphas — none rebuild the tree.
+;; ============================================================================
+
+(defn- mark-subtree-dirty! [^INode n]
+  (.setFlag n node/FLAG-LAYOUT-DIRTY)
+  (let [c (.getChildCount n)]
+    (loop [i 0]
+      (when (< i c)
+        (mark-subtree-dirty! (.getChild n i))
+        (recur (unchecked-inc-int i))))))
+
+(defn- build-skill-node!
+  "Build one skill-node group under `parent`, returning mutable handles."
+  [^UiRt rt ^INode parent nd]
+  (let [ta logic/total-size
+        da logic/draw-align
+        opa (+ da logic/prog-align)
+        oia (+ da logic/align)
+        ^INode grp (rt/build-child! rt {:kind :group
+                                        :props {:x (double (:x nd)) :y (double (:y nd)) :w ta :h ta}} parent)
+        back (rt/build-child! rt {:kind :image :props {:x da :y da :w ta :h ta
+                                                       :src (tex-src :skill-back) :alpha 0.0}} grp)
+        outline (rt/build-child! rt {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
+                                                          :src (tex-src :skill-outline) :alpha 0.0}} grp)
+        icon (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
+                                                       :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+        ring (when (:learned nd)
+               (rt/build-child! rt {:kind :shader-progress
+                                    :props {:x opa :y opa :w logic/prog-size :h logic/prog-size :progress 0.0
+                                            :shader-props {:shader-id :ring-progbar
+                                                           :texture-0 (tex-src :skill-outline)
+                                                           :texture-1 (tex-src :skill-mask)}}} grp))]
+    {:idx (long (or (:idx nd) 0)) :skill-id (:skill-id nd) :group grp
+     :bx (double (:x nd)) :by (double (:y nd))
+     :back back :outline outline :icon icon :ring ring
+     :m-alpha (double (or (:m-alpha nd) 0.7)) :exp (double (or (:exp nd) 0.0))}))
+
+(defn- apply-node-anim!
+  "Mutate a node's alphas/progress for the reveal. anim-s = nil → final state."
+  [^UiRt rt h anim-s]
+  (let [ma (double (:m-alpha h))
+        reveal? (some? anim-s)
+        dt (if reveal? (- (double anim-s) (+ (* (double (:idx h)) 0.08) 0.1)) 1.0)
+        back-mult (if reveal? (clamp01 (* dt 10.0)) 1.0)
+        icon-mult (if reveal? (clamp01 (* (- dt 0.08) 10.0)) 1.0)
+        prog-mult (if reveal? (clamp01 (* (- dt 0.12) 2.0)) 1.0)
+        a (clamp01 (* ma back-mult))]
+    (ui/set-node-prop! rt (:back h) :alpha a)
+    (ui/set-node-prop! rt (:outline h) :alpha (* a 0.6))
+    (ui/set-node-prop! rt (:icon h) :alpha (clamp01 (* ma 0.9 icon-mult)))
+    (when-let [ring (:ring h)]
+      (ui/set-node-prop! rt ring :progress (float (* (:exp h) prog-mult))))))
+
+(defn- build-tree!
+  "Build the :tree-cam camera group + connections + skill nodes under :tree-layer
+   once, returning mutation handles. Chrome/visibility is the caller's concern."
+  [^UiRt rt render-data w h]
+  (let [nodes (:skill-nodes render-data)
+        [s offx offy] (area-fit-transform nodes w h)
+        ^INode layer (ui/node rt :tree-layer)]
+    (rt/clear-children! rt layer)
+    (let [^INode cam (rt/build-child! rt {:kind :group :id :tree-cam
+                                          :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
+                       layer)]
+      (doseq [conn (:connections render-data)]
+        (when-let [spec (connection-spec conn 0.0 0.0)]
+          (rt/build-child! rt spec cam)))
+      (rt/mark-tree-dirty! rt)
+      {:cam cam :fit [s offx offy] :nodes (mapv #(build-skill-node! rt cam %) nodes)})))
+
+(defn build-embedded!
+  "Build the embedded skill tree once. Returns handles {:cam :fit :nodes} for
+   later mutation. Only a skill-data change should call this again."
+  [^UiRt rt render-data w h]
   (ensure-shell! rt w h)
-  (let [rd (assoc render-data :hover-skill hover-id)
-        [pdx pdy] (parallax-offset mx my w h)]
-    (rebuild-tree-layer! rt rd pdx pdy)
-    (refresh-tooltip! rt rd)
-    (clear-popup! rt)
-    (set-visible! (ui/node rt :level-btn) false)
-    (set-visible! (ui/node rt :level-lbl) false)
-    (set-visible! (ui/node rt :overlay) false)
-    (doseq [id [:cat-text :lvl-text :cp-text :ov-text]]
-      (set-visible! (ui/node rt id) false))
-    (rt/mark-tree-dirty! rt)))
+  (set-visible! (ui/node rt :level-btn) false)
+  (set-visible! (ui/node rt :level-lbl) false)
+  (set-visible! (ui/node rt :overlay) false)
+  (doseq [id [:cat-text :lvl-text :cp-text :ov-text]] (set-visible! (ui/node rt id) false))
+  (set-visible! (ui/node rt :tooltip) false)  ;; no tree tooltip (upstream); hover scales the node
+  (clear-popup! rt)
+  (build-tree! rt render-data w h))
+
+(defn apply-anim!
+  "Mutate node alphas for the reveal (anim-s) or final state (nil)."
+  [^UiRt rt handles anim-s]
+  (doseq [h (:nodes handles)] (apply-node-anim! rt h anim-s)))
+
+(defn apply-parallax!
+  "Move the node container by the pointer parallax and re-layout its subtree —
+   no rebuild. (The background stays put; only the nodes drift.)"
+  [^UiRt rt handles mx my w h]
+  (let [[s offx offy] (:fit handles)
+        [pdx pdy] (parallax-offset mx my w h)
+        ^INode cam (:cam handles)]
+    (.setX cam (- (double offx) (* (double pdx) (double s))))
+    (.setY cam (- (double offy) (* (double pdy) (double s))))
+    (mark-subtree-dirty! cam)))
+
+(defn set-hover!
+  "Hover feedback — scale the node under the pointer to 1.2× (upstream
+   StateHover); upstream shows no tooltip in the tree. Only touches nodes whose
+   scale actually changes."
+  [^UiRt rt handles hover-id]
+  (doseq [h (:nodes handles)]
+    (let [^INode g (:group h)
+          want (if (= (:skill-id h) hover-id) 1.2 1.0)]
+      (when (not= want (.getScale g))
+        ;; grow from the node centre: offset by (want-1)*size/2
+        (let [off (* logic/total-size (/ (- want 1.0) 2.0))]
+          (.setScale g want)
+          (.setX g (- (double (:bx h)) off))
+          (.setY g (- (double (:by h)) off))
+          (mark-subtree-dirty! g))))))
 
 (defn refresh-detail-overlay!
   "Standalone detail popup runtime (developer panel overlay)."
@@ -297,7 +449,7 @@
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))
-  (refresh-detail-popup! rt node)
+  (refresh-detail-popup! rt node 400 187 false)
   (rt/mark-tree-dirty! rt))
 
 (defn refresh-levelup-overlay!
@@ -305,5 +457,5 @@
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))
-  (refresh-levelup-popup! rt target-level dev-state)
+  (refresh-levelup-popup! rt target-level dev-state 400 187 false)
   (rt/mark-tree-dirty! rt))

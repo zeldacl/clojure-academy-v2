@@ -72,6 +72,23 @@
     (let [f (persistent! failures)]
       {:pass? (empty? f) :failures f})))
 
+(defn conditions-with-status
+  "Displayable learn conditions for a skill, each with an :accepted flag. Mirrors
+   upstream: the level condition has shouldDisplay=false so it is omitted; only
+   developer-type / prerequisite / any-skill-level conditions are shown."
+  [skill-spec ability-data player-level developer-type]
+  (vec
+   (concat
+    (when (:developer-type skill-spec)
+      [{:type :developer-type :required (:developer-type skill-spec)
+        :accepted (check-developer-type-condition developer-type (:developer-type skill-spec))}])
+    (for [{:keys [skill-id min-exp]} (:prerequisites skill-spec)]
+      {:type :prerequisite :skill-id skill-id :required min-exp
+       :accepted (check-dependency-condition ability-data skill-id min-exp)})
+    (for [c (:conditions skill-spec) :when (= (:type c) :any-skill-level)]
+      {:type :any-skill-level :required-level (:level c)
+       :accepted (check-any-skill-level-condition ability-data (:level c))}))))
+
 (defn can-learn?
   "Convenience predicate—returns boolean. Returns false for nil skill-spec."
   [skill-spec ability-data player-level developer-type]
