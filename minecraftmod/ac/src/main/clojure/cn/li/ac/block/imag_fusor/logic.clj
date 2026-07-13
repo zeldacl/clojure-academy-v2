@@ -258,6 +258,7 @@
   (machine-runtime/make-tick-fn
     {:default-state fusor-default-state
      :tick-state fusor-tick-state
+     :mark-changed? machine-runtime/changed-ignoring-ticker?
      :after-commit! sync-fusor-blockstate!}))
 
 (defn- can-place? [_be slot item _face]

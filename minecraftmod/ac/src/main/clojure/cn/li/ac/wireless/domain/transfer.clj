@@ -18,6 +18,14 @@
           v
           (into (subvec v k) (subvec v 0 k)))))))
 
+(defn rotate-start
+  "Starting index for a game-time-rotated index-order walk of a vector of
+  length `n` — same rotation semantics as `rotated`, but for hot per-tick
+  loops that read (`nth v (mod (+ start i) n)`) in order rather than needing
+  a materialized rotated vector (see wireless.runtime.node-transfer)."
+  ^long [n ^long game-time]
+  (if (< (long n) 2) 0 (Math/floorMod game-time (long n))))
+
 (defn balance-plan
   "Build a pure balancing plan.
 

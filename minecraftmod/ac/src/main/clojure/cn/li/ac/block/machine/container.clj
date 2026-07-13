@@ -30,9 +30,14 @@
         apply-transform (fn [state]
                           (transform-state state))
         commit! (fn [be state']
+                  ;; Inventory mutation is player-interaction-driven, not tick-driven —
+                  ;; always sync-client here is cheap and preserves visuals for TESRs
+                  ;; that read counts/amounts derived from slot contents (e.g. matrix
+                  ;; shields, phase-gen liquid level).
                   (machine-runtime/commit-transform!
                     be default-state (constantly state')
-                    :blockstate-updater blockstate-updater))]
+                    :blockstate-updater blockstate-updater
+                    :sync-client? true))]
     {:get-size (fn [_be] (slot-count-fn))
      :get-item (fn [be slot]
                  (get-in (machine-runtime/state-or-default be default-state) [inventory-key slot]))

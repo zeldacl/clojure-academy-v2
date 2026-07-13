@@ -183,13 +183,15 @@
   [send-fn owner]
   (let [{:keys [due? force-full? tick session-key dirty-uuids]} (advance-scheduler! owner)]
     (when due?
-      (let [flush-uuids (if force-full?
-                          (vec (into (set dirty-uuids)
-                                     (power-runtime/with-client-ctx {:player-owner owner}
-                                       (power-runtime/list-player-uuids))))
-                          dirty-uuids)]
-        (doseq [uuid flush-uuids]
-          (power-runtime/with-client-ctx {:player-owner owner}
+      ;; `owner` is invariant across this whole flush — establish the client
+      ;; ctx ThreadLocal once instead of once per uuid (was N pushes/pops per
+      ;; flush, now 1).
+      (power-runtime/with-client-ctx {:player-owner owner}
+        (let [flush-uuids (if force-full?
+                            (vec (into (set dirty-uuids)
+                                       (power-runtime/list-player-uuids)))
+                            dirty-uuids)]
+          (doseq [uuid flush-uuids]
             (when-let [payload (build-sync-payload uuid)]
               (try
                 (when send-fn

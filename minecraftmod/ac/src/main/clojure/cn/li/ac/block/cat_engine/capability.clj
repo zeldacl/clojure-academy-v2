@@ -31,7 +31,9 @@
 				                                 #(assoc %
 				                                         :energy (- energy actual)
 				                                         :this-tick-gen (double actual)
-				                                         :gen-speed (double actual))))
+				                                         :gen-speed (double actual))
+				                                 ;; render.clj reads :this-tick-gen directly for rotor speed.
+				                                 :sync-client? true))
 			(double actual)))
 
 	(getGeneratorBandwidth [_]

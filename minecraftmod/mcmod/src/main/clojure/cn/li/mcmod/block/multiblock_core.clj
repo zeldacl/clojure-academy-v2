@@ -35,6 +35,8 @@
   [be state-map]
   (try
     (platform-be/set-custom-state! be state-map)
+    (platform-be/set-changed! be)
+    (platform-be/sync-to-client! be)
     (catch Throwable _
       nil)))
 

@@ -29,13 +29,20 @@
   (or (platform-be/get-custom-state be) default-state))
 
 (defn commit-state!
-  "Single boundary for BE state writes, dirty flag, and optional blockstate projection."
-  [be level pos old-state new-state & {:keys [blockstate-updater mark-changed?]
-                                       :or {mark-changed? true}}]
+  "Single boundary for BE state writes, dirty flag, client sync, and optional blockstate projection.
+
+  `:mark-changed?` (default true) controls setChanged (NBT save dirty).
+  `:sync-client?` (default false) controls an explicit client block-update packet.
+  Most machines don't need this: visuals go through BlockState properties or GUI
+  DataSlots. Declare true only when a TESR reads BE custom-state directly."
+  [be level pos old-state new-state & {:keys [blockstate-updater mark-changed? sync-client?]
+                                       :or {mark-changed? true sync-client? false}}]
   (when (not= new-state old-state)
     (platform-be/set-custom-state! be new-state)
     (when mark-changed?
       (try (platform-be/set-changed! be) (catch Exception _ nil)))
+    (when sync-client?
+      (try (platform-be/sync-to-client! be) (catch Exception _ nil)))
     (when (and blockstate-updater level pos)
       (blockstate-updater new-state level pos))))
 
@@ -57,27 +64,37 @@
   "Apply `transform` to current tile state and commit when changed.
 
   `transform` receives current state map and returns new state.
-  Options match `commit-state!`; optional `:after-commit!` runs when state changes."
-  [tile default-state transform & {:keys [blockstate-updater mark-changed? after-commit!]}]
+  Options match `commit-state!`; optional `:after-commit!` runs when state changes.
+
+  NOTE: defaults for `:mark-changed?`/`:sync-client?` are resolved HERE (not left to
+  `commit-state!`'s `:or`) — an omitted keyword here would otherwise pass an explicit
+  `nil` through to `commit-state!`, which defeats its own `:or` default (a present key
+  bound to nil is not the same as an absent key)."
+  [tile default-state transform & {:keys [blockstate-updater mark-changed? sync-client? after-commit!]
+                                   :or {mark-changed? true sync-client? false}}]
   (when tile
     (let [[level pos] (resolve-tile-level-pos tile)
           old (state-or-default tile default-state)
           new-state (transform old)]
       (commit-state! tile level pos old new-state
                      :blockstate-updater blockstate-updater
-                     :mark-changed? mark-changed?)
+                     :mark-changed? mark-changed?
+                     :sync-client? sync-client?)
       (when (and after-commit! (not= new-state old))
         (after-commit! tile level pos old new-state)))))
 
 (defn commit-from-tile!
-  "Commit an explicit new state for a tile (old state read from tile)."
-  [tile default-state new-state & {:keys [blockstate-updater mark-changed? after-commit!]}]
+  "Commit an explicit new state for a tile (old state read from tile).
+  See `commit-transform!` for why defaults are resolved here."
+  [tile default-state new-state & {:keys [blockstate-updater mark-changed? sync-client? after-commit!]
+                                   :or {mark-changed? true sync-client? false}}]
   (when tile
     (let [[level pos] (resolve-tile-level-pos tile)
           old (state-or-default tile default-state)]
       (commit-state! tile level pos old new-state
                      :blockstate-updater blockstate-updater
-                     :mark-changed? mark-changed?)
+                     :mark-changed? mark-changed?
+                     :sync-client? sync-client?)
       (when (and after-commit! (not= new-state old))
         (after-commit! tile level pos old new-state)))))
 
@@ -92,19 +109,24 @@
   - :tick-state (fn [state level pos block-state be] -> state')
   - :initial-state (fn [be level pos block-state] -> state) optional
   - :after-commit! (fn [be level pos old-state new-state] -> nil) optional
-  - :mark-changed? may be true, false, or (fn [old-state new-state] -> bool)."
-  [{:keys [default-state initial-state tick-state blockstate-updater after-commit! mark-changed?]
-    :or {mark-changed? true}}]
+  - :mark-changed? may be true, false, or (fn [old-state new-state] -> bool).
+  - :sync-client? may be true, false, or (fn [old-state new-state] -> bool); default false.
+    Only declare true for machines whose TESR reads BE custom-state directly — most
+    visuals go through BlockState properties or GUI DataSlots and need no BE packet."
+  [{:keys [default-state initial-state tick-state blockstate-updater after-commit! mark-changed? sync-client?]
+    :or {mark-changed? true sync-client? false}}]
   (fn [level pos block-state be]
     (when (server-side? level)
       (let [state0 (if initial-state
                      (initial-state be level pos block-state)
                      (state-or-default be default-state))
             state1 (tick-state state0 level pos block-state be)
-            dirty? (compute-dirty-flag mark-changed? state0 state1)]
+            dirty? (compute-dirty-flag mark-changed? state0 state1)
+            sync?  (compute-dirty-flag sync-client? state0 state1)]
         (commit-state! be level pos state0 state1
                        :blockstate-updater blockstate-updater
-                       :mark-changed? dirty?)
+                       :mark-changed? dirty?
+                       :sync-client? sync?)
         (when (and after-commit! (not= state1 state0))
           (after-commit! be level pos state0 state1))))))
 
@@ -138,3 +160,12 @@
   "Common helper for machines that track :update-ticker."
   [state]
   (update state :update-ticker (fn [t] (inc (long (or t 0))))))
+
+(defn changed-ignoring-ticker?
+  "Dirty/sync predicate for machines using `inc-update-ticker`: a real change is
+  anything besides :update-ticker differing. Use as :mark-changed? (and, when the
+  TESR reads BE custom-state directly, also :sync-client?) so an idle machine whose
+  only per-tick mutation is the bookkeeping ticker never marks NBT dirty or sends a
+  client packet."
+  [old-state new-state]
+  (not= (dissoc old-state :update-ticker) (dissoc new-state :update-ticker)))

@@ -51,11 +51,16 @@
   [conn world]
   (resolver/resolve-node-cap world (:node conn)))
 
-(defn get-receivers [conn]
-  (vec (or (state-value conn :receivers) [])))
+(defn get-receivers
+  "`:receivers` is always a vector at every write site (default-state, conj-only
+  mutation, NBT load) — no re-`vec` needed on this per-tick read path."
+  [conn]
+  (or (state-value conn :receivers) []))
 
-(defn get-generators [conn]
-  (vec (or (state-value conn :generators) [])))
+(defn get-generators
+  "`:generators` is always a vector — see `get-receivers`."
+  [conn]
+  (or (state-value conn :generators) []))
 
 (defn is-disposed? [conn]
   (boolean (state-value conn :disposed)))

@@ -201,7 +201,8 @@
 (def matrix-scripted-tick-fn
   (machine-runtime/make-tick-fn
     {:default-state stats/matrix-default-state
-     :tick-state matrix-tick-state}))
+     :tick-state matrix-tick-state
+     :mark-changed? machine-runtime/changed-ignoring-ticker?}))
 
 ;; ============================================================================
 ;; Container

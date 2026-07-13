@@ -108,9 +108,13 @@
   (query-core/get-player-by-uuid (server-context-spi/require-current-server) uuid-str))
 
 (defn- same-dimension?
+  "ResourceKey<Level> is an interned singleton per dimension (same instance for
+  every player in the same dimension) — identical? avoids building two
+  ResourceLocation-to-String conversions per candidate player on this
+  every-player-in-the-list scan."
   [^ServerPlayer a-player ^ServerPlayer b-player]
-  (= (some-> a-player .level .dimension .location str)
-     (some-> b-player .level .dimension .location str)))
+  (identical? (some-> a-player .level .dimension)
+              (some-> b-player .level .dimension)))
 
 (defn- within-radius?
   [^ServerPlayer source-player ^ServerPlayer target-player radius]

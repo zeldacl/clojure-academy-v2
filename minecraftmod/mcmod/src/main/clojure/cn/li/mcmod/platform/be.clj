@@ -8,7 +8,8 @@
 
 (def be-ops-keys
   #{:be-get-level :be-get-world :be-get-custom-state :be-set-custom-state!
-    :be-get-block-id :be-get-tile-id :be-set-changed! :be-get-fluid-height})
+    :be-get-block-id :be-get-tile-id :be-set-changed! :be-get-fluid-height
+    :be-sync-to-client!})
 
 (defn install-be-ops!
   [ops-map _label]
@@ -63,10 +64,16 @@
   (when be
     (try
       (be-op :be-set-custom-state! be state)
-      (be-op :be-set-changed! be)
       (catch Exception e
         (call-log :error "set-custom-state! failed:" (ex-message e))
         (log/stacktrace "set-custom-state! failed" e)))))
+
+(defn sync-to-client! [be]
+  (when be
+    (try (be-op :be-sync-to-client! be)
+         (catch Exception e
+           (call-log :warn "sync-to-client! failed:" (ex-message e))
+           (log/stacktrace "sync-to-client! failed" e)))))
 
 (defn be-get-block-id [be]
   (when be

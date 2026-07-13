@@ -74,7 +74,8 @@
               (when (and (pos? can-fill) (= action IFluidHandler$FluidAction/EXECUTE))
                 (let [new-state (assoc state :liquid-amount (+ current can-fill))]
                   (platform-be/set-custom-state! be new-state)
-                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid fill" (ex-message e)) nil))))
+                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid fill" (ex-message e)) nil))
+                  (try (platform-be/sync-to-client! be) (catch Exception e (log/debug "sync-to-client! failed for fluid fill" (ex-message e)) nil))))
               (int can-fill))
             0)))
       (fn [max-drain action]
@@ -88,7 +89,8 @@
               (when (= action IFluidHandler$FluidAction/EXECUTE)
                 (let [new-state (assoc state :liquid-amount (- current can-drain))]
                   (platform-be/set-custom-state! be new-state)
-                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid drain" (ex-message e)) nil))))
+                  (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid drain" (ex-message e)) nil))
+                  (try (platform-be/sync-to-client! be) (catch Exception e (log/debug "sync-to-client! failed for fluid drain" (ex-message e)) nil))))
               (FluidStack. fluid can-drain))
             FluidStack/EMPTY)))
       (fn [resource action]
@@ -104,7 +106,8 @@
                   (when (= action IFluidHandler$FluidAction/EXECUTE)
                     (let [new-state (assoc state :liquid-amount (- current can-drain))]
                       (platform-be/set-custom-state! be new-state)
-                      (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid energy" (ex-message e)) nil))))
+                      (try (platform-be/set-changed! be) (catch Exception e (log/debug "set-changed! failed for fluid energy" (ex-message e)) nil))
+                      (try (platform-be/sync-to-client! be) (catch Exception e (log/debug "sync-to-client! failed for fluid energy" (ex-message e)) nil))))
                   (FluidStack. fluid can-drain))
                 FluidStack/EMPTY))
             FluidStack/EMPTY))))))

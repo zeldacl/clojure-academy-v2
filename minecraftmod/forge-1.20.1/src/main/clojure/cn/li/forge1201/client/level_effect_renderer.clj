@@ -9,7 +9,7 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]
-           [net.minecraftforge.client.event RenderLevelStageEvent]
+           [net.minecraftforge.client.event RenderLevelStageEvent RenderLevelStageEvent$Stage]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
@@ -24,18 +24,28 @@
   false)
 
 (defn- render-stage-eligible? [^RenderLevelStageEvent evt]
-  (let [stage-name (str (.getStage evt))]
-    (or (.contains stage-name "AFTER_PARTICLES")
-        (.contains stage-name "AFTER_TRANSLUCENT"))))
+  ;; Stage is a fixed enum-like singleton set (RenderLevelStageEvent$Stage) — identical?
+  ;; avoids a fresh string allocation + two substring scans on every stage dispatch
+  ;; this tick (~9 stages/frame), most of which are not eligible.
+  (let [stage (.getStage evt)]
+    (or (identical? stage RenderLevelStageEvent$Stage/AFTER_PARTICLES)
+        (identical? stage RenderLevelStageEvent$Stage/AFTER_TRANSLUCENT_BLOCKS))))
 
 (defn- emit-plasma-vertex! [^VertexConsumer vc mat p]
   (-> vc
       (.vertex mat (float (:x p)) (float (:y p)) (float (:z p)))
       (.endVertex)))
 
+(def ^:private ball-uniform-names
+  "Precomputed \"balls[0]\".. \"balls[15]\" uniform names — avoids 16 string
+  concatenations per frame in `set-plasma-uniforms!`."
+  (mapv (fn [i] (str "balls[" i "]")) (range 16)))
+
 (defn- set-plasma-uniforms!
   [cam-pos {:keys [alpha balls]}]
   (when-let [shader (ModShaders/getPlasmaBodyShader)]
+    ;; `balls` may be a lazy seq upstream — vec once so the 16x `nth` below is O(1)
+    ;; each, not O(n) per call against a non-indexed seq.
     (let [balls-vec (vec (take 16 (or balls [])))
           ball-count (count balls-vec)]
       (when-let [uniform (.getUniform shader "ballCount")]
@@ -43,7 +53,7 @@
       (when-let [uniform (.getUniform shader "alpha")]
         (.set uniform (float (double (or alpha 0.0)))))
       (doseq [idx (range 16)]
-        (when-let [uniform (.getUniform shader (str "balls[" idx "]"))]
+        (when-let [uniform (.getUniform shader (nth ball-uniform-names idx))]
           (let [{:keys [x y z size]} (or (nth balls-vec idx nil) {})
                 cx (float (- (double (or x 0.0)) (double (:x cam-pos))))
                 cy (float (- (double (or y 0.0)) (double (:y cam-pos))))

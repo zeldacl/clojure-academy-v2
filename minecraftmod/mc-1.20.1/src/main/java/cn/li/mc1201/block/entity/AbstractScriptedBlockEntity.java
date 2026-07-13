@@ -13,7 +13,6 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import java.util.Objects;
 
 /**
  * Shared scripted block-entity core for 1.20.1 loaders.
@@ -52,12 +51,19 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
         return customState;
     }
 
+    /**
+     * Pure store: no NBT-dirty marking, no client sync. Dirty flag and client sync
+     * are controlled by the commit boundary (ac.block.machine.runtime/commit-state!)
+     * via {@code :mark-changed?} / {@code :sync-client?} — calling those here as a
+     * side effect would make every state write (including per-tick bookkeeping
+     * fields that never persist) unconditionally dirty + broadcast.
+     */
     public void setCustomState(Object state) {
-        if (Objects.equals(this.customState, state)) {
-            return;
-        }
         this.customState = state;
-        setChanged();
+    }
+
+    /** Explicit client sync entry point, invoked only via the :sync-client? commit gate. */
+    public void syncCustomStateToClient() {
         if (level != null && !level.isClientSide) {
             BlockState blockState = getBlockState();
             level.sendBlockUpdated(worldPosition, blockState, blockState, 3);

@@ -70,7 +70,10 @@
 (def cat-tick-fn
 	(machine-runtime/make-tick-fn
 		{:default-state cat-default-state
-		 :tick-state cat-tick-state}))
+		 :tick-state cat-tick-state
+		 :mark-changed? machine-runtime/changed-ignoring-ticker?
+		 ;; render.clj reads :this-tick-gen directly for rotor speed.
+		 :sync-client? machine-runtime/changed-ignoring-ticker?}))
 
 (defn cat-right-click! [_player world pos _block-id]
 	(let [be (and world pos (world/world-get-tile-entity* world pos))]

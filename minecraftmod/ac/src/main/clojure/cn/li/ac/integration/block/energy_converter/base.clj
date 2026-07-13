@@ -13,6 +13,9 @@
   [be energy]
   (let [v (max 0.0 (min (double (ec-config/energy-capacity)) (double energy)))]
     (platform-be/set-custom-state! be (assoc (or (platform-be/get-custom-state be) (ec-schema/default-state-map)) :energy v))
+    ;; No TESR reads this block's custom-state (GUI energy bar syncs via DataSlot) —
+    ;; NBT-dirty only, no client packet on this per-tick hot path.
+    (platform-be/set-changed! be)
     v))
 
 (defn read-nbt-fn

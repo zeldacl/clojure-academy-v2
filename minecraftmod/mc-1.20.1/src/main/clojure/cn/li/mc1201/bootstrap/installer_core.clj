@@ -330,7 +330,7 @@
 
   `fns-map` keys:
   :be-get-level, :be-get-world, :be-get-custom-state,
-  :be-set-custom-state!, :be-get-block-id, :be-set-changed!"
+  :be-set-custom-state!, :be-get-block-id, :be-set-changed!, :be-sync-to-client!"
   [fns-map]
   (install-when! be-fns-installed?
     (be/install-be-ops! fns-map "mc1201")

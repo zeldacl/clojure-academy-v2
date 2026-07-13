@@ -42,14 +42,18 @@
 
 (defn keepalive-timeout-ms
   "Server-side keepalive timeout threshold in milliseconds.
-  Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500)."
+  Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500).
+  Read on every call (not cached): `dispatcher-timing-can-be-overridden-via-
+  system-properties-test` requires runtime System/setProperty to take effect
+  without a JVM restart."
   []
   (context-domain/positive-long-prop "ac.ctx.keepalive-timeout-ms"
                                      default-keepalive-timeout-ms))
 
 (defn terminated-context-grace-ms
   "Grace window before terminated contexts are purged from registry.
-  Configurable through -Dac.ctx.terminated-grace-ms (default 1000)."
+  Configurable through -Dac.ctx.terminated-grace-ms (default 1000).
+  Read on every call — see `keepalive-timeout-ms`."
   []
   (context-domain/positive-long-prop "ac.ctx.terminated-grace-ms"
                                      default-terminated-context-grace-ms))

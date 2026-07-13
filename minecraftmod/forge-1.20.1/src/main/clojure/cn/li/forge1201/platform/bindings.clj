@@ -133,6 +133,10 @@
 	[^ScriptedBlockEntity be]
 	(.setChanged be))
 
+(defn be-sync-to-client!
+	[^ScriptedBlockEntity be]
+	(.syncCustomStateToClient be))
+
 (defn be-get-fluid-height
 	"Return fluid surface height (0.0-1.0) at the block entity's position.
 	Uses FluidState.getOwnHeight() — the 1.20 API."

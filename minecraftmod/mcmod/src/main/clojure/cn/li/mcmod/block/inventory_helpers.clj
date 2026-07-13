@@ -66,5 +66,6 @@
   (let [state (or (pbe/get-custom-state be) {})]
     (pbe/set-custom-state! be (assoc state field value))
     (try (pbe/set-changed! be) (catch Exception e (log/warn "set-changed! failed in update-be-field!:" (ex-message e))))
+    (try (pbe/sync-to-client! be) (catch Exception e (log/warn "sync-to-client! failed in update-be-field!:" (ex-message e))))
     be))
 

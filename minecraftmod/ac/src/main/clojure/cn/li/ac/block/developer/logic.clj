@@ -132,6 +132,7 @@
 	(machine-runtime/make-tick-fn
 		{:default-state dev-default-state
 		 :tick-state developer-tick-state
+		 :mark-changed? machine-runtime/changed-ignoring-ticker?
 		 :after-commit! developer-after-commit!}))
 
 (defn- resolve-developer-open-pos [controller-block-id]

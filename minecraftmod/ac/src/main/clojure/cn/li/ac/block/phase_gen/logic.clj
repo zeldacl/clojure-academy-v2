@@ -82,7 +82,10 @@
 (def phase-tick-fn
   (machine-runtime/make-tick-fn
     {:default-state phase-default-state
-     :tick-state phase-tick-state}))
+     :tick-state phase-tick-state
+     :mark-changed? machine-runtime/changed-ignoring-ticker?
+     ;; render.clj reads :liquid-amount directly (texture frame 0-4).
+     :sync-client? machine-runtime/changed-ignoring-ticker?}))
 
 (defn- can-place? [_be ^long slot item _face]
   (case slot

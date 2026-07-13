@@ -59,15 +59,19 @@
   `cache` is a java.util.HashMap owned by the per-tick ctx: single-threaded
   (server thread) use only, discarded at tick end — capability identity is
   stable within one tick, so misses are cached too. `nil` cache falls through
-  to a direct resolve (non-tick callers)."
+  to a direct resolve (non-tick callers).
+
+  Keyed by the VBlock record itself (defrecord equals/hashCode over all
+  fields) — zero allocation on the lookup path, vs. a fresh 4-element vector
+  (plus boxed ints) built on every call under the old `[x y z block-type]`
+  key, even on a cache hit."
   [^java.util.HashMap cache resolve-fn world vblock]
   (if (nil? cache)
     (resolve-fn world vblock)
-    (let [k [(:x vblock) (:y vblock) (:z vblock) (:block-type vblock)]
-          hit (.get cache k)]
+    (let [hit (.get cache vblock)]
       (cond
         (identical? cache-miss hit) nil
         (some? hit) hit
         :else (let [v (resolve-fn world vblock)]
-                (.put cache k (or v cache-miss))
+                (.put cache vblock (or v cache-miss))
                 v)))))
