@@ -314,7 +314,11 @@
 (defn open! [player]
   (bridge/open-reactive-screen! (create-runtime player) "Location Teleport"))
 
-(defn init! []
-  (platform-ui/register-widget-factory! :ac/saved-position
-    (fn [{:keys [player payload]}] (open-screen! player (or payload {}))))
-  (log/info "Location Teleport reactive screen registered"))
+(let [registered? (atom false)]
+  (defn init!
+    "Register location-teleport widget factory. Idempotent."
+    []
+    (when (compare-and-set! registered? false true)
+      (platform-ui/register-widget-factory! :ac/saved-position
+        (fn [{:keys [player payload]}] (open-screen! player (or payload {}))))
+      (log/info "Location Teleport reactive screen registered"))))

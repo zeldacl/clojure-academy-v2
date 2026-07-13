@@ -63,15 +63,28 @@
 (defn- wire-editable-value!
   [^UiRt rt ^INode value-n editable? on-change color-change?]
   (when editable?
-    (rt/register-event! rt (.getIdx value-n) :confirm-input
-      (fn [_ _ evt]
-        (when on-change (on-change (:value evt)))
-        (when color-change?
-          (ui/set-node-prop! rt value-n :color idle-color))))
-    (when (and editable? color-change?)
-      (rt/register-event! rt (.getIdx value-n) :change-content
-        (fn [_ _ _]
-          (ui/set-node-prop! rt value-n :color edit-color))))))
+    (let [last-confirmed (volatile! nil)]
+      (rt/register-event! rt (.getIdx value-n) :confirm-input
+        (fn [_ _ evt]
+          (let [v (:value evt)]
+            (when (and on-change (not= v @last-confirmed))
+              (vreset! last-confirmed v)
+              (on-change v)))
+          (when color-change?
+            (ui/set-node-prop! rt value-n :color idle-color))))
+      ;; Auto-confirm when focus leaves the editable field (click away / tab)
+      (rt/register-event! rt (.getIdx value-n) :lost-focus
+        (fn [_ node _]
+          (let [v (str (or (.getOSlot ^INode node 0) ""))]
+            (when (and on-change (not= v @last-confirmed))
+              (vreset! last-confirmed v)
+              (on-change v)))
+          (when color-change?
+            (ui/set-node-prop! rt value-n :color idle-color))))
+      (when (and editable? color-change?)
+        (rt/register-event! rt (.getIdx value-n) :change-content
+          (fn [_ _ _]
+            (ui/set-node-prop! rt value-n :color edit-color)))))))
 
 (defn add-property!
   "Add label + value row. value may be string or (fn [] string) for live updates.

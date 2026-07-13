@@ -368,16 +368,18 @@
   nil)
 
 (defn- mark-client-push-handlers-registered!
+  "Atomically check-and-set :push-handlers-registered? in client UI runtime state.
+  Returns true only for the caller whose CAS committed the flag transition.
+  Pure swap function — no side effects inside swap! (swap-vals! guarantees the
+  old/new comparison is drawn from the committed values, not a retried attempt)."
   []
-  (let [installed? (atom false)]
-    (update-client-ui-runtime!
-      (fn [runtime-state]
-        (if (:push-handlers-registered? runtime-state)
-          runtime-state
-          (do
-            (reset! installed? true)
-            (assoc runtime-state :push-handlers-registered? true)))))
-    @installed?))
+  (let [[old new] (swap-vals! (client-ui-runtime-state-atom)
+                    (fn [runtime-state]
+                      (if (:push-handlers-registered? runtime-state)
+                        runtime-state
+                        (assoc runtime-state :push-handlers-registered? true))))]
+    (not= (:push-handlers-registered? old)
+          (:push-handlers-registered? new))))
 
 (defn set-slot-context-for-test!
   [player-uuid key-idx ctx-id]

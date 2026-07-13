@@ -5,6 +5,7 @@
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]
@@ -25,6 +26,12 @@
   [is-owner?]
   {:editable-node-name? (boolean is-owner?)
    :editable-password? (boolean is-owner?)})
+
+(defn- send-owner
+  "Resolve a client owner for GUI-initiated server requests (same pattern as
+  matrix_info_reactive). Falls back to nil when no client session is bound."
+  []
+  (runtime-hooks/default-client-owner))
 
 (defn rebuild!
   [^UiRt rt container player]
@@ -55,16 +62,22 @@
           (info-area/add-property! ctx "Node Name" (or @(:ssid container) "")
             :editable? true
             :on-change (fn [new-name]
-                         (net-client/send-to-server
-                           (msg :change-name)
-                           (action-payload/action-payload container {:node-name new-name}))))
+                         (if-let [owner (send-owner)]
+                           (net-client/send-to-server
+                             owner
+                             (msg :change-name)
+                             (action-payload/action-payload container {:node-name new-name}))
+                           (log/warn "Skip change-name: no client session bound"))))
           (info-area/add-property! ctx "Password" (or @(:password container) "")
             :editable? (:editable-password? policy)
             :masked? true
             :on-change (fn [new-pass]
-                         (net-client/send-to-server
-                           (msg :change-password)
-                           (action-payload/action-payload container {:password new-pass})))))
+                         (if-let [owner (send-owner)]
+                           (net-client/send-to-server
+                             owner
+                             (msg :change-password)
+                             (action-payload/action-payload container {:password new-pass}))
+                           (log/warn "Skip change-password: no client session bound")))))
         (info-area/add-property! ctx "Node Name" (or @(:ssid container) "")))
       nil)
     (catch Exception e

@@ -55,4 +55,17 @@
 																						:password pass
 																						:need-auth? true))
 							 :logo-path      nil
+							 :logo-breathe?  true}
+	 :machine   {:list-msg       #(dev-msg :list-nodes)
+							 :disconnect-msg #(dev-msg :disconnect)
+							 :connect-msg    #(dev-msg :connect)
+							 :name-fn        (fn [t] (:node-name t))
+							 :connect-payload-fn (fn [payload target pass]
+																		 (assoc payload
+																						:node-x (:pos-x target)
+																						:node-y (:pos-y target)
+																						:node-z (:pos-z target)
+																						:password pass
+																						:need-auth? true))
+							 :logo-path      nil
 							 :logo-breathe?  true}})

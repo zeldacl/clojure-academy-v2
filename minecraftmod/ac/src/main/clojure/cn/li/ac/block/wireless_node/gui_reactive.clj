@@ -79,7 +79,7 @@
    not keywords, so this is the reliable anchor), positioned/scaled to match
    the old CGUI create-anim-widget widget (pos 42,35.5 size 186x75 scale 0.5)."
   [r container menu player _signals]
-  (node-info/attach! r container player)
+  (node-info/attach! r (assoc container :minecraft-container menu) player)
   (when-let [^INode ui-block (or (rt/node-by-id r :ui_block) (rt/node-by-id r "ui_block"))]
     (rt/build-child! r
       {:kind :image
