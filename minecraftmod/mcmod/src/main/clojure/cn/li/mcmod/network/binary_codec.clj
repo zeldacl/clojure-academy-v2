@@ -50,7 +50,7 @@
     (integer? v) (do (.writeByte out tag-long) (.writeLong out (long v)))
     (float? v)   (do (.writeByte out tag-double) (.writeDouble out (double v)))
     (string? v)  (do (.writeByte out tag-string) (write-str! out v))
-    (keyword? v) (do (.writeByte out tag-keyword) (write-str! out (str (symbol v))))
+    (keyword? v) (do (.writeByte out tag-keyword) (write-str! out (subs (str v) 1)))
     (map? v)     (do (.writeByte out tag-map)
                       (.writeInt out (count v))
                       (reduce-kv (fn [_ k mv] (write-val! out k) (write-val! out mv) nil) nil v))

@@ -189,6 +189,9 @@ tasks.register('runMcmodClojureTestsFast', JavaExec) {
     if (System.getProperty('mcmod.test.only') != null) {
         systemProperty 'mcmod.test.only', System.getProperty('mcmod.test.only')
     }
+    if (System.getProperty('mcmod.test.jfr') != null) {
+        jvmArgs "-XX:StartFlightRecording=filename=${System.getProperty('mcmod.test.jfr')},settings=profile"
+    }
     args '-m', 'cn.li.mcmod.test-runner'
 }
 

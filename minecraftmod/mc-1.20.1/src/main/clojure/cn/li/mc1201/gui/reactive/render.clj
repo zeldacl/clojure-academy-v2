@@ -128,7 +128,7 @@
    '.png' extension. GUI textures are always .png; tolerate paths written
    without it (e.g. \"my_mod:textures/guis/blend_quad\") by appending it. Paths
    that already end in .png (image :src values) are left unchanged."
-  [src]
+  ^ResourceLocation [src]
   (when (and src (string? src) (not (clojure.string/blank? src)))
     (let [src (if (clojure.string/ends-with? src ".png") src (str src ".png"))]
       (ResourceLocation/tryParse src))))

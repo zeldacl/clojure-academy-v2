@@ -37,6 +37,7 @@
            [cn.li.fabric1201.shim FabricClientHelper$RendererFactory]
            [cn.li.fabric1201.client.render BlockEntityRendererImpl]
            [com.mojang.blaze3d.platform Window]
+           [net.minecraft.world.entity.player Player]
            [cn.li.mc1201.client GuiGraphicsHelper]))
 
 (defn- bind-texture-fabric!
@@ -140,7 +141,7 @@
 	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
-	     :send-system-message! (fn [player translatable-key & args]
+	     :send-system-message! (fn [^Player player translatable-key & args]
 	                              (.sendSystemMessage player
 	                                (Component/translatable translatable-key (into-array Object args))))
      ;; === Rendering bridge (parity with Forge init.clj) ===
@@ -167,7 +168,8 @@
      :is-glfw-key-down? (fn [key-code]
                           (try
                             (let [^Minecraft mc (Minecraft/getInstance)
-                                  handle (.. mc getWindow getHandle)]
+                                  ^Window win (.getWindow mc)
+                                  handle (.getWindow win)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))}))
 

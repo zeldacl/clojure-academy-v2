@@ -7,10 +7,10 @@
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.resources ResourceLocation]))
 
-(def c2s-channel
+(def ^ResourceLocation c2s-channel
   (ResourceLocation. mod-config/*mod-id* "clj_rpc_c2s"))
 
-(def s2c-channel
+(def ^ResourceLocation s2c-channel
   (ResourceLocation. mod-config/*mod-id* "clj_rpc_s2c"))
 
 (defn make-buf

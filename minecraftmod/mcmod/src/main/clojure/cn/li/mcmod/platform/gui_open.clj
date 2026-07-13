@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.platform.gui-open
-  "Platform-injected player menu open (Forge openMenu / Fabric openHandledScreen).
+  "Platform-injected player menu open (both loaders call Player/openMenu under
+  official Mojang mappings).
 
   Function stored in Framework [:platform :gui-open] instead of ^:dynamic var."
   (:require [cn.li.mcmod.framework :as fw]))

@@ -60,7 +60,7 @@
 
 (defn open-player-menu!
   [^net.minecraft.world.entity.player.Player player factory]
-  (.openHandledScreen player factory))
+  (.openMenu player factory))
 
 (defn player-persistent-data
   [^net.minecraft.server.level.ServerPlayer player]

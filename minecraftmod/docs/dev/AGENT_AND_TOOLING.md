@@ -33,9 +33,8 @@
   - `cmd /c .\gradlew.bat quickUnitTests`（聚合 `runAcUnitTests` + `runMcmodUnitTests`）
   - `cmd /c .\gradlew.bat verifyLocalPrGate`（聚合 `verifyCurrentPlatforms` + `quickUnitTests`）
   - `cmd /c .\gradlew.bat verifyAotBootstrapSafety`
-  - `cmd /c .\gradlew.bat verifyNoPlatformReflection`（扫描 main Clojure 源，禁止 MC/Forge/Fabric 反射；仅 allowlist `ic2_energy.clj`）
-  - `cmd /c .\gradlew.bat verifyForgeBaseline`
-  - `cmd /c .\gradlew.bat verifyFabricBaseline`
+  - `cmd /c .\gradlew.bat verifyNoPlatformReflection`（正则扫描 main Clojure 源文本，禁止显式反射 API：`Class/forName`、`clojure.lang.Reflector`、`.getMethod` 等；仅 allowlist `ic2_energy.clj`。**不检测**编译器隐式反射——缺类型提示导致的反射 warning 需要 `checkClojure`）
+  - `cmd /c .\gradlew.bat verifyForgeBaseline` / `verifyFabricBaseline`（2026-07 起两者均已把 `:forge-1.20.1:checkClojure` / `:fabric-1.20.1:checkClojure` 纳入依赖链，真正拦截 Clojure 编译器隐式反射 `reflection='fail'`；此前 `checkClojure` 虽然声明了 `reflection='fail'`，但从未被任何 baseline/PR 门禁调用到，`compileClojure` 任务本身也不产生反射 warning（`-Dclojure.compile.warn-on-reflection=true` 这个 JVM 系统属性对 Clojure 编译器无效，mcmod/build.gradle 里监听 "Reflection warning" 文本的 `StandardOutputListener` 因此一直是死代码）——这意味着此前 forge/fabric 平台专属 Clojure 源码的隐式反射长期零覆盖。审计时用探针文件验证实测确认了这一点，并顺带修复了当时唯二能找到的 6 处遗留反射警告（`gui/reactive/render.clj` 缺返回类型提示；`fabric1201` 的 `registerGlobalReceiver`/`getWindow`/`sendSystemMessage`/`Player.openMenu`——最后一处是真 bug：Fabric 端错写成 Yarn 映射名 `openHandledScreen`，官方映射下该方法根本不存在，运行时会直接抛 `NoSuchMethodException`）。`checkClojure` 会重新遍历全部命名空间（较慢），衡量是否值得为 baseline 增加这层时按此记录取舍。
   - `cmd /c .\gradlew.bat verifyFabricSmoke`
   - `cmd /c .\gradlew.bat verifyForgeHookCoverage`
   - `cmd /c .\gradlew.bat verifyFabricHookManifest`
