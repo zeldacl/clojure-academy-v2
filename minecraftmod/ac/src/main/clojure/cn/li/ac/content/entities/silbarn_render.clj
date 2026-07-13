@@ -19,7 +19,7 @@
 
 (def ^:private silbarn-model
   (machine-render-runtime/lazy-resource silbarn-render-resource-lock #'*silbarn-model*
-                                        #(res/load-obj-model "silbarn")))
+                                        #(obj/bake-obj-model (res/load-obj-model "silbarn"))))
 
 (def ^:private silbarn-texture
   (machine-render-runtime/lazy-resource silbarn-render-resource-lock #'*silbarn-texture*
@@ -50,7 +50,7 @@
           (pose/apply-axis-rotation pose-stack spin-angle ax ay az)
           (pose/apply-y-rotation pose-stack (- (double yaw)))
           (pose/apply-x-rotation pose-stack 90.0)
-          (obj/render-all! (silbarn-model) pose-stack vc packed-light packed-overlay)
+          (obj/render-baked-all! (silbarn-model) pose-stack vc packed-light packed-overlay)
           (finally
             (pose/pop-pose pose-stack))))
       (catch Exception e

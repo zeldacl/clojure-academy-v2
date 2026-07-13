@@ -16,7 +16,9 @@
 
 (def ^:private matrix-model
   (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-model*
-                                        #(res/load-obj-model "matrix")))
+                                        #(obj/bake-obj-model (res/load-obj-model "matrix")
+                                                             {:skip-flat-bottom-plane? true
+                                                              :bottom-plane-epsilon 0.0008})))
 
 (def ^:private matrix-texture
   (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-texture*
@@ -63,17 +65,16 @@
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
           (pose/translate pose-stack (double 0.0) (double y-offset) (double 0.0))
           (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
-          (obj/render-part-consumer (matrix-model) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
+          (obj/render-baked-part! (matrix-model) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
         (finally
           (pose/pop-pose pose-stack))))))
 
 (defn render-at-origin
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (obj-tesr/translate-obj-y-lift! pose-stack)
-  (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source (matrix-texture)
-    (fn [vc]
-      (render-base tile pose-stack vc packed-light packed-overlay)
-      (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay))))
+  (let [vc (obj-tesr/get-solid-vc buffer-source (matrix-texture))]
+    (render-base tile pose-stack vc packed-light packed-overlay)
+    (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
 
 (defn register!
   []

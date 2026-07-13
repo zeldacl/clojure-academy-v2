@@ -73,26 +73,31 @@
 (defn- msdf-glyph? [cp]
   (MsdfFontManager/hasGlyph (int cp)))
 
-(defn- segment-runs [^String text]
-  (let [^ints cps (codepoints text)]
-    (cond
-      (or (not (MsdfFontManager/hasFontFace)) (zero? (alength cps)))
+(defn- segment-runs
+  "Split `text` into runs of consecutive same-family (MSDF/non-MSDF) codepoints.
+  Single pass over the codepoint array; run boundaries are cut via `subs` on
+  the original string (tracking the parallel char-index, correct across
+  surrogate pairs) instead of the old per-codepoint `Character/toString` +
+  `str` concatenation (which reallocated the run's text on every codepoint)."
+  [^String text]
+  (let [^ints cps (codepoints text)
+        n (alength cps)]
+    (if (or (not (MsdfFontManager/hasFontFace)) (zero? n))
       [{:msdf? false :text (or text "")}]
-      :else
-      (let [runs (reduce
-                  (fn [acc cp]
-                    (let [ch (Character/toString (int cp))
-                          msdf? (msdf-glyph? cp)]
-                      (if (empty? acc)
-                        [{:msdf? msdf? :text ch}]
-                        (let [last-run (peek acc)
-                              same? (= msdf? (:msdf? last-run))]
-                          (if same?
-                            (conj (pop acc) (update last-run :text str ch))
-                            (conj acc {:msdf? msdf? :text ch}))))))
-                  []
-                  (map #(aget cps %) (range (alength cps))))]
-        (if (seq runs) runs [{:msdf? false :text text}])))))
+      (loop [i 0
+             char-i 0
+             run-start-char 0
+             run-msdf? (msdf-glyph? (aget cps 0))
+             acc (transient [])]
+        (if (< i n)
+          (let [cp (aget cps i)
+                cw (Character/charCount cp)
+                m? (msdf-glyph? cp)]
+            (if (= m? run-msdf?)
+              (recur (inc i) (+ char-i cw) run-start-char run-msdf? acc)
+              (recur (inc i) (+ char-i cw) char-i m?
+                     (conj! acc {:msdf? run-msdf? :text (subs text run-start-char char-i)}))))
+          (persistent! (conj! acc {:msdf? run-msdf? :text (subs text run-start-char char-i)})))))))
 
 (defn- scale-factor [font-size]
   (* (/ (double font-size) (get-msdf-base-height)) 1.0))
@@ -126,22 +131,72 @@
   (try (body-fn)
        (finally (MsdfFontManager/setMonospace false))))
 
+;; ---- text bake cache ----
+;; segment-runs + per-run Component + per-run width used to be recomputed
+;; twice per draw-text! call (once for alignment width, once for drawing) and
+;; every frame even for unchanged text. Baked result is font-size-independent
+;; (scale is a pure multiplier applied downstream by callers), so it's cached
+;; by [font-desc text] — structural map equality means callers passing a
+;; fresh-but-equal font-desc map still hit; no key allocation on a cache hit,
+;; only `get` against what the caller already passed in.
+(defonce ^:private text-bake-cache (atom {}))
+(defonce ^:private last-has-font-face? (atom false))
+(defonce ^:private last-cache-clear-ms (atom 0))
+(def ^:private cache-refresh-interval-ms
+  "Bounds how long a text/style combo can stay pinned to a stale MSDF/vanilla
+  run classification if a glyph's MSDF atlas entry finishes async pre-baking
+  (triggered by MsdfFontManager/getGlyph) after this cache already classified
+  it as non-MSDF. A few seconds is imperceptible but keeps the cache from
+  being wrong indefinitely — the old uncached code re-segmented every frame
+  and so self-corrected within ~1 frame; this bounds it to this interval
+  instead."
+  4000)
+
+(defn- bake-text
+  "{:runs [{:msdf? bool :text String :comp Component :width double} ...]
+    :total-width double} — width is unscaled (em-space), matching the old
+  segmented-width contract; multiply by `scale-factor` to get screen pixels."
+  [font-desc ^String text]
+  (let [monospace? (boolean (:monospace? font-desc))]
+    (with-monospace monospace?
+      (fn []
+        (let [^Font shadow (shadow-font)
+              ^Font vanilla (vanilla-font)
+              use-shadow? (MsdfFontManager/hasFontFace)
+              ^Font font (if use-shadow? shadow vanilla)]
+          (loop [runs (segment-runs text) acc (transient []) total 0.0]
+            (if (empty? runs)
+              {:runs (persistent! acc) :total-width total}
+              (let [{:keys [msdf? text]} (first runs)
+                    ^Component comp (component-for-run text font-desc)
+                    w (double
+                       (if (and use-shadow? msdf? monospace?)
+                         (* (count text) (MsdfFontManager/monospaceAdvance))
+                         (.width font comp)))]
+                (recur (rest runs)
+                       (conj! acc {:msdf? msdf? :text text :comp comp :width w})
+                       (+ total w))))))))))
+
+(defn- baked-for
+  [font-desc ^String text]
+  ;; MSDF face can transition ready-state after this ns's first calls (async
+  ;; load); invalidate on that transition. Also time-bounded refresh — see
+  ;; `cache-refresh-interval-ms`.
+  (let [ready? (boolean (MsdfFontManager/hasFontFace))
+        now (System/currentTimeMillis)]
+    (when (or (not= ready? @last-has-font-face?)
+              (> (- now (long @last-cache-clear-ms)) cache-refresh-interval-ms))
+      (reset! last-has-font-face? ready?)
+      (reset! last-cache-clear-ms now)
+      (reset! text-bake-cache {})))
+  (let [by-text (get @text-bake-cache font-desc)]
+    (or (get by-text text)
+        (let [b (bake-text font-desc text)]
+          (swap! text-bake-cache update font-desc (fnil assoc {}) text b)
+          b))))
+
 (defn- segmented-width [font-desc ^String text & {:keys [glyph-styles]}]
-  (let [monospace? (boolean (:monospace? font-desc))
-        ^Font shadow (shadow-font)
-        ^Font vanilla (vanilla-font)
-        use-shadow? (MsdfFontManager/hasFontFace)]
-    (loop [runs (segment-runs text) width 0.0]
-      (if (empty? runs)
-        width
-        (let [{:keys [msdf? text]} (first runs)
-              ^Component comp (component-for-run text font-desc)
-              ^Font font (if use-shadow? shadow vanilla)
-              w (double
-                 (if (and use-shadow? msdf? monospace?)
-                   (* (count text) (MsdfFontManager/monospaceAdvance))
-                   (.width font comp)))]
-          (recur (rest runs) (+ width w)))))))
+  (:total-width (baked-for font-desc text)))
 
 (defn text-width
   ([font-desc ^String text font-size]
@@ -181,23 +236,24 @@
 
 (defn- draw-msdf-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?
                        & {:keys [glyph-styles]}]
+  ;; Reuses the same baked runs `segmented-width`/`text-width` already forced
+  ;; a cache entry for — per-run Component + width are not recomputed here.
   (let [scale (scale-factor font-size)
+        {:keys [runs]} (baked-for font-desc text)
         ^Font shadow (shadow-font)
         ^Font vanilla (vanilla-font)
         use-shadow? (or (msdf-active?) (MsdfFontManager/hasFontFace))
+        ^Font font (if use-shadow? shadow vanilla)
         ^PoseStack ps (.pose gg)]
     (.pushPose ps)
     (try
       (.translate ps (double x) (double y) 0.0)
       (.scale ps (float scale) (float scale) 1.0)
-      (loop [runs (segment-runs text) dx 0.0]
-        (when (seq runs)
-          (let [{:keys [msdf? text]} (first runs)
-                ^Component comp (component-for-run text font-desc)
-                ^Font font (if use-shadow? shadow vanilla)
-                w (double (.width font comp))]
+      (loop [rs runs dx 0.0]
+        (when (seq rs)
+          (let [{:keys [^Component comp width]} (first rs)]
             (draw-run! gg font comp dx 0 color shadow?)
-            (recur (rest runs) (+ dx w)))))
+            (recur (rest rs) (+ dx (double width))))))
       (finally
         (.popPose ps)))
     (.endBatch (.bufferSource gg))))

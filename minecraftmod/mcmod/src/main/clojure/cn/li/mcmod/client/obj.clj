@@ -50,48 +50,10 @@
    :y (double (:y nrm))
    :z (double (:z nrm))})
 
-(def ^:dynamic *skip-downward-faces*
-  "When true, faces with downward-pointing normals are skipped.
-  Useful for block-mounted models where the underside should not occlude
-  the supporting block's top surface."
-  false)
-
-(def ^:dynamic *skip-model-bottom-faces*
-  "When true, triangles on the model's lowest Y plane are skipped.
-  This is more robust than normal-based culling for OBJ files with mixed
-  winding or imperfect normals."
-  false)
-
-(def ^:dynamic *force-fullbright*
-  "When true, OBJ buffered rendering uses fullbright light to avoid models
-  turning black due to platform/light interop differences."
-  true)
-
-(def ^:dynamic *skip-flat-bottom-plane*
-  "When true, remove triangles that are exactly on the current part's minimum
-  Y plane (all 3 vertices near min Y). This is a precise way to avoid support
-  block depth conflicts without broad face culling."
-  false)
-
-(def ^:dynamic *bottom-plane-epsilon*
-  "Tolerance for flat-bottom-plane matching in model-space Y units."
-  0.0005)
-
-(def ^:dynamic *obj-buffer-normal-mode*
-  "How buffered (VertexConsumer) OBJ shading picks normals.
-  `:reconcile` (default): file `vn` when dot(vn, n_face) >= `*obj-vn-face-align-min-dot*`,
-  else face normal (Wavefront: vn should agree with facet orientation or results are undefined).
-  `:face`: flat face normal everywhere. `:vertex`: file `vn` only (may look wrong if vn disagrees)."
-  :reconcile)
-
-(def ^:dynamic *obj-vn-face-align-min-dot*
-  "Cosine threshold for `:reconcile` mode; below this use geometric face normal."
-  0.12)
-
-(def ^:dynamic *obj-max-lod*
-  "Optional LOD ceiling for OBJ `lod` display attribute.
-  nil means disabled (render all)."
-  nil)
+;; Rendering behavior used to be controlled by 8 `^:dynamic` vars, rebound via
+;; `binding` around every render-tile call (every frame, per BE). They are now
+;; `bake-obj-model` parameters instead — resolved once at model-load time, not
+;; every frame. See `bake-obj-model` below for the equivalent keys/defaults.
 
 (defn- v3-dot [a b]
   (+ (* (double (:x a)) (double (:x b)))
@@ -1169,233 +1131,194 @@
      (float b)
      (float (max 0.0 (min 1.0 alpha)))]))
 
-(defn- buffered-emit-part-faces!
-  "Emit triangles for `face-list` using an existing VertexConsumer (single texture).
+(defn- part-min-y
+  [vertices face-list]
+  (let [idxs (into #{} (mapcat (fn [{:keys [i0 i1 i2]}] [i0 i1 i2])) face-list)]
+    (if (seq idxs)
+      (reduce min (map (fn [idx] (double (:y (:pos (nth vertices idx))))) idxs))
+      0.0)))
 
-  Performance-critical render-loop code. Optimizations applied:
-  - Dynamic var lookups extracted outside the hot loop (single read per call).
-  - filter+count+vector replaced by arithmetic (zero allocation per face).
-  - v3 / v3-norm / map-model-* inlined to scalars (zero map allocation per vertex).
-  - [i0 i1 i2] vector allocation eliminated via pre-extracted vertex order + case.
-  - Redundant double-normalization of already-unit vectors removed.
-  - Primitive coercion via (double)/(long)/(int) — Clojure AOT infers unboxed locals."
-  [vertices materials part-min-y bottom-epsilon face-list pose-stack vc packed-light packed-overlay]
-  ;; ─── Extract all dynamic vars once (thread-local read → local boolean/number) ───
-  (let [part-min-y   (double part-min-y)
-        bottom-epsilon (double bottom-epsilon)
-        skip-flat?*  (boolean *skip-flat-bottom-plane*)
-        skip-down?*  (boolean *skip-downward-faces*)
-        skip-model-bot?* (boolean *skip-model-bottom-faces*)
-        max-lod*     (double (or *obj-max-lod* 0.0))
-        normal-mode* *obj-buffer-normal-mode*
-        align-thresh* (double *obj-vn-face-align-min-dot*)
-        fullbright?* (boolean *force-fullbright*)
-        ;; Pre-extract vertex order (avoids repeated platform lookups + vector alloc per face).
-        v-order      (buffer/triangle-vertex-order)
-        o0           (long (nth v-order 0))
-        o1           (long (nth v-order 1))
-        o2           (long (nth v-order 2))
-        ;; Pre-compute fullbright light value.
-        final-light  (int (if fullbright?* 0x00F000F0 packed-light))
-        p-overlay    (int packed-overlay)]
-
-    (doseq [{:keys [i0 i1 i2 normal material display]} face-list
-            :let [;; Face normal → scalars (inlined map-model-normal: currently identity).
-                  fnx (double (:x normal))
+(defn- bake-batch-verts
+  "Resolve culling + normal-mode selection for one material's faces within a
+  part, once. Returns a primitive float[] of x y z u v nx ny nz per emitted
+  vertex (in `v-order`), or nil if every face in this batch was culled."
+  ^floats
+  [vertices v-order
+   {:keys [skip-flat?* skip-down?* skip-model-bot?* max-lod* normal-mode align-thresh*
+           pmy bottom-epsilon]}
+   faces]
+  (let [acc (java.util.ArrayList.)]
+    (doseq [{:keys [i0 i1 i2 normal display]} faces
+            :let [fnx (double (:x normal))
                   fny (double (:y normal))
                   fnz (double (:z normal))
-
-                  ;; Vertex references.
                   v0 (nth vertices i0)
                   v1 (nth vertices i1)
                   v2 (nth vertices i2)
-
-                  ;; Y coordinates.
                   y0 (double (:y (:pos v0)))
                   y1 (double (:y (:pos v1)))
                   y2 (double (:y (:pos v2)))
-
-                  ;; ─── Arithmetic bottom-verts (replaces filter + count + vector alloc) ───
-                  b0 (if (<= (Math/abs (- y0 part-min-y)) bottom-epsilon) 1 0)
-                  b1 (if (<= (Math/abs (- y1 part-min-y)) bottom-epsilon) 1 0)
-                  b2 (if (<= (Math/abs (- y2 part-min-y)) bottom-epsilon) 1 0)
+                  b0 (if (<= (Math/abs (- y0 pmy)) bottom-epsilon) 1 0)
+                  b1 (if (<= (Math/abs (- y1 pmy)) bottom-epsilon) 1 0)
+                  b2 (if (<= (Math/abs (- y2 pmy)) bottom-epsilon) 1 0)
                   bottom-verts (long (+ b0 b1 b2))
-
-                  ;; Skip-checks with short-circuit evaluation.
                   skip-flat-bottom? (and skip-flat?* (= 3 bottom-verts))
-                  skip-by-normal?   (and skip-down?* (<= fny -0.2))
-
-                  ;; face-min-y computed lazily inside skip-by-bottom? — only
-                  ;; evaluated when skip-model-bot?* is true (avoid wasted min()).
-                  skip-by-bottom?   (and skip-model-bot?*
-                                         (let [face-min-y (min y0 (min y1 y2))]
-                                           (or (>= bottom-verts 2)
-                                               (and (>= bottom-verts 1)
-                                                    (<= fny 0.15)
-                                                    (<= (Math/abs (- face-min-y part-min-y))
-                                                        (* 2.0 bottom-epsilon))))))
+                  skip-by-normal? (and skip-down?* (<= fny -0.2))
+                  skip-by-bottom? (and skip-model-bot?*
+                                       (let [face-min-y (min y0 (min y1 y2))]
+                                         (or (>= bottom-verts 2)
+                                             (and (>= bottom-verts 1)
+                                                  (<= fny 0.15)
+                                                  (<= (Math/abs (- face-min-y pmy))
+                                                      (* 2.0 bottom-epsilon))))))
                   skip-by-lod? (if (map? display)
                                  (let [lod (:lod display)]
-                                   (and (number? lod)
-                                        (> (double lod) max-lod*)))
+                                   (and (number? lod) (> (double lod) max-lod*)))
                                  false)]
-
             :when (not (or skip-flat-bottom? skip-by-normal? skip-by-bottom? skip-by-lod?))]
-
-      ;; ─── Per-face: material color + face-unit normal (computed once) ───
-      (let [rgba (material-rgba materials material)
-            cr   (nth rgba 0)
-            cg   (nth rgba 1)
-            cb   (nth rgba 2)
-            ca   (nth rgba 3)
-
-            ;; Inline face-unit normal computation (avoid v3 map allocation).
-            fn-len-sq (+ (* fnx fnx) (* fny fny) (* fnz fnz))
-            fn-len    (Math/sqrt fn-len-sq)
+      (let [fn-len-sq (+ (* fnx fnx) (* fny fny) (* fnz fnz))
+            fn-len (Math/sqrt fn-len-sq)
             fn-near-zero? (< fn-len 1.0e-8)
-            ;; (double ...) wrapper on if to force unbox — branches mix literal 0.0/1.0 (boxed)
-            ;; with primitive / results.
             fu-x (double (if fn-near-zero? 0.0 (/ fnx fn-len)))
             fu-y (double (if fn-near-zero? 1.0 (/ fny fn-len)))
             fu-z (double (if fn-near-zero? 0.0 (/ fnz fn-len)))]
-
-        ;; ─── Emit 3 vertices per triangle ───
-        ;; Avoid [i0 i1 i2] vector allocation: use case dispatch on pre-extracted order.
         (doseq [ord v-order]
-          (let [vertex-idx (case (int ord)
-                             0 i0
-                             1 i1
-                             i2)
+          (let [vertex-idx (case (int ord) 0 i0 1 i1 i2)
                 {:keys [pos uv normal]} (nth vertices vertex-idx)
-
-                ;; Inline map-model-pos + map-model-normal (currently identity copies).
-                ;; Access vector components directly as scalars → zero map allocation.
                 pos-x (double (:x pos))
                 pos-y (double (:y pos))
                 pos-z (double (:z pos))
-
                 r-nx (double (:x normal))
                 r-ny (double (:y normal))
                 r-nz (double (:z normal))
-
-                ;; Inline v3-norm for vertex raw normal.
                 r-len-sq (+ (* r-nx r-nx) (* r-ny r-ny) (* r-nz r-nz))
-                r-len    (Math/sqrt r-len-sq)
+                r-len (Math/sqrt r-len-sq)
                 r-near-zero? (< r-len 1.0e-8)
                 vn-u-x (double (if r-near-zero? 0.0 (/ r-nx r-len)))
                 vn-u-y (double (if r-near-zero? 0.0 (/ r-ny r-len)))
                 vn-u-z (double (if r-near-zero? 0.0 (/ r-nz r-len)))
-
                 vn-sq (+ (* vn-u-x vn-u-x) (* vn-u-y vn-u-y) (* vn-u-z vn-u-z))
                 vn-is-zero? (< vn-sq 1.0e-16)
-
-                ;; Inline v3-dot: dot(vertex-normal-unit, face-unit).
                 dot (+ (* vn-u-x fu-x) (* vn-u-y fu-y) (* vn-u-z fu-z))
-
-                ;; ─── Pick normal per mode ───
-                ;; All branches produce already-unit vectors → no re-normalization needed
-                ;; downstream; we only guard against near-zero fallback.
-                ;; (double ...) wrapper forces unbox of case expression.
-                np-x (double (case normal-mode*
-                               :face   fu-x
+                np-x (double (case normal-mode
+                               :face fu-x
                                :vertex (if vn-is-zero? fu-x vn-u-x)
-                               ;; :reconcile (default)
-                               (if vn-is-zero?
-                                 fu-x
-                                 (if (>= dot align-thresh*) vn-u-x fu-x))))
-                np-y (double (case normal-mode*
-                               :face   fu-y
+                               (if vn-is-zero? fu-x (if (>= dot align-thresh*) vn-u-x fu-x))))
+                np-y (double (case normal-mode
+                               :face fu-y
                                :vertex (if vn-is-zero? fu-y vn-u-y)
-                               (if vn-is-zero?
-                                 fu-y
-                                 (if (>= dot align-thresh*) vn-u-y fu-y))))
-                np-z (double (case normal-mode*
-                               :face   fu-z
+                               (if vn-is-zero? fu-y (if (>= dot align-thresh*) vn-u-y fu-y))))
+                np-z (double (case normal-mode
+                               :face fu-z
                                :vertex (if vn-is-zero? fu-z vn-u-z)
-                               (if vn-is-zero?
-                                 fu-z
-                                 (if (>= dot align-thresh*) vn-u-z fu-z))))
-
-                ;; Final guard: if picked normal is near-zero, default to (0,1,0).
+                               (if vn-is-zero? fu-z (if (>= dot align-thresh*) vn-u-z fu-z))))
                 np-len-sq (+ (* np-x np-x) (* np-y np-y) (* np-z np-z))
                 np-is-zero? (< np-len-sq 1.0e-16)
                 np-len (Math/sqrt np-len-sq)
-
-                ;; ─── Final per-vertex outputs ───
-                x  (float pos-x)
-                y  (float pos-y)
-                z  (float pos-z)
-                u  (float (:u uv))
-                v  (float (- 1.0 (:v uv)))
+                x (float pos-x)
+                y (float pos-y)
+                z (float pos-z)
+                u (float (:u uv))
+                v (float (- 1.0 (:v uv)))
                 nx (float (if np-is-zero? 0.0 (/ np-x np-len)))
                 ny (float (if np-is-zero? 1.0 (/ np-y np-len)))
                 nz (float (if np-is-zero? 0.0 (/ np-z np-len)))]
+            (.add acc x) (.add acc y) (.add acc z)
+            (.add acc u) (.add acc v)
+            (.add acc nx) (.add acc ny) (.add acc nz)))))
+    (when (pos? (.size acc))
+      (float-array acc))))
 
-            (buffer/submit-vertex vc pose-stack x y z
-                                  cr cg cb ca
-                                  u v p-overlay final-light
-                                  nx ny nz)))))))
+(defn bake-obj-model
+  "Resolve per-face culling, normal-mode selection, and material tint at
+  MODEL LOAD TIME instead of every render call — replaces the 8 `^:dynamic`
+  vars this namespace used to read (and `binding`-rebind) every frame.
 
-(defn render-part-consumer
-  "Render one OBJ group using a VertexConsumer. Uses the provided PoseStack
-  for transforms and the provided vertex consumer for buffered submission.
-  Faces may carry optional `:material` from `usemtl`; single-texture callers
-  ignore it. For per-material textures see `render-part-consumer-multi`."
-  [model part pose-stack vertex-consumer packed-light packed-overlay]
-  (when-let [face-list (get (:faces model) part)]
-    (when (seq face-list)
-      (let [part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
-                                               [i0 i1 i2])
-                                             face-list))
-            part-min-y (if (seq part-vertex-indices)
-                         (reduce min
-                                 (map (fn [idx]
-                                        (:y (:pos (nth (:vertices model) idx))))
-                                      part-vertex-indices))
-                         0.0)
-            bottom-epsilon (double *bottom-plane-epsilon*)
-            vertices (:vertices model)]
-          (buffered-emit-part-faces! vertices (:materials model) part-min-y bottom-epsilon face-list
-                                   pose-stack vertex-consumer packed-light packed-overlay)))))
+  Options (same semantics/defaults as the old dynamic vars):
+  - :skip-flat-bottom-plane? (default false)
+  - :bottom-plane-epsilon (default 0.0005)
+  - :skip-downward-faces? (default false)
+  - :skip-model-bottom-faces? (default false)
+  - :max-lod (default 0.0 — was `(or *obj-max-lod* 0.0)`, i.e. no override anywhere)
+  - :normal-mode (:reconcile default, or :face / :vertex)
+  - :vn-face-align-min-dot (default 0.12)
+  - :force-fullbright? (default true)
 
-(defn render-part-consumer-multi
-  "Buffered OBJ draw with a **fresh* VertexConsumer per material batch.
-  `material->texture` maps MTL material name (string) to the same texture type
-  your platform uses for `buffer/get-solid-buffer`. Unknown / default faces
-  (no `:material`) use `default-texture`."
-  [model part pose-stack buffer-source default-texture packed-light packed-overlay material->texture]
-  (when-let [face-list (get (:faces model) part)]
-    (when (seq face-list)
-      (let [vertices (:vertices model)
-            part-vertex-indices (set (mapcat (fn [{:keys [i0 i1 i2]}]
-                                               [i0 i1 i2])
-                                             face-list))
-            part-min-y (if (seq part-vertex-indices)
-                         (reduce min
-                                 (map (fn [idx]
-                                        (:y (:pos (nth (:vertices model) idx))))
-                                      part-vertex-indices))
-                         0.0)
-            bottom-epsilon (double *bottom-plane-epsilon*)
-            batches (->> face-list
-                         (group-by #(or (:material %) default-mtl-key))
-                         (sort-by (fn [[k _]] (if (= k default-mtl-key) "" (str k)))))]
-        (doseq [[mat-key batch] batches]
-          (let [tex (if (= mat-key default-mtl-key)
-                      default-texture
-                      (or (when material->texture (material->texture mat-key))
-                          default-texture))
-                vc (buffer/get-solid-buffer buffer-source tex)]
-              (buffered-emit-part-faces! vertices (:materials model) part-min-y bottom-epsilon batch
-                                       pose-stack vc packed-light packed-overlay)))))))
+  Returns {:fullbright? bool
+           :parts {part-name {:batches [{:rgba floats :verts floats} ...]}}}.
+  `render-baked-part!` scans this with zero further allocation."
+  ([model] (bake-obj-model model {}))
+  ([model {:keys [skip-flat-bottom-plane? bottom-plane-epsilon
+                  skip-downward-faces? skip-model-bottom-faces?
+                  max-lod normal-mode vn-face-align-min-dot
+                  force-fullbright?]
+           :or {bottom-plane-epsilon 0.0005
+                max-lod 0.0
+                normal-mode :reconcile
+                vn-face-align-min-dot 0.12
+                force-fullbright? true}}]
+   (let [vertices (:vertices model)
+         materials (:materials model)
+         v-order (buffer/triangle-vertex-order)
+         cull-opts {:skip-flat?* (boolean skip-flat-bottom-plane?)
+                    :skip-down?* (boolean skip-downward-faces?)
+                    :skip-model-bot?* (boolean skip-model-bottom-faces?)
+                    :max-lod* (double max-lod)
+                    :normal-mode normal-mode
+                    :align-thresh* (double vn-face-align-min-dot)
+                    :bottom-epsilon (double bottom-plane-epsilon)}
+         bake-part
+         (fn [face-list]
+           (let [pmy (part-min-y vertices face-list)
+                 opts (assoc cull-opts :pmy pmy)]
+             {:batches
+              (vec
+               (keep
+                (fn [[mat-key faces]]
+                  (when-let [verts (bake-batch-verts vertices v-order opts faces)]
+                    {:rgba (float-array (material-rgba materials (when (not= mat-key default-mtl-key) mat-key)))
+                     :verts verts}))
+                (group-by #(or (:material %) default-mtl-key) face-list)))}))]
+     {:fullbright? (boolean force-fullbright?)
+      :parts (into {}
+                   (map (fn [[part face-list]] [part (bake-part face-list)]))
+                   (:faces model))})))
 
-(defn render-all!
-  "Render all groups in parsed OBJ model."
-  ([model pose-stack vertex-consumer packed-light packed-overlay]
-   (doseq [part (keys (:faces model))]
-     (render-part-consumer model part pose-stack vertex-consumer packed-light packed-overlay))))
+(defn render-baked-part!
+  "Zero-allocation render of one baked part."
+  [baked part pose-stack vc packed-light packed-overlay]
+  (when-let [batches (get-in baked [:parts part :batches])]
+    (let [light (int (if (:fullbright? baked) 0x00F000F0 packed-light))
+          overlay (int packed-overlay)
+          bn (count batches)]
+      (loop [bi 0]
+        (when (< bi bn)
+          (let [{:keys [^floats verts ^floats rgba]} (nth batches bi)
+                cr (aget rgba 0) cg (aget rgba 1) cb (aget rgba 2) ca (aget rgba 3)
+                n (alength verts)]
+            (loop [i 0]
+              (when (< i n)
+                (buffer/submit-vertex vc pose-stack
+                                      (aget verts i)
+                                      (aget verts (unchecked-add-int i 1))
+                                      (aget verts (unchecked-add-int i 2))
+                                      cr cg cb ca
+                                      (aget verts (unchecked-add-int i 3))
+                                      (aget verts (unchecked-add-int i 4))
+                                      overlay light
+                                      (aget verts (unchecked-add-int i 5))
+                                      (aget verts (unchecked-add-int i 6))
+                                      (aget verts (unchecked-add-int i 7)))
+                (recur (unchecked-add-int i 8)))))
+          (recur (unchecked-inc-int bi)))))))
 
-(defn has-part?
-  "Whether the model contains a named part/group." 
-  [model part]
-  (contains? (:faces model) part))
+(defn render-baked-all!
+  "Render all parts in a baked OBJ model."
+  [baked pose-stack vc packed-light packed-overlay]
+  (doseq [part (keys (:parts baked))]
+    (render-baked-part! baked part pose-stack vc packed-light packed-overlay)))
+
+(defn baked-has-part?
+  "Whether the baked model contains a named part/group."
+  [baked part]
+  (contains? (:parts baked) part))

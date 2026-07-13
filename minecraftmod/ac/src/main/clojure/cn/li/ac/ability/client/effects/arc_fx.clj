@@ -1,23 +1,24 @@
 (ns cn.li.ac.ability.client.effects.arc-fx
   "L-system lightning arc generation for beam effects.
   Ported from original AcademyCraft ArcFactory.java + SubArcHandler.java."
-  (:require [cn.li.ac.ability.client.render-util :as ru]))
+  (:require [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.util.math.vec3 :as vec3]))
 
 ;; ---------------------------------------------------------------------------
-;; 3D vector helpers
+;; 3D vector helpers — generic ops delegate to util.math.vec3 (this used to be
+;; a third private copy of the same {:x :y :z} algebra); yaw/pitch rotation and
+;; the lerp/point/segment helpers below are arc_fx-specific, kept local.
 ;; ---------------------------------------------------------------------------
 
-(defn- v+ [a b] {:x (+ (:x a) (:x b)) :y (+ (:y a) (:y b)) :z (+ (:z a) (:z b))})
-(defn- v- [a b] {:x (- (:x a) (:x b)) :y (- (:y a) (:y b)) :z (- (:z a) (:z b))})
-(defn- v* [a s] {:x (* (:x a) s) :y (* (:y a) s) :z (* (:z a) s)})
+(def ^:private v+ vec3/v+)
+(def ^:private v- vec3/v-)
+(def ^:private v* vec3/v*)
+(def ^:private v-cross vec3/vcross)
+(def ^:private v-length vec3/vlen)
+(def ^:private v-normalize vec3/vnorm)
 (defn- v-lerp [a b t] {:x (+ (:x a) (* (- (:x b) (:x a)) t))
                        :y (+ (:y a) (* (- (:y b) (:y a)) t))
                        :z (+ (:z a) (* (- (:z b) (:z a)) t))})
-(defn- v-cross [a b] {:x (- (* (:y a) (:z b)) (* (:z a) (:y b)))
-                      :y (- (* (:z a) (:x b)) (* (:x a) (:z b)))
-                      :z (- (* (:x a) (:y b)) (* (:y a) (:x b)))})
-(defn- v-length [a] (Math/sqrt (+ (* (:x a) (:x a)) (* (:y a) (:y a)) (* (:z a) (:z a)))))
-(defn- v-normalize [a] (let [l (max 1e-8 (v-length a))] (v* a (/ 1.0 l))))
 (defn- v-rotate-yaw [a rad]
   (let [cos (Math/cos rad) sin (Math/sin rad)]
     {:x (+ (* (:x a) cos) (* (:z a) sin))
@@ -33,9 +34,8 @@
   "Randomly rotate a vector within range degrees (matching original randomRotate)."
   [range-deg dir]
   (let [a-rad (/ (* range-deg (rand)) 180.0 Math/PI)
-        ret (atom (v-rotate-pitch dir (- (* (rand) 2 a-rad) a-rad)))]
-    (reset! ret (v-rotate-yaw @ret (- (* (rand) 2 a-rad) a-rad)))
-    @ret))
+        pitched (v-rotate-pitch dir (- (* (rand) 2 a-rad) a-rad))]
+    (v-rotate-yaw pitched (- (* (rand) 2 a-rad) a-rad))))
 
 (defn- random-dir-orthogonal
   "Generate a random direction in the plane orthogonal to the given vector."

@@ -45,9 +45,20 @@
 (def ^:private ^:dynamic *advanced-model* nil)
 (def ^:private ^:dynamic *advanced-tex* nil)
 
+(defn- load-and-bake
+  "Bundle the baked model with the anchor offset derived from raw geometry
+  (`obj-controller-anchor-offset` needs :vertices, which the baked structure
+  no longer carries — compute it once here, from the same raw parse)."
+  [asset-path]
+  (let [raw (res/load-obj-model asset-path)]
+    {:baked (obj/bake-obj-model raw {:skip-flat-bottom-plane? false})
+     ;; Developer has many near-coplanar bottom faces; flat-bottom culling
+     ;; strips real geometry and reads as a "shattered" mesh. Matrix keeps it on.
+     :anchor-offset (or (obj-controller-anchor-offset raw) [0.0 0.0 0.0])}))
+
 (def ^:private normal-model
   (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-model*
-                                        #(res/load-obj-model "developer_normal")))
+                                        #(load-and-bake "developer_normal")))
 
 (def ^:private normal-tex
   (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-tex*
@@ -55,7 +66,7 @@
 
 (def ^:private advanced-model
   (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-model*
-                                        #(res/load-obj-model "developer_advanced")))
+                                        #(load-and-bake "developer_advanced")))
 
 (def ^:private advanced-tex
   (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-tex*
@@ -65,21 +76,17 @@
   [model-fn tex-fn _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (pose/push-pose pose-stack)
   (try
-    (let [model (model-fn)
+    (let [{:keys [baked anchor-offset]} (model-fn)
           tex (tex-fn)
-          [ax miny az] (or (obj-controller-anchor-offset model) [0.0 0.0 0.0])
+          [ax miny az] anchor-offset
           ;; Re-anchor the mesh so controller cell center maps to local origin.
           _ (pose/translate pose-stack (- ax) (- miny) (- az))
           s (float 0.5)]
       (pose/scale pose-stack s s s)
       ;; Block-space lift after scale (matches matrix: small Y in block units).
       (obj-tesr/translate-obj-y-lift! pose-stack)
-      (obj-tesr/with-solid-vc-and-obj-bindings! buffer-source tex
-        (fn [vc]
-          ;; Developer has many near-coplanar bottom faces; flat-bottom culling
-          ;; strips real geometry and reads as a “shattered” mesh. Matrix keeps it on.
-          (binding [obj/*skip-flat-bottom-plane* false]
-            (obj-tesr/render-obj-parts! model (sort (keys (:faces model))) pose-stack vc packed-light packed-overlay)))))
+      (let [vc (obj-tesr/get-solid-vc buffer-source tex)]
+        (obj-tesr/render-obj-parts! baked (sort (keys (:parts baked))) pose-stack vc packed-light packed-overlay)))
     (finally
       (pose/pop-pose pose-stack))))
 

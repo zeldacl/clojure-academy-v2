@@ -617,6 +617,15 @@
 ;; :crosshair
 ;; ============================================================================
 
+(def ^:private crosshair-ring-unit-vecs
+  "Precomputed [cos sin] for the 24-point ring — the reflection crosshair only
+  scales this fixed unit circle by `radius` each frame; no need to recompute
+  Math/cos + Math/sin 24x every frame it's active."
+  (mapv (fn [idx]
+          (let [a (/ (* 2.0 Math/PI idx) 24.0)]
+            [(Math/cos a) (Math/sin a)]))
+        (range 24)))
+
 (defn render-crosshair! [^GuiGraphics gg ^INode node]
   (let [cx (unchecked-int (node-abs-x node))
         cy (unchecked-int (node-abs-y node))
@@ -632,10 +641,9 @@
     (.fill gg (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
     (.fill gg (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
     (.fill gg (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
-    (doseq [idx (range 24)]
-      (let [a (/ (* 2.0 Math/PI idx) 24.0)
-            rx (+ cx (int (Math/round (* radius (Math/cos a)))))
-            ry (+ cy (int (Math/round (* radius (Math/sin a)))))]
+    (doseq [[cos-a sin-a] crosshair-ring-unit-vecs]
+      (let [rx (+ cx (int (Math/round (* radius cos-a))))
+            ry (+ cy (int (Math/round (* radius sin-a))))]
         (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
 
 (defn bake-crosshair! [^INode _node] nil)

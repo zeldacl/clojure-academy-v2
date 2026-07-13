@@ -266,6 +266,16 @@
         (set-visible! r :preset-prev false)
         (set-visible! r :preset-curr false)))))
 
+(defn- format-tenths-seconds
+  "Format non-negative seconds as \"N.Ts\" (one decimal, rounded). Runs every
+  frame for every skill slot on cooldown — avoids java.util.Formatter's
+  locale-aware parsing (`(format \"%.1f\" ...)`) on that hot path."
+  ^String [seconds]
+  (let [tenths (long (Math/round (* (double seconds) 10.0)))
+        whole (quot tenths 10)
+        frac (mod tenths 10)]
+    (str whole "." frac "s")))
+
 (defn- update-skill-slot-item! [r item slot]
   (let [visual (:visual-state slot :idle)
         alpha (double (or (:alpha slot) 1.0))
@@ -287,7 +297,7 @@
     (when cd-text
       (if in-cd?
         (do (.setVisible cd-text true)
-            (ui/set-node-prop! r cd-text :text (format "%.1fs" (double (:cooldown-seconds slot 0.0)))))
+            (ui/set-node-prop! r cd-text :text (format-tenths-seconds (:cooldown-seconds slot 0.0))))
         (.setVisible cd-text false)))))
 
 (defn- update-skill-slots! [r snapshot]

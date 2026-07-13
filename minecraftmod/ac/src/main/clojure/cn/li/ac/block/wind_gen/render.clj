@@ -23,21 +23,24 @@
 (def ^:private ^:dynamic *fan-tex* nil)
 (def ^:private ^:dynamic *pillar-tex* nil)
 
+(def ^:private obj-bake-opts
+  {:skip-flat-bottom-plane? true :bottom-plane-epsilon 0.0008})
+
 (def ^:private base-model
   (machine-render-runtime/lazy-resource wind-render-resource-lock #'*base-model*
-                                        #(res/load-obj-model "windgen_base")))
+                                        #(obj/bake-obj-model (res/load-obj-model "windgen_base") obj-bake-opts)))
 
 (def ^:private main-model
   (machine-render-runtime/lazy-resource wind-render-resource-lock #'*main-model*
-                                        #(res/load-obj-model "windgen_main")))
+                                        #(obj/bake-obj-model (res/load-obj-model "windgen_main") obj-bake-opts)))
 
 (def ^:private fan-model
   (machine-render-runtime/lazy-resource wind-render-resource-lock #'*fan-model*
-                                        #(res/load-obj-model "windgen_fan")))
+                                        #(obj/bake-obj-model (res/load-obj-model "windgen_fan") obj-bake-opts)))
 
 (def ^:private pillar-model
   (machine-render-runtime/lazy-resource wind-render-resource-lock #'*pillar-model*
-                                        #(res/load-obj-model "windgen_pillar")))
+                                        #(obj/bake-obj-model (res/load-obj-model "windgen_pillar") obj-bake-opts)))
 
 (def ^:private base-tex-normal
   (machine-render-runtime/lazy-resource wind-render-resource-lock #'*base-tex-normal*
@@ -102,9 +105,7 @@
         complete? (= "COMPLETE" (str (get state :status "BASE_ONLY")))
         tex (if complete? (base-tex-normal) (base-tex-disabled))
         vc (rb/get-solid-buffer buffer-source tex)]
-    (binding [obj/*skip-flat-bottom-plane* true
-              obj/*bottom-plane-epsilon* 0.0008]
-      (obj/render-all! (base-model) pose-stack vc packed-light packed-overlay))))
+    (obj/render-baked-all! (base-model) pose-stack vc packed-light packed-overlay)))
 
 (defn- render-main-at-origin
   [tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]
@@ -113,9 +114,7 @@
         no-obstacle? (boolean (get state :no-obstacle false))
         complete? (boolean (get state :complete false))]
     (let [vc-main (rb/get-solid-buffer buffer-source (main-tex))]
-      (binding [obj/*skip-flat-bottom-plane* true
-                obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! (main-model) pose-stack vc-main packed-light packed-overlay)))
+      (obj/render-baked-all! (main-model) pose-stack vc-main packed-light packed-overlay))
 
     (when (and fan-installed? no-obstacle?)
       (pose/push-pose pose-stack)
@@ -123,9 +122,7 @@
         (pose/translate pose-stack 0.0 0.5 0.82)
         (pose/apply-z-rotation pose-stack (- (double (update-fan-rotation! tile (if complete? 60.0 0.0)))))
         (let [vc-fan (rb/get-solid-buffer buffer-source (fan-tex))]
-          (binding [obj/*skip-flat-bottom-plane* true
-                    obj/*bottom-plane-epsilon* 0.0008]
-            (obj/render-all! (fan-model) pose-stack vc-fan packed-light packed-overlay)))
+          (obj/render-baked-all! (fan-model) pose-stack vc-fan packed-light packed-overlay))
         (finally
           (pose/pop-pose pose-stack))))))
 
@@ -136,9 +133,7 @@
     (try
       ;; Single-block TESR origin is block corner; move OBJ to block center.
       (pose/translate pose-stack 0.5 0.0 0.5)
-      (binding [obj/*skip-flat-bottom-plane* true
-                obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! (pillar-model) pose-stack vc packed-light packed-overlay))
+      (obj/render-baked-all! (pillar-model) pose-stack vc packed-light packed-overlay)
       (finally
         (pose/pop-pose pose-stack)))))
 

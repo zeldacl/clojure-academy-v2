@@ -21,7 +21,9 @@
 
 (def ^:private phase-model
   (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-model*
-                                        #(res/load-obj-model "ip_gen")))
+                                        #(obj/bake-obj-model (res/load-obj-model "ip_gen")
+                                                             {:skip-flat-bottom-plane? true
+                                                              :bottom-plane-epsilon 0.0008})))
 
 (def ^:private phase-textures
   (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-textures*
@@ -52,9 +54,7 @@
     (try
       ;; Scripted BER origin is block corner; move OBJ to center like original.
       (pose/translate pose-stack 0.5 0.0 0.5)
-      (binding [obj/*skip-flat-bottom-plane* true
-                obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! (phase-model) pose-stack vc packed-light packed-overlay))
+      (obj/render-baked-all! (phase-model) pose-stack vc packed-light packed-overlay)
       (finally
         (pose/pop-pose pose-stack)))))
 

@@ -14,7 +14,9 @@
 
 (def ^:private solar-model
   (machine-render-runtime/lazy-resource solar-render-resource-lock #'*solar-model*
-                                        #(res/load-obj-model "solar")))
+                                        #(obj/bake-obj-model (res/load-obj-model "solar")
+                                                             {:skip-flat-bottom-plane? true
+                                                              :bottom-plane-epsilon 0.0008})))
 
 (def ^:private solar-texture
   (machine-render-runtime/lazy-resource solar-render-resource-lock #'*solar-texture*
@@ -28,9 +30,7 @@
           _ (pose/apply-y-rotation pose-stack 90.0)
           _ (pose/scale pose-stack (float 0.014) (float 0.014) (float 0.014))
           vc (rb/get-solid-buffer buffer-source (solar-texture))]
-      (binding [obj/*skip-flat-bottom-plane* true
-                obj/*bottom-plane-epsilon* 0.0008]
-        (obj/render-all! (solar-model) pose-stack vc packed-light packed-overlay)))
+      (obj/render-baked-all! (solar-model) pose-stack vc packed-light packed-overlay))
     (finally
       (pose/pop-pose pose-stack))))
 
