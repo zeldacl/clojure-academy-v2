@@ -1,11 +1,12 @@
 (ns cn.li.ac.ability.client.beam-ops-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.client.effects.beam-ops :as beam-ops]))
+            [cn.li.ac.ability.client.effects.beam-ops :as beam-ops]
+            [cn.li.ac.ability.client.effects.rv3 :as v3]))
 
 (deftest fading-beam-style-composes-rgb-alpha-test
-  (let [start {:x 0.0 :y 0.0 :z 0.0}
-        end {:x 0.0 :y 0.0 :z 1.0}
-        cam-pos {:x 1.0 :y 0.0 :z 0.0}
+  (let [start (v3/v3 0.0 0.0 0.0)
+        end (v3/v3 0.0 0.0 1.0)
+        cam-pos (v3/v3 1.0 0.0 0.0)
         beam {:start start :end end :ttl 5 :max-ttl 10 :is-reflect? true}
         ops (beam-ops/fading-beam-ops
               cam-pos
@@ -29,9 +30,9 @@
       (is (= {:r 7 :g 8 :b 9 :a 100} (:color (nth ops 2)))))))
 
 (deftest direct-beam-style-resolves-static-colors-test
-  (let [start {:x 0.0 :y 0.0 :z 0.0}
-        end {:x 0.0 :y 1.0 :z 0.0}
-        cam-pos {:x 1.0 :y 0.0 :z 0.0}
+  (let [start (v3/v3 0.0 0.0 0.0)
+        end (v3/v3 0.0 1.0 0.0)
+        cam-pos (v3/v3 1.0 0.0 0.0)
         ops (beam-ops/beam-ops
               cam-pos
               start

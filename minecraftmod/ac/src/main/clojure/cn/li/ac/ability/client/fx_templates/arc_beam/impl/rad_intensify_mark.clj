@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (defn- mark-key
@@ -64,10 +64,8 @@
           (let [angle (+ base-angle (* i 2.1))
                 dx (* 0.35 (Math/cos angle))
                 dz (* 0.35 (Math/sin angle))]
-            (ru/line-op {:x cx :y cy :z cz}
-                        {:x (+ cx dx)
-                         :y (+ cy 0.2)
-                         :z (+ cz dz)}
+            (ru/line-op (vec3/v3 cx cy cz)
+                        (vec3/v3 (+ cx dx) (+ cy 0.2) (+ cz dz))
                         {:r 255 :g 120 :b 40 :a alpha})))))))
 
 (defn- build-plan

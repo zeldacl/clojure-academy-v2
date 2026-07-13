@@ -7,7 +7,7 @@
 
   Each surround point generates short zigzag arcs pointing toward the center,
   rotating around the target at a fixed angular speed."
-  (:require [cn.li.ac.util.math.vec3 :as v]
+  (:require [cn.li.ac.ability.client.effects.rv3 :as v]
             [cn.li.ac.ability.client.render-util :as ru]))
 
 ;; ============================================================================
@@ -50,7 +50,7 @@
         dz (* radius (Math/sin a))
         ;; Slight vertical wobble
         dy (* radius 0.3 (Math/sin (* a 1.7)))]
-    (v/v+ center {:x dx :y dy :z dz})))
+    (v/v+ center (v/v3 dx dy dz))))
 
 (defn surround-arc-ops
   "Generate render ops for EntitySurroundArc equivalent.

@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (def ^:private loop-sound "my_mod:em.move_loop")
@@ -104,9 +104,9 @@
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
-      {:ops (vec (ru/zigzag-arc-ops camera-pos
-                                    (dissoc hand-center-pos :player-uuid)
-                                    (:target mag-move)
+      {:ops (vec (ru/zigzag-arc-ops (vec3/map->v3 camera-pos)
+                                    (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
+                                    (vec3/map->v3 (:target mag-move))
                                     {:arc-pattern :thin-continuous
                                      :life-ratio 1.0}))})))
 

@@ -19,7 +19,7 @@
     :fork-count   — max number of side branches
     :fork-length  — fraction of main beam for fork reach
     :fork-angle   — radians, max deviation from beam axis"
-  (:require [cn.li.ac.util.math.vec3 :as v]))
+  (:require [cn.li.ac.ability.client.effects.rv3 :as v]))
 
 ;; ============================================================================
 ;; ArcPattern presets — matching original AcademyCraft ArcPatterns constants
@@ -154,14 +154,13 @@
   Matching original EntityArc zigzag rendering:
   - Segments subdivide the straight line into jagged sections
   - Each vertex has UV coords (u=0.0-1.0 along beam, v=0.0-1.0 across width)"
-  [start end {:keys [segments amplitude seed]
-              :or {segments 8 amplitude 0.15 seed 42}}]
+  [^cn.li.mcmod.math.V3 start ^cn.li.mcmod.math.V3 end
+   {:keys [segments amplitude seed]
+    :or {segments 8 amplitude 0.15 seed 42}}]
   (let [dir (v/vnorm (v/v- end start))
         len (v/vlen (v/v- end start))
         ;; Compute perpendicular axis (any axis perpendicular to dir works)
-        up (if (< (Math/abs (double (:y dir))) 0.99)
-             {:x 0.0 :y 1.0 :z 0.0}
-             {:x 1.0 :y 0.0 :z 0.0})
+        up (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 dir)) 0.99) v/unit-y v/unit-x)
         perp (v/vnorm (v/vcross dir up))
         perp2 (v/vnorm (v/vcross dir perp))
         n (max 2 (int segments))]

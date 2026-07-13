@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private beam-life-ticks 50)
 
@@ -99,20 +100,21 @@
                           [owner-key live]))))
               by-owner)))))
 
-(defn- impact-ring-ops [end ttl max-ttl]
+(defn- impact-ring-ops [^V3 end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
         radius (+ 0.12 (* 0.22 (- 1.0 life)))
         color (ru/with-alpha {:r 188 :g 252 :b 238} (+ 20 (* 160 life)))
-        segments 12]
+        segments 12
+        ex (.-x end) ey (.-y end) ez (.-z end)]
     (vec
       (for [idx (range segments)
             :let [t0 (/ (* 2.0 Math/PI idx) segments)
                   t1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 {:x (+ (:x end) (* radius (Math/cos t0))) :y (:y end) :z (+ (:z end) (* radius (Math/sin t0)))}
-                  p1 {:x (+ (:x end) (* radius (Math/cos t1))) :y (:y end) :z (+ (:z end) (* radius (Math/sin t1)))}]]
+                  p0 (vec3/v3 (+ ex (* radius (Math/cos t0))) ey (+ ez (* radius (Math/sin t0))))
+                  p1 (vec3/v3 (+ ex (* radius (Math/cos t1))) ey (+ ez (* radius (Math/sin t1))))]]
         (ru/line-op p0 p1 color)))))
 
-(defn- charge-hand-ops [camera-pos hand-center charge-start-ms charge-ratio coin-active? game-ticks]
+(defn- charge-hand-ops [^V3 camera-pos ^V3 hand-center charge-start-ms charge-ratio coin-active? game-ticks]
   (let [elapsed-ms (if charge-start-ms (max 0 (- (* (double game-ticks) 50.0) (double charge-start-ms))) 0)
         ;; 40 frames at 40ms each = 1.6s total animation
         frame (min 39 (int (/ elapsed-ms 40.0)))
@@ -122,13 +124,13 @@
         ;; Original uses scale 0.4 with offset (0.26, -0.15, -0.24)
         half-size 0.12
         ;; Simple upward offset from hand center (matches original first-person offset direction)
-        center (assoc hand-center
-                      :y (+ (:y hand-center) -0.15)
-                      :x (+ (:x hand-center) 0.26))
-        p0 {:x (- (:x center) half-size) :y (- (:y center) half-size) :z (:z center)}
-        p1 {:x (+ (:x center) half-size) :y (- (:y center) half-size) :z (:z center)}
-        p2 {:x (+ (:x center) half-size) :y (+ (:y center) half-size) :z (:z center)}
-        p3 {:x (- (:x center) half-size) :y (+ (:y center) half-size) :z (:z center)}
+        cx (+ (.-x hand-center) 0.26)
+        cy (+ (.-y hand-center) -0.15)
+        cz (.-z hand-center)
+        p0 (vec3/v3 (- cx half-size) (- cy half-size) cz)
+        p1 (vec3/v3 (+ cx half-size) (- cy half-size) cz)
+        p2 (vec3/v3 (+ cx half-size) (+ cy half-size) cz)
+        p3 (vec3/v3 (- cx half-size) (+ cy half-size) cz)
         a (int (* 255 alpha))]
     [{:kind :quad
       :texture texture-path
@@ -137,22 +139,24 @@
 
 (defn- build-plan [camera-pos hand-center-pos game-ticks]
   (let [beams (all-beam-effects)
+        ^V3 cam-v (vec3/map->v3 camera-pos)
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid (* (double game-ticks) 50.0)))
         beam-plan (mapcat (fn [beam]
-                            (concat
-                              ;; Arc/lightning branches
-                              (arc-fx/railgun-arc-ops camera-pos beam {})
-                              ;; Glow layer (behind core beam)
-                              (when-let [glow-style (:glow railgun-beam-style)]
-                                (fx-beam/fading-beam-ops camera-pos beam glow-style))
-                              (fx-beam/fading-beam-ops camera-pos beam railgun-beam-style)
-                              (impact-ring-ops (:end beam) (:ttl beam) (:max-ttl beam))))
+                            (let [beam-v (assoc beam :start (vec3/map->v3 (:start beam)) :end (vec3/map->v3 (:end beam)))]
+                              (concat
+                                ;; Arc/lightning branches
+                                (arc-fx/railgun-arc-ops cam-v beam-v {})
+                                ;; Glow layer (behind core beam)
+                                (when-let [glow-style (:glow railgun-beam-style)]
+                                  (fx-beam/fading-beam-ops cam-v beam-v glow-style))
+                                (fx-beam/fading-beam-ops cam-v beam-v railgun-beam-style)
+                                (impact-ring-ops (:end beam-v) (:ttl beam) (:max-ttl beam)))))
                           beams)
         charge-plan (if (and hand-center-pos (:active? charge-state))
-                      (charge-hand-ops camera-pos
-                                       (dissoc hand-center-pos :player-uuid)
+                      (charge-hand-ops cam-v
+                                       (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
                                        (:charge-start-ms charge-state)
                                        (:charge-ratio charge-state)
                                        (:coin-active? charge-state)

@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id "my_mod:vecmanip.directed_blast")
 (def ^:private wave-life 15)
@@ -125,18 +126,20 @@
       :else 1.5)))
 
 (defn- basis
-  [dir]
+  [^V3 dir]
   (let [n-dir (vec3/vnorm dir)
-        up-axis (if (> (Math/abs (double (:y n-dir))) 0.95)
-                  {:x 1.0 :y 0.0 :z 0.0}
-                  {:x 0.0 :y 1.0 :z 0.0})
+        up-axis (if (> (Math/abs (.-y n-dir)) 0.95)
+                  vec3/unit-x
+                  vec3/unit-y)
         right (vec3/vnorm (vec3/vcross n-dir up-axis))
         up (vec3/vnorm (vec3/vcross right n-dir))]
     [right up n-dir]))
 
 (defn- wave-ops
   [{:keys [pos dir ttl max-ttl rings]}]
-  (let [ticks (- (long max-ttl) (long ttl))
+  (let [^V3 pos (vec3/map->v3 pos)
+        ^V3 dir (vec3/map->v3 dir)
+        ticks (- (long max-ttl) (long ttl))
         max-alpha (alpha-curve (/ (double ticks) (double (max 1 max-ttl))))
         ss (size-scale ticks)
         [right up forward] (basis dir)
@@ -164,11 +167,12 @@
         rings))))
 
 (defn- charge-ops
-  [center charge-ticks punched?]
+  [^V3 center charge-ticks punched?]
   (let [progress (min 1.0 (/ (double charge-ticks) 50.0))
         radius (+ 0.1 (* 0.16 progress))
         pulse (+ radius (* 0.025 (Math/sin (* 0.22 charge-ticks))))
         points 16
+        cx (.-x center) cy (.-y center) cz (.-z center)
         alpha (if punched? 220 170)
         color {:r 225 :g 245 :b 255 :a alpha}
         core {:r 178 :g 220 :b 245 :a (int (* 0.7 alpha))}]
@@ -177,12 +181,8 @@
         (fn [idx]
           (let [a0 (/ (* 2.0 Math/PI idx) points)
                 a1 (/ (* 2.0 Math/PI (inc idx)) points)
-                p0 {:x (+ (:x center) (* pulse (Math/cos a0)))
-                    :y (:y center)
-                    :z (+ (:z center) (* pulse (Math/sin a0)))}
-                p1 {:x (+ (:x center) (* pulse (Math/cos a1)))
-                    :y (:y center)
-                    :z (+ (:z center) (* pulse (Math/sin a1)))}]
+                p0 (vec3/v3 (+ cx (* pulse (Math/cos a0))) cy (+ cz (* pulse (Math/sin a0))))
+                p1 (vec3/v3 (+ cx (* pulse (Math/cos a1))) cy (+ cz (* pulse (Math/sin a1))))]
             [(ru/line-op p0 p1 color)
              (ru/line-op center p0 core)]))
         (range points)))))
@@ -200,7 +200,7 @@
                  (vals effect-state))
         current-waves (mapcat val waves)
         charge-plan (if (and hand-center-pos db (:active? db))
-                      (charge-ops (dissoc hand-center-pos :player-uuid)
+                      (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
                                   (long (or (:charge-ticks db) 0))
                                   (boolean (:punched? db)))
                       [])

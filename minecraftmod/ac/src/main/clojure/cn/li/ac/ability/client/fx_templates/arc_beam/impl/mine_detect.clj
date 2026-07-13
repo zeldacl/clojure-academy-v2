@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (def ^:private mineview-texture
@@ -89,13 +89,16 @@
         z0 (- (double z) eps)
         x1 (+ (double x) 1.0 eps)
         y1 (+ (double y) 1.0 eps)
-        z1 (+ (double z) 1.0 eps)]
-    [(ru/quad-op mineview-texture {:x x0 :y y0 :z z0} {:x x1 :y y0 :z z0} {:x x1 :y y1 :z z0} {:x x0 :y y1 :z z0} color)
-     (ru/quad-op mineview-texture {:x x1 :y y0 :z z1} {:x x0 :y y0 :z z1} {:x x0 :y y1 :z z1} {:x x1 :y y1 :z z1} color)
-     (ru/quad-op mineview-texture {:x x0 :y y0 :z z1} {:x x0 :y y0 :z z0} {:x x0 :y y1 :z z0} {:x x0 :y y1 :z z1} color)
-     (ru/quad-op mineview-texture {:x x1 :y y0 :z z0} {:x x1 :y y0 :z z1} {:x x1 :y y1 :z z1} {:x x1 :y y1 :z z0} color)
-     (ru/quad-op mineview-texture {:x x0 :y y1 :z z0} {:x x1 :y y1 :z z0} {:x x1 :y y1 :z z1} {:x x0 :y y1 :z z1} color)
-     (ru/quad-op mineview-texture {:x x0 :y y0 :z z1} {:x x1 :y y0 :z z1} {:x x1 :y y0 :z z0} {:x x0 :y y0 :z z0} color)]))
+        z1 (+ (double z) 1.0 eps)
+        v3 vec3/v3
+        p000 (v3 x0 y0 z0) p100 (v3 x1 y0 z0) p110 (v3 x1 y1 z0) p010 (v3 x0 y1 z0)
+        p101 (v3 x1 y0 z1) p001 (v3 x0 y0 z1) p011 (v3 x0 y1 z1) p111 (v3 x1 y1 z1)]
+    [(ru/quad-op mineview-texture p000 p100 p110 p010 color)
+     (ru/quad-op mineview-texture p101 p001 p011 p111 color)
+     (ru/quad-op mineview-texture p001 p000 p010 p011 color)
+     (ru/quad-op mineview-texture p100 p101 p111 p110 color)
+     (ru/quad-op mineview-texture p010 p110 p111 p011 color)
+     (ru/quad-op mineview-texture p001 p101 p100 p000 color)]))
 
 (defn- should-rescan?
   [{:keys [ticks rescan-interval last-rescan-tick]}]

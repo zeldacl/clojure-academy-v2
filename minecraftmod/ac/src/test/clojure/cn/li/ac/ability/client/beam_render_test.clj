@@ -1,11 +1,12 @@
 (ns cn.li.ac.ability.client.beam-render-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.ability.client.effects.beam-render :as beam-render]))
+            [cn.li.ac.ability.client.effects.beam-render :as beam-render]
+            [cn.li.ac.ability.client.effects.rv3 :as v3]))
 
 (deftest fading-beam-ops-builds-standard-shape-test
-  (let [start {:x 0.0 :y 0.0 :z 0.0}
-        end {:x 0.0 :y 0.0 :z 1.0}
-        cam-pos {:x 1.0 :y 0.0 :z 0.0}
+  (let [start (v3/v3 0.0 0.0 0.0)
+        end (v3/v3 0.0 0.0 1.0)
+        cam-pos (v3/v3 1.0 0.0 0.0)
         beam {:start start :end end :ttl 5 :max-ttl 10 :mode :test}
         ops (beam-render/fading-beam-ops
               cam-pos

@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (defn- spawn-tp-marking! []
   (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect {:effect-id "entity_tp_marking"}))
@@ -73,25 +74,26 @@
                       (assoc acc owner-key (assoc st :ticks ticks)))))
                 {} states)))))
 
-(defn- ground-ring-ops [target ticks distance]
+(defn- ground-ring-ops [^V3 target ticks distance]
   (let [base-radius (+ 0.55 (* 0.08 (Math/sin (* 0.18 (double ticks)))))
         radius (+ base-radius (* 0.04 (min 1.0 (/ (double distance) 20.0))))
-        y (+ (double (:y target)) 0.02)
+        tx (.-x target) tz (.-z target)
+        y (+ (.-y target) 0.02)
         segments 24
         color {:r 230 :g 236 :b 255 :a 180}]
     (vec (for [idx (range segments)
                :let [a0 (/ (* 2.0 Math/PI idx) segments)
                      a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                     p0 {:x (+ (:x target) (* radius (Math/cos a0))) :y y :z (+ (:z target) (* radius (Math/sin a0)))}
-                     p1 {:x (+ (:x target) (* radius (Math/cos a1))) :y y :z (+ (:z target) (* radius (Math/sin a1)))}]]
+                     p0 (vec3/v3 (+ tx (* radius (Math/cos a0))) y (+ tz (* radius (Math/sin a0))))
+                     p1 (vec3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
            (ru/line-op p0 p1 color)))))
 
-(defn- billboard-ops [cam-pos target ticks]
-  (let [center {:x (:x target) :y (+ (double (:y target)) 0.9) :z (:z target)}
+(defn- billboard-ops [^V3 cam-pos ^V3 target ticks]
+  (let [center (vec3/v3 (.-x target) (+ (.-y target) 0.9) (.-z target))
         right (ru/camera-facing-right-axis center cam-pos)
         half-width (+ 0.34 (* 0.04 (Math/sin (* 0.22 (double ticks)))))
         half-height 0.9
-        up {:x 0.0 :y half-height :z 0.0}
+        up (vec3/v3 0.0 half-height 0.0)
         side (vec3/v* right half-width)
         p0 (vec3/v+ (vec3/v- center side) up)
         p1 (vec3/v+ (vec3/v+ center side) up)
@@ -99,7 +101,7 @@
         p3 (vec3/v- (vec3/v- center side) up)
         halo-width (* half-width 1.35) halo-height 1.12
         halo-side (vec3/v* right halo-width)
-        halo-up {:x 0.0 :y halo-height :z 0.0}
+        halo-up (vec3/v3 0.0 halo-height 0.0)
         h0 (vec3/v+ (vec3/v- center halo-side) halo-up)
         h1 (vec3/v+ (vec3/v+ center halo-side) halo-up)
         h2 (vec3/v- (vec3/v+ center halo-side) halo-up)
@@ -109,11 +111,13 @@
      (ru/quad-op "my_mod:textures/effects/glow_circle.png" p0 p1 p2 p3 {:r 245 :g 250 :b 255 :a 180})]))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (let [ops (mapcat (fn [mk]
+  (let [^V3 cam-v (vec3/map->v3 camera-pos)
+        ops (mapcat (fn [mk]
                       (when (and (:active? mk) (map? (:target mk)))
-                        (let [{:keys [target ticks distance]} mk]
-                          (concat (ground-ring-ops target ticks distance)
-                                  (billboard-ops camera-pos target ticks)))))
+                        (let [{:keys [target ticks distance]} mk
+                              ^V3 target-v (vec3/map->v3 target)]
+                          (concat (ground-ring-ops target-v ticks distance)
+                                  (billboard-ops cam-v target-v ticks)))))
                     (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mark-teleport))))]
     (when (seq ops) {:ops (vec ops)})))
 

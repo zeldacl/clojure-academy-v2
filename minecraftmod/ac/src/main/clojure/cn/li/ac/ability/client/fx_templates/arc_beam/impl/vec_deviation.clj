@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id "my_mod:vecmanip.vec_deviation")
 
@@ -93,9 +94,12 @@
         (vals effect-state)))
 
 (defn- ring-ops
+  "`center` crosses in as a map (dissoc'd hand-center-pos) — convert once."
   [center ticks]
-  (let [radius (+ 0.7 (* 0.08 (Math/sin (* 0.19 (double ticks)))))
-        y (+ (double (:y center)) 0.25)
+  (let [^V3 c (vec3/map->v3 center)
+        cx (.-x c) cz (.-z c)
+        radius (+ 0.7 (* 0.08 (Math/sin (* 0.19 (double ticks)))))
+        y (+ (.-y c) 0.25)
         segments 28
         color {:r 210 :g 240 :b 255 :a 170}
         spoke-color {:r 170 :g 210 :b 245 :a 120}
@@ -105,21 +109,23 @@
         (fn [idx]
           (let [a0 (/ (* 2.0 Math/PI idx) segments)
                 a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                p0 {:x (+ (:x center) (* radius (Math/cos a0))) :y y :z (+ (:z center) (* radius (Math/sin a0)))}
-                p1 {:x (+ (:x center) (* radius (Math/cos a1))) :y y :z (+ (:z center) (* radius (Math/sin a1)))}
+                p0 (vec3/v3 (+ cx (* radius (Math/cos a0))) y (+ cz (* radius (Math/sin a0))))
+                p1 (vec3/v3 (+ cx (* radius (Math/cos a1))) y (+ cz (* radius (Math/sin a1))))
                 ring-op (ru/line-op p0 p1 color)
                 spoke-op (when (zero? (mod idx spoke-step))
-                           (ru/line-op center p0 spoke-color))]
+                           (ru/line-op c p0 spoke-color))]
             (if spoke-op [ring-op spoke-op] [ring-op])))
         (range segments)))))
 
 (defn- wave-ops
+  "`cam-pos` crosses in as a map (shared level-effect-plan context)."
   [cam-pos {:keys [x y z ttl max-ttl]}]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
         alpha (int (max 0 (min 255 (* 170.0 life))))
-        center {:x (double x) :y (+ (double y) 0.6) :z (double z)}
-        right (ru/camera-facing-right-axis center cam-pos)
-        up (ru/billboard-up-axis center cam-pos right)
+        ^V3 cam (vec3/map->v3 cam-pos)
+        center (vec3/v3 (double x) (+ (double y) 0.6) (double z))
+        right (ru/camera-facing-right-axis center cam)
+        up (ru/billboard-up-axis center cam right)
         half-size (+ 0.35 (* 0.65 (- 1.0 life)))
         side (vec3/v* right half-size)
         lift (vec3/v* up half-size)

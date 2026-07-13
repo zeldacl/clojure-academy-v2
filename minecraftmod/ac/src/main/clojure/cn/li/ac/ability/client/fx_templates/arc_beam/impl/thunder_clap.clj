@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [clojure.string :as str]))
 
 (defn- enqueue-state!
@@ -100,37 +100,33 @@
 
 (defn- surround-ops [player-center ticks]
   (let [radius (+ 0.55 (* 0.25 (Math/sin (* 0.22 (double ticks)))))
+        cx (double (:x player-center))
         y (+ (double (:y player-center)) 0.2)
+        cz (double (:z player-center))
         segments 20
         color {:r 190 :g 232 :b 255 :a 170}]
     (vec
       (for [idx (range segments)
             :let [a0 (/ (* 2.0 Math/PI idx) segments)
                   a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 {:x (+ (:x player-center) (* radius (Math/cos a0)))
-                      :y y
-                      :z (+ (:z player-center) (* radius (Math/sin a0)))}
-                  p1 {:x (+ (:x player-center) (* radius (Math/cos a1)))
-                      :y y
-                      :z (+ (:z player-center) (* radius (Math/sin a1)))}]]
+                  p0 (rv3/v3 (+ cx (* radius (Math/cos a0))) y (+ cz (* radius (Math/sin a0))))
+                  p1 (rv3/v3 (+ cx (* radius (Math/cos a1))) y (+ cz (* radius (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
 (defn- target-mark-ops [target ticks charge-ratio]
   (let [base-radius (+ 0.55 (* 0.35 (double charge-ratio)))
         pulse (+ base-radius (* 0.08 (Math/sin (* 0.24 (double ticks)))))
+        tx (double (:x target))
         y (+ (double (:y target)) 0.03)
+        tz (double (:z target))
         segments 24
         color {:r 204 :g 204 :b 204 :a 179}]
     (vec
       (for [idx (range segments)
             :let [a0 (/ (* 2.0 Math/PI idx) segments)
                   a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 {:x (+ (:x target) (* pulse (Math/cos a0)))
-                      :y y
-                      :z (+ (:z target) (* pulse (Math/sin a0)))}
-                  p1 {:x (+ (:x target) (* pulse (Math/cos a1)))
-                      :y y
-                      :z (+ (:z target) (* pulse (Math/sin a1)))}]]
+                  p0 (rv3/v3 (+ tx (* pulse (Math/cos a0))) y (+ tz (* pulse (Math/sin a0))))
+                  p1 (rv3/v3 (+ tx (* pulse (Math/cos a1))) y (+ tz (* pulse (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
 (defn- impact-ops [{:keys [target ttl max-ttl charge-ratio]}]
@@ -139,7 +135,9 @@
                0.0)
         growth (- 1.0 life)
         radius (+ 0.8 (* 0.65 growth) (* 0.2 (double (or charge-ratio 0.0))))
+        tx (double (:x target))
         y (+ (double (:y target)) 0.08)
+        tz (double (:z target))
         segments 20
         alpha (int (+ 20 (* 160 life)))
         color {:r 220 :g 245 :b 255 :a alpha}]
@@ -147,12 +145,8 @@
       (for [idx (range segments)
             :let [a0 (/ (* 2.0 Math/PI idx) segments)
                   a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 {:x (+ (:x target) (* radius (Math/cos a0)))
-                      :y y
-                      :z (+ (:z target) (* radius (Math/sin a0)))}
-                  p1 {:x (+ (:x target) (* radius (Math/cos a1)))
-                      :y y
-                      :z (+ (:z target) (* radius (Math/sin a1)))}]]
+                  p0 (rv3/v3 (+ tx (* radius (Math/cos a0))) y (+ tz (* radius (Math/sin a0))))
+                  p1 (rv3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
 (defn- local-walk-speed [ticks]

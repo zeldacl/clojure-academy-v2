@@ -4,6 +4,7 @@
   Ability FX namespaces register via `build-spec` and expose only `init!`
   plus test helpers delegating to this template."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -162,8 +163,12 @@
             by-owner))))
 
 (defn- arc-ops
+  "`cam-pos`/`start`/`end` cross in as maps — `start`/`end` from the stored
+  arc-item (originally decoded from a network payload), `cam-pos` from the
+  shared level-effect-plan context. Convert once per arc, right before the
+  render-pipeline V3 math in render-util."
   [cam-pos {:keys [start end ttl max-ttl is-aoe?]} arc-pattern]
-  (ru/zigzag-arc-ops cam-pos start end
+  (ru/zigzag-arc-ops (rv3/map->v3 cam-pos) (rv3/map->v3 start) (rv3/map->v3 end)
     {:arc-pattern (if is-aoe? :aoe arc-pattern)
      :life-ratio (/ (double ttl) (double (max 1 max-ttl)))}))
 

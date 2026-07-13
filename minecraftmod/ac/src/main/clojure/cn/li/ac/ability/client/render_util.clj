@@ -3,9 +3,14 @@
 
   Provides vector math, render-op constructors, camera-basis helpers,
   zigzag arc ops (matching original EntityArc/ArcPatterns), and
-  billboard-beam ops that are shared across all skill effect renderers."
-  (:require [cn.li.ac.util.math.vec3 :as vec3]
-            [cn.li.ac.ability.client.arc-patterns :as arc]))
+  billboard-beam ops that are shared across all skill effect renderers.
+
+  Uses V3 (rv3), not the map-based cn.li.ac.util.math.vec3 — this is the
+  per-frame render hot path; vec3.clj stays map-based for its other 28
+  non-render consumers (see rv3.clj docstring)."
+  (:require [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.arc-patterns :as arc])
+  (:import [cn.li.mcmod.math V3]))
 
 ;; ---------------------------------------------------------------------------
 ;; Color helpers
@@ -41,11 +46,11 @@
 
 (defn- rand-offset
   "Random vec3 offset within magnitude."
-  [magnitude]
+  ^V3 [magnitude]
   (when (pos? (double magnitude))
-    {:x (* magnitude (- (* 2.0 (rand)) 1.0))
-     :y (* magnitude (- (* 2.0 (rand)) 1.0))
-     :z (* magnitude (- (* 2.0 (rand)) 1.0))}))
+    (vec3/v3 (* magnitude (- (* 2.0 (rand)) 1.0))
+             (* magnitude (- (* 2.0 (rand)) 1.0))
+             (* magnitude (- (* 2.0 (rand)) 1.0)))))
 
 (defn zigzag-arc-ops
   "Generate zigzag lightning arc render ops with deterministic sin-based wiggle,
@@ -135,7 +140,7 @@
                                 perp1 (beam-right-axis start end cam-pos)
                                 perp2 (if (> (vec3/vlen perp1) 0.01)
                                         (vec3/vnorm (vec3/vcross dir perp1))
-                                        {:x 1.0 :y 0.0 :z 0.0})
+                                        vec3/unit-x)
                                 angle (* fork-angle (- (* 2.0 (rand)) 1.0))
                                 rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
                                             (vec3/v* perp2 (Math/sin angle)))
@@ -219,7 +224,7 @@
                                        perp1 (beam-right-axis start' end' cam-pos)
                                        perp2 (if (> (vec3/vlen perp1) 0.01)
                                                (vec3/vnorm (vec3/vcross dir perp1))
-                                               {:x 1.0 :y 0.0 :z 0.0})
+                                               vec3/unit-x)
                                        angle (* fork-angle (- (* 2.0 (rand)) 1.0))
                                        rot-dir (vec3/v+ (vec3/v* perp1 (Math/cos angle))
                                                    (vec3/v* perp2 (Math/sin angle)))
@@ -258,17 +263,16 @@
         raw (vec3/vcross dir to-cam)]
     (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
-      {:x 1.0 :y 0.0 :z 0.0})))
+      vec3/unit-x)))
 
 (defn camera-facing-right-axis
   "Right axis for a camera-facing billboard at `center`."
   [center cam-pos]
   (let [to-cam (vec3/vnorm (vec3/v- cam-pos center))
-        up {:x 0.0 :y 1.0 :z 0.0}
-        raw (vec3/vcross up to-cam)]
+        raw (vec3/vcross vec3/unit-y to-cam)]
     (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
-      {:x 1.0 :y 0.0 :z 0.0})))
+      vec3/unit-x)))
 
 (defn billboard-up-axis
   "Up axis for a billboard given `center`, `cam-pos`, and already-computed `right`."
@@ -277,4 +281,4 @@
         raw (vec3/vcross to-cam right)]
     (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
-      {:x 0.0 :y 1.0 :z 0.0})))
+      vec3/unit-y)))

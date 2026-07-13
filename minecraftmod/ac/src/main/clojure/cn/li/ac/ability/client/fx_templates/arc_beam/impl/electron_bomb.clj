@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (defn- enqueue-state!
@@ -111,12 +111,11 @@
 				angle (* 0.4 (double ticks))
 				ox (* 0.9 (Math/cos angle))
 				oz (* 0.9 (Math/sin angle))
-				center {:x (double (or (:x st) 0.0))
-								:y (double (or (:y st) 0.0))
-								:z (double (or (:z st) 0.0))}
-				pulse-end {:x (+ (:x center) ox)
-									 :y (+ (:y center) 0.2)
-									 :z (+ (:z center) oz)}]
+				cx (double (or (:x st) 0.0))
+				cy (double (or (:y st) 0.0))
+				cz (double (or (:z st) 0.0))
+				center (vec3/v3 cx cy cz)
+				pulse-end (vec3/v3 (+ cx ox) (+ cy 0.2) (+ cz oz))]
 		[(ru/line-op center pulse-end {:r 160 :g 255 :b 190 :a 200})]))
 
 (defn- beam-flash-ops [camera-pos beams]
@@ -128,7 +127,7 @@
                   blend-out (min 1.0 (/ life-ratio 0.57))
                   am (* blend-in blend-out)
                   shrink (if (< life-ratio 0.3) 0.0 1.0)]
-              (ru/billboard-beam-ops camera-pos start end
+              (ru/billboard-beam-ops camera-pos (vec3/map->v3 start) (vec3/map->v3 end)
                 {:width 0.3
                  :core-width 0.045
                  :core-ratio 0.667
@@ -139,12 +138,13 @@
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
 	(let [{:keys [effect-state beams]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :electron-bomb)
+				cam-v (vec3/map->v3 camera-pos)
 				active-ops (mapcat (fn [[_owner-key st]]
 														 (when (:active? st)
 															 (active-state-ops st)))
 													 effect-state)
 				beam-ops (mapcat (fn [[_owner-key xs]]
-													 (beam-flash-ops camera-pos xs))
+													 (beam-flash-ops cam-v xs))
 												 beams)
 				ops (vec (concat active-ops beam-ops))]
 		(when (seq ops)

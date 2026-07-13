@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id "my_mod:vecmanip.vec_accel")
 
@@ -70,17 +71,17 @@
 	(or store {:effect-state {}}))
 
 (defn- trajectory-ops
-	[camera-pos effect]
+	[^V3 camera-pos effect]
 	(when (and effect (:active? effect))
-		(let [init-vel  (or (:init-vel effect) {:x 0.0 :y 0.0 :z 1.0})
-					look-dir  (or (:look-dir effect) {:x 0.0 :y 0.0 :z 1.0})
+		(let [init-vel  (vec3/map->v3 (or (:init-vel effect) {:x 0.0 :y 0.0 :z 1.0}))
+					look-dir  (vec3/map->v3 (or (:look-dir effect) {:x 0.0 :y 0.0 :z 1.0}))
 					can-do?   (boolean (:can-perform? effect))
-					px        (double (:x camera-pos))
-					py        (- (double (:y camera-pos)) 1.62)
-					pz        (double (:z camera-pos))
-					lx        (double (:x look-dir))
-					ly        (double (:y look-dir))
-					lz        (double (:z look-dir))
+					px        (.-x camera-pos)
+					py        (- (.-y camera-pos) 1.62)
+					pz        (.-z camera-pos)
+					lx        (.-x look-dir)
+					ly        (.-y look-dir)
+					lz        (.-z look-dir)
 					horiz-len (Math/sqrt (+ (* lx lx) (* lz lz)))
 					safe-h    (max 1.0e-8 horiz-len)
 					rot-x     (* (/ lz safe-h) -0.08)
@@ -88,23 +89,19 @@
 					off-x     (- rot-x (* lx 0.12))
 					off-y     (- 1.56 (* ly 0.12))
 					off-z     (- rot-z (* lz 0.12))
-					start-pos {:x (+ px off-x) :y (+ py off-y) :z (+ pz off-z)}
+					start-pos (vec3/v3 (+ px off-x) (+ py off-y) (+ pz off-z))
 					h         0.02
 					dt        0.02]
-			(loop [pos   start-pos
-						 vel   {:x (double (:x init-vel))
-										:y (double (:y init-vel))
-										:z (double (:z init-vel))}
-						 prev  nil
+			(loop [^V3 pos   start-pos
+						 ^V3 vel   init-vel
+						 ^V3 prev  nil
 						 ops   (transient [])
 						 idx   0]
-				(let [vel2  {:x (* (double (:x vel)) 0.98)
-										 :y (* (double (:y vel)) 0.98)
-										 :z (* (double (:z vel)) 0.98)}
-							pos2  {:x (+ (double (:x pos)) (* (double (:x vel2)) dt))
-										 :y (+ (double (:y pos)) (* (double (:y vel2)) dt))
-										 :z (+ (double (:z pos)) (* (double (:z vel2)) dt))}
-							vel3  (assoc vel2 :y (- (double (:y vel2)) (* dt 1.9)))]
+				(let [vel2  (vec3/v3 (* (.-x vel) 0.98) (* (.-y vel) 0.98) (* (.-z vel) 0.98))
+							pos2  (vec3/v3 (+ (.-x pos) (* (.-x vel2) dt))
+														(+ (.-y pos) (* (.-y vel2) dt))
+														(+ (.-z pos) (* (.-z vel2) dt)))
+							vel3  (vec3/v3 (.-x vel2) (- (.-y vel2) (* dt 1.9)) (.-z vel2))]
 					(when (and prev (< idx 99))
 						(let [a-int (fx-beam/fade-alpha idx)]
 							(when (> a-int 0)
@@ -113,10 +110,10 @@
 																{:r 255 :g 255 :b 255}
 																{:r 255 :g 51 :b 51})
 															a-int)
-											p0 {:x (double (:x prev)) :y (+ (double (:y prev)) h) :z (double (:z prev))}
-											p1 {:x (double (:x pos)) :y (+ (double (:y pos)) h) :z (double (:z pos))}
-											p2 {:x (double (:x pos)) :y (- (double (:y pos)) h) :z (double (:z pos))}
-											p3 {:x (double (:x prev)) :y (- (double (:y prev)) h) :z (double (:z prev))}]
+											p0 (vec3/v3 (.-x prev) (+ (.-y prev) h) (.-z prev))
+											p1 (vec3/v3 (.-x pos) (+ (.-y pos) h) (.-z pos))
+											p2 (vec3/v3 (.-x pos) (- (.-y pos) h) (.-z pos))
+											p3 (vec3/v3 (.-x prev) (- (.-y prev) h) (.-z prev))]
 									(conj! ops (fx-beam/glow-line-quad-op p0 p1 p2 p3 color))))))
 					(if (>= idx 99)
 						(persistent! ops)
@@ -124,7 +121,8 @@
 
 (defn- build-plan
 	[camera-pos _hand-center-pos _tick]
-	(let [ops (mapcat #(trajectory-ops camera-pos %)
+	(let [^V3 cam-v (vec3/map->v3 camera-pos)
+				ops (mapcat #(trajectory-ops cam-v %)
 										(filter #(get % :active?) (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-accel)))))]
 		(when (seq ops)
 			{:ops (vec ops)})))

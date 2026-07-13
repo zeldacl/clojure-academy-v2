@@ -10,7 +10,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (defn- all-beams
@@ -59,8 +59,8 @@
               (let [{:keys [from-x from-y from-z to-x to-y to-z ttl]} beam
                     alpha (int (* 180 (/ (double ttl) 12.0)))
                     col {:r 255 :g 100 :b 50 :a alpha}]
-                [(ru/line-op {:x (double from-x) :y (double from-y) :z (double from-z)}
-                             {:x (double to-x)   :y (double to-y)   :z (double to-z)}
+                [(ru/line-op (vec3/v3 from-x from-y from-z)
+                             (vec3/v3 to-x to-y to-z)
                              col)]))
             beams)}))
 

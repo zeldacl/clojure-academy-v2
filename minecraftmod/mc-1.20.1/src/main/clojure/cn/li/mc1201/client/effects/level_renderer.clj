@@ -14,7 +14,8 @@
            [net.minecraft.world.entity.player Abilities]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState]
-           [net.minecraft.world.phys Vec3]))
+           [net.minecraft.world.phys Vec3]
+           [cn.li.mcmod.math V3]))
 
 (def ^:private full-bright-uv2 15728880)
 (def ^:private default-walk-speed 0.1)
@@ -192,16 +193,16 @@
       (.endVertex)))
 
 (defn- emit-line!
-  [^VertexConsumer vc mat {:keys [p1 p2 color]}]
+  [^VertexConsumer vc mat {:keys [^V3 p1 ^V3 p2 color]}]
   (let [{:keys [r g b a]} color]
-    (emit-line-vertex! vc mat (:x p1) (:y p1) (:z p1) r g b a)
-    (emit-line-vertex! vc mat (:x p2) (:y p2) (:z p2) r g b a)))
+    (emit-line-vertex! vc mat (.-x p1) (.-y p1) (.-z p1) r g b a)
+    (emit-line-vertex! vc mat (.-x p2) (.-y p2) (.-z p2) r g b a)))
 
 (defn- emit-quad-vertex!
-  [^VertexConsumer vc mat p u v color]
+  [^VertexConsumer vc mat ^V3 p u v color]
   (let [{:keys [r g b a]} color]
     (-> vc
-        (.vertex mat (float (:x p)) (float (:y p)) (float (:z p)))
+        (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
         (.color (int r) (int g) (int b) (int a))
         (.uv (float u) (float v))
         (.overlayCoords (int OverlayTexture/NO_OVERLAY))

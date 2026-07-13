@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id "my_mod:vecmanip.blood_retro")
 (def ^:private splash-life 10)
@@ -123,8 +124,8 @@
 														 [owner-key live]))))
 								 (:sprays store*)))))
 
-(defn- splash-ops [cam-pos {:keys [x y z size ttl max-ttl]}]
-	(let [center {:x (double x) :y (double y) :z (double z)}
+(defn- splash-ops [^V3 cam-pos {:keys [x y z size ttl max-ttl]}]
+	(let [center (vec3/v3 (double x) (double y) (double z))
 				half-size (* 0.5 (double (or size 1.0)))
 				right (ru/camera-facing-right-axis center cam-pos)
 				up (ru/billboard-up-axis center cam-pos right)
@@ -142,20 +143,18 @@
 
 (defn- spray-face-basis [face]
 	(case face
-		:up    [{:x 0.0 :y 1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0}]
-		:down  [{:x 0.0 :y -1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z -1.0}]
-		:north [{:x 0.0 :y 0.0 :z -1.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 1.0 :z 0.0}]
-		:south [{:x 0.0 :y 0.0 :z 1.0} {:x -1.0 :y 0.0 :z 0.0} {:x 0.0 :y 1.0 :z 0.0}]
-		:west  [{:x -1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z -1.0} {:x 0.0 :y 1.0 :z 0.0}]
-		:east  [{:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0} {:x 0.0 :y 1.0 :z 0.0}]
-		[{:x 0.0 :y 1.0 :z 0.0} {:x 1.0 :y 0.0 :z 0.0} {:x 0.0 :y 0.0 :z 1.0}]))
+		:up    [(vec3/v3 0.0 1.0 0.0) (vec3/v3 1.0 0.0 0.0) (vec3/v3 0.0 0.0 1.0)]
+		:down  [(vec3/v3 0.0 -1.0 0.0) (vec3/v3 1.0 0.0 0.0) (vec3/v3 0.0 0.0 -1.0)]
+		:north [(vec3/v3 0.0 0.0 -1.0) (vec3/v3 1.0 0.0 0.0) (vec3/v3 0.0 1.0 0.0)]
+		:south [(vec3/v3 0.0 0.0 1.0) (vec3/v3 -1.0 0.0 0.0) (vec3/v3 0.0 1.0 0.0)]
+		:west  [(vec3/v3 -1.0 0.0 0.0) (vec3/v3 0.0 0.0 -1.0) (vec3/v3 0.0 1.0 0.0)]
+		:east  [(vec3/v3 1.0 0.0 0.0) (vec3/v3 0.0 0.0 1.0) (vec3/v3 0.0 1.0 0.0)]
+		[(vec3/v3 0.0 1.0 0.0) (vec3/v3 1.0 0.0 0.0) (vec3/v3 0.0 0.0 1.0)]))
 
 (defn- spray-ops [{:keys [x y z face size rotation offset-u offset-v texture-id ttl]}]
 	(let [[normal tangent bitangent] (spray-face-basis face)
 				center (vec3/v+
-								 {:x (+ (double x) 0.5)
-									:y (+ (double y) 0.5)
-									:z (+ (double z) 0.5)}
+								 (vec3/v3 (+ (double x) 0.5) (+ (double y) 0.5) (+ (double z) 0.5))
 								 (vec3/v* normal 0.51))
 				tangent' (vec3/rotate-around-axis tangent normal (double (or rotation 0.0)))
 				bitangent' (vec3/rotate-around-axis bitangent normal (double (or rotation 0.0)))
@@ -188,7 +187,8 @@
 								 (vals effect-state))
 				current-splashes (mapcat val splashes)
 				current-sprays (mapcat val sprays)
-				splash-plan (mapcat #(splash-ops camera-pos %) current-splashes)
+				^V3 cam-v (vec3/map->v3 camera-pos)
+				splash-plan (mapcat #(splash-ops cam-v %) current-splashes)
 				spray-plan (mapcat spray-ops current-sprays)
 				ws (when (and br (:active? br))
 						 (local-walk-speed (:ticks br)))]

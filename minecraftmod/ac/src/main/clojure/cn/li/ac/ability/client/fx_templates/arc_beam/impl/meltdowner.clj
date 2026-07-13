@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (defn- update-meltdowner-fx-state!
   [f & args]
@@ -154,10 +155,11 @@
 ;; Render ops
 ;; ---------------------------------------------------------------------------
 
-(defn- charge-ops [center ticks charge-ratio]
+(defn- charge-ops [^V3 center ticks charge-ratio]
   (let [base-radius (+ 0.72 (* 0.28 (double charge-ratio)))
         pulse (+ base-radius (* 0.08 (Math/sin (* 0.23 (double ticks)))))
-        y-base (+ (double (:y center)) 0.18)
+        cx (.-x center) cz (.-z center)
+        y-base (+ (.-y center) 0.18)
         ring-segments 18]
     (vec
       (mapcat
@@ -165,12 +167,8 @@
           (let [a0 (/ (* 2.0 Math/PI idx) ring-segments)
                 a1 (/ (* 2.0 Math/PI (inc idx)) ring-segments)
                 h (+ y-base (* 0.22 (Math/sin (+ (* 0.17 ticks) idx))))
-                p0 {:x (+ (:x center) (* pulse (Math/cos a0)))
-                    :y h
-                    :z (+ (:z center) (* pulse (Math/sin a0)))}
-                p1 {:x (+ (:x center) (* pulse (Math/cos a1)))
-                    :y h
-                    :z (+ (:z center) (* pulse (Math/sin a1)))}
+                p0 (vec3/v3 (+ cx (* pulse (Math/cos a0))) h (+ cz (* pulse (Math/sin a0))))
+                p1 (vec3/v3 (+ cx (* pulse (Math/cos a1))) h (+ cz (* pulse (Math/sin a1))))
                 ray-color {:r 170 :g 255 :b 190 :a 170}
                 link-color {:r 140 :g 240 :b 170 :a 120}]
             [(ru/line-op p0 p1 ray-color)
@@ -196,16 +194,18 @@
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
   (let [md (matching-active-state hand-center-pos)
-        current-rays (all-rays)
+        ^V3 cam-v (vec3/map->v3 camera-pos)
+        current-rays (map (fn [ray] (assoc ray :start (vec3/map->v3 (:start ray)) :end (vec3/map->v3 (:end ray))))
+                           (all-rays))
         charge-plan (if (and hand-center-pos md (:active? md))
-                      (let [center (dissoc hand-center-pos :player-uuid)
+                      (let [center (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
                             ticks (long (or (:ticks md) 0))
                             ratio (double (or (:charge-ratio md) 0.0))]
                         (charge-ops center ticks ratio))
                       [])
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
-        ray-plan (fx-beam/fading-beams-ops camera-pos current-rays meltdowner-ray-style)]
+        ray-plan (fx-beam/fading-beams-ops cam-v current-rays meltdowner-ray-style)]
     (when (or (seq charge-plan) (seq ray-plan) ws)
       {:ops (vec (concat charge-plan ray-plan))
        :local-walk-speed ws})))

@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
 (def ^:private local-remove-scripted-effect-key :mcmod/remove-local-scripted-effect)
@@ -24,20 +25,20 @@
 (defn- clamp01 [x]
   (max 0.0 (min 1.0 (double x))))
 
-(defn- lerp-pos [a b t]
+(defn- lerp-pos ^V3 [^V3 a ^V3 b t]
   (let [k (clamp01 t)]
     (vec3/v+ a (vec3/v* (vec3/v- b a) k))))
 
-(defn- safe-trail-right-axis [dir]
-  (let [up-axis (if (> (Math/abs (double (:y dir))) 0.95)
-                  {:x 1.0 :y 0.0 :z 0.0}
-                  {:x 0.0 :y 1.0 :z 0.0})
+(defn- safe-trail-right-axis ^V3 [^V3 dir]
+  (let [up-axis (if (> (Math/abs (.-y dir)) 0.95)
+                  vec3/unit-x
+                  vec3/unit-y)
         right (vec3/vcross dir up-axis)]
     (if (> (vec3/vlen right) min-segment-length)
       (vec3/vnorm right)
-      {:x 1.0 :y 0.0 :z 0.0})))
+      vec3/unit-x)))
 
-(defn- trail-layer-ops [start pos ttl trigger-ticks]
+(defn- trail-layer-ops [^V3 start ^V3 pos ttl trigger-ticks]
   (let [travel (vec3/v- pos start)
         distance (vec3/vlen travel)]
     (if (< distance min-segment-length)
@@ -66,9 +67,9 @@
                          (ru/line-op tail head {:r 200 :g 248 :b 255 :a (min 255 (+ 16 alpha))})])))
                   (range 4)))))))
 
-(defn- impact-billboard-ops [cam-pos target ttl trigger-ticks]
-  (if (map? cam-pos)
-    (let [center {:x (:x target) :y (+ (double (:y target)) 0.45) :z (:z target)}
+(defn- impact-billboard-ops [^V3 cam-pos ^V3 target ttl trigger-ticks]
+  (if (some? cam-pos)
+    (let [center (vec3/v3 (.-x target) (+ (.-y target) 0.45) (.-z target))
           right (ru/camera-facing-right-axis center cam-pos)
           up (ru/billboard-up-axis center cam-pos right)
           ttl-k (clamp01 (/ (double ttl) (double trigger-ttl)))
@@ -95,22 +96,24 @@
        (ru/quad-op "my_mod:textures/effects/glow_circle.png" i0 i1 i2 i3 {:r 225 :g 252 :b 255 :a inner-a})])
     []))
 
-(defn- impact-spike-ops [target ttl trigger-ticks]
-  (let [center {:x (:x target) :y (+ (double (:y target)) 0.08) :z (:z target)}
+(defn- impact-spike-ops [^V3 target ttl trigger-ticks]
+  (let [cx (.-x target) cy (+ (.-y target) 0.08) cz (.-z target)
+        center (vec3/v3 cx cy cz)
         ttl-k (clamp01 (/ (double ttl) (double trigger-ttl)))
         radius (+ 0.38 (* 0.18 (Math/sin (* 0.26 (double trigger-ticks)))))
         y-lift (+ 0.06 (* 0.03 ttl-k))
         alpha (int (max 0 (min 255 (* 200.0 ttl-k))))
         color {:r 214 :g 248 :b 255 :a alpha}
-        inner {:r 180 :g 230 :b 255 :a (int (max 0 (min 255 (* 135.0 ttl-k))))}]
+        inner {:r 180 :g 230 :b 255 :a (int (max 0 (min 255 (* 135.0 ttl-k))))}
+        base (vec3/v3 cx (+ cy 0.16) cz)]
     (vec
       (mapcat (fn [idx]
                 (let [a (/ (* 2.0 Math/PI idx) 8.0)
-                      tip {:x (+ (:x center) (* radius (Math/cos a)))
-                           :y (+ (:y center) y-lift)
-                           :z (+ (:z center) (* radius (Math/sin a)))}]
+                      tip (vec3/v3 (+ cx (* radius (Math/cos a)))
+                                   (+ cy y-lift)
+                                   (+ cz (* radius (Math/sin a))))]
                   [(ru/line-op center tip color)
-                   (ru/line-op {:x (:x center) :y (+ (:y center) 0.16) :z (:z center)} tip inner)]))
+                   (ru/line-op base tip inner)]))
               (range 8)))))
 
 
@@ -121,19 +124,16 @@
 
 
 
-(defn- ring-ops [target radius color]
+(defn- ring-ops [^V3 target radius color]
   (let [segments 24
-        y (+ (double (:y target)) 0.05)]
+        tx (.-x target) tz (.-z target)
+        y (+ (.-y target) 0.05)]
     (vec
       (for [idx (range segments)
             :let [a0 (/ (* 2.0 Math/PI idx) segments)
                   a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 {:x (+ (double (:x target)) (* radius (Math/cos a0)))
-                      :y y
-                      :z (+ (double (:z target)) (* radius (Math/sin a0)))}
-                  p1 {:x (+ (double (:x target)) (* radius (Math/cos a1)))
-                      :y y
-                      :z (+ (double (:z target)) (* radius (Math/sin a1)))}]]
+                  p0 (vec3/v3 (+ tx (* radius (Math/cos a0))) y (+ tz (* radius (Math/sin a0))))
+                  p1 (vec3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
 (defn- spawn-diamond-shield!
@@ -250,13 +250,14 @@
 
 (defn- build-plan
   [camera-pos _hand-center-pos _tick]
-  (let [states (vals (:fx-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :jet-engine)))
+  (let [^V3 cam-v (when (map? camera-pos) (vec3/map->v3 camera-pos))
+        states (vals (:fx-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :jet-engine)))
         marking-states (filter #(= :marking (:phase %)) states)
         triggering-states (filter #(= :triggering (:phase %)) states)
         mark-ops (vec
                    (mapcat (fn [st]
                              (when-let [target (:target st)]
-                               (ring-ops target
+                               (ring-ops (vec3/map->v3 target)
                                          (+ 0.55 (* 0.2 (Math/sin (* 0.15 (double (:hold-ticks st))))))
                                          {:r 120 :g 245 :b 255 :a 170})))
                            marking-states))
@@ -273,12 +274,13 @@
                                   (when (pos? ttl)
                                     (concat
                                       (when (and start pos)
-                                        (trail-layer-ops start pos ttl trigger-ticks))
+                                        (trail-layer-ops (vec3/map->v3 start) (vec3/map->v3 pos) ttl trigger-ticks))
                                       (when target
-                                        (concat
-                                          (ring-ops target impact-radius impact-color)
-                                          (impact-spike-ops target ttl trigger-ticks)
-                                          (impact-billboard-ops camera-pos target ttl trigger-ticks)))))))
+                                        (let [target-v (vec3/map->v3 target)]
+                                          (concat
+                                            (ring-ops target-v impact-radius impact-color)
+                                            (impact-spike-ops target-v ttl trigger-ticks)
+                                            (impact-billboard-ops cam-v target-v ttl trigger-ticks))))))))
                               triggering-states))
         alpha (->> triggering-states
                    (map #(long (or (:ttl %) 0)))

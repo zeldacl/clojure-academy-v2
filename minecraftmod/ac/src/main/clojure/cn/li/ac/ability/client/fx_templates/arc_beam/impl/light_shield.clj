@@ -10,8 +10,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.util.math.vec3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [clojure.string :as str])
+  (:import [cn.li.mcmod.math V3]))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -65,7 +66,9 @@
 (defn- build-plan
   [camera-pos hand-center-pos tick]
   (when hand-center-pos
-    (let [center (dissoc hand-center-pos :player-uuid)
+    (let [^V3 center (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
+          ^V3 camera-pos (vec3/map->v3 camera-pos)
+          cx (.-x center) cy (.-y center) cz (.-z center)
           angle (* 0.12 (double (or tick 0)))
           ring-radius (+ 0.82 (* 0.06 (Math/sin (* 0.17 (double (or tick 0))))))
           segments 24
@@ -75,12 +78,8 @@
                      (fn [idx]
                        (let [a0 (+ angle (/ (* 2.0 Math/PI idx) segments))
                              a1 (+ angle (/ (* 2.0 Math/PI (inc idx)) segments))
-                             p0 {:x (+ (:x center) (* ring-radius (Math/cos a0)))
-                                 :y (+ (:y center) 0.15)
-                                 :z (+ (:z center) (* ring-radius (Math/sin a0)))}
-                             p1 {:x (+ (:x center) (* ring-radius (Math/cos a1)))
-                                 :y (+ (:y center) 0.15)
-                                 :z (+ (:z center) (* ring-radius (Math/sin a1)))}]
+                             p0 (vec3/v3 (+ cx (* ring-radius (Math/cos a0))) (+ cy 0.15) (+ cz (* ring-radius (Math/sin a0))))
+                             p1 (vec3/v3 (+ cx (* ring-radius (Math/cos a1))) (+ cy 0.15) (+ cz (* ring-radius (Math/sin a1))))]
                          [(ru/line-op p0 p1 outer-color)
                           (ru/line-op center p0 inner-color)]))
                      (range segments))
