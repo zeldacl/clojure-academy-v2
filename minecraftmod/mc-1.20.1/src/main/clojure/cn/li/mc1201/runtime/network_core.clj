@@ -50,8 +50,15 @@
        (sort-by (fn [x] [(long (or (:order x) 0)) (str (:id x))]))))
 
 (defn- sync-message-payload
+  "Build one domain's sync message, or nil to skip it entirely.
+
+  `runtime-payload` only contains keys for domains build-sync-payload decided
+  to include (all of them for a full sync, only the dirty ones for a delta
+  sync) — contains? (not just truthy get) is what makes the skip work, since
+  an included domain's value can itself legitimately be nil."
   [uuid runtime-payload {:keys [message-id message-key payload-key]}]
-  (when (and (or message-id message-key) payload-key)
+  (when (and (or message-id message-key) payload-key
+             (contains? runtime-payload payload-key))
     {:msg-id (or message-id (msg-id message-key))
      :payload {:uuid uuid
                payload-key (get runtime-payload payload-key)}}))

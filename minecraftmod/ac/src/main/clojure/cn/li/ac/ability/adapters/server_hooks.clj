@@ -97,6 +97,24 @@
    {:command :set-dirty-flag :dirty? false})
   nil)
 
+(defn- build-sync-payload-impl
+  "Build the client sync payload for player-uuid.
+
+  full? true: every sync domain included (login/respawn/dimension-change and
+  the periodic full-sync safety net all request this).
+  full? false: only domains present in :dirty-domains are included — absent
+  keys tell sync-message-payload (network-core) to skip that domain's wire
+  message entirely rather than send a stale/nil value over it."
+  [player-uuid full?]
+  (when-let [state (runtime-get-player-state player-uuid)]
+    (let [domains (if full? store/sync-domains (or (:dirty-domains state) #{}))]
+      (cond-> {:uuid player-uuid}
+        (contains? domains :ability-data)  (assoc :ability-data (:ability-data state))
+        (contains? domains :resource-data) (assoc :resource-data (:resource-data state))
+        (contains? domains :cooldown-data) (assoc :cooldown-data (:cooldown-data state))
+        (contains? domains :preset-data)   (assoc :preset-data (:preset-data state))
+        (contains? domains :develop-data)  (assoc :develop-data (:develop-data state))))))
+
 (defn- runtime-list-player-uuids
   []
   (store/list-players (store/get-store)
@@ -255,18 +273,13 @@
      (runtime-list-player-uuids))
 
    :build-sync-payload
-   (fn [player-uuid]
-     (when-let [state (runtime-get-player-state player-uuid)]
-       {:uuid player-uuid
-        :ability-data (:ability-data state)
-        :resource-data (:resource-data state)
-        :cooldown-data (:cooldown-data state)
-        :preset-data (:preset-data state)
-        :develop-data (:develop-data state)}))
+   (fn
+     ([player-uuid] (build-sync-payload-impl player-uuid true))
+     ([player-uuid full?] (build-sync-payload-impl player-uuid full?)))
 
    :player-state-dirty?
    (fn [player-uuid]
-     (boolean (:dirty? (runtime-get-player-state player-uuid))))
+     (boolean (seq (:dirty-domains (runtime-get-player-state player-uuid)))))
 
    :mark-player-clean!
    (fn [player-uuid]

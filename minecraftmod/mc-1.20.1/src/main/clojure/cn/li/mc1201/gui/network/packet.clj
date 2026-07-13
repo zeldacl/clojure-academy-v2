@@ -5,7 +5,7 @@
   transports may read/write bytes or buffers, but request/response/push envelope
   semantics live here."
   (:require [clojure.string :as str]
-            [cn.li.mc1201.runtime.edn-state :as es]
+            [cn.li.mcmod.network.binary-codec :as codec]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn make-packet
@@ -30,25 +30,18 @@
   [namespace packet]
   (str (str/trim (str namespace)) "/" (name (packet-id packet))))
 
-(defn encode-payload
-  [payload]
-  (es/encode-edn (or payload {})))
-
-(defn decode-payload
-  [s on-error]
-  (let [result (es/decode-edn-safe
-                (or s "{}")
-                on-error)]
-    (if (map? result) result {})))
-
 (defn encode-payload-bytes
-  [payload]
-  (let [^String encoded (str (encode-payload payload))]
-    (.getBytes encoded "UTF-8")))
+  ^bytes [payload]
+  (codec/encode (or payload {})))
 
 (defn decode-payload-bytes
   [^bytes bs on-error]
-  (decode-payload (String. bs "UTF-8") on-error))
+  (let [result (try
+                 (codec/decode (or bs (byte-array 0)))
+                 (catch Exception e
+                   (when on-error (on-error e))
+                   nil))]
+    (if (map? result) result {})))
 
 (defn normalize-map
   [v]

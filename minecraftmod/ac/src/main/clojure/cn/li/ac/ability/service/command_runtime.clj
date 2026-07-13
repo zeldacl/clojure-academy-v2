@@ -147,9 +147,10 @@
             _ (contracts/assert-reducer-result! result)
             next-state (:state result)]
         (when (and next-state (not= next-state state))
-          (store/set-player-state!* session-id uuid next-state)
-          (when mark-dirty?
-            (store/mark-player-dirty! session-id uuid)))
+          (let [domains (store/changed-sync-domains state next-state)]
+            (store/set-player-state!* session-id uuid next-state)
+            (when mark-dirty?
+              (store/mark-player-dirty! session-id uuid domains))))
         (runtime-hooks/with-player-state-owner owner
           (interpreter/execute-reducer-result! result))
         (when explicit-command-id
@@ -181,9 +182,10 @@
         _ (contracts/assert-reducer-result! result)
         next-state (:state result)]
     (when (and next-state (not= next-state state))
-      (store/set-player-state!* session-id uuid next-state)
-      (when mark-dirty?
-        (store/mark-player-dirty! session-id uuid)))
+      (let [domains (store/changed-sync-domains state next-state)]
+        (store/set-player-state!* session-id uuid next-state)
+        (when mark-dirty?
+          (store/mark-player-dirty! session-id uuid domains))))
     (runtime-hooks/with-player-state-owner owner
       (interpreter/execute-reducer-result! result))
     result))

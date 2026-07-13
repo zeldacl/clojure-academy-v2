@@ -29,7 +29,7 @@
    :on-player-tick! noop
    :init-damage-handlers! noop
    :list-player-uuids (fn [] [])
-   :build-sync-payload (fn [_] nil)
+   :build-sync-payload (fn ([_] nil) ([_ _] nil))
    ;; Default true: unknown/unregistered player state is always considered
    ;; dirty (safe fallback — matches pre-dirty-tracking behavior of syncing
    ;; every player every tick).
@@ -458,8 +458,13 @@
   ((:list-player-uuids (hooks-core-state-snapshot))))
 
 (defn build-sync-payload
-  [player-uuid]
-  ((:build-sync-payload (hooks-core-state-snapshot)) player-uuid))
+  "Build the runtime sync payload for player-uuid. When full? is true (or
+  omitted), every synced domain is included; when false, content layers may
+  return only domains that changed since the last clean mark (delta sync)."
+  ([player-uuid]
+   (build-sync-payload player-uuid true))
+  ([player-uuid full?]
+   ((:build-sync-payload (hooks-core-state-snapshot)) player-uuid full?)))
 
 (defn player-state-dirty?
   "Return true when player-uuid's runtime state has unsynced changes.

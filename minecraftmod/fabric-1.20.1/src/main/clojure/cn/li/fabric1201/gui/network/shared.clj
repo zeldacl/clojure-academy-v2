@@ -16,14 +16,10 @@
 (defn make-buf
   [payload]
   (doto (FriendlyByteBuf. (Unpooled/buffer))
-    (.writeUtf (packet-base/encode-payload payload))))
+    (.writeByteArray ^bytes (packet-base/encode-payload-bytes payload))))
 
 (defn read-buf-map
   [^FriendlyByteBuf buf]
-  (let [raw (try
-              (.readUtf buf 1048576)
-              (catch Throwable _
-                (.readUtf buf)))]
-    (packet-base/decode-payload
-      raw
-      #(log/error "Failed to deserialize Fabric network payload:" (ex-message %)))))
+  (packet-base/decode-payload-bytes
+    (.readByteArray buf)
+    #(log/error "Failed to deserialize Fabric network payload:" (ex-message %))))

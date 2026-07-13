@@ -49,7 +49,7 @@
                      :resource-data resource-data
                      :cooldown-data cooldown-data
                      :preset-data {:active-preset 0 :slots {}}
-                     :dirty? false})))
+                     :dirty-domains #{}})))
 
 (deftest key-down-blocked-by-cooldown-test
   (let [uuid "test-player-cooldown"
@@ -211,7 +211,7 @@
                                :cooldown-data (-> (cd/new-cooldown-data)
                                                   (cd/set-cooldown :arc-gen :main 5))
                                :preset-data {:active-preset 0 :slots {}}
-                               :dirty? false})
+                               :dirty-domains #{}})
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
     (binding [ctx/*context-owner* (test-context-owner uuid)
               runtime-hooks/*player-state-owner* {:server-session-id alt-session

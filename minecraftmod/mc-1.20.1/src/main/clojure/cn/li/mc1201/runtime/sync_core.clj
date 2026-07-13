@@ -116,8 +116,8 @@
                  (map (fn [uuid] [uuid {:last-dirty-tick tick}])
                  players)))))
 
-(defn- build-sync-payload [uuid]
-  (power-runtime/build-sync-payload uuid))
+(defn- build-sync-payload [uuid full?]
+  (power-runtime/build-sync-payload uuid full?))
 
 (defn- advance-scheduler!
   [owner]
@@ -192,7 +192,7 @@
                                        (power-runtime/list-player-uuids)))
                             dirty-uuids)]
           (doseq [uuid flush-uuids]
-            (when-let [payload (build-sync-payload uuid)]
+            (when-let [payload (build-sync-payload uuid force-full?)]
               (try
                 (when send-fn
                   (send-fn uuid payload))

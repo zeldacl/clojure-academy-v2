@@ -15,18 +15,24 @@
 (defn network-impl-validator
   "Unregister disposed networks and networks whose matrix block is gone."
   [world-data world]
-  (doseq [item (vals (world-registry/networks world-data))]
-    (when (or (network-state/is-disposed? item)
-              (and (vb/is-chunk-loaded? (:matrix item) world)
-                   (nil? (resolver/resolve-matrix-cap world (:matrix item)))))
-      (store/unregister-network! world-data item))))
+  (reduce-kv
+    (fn [_ _ item]
+      (when (or (network-state/is-disposed? item)
+                (and (vb/is-chunk-loaded? (:matrix item) world)
+                     (nil? (resolver/resolve-matrix-cap world (:matrix item)))))
+        (store/unregister-network! world-data item))
+      nil)
+    nil (world-registry/networks world-data)))
 
 (defn node-connection-impl-validator
   "Unregister disposed node connections."
   [world-data world]
-  (doseq [item (vals (world-registry/connections world-data))]
-    (when (node-conn/is-disposed? item)
-      (store/unregister-connection! world-data item))))
+  (reduce-kv
+    (fn [_ _ item]
+      (when (node-conn/is-disposed? item)
+        (store/unregister-connection! world-data item))
+      nil)
+    nil (world-registry/connections world-data)))
 
 (defn tick-world-data!
   "Advance all wireless runtime state for one server tick.
@@ -42,11 +48,13 @@
         ctx {:game-time game-time
              :cfg cfg
              :cap-cache (java.util.HashMap.)}]
-    (doseq [net (vals (get state :networks))]
-      (network-runtime/tick-wireless-net! net world ctx))
-    (doseq [conn (vals (get state :connections))]
-      (when-not (node-conn/is-disposed? conn)
-        (node-transfer/tick-node-conn! conn world ctx)))
+    (reduce-kv (fn [_ _ net] (network-runtime/tick-wireless-net! net world ctx) nil)
+               nil (get state :networks))
+    (reduce-kv (fn [_ _ conn]
+                 (when-not (node-conn/is-disposed? conn)
+                   (node-transfer/tick-node-conn! conn world ctx))
+                 nil)
+               nil (get state :connections))
     (when (sched/due? game-time (long (get cfg :sweep-interval-ticks)) ::sweep)
       (network-impl-validator world-data world)
       (node-connection-impl-validator world-data world))))

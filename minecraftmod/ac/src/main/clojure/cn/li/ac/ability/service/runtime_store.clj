@@ -16,7 +16,7 @@
      :cooldown-data    {...}  ; {[ctrl-id sub-id] ticks}
      :preset-data      {...}  ; active-preset/slots
      :context-registry {...}  ; {ctx-id {:id :skill-id :status :player-uuid}}
-     :dirty?           bool}
+     :dirty-domains    #{}}   ; subset of sync-domains changed since last clean mark
 
   Note: terminal-data and tutorial-data are persisted directly to player
   NBT (see terminal/player.clj and tutorial/player.clj), not via this store."
@@ -30,6 +30,11 @@
 ;; Default Player State
 ;; ============================================================================
 
+(def sync-domains
+  "Player-state keys carried by the client sync payload (build-sync-payload).
+  Domain-level dirty tracking only ever needs to watch these five."
+  #{:ability-data :resource-data :cooldown-data :preset-data :develop-data})
+
 (defn fresh-player-state
   "Create a default empty player state map.
    cooldown-data and develop-data are transient (upstream CooldownData/DevelopData
@@ -39,7 +44,7 @@
    :resource-data    (rdata/new-resource-data)
    :preset-data      (pdata/new-preset-data)
    :context-registry {}
-   :dirty?           false})
+   :dirty-domains    #{}})
 
 ;; ============================================================================
 ;; Player key encoding
@@ -124,15 +129,19 @@
                    (update base domain-key f)))))))
 
 (defn mark-dirty!
-  "Mark player state as needing persistence flush. Returns nil."
-  [session-id player-uuid]
-  (when-let [store (ensure-store)]
-    (when-let [a (.get ^ConcurrentHashMap (:player-atoms store) (player-key session-id player-uuid))]
-      (swap! a assoc :dirty? true)))
-  nil)
+  "Mark player state as needing a sync flush. With no domains arg, marks every
+  sync domain dirty (coarse fallback for callers that can't identify which
+  domain changed). Returns nil."
+  ([session-id player-uuid]
+   (mark-dirty! session-id player-uuid sync-domains))
+  ([session-id player-uuid domains]
+   (when-let [store (ensure-store)]
+     (when-let [a (.get ^ConcurrentHashMap (:player-atoms store) (player-key session-id player-uuid))]
+       (swap! a update :dirty-domains (fnil into #{}) domains)))
+   nil))
 
 (defn get-dirty-players
-  "List of player-uuids with :dirty? = true in this session. Returns [...]."
+  "List of player-uuids with non-empty :dirty-domains in this session. Returns [...]."
   [session-id]
   (when-let [store (ensure-store)]
     (let [player-atoms (:player-atoms store)
@@ -141,17 +150,17 @@
         (let [dirty (java.util.ArrayList.)]
           (doseq [uuid (enumeration-seq (.keys ^ConcurrentHashMap s))]
             (when-let [a (.get ^ConcurrentHashMap player-atoms (player-key session-id uuid))]
-              (when (:dirty? @a)
+              (when (seq (:dirty-domains @a))
                 (.add dirty uuid))))
           (vec dirty))
         []))))
 
 (defn clear-dirty!
-  "Clear the dirty flag. Returns nil."
+  "Clear the dirty-domains set. Returns nil."
   ([session-id player-uuid]
    (when-let [store (ensure-store)]
      (when-let [a (.get ^ConcurrentHashMap (:player-atoms store) (player-key session-id player-uuid))]
-       (swap! a assoc :dirty? false)))
+       (swap! a assoc :dirty-domains #{})))
    nil)
   ([_store session-id player-uuid]
    (clear-dirty! session-id player-uuid)))
@@ -265,9 +274,21 @@
     (update-player-state! session-id player-uuid f)))
 
 (defn mark-player-dirty!
-  "Mark player dirty in the store."
-  [session-id player-uuid]
-  (mark-dirty! session-id player-uuid))
+  "Mark player dirty in the store. With no domains arg, marks every sync
+  domain dirty."
+  ([session-id player-uuid]
+   (mark-dirty! session-id player-uuid))
+  ([session-id player-uuid domains]
+   (mark-dirty! session-id player-uuid domains)))
+
+(defn changed-sync-domains
+  "Return the subset of sync-domains where old-state and new-state differ
+  structurally. Used to mark only the domains a command actually touched
+  dirty, instead of the whole sync-domains set."
+  [old-state new-state]
+  (into #{}
+        (filter (fn [k] (not= (get old-state k) (get new-state k))))
+        sync-domains))
 
 (defn get-or-create-player-state!
   "Get player state or create it with fresh defaults if missing."
@@ -295,12 +316,13 @@
 (defn apply-reducer-result!
   "Commit a reducer result {:state ...} back to the store.
 
-  Marks dirty if :state is non-nil and different from current.
-  Returns the new state."
+  Marks dirty (only the sync domains that actually changed) if :state is
+  non-nil and different from current. Returns the new state."
   [session-id player-uuid {:keys [state]}]
   (when state
     (let [current (get-player-state* session-id player-uuid)]
       (when-not (identical? state current)
-        (set-player-state!* session-id player-uuid state)
-        (mark-player-dirty! session-id player-uuid))))
+        (let [domains (changed-sync-domains current state)]
+          (set-player-state!* session-id player-uuid state)
+          (mark-player-dirty! session-id player-uuid domains)))))
   state)

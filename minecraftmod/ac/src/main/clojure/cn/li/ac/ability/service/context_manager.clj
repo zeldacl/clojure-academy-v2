@@ -175,39 +175,34 @@
         (cond-> {:logical-side side}
           (:player-uuid ctx-map) (assoc :player-uuid (str (:player-uuid ctx-map)))))))
 
-(defn- timeout-expired-server-contexts
+(defn- expired-server-context?
+  [now timeout-ms ctx-map]
+  (and (= :server (:logical-side ctx-map))
+       (= ctx/STATUS-ALIVE (:status ctx-map))
+       (:last-keepalive-ms ctx-map)
+       (> (- now (:last-keepalive-ms ctx-map)) timeout-ms)))
+
+(defn- stale-terminated-context?
+  [now grace-ms ctx-map]
+  (and (= ctx/STATUS-TERMINATED (:status ctx-map))
+       (:terminated-at-ms ctx-map)
+       (>= (- now (:terminated-at-ms ctx-map)) grace-ms)))
+
+(defn- sweep-contexts!
+  "Single pass over the transport-context snapshot doing both the keepalive
+  timeout sweep and the stale-terminated purge (previously two independent
+  full snapshot+filter passes)."
   []
   (let [now (System/currentTimeMillis)
-  timeout-ms (keepalive-timeout-ms)]
-      (->> (ctx/snapshot-transport-contexts)
-         (filter (fn [ctx-map]
-                   (and (= :server (:logical-side ctx-map))
-              (= ctx/STATUS-ALIVE (:status ctx-map))
-                        (:last-keepalive-ms ctx-map)
-                        (> (- now (:last-keepalive-ms ctx-map)) timeout-ms)))))))
+        timeout-ms (keepalive-timeout-ms)
+        grace-ms (terminated-context-grace-ms)]
+    (doseq [ctx-map (ctx/snapshot-transport-contexts)]
+      (cond
+        (expired-server-context? now timeout-ms ctx-map)
+        (ctx/terminate-context! (context-owner-from-map ctx-map) (:id ctx-map) send-terminated!)
 
-(defn- terminate-expired-contexts!
-  []
-  (doseq [ctx-map (timeout-expired-server-contexts)]
-    (ctx/terminate-context! (context-owner-from-map ctx-map)
-                                (:id ctx-map)
-                                send-terminated!)))
-
-(defn- stale-terminated-contexts
-  []
-  (let [now (System/currentTimeMillis)
-  grace-ms (terminated-context-grace-ms)]
-      (->> (ctx/snapshot-transport-contexts)
-         (filter (fn [ctx-map]
-            (and (= ctx/STATUS-TERMINATED (:status ctx-map))
-                        (:terminated-at-ms ctx-map)
-                        (>= (- now (:terminated-at-ms ctx-map)) grace-ms)))))))
-
-(defn- purge-stale-terminated-contexts!
-  []
-  (doseq [ctx-map (stale-terminated-contexts)]
-    (ctx/remove-context! (context-owner-from-map ctx-map)
-                             (:id ctx-map))))
+        (stale-terminated-context? now grace-ms ctx-map)
+        (ctx/remove-context! (context-owner-from-map ctx-map) (:id ctx-map))))))
 
 (defn push-channel-to-player!
   "Push a context channel payload to a player's client.
@@ -266,5 +261,4 @@
         guard (sweep-guard-atom)]
     (when (or (nil? tick-id) (not= tick-id @guard))
       (when tick-id (reset! guard tick-id))
-      (terminate-expired-contexts!)
-      (purge-stale-terminated-contexts!))))
+      (sweep-contexts!))))

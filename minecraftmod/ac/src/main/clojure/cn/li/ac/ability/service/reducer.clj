@@ -27,6 +27,12 @@
             [cn.li.ac.ability.config :as cfg]
             [cn.li.mcmod.util.log :as log]))
 
+;; Duplicated from runtime-store/sync-domains rather than required: this ns is
+;; the pure reducer layer (no atoms, no imperative shell deps) and runtime-store
+;; is the imperative shell built on top of it.
+(def ^:private sync-domains
+  #{:ability-data :resource-data :cooldown-data :preset-data :develop-data})
+
 ;; ============================================================================
 ;; Outcome Builder Helpers
 ;; ============================================================================
@@ -590,11 +596,11 @@
             (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
             (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
             (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
-            (contains? cmd :dirty?) (assoc :dirty? (boolean (:dirty? cmd)))))))
+            (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{}))))))
 
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
-    (ok (assoc player-state :dirty? (boolean dirty?))))
+    (ok (assoc player-state :dirty-domains (if dirty? sync-domains #{}))))
 
   (defn- cmd-set-cheats-enabled
     [player-state {:keys [enabled?]}]

@@ -47,7 +47,7 @@
                                                    :cur-overload 0.0)
                              :cooldown-data (cd/new-cooldown-data)
                              :preset-data {:active-preset 0 :slots {}}
-                             :dirty? false}))
+                             :dirty-domains #{}}))
 
 (deftest resolve-action-key-mappings-test
   (testing ":instant key-down -> :perform!"

@@ -43,7 +43,7 @@
     (is (map? (:resource-data s)))
     (is (map? (:preset-data s)))
     (is (map? (:context-registry s)))
-    (is (false? (:dirty? s)))
+    (is (= #{} (:dirty-domains s)))
     (is (false? (contains? s :terminal-data)))))
 
 (deftest get-or-create-player-state-test
@@ -53,14 +53,14 @@
 
 (deftest update-ability-data-marks-dirty-test
   (store/get-or-create-player-state! ps-fix/test-session-id "u2")
-  (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
+  (is (empty? (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2"))))
   (command-rt/run-command-in-session! ps-fix/test-session-id
                                       "u2"
                                       {:command :change-category
                                        :new-category :vecmanip})
-  (is (true? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2"))))
+  (is (seq (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2"))))
   (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
-  (is (false? (:dirty? (store/get-player-state* ps-fix/test-session-id "u2")))))
+  (is (empty? (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2")))))
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
@@ -116,11 +116,11 @@
                   (assoc-in [:cooldown-data [:railgun :main]] 20)
                   (assoc-in [:preset-data :slots [0 0]] [:electromaster :railgun])
                   (assoc-in [:develop-data :state] :developing)
-                  (assoc :dirty? true))
-        persisted (dissoc state :dirty?)
+                  (assoc :dirty-domains #{:ability-data}))
+        persisted (dissoc state :dirty-domains)
         decoded (edn/read-string (pr-str persisted))]
     (is (= persisted decoded))
-    (is (false? (contains? decoded :dirty?)))
+    (is (false? (contains? decoded :dirty-domains)))
     (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :context-registry}
            (set (keys decoded))))
     (is (= [:electromaster :railgun]
