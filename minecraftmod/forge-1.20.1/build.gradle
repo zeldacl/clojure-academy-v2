@@ -28,6 +28,9 @@ loom {
             client()
             configName = "Forge Client 1.20.1"
             runDir = "run"
+            // 注入 Windows 内存分析所需参数
+            vmArg "-XX:+UnlockDiagnosticVMOptions"
+            vmArg "-XX:+DebugNonSafepoints"
         }
         server {
             server()

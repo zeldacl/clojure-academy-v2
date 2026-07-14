@@ -127,6 +127,7 @@
           (when (>= (- now (get-in @fw-atom throttle-path 0)) sync-interval-ms)
             (swap! fw-atom assoc-in throttle-path now)
             (net-client/send-to-server
+              (runtime-hooks/default-client-owner)
               (tut-msg/msg-id :tutorial/request-sync)
               {}
               (fn [response]

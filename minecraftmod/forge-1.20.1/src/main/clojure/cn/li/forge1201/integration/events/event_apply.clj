@@ -30,12 +30,14 @@
   evt)
 
 (defn apply-consumed-right-click!
-  "Deny both item-use and block-use so Forge does not place an item or interact
-  with the block after the handler has already consumed the event.
-  On the server, additionally cancel the event with InteractionResult/CONSUME
-  to prevent the default processing path."
+  "Cancel the RightClickBlock event with InteractionResult/CONSUME on both sides.
+  This prevents the vanilla Item.use() fallback that would otherwise fire even
+  after useItem=DENY (Item.useOn is skipped, but Item.use runs as a last resort).
+  The block's GUI was already opened by the handler — cancelling the event does
+  not affect the GUI."
   [^PlayerInteractEvent evt client-side?]
-  (deny-right-click-use! evt)
-  (when-not client-side?
-    (cancel-player-interact-consume! evt))
+  (when (instance? PlayerInteractEvent$RightClickBlock evt)
+    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
+      (.setUseItem right-click-evt Event$Result/DENY)))
+  (cancel-player-interact-consume! evt)
   evt)

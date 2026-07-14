@@ -31,6 +31,7 @@
             [cn.li.ac.tutorial.client.state :as client-state]
             [cn.li.ac.tutorial.messages :as tut-msg]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -192,7 +193,7 @@
 
 (defn- attach-tag-hover-tick! [^UiRt rt]
   (set-tick! rt :tag-hover-tick
-    (sig/computed-d [(rt/clock-ms-sig rt)]
+    (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [_]
         (let [hover-map (or (rt/user-signal rt :tag-hover-map) {})
               display-text (get hover-map (rt/hovered-idx rt))
@@ -265,7 +266,7 @@
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
   (let [done? (atom false)]
     (set-tick! rt :logo-anim-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [ms]
           (when-not @done?
             (let [elapsed (- (double ms) (double anim-start))]
@@ -276,7 +277,7 @@
               (let [dt (- elapsed 400.0) b1 300.0 b2 200.0
                     ln 500.0 ln2 300.0 cl 50.0 half-w 449.5
                     ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
-                (when (>= dt 0)
+                (when (and (>= dt 0) gr gl)
                   (if (< dt b1)
                     (let [len (* ln (/ dt b1))]
                       (when (> len cl)
@@ -291,7 +292,8 @@
               (when (>= elapsed 2400.0)
                 (let [^INode list-n (rt/node-by-id rt :list)]
                   (.setVisible list-n true) (.setFlag list-n node/FLAG-LAYOUT-DIRTY))
-                (net-client/send-to-server (tut-msg/msg-id :tutorial/mark-first-open-done) {})
+                (when-let [owner (runtime-hooks/default-client-owner)]
+                  (net-client/send-to-server owner (tut-msg/msg-id :tutorial/mark-first-open-done) {} nil))
                 (client-state/apply-sync! {:first-open? false})
                 (reset! done? true)
                 (set-tick! rt :logo-anim-tick nil))))
@@ -318,7 +320,7 @@
 (defn- fade-out-logos! [^UiRt rt fade-start]
   (let [done? (atom false)]
     (set-tick! rt :logo-anim-tick
-      (sig/computed-d [(rt/clock-ms-sig rt)]
+      (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [ms]
           (when-not @done?
             (let [elapsed (- (double ms) (double fade-start))
@@ -386,8 +388,9 @@
 (defn create-runtime [player]
   (let [player-uuid (uuid/player-uuid player)
         _ (client-state/ensure-client-state! player-uuid)
-        _ (net-client/send-to-server (tut-msg/msg-id :tutorial/request-sync) {}
-            (fn [resp] (when resp (client-state/apply-sync! resp))))
+        _ (when-let [owner (runtime-hooks/default-client-owner)]
+            (net-client/send-to-server owner (tut-msg/msg-id :tutorial/request-sync) {}
+              (fn [resp] (when resp (client-state/apply-sync! resp)))))
         lang (tut-content/current-lang)
         entries (tut-registry/all-tutorials)
         first-open? (client-state/first-open? player-uuid)

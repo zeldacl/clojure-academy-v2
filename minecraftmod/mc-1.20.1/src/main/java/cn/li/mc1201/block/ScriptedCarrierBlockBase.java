@@ -28,6 +28,10 @@ public abstract class ScriptedCarrierBlockBase extends BaseEntityBlock implement
         this.tileId = tileId;
     }
 
+    // =========================================================================
+    // IScriptedBlock
+    // =========================================================================
+
     @Override
     public String getBlockId() {
         return blockId;

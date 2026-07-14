@@ -21,7 +21,7 @@
   [ret]
   (= :runtime-active (:event-result ret)))
 
-(defn- runtime-active-event?
+(defn runtime-active-event?
   [event-data]
   (boolean
     (when-let [player (:player event-data)]
