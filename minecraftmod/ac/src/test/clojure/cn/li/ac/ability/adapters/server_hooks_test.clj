@@ -215,7 +215,9 @@
                   world-registry/clear-session-world-data! (fn [session-id]
                                                              (swap! called conj [:wireless session-id])
                                                              nil)
-                  md-damage/clear-all-marks! (fn [] nil)
+                  md-damage/on-server-stop! (fn [session-id]
+                                              (swap! called conj [:marks session-id])
+                                              nil)
                   delayed-projectiles/clear-all-tasks! (fn []
                                                          (swap! called conj [:projectiles])
                                                          nil)]
@@ -223,7 +225,8 @@
           (is (= [[:contexts :server-session]
             [:wireless :server-session]
             [:reset-runtimes]
-            [:projectiles]]
+            [:projectiles]
+            [:marks :server-session]]
            (remove #(= :player-states (first %)) @called)))))
 
 (deftest register-platform-functions-registers-network-reset-and-energy-pull-test

@@ -13,12 +13,14 @@
     :platform-call   �?call a registered platform function via hooks registry
     :persist-state   �?mark player dirty, triggering NBT save
     :fire-event      �?fire an ability lifecycle event
+    :radiation-index-sync �?resync the derived radiation-mark read index
 
   Unrecognised effect types are logged as warnings and skipped."
   (:require [cn.li.ac.ability.effects.network-handler    :as net]
             [cn.li.ac.ability.effects.platform-handler   :as platform]
             [cn.li.ac.ability.effects.persistence-handler :as persist]
             [cn.li.ac.ability.registry.event             :as evt]
+            [cn.li.ac.ability.service.radiation-mark-index :as rad-index]
             [cn.li.mcmod.hooks.core                      :as runtime-hooks]
             [cn.li.mcmod.util.log                        :as log]))
 
@@ -56,6 +58,7 @@
      :platform-call (platform/execute-platform-call! effect)
      :persist-state (persist/execute-persist-state! session-id effect)
      :fire-event    (execute-fire-event! effect)
+     :radiation-index-sync (rad-index/execute-index-sync! session-id effect)
      (log/warn "Unknown ability effect type" (:effect/type effect) effect))))
 
 (defn execute-effects!

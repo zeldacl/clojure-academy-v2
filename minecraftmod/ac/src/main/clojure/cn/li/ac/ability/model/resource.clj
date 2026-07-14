@@ -189,6 +189,20 @@
             (assoc d :cur-overload 0.0 :overload-fine true)
             (assoc d :cur-overload new-val)))))))
 
+(defn recovery-idle?
+  "True iff both tick-cp-recovery and tick-overload-recovery would return d
+  unchanged this tick — i.e. CP is full, overload is at rest (not overloaded,
+  no post-use cooldowns pending), so a :server-tick command would be a pure
+  no-op. Must mirror those two fns branch-for-branch; guarded by an
+  equivalence test (recovery_idle_equivalence_test) so drift is caught
+  immediately if the recovery formulas ever change."
+  [d]
+  (and (boolean (:overload-fine d))
+       (not (pos? (int (or (:until-recover d) 0))))
+       (not (pos? (int (or (:until-overload-recover d) 0))))
+       (>= (double (or (:cur-cp d) 0.0)) (double (or (:max-cp d) 0.0)))
+       (<= (double (or (:cur-overload d) 0.0)) 0.0)))
+
 ;; ============================================================================
 ;; Interference
 ;; ============================================================================

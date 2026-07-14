@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.delayed-projectiles :as dp]
@@ -237,4 +238,16 @@
       (dp/tick-player! "p1")
       (is (= 0 @run-count*))
       (is (empty? (dp/pending-tasks-snapshot "p1"))))))
+
+(deftest tick-player-with-no-pending-tasks-dispatches-no-command-test
+  (testing "idle players (no pending tasks) never reach command-runtime"
+    (is (empty? (dp/pending-tasks-snapshot "p1")))
+    (let [calls (atom 0)
+          original prt-cmd/run-for-player!]
+      (with-redefs [prt-cmd/run-for-player!
+                    (fn
+                      ([uuid cmd] (swap! calls inc) (original uuid cmd {}))
+                      ([uuid cmd opts] (swap! calls inc) (original uuid cmd opts)))]
+        (dp/tick-player! "p1"))
+      (is (zero? @calls)))))
 

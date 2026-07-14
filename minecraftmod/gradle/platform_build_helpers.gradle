@@ -101,6 +101,12 @@ ext.configureMcmodContentRuntime = {
         dependsOn copyMcmodJavaClassesToPlatformOutput
     }
 
+    tasks.matching { it.name == 'checkClojure' }.configureEach {
+        // Same implicit-read issue as the AC mirror: checkClojure's classpath
+        // reads classes/java/main, which this copy task also writes into.
+        dependsOn copyMcmodJavaClassesToPlatformOutput
+    }
+
     tasks.matching { it.name in ['runClient', 'runServer', 'runData', 'runDatagen', 'runGametestServer'] }.configureEach {
         dependsOn copyMcmodJavaClassesToPlatformOutput
     }
@@ -210,6 +216,11 @@ ext.configureAcContentRuntime = {
             include '**/*.clj'
             include '**/*.cljc'
         }))
+        // checkClojure's classpath also reads classes/java/main (see getClasspath()
+        // wiring elsewhere in this task graph); that directory is populated by this
+        // copy task, so declare the dependency explicitly instead of relying on
+        // incidental task-graph ordering (Gradle flags the implicit read otherwise).
+        dependsOn copyAcJavaClassesToPlatformOutput
     }
 
     tasks.named('classes').configure {

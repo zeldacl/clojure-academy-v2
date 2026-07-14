@@ -233,7 +233,7 @@
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (delayed-projectiles/clear-all-tasks!)
-     (md-damage/clear-all-marks!))
+     (md-damage/on-server-stop! session-id))
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]

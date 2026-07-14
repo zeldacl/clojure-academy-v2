@@ -874,13 +874,13 @@ tasks.register('verifyAotBootstrapSafetyNegativeFixture') {
 registerBaselineVerificationTask(
     'verifyForgeBaseline',
     'Compile baseline Clojure sources for ac, mcmod, and forge-1.20.1.',
-    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':ac:compileClojure', ':mcmod:compileClojure', ':forge-1.20.1:compileClojure', ':forge-1.20.1:checkClojure']
 )
 
 registerBaselineVerificationTask(
     'verifyFabricBaseline',
     'Compile baseline sources for fabric-1.20.1 (minimal-maintenance gate).',
-    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure']
+    ['verifyArchitectureBoundaries', 'verifyAotBootstrapSafety', 'verifyNoPlatformReflection', ':fabric-1.20.1:compileJava', ':fabric-1.20.1:compileClojure', ':fabric-1.20.1:checkClojure']
 )
 
 subprojects {

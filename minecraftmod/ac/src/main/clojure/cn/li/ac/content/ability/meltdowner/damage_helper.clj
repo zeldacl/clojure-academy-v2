@@ -28,13 +28,21 @@
 
 (defn clear-all-marks!
   []
-  (let [session-id (prt-cmd/session-id)
-        store-ref (store/get-store)]
-    (doseq [player-uuid (store/list-players store-ref session-id)]
-      (prt-cmd/run-for-player!
-       player-uuid
-       {:command :clear-radiation-marks :clear-all? true}))
-    (reset! last-radiation-tick-id* nil))
+  (doseq [holder (prt-cmd/radiation-mark-holders)]
+    (prt-cmd/run-for-player!
+     holder
+     {:command :clear-radiation-marks :clear-all? true}))
+  (reset! last-radiation-tick-id* nil)
+  nil)
+
+(defn on-server-stop!
+  "Drop the whole session's derived radiation-mark index in one shot instead
+   of iterating players (the store's per-player state is already gone by the
+   time this runs, so per-player clear commands would be pure ghost-state
+   recreation)."
+  [session-id]
+  (prt-cmd/clear-radiation-index-session! session-id)
+  (reset! last-radiation-tick-id* nil)
   nil)
 
 (defn reset-marks-for-test!
@@ -58,12 +66,10 @@
 (defn clear-mark!
   ([target-id]
    (when-let [target-key (normalize-id target-id)]
-     (let [session-id (prt-cmd/session-id)
-           store-ref (store/get-store)]
-       (doseq [player-uuid (store/list-players store-ref session-id)]
-         (prt-cmd/run-for-player!
-          player-uuid
-          {:command :clear-radiation-marks :target-id target-key}))))
+     (doseq [source-uuid (prt-cmd/radiation-mark-sources-for-target target-key)]
+       (prt-cmd/run-for-player!
+        source-uuid
+        {:command :clear-radiation-marks :target-id target-key})))
    nil)
   ([_source-player-id target-id]
    (clear-mark! target-id)))
@@ -87,29 +93,30 @@
 
 (defn clear-expired-marks!
   []
-  (let [session-id (prt-cmd/session-id)
-        store-ref (store/get-store)]
-    (doseq [player-uuid (store/list-players store-ref session-id)]
-      (prt-cmd/run-for-player!
-       player-uuid
-       {:command :clear-radiation-marks :clear-expired? true})))
+  (doseq [holder (prt-cmd/radiation-mark-holders)]
+    (prt-cmd/run-for-player!
+     holder
+     {:command :clear-radiation-marks :clear-expired? true}))
   nil)
 
 (defn tick-marks!
   "Drive radiation markers globally once per unique server tick.
-   Optimized: singleton command constant eliminates O(N) per-player map
-   allocations — N players × 20 tick/s map creation reduced to zero."
+   Optimized: only iterates players who currently hold at least one
+   outgoing mark (via the derived radiation-mark index), instead of every
+   online player — a server with no active marks emits zero commands."
   []
   (let [tick-id (current-server-tick-id)]
     (when (or (nil? tick-id) (not= tick-id @last-radiation-tick-id*))
       (when tick-id
         (reset! last-radiation-tick-id* tick-id))
-      (let [session-id (prt-cmd/session-id)
-            store-ref (store/get-store)]
-        (doseq [player-uuid (store/list-players store-ref session-id)]
-          (prt-cmd/run-for-player!
-           player-uuid
-           tick-radiation-command)))))
+      (let [session-id (prt-cmd/session-id)]
+        (doseq [holder (prt-cmd/radiation-mark-holders)]
+          (if (store/get-player-state* session-id holder)
+            (prt-cmd/run-for-player! holder tick-radiation-command)
+            ;; Ghost index entry (backing player state already gone) — drop
+            ;; it directly. Never use a get-or-create path here, or a
+            ;; departed player's state gets silently resurrected.
+            (prt-cmd/drop-radiation-index-source! holder))))))
   nil)
 
 (defn- learned-rad-intensify?
@@ -140,7 +147,7 @@
    (let [source-id (normalize-id attacker-id)
          marked-target-id (normalize-id target-id)]
      (when (and source-id marked-target-id (learned-rad-intensify? source-id))
-       (let [source-ticks (long (or (:ticks-left (get (marks-snapshot) marked-target-id)) 0))
+       (let [source-ticks (long (or (:ticks-left (prt-cmd/radiation-marks-for-target marked-target-id)) 0))
              mark-ticks (long (max 60 (rad/mark-duration-ticks) source-ticks))
              mark-rate (rad/rate source-id)
              mark {:source-player-id source-id

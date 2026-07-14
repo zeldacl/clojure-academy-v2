@@ -338,6 +338,20 @@
         completion-events (or (:events completion) [])]
     (ok final-state completion-events)))
 
+(defn server-tick-noop?
+  "True iff cmd-server-tick would return player-state unchanged with no
+  events for it — i.e. the player is fully idle (CP/overload at rest, no
+  cooldowns, not developing). Used by the imperative shell to skip the
+  :server-tick command entirely on idle ticks.
+
+  Must mirror cmd-server-tick's three sub-steps branch-for-branch; guarded
+  by an equivalence test so drift is caught immediately."
+  [player-state]
+  (and (rdata/recovery-idle? (:resource-data player-state))
+       (empty? (:cooldown-data player-state))
+       (let [dd (:develop-data player-state)]
+         (or (nil? dd) (not (ddata/developing? dd))))))
+
 ;; ============================================================================
 ;; Sub-Reducer: context lifecycle
 ;; ============================================================================
@@ -579,6 +593,16 @@
                 (assoc-in [:resource-data :overload-fine] true)))
         (ok player-state))))
 
+  (def ^:private radiation-marks-path [:runtime :meltdowner :radiation-marks])
+
+  (defn- radiation-index-effect
+    "Effect telling the radiation-mark-index shell to fully replace one
+    player's outgoing marks (see service/radiation-mark-index.clj)."
+    [player-uuid marks]
+    {:effect/type :radiation-index-sync
+     :player-uuid (str player-uuid)
+     :marks marks})
+
   (defn- cmd-hydrate-player-state
     "Replace player-state slices from persistence or lifecycle hydration.
 
@@ -588,15 +612,22 @@
     (if (and (contains? cmd :context-registry)
              (not (map? (:context-registry cmd))))
       (rejected player-state :invalid-context-registry-sync)
-      (ok (cond-> player-state
-            (contains? cmd :ability-data) (assoc :ability-data (:ability-data cmd))
-            (contains? cmd :resource-data) (assoc :resource-data (:resource-data cmd))
-            (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
-            (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
-            (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
-            (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
-            (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
-            (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{}))))))
+      (let [hydrated (cond-> player-state
+                       (contains? cmd :ability-data) (assoc :ability-data (:ability-data cmd))
+                       (contains? cmd :resource-data) (assoc :resource-data (:resource-data cmd))
+                       (contains? cmd :cooldown-data) (assoc :cooldown-data (:cooldown-data cmd))
+                       (contains? cmd :preset-data) (assoc :preset-data (:preset-data cmd))
+                       (contains? cmd :develop-data) (assoc :develop-data (:develop-data cmd))
+                       (contains? cmd :context-registry) (assoc :context-registry (:context-registry cmd))
+                       (contains? cmd :runtime-data) (assoc :runtime (:runtime-data cmd))
+                       (contains? cmd :dirty?) (assoc :dirty-domains (if (:dirty? cmd) sync-domains #{})))]
+        ;; :runtime-data can replace [:runtime] wholesale (including
+        ;; radiation-marks) — resync the derived index so it doesn't drift.
+        (ok hydrated
+            []
+            (if (contains? cmd :runtime-data)
+              [(radiation-index-effect (:player-uuid cmd) (get-in hydrated radiation-marks-path))]
+              [])))))
 
   (defn- cmd-set-dirty-flag
     [player-state {:keys [dirty?] :or {dirty? false}}]
@@ -716,14 +747,17 @@
                    dissoc (str player-uuid)))))
 
 (defn- cmd-mark-radiation-target
-  [player-state {:keys [target-id mark]}]
+  [player-state {:keys [player-uuid target-id mark]}]
   (if (and target-id mark)
-    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks (str target-id)] mark))
+    (let [next-state (assoc-in player-state (conj radiation-marks-path (str target-id)) mark)]
+      (ok next-state
+          []
+          [(radiation-index-effect player-uuid (get-in next-state radiation-marks-path))]))
     (rejected player-state :invalid-radiation-mark)))
 
 (defn- cmd-clear-radiation-marks
-  [player-state {:keys [target-id source-player-id clear-all? clear-expired?]}]
-  (let [marks (or (get-in player-state [:runtime :meltdowner :radiation-marks]) {})
+  [player-state {:keys [player-uuid target-id source-player-id clear-all? clear-expired?]}]
+  (let [marks (or (get-in player-state radiation-marks-path) {})
         next-marks
         (cond
           clear-all?
@@ -747,11 +781,15 @@
 
           :else
           marks)]
-    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks] next-marks))))
+    (if (= marks next-marks)
+      (ok player-state)
+      (ok (assoc-in player-state radiation-marks-path next-marks)
+          []
+          [(radiation-index-effect player-uuid next-marks)]))))
 
 (defn- cmd-tick-radiation-marks
-  [player-state _]
-  (let [marks (or (get-in player-state [:runtime :meltdowner :radiation-marks]) {})
+  [player-state {:keys [player-uuid]}]
+  (let [marks (or (get-in player-state radiation-marks-path) {})
         next-marks
         (reduce-kv
           (fn [acc target-id mark]
@@ -761,7 +799,12 @@
                 acc)))
           {}
           marks)]
-    (ok (assoc-in player-state [:runtime :meltdowner :radiation-marks] next-marks))))
+    ;; Unconditional emit (even when next-marks == marks or empty): this is
+    ;; the index's per-tick self-healing channel — any drift from a swallowed
+    ;; effect exception is corrected on the very next tick.
+    (ok (assoc-in player-state radiation-marks-path next-marks)
+        []
+        [(radiation-index-effect player-uuid next-marks)])))
 
 (defn- projectile-claims-path
   []

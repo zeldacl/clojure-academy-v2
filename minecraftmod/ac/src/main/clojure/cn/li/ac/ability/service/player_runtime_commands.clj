@@ -3,6 +3,7 @@
   (:require [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.radiation-mark-index :as rad-index]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn session-id
@@ -26,25 +27,32 @@
           []))
 
 (defn radiation-marks-for-target
+  "O(1) lookup via the derived radiation-mark index (see radiation-mark-index.clj)."
   [target-id]
-  (let [target-key (str target-id)
-        session-id (session-id)]
-    (some (fn [player-uuid]
-            (get-in (store/get-player-state* session-id player-uuid)
-                    [:runtime :meltdowner :radiation-marks target-key]))
-          (store/list-players (store/get-store) session-id))))
+  (rad-index/strongest-mark-for-target (session-id) (str target-id)))
 
 (defn radiation-marks-snapshot
   []
-  (let [session-id (session-id)
-        store-ref (store/get-store)]
-    (into {}
-          (mapcat (fn [player-uuid]
-                    (let [marks (get-in (store/get-player-state* session-id player-uuid)
-                                        [:runtime :meltdowner :radiation-marks]
-                                        {})]
-                      (seq marks)))
-                  (store/list-players store-ref session-id)))))
+  (rad-index/snapshot-by-target (session-id)))
+
+(defn radiation-mark-holders
+  "Player-uuid strings that currently hold at least one outgoing radiation mark."
+  []
+  (rad-index/mark-holders (session-id)))
+
+(defn radiation-mark-sources-for-target
+  [target-id]
+  (rad-index/sources-for-target (session-id) target-id))
+
+(defn drop-radiation-index-source!
+  "Clear source-uuid's index entries without touching player state (used to
+  reap ghost index entries whose backing player state no longer exists)."
+  [source-uuid]
+  (rad-index/sync-source-marks! (session-id) (str source-uuid) {}))
+
+(defn clear-radiation-index-session!
+  [session-id]
+  (rad-index/clear-session! session-id))
 
 (defn projectile-claims
   [player-uuid]
