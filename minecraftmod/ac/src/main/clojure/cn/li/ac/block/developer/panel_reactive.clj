@@ -442,7 +442,7 @@
 ;; ============================================================================
 
 (defn- open-wireless-overlay! [^UiRt rt container]
-  (let [alpha-target (sig/signal-d 0.7)
+  (let [alpha-target (sig/signal-d 1.0)  ;; fully opaque — wireless page is a full page, not a modal popup
         fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
         wr (rt/create-runtime)
         spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_wireless.xml"))

@@ -78,9 +78,9 @@
         (fn [_ _ _]
           (when linked? (disconnect-fn linked)))))
     (when ec-logo (set-image-alpha! rt ec-logo alpha))
-    ;; Compact spacing between available network rows (default 4.0, set to 0 to match row-h=16.0)
+    ;; Compact spacing between available network rows (default 4.0; must be >0 for pos?)
     (when-let [^INode list-node (rt/node-by-id rt :zone_elementlist)]
-      (.setDSlot list-node 0 0.0))
+      (.setDSlot list-node 0 0.01))
     (ui/list-set! rt :zone_elementlist avail
       (fn [r item target]
         (wire-avail-row! r item target (name-fn target) connect-fn (encrypted?-fn target))))
