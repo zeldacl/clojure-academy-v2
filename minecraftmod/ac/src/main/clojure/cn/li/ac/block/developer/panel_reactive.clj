@@ -450,6 +450,7 @@
         px (/ (- classic-w 176.0) 2.0) py 0.0]
     (bind-cover-fill! rt fill-sig)
     (set-cover-visible! rt true)
+    (cover-fullscreen! rt)  ;; full-screen dark backdrop (matching other overlays)
     (wireless-tab/attach-panel! wr {:role :receiver :container container
                                     :tab-logo-path (tex-path "guis/icons/icon_node.png")
                                     :connected-row-logo-path (tex-path "guis/icons/icon_node.png")})

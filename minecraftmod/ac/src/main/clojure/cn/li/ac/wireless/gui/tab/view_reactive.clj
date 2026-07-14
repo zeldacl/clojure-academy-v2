@@ -10,7 +10,7 @@
            [cn.li.mcmod.uipojo.signal ISigL]
            [cn.li.mcmod.ui.node INode]))
 
-(def ^:private row-h 16.0)
+(def ^:private row-h 16.0)   ;; template item height; spacing (DSlot 0) is set separately before list-set!
 (def ^:private visible-h 115.0)
 
 (def ^:private tex-connected
@@ -78,6 +78,9 @@
         (fn [_ _ _]
           (when linked? (disconnect-fn linked)))))
     (when ec-logo (set-image-alpha! rt ec-logo alpha))
+    ;; Compact spacing between available network rows (default 4.0, set to 0 to match row-h=16.0)
+    (when-let [^INode list-node (rt/node-by-id rt :zone_elementlist)]
+      (.setDSlot list-node 0 0.0))
     (ui/list-set! rt :zone_elementlist avail
       (fn [r item target]
         (wire-avail-row! r item target (name-fn target) connect-fn (encrypted?-fn target))))

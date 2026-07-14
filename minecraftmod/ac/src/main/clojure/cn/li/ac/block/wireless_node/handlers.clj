@@ -120,23 +120,43 @@
 
 (defn handle-change-name
   [payload player]
-  (with-owner-authorization payload player
-    (fn [_ _ tile]
+  (log/info "[NodeGUI-Server] handle-change-name called:" {:payload payload
+                                                            :player (str player)})
+  (let [tile (open-tile payload player)
+        authorized? (and tile (owner-authorized? tile player))]
+    (log/info "[NodeGUI-Server] change-name auth:" {:tile (boolean tile)
+                                                     :authorized? (boolean authorized?)})
+    (if authorized?
       (let [new-value (:node-name payload)]
+        (log/info "[NodeGUI-Server] change-name updating:" {:new-value new-value})
         (if (and tile new-value)
           (do (inv-helpers/update-be-field! tile :node-name new-value)
+              (log/info "[NodeGUI-Server] change-name success")
               {:success true :messages (feedback/result->messages :node {:success true})})
-          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))))
+          (do (log/warn "[NodeGUI-Server] change-name aborted: missing tile or new-value")
+              {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
+      (do (log/warn "[NodeGUI-Server] change-name unauthorized")
+          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})}))))
 
 (defn handle-change-password
   [payload player]
-  (with-owner-authorization payload player
-    (fn [_ _ tile]
+  (log/info "[NodeGUI-Server] handle-change-password called:" {:has-password (boolean (:password payload))
+                                                                :player (str player)})
+  (let [tile (open-tile payload player)
+        authorized? (and tile (owner-authorized? tile player))]
+    (log/info "[NodeGUI-Server] change-password auth:" {:tile (boolean tile)
+                                                         :authorized? (boolean authorized?)})
+    (if authorized?
       (let [new-value (:password payload)]
+        (log/info "[NodeGUI-Server] change-password updating:" {:new-value-len (count (str new-value))})
         (if (and tile new-value)
           (do (inv-helpers/update-be-field! tile :password new-value)
+              (log/info "[NodeGUI-Server] change-password success")
               {:success true :messages (feedback/result->messages :node {:success true})})
-          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))))
+          (do (log/warn "[NodeGUI-Server] change-password aborted: missing tile or new-value")
+              {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})})))
+      (do (log/warn "[NodeGUI-Server] change-password unauthorized")
+          {:success false :messages (feedback/result->messages :node {:success false :reason :aborted})}))))
 
 (defn handle-list-networks
   [payload player]

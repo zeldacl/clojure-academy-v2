@@ -35,7 +35,7 @@
 ;; Container + slots (preserved)
 ;; ============================================================================
 
-(def wireless-node-id :wireless-node) (def ^:private gui-type :wireless-node)
+(def wireless-node-id :wireless-node) (def ^:private gui-type :node)
 (defn- ensure-slot-schema! [] (node-logic/ensure-node-slot-schema!))
 (defn- resolve-state [tile] (if (map? tile) [nil tile] (try [tile (or (platform-be/get-custom-state tile) {})] (catch Exception e (log/warn "resolve-state:" (ex-message e)) [tile {}]))))
 (defn create-container [tile player] (let [[be _] (resolve-state tile)] (gui-sync/create-schema-container node-schema/unified-node-schema (or be tile) player :node {:gui-id (gui-manifest/gui-id :wireless-node)})))

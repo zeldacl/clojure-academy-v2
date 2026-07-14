@@ -11,7 +11,7 @@
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.mcmod.uipojo.runtime UiRt]))
 
-(def ^:private gui-type :wireless-node)
+(def ^:private gui-type :node)
 (defn- msg [action] (msg-registry/msg gui-type action))
 
 (defn- get-owner
@@ -32,6 +32,43 @@
   matrix_info_reactive). Falls back to nil when no client session is bound."
   []
   (runtime-hooks/default-client-owner))
+
+;; Network-send helpers (matching matrix_info_reactive pattern: try/catch wrappers
+;; so any exception in action-payload or send-to-server is logged, not swallowed.)
+;; On success, update the container atom directly so the value is correct on next rebuild.
+(defn send-change-name
+  [container new-name]
+  (try
+    (if-let [owner (send-owner)]
+      (let [payload (action-payload/action-payload container {:node-name new-name})]
+        (log/info "[NodeGUI] Sending change-name:" {:new-name new-name :payload payload})
+        (net-client/send-to-server owner
+          (msg :change-name)
+          payload
+          (fn [resp]
+            (log/info "[NodeGUI] change-name response:" resp)
+            (when (:success resp)
+              (reset! (:ssid container) new-name)))))
+      (log/warn "Skip change-name: no client session bound"))
+    (catch Exception e
+      (log/error "Error sending change-name:" (ex-message e)))))
+
+(defn send-change-password
+  [container new-pass]
+  (try
+    (if-let [owner (send-owner)]
+      (let [payload (action-payload/action-payload container {:password new-pass})]
+        (log/info "[NodeGUI] Sending change-password:" {:new-pass-len (count new-pass) :payload payload})
+        (net-client/send-to-server owner
+          (msg :change-password)
+          payload
+          (fn [resp]
+            (log/info "[NodeGUI] change-password response:" resp)
+            (when (:success resp)
+              (reset! (:password container) new-pass)))))
+      (log/warn "Skip change-password: no client session bound"))
+    (catch Exception e
+      (log/error "Error sending change-password:" (ex-message e)))))
 
 (defn rebuild!
   [^UiRt rt container player]
@@ -61,23 +98,11 @@
         (do
           (info-area/add-property! ctx "Node Name" (or @(:ssid container) "")
             :editable? true
-            :on-change (fn [new-name]
-                         (if-let [owner (send-owner)]
-                           (net-client/send-to-server
-                             owner
-                             (msg :change-name)
-                             (action-payload/action-payload container {:node-name new-name}))
-                           (log/warn "Skip change-name: no client session bound"))))
+            :on-change (fn [new-name] (send-change-name container new-name)))
           (info-area/add-property! ctx "Password" (or @(:password container) "")
             :editable? (:editable-password? policy)
             :masked? true
-            :on-change (fn [new-pass]
-                         (if-let [owner (send-owner)]
-                           (net-client/send-to-server
-                             owner
-                             (msg :change-password)
-                             (action-payload/action-payload container {:password new-pass}))
-                           (log/warn "Skip change-password: no client session bound")))))
+            :on-change (fn [new-pass] (send-change-password container new-pass))))
         (info-area/add-property! ctx "Node Name" (or @(:ssid container) "")))
       nil)
     (catch Exception e

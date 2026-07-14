@@ -81,6 +81,11 @@
               (on-change v)))
           (when color-change?
             (ui/set-node-prop! rt value-n :color idle-color))))
+      ;; Restore edit-color when the field gains focus (re-click after blur)
+      (when (and editable? color-change?)
+        (rt/register-event! rt (.getIdx value-n) :gain-focus
+          (fn [_ _ _]
+            (ui/set-node-prop! rt value-n :color edit-color))))
       (when (and editable? color-change?)
         (rt/register-event! rt (.getIdx value-n) :change-content
           (fn [_ _ _]

@@ -21,8 +21,8 @@
    Called during AC bootstrap to register all available inputs."
   [input-id handler-fn]
   (assert (keyword? input-id) "input-id must be a keyword")
-  (assert (or (fn? handler-fn) (symbol? handler-fn))
-          "handler-fn must be a function or symbol")
+  (assert (or (fn? handler-fn) (symbol? handler-fn) (var? handler-fn))
+          "handler-fn must be a function, symbol, or var")
   (registry/register! (fw/fw-atom) :input input-id handler-fn)
   (log/debug "Registered input handler" {:input-id input-id})
   nil)
@@ -61,7 +61,7 @@
     (try
       ;; If handler is a symbol, resolve it to a function
       (let [handler-fn (if (symbol? handler) (resolve handler) handler)]
-        (if (fn? handler-fn)
+        (if (ifn? handler-fn)
           (handler-fn context)
           (log/warn "Resolved handler is not a function"
                    {:input-id input-id :handler handler})))
