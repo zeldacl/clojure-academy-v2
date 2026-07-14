@@ -2,6 +2,7 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.spi.entity-render-registry :as entity-render-registry]
+            [cn.li.ac.bootstrap :as ac-bootstrap]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
@@ -62,6 +63,7 @@
 (defn- register-lifecycle-hooks-body!
   []
   (smoke-manifest/register!)
+  (ac-bootstrap/register-post-spi-init!)
   (lifecycle/register-content-init! #'init)
   (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
   (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)

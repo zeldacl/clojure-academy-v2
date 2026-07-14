@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.phase-gen.gui-reactive
   "Complete reactive replacement for phase_gen/gui.clj."
   (:refer-clojure :exclude [sync])
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
@@ -43,9 +43,9 @@
 
 (def update! bgui/update-signals!) (def open! bgui/open!)
 (defn- container? [c] (and (map? c) (= (:container-type c) gui-type) (contains? c :tile-entity) (contains? c :energy)))
-(defonce-guard phase-gen-reactive-installed?)
 (defn init-phase-gen-reactive! []
-  (with-init-guard phase-gen-reactive-installed?
+  (install/framework-once! ::phase-gen-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema! {:schema-id slot-schema-id :slots [{:id :input-1 :type :input :x 30 :y 20} {:id :input-2 :type :input :x 48 :y 20} {:id :output :type :output :x 120 :y 52} {:id :energy :type :energy :x 42 :y 81}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :phase-gen) (merge (gui-manifest/gui-registration :phase-gen) {:container-predicate container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil)}))
-    (log/info "Phase Generator GUI initialized (reactive)")))
+    (log/info "Phase Generator GUI initialized (reactive)"))))

@@ -3,7 +3,7 @@
    Container/slot/network/capability-proxy + ownership-policy logic was
    ported verbatim — none of it ever touched CGUI, only the old
    create-matrix-gui/create-screen did."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.be :as platform-be]
@@ -194,8 +194,6 @@
 ;; Registration
 ;; ============================================================================
 
-(defonce-guard matrix-reactive-installed?)
-
 (defn- matrix-container?
   "Predicate used by the GUI dispatcher (get-config-by-container) to route
    validate/close/slot operations to this GUI. Every other block GUI registers
@@ -205,7 +203,8 @@
   (and (map? c) (= (:container-type c) :matrix)))
 
 (defn init-wireless-matrix-reactive! []
-  (with-init-guard matrix-reactive-installed?
+  (install/framework-once! ::matrix-reactive-installed?
+  (fn []
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :wireless-matrix)
       (merge (gui-manifest/gui-registration :wireless-matrix)
@@ -222,4 +221,4 @@
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!
          :quick-move-fn quick-move-stack}))
-    (log/info "Wireless Matrix GUI initialized (reactive render + delegated container logic)")))
+    (log/info "Wireless Matrix GUI initialized (reactive render + delegated container logic)"))))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.command.commands
   (:require [cn.li.ac.command.dsl :as cmd]
             [cn.li.ac.command.handlers :as handlers]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (defn- resolve-handler [handler-name]
   (or (ns-resolve 'cn.li.ac.command.handlers (symbol handler-name))
@@ -76,11 +76,10 @@
 (defn- build-aimp-subcommands []
   (build-common-aim-subcommands))
 
-(defonce-guard commands-installed?)
-
 (defn init-commands!
   []
-  (with-init-guard commands-installed?
+  (install/framework-once! ::commands-installed?
+  (fn []
     (cmd/register-command!
       (cmd/create-command-spec
         "acach"
@@ -110,4 +109,4 @@
          :arguments [{:name "player"
                       :type :player
                       :description "Target player"}]
-         :subcommands (build-aimp-subcommands)}))))
+         :subcommands (build-aimp-subcommands)})))))

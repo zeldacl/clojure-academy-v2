@@ -4,15 +4,12 @@
             [cn.li.ac.block.metal-former.handlers :as former-handlers]
             [cn.li.ac.block.metal-former.logic :as former-logic]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]))
-
-(defonce-guard metal-former-installed?)
 
 (defn init-metal-former!
   []
   (machine-reg/init-machine!
-    {:guard metal-former-installed?
+    {:guard ::init
      :log-label "Metal Former"
      :tiles [{:id "metal-former"
               :registry-name "metal_former"

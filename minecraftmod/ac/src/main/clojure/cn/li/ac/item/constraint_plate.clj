@@ -3,17 +3,16 @@
 
   Required for Matrix to function (need 3 plates)."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.item :as item]
             [clojure.string :as str]))
 
 (def ^:private constraint-plate-id "constraint_plate")
 
-(defonce-guard constraint-plate-installed?)
-
 (defn init-constraint-plate! []
-  (with-init-guard constraint-plate-installed?
+  (install/framework-once! ::constraint-plate-installed?
+  (fn []
     (idsl/register-item!
       (idsl/create-item-spec
         constraint-plate-id
@@ -24,7 +23,7 @@
                       :model-texture "constraint_plate"}
          :on-use (fn [_event-data]
                    (log/debug "Using constraint plate"))}))
-    (log/info "Constraint Plate initialized")))
+    (log/info "Constraint Plate initialized"))))
 
 (defn is-constraint-plate?
   "Check if ItemStack (or item-like value) is a constraint plate.

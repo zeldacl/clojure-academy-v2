@@ -1,10 +1,8 @@
 (ns cn.li.ac.content.sounds
 	"Sound event declarations for AC content."
 	(:require [cn.li.mcmod.sound.dsl :as sdsl]
-						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+						[cn.li.mcmod.runtime.install :as install]
 						[cn.li.mcmod.util.log :as log]))
-
-(defonce-guard sounds-initialized?)
 
 (def all-sound-ids
 	["ability.deny"
@@ -73,8 +71,9 @@
 
 (defn init-sounds!
 	[]
-	(with-init-guard sounds-initialized?
-		(doseq [sound-id all-sound-ids]
+	(install/framework-once! ::sounds-initialized?
+  (fn []
+    (doseq [sound-id all-sound-ids]
 			(sdsl/register-sound! (sdsl/create-sound-spec sound-id {})))
 
-		(log/info "Sound content initialized")))
+		(log/info "Sound content initialized"))))

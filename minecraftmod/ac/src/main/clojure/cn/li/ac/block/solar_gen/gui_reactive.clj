@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.solar-gen.gui-reactive
   "Complete reactive replacement for solar_gen/gui.clj."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.energy.operations :as energy] [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest] [cn.li.ac.gui.block-gui-reactive :as bgui]
@@ -50,9 +50,9 @@
 
 (def update! bgui/update-signals!) (def open! bgui/open!)
 (defn- solar-container? [c] (and (map? c) (contains? c :tile-entity) (contains? c :energy) (contains? c :status)))
-(defonce-guard solar-gui-reactive-installed?)
 (defn init-solar-reactive! []
-  (with-init-guard solar-gui-reactive-installed?
+  (install/framework-once! ::solar-gui-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema! {:schema-id solar-gen-id :slots [{:id :energy :type :energy :x 42 :y 81}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :solar-gen) (merge (gui-manifest/gui-registration :solar-gen) {:container-predicate solar-container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn slot-changed!}))
-    (log/info "Solar Generator GUI initialized (reactive)")))
+    (log/info "Solar Generator GUI initialized (reactive)"))))

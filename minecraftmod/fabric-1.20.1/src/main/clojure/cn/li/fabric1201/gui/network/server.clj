@@ -46,7 +46,7 @@
             (or response {})))))))
 
 (defn- on-server-play-receive
-  [server player _handler buf _sender]
+  [^MinecraftServer server player _handler buf _sender]
   (let [{:keys [msg-id request-id payload]} (packet-base/normalize-request (shared/read-buf-map buf))]
     (.execute server
               (reify Runnable

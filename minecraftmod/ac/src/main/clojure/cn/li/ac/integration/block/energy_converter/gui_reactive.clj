@@ -8,7 +8,7 @@
    cn.li.ac.gui.block-gui-reactive (which always builds an inv+wireless
    tab pair); it builds a bare page_wireless.xml runtime instead, matching
    the old single-page layout exactly."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.util.log :as log]
@@ -105,11 +105,10 @@
 ;; Registration
 ;; ============================================================================
 
-(defonce-guard converter-gui-reactive-installed?)
-
 (defn register-converter-guis-reactive!
   []
-  (with-init-guard converter-gui-reactive-installed?
+  (install/framework-once! ::converter-gui-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema!
       {:schema-id :energy-converter
        :slots []})
@@ -128,4 +127,4 @@
          :slot-set-fn set-slot-item!
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!}))
-    (log/info "Energy Converter GUI initialized (reactive: wireless panel, gui-id 14)")))
+    (log/info "Energy Converter GUI initialized (reactive: wireless panel, gui-id 14)"))))

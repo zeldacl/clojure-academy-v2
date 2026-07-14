@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.blocks.generators
   "Content entrypoint for energy generator blocks"
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:private generator-block-spec
   {:label :generators
@@ -20,9 +20,8 @@
                    cn.li.ac.block.phase-gen.gui-reactive/init-phase-gen-reactive!
                    cn.li.ac.block.cat-engine.block/init-cat-engine!]})
 
-(defonce-guard generator-blocks-installed?)
-
 (defn init-generator-blocks!
   []
-  (with-init-guard generator-blocks-installed?
-    (block-loader/load-block-category! generator-block-spec)))
+  (install/framework-once! ::generator-blocks-installed?
+  (fn []
+    (block-loader/load-block-category! generator-block-spec))))

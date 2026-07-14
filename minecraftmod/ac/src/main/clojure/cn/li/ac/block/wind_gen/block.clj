@@ -5,12 +5,9 @@
             [cn.li.ac.block.wind-gen.handlers :as wind-handlers]
             [cn.li.ac.block.wind-gen.logic :as wind-logic]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
-
-(defonce-guard wind-gen-installed?)
 
 (defn- register-wind-multiblocks! []
   (bdsl/defmultiblock 'wind-gen-main
@@ -60,7 +57,7 @@
 
 (defn init-wind-gen! []
   (machine-reg/init-machine!
-    {:guard wind-gen-installed?
+    {:guard ::init
      :log-label "Wind Generator (main/base multiblock + pillar)"
      :tiles [{:id "wind-gen-main"
               :registry-name "wind_gen_main"

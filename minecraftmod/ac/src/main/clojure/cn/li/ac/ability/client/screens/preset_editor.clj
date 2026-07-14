@@ -6,6 +6,7 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.platform.ui :as platform-ui]
             [cn.li.mcmod.util.log :as log]))
 
@@ -170,10 +171,11 @@
      :title "Preset Editor"
      :on-close #(on-close! owner)}))
 
-(let [registered? (atom false)]
-  (defn install-widget-factory!
-    "Register preset-editor CGui widget factory. Idempotent."
-    []
-    (when (compare-and-set! registered? false true)
+(defn install-widget-factory!
+  "Register preset-editor CGui widget factory. Idempotent."
+  []
+  (install/framework-once! ::install-widget-factory
+    (fn []
       (platform-ui/register-widget-factory! :ac/preset-editor create-preset-editor-widget)
-      (log/info "Preset-editor widget factory registered"))))
+      (log/info "Preset-editor widget factory registered")))
+  nil)

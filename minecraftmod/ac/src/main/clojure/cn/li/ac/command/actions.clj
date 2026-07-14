@@ -10,7 +10,7 @@
 [cn.li.mcmod.hooks.core :as runtime-hooks]
 [clojure.string :as str]
 														[cn.li.ac.ability.service.command-runtime :as command-rt]						[cn.li.ac.ability.registry.skill-query :as skill-query]
-						[cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+						[cn.li.mcmod.runtime.install :as install]
 						[cn.li.mcmod.command.actions :as command-actions]
 						[cn.li.mcmod.util.log :as log]))
 
@@ -29,8 +29,6 @@
 		:maxout-progression
 		:enable-cheats
 		:disable-cheats})
-
-(defonce-guard command-actions-installed?)
 
 (declare install-command-actions!)
 
@@ -299,11 +297,12 @@
 (defn install-command-actions!
 	"Register AC command action ids and executors into the mcmod command seam."
 	[]
-	(with-init-guard command-actions-installed?
-		(command-actions/register-action-executors!
+	(install/framework-once! ::command-actions-installed?
+  (fn []
+    (command-actions/register-action-executors!
 			(zipmap ability-command-action-types
 							(repeat execute-ability-command-action!)))
-		(log/info "AC command actions installed" {:actions ability-command-action-types}))
+		(log/info "AC command actions installed" {:actions ability-command-action-types})))
 	nil)
 
 

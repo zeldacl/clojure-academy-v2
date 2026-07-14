@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.metal-former.gui-reactive
   "Complete reactive replacement for metal_former/gui.clj.
    Preserves ALL functional logic: container, slots, registration, network + reactive rendering."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.network.client :as net-client]
@@ -127,11 +127,10 @@
   (and (map? c) (= (:container-type c) former-gui-type)
        (contains? c :tile-entity) (contains? c :mode) (contains? c :energy)))
 
-(defonce-guard metal-former-reactive-installed?)
-
 (defn init-metal-former-reactive!
   []
-  (with-init-guard metal-former-reactive-installed?
+  (install/framework-once! ::metal-former-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema!
       {:schema-id former-slot-schema-id
        :slots [{:id :input :type :input :x 13 :y 49}
@@ -153,4 +152,4 @@
               :slot-can-place-fn can-place-item?
               :slot-changed-fn slot-changed!
               :quick-move-fn quick-move-stack}))
-    (log/info "Metal Former GUI initialized (reactive)")))
+    (log/info "Metal Former GUI initialized (reactive)"))))

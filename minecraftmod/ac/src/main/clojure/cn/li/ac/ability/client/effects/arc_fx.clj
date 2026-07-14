@@ -134,26 +134,27 @@
 (def ^:private default-branch-factor 0.7)
 (def ^:private default-width-shrink 0.9)
 
-(let [template-cache (atom nil)]
-  (defn- ensure-templates
-    "Generate arc templates on first call, cache and return."
-    []
-    (or @template-cache
-        (let [templates
-              (vec
-               (for [_ (range default-num-templates)
-                     :let [length (+ 1.0 (* (rand) 1.0))]] ;; spacing 1-2
-                 (generate-arc-segments length
-                   default-arc-width default-max-offset
-                   default-passes default-branch-factor default-width-shrink)))]
-          (reset! template-cache templates)
-          templates)))
+(def ^:private template-cache (atom nil))
 
-  (defn reset-arc-templates-for-test!
-    "Clear cached templates (for testing)."
-    []
-    (reset! template-cache nil)
-    nil))
+(defn- ensure-templates
+  "Generate arc templates on first call, cache and return."
+  []
+  (or @template-cache
+      (let [templates
+            (vec
+             (for [_ (range default-num-templates)
+                   :let [length (+ 1.0 (* (rand) 1.0))]] ;; spacing 1-2
+               (generate-arc-segments length
+                 default-arc-width default-max-offset
+                 default-passes default-branch-factor default-width-shrink)))]
+        (reset! template-cache templates)
+        templates)))
+
+(defn reset-arc-templates-for-test!
+  "Clear cached templates (for testing)."
+  []
+  (reset! template-cache nil)
+  nil)
 
 ;; ---------------------------------------------------------------------------
 ;; Arc rendering: convert segments to quads

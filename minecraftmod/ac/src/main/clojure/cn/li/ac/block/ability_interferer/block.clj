@@ -4,11 +4,8 @@
             [cn.li.ac.block.ability-interferer.logic :as interferer-logic]
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessReceiver]))
-
-(defonce-guard ability-interferer-installed?)
 
 (defn- interferer-receiver-cap-factory [be _side]
   (interferer-logic/create-interferer-wireless-receiver be))
@@ -16,7 +13,7 @@
 (defn init-ability-interferer!
   []
   (machine-reg/init-machine!
-    {:guard ability-interferer-installed?
+    {:guard ::init
      :log-label "Ability Interferer"
      :tiles [{:id "ability-interferer"
               :registry-name "ability_interferer"

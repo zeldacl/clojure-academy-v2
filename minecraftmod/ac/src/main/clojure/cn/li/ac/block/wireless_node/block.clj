@@ -4,7 +4,6 @@
             [cn.li.ac.block.wireless-node.capability :as node-capability]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessNode]
            [cn.li.mcmod.energy IEnergyCapable]))
@@ -13,8 +12,6 @@
   [(bdsl/get-block-spec "wireless-node-basic")
    (bdsl/get-block-spec "wireless-node-standard")
    (bdsl/get-block-spec "wireless-node-advanced")])
-
-(defonce-guard wireless-node-installed?)
 
 (defn- node-block-spec [id registry-name node-type]
   (bdsl/create-block-spec
@@ -36,7 +33,7 @@
 (defn init-wireless-nodes!
   []
   (machine-reg/init-machine!
-    {:guard wireless-node-installed?
+    {:guard ::init
      :log-label "Wireless Nodes"
      :before node-logic/ensure-node-slot-schema!
      :tile-kind {:tile-kind :wireless-node

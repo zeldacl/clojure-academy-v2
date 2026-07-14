@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.imag-fusor.gui-reactive
   "Complete reactive replacement for imag_fusor/gui.clj."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
@@ -44,9 +44,9 @@
 
 (def update! bgui/update-signals!) (def open! bgui/open!)
 (defn- fusor-container? [c] (and (map? c) (= (:container-type c) fusor-gui-type) (contains? c :tile-entity) (contains? c :energy)))
-(defonce-guard imag-fusor-reactive-installed?)
 (defn init-imag-fusor-reactive! []
-  (with-init-guard imag-fusor-reactive-installed?
+  (install/framework-once! ::imag-fusor-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema! {:schema-id fusor-slot-schema-id :slots [{:id :input-1 :type :input :x 64 :y 10} {:id :input-2 :type :input :x 112 :y 10} {:id :output :type :output :x 88 :y 60} {:id :energy :type :energy :x 42 :y 80}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :imag-fusor) (merge (gui-manifest/gui-registration :imag-fusor) {:container-predicate fusor-container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil) :quick-move-fn quick-move-stack}))
-    (log/info "Imag Fusor GUI initialized (reactive)")))
+    (log/info "Imag Fusor GUI initialized (reactive)"))))

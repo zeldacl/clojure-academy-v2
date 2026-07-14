@@ -6,6 +6,7 @@
    node updates."
   (:require [clojure.string :as str]
             [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig]
@@ -241,100 +242,112 @@
 
 ;; Command registry: {command-name-str → (fn [state] [new-state action-kw])}.
 ;; Register commands via register-command! to add custom console commands.
-(let [command-registry (atom {})]
-  ;; Register a console command. callback receives the current state atom
-  ;; and the create-console options map, returns [new-state action-kw].
-  ;; Matching original SkillTree.scala: console += Command(name, callback)
-  (defn register-command! [name callback]
-    (swap! command-registry assoc name callback)
-    nil)
+(def ^:private command-registry
+  "Process-local; re-populated by register-builtin-commands! at init (see
+  below), not at namespace load."
+  (atom {}))
 
-  (defn- cmd-help [mode]
-    (let [cmds (keys @command-registry)
-          names (sort (concat (case mode :reset ["reset"] ["learn"])
-                              ["help" "clear"]))]
-      (str "Commands: " (str/join ", " (take 4 (distinct names))))))
+;; Register a console command. callback receives the current state atom
+;; and the create-console options map, returns [new-state action-kw].
+;; Matching original SkillTree.scala: console += Command(name, callback)
+(defn register-command! [name callback]
+  (swap! command-registry assoc name callback)
+  nil)
 
-  (defn exec-cmd
-    "Execute a pending command via registered handlers.
-    Returns [new-state action-kw]."
-    [state]
-    (let [cmd (:exec-cmd state)
-          base (fn [phase]
-                 (-> state
-                     (update :lines conj (str prompt-str))
-                     (update :lines clamp-lines)
-                     (assoc :phase phase :exec-cmd nil)))]
-      (if-let [handler (get @command-registry cmd)]
-        (handler state)
-        [(-> (base :idle)
-             (update :lines conj (msg :invalid-cmd))
-             (update :lines clamp-lines))
-         nil]))))
+(defn- cmd-help [mode]
+  (let [cmds (keys @command-registry)
+        names (sort (concat (case mode :reset ["reset"] ["learn"])
+                            ["help" "clear"]))]
+    (str "Commands: " (str/join ", " (take 4 (distinct names))))))
+
+(defn exec-cmd
+  "Execute a pending command via registered handlers.
+  Returns [new-state action-kw]."
+  [state]
+  (let [cmd (:exec-cmd state)
+        base (fn [phase]
+               (-> state
+                   (update :lines conj (str prompt-str))
+                   (update :lines clamp-lines)
+                   (assoc :phase phase :exec-cmd nil)))]
+    (if-let [handler (get @command-registry cmd)]
+      (handler state)
+      [(-> (base :idle)
+           (update :lines conj (msg :invalid-cmd))
+           (update :lines clamp-lines))
+       nil])))
 
 ;; ============================================================================
 ;; Built-in command registrations
 ;; ============================================================================
 
-(register-command! "help"
-  (fn [state]
-    [(-> (update state :lines conj (str prompt-str))
-         (update :lines conj (cmd-help (:mode state)))
-         (update :lines clamp-lines)
-         (assoc :phase :idle :exec-cmd nil))
-     nil]))
-
-(register-command! "clear"
-  (fn [state]
-    [(assoc state :lines [] :phase :idle :exec-cmd nil) nil]))
-
-(register-command! "learn"
-  (fn [state]
-    (if (= :learn (:mode state))
-      (if (:on-start-development state)
-        (do
-          ((:on-start-development state))
-          [(-> state
-               (update :lines conj (str prompt-str))
-               (update :lines conj (msg :dev-begin))
-               (update :lines conj (loc :progress "00"))
+(defn register-builtin-commands!
+  "Register the built-in help/clear/learn/reset commands. Called from
+  developer.gui-reactive's init-developer-reactive! (framework-once!
+  guarded there) — not at namespace load."
+  []
+  (install/framework-once! ::register-builtin-commands
+    (fn []
+      (register-command! "help"
+        (fn [state]
+          [(-> (update state :lines conj (str prompt-str))
+               (update :lines conj (cmd-help (:mode state)))
                (update :lines clamp-lines)
-               (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
-           :developing])
-        [(-> (update state :lines conj (str prompt-str))
-             (update :lines conj (msg :no-developer))
-             (update :lines clamp-lines)
-             (assoc :phase :idle :exec-cmd nil))
-         nil])
-      [(-> (update state :lines conj (str prompt-str))
-           (update :lines conj (msg :invalid-cmd))
-           (update :lines clamp-lines)
-           (assoc :phase :idle :exec-cmd nil))
-       nil])))
+               (assoc :phase :idle :exec-cmd nil))
+           nil]))
 
-(register-command! "reset"
-  (fn [state]
-    (if (= :reset (:mode state))
-      (if (:on-start-development state)
-        (do
-          ((:on-start-development state))
-          [(-> state
-               (update :lines conj (str prompt-str))
-               (update :lines conj (msg :reset-begin))
-               (update :lines conj (loc :progress "00"))
-               (update :lines clamp-lines)
-               (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
-           :developing])
-        [(-> (update state :lines conj (str prompt-str))
-             (update :lines conj (msg :no-developer))
-             (update :lines clamp-lines)
-             (assoc :phase :idle :exec-cmd nil))
-         nil])
-      [(-> (update state :lines conj (str prompt-str))
-           (update :lines conj (msg :invalid-cmd))
-           (update :lines clamp-lines)
-           (assoc :phase :idle :exec-cmd nil))
-       nil])))
+      (register-command! "clear"
+        (fn [state]
+          [(assoc state :lines [] :phase :idle :exec-cmd nil) nil]))
+
+      (register-command! "learn"
+        (fn [state]
+          (if (= :learn (:mode state))
+            (if (:on-start-development state)
+              (do
+                ((:on-start-development state))
+                [(-> state
+                     (update :lines conj (str prompt-str))
+                     (update :lines conj (msg :dev-begin))
+                     (update :lines conj (loc :progress "00"))
+                     (update :lines clamp-lines)
+                     (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+                 :developing])
+              [(-> (update state :lines conj (str prompt-str))
+                   (update :lines conj (msg :no-developer))
+                   (update :lines clamp-lines)
+                   (assoc :phase :idle :exec-cmd nil))
+               nil])
+            [(-> (update state :lines conj (str prompt-str))
+                 (update :lines conj (msg :invalid-cmd))
+                 (update :lines clamp-lines)
+                 (assoc :phase :idle :exec-cmd nil))
+             nil])))
+
+      (register-command! "reset"
+        (fn [state]
+          (if (= :reset (:mode state))
+            (if (:on-start-development state)
+              (do
+                ((:on-start-development state))
+                [(-> state
+                     (update :lines conj (str prompt-str))
+                     (update :lines conj (msg :reset-begin))
+                     (update :lines conj (loc :progress "00"))
+                     (update :lines clamp-lines)
+                     (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+                 :developing])
+              [(-> (update state :lines conj (str prompt-str))
+                   (update :lines conj (msg :no-developer))
+                   (update :lines clamp-lines)
+                   (assoc :phase :idle :exec-cmd nil))
+               nil])
+            [(-> (update state :lines conj (str prompt-str))
+                 (update :lines conj (msg :invalid-cmd))
+                 (update :lines clamp-lines)
+                 (assoc :phase :idle :exec-cmd nil))
+             nil])))))
+  nil)
 
 (defn process-key
   "Pure transition for key input. Uses camelCase keys matching input/key-input! event format."

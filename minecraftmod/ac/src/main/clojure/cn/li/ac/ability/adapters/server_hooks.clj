@@ -21,25 +21,13 @@
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
-            [cn.li.ac.util.init-guard :refer [with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
 (def ^:private fn-register-network-handlers :ability/register-network-handlers!)
 (def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
-
-;; Lifecycle subscriptions guard — Framework [:service :lifecycle-subscriptions]
-
-(def ^:private lsub-path [:service :lifecycle-subscriptions])
-
-(defn- lifecycle-subscriptions-registered-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom lsub-path)
-        (let [a (atom false)]
-          (swap! fw-atom assoc-in lsub-path a) a))
-    (atom false)))
 
 (defn- unique-context-by-id
   [ctx-id]
@@ -141,14 +129,15 @@
 
 (defn lifecycle-subscriptions-registered-snapshot
   []
-  @(lifecycle-subscriptions-registered-atom))
+  (install/framework-once-done? ::register-lifecycle-subscriptions))
 
 (defn reset-lifecycle-subscriptions-registered-for-test!
   ([]
-   (reset-lifecycle-subscriptions-registered-for-test! false))
+   (install/reset-framework-once-flag-for-test! ::register-lifecycle-subscriptions))
   ([registered?]
-  (reset! (lifecycle-subscriptions-registered-atom) (boolean registered?))
-   nil))
+   (if registered?
+     (install/framework-once! ::register-lifecycle-subscriptions (fn []))
+     (install/reset-framework-once-flag-for-test! ::register-lifecycle-subscriptions))))
 
 (defn register-platform-functions!
   "Register platform-facing callbacks used by reducer/effects/network shells."
@@ -163,7 +152,8 @@
 
 (defn register-lifecycle-subscriptions!
   []
-  (with-init-guard (lifecycle-subscriptions-registered-atom)
+  (install/framework-once! ::register-lifecycle-subscriptions
+    (fn []
     (evt/subscribe-ability-event!
      evt/EVT-LEVEL-CHANGE
      (fn [{:keys [uuid new-level]}]
@@ -208,7 +198,7 @@
      (fn [{:keys [uuid]}]
        (when uuid
          (ctx-mgr/abort-player-contexts! uuid))))
-    (log/info "Ability lifecycle event subscriptions registered")))
+    (log/info "Ability lifecycle event subscriptions registered"))))
 
 (defn runtime-server-hooks
   []

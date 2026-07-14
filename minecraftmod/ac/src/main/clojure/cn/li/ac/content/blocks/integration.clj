@@ -4,7 +4,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.integration.block.energy-converter.init :as ec-init]
             [cn.li.ac.integration.block.energy-converter.gui-reactive :as ec-gui-reactive]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:private integration-block-spec
   {:label :integration
@@ -20,9 +20,8 @@
                        (fn []
                          (log/info "Loaded integration blocks content (4 converters)"))]})
 
-(defonce-guard integration-blocks-installed?)
-
 (defn init-integration-blocks!
   []
-  (with-init-guard integration-blocks-installed?
-    (block-loader/load-block-category! integration-block-spec)))
+  (install/framework-once! ::integration-blocks-installed?
+  (fn []
+    (block-loader/load-block-category! integration-block-spec))))

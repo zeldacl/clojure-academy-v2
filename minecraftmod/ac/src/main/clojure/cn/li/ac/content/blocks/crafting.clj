@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.blocks.crafting
   "Content entrypoint for crafting/processing blocks"
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:private crafting-block-spec
   {:label :crafting
@@ -13,9 +13,8 @@
                    cn.li.ac.block.imag-fusor.gui-reactive/init-imag-fusor-reactive!
                    cn.li.ac.block.metal-former.gui-reactive/init-metal-former-reactive!]})
 
-(defonce-guard crafting-blocks-installed?)
-
 (defn init-crafting-blocks!
   []
-  (with-init-guard crafting-blocks-installed?
-    (block-loader/load-block-category! crafting-block-spec)))
+  (install/framework-once! ::crafting-blocks-installed?
+  (fn []
+    (block-loader/load-block-category! crafting-block-spec))))

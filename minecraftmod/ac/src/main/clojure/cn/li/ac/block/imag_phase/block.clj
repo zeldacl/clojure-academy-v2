@@ -4,7 +4,7 @@
   Registers a fluid + block with an animated overlay TESR that mirrors
   the upstream RenderImagPhaseLiquid (3 scrolling layers)."
   (:require [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.ac.block.imag-phase.handlers :as imag-phase-handlers]
             [cn.li.ac.registry.hooks :as hooks]
             [cn.li.mcmod.block.dsl :as bdsl]
@@ -13,11 +13,10 @@
             [cn.li.mcmod.worldgen :as mcmod-worldgen]
             [cn.li.mcmod.util.log :as log]))
 
-(defonce-guard imag-phase-installed?)
-
 (defn init-imag-phase!
   []
-  (with-init-guard imag-phase-installed?
+  (install/framework-once! ::imag-phase-installed?
+  (fn []
     (fdsl/register-fluid!
       (fdsl/create-fluid-spec
         "imag-phase"
@@ -70,4 +69,4 @@
     (mcmod-worldgen/register-pool-fill-block-id! (str modid/MOD-ID ":imag_phase"))
     ;; Attach the animated TESR overlay (3 scrolling layers)
     (hooks/register-client-renderer! 'cn.li.ac.block.imag-phase.render/init!)
-    (log/info "Initialized Imag Phase fluid block with TESR")))
+    (log/info "Initialized Imag Phase fluid block with TESR"))))

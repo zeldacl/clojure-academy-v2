@@ -4,16 +4,13 @@
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
-
-(defonce-guard cat-engine-installed?)
 
 (defn init-cat-engine!
   []
   (machine-reg/init-machine!
-    {:guard cat-engine-installed?
+    {:guard ::init
      :log-label "Cat Engine"
      :tiles [{:id "cat-engine"
               :registry-name "cat_engine"

@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.blocks.ability
   "Content entrypoint for ability system blocks"
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:private ability-block-spec
   {:label :ability
@@ -14,9 +14,8 @@
                    cn.li.ac.block.ability-interferer.block/init-ability-interferer!
                    cn.li.ac.block.ability-interferer.gui-reactive/init-ability-interferer-reactive!]})
 
-(defonce-guard ability-blocks-installed?)
-
 (defn init-ability-blocks!
   []
-  (with-init-guard ability-blocks-installed?
-    (block-loader/load-block-category! ability-block-spec)))
+  (install/framework-once! ::ability-blocks-installed?
+  (fn []
+    (block-loader/load-block-category! ability-block-spec))))

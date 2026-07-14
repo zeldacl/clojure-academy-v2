@@ -6,11 +6,9 @@
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.runtime-container :as runtime-container]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard runtime-hooks-installed?)
 
 (def ^:private sync-descriptors
   [{:id :ac/sync-runtime
@@ -99,7 +97,8 @@
   ([]
    (install-runtime-hooks! nil))
   ([runtime-components]
-  (with-init-guard runtime-hooks-installed?
+  (install/framework-once! ::runtime-hooks-installed?
+  (fn []
     (install-runtime-components! runtime-components)
     (server-hooks/register-platform-functions!)
     (server-hooks/register-lifecycle-subscriptions!)
@@ -113,4 +112,4 @@
              (client-ui/runtime-client-ui-hooks)
              (client-effects/runtime-client-effect-hooks)
              debug-overlay-hooks))
-    (log/info "AC ability runtime hooks installed"))))
+    (log/info "AC ability runtime hooks installed")))))

@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.machine.registration
   "Unified scripted machine registration: tile, container, capabilities, block, hooks."
   (:require [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-kind :as tile-kind]
@@ -55,10 +55,11 @@
   (when client-renderer (hooks/register-client-renderer! client-renderer)))
 
 (defn init-machine!
-  "Run one-time machine init behind defonce-guard.
+  "Run one-time machine init behind a Framework-scoped exactly-once guard.
 
   machine-spec keys:
-  - :guard atom from defonce-guard
+  - :guard keyword — unique install-key for install/framework-once!
+    (each caller passes its own ::init, ns-qualified so it's unique per file)
   - :log-label string
   - :before (fn []) optional
   - :tile-kind optional map for register-tile-kind!
@@ -71,19 +72,21 @@
   - :client-renderer symbol"
   [{:keys [guard log-label before after tile-kind tiles capabilities tile-ids containers blocks
            network-handler client-renderer]}]
-  (with-init-guard guard
-    (when before (before))
-    (when tile-kind (register-tile-kind! tile-kind))
-    (let [ids (or tile-ids (mapv #(get % :id) tiles))
-          cap-keys (when (seq capabilities)
-                     (declare-and-register-capabilities! capabilities ids))]
-      (doseq [tile tiles]
-        (register-tile-spec!
-          (assoc tile
-                 :container (get containers (:id tile))
-                 :capability-keys (or (:capability-keys tile) cap-keys)))))
-    (when blocks (register-blocks! blocks))
-    (when after (after))
-    (register-machine-hooks! {:network-handler network-handler
-                              :client-renderer client-renderer})
-    (log/info (str "Initialized " (or log-label "machine")))))
+  (install/framework-once! guard
+    (fn []
+      (when before (before))
+      (when tile-kind (register-tile-kind! tile-kind))
+      (let [ids (or tile-ids (mapv #(get % :id) tiles))
+            cap-keys (when (seq capabilities)
+                       (declare-and-register-capabilities! capabilities ids))]
+        (doseq [tile tiles]
+          (register-tile-spec!
+            (assoc tile
+                   :container (get containers (:id tile))
+                   :capability-keys (or (:capability-keys tile) cap-keys)))))
+      (when blocks (register-blocks! blocks))
+      (when after (after))
+      (register-machine-hooks! {:network-handler network-handler
+                                :client-renderer client-renderer})
+      (log/info (str "Initialized " (or log-label "machine")))))
+  nil)

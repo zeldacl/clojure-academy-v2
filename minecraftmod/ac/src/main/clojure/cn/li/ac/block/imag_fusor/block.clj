@@ -6,13 +6,10 @@
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.capability :as platform-cap])
   (:import [cn.li.acapi.wireless IWirelessReceiver]))
-
-(defonce-guard imag-fusor-installed?)
 
 (defn- fusor-max-energy [state]
   (or (:max-energy state) fusor-config/max-energy))
@@ -26,7 +23,7 @@
 (defn init-imag-fusor!
   []
   (machine-reg/init-machine!
-    {:guard imag-fusor-installed?
+    {:guard ::init
      :log-label "Imaginary Fusor"
      :tiles [{:id "imag-fusor"
               :registry-name "imag_fusor"

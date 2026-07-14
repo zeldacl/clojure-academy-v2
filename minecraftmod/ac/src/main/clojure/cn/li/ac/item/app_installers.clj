@@ -1,13 +1,11 @@
 (ns cn.li.ac.item.app-installers
   "Terminal app installer items migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.player :as term-player]
             [cn.li.ac.terminal.catalog :as term-catalog]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard app-installers-installed?)
 
 (defn- install-app-for-player!
   [player app-id]
@@ -38,7 +36,8 @@
 
 (defn init-app-installers!
   []
-  (with-init-guard app-installers-installed?
+  (install/framework-once! ::app-installers-installed?
+  (fn []
     (idsl/register-item!
       (idsl/create-item-spec
         "app_freq_transmitter"
@@ -66,4 +65,4 @@
                                 "需要先安装终端"]
                       :model-texture "app_skill_tree"}
          :on-right-click (app-installer-handler :skill-tree)}))
-    (log/info "App installer items initialized: app_freq_transmitter, app_media_player, app_skill_tree")))
+    (log/info "App installer items initialized: app_freq_transmitter, app_media_player, app_skill_tree"))))

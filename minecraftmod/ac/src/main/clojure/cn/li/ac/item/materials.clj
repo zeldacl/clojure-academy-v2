@@ -1,10 +1,8 @@
 (ns cn.li.ac.item.materials
   "AcademyCraft material item declarations used by chip/crystal progression."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard materials-installed?)
 
 (def ^:private material-specs
   [{:id "imag_silicon_ingot"
@@ -41,7 +39,8 @@
 
 (defn init-materials!
   []
-  (with-init-guard materials-installed?
+  (install/framework-once! ::materials-installed?
+  (fn []
     (doseq [{:keys [id display-name tooltip]} material-specs]
       (idsl/register-item!
         (idsl/create-item-spec
@@ -51,4 +50,4 @@
            :properties {:display-name display-name
                         :tooltip tooltip
                         :model-texture id}})))
-    (log/info "Material items initialized:" (mapv #(get % :id) material-specs))))
+    (log/info "Material items initialized:" (mapv #(get % :id) material-specs)))))

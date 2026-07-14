@@ -2,11 +2,9 @@
   "Energy-backed item declarations migrated from original AcademyCraft."
   (:require [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.ac.item.developer-portable-reactive :as developer-portable-reactive]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard energy-items-installed?)
 
 (defn- open-portable-developer!
   "Right-click handler for developer_portable item.
@@ -20,7 +18,8 @@
 
 (defn init-energy-items!
   []
-  (with-init-guard energy-items-installed?
+  (install/framework-once! ::energy-items-installed?
+  (fn []
     (energy-base/init-energy-items!)
     (idsl/register-item!
       (idsl/create-item-spec
@@ -59,4 +58,4 @@
                                                     :thirdperson_lefthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
                                                     :ground {:scale [-0.15 -0.15 0.15] :translation [0 0.1 0]}}}}
          :on-right-click open-portable-developer!}))
-    (log/info "Energy items initialized: energy_unit, developer_portable")))
+    (log/info "Energy items initialized: energy_unit, developer_portable"))))

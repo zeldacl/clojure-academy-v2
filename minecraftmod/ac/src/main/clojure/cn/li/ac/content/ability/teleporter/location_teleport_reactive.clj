@@ -15,6 +15,7 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.ui :as platform-ui]
@@ -314,11 +315,12 @@
 (defn open! [player]
   (bridge/open-reactive-screen! (create-runtime player) "Location Teleport"))
 
-(let [registered? (atom false)]
-  (defn init!
-    "Register location-teleport widget factory. Idempotent."
-    []
-    (when (compare-and-set! registered? false true)
+(defn init!
+  "Register location-teleport widget factory. Idempotent."
+  []
+  (install/framework-once! ::init
+    (fn []
       (platform-ui/register-widget-factory! :ac/saved-position
         (fn [{:keys [player payload]}] (open-screen! player (or payload {}))))
-      (log/info "Location Teleport reactive screen registered"))))
+      (log/info "Location Teleport reactive screen registered")))
+  nil)

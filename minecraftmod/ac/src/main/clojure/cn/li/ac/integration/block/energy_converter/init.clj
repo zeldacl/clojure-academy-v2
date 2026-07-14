@@ -16,7 +16,7 @@
 	          [cn.li.ac.integration.block.energy-converter.rf-output :as rf-output]
 		          [cn.li.ac.block.energy-converter.wireless-impl :as ec-wireless]
 	          [cn.li.ac.gui.open :as gui-open]
-	          [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+	          [cn.li.mcmod.runtime.install :as install]
 						[cn.li.ac.integration.block.energy-converter.platform-bridge :as ec-bridge]
 						[cn.li.mcmod.util.log :as log])
 		(:import [cn.li.acapi.wireless IWirelessGenerator IWirelessReceiver]))
@@ -73,20 +73,19 @@
 									:flat-item-icon? true}
 			 :events {:on-right-click open-converter-gui!}})))
 
-(defonce-guard converters-loaded?)
-(defonce-guard converters-initialized?)
-
 (defn load-converters!
 	[]
-	(with-init-guard converters-loaded?
-		(ec-bridge/install-energy-integration-hooks!)
+	(install/framework-once! ::converters-loaded?
+  (fn []
+    (ec-bridge/install-energy-integration-hooks!)
 		(log/info "Energy converters loaded"
-							{:count (count ec-config/supported-blocks)})))
+							{:count (count ec-config/supported-blocks)}))))
 
 (defn init-converters!
 	[]
-	(with-init-guard converters-initialized?
-		(doseq [converter converter-definitions]
+	(install/framework-once! ::converters-initialized?
+  (fn []
+    (doseq [converter converter-definitions]
 			(register-converter-block! converter))
 		;; --- register wireless capability bindings ---
 		;; :wireless-generator and :wireless-receiver capabilities are declared
@@ -104,4 +103,4 @@
 		(doseq [tile-id ["rf-output" "eu-output"]]
 			(tdsl/register-tile-capability-keys! tile-id :wireless-generator))
 		(log/info "Energy converters initialized"
-							{:count (count ec-config/supported-blocks)})))
+							{:count (count ec-config/supported-blocks)}))))

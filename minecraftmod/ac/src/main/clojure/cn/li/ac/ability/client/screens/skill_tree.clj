@@ -12,6 +12,7 @@
    [cn.li.ac.ability.config :as cfg]
    [cn.li.ac.config.modid :as modid]
    [cn.li.mcmod.i18n :as i18n]
+   [cn.li.mcmod.runtime.install :as install]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
    [cn.li.mcmod.platform.ui :as platform-ui]
    [cn.li.mcmod.util.log :as log]))
@@ -307,10 +308,11 @@
      :title "Node Tree"
      :on-close #(on-close! owner)}))
 
-(let [registered? (atom false)]
-  (defn install-widget-factory!
-    "Register skill-tree CGui widget factory. Idempotent."
-    []
-    (when (compare-and-set! registered? false true)
+(defn install-widget-factory!
+  "Register skill-tree CGui widget factory. Idempotent."
+  []
+  (install/framework-once! ::install-widget-factory
+    (fn []
       (platform-ui/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
-      (log/info "Skill-tree widget factory registered"))))
+      (log/info "Skill-tree widget factory registered")))
+  nil)

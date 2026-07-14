@@ -16,7 +16,7 @@
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.teleporter.passive-hooks :as tp-passive]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (defcategory electromaster
@@ -50,16 +50,6 @@
   :color [0.0 0.0 0.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
-
-(defonce-guard ability-content-installed?)
-
-(defn- content-registries-ready?
-  []
-  (try
-    (and (seq (category/get-all-categories))
-         (seq (skill-registry/raw-skills)))
-    (catch Throwable _
-      false)))
 
 (defn- load-discovered-skill-namespaces!
   []
@@ -120,9 +110,8 @@
 
 (defn init-ability-content!
   []
-  (when (or (not @ability-content-installed?)
-            (not (content-registries-ready?)))
-    (try
+  (install/framework-once! ::ability-content-installed
+    (fn []
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (let [skill-namespaces (load-discovered-skill-namespaces!)]
@@ -144,8 +133,12 @@
       (damage-runtime/freeze-damage-handler-registry!)
       (passive/freeze-passive-handler-registry!)
       (lifecycle/freeze-lifecycle-registry!)
-      (reset! ability-content-installed? true)
-      (log/info "Ability content initialized")
-      (catch Throwable t
-        (reset! ability-content-installed? false)
-        (throw t)))))
+      (log/info "Ability content initialized")))
+  nil)
+
+(defn reset-ability-content-for-test!
+  "Test-only: clear the ability-content install guard so init-ability-content!
+   can rerun within the same Framework lifetime."
+  []
+  (install/reset-framework-once-flag-for-test! ::ability-content-installed)
+  nil)

@@ -8,9 +8,7 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
-
-(defonce-guard tutorial-item-installed?)
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ============================================================================
 ;; Right-click handler
@@ -48,7 +46,8 @@
 
 (defn init-tutorial-item!
   []
-  (with-init-guard tutorial-item-installed?
+  (install/framework-once! ::tutorial-item-installed?
+  (fn []
     (idsl/register-item!
       (idsl/create-item-spec
         "tutorial"
@@ -57,4 +56,4 @@
          :properties {:tooltip ["教程物品"]
                       :model-texture "tutorial"}
          :on-right-click tutorial-on-right-click}))
-    (log/info "Tutorial item (MisakaCloud Terminal) registered")))
+    (log/info "Tutorial item (MisakaCloud Terminal) registered"))))

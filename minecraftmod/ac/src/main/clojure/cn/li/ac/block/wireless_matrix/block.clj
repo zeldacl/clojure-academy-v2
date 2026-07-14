@@ -4,11 +4,8 @@
             [cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
-
-(defonce-guard wireless-matrix-installed?)
 
 (defn- register-matrix-multiblock! []
   (bdsl/defmultiblock 'wireless-matrix
@@ -36,7 +33,7 @@
 
 (defn init-wireless-matrix! []
   (machine-reg/init-machine!
-    {:guard wireless-matrix-installed?
+    {:guard ::init
      :log-label "Wireless Matrix"
      :before matrix-logic/ensure-matrix-slot-schema!
      :tile-kind {:tile-kind :wireless-matrix

@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wind-gen.gui-reactive
   "Complete reactive replacement for wind_gen/gui.clj (main + base GUIs)."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.position :as pos]
@@ -85,11 +85,11 @@
 ;; ============================================================================
 ;; Registration
 ;; ============================================================================
-(defonce-guard wind-gen-reactive-installed?)
 (defn init-wind-gen-reactive! []
-  (with-init-guard wind-gen-reactive-installed?
+  (install/framework-once! ::wind-gen-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema! {:schema-id main-schema-id :slots [{:id :fan :type :standard :x 78 :y 9}]})
     (slot-schema/register-slot-schema! {:schema-id base-schema-id :slots [{:id :energy :type :energy :x 42 :y 80}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :wind-gen-main) (merge (gui-manifest/gui-registration :wind-gen-main) {:container-predicate main-container? :container-fn create-main-container :screen-fn create-main-screen :server-menu-sync-fn main-server-sync! :validate-fn main-still-valid? :close-fn (:on-close main-sync) :slot-count-fn main-slot-count :slot-get-fn main-get-slot :slot-set-fn main-set-slot! :slot-can-place-fn main-can-place? :slot-changed-fn (fn [_ _] nil)}))
     (gui-reg/register-block-gui! (gui-manifest/gui-name :wind-gen-base) (merge (gui-manifest/gui-registration :wind-gen-base) {:container-predicate base-container? :container-fn create-base-container :screen-fn create-base-screen :server-menu-sync-fn base-server-sync! :validate-fn base-still-valid? :close-fn (:on-close base-sync) :slot-count-fn base-slot-count :slot-get-fn base-get-slot :slot-set-fn base-set-slot! :slot-can-place-fn base-can-place? :slot-changed-fn (fn [_ _] nil)}))
-    (log/info "Wind Generator GUIs initialized (reactive: main + base)")))
+    (log/info "Wind Generator GUIs initialized (reactive: main + base)"))))

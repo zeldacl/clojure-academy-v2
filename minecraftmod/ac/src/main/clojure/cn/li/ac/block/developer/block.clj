@@ -3,11 +3,8 @@
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessReceiver]))
-
-(defonce-guard developer-installed?)
 
 (defn- register-developer-multiblocks! []
   (bdsl/defmultiblock 'developer-normal
@@ -53,7 +50,7 @@
 (defn init-developer!
   []
   (machine-reg/init-machine!
-    {:guard developer-installed?
+    {:guard ::init
      :log-label "Developer blocks"
      :tiles [{:id "developer-normal"
               :registry-name "developer_normal"

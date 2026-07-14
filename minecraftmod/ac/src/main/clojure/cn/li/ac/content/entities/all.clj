@@ -1,13 +1,12 @@
 (ns cn.li.ac.content.entities.all
   "Content entrypoint for AC entity declarations."
   (:require [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
-
-(defonce-guard entities-installed?)
+            [cn.li.mcmod.runtime.install :as install]))
 
 (defn init-entities!
   []
-  (with-init-guard entities-installed?
+  (install/framework-once! ::entities-installed?
+  (fn []
     ;; Keep existing registry IDs stable for world/network compatibility.
     (edsl/register-entity!
       (edsl/create-entity-spec
@@ -529,4 +528,4 @@
          :properties {:mob {:mob-tick-fn (fn [_mob] nil)
                             :mob-hurt-fn (fn [_mob _src amt] amt)
                             :mob-death-fn (fn [_mob _src] nil)
-                            :mob-loot-fn (fn [_mob _src _recent?] false)}}}))))
+                            :mob-loot-fn (fn [_mob _src _recent?] false)}}})))))

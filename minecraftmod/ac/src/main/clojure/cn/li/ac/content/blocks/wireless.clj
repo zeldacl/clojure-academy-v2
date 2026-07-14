@@ -6,7 +6,7 @@
   these namespaces; blocks interact through acapi Java interfaces."
   (:require [cn.li.ac.content.block-loader-core :as block-loader]
             [cn.li.ac.wireless.gui.message.bootstrap :as msg-reg]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:private wireless-block-spec
   {:label :wireless
@@ -20,9 +20,8 @@
                    cn.li.ac.block.wireless-node.gui-reactive/init-wireless-node-reactive!]
    :post-init-entries [msg-reg/register-all!]})
 
-(defonce-guard wireless-blocks-installed?)
-
 (defn init-wireless-blocks!
   []
-  (with-init-guard wireless-blocks-installed?
-    (block-loader/load-block-category! wireless-block-spec)))
+  (install/framework-once! ::wireless-blocks-installed?
+  (fn []
+    (block-loader/load-block-category! wireless-block-spec))))

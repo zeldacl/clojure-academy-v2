@@ -8,10 +8,8 @@
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard special-items-installed?)
 
 (def ^:private induction-factor->category
   {"induction_factor_electromaster" :electromaster
@@ -143,7 +141,8 @@
 
 (defn init-special-items!
   []
-  (with-init-guard special-items-installed?
+  (install/framework-once! ::special-items-installed?
+  (fn []
     ;; MC 1.20 does not support metadata subtypes, so induction factors are split.
     (idsl/register-item!
       (idsl/create-item-spec
@@ -202,6 +201,6 @@
                                        :damage 1
                                        :label "phase-liquid"}}
          :on-right-click use-matter-unit!}))
-    (log/info "Special items initialized: induction factors, mag_hook, matter_unit")))
+    (log/info "Special items initialized: induction factors, mag_hook, matter_unit"))))
 
 

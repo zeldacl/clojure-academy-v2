@@ -53,6 +53,23 @@
             (swap! fw-atom update-in flags-path dissoc install-key)
             (throw t)))))))
 
+(defn framework-once-done?
+  "Query whether a framework-once! install-key has already been claimed
+   in the current Framework lifetime. Returns false if framework isn't
+   injected (e.g. AOT phase)."
+  [install-key]
+  (boolean (when-let [fw-atom (fw/fw-atom)]
+             (get-in @fw-atom (conj flags-path install-key)))))
+
+(defn reset-framework-once-flag-for-test!
+  "Test-only: clear a single framework-once! flag so its action can rerun,
+   without resetting the whole Framework (with-fresh-framework already does
+   that; use this when a test needs finer-grained control over one flag)."
+  [install-key]
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in flags-path dissoc install-key))
+  nil)
+
 ;; ============================================================================
 ;; process-once! — JVM-process-scoped exactly-once
 ;; ============================================================================

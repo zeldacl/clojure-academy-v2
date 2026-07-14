@@ -14,7 +14,7 @@
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.messages :as terminal-messages]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
@@ -105,14 +105,13 @@
 ;; install-push-handler!, calling this file's reactive show! instead.
 ;; ============================================================================
 
-(defonce-guard install-effect-reactive-push-handler-installed?)
-
 (defn install-push-handler! []
-  (with-init-guard install-effect-reactive-push-handler-installed?
+  (install/framework-once! ::install-effect-reactive-push-handler-installed?
+  (fn []
     (net-client/register-push-handler!
       (terminal-messages/msg-id :terminal-install-effect)
       (fn [_payload]
         (when-let [player (bridge/get-client-player)]
           (show! player))))
-    (log/info "AC terminal install-effect push handler installed (reactive)"))
+    (log/info "AC terminal install-effect push handler installed (reactive)")))
   nil)

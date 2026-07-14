@@ -9,18 +9,10 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
             [cn.li.mcmod.util.log]
-            [cn.li.ac.content.ability :as ability-content]))
+            [cn.li.ac.content.ability :as ability-content]
+            [cn.li.ac.test.support.framework :as support-fw]))
 
-(defn- reset-ability-init-guard-fixture [f]
-  (let [guard* (var-get #'cn.li.ac.content.ability/ability-content-installed?)
-        before @guard*]
-    (reset! guard* false)
-    (try
-      (f)
-      (finally
-        (reset! guard* before)))))
-
-(use-fixtures :each reset-ability-init-guard-fixture)
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (deftest init-ability-content-freezes-registries-once-test
   (let [freeze-calls* (atom [])]

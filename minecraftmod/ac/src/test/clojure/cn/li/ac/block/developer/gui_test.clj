@@ -37,7 +37,7 @@
 
 (deftest developer-gui-init-registers-once-test
   (with-redefs [gui-reg/register-block-gui! (fn [& _] nil)]
-    ;; init-developer-reactive! is guarded by defonce-guard/with-init-guard —
+    ;; init-developer-reactive! is guarded by install/framework-once! —
     ;; calling it repeatedly across the test suite is safe and a no-op after
     ;; the first successful registration.
     (developer-gui-reactive/init-developer-reactive!)

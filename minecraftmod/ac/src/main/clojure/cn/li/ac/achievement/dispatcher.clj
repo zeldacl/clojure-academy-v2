@@ -5,10 +5,8 @@
 [cn.li.mcmod.hooks.core :as runtime-hooks]
 [cn.li.ac.achievement.registry :as ach-reg]
             [cn.li.ac.achievement.trigger :as ach-trigger]
-            [cn.li.ac.ability.registry.event :as evt]            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.ac.ability.registry.event :as evt]            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard installed?)
 
 (declare trigger-custom-event!
          player-category-in-session)
@@ -34,7 +32,8 @@
 
 (defn init-dispatcher!
   []
-  (with-init-guard installed?
+  (install/framework-once! ::installed?
+  (fn []
     (evt/subscribe-ability-event!
       evt/EVT-LEVEL-CHANGE
       (fn [{:keys [uuid new-level]}]
@@ -51,6 +50,6 @@
       (fn [{:keys [uuid skill-id]}]
         (fire-by-trigger! :skill-perform {:skill-id skill-id} uuid)))
 
-    (log/info "Achievement dispatcher initialized")))
+    (log/info "Achievement dispatcher initialized"))))
 
 

@@ -11,6 +11,7 @@
   where forge/fabric were directly requiring cn.li.ac.bootstrap."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry]
             [cn.li.ac.input-ids :as input-ids]))
 
@@ -53,15 +54,14 @@
 ;; Self-registration into neutral mcmod lifecycle
 ;; ============================================================================
 
-(let [registered? (atom false)]
-  (defn- register-post-spi-init!
-    "Register AC keybinding init as a post-SPI client callback.
-    Idempotent — only registers once."
-    []
-    (when-not @registered?
-      (reset! registered? true)
+(defn register-post-spi-init!
+  "Register AC keybinding init as a post-SPI client callback. Called from
+  cn.li.ac.core's lifecycle-hook registration (the real ServiceLoader-driven
+  content-init entrypoint) — not at namespace load. framework-once! makes
+  this idempotent across repeated calls within one Framework lifetime."
+  []
+  (install/framework-once! ::register-post-spi-init
+    (fn []
       (lifecycle/register-post-spi-client-init! initialize-keybindings!)
-      (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)"))))
-
-;; Auto-register when this namespace is loaded (during content-init via ServiceLoader).
-(register-post-spi-init!)
+      (log/info "AC keybinding init registered into mcmod lifecycle (post-spi-client-init)")))
+  nil)

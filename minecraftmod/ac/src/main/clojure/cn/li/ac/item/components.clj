@@ -7,10 +7,8 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.item.terminal-installer-handler :as terminal-installer-handler]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard components-installed?)
 
 ;; ============================================================================
 ;; Silbarn - thrown marker entity (matches original ItemSilbarn behavior)
@@ -45,7 +43,8 @@
 ;; ============================================================================
 
 (defn init-components! []
-  (with-init-guard components-installed?
+  (install/framework-once! ::components-installed?
+  (fn []
     (idsl/register-item!
       (idsl/create-item-spec
         "wafer"
@@ -157,4 +156,4 @@
                       :model-texture "logo"}}))
     (log/info "Component items initialized: wafer, terminal-installer, silbarn,"
               "reso-crystal, resonance-component, reinforced-iron-plate, needle, coin,"
-              "brain-component, energy-convert-component, info-component, magnetic-coil, logo")))
+              "brain-component, energy-convert-component, info-component, magnetic-coil, logo"))))

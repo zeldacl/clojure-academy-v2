@@ -3,17 +3,16 @@
   
   Media items store information/music that can be transmitted through wireless network."
   (:require [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard media-installed?)
 
 ;; ============================================================================
 ;; Initialization
 ;; ============================================================================
 
 (defn init-media! []
-  (with-init-guard media-installed?
+  (install/framework-once! ::media-installed?
+  (fn []
     (idsl/register-item!
       (idsl/create-item-spec
         "media_0"
@@ -41,4 +40,4 @@
                       :tooltip ["音乐: 5级审判之光 (Level5 Judgelight)"
                                 "来自某某动画的ED曲"]
                       :model-texture "media_level5_judgelight"}}))
-    (log/info "Media items initialized: media-0, media-1, media-2")))
+    (log/info "Media items initialized: media-0, media-1, media-2"))))

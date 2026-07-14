@@ -1,14 +1,13 @@
 (ns cn.li.ac.content.effects
   "Custom status effect declarations."
   (:require [cn.li.mcmod.effect.dsl :as edsl]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard effects-initialized?)
 
 (defn init-effects!
   []
-  (with-init-guard effects-initialized?
+  (install/framework-once! ::effects-initialized?
+  (fn []
     (edsl/defeffect {:id "bleeding"
                      :category :harmful
                      :color 0xAA1111
@@ -24,4 +23,4 @@
                      :color 0x33CCFF
                      :tick-interval 40
                      :damage-per-tick 0.0})
-    (log/info "Effect content initialized")))
+    (log/info "Effect content initialized"))))

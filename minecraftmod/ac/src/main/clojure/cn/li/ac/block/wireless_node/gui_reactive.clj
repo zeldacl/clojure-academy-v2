@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.wireless-node.gui-reactive
   "Complete reactive replacement for wireless_node/gui.clj.
    All functional logic preserved: container, slots, animation, 2s link polling."
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.network.client :as net-client] [cn.li.ac.energy.operations :as energy-stub]
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
@@ -155,9 +155,9 @@
 ;; Registration
 ;; ============================================================================
 
-(defonce-guard node-reactive-installed?)
 (defn init-wireless-node-reactive! []
-  (with-init-guard node-reactive-installed?
+  (install/framework-once! ::node-reactive-installed?
+  (fn []
     (ensure-slot-schema!)
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :wireless-node)
@@ -167,4 +167,4 @@
          :slot-count-fn get-slot-count :slot-get-fn get-slot-item
          :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item?
          :slot-changed-fn (fn [_ _] nil) :quick-move-fn quickly-move}))
-    (log/info "Wireless Node GUI initialized (reactive: animation+polling preserved)")))
+    (log/info "Wireless Node GUI initialized (reactive: animation+polling preserved)"))))

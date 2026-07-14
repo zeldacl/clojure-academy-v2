@@ -1,7 +1,7 @@
 (ns cn.li.ac.block.ability-interferer.gui-reactive
   "Complete reactive replacement for ability_interferer/gui.clj."
   (:refer-clojure :exclude [sync])
-  (:require [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+  (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.network.client :as net-client] [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest] [cn.li.ac.gui.block-gui-reactive :as bgui]
@@ -41,9 +41,9 @@
 
 (def update! bgui/update-signals!) (def open! bgui/open!)
 (defn- container? [c] (and (map? c) (= (:container-type c) gui-type) (contains? c :tile-entity) (contains? c :energy)))
-(defonce-guard interferer-reactive-installed?)
 (defn init-ability-interferer-reactive! []
-  (with-init-guard interferer-reactive-installed?
+  (install/framework-once! ::interferer-reactive-installed?
+  (fn []
     (slot-schema/register-slot-schema! {:schema-id slot-schema-id :slots [{:id :energy :type :energy :x 80 :y 35}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :ability-interferer) (merge (gui-manifest/gui-registration :ability-interferer) {:container-predicate container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil)}))
-    (log/info "Ability Interferer GUI initialized (reactive)")))
+    (log/info "Ability Interferer GUI initialized (reactive)"))))

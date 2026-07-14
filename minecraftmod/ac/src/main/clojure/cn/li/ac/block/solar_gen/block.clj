@@ -5,16 +5,13 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.block.solar-gen.handlers :as solar-handlers]
             [cn.li.ac.block.solar-gen.logic :as solar-logic]
-            [cn.li.ac.util.init-guard :refer [defonce-guard]]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
-
-(defonce-guard solar-gen-installed?)
 
 (defn init-solar-gen!
   []
   (machine-reg/init-machine!
-    {:guard solar-gen-installed?
+    {:guard ::init
      :log-label "Solar Generator"
      :tiles [{:id "solar-gen"
               :registry-name "solar_gen"

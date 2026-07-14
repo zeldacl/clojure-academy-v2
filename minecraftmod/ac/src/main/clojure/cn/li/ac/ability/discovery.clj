@@ -10,38 +10,44 @@
 
 (declare register-provider! registered-providers merge-provider!)
 
-(let [attempts* (atom 0)]
-  (defn bootstrap-attempts-snapshot
-    "Return current bootstrap attempt count. For test diagnostics."
-    []
-    @attempts*)
+(def ^:private attempts*
+  "Retry-if-empty counter, not a strict exactly-once guard (bootstrap-default-
+  providers! deliberately re-attempts when the registry looks empty even
+  after the count threshold) — install/framework-once! doesn't model retry,
+  so this stays a plain top-level atom rather than migrating to it."
+  (atom 0))
 
-  (defn reset-bootstrap-attempts-for-test!
-    "Reset bootstrap attempt counter. For tests only."
-    ([]
-     (reset-bootstrap-attempts-for-test! 0))
-    ([attempts]
-     (reset! attempts* (long (or attempts 0)))
-     nil))
+(defn bootstrap-attempts-snapshot
+  "Return current bootstrap attempt count. For test diagnostics."
+  []
+  @attempts*)
 
-  (defn bootstrap-default-providers!
-    "Discover and register built-in ability providers from classpath.
+(defn reset-bootstrap-attempts-for-test!
+  "Reset bootstrap attempt counter. For tests only."
+  ([]
+   (reset-bootstrap-attempts-for-test! 0))
+  ([attempts]
+   (reset! attempts* (long (or attempts 0)))
+   nil))
 
-    Safe to call repeatedly. Tracks attempts internally — runs discovery
-    at most once per JVM session (or until reset for tests)."
-    []
-    (when (or (zero? (count (registered-providers)))
-              (< @attempts* 1))
-      (swap! attempts* inc)
-      (let [scanned-providers (scanner/discover-ability-providers)
-            descriptor-providers (discovery-descriptor/bundled-provider-descriptors)]
-        (when (and (empty? scanned-providers) (empty? descriptor-providers))
-          (log/warn "Ability discovery returned no providers; check classpath/resource layout"))
-        (doseq [provider scanned-providers]
-          (register-provider! provider))
-        (doseq [provider descriptor-providers]
-          (merge-provider! provider))))
-    (registered-providers)))
+(defn bootstrap-default-providers!
+  "Discover and register built-in ability providers from classpath.
+
+  Safe to call repeatedly. Tracks attempts internally — runs discovery
+  at most once per JVM session (or until reset for tests)."
+  []
+  (when (or (zero? (count (registered-providers)))
+            (< @attempts* 1))
+    (swap! attempts* inc)
+    (let [scanned-providers (scanner/discover-ability-providers)
+          descriptor-providers (discovery-descriptor/bundled-provider-descriptors)]
+      (when (and (empty? scanned-providers) (empty? descriptor-providers))
+        (log/warn "Ability discovery returned no providers; check classpath/resource layout"))
+      (doseq [provider scanned-providers]
+        (register-provider! provider))
+      (doseq [provider descriptor-providers]
+        (merge-provider! provider))))
+  (registered-providers))
 
 (defn- provider-by-id
 	[provider-id]

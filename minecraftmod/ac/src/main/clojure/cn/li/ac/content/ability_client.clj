@@ -11,10 +11,8 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
-
-(defonce-guard fx-initialized?)
 
 (defn- init-fx-namespace! [ns-sym]
   (require ns-sym)
@@ -30,10 +28,18 @@
   "Ensure all client FX registrations have been loaded.
   Safe to call multiple times."
   []
-  (with-init-guard fx-initialized?
+  (install/framework-once! ::fx-initialized?
+  (fn []
     (init-discovered-fx!)
     (fx-registry/freeze-fx-registry!)
     (keybinds/freeze-keybind-registries!)
     (level-effects/freeze-level-effect-registry!)
     (hand-effects/freeze-hand-effect-registry!)
-    (log/info "Ability client FX content initialized")))
+    (log/info "Ability client FX content initialized"))))
+
+(defn reset-client-fx-for-test!
+  "Test-only: clear the client-FX install guard so init-client-fx! can rerun
+   within the same Framework lifetime."
+  []
+  (install/reset-framework-once-flag-for-test! ::fx-initialized?)
+  nil)

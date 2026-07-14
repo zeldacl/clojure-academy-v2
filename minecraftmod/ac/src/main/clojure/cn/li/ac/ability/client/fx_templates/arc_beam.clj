@@ -8,7 +8,8 @@
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effect registry (populated by build-spec)
@@ -16,7 +17,9 @@
 
 (def ^:private effect-registry (atom {}))
 
-(defn- register-effect!
+(defn register-effect!
+  "Public: def-arc-beam-fx expands calls to this into each skill FX
+  namespace's init!, so it must be visible cross-namespace."
   [effect-id entry]
   (swap! effect-registry assoc effect-id entry))
 
@@ -352,7 +355,11 @@
 ;; ---------------------------------------------------------------------------
 
 (defn build-spec
-  "Build a complete `fx-spec/register!` map.
+  "Build a complete `fx-spec/register!` map, pure — no registration side
+  effect. The registry entry that `init!` (from def-arc-beam-fx) later
+  passes to `register-effect!` travels in the returned map under the
+  private key `::arc-entry`; `init!` strips it before calling
+  `fx-spec/register!`.
 
   Required: `:effect-id`, `:channels`
   Runtime: `:runtime` — :level (default), :hand, :both, :none
@@ -372,31 +379,30 @@
                           #(effect-transform-fn effect-id)))]
     (when-not (keyword? effect-id)
       (throw (IllegalArgumentException. "build-spec requires :effect-id keyword")))
-    (register-effect!
-      effect-id
-      {:runtime runtime
-       :arc-opts arc-opts
-       :initial-state (:initial-state opts)
-       :level-initial-state (:level-initial-state opts)
-       :hand-initial-state (:hand-initial-state opts)
-       :after-register (:after-register opts)})
-    (cond-> {:id effect-id :channels channels}
-      (not= runtime :none)
-      (as-> spec spec
-            (if (contains? #{:level :both} runtime)
-              (assoc spec :level
-                     {:initial-state (resolve-initial-state opts :level)
-                      :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
-                      :tick-state-fn #(dispatch-tick! :level effect-id %1)
-                      :build-plan-fn #(apply dispatch-build-plan effect-id %1 %2 %3 %&)})
-              spec)
-            (if (contains? #{:hand :both} runtime)
-              (assoc spec :hand
-                     {:initial-state (resolve-initial-state opts :hand)
-                      :enqueue-state-fn #(dispatch-enqueue! :hand effect-id %1 %2 %3 %4 %5)
-                      :tick-state-fn #(dispatch-tick! :hand effect-id %1)
-                      :transform-fn transform})
-              spec)))))
+    (-> (cond-> {:id effect-id :channels channels}
+          (not= runtime :none)
+          (as-> spec spec
+                (if (contains? #{:level :both} runtime)
+                  (assoc spec :level
+                         {:initial-state (resolve-initial-state opts :level)
+                          :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
+                          :tick-state-fn #(dispatch-tick! :level effect-id %1)
+                          :build-plan-fn #(apply dispatch-build-plan effect-id %1 %2 %3 %&)})
+                  spec)
+                (if (contains? #{:hand :both} runtime)
+                  (assoc spec :hand
+                         {:initial-state (resolve-initial-state opts :hand)
+                          :enqueue-state-fn #(dispatch-enqueue! :hand effect-id %1 %2 %3 %4 %5)
+                          :tick-state-fn #(dispatch-tick! :hand effect-id %1)
+                          :transform-fn transform})
+                  spec)))
+        (assoc ::arc-entry
+               {:runtime runtime
+                :arc-opts arc-opts
+                :initial-state (:initial-state opts)
+                :level-initial-state (:level-initial-state opts)
+                :hand-initial-state (:hand-initial-state opts)
+                :after-register (:after-register opts)}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-skill FX boilerplate
@@ -407,13 +413,25 @@
   `clear-fx-owner!` quartet for one skill's FX namespace, given its
   (already-defined, via build-spec) `spec` var and :effect-id keyword.
   Expands in the calling (per-skill FX) namespace, so every skill FX file
-  collapses these four near-identical forms into one macro invocation."
+  collapses these four near-identical forms into one macro invocation.
+
+  init! does all load-time-deferred registration for this effect:
+  - process-once! loads the shared defmethod impl namespace (JVM-level
+    dispatch table, must not redo on Framework reinjection) — was a bare
+    top-level (require ...) at the bottom of this file; each effect's
+    init! now triggers it exactly once per process instead.
+  - register-effect! populates the (still process-local, P3-pending)
+    effect-registry from the ::arc-entry build-spec attached.
+  - fx-spec/register! registers the public fx-spec, stripped of the
+    private ::arc-entry key."
   [effect-kw]
   `(do
-     (defn ~'init! [] (fx-spec/register! ~'spec) nil)
+     (defn ~'init! []
+       (install/process-once! ::arc-beam-impls
+         #(require 'cn.li.ac.ability.client.fx-templates.arc-beam.impl.load))
+       (register-effect! ~effect-kw (get ~'spec ::arc-entry))
+       (fx-spec/register! (dissoc ~'spec ::arc-entry))
+       nil)
      (defn ~'fx-snapshot [] (snapshot ~effect-kw))
      (defn ~'reset-fx-for-test! [] (reset-for-test! ~effect-kw))
      (defn ~'clear-fx-owner! [owner-key#] (clear-owner! ~effect-kw owner-key#))))
-
-;; Custom effect implementations (defmethod registrations)
-(require 'cn.li.ac.ability.client.fx-templates.arc-beam.impl.load)

@@ -4,18 +4,10 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability-client :as ability-client]))
+            [cn.li.ac.content.ability-client :as ability-client]
+            [cn.li.ac.test.support.framework :as support-fw]))
 
-(defn- reset-fx-init-guard-fixture [f]
-  (let [guard* (var-get #'cn.li.ac.content.ability-client/fx-initialized?)
-        before @guard*]
-    (reset! guard* false)
-    (try
-      (f)
-      (finally
-        (reset! guard* before)))))
-
-(use-fixtures :each reset-fx-init-guard-fixture)
+(use-fixtures :each support-fw/with-fresh-framework)
 
 (deftest init-client-fx-loads-discovered-namespaces-once-test
   (let [inited* (atom [])

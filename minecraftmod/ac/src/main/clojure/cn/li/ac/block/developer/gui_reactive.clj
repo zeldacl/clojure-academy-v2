@@ -5,7 +5,7 @@
    content (classic page_developer.xml layout, console, skill-tree area,
    cover overlays) lives in panel-reactive.clj."
   (:require [clojure.string :as str]
-            [cn.li.ac.util.init-guard :refer [defonce-guard with-init-guard]]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
@@ -14,6 +14,7 @@
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
+            [cn.li.ac.block.developer.console-reactive :as console-reactive]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -93,11 +94,11 @@
 (defn create-screen [container menu player]
   (panel-reactive/create-screen container menu player))
 
-(defonce-guard developer-gui-reactive-installed?)
-
 (defn init-developer-reactive!
   []
-  (with-init-guard developer-gui-reactive-installed?
+  (install/framework-once! ::developer-gui-reactive-installed?
+  (fn []
+    (console-reactive/register-builtin-commands!)
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :developer)
       (merge (gui-manifest/gui-registration :developer)
@@ -113,4 +114,4 @@
          :slot-set-fn set-slot-item!
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!}))
-    (log/info "Ability Developer GUI initialized (reactive: classic layout + console + skill-tree area)")))
+    (log/info "Ability Developer GUI initialized (reactive: classic layout + console + skill-tree area)"))))
