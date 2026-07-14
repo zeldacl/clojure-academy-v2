@@ -3,6 +3,8 @@
   (:require [cn.li.ac.ability.client.screens.skill-tree :as logic]
             [cn.li.ac.ability.client.screens.skill-tree-view :as view]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.signal :as sig])
@@ -14,15 +16,21 @@
 (def ^:private default-mx 210.0)
 (def ^:private default-my 130.0)
 
-(def ^:private active-by-uuid (atom {}))
+;; Keyed by [client-session-id player-uuid] — not player-uuid alone — so a
+;; stale entry from a previous world/server session (same player profile,
+;; same JVM) can never be mistaken for the currently-open screen. See
+;; docs/dev/AGENT_AND_TOOLING.md P5.
+(def ^:private active-by-session-path [:service :skill-tree :active-by-session])
 
 (defn- track-active! [owner ^UiRt r]
   (when-let [uuid (:player-uuid owner)]
-    (swap! active-by-uuid assoc uuid {:rt r :owner owner})))
+    (when-let [session-id (:client-session-id owner)]
+      (swap! (fw/fw-atom) assoc-in (conj active-by-session-path [session-id uuid]) {:rt r :owner owner}))))
 
 (defn- untrack-active! [owner]
   (when-let [uuid (:player-uuid owner)]
-    (swap! active-by-uuid dissoc uuid)))
+    (when-let [session-id (:client-session-id owner)]
+      (swap! (fw/fw-atom) update-in active-by-session-path dissoc [session-id uuid]))))
 
 (defn- refresh! [^UiRt r owner]
   (let [mx-sig (rt/user-signal r :mouse-x)
@@ -32,8 +40,9 @@
     (view/refresh-screen! r owner mx my)))
 
 (defn refresh-active-screen! [player-uuid]
-  (when-let [{:keys [rt owner]} (get @active-by-uuid player-uuid)]
-    (refresh! rt owner)))
+  (when-let [session-id (runtime-hooks/*client-session-id*)]
+    (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom) (conj active-by-session-path [session-id player-uuid]))]
+      (refresh! rt owner))))
 
 (defn- set-mouse! [^UiRt r mx my owner]
   (let [mx-sig (rt/user-signal r :mouse-x)

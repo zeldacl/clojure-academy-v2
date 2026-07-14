@@ -16,11 +16,13 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private interferer-rt
@@ -126,44 +128,56 @@
 
 ;; ============================================================================
 ;; Global registry of active interferers (for tile invalidation detection)
+;; Keyed by server-session (level identity hash) so state from one
+;; integrated-server world can never leak into a different world loaded
+;; later in the same client JVM session — see docs/dev/AGENT_AND_TOOLING.md P5.
 ;; ============================================================================
 
-(def ^:private active-interferers (atom {}))
-;; {source-id {:level world :pos block-pos :affected-uuids #{...}}}
+(def ^:private interferers-path [:service :ability-interferer :by-session])
+(def ^:private tick-counter-path [:service :ability-interferer :tick-counter])
 
-(def ^:private active-interferers-tick-counter (atom 0))
+(defn- server-session-key
+  "Stable-for-this-world-lifetime, unique-across-world-loads key. A ServerLevel
+   instance is recreated on every world load, so its identity hash naturally
+   partitions state the same way client-session-id does on the client side."
+  [level]
+  (System/identityHashCode level))
 
 (defn- register-active-interferer! [src-id level pos uuids]
-  (swap! active-interferers assoc src-id {:level level :pos pos :affected-uuids (set uuids)}))
+  (swap! (fw/fw-atom) assoc-in
+    (conj interferers-path (server-session-key level) src-id)
+    {:level level :pos pos :affected-uuids (set uuids)}))
 
-(defn- unregister-active-interferer! [src-id]
-  (swap! active-interferers dissoc src-id))
+(defn- unregister-active-interferer! [level src-id]
+  (swap! (fw/fw-atom) update-in (conj interferers-path (server-session-key level)) dissoc src-id))
 
-(defn- update-active-interferer-uuids! [src-id uuids]
-  (swap! active-interferers (fn [m]
-                              (if (contains? m src-id)
-                                (assoc-in m [src-id :affected-uuids] (set uuids))
-                                m))))
+(defn- update-active-interferer-uuids! [level src-id uuids]
+  (swap! (fw/fw-atom) update-in (conj interferers-path (server-session-key level))
+    (fn [m] (if (contains? m src-id) (assoc-in m [src-id :affected-uuids] (set uuids)) m))))
 
 (defn- cleanup-stale-interferers!
   "World-tick handler: check all registered interferers for chunk unload.
    Matching original AcademyCraft's !tile.isInvalid per-tick check."
   [world]
-  (swap! active-interferers-tick-counter inc)
-  (when (zero? (mod @active-interferers-tick-counter 40))
-    (let [stale (atom [])]
-      (doseq [[src-id {:keys [level pos affected-uuids]}] @active-interferers]
-        (when (and level pos)
-          (try
-            (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/pos-x pos)) (world/block-to-chunk-coord (pos/pos-z pos)))
-              (swap! stale conj src-id)
-              (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
-              (doseq [u affected-uuids]
-                (remove-interference-effect-by-uuid! u src-id)))
-            (catch Exception e
-              (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e))))))
-      (when (seq @stale)
-        (swap! active-interferers #(apply dissoc % @stale))))))
+  (let [fw-atom (fw/fw-atom)
+        session-key (server-session-key world)
+        session-tick-path (conj tick-counter-path session-key)
+        session-interferers-path (conj interferers-path session-key)
+        tick (get-in (swap! fw-atom update-in session-tick-path (fnil inc 0)) session-tick-path)]
+    (when (zero? (mod tick 40))
+      (let [stale (atom [])]
+        (doseq [[src-id {:keys [level pos affected-uuids]}] (get-in @fw-atom session-interferers-path)]
+          (when (and level pos)
+            (try
+              (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/pos-x pos)) (world/block-to-chunk-coord (pos/pos-z pos)))
+                (swap! stale conj src-id)
+                (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
+                (doseq [u affected-uuids]
+                  (remove-interference-effect-by-uuid! u src-id)))
+              (catch Exception e
+                (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e))))))
+        (when (seq @stale)
+          (swap! fw-atom update-in session-interferers-path #(apply dissoc % @stale)))))))
 
 ;; ============================================================================
 ;; Scan and tick
@@ -247,10 +261,10 @@
             (apply-interference-effect! player src-id))))
       ;; Update the global registry for tile invalidation tracking
       (if (seq next)
-        (if (contains? @active-interferers src-id)
-          (update-active-interferer-uuids! src-id next)
+        (if (contains? (get-in @(fw/fw-atom) (conj interferers-path (server-session-key level))) src-id)
+          (update-active-interferer-uuids! level src-id next)
           (register-active-interferer! src-id level pos next))
-        (unregister-active-interferer! src-id)))))
+        (unregister-active-interferer! level src-id)))))
 
 (def interferer-tick-fn
   "BlockState updates follow the vanilla 1.20 pattern:
@@ -323,7 +337,7 @@
 					(when (seq uuids)
 						(clear-interference-by-uuids! uuids src-id))
           ;; Remove from global registry
-          (unregister-active-interferer! src-id))))))
+          (unregister-active-interferer! world src-id))))))
 
 ;; ============================================================================
 ;; IWirelessReceiver capability (matching original TileReceiverBase)
@@ -345,13 +359,13 @@
 ;; World-tick cleanup registration
 ;; ============================================================================
 
-(def ^:private world-tick-cleanup-registered? (atom false))
-
 (defn ensure-world-tick-cleanup!
   "Register the stale interferer cleanup handler if not already registered."
   []
-  (when (compare-and-set! world-tick-cleanup-registered? false true)
-    (world-lifecycle/register-world-lifecycle-handler!
-      {:on-tick (fn [world]
-                  (cleanup-stale-interferers! world))})
-    (log/info "Ability Interferer world-tick cleanup handler registered")))
+  (install/process-once! ::world-tick-cleanup-registered
+    (fn []
+      (world-lifecycle/register-world-lifecycle-handler!
+        {:on-tick (fn [world]
+                    (cleanup-stale-interferers! world))})
+      (log/info "Ability Interferer world-tick cleanup handler registered")))
+  nil)

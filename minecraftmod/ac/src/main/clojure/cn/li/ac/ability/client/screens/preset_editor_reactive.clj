@@ -3,6 +3,8 @@
    State and server requests remain in preset-editor."
   (:require [cn.li.ac.ability.client.screens.preset-editor :as logic]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -75,18 +77,24 @@
                  :props {:x 8.0 :y 6.0 :w 70.0 :h 14.0 :text "Set Active"
                          :font-size 10.0 :color 0xFFFFFFFF}}]}]})
 
-(def ^:private active-by-uuid (atom {}))
+;; Keyed by [client-session-id player-uuid] — not player-uuid alone — so a
+;; stale entry from a previous world/server session (same player profile,
+;; same JVM) can never be mistaken for the currently-open screen. See
+;; docs/dev/AGENT_AND_TOOLING.md P5.
+(def ^:private active-by-session-path [:service :preset-editor :active-by-session])
 
 (defn- owner-key [owner]
   (logic/editor-owner-key owner))
 
 (defn- track-active! [owner ^UiRt r]
   (when-let [uuid (or (:player-uuid owner) (nth (owner-key owner) 2 nil))]
-    (swap! active-by-uuid assoc uuid {:rt r :owner owner})))
+    (when-let [session-id (:client-session-id owner)]
+      (swap! (fw/fw-atom) assoc-in (conj active-by-session-path [session-id uuid]) {:rt r :owner owner}))))
 
 (defn- untrack-active! [owner]
   (when-let [uuid (or (:player-uuid owner) (nth (owner-key owner) 2 nil))]
-    (swap! active-by-uuid dissoc uuid)))
+    (when-let [session-id (:client-session-id owner)]
+      (swap! (fw/fw-atom) update-in active-by-session-path dissoc [session-id uuid]))))
 
 (defn- refresh-preset-tab-labels! [^UiRt r rd]
   (let [selected (:selected-preset rd)
@@ -153,8 +161,9 @@
 (defn refresh-active-screen!
   "Called when server preset data syncs while the editor is open."
   [player-uuid]
-  (when-let [{:keys [rt owner]} (get @active-by-uuid player-uuid)]
-    (refresh-ui! rt owner)))
+  (when-let [session-id (runtime-hooks/*client-session-id*)]
+    (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom) (conj active-by-session-path [session-id player-uuid]))]
+      (refresh-ui! rt owner))))
 
 (defn- wire-action-buttons! [^UiRt r owner]
   (doseq [[id action]
