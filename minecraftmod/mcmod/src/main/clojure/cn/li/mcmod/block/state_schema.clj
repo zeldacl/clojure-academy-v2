@@ -16,6 +16,7 @@
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
             [cn.li.mcmod.schema.core :as schema]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- ^:private valid-network-editable-field?
@@ -64,19 +65,19 @@
   [schema*]
   (schema/require-valid field-schema (field-schema-validator) :block-state-field-schema schema*))
 
-(def ^:private ^:dynamic *network-get-world-fn*
+(def ^:private *network-get-world-fn*
   (fn [_] nil))
 
-(def ^:private ^:dynamic *network-get-tile-at-fn*
+(def ^:private *network-get-tile-at-fn*
   (fn [_ _] nil))
 
 (defn register-network-helper-fns!
   "Register helper fns used by generated network handlers."
   [{:keys [get-world get-tile-at]}]
   (when get-world
-    (alter-var-root #'*network-get-world-fn* (constantly get-world)))
+    (install/install-root! #'*network-get-world-fn* get-world))
   (when get-tile-at
-    (alter-var-root #'*network-get-tile-at-fn* (constantly get-tile-at)))
+    (install/install-root! #'*network-get-tile-at-fn* get-tile-at))
   nil)
 
 (defn get-network-world

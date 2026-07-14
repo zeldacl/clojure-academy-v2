@@ -10,6 +10,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 ;; --- Path construction ---
@@ -111,13 +112,13 @@
 
 ;; --- Client-side language helper ---
 
-(def ^:private ^:dynamic *current-lang* nil)
+(def ^:private *current-lang* nil)
 
 (defn install-current-lang-fn!
   "Install a 0-arg function that returns the current Minecraft language string
   (e.g. \"en_us\").  Called from platform client init."
   [lang-fn]
-  (alter-var-root #'*current-lang* (constantly lang-fn)))
+  (install/install-root! #'*current-lang* lang-fn))
 
 (defn current-lang
   "Resolve the current Minecraft language setting.

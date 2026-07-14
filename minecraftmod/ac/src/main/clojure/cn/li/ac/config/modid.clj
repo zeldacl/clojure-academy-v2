@@ -2,7 +2,8 @@
   "Centralized mod-id configuration for easy portability across projects.
    Change MOD-ID here to update mod identification across all modules."
   (:require [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.mcmod.platform.resource :as platform-resource]))
+            [cn.li.mcmod.platform.resource :as platform-resource]
+            [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:const MOD-ID
   "The primary mod identifier used across all resource locations, registries,
@@ -16,7 +17,7 @@
   This is intentionally explicit: requiring this namespace must not mutate
   shared configuration state."
   []
-  (alter-var-root #'mcmod-config/*mod-id* (constantly MOD-ID))
+  (install/install-root! #'mcmod-config/*mod-id* MOD-ID)
   (platform-resource/install-resource-location-fn!
    (fn [namespace path]
      (if namespace

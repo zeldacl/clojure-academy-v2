@@ -61,7 +61,8 @@
                       :worldgen    {}
                       :render      {}
                       :input       {}
-                      :arc-fx      {}}
+                      :arc-fx      {}
+                      :capability  {}}
            :service {:lifecycle {:content-init-fn nil
                                  :runtime-content-activation-fn nil
                                  :datagen-metadata-init-fns []

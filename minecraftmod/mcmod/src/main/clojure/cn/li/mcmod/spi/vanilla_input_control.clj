@@ -5,9 +5,10 @@
   for the full rationale (cross-module AOT ClassLoader isolation).
 
   Contract: {:suppress! (fn [mc]) :restore! (fn [mc])}"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.util.log :as log]))
 
-(def ^:private suppressor (atom nil))
+(def ^:private suppressor nil)
 
 (defn- valid-suppressor?
   [suppressor-impl]
@@ -21,14 +22,14 @@
   [suppressor-impl]
   (assert (valid-suppressor? suppressor-impl)
           "suppressor must be a map with :suppress! and :restore! fns")
-  (reset! suppressor suppressor-impl)
+  (install/install-root! #'suppressor suppressor-impl)
   (log/info "VanillaInputSuppressor installed")
   nil)
 
 (defn require-suppressor
   "Get the installed suppressor, fail if not available."
   []
-  (or @suppressor
+  (or suppressor
       (throw (ex-info "VanillaInputSuppressor not installed"
                      {:error :missing-spi}))))
 

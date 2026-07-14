@@ -4,41 +4,44 @@
 	This namespace is platform-agnostic and intentionally data-only. Runtime
 	executors should consume validated profiles without additional shape checks
 	in hot render loops."
-	(:require [clojure.set :as set]))
+	(:require [clojure.set :as set]
+			  [cn.li.mcmod.framework :as fw]
+			  [cn.li.mcmod.framework.registry :as registry]))
 
-(defonce ^:private registered-kinds*
-	(atom #{:billboard-cross
-			:ring-lines
-			:polyline-arc
-			:wire-box
-			:ray-composite
-			:ray-composite-lite}))
+(def ^:private builtin-kinds
+	#{:billboard-cross
+	  :ring-lines
+	  :polyline-arc
+	  :wire-box
+	  :ray-composite
+	  :ray-composite-lite})
 
 (defn register-scripted-effect-kind!
 	"Register an additional scripted-effect kind. Content modules call this during init."
 	[kind]
-	(swap! registered-kinds* conj kind)
+	(registry/register! (fw/fw-atom) :render [::kind kind] true)
 	nil)
 
 (defn supported-kinds
 	"Return the set of currently registered scripted-effect kinds."
 	[]
-	@registered-kinds*)
+	(if-let [fw-atom (fw/fw-atom)]
+		(into builtin-kinds
+			(keep (fn [[k _]] (when (and (vector? k) (= ::kind (first k))) (second k))))
+			(get-in @fw-atom [:registry :render]))
+		builtin-kinds))
 
 ;; --- kind → native renderer key mapping ---
 ;; Content modules map their kind keywords to platform-neutral renderer keys.
 ;; The mc-1.20.1 renderer dispatcher uses these keys (not raw kind names) in
 ;; switch statements, keeping content-owned kind strings out of the platform layer.
 
-(defonce ^:private kind-renderer-keys*
-	(atom {}))
-
 (defn register-kind-renderer-key!
 	"Map a scripted-effect kind to a platform-neutral renderer key.
 	 kind is a keyword (e.g. :custom-kind), renderer-key is a keyword
 	 (e.g. :tiered-zigzag). Called by content during init."
 	[kind renderer-key]
-	(swap! kind-renderer-keys* assoc kind renderer-key)
+	(registry/register! (fw/fw-atom) :render [::renderer-key kind] renderer-key)
 	nil)
 
 (defn resolve-kind-renderer-key
@@ -46,7 +49,7 @@
 	 kind can be a keyword or string."
 	[kind]
 	(let [k (if (keyword? kind) kind (keyword kind))]
-	(get @kind-renderer-keys* k k)))
+	(or (registry/get-spec (fw/fw-atom) :render [::renderer-key k]) k)))
 
 (def ^:private allowed-top-level-keys
 	#{:id :kind :version :enabled? :state :anim :params :budget})

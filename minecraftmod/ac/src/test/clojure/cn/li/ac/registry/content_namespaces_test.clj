@@ -1,7 +1,8 @@
 (ns cn.li.ac.registry.content-namespaces-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.registry.content-namespaces :as content-ns]
-            [cn.li.ac.registry.discovery :as discovery]))
+            [cn.li.ac.registry.discovery :as discovery]
+            [cn.li.ac.test.support.framework :as support-fw]))
 
 (defn- clean-discovery-fixture [f]
   (discovery/reset-provider-registry-for-test!)
@@ -10,6 +11,7 @@
     (finally
       (discovery/reset-provider-registry-for-test!))))
 
+(use-fixtures :each support-fw/with-fresh-framework)
 (use-fixtures :each clean-discovery-fixture)
 
 (deftest current-content-load-plan-includes-core-phases-test

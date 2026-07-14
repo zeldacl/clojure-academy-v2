@@ -13,9 +13,10 @@
     (`AbstractMethodError` / `NoClassDefFoundError`). Use Java skeletons (`mc-1.20.1/shim/`).
 
   Contract: {:is-key-down? (fn [scheme-name key-idx] -> boolean)}"
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.util.log :as log]))
 
-(def ^:private provider (atom nil))
+(def ^:private provider nil)
 
 (defn- valid-provider?
   [provider-impl]
@@ -28,14 +29,14 @@
   [provider-impl]
   (assert (valid-provider? provider-impl)
           "provider must be a map with :is-key-down? fn")
-  (reset! provider provider-impl)
+  (install/install-root! #'provider provider-impl)
   (log/info "KeySchemeProvider installed")
   nil)
 
 (defn require-provider
   "Get the installed provider, fail if not available."
   []
-  (or @provider
+  (or provider
       (throw (ex-info "KeySchemeProvider not installed. Did you forget to install it from platform layer?"
                      {:error :missing-spi}))))
 

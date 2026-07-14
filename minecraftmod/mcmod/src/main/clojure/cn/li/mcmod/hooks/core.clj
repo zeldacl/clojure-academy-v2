@@ -7,6 +7,7 @@
             [cn.li.mcmod.schema.core :as schema]
             [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private noop
@@ -109,6 +110,7 @@
 (def ^:private hooks-path [:registry :hooks :runtime-hooks])
 
 (defn- hooks-core-state-snapshot []
+  ;; P3: no write-through cache — would go stale across with-fresh-framework re-injection with no invalidation hook to catch it; get-in here is already a lock-free HAMT lookup.
   (if-let [fw-atom (fw/fw-atom)]
     (or (get-in @fw-atom hooks-path)
         (default-runtime-hooks-state))
@@ -761,19 +763,19 @@
 ;; without importing Minecraft classes directly.
 ;; ============================================================================
 
-(def ^:private default-client-owner-fn (atom nil))
+(def ^:private default-client-owner-fn nil)
 
 (defn set-default-client-owner-fn!
   "Register a zero-arg function that returns a canonical client owner map
   {:logical-side :client :client-session-id ... :player-uuid ...}.
   Called by the platform layer during client initialization."
   [f]
-  (reset! default-client-owner-fn f)
+  (install/install-root! #'default-client-owner-fn f)
   nil)
 
 (defn default-client-owner
   "Return the current client owner map via the platform-registered hook.
   Returns nil if the platform layer hasn't registered a hook yet."
   []
-  (when-let [f @default-client-owner-fn]
+  (when-let [f default-client-owner-fn]
     (f)))

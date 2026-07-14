@@ -9,6 +9,7 @@
             [cn.li.mcmod.gui.registry :as gui-registry]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui]
             [cn.li.ac.gui.reactive.register :as reactive-register]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- register-network-edit-helpers!
@@ -16,12 +17,6 @@
   (state-schema/register-network-helper-fns!
     {:get-world wireless-sync-handler/get-world
      :get-tile-at wireless-sync-handler/get-tile-at}))
-
-(def ^:private runtime-content-loader-lock
-  (Object.))
-
-(def ^:private ^:dynamic *runtime-content-loaded?*
-  false)
 
 (defn- load-runtime-content-once!
   []
@@ -49,11 +44,8 @@
   nil)
 
 (defn activate-runtime-content!
-  "Load and initialize AC runtime content once. Safe to call repeatedly."
+  "Load and initialize AC runtime content once per Framework lifetime.
+  Safe to call repeatedly."
   []
-  (when-not (var-get #'*runtime-content-loaded?*)
-    (locking runtime-content-loader-lock
-      (when-not (var-get #'*runtime-content-loaded?*)
-        (load-runtime-content-once!)
-        (alter-var-root #'*runtime-content-loaded?* (constantly true)))))
+  (install/framework-once! ::runtime-content-loaded (fn [] (load-runtime-content-once!)))
   nil)

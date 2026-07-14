@@ -7,6 +7,7 @@
   - duplicate warning is emitted at most once per profile id
   - registry can be frozen after initialization"
   (:require [cn.li.mcmod.client.render.script-render-abi :as abi]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (defn create-script-render-runtime
@@ -16,13 +17,13 @@
    :duplicate-warned-ids #{}})
 
 
-(def ^:private ^:dynamic *profile-registry*
+(def ^:private *profile-registry*
   {})
 
-(def ^:private ^:dynamic *registry-frozen?*
+(def ^:private *registry-frozen?*
   false)
 
-(def ^:private ^:dynamic *duplicate-warned-ids*
+(def ^:private *duplicate-warned-ids*
   #{})
 
 (defn profile-registry-snapshot
@@ -35,18 +36,18 @@
 
 (defn freeze!
   []
-  (alter-var-root #'*registry-frozen?* (constantly true))
+  (install/install-root! #'*registry-frozen?* true)
   nil)
 
 (defn unfreeze!
   []
-  (alter-var-root #'*registry-frozen?* (constantly false))
+  (install/install-root! #'*registry-frozen?* false)
   nil)
 
 (defn clear!
   []
-  (alter-var-root #'*profile-registry* (constantly {}))
-  (alter-var-root #'*duplicate-warned-ids* (constantly #{}))
+  (install/install-root! #'*profile-registry* {})
+  (install/install-root! #'*duplicate-warned-ids* #{})
   nil)
 
 (defn register-profile!
@@ -60,11 +61,11 @@
     (if existing
       (do
         (when-not (contains? *duplicate-warned-ids* profile-id)
-          (alter-var-root #'*duplicate-warned-ids* conj profile-id)
+          (install/install-root! #'*duplicate-warned-ids* (conj *duplicate-warned-ids* profile-id))
           (log/warn "Duplicate ScriptRender profile ignored: " profile-id))
         existing)
       (do
-        (alter-var-root #'*profile-registry* assoc profile-id validated)
+        (install/install-root! #'*profile-registry* (assoc *profile-registry* profile-id validated))
         validated))))
 
 (defn register-profiles!

@@ -13,22 +13,23 @@
   (:require [cn.li.ac.ability.registry.event   :as evt]
             [cn.li.ac.ability.config  :as cfg]
             [cn.li.ac.ability.registry.skill   :as skill]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log     :as log]))
 
 ;; ============================================================================
 ;; Injected platform fns
 ;; ============================================================================
 
-(def ^:private ^:dynamic *attack-fn* nil)
-(def ^:private ^:dynamic *attack-ignore-armor-fn* nil)
-(def ^:private ^:dynamic *nearby-players-fn* nil)
+(def ^:private *attack-fn* nil)
+(def ^:private *attack-ignore-armor-fn* nil)
+(def ^:private *nearby-players-fn* nil)
 
 (defn register-platform-fns!
   "Call from forge adapter during mod init."
   [{:keys [attack attack-ignore-armor nearby-players]}]
-  (alter-var-root #'*attack-fn*             (constantly attack))
-  (alter-var-root #'*attack-ignore-armor-fn* (constantly attack-ignore-armor))
-  (alter-var-root #'*nearby-players-fn*      (constantly nearby-players)))
+  (install/install-root! #'*attack-fn*             attack)
+  (install/install-root! #'*attack-ignore-armor-fn* attack-ignore-armor)
+  (install/install-root! #'*nearby-players-fn*      nearby-players))
 
 ;; ============================================================================
 ;; Attack pipeline

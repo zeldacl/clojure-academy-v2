@@ -12,7 +12,8 @@
 
   The JEI plugin is automatically discovered by JEI via the @JEIPlugin annotation
   on JEIPluginWrapper.java, which delegates to the Clojure implementation."
-  (:require [cn.li.ac.integration.jei.categories :as categories]))
+  (:require [cn.li.ac.integration.jei.categories :as categories]
+            [cn.li.mcmod.runtime.install :as install]))
 
 (defn get-all-categories
   "Get all JEI recipe categories for AcademyCraft machines.
@@ -44,19 +45,15 @@
   (categories/format-recipe-for-jei recipe))
 
 ;; JEI integration status
-(def ^:private jei-available-lock
-  (Object.))
-
-(def ^:private ^:dynamic *jei-available?*
+(def ^:private *jei-available?*
   false)
 
 (defn jei-loaded?
   "Check if JEI is loaded and available."
   []
-  (var-get #'*jei-available?*))
+  *jei-available?*)
 
 (defn mark-jei-loaded!
   "Mark JEI as loaded. Called by platform implementation."
   []
-  (locking jei-available-lock
-    (alter-var-root #'*jei-available?* (constantly true))))
+  (install/install-root! #'*jei-available?* true))

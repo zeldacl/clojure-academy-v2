@@ -68,6 +68,17 @@
   (swap! fw assoc-in (conj frozen-path domain) true)
   nil)
 
+(defn reset-domain-for-test!
+  "Test-only: clear every spec in a registry domain (and its frozen flag)
+   without touching sibling domains. Bypasses the frozen-write guard
+   deliberately — tests need to rebuild a domain regardless of freeze state."
+  [fw domain]
+  (swap! fw (fn [state]
+              (-> state
+                  (assoc-in [:registry domain] {})
+                  (update-in frozen-path dissoc domain))))
+  nil)
+
 (defn freeze-all!
   "Lock ALL registry domains for writes.
 

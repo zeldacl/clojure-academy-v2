@@ -44,6 +44,21 @@ Note: `create-cache-runtime` in the same file backs these three vars only —
 it is a *different* helper from `lazy-resource` (below), which never needs
 `^:dynamic` in the first place.
 
+## P3 addendum — 2 more KEEP cases found (test-tree binding was under-scanned)
+
+The original scan above under-counted `binding` sites in `test` trees. P3 re-grepped
+every `^:dynamic` var individually before converting and found 2 more real KEEP cases:
+
+| var | file | bound at | binder |
+|---|---|---|---|
+| `*translate-fn*` | `mcmod/.../i18n.clj` | `mcmod/src/test/clojure/cn/li/mcmod/i18n_test.clj:7,11,15` | inline `binding` (test-only) |
+| `*show-all?*` | `ac/.../tutorial/registry.clj` | none in source — public debug flag intended for ad-hoc REPL `binding`/`alter-var-root` toggling | manual |
+
+Both left untouched by P3. `*mod-id*` (`mcmod/.../config.clj`) and `*forge-version*`
+(`mcmod/.../item/dsl.clj`) were re-verified to have zero `binding` usage anywhere
+(only `alter-var-root`/`with-redefs`, which work on non-dynamic vars) — both were
+converted (KILL) as originally classified.
+
 ## `lazy-resource` helper — dynamic-ness never required
 
 `ac/.../block/machine/render_runtime.clj`'s `lazy-resource` fn (used by the

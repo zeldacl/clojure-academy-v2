@@ -4,7 +4,9 @@
   Content code calls declare-capability! to register a capability type and its
   handler factory. Handler factories are resolved at bundle compile time via
   get-handler-factory."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.registry :as registry]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
 ;; Registry
@@ -12,21 +14,24 @@
 
 ; Map of keyword → {:java-type Class :handler-factory-fn (fn [be side] handler)}
 ; Populated by declare-capability! calls from content namespaces at load time.
-(def ^:private ^:dynamic *capability-type-registry* {})
 
 (defn capability-type-registry-snapshot
   []
-  *capability-type-registry*)
+  (if-let [fw-atom (fw/fw-atom)]
+    (get-in @fw-atom [:registry :capability ::capability-types])
+    {}))
 
 (defn update-capability-type-registry!
   [f & args]
-  (apply alter-var-root #'*capability-type-registry* f args)
+  (registry/register! (fw/fw-atom) :capability ::capability-types
+    (apply f (capability-type-registry-snapshot) args))
   nil)
 
 (defn reset-capability-type-registry!
   "Test-only reset of the static capability type registry."
   []
-  (alter-var-root #'*capability-type-registry* (constantly {}))
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in [:registry :capability] dissoc ::capability-types))
   nil)
 
 (defn get-capability-entry
@@ -63,23 +68,25 @@
 ;; Content registers which fluid a tile holds; platform reads at capability setup.
 ;; ============================================================================
 
-(defonce ^:private tile-fluid-specs* (atom {}))
-
 (defn register-tile-fluid-spec!
   "Register the fluid a tile holds for IFluidHandler capability binding.
   tile-id is the DSL tile id string; mod-id and fluid-path form the ResourceLocation."
   [tile-id fluid-mod-id fluid-path]
-  (swap! tile-fluid-specs* assoc tile-id {:mod-id fluid-mod-id :path fluid-path})
+  (registry/register! (fw/fw-atom) :capability [::tile-fluid tile-id]
+    {:mod-id fluid-mod-id :path fluid-path})
   nil)
 
 (defn get-tile-fluid-spec
   "Return {:mod-id ... :path ...} for tile-id, or nil if not registered."
   [tile-id]
-  (get @tile-fluid-specs* tile-id))
+  (when-let [fw-atom (fw/fw-atom)]
+    (registry/get-spec fw-atom :capability [::tile-fluid tile-id])))
 
 (defn reset-tile-fluid-specs-for-test!
   []
-  (reset! tile-fluid-specs* {})
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom update-in [:registry :capability]
+      (fn [m] (into {} (remove (fn [[k _]] (and (vector? k) (= ::tile-fluid (first k))))) m))))
   nil)
 
 ;; ============================================================================

@@ -6,6 +6,7 @@
   - post-require init function execution order"
   (:require [cn.li.ac.registry.discovery :as discovery]
             [cn.li.ac.registry.spi.content-phase :as content-phase-spi]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-phase-plugins
@@ -52,23 +53,14 @@
                 cn.li.ac.tutorial.init/init-tutorial!]
     :trace-tag :system-init}])
 
-(def ^:private phase-provider-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *default-phase-providers-installed?*
-  false)
-
 (defn ensure-default-phase-providers!
   "Register built-in content phase providers once.
 
   Requiring this namespace must not mutate discovery state; callers opt in by
   asking for or loading the current plan."
   []
-  (when-not (var-get #'*default-phase-providers-installed?*)
-    (locking phase-provider-guard-lock
-      (when-not (var-get #'*default-phase-providers-installed?*)
-        (discovery/bootstrap-default-providers! default-phase-plugins)
-        (alter-var-root #'*default-phase-providers-installed?* (constantly true)))))
+  (install/framework-once! ::default-phase-providers-installed
+    (fn [] (discovery/bootstrap-default-providers! default-phase-plugins)))
   nil)
 
 (defn register-content-phase-plugin!

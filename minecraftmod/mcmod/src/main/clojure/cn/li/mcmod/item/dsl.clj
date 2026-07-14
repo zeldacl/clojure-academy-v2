@@ -215,7 +215,7 @@
   (apply merge template-and-options))
 
 ;; Multimethod for version-specific item creation
-(def ^:dynamic *forge-version* nil)
+(def *forge-version* nil)
 
 (defmulti create-platform-item
   "Create a version-specific item instance"

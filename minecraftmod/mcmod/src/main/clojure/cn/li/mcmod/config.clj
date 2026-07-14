@@ -3,7 +3,7 @@
 
 (require '[cn.li.mcmod.platform.resource :as resource])
 
-(def ^:dynamic *mod-id*
+(def *mod-id*
   "Primary mod identifier used by resource locations.
    Default: \"my_mod\" (can be overridden via MOD_ID env var)."
   (or (System/getenv "MOD_ID") "my_mod"))

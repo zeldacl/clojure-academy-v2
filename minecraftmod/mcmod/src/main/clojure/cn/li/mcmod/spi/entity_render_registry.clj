@@ -7,9 +7,9 @@
 
   Solution: Content modules register their render namespaces here.
   Java renderer classes read from this registry at render time."
-  (:require [cn.li.mcmod.util.log :as log]))
-
-(def ^:private render-ns-map (atom {}))
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.registry :as registry]
+            [cn.li.mcmod.util.log :as log]))
 
 (defn register-entity-render-ns!
   "Register a Clojure render namespace for an entity hook-id.
@@ -19,7 +19,7 @@
   [hook-id render-ns]
   (assert (string? render-ns)
           (str "render-ns must be a string, got " (type render-ns)))
-  (swap! render-ns-map assoc (str hook-id) render-ns)
+  (registry/register! (fw/fw-atom) :hooks [::entity-render (str hook-id)] render-ns)
   (log/info "Entity render namespace registered:" hook-id "->" render-ns)
   nil)
 
@@ -27,4 +27,5 @@
   "Returns the registered render namespace for a hook-id, or nil.
   Called from Java renderer classes at render time."
   [hook-id]
-  (get @render-ns-map (str hook-id)))
+  (when-let [fw-atom (fw/fw-atom)]
+    (registry/get-spec fw-atom :hooks [::entity-render (str hook-id)])))

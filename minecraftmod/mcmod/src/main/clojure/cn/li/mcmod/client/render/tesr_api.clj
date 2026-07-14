@@ -7,7 +7,8 @@
   Renderer objects are plain maps with:
   - :render-tile (fn [tile-entity partial-ticks pose-stack buffer-source packed-light packed-overlay] -> nil)"
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ============================================================================
 ;; Renderer Registry & Dispatcher
@@ -18,10 +19,10 @@
   {:renderer-registry {}
    :scripted-renderer-registry {}})
 
-(def ^:private ^:dynamic *renderer-registry*
+(def ^:private *renderer-registry*
   {})
 
-(def ^:private ^:dynamic *scripted-renderer-registry*
+(def ^:private *scripted-renderer-registry*
   {})
 
 (defn renderer-registry-snapshot
@@ -43,7 +44,7 @@
     (register-tile-renderer! TileMatrix my-renderer-obj)"
   [tile-class renderer-fn]
   (log/info "Registering TileEntity renderer for" tile-class)
-  (alter-var-root #'*renderer-registry* assoc tile-class renderer-fn)
+  (install/install-root! #'*renderer-registry* (assoc *renderer-registry* tile-class renderer-fn))
   nil)
 
 ;; Scripted block entities: dispatch by block-id (string). Platform registers
@@ -55,7 +56,7 @@
   render-scripted-tile-entity(block-id, be, x, y, z)."
   [block-id renderer-obj]
   (log/info "Registering scripted TileEntity renderer for" block-id)
-  (alter-var-root #'*scripted-renderer-registry* assoc block-id renderer-obj)
+  (install/install-root! #'*scripted-renderer-registry* (assoc *scripted-renderer-registry* block-id renderer-obj))
   nil)
 
 (defn get-scripted-tile-renderer [block-id]
