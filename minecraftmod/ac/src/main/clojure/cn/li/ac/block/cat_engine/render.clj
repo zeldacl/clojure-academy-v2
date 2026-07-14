@@ -13,35 +13,30 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]))
 
-(def ^:private cat-engine-texture-lock (Object.))
-(def ^:private ^:dynamic *cat-engine-texture* nil)
+(def ^:private cat-engine-resources-holder nil)
+(def ^:private cat-engine-resources
+  (machine-render-runtime/lazy-resources #'cat-engine-resources-holder
+    {:texture #(res/texture-location "block/cat_engine")}))
 
-(def ^:private cat-engine-texture
-  (machine-render-runtime/lazy-resource cat-engine-texture-lock #'*cat-engine-texture*
-                                        #(res/texture-location "block/cat_engine")))
-
-(defonce ^:private rotor-cache
-  (machine-render-runtime/create-cache-runtime :rotor-cache))
-
-(def ^:dynamic *cat-engine-render-runtime* (:runtime rotor-cache))
+(def ^:private rotor-cache-key :rotor-cache)
 
 (defn rotor-cache-atom
   []
-  (machine-render-runtime/cache-atom *cat-engine-render-runtime* :rotor-cache))
+  (machine-render-runtime/render-cache-atom rotor-cache-key {}))
 
 (defn rotor-cache-snapshot
   []
-  (machine-render-runtime/cache-snapshot *cat-engine-render-runtime* :rotor-cache))
+  (machine-render-runtime/render-cache-snapshot rotor-cache-key {}))
 
 (defn clear-rotor-cache!
   []
-  ((:clear! rotor-cache)))
+  (machine-render-runtime/clear-render-cache! rotor-cache-key {}))
 
 (defn reset-rotor-cache-for-test!
   ([]
-   ((:reset-for-test! rotor-cache)))
+   (clear-rotor-cache!))
   ([cache]
-   ((:reset-for-test! rotor-cache) cache)))
+   (machine-render-runtime/reset-render-cache-for-test! rotor-cache-key {} cache)))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]
@@ -88,7 +83,7 @@
         wx (+ 0.5 (double (pos/pos-x p)))
         wz (+ 0.5 (double (pos/pos-z p)))
         yaw-deg (+ 180.0 (Math/toDegrees (Math/atan2 wx wz)))
-        vc (rb/get-cutout-no-cull-buffer buffer-source (cat-engine-texture))]
+        vc (rb/get-cutout-no-cull-buffer buffer-source (:texture (cat-engine-resources)))]
     (pose/push-pose pose-stack)
     (try
       (pose/translate pose-stack 0.5 (+ 0.03 bob) 0.5)

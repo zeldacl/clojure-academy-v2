@@ -39,12 +39,6 @@
           az (+ minz (/ (- maxz minz) (* 2.0 z-cells)))]
       [ax miny az])))
 
-(def ^:private developer-render-resource-lock (Object.))
-(def ^:private ^:dynamic *normal-model* nil)
-(def ^:private ^:dynamic *normal-tex* nil)
-(def ^:private ^:dynamic *advanced-model* nil)
-(def ^:private ^:dynamic *advanced-tex* nil)
-
 (defn- load-and-bake
   "Bundle the baked model with the anchor offset derived from raw geometry
   (`obj-controller-anchor-offset` needs :vertices, which the baked structure
@@ -56,21 +50,18 @@
      ;; strips real geometry and reads as a "shattered" mesh. Matrix keeps it on.
      :anchor-offset (or (obj-controller-anchor-offset raw) [0.0 0.0 0.0])}))
 
-(def ^:private normal-model
-  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-model*
-                                        #(load-and-bake "developer_normal")))
+(def ^:private developer-resources-holder nil)
+(def ^:private developer-resources
+  (machine-render-runtime/lazy-resources #'developer-resources-holder
+    {:normal-model #(load-and-bake "developer_normal")
+     :normal-tex #(res/texture-location "models/developer_normal")
+     :advanced-model #(load-and-bake "developer_advanced")
+     :advanced-tex #(res/texture-location "models/developer_advanced")}))
 
-(def ^:private normal-tex
-  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*normal-tex*
-                                        #(res/texture-location "models/developer_normal")))
-
-(def ^:private advanced-model
-  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-model*
-                                        #(load-and-bake "developer_advanced")))
-
-(def ^:private advanced-tex
-  (machine-render-runtime/lazy-resource developer-render-resource-lock #'*advanced-tex*
-                                        #(res/texture-location "models/developer_advanced")))
+(defn- normal-model [] (:normal-model (developer-resources)))
+(defn- normal-tex [] (:normal-tex (developer-resources)))
+(defn- advanced-model [] (:advanced-model (developer-resources)))
+(defn- advanced-tex [] (:advanced-tex (developer-resources)))
 
 (defn- render-obj-at-origin!
   [model-fn tex-fn _tile _partial-ticks pose-stack buffer-source packed-light packed-overlay]

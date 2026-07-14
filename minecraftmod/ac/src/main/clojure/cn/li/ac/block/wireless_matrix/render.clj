@@ -10,41 +10,32 @@
             [cn.li.mcmod.client.resources :as res]
             [cn.li.mcmod.util.render :as render]))
 
-(def ^:private matrix-render-resource-lock (Object.))
-(def ^:private ^:dynamic *matrix-model* nil)
-(def ^:private ^:dynamic *matrix-texture* nil)
+(def ^:private matrix-resources-holder nil)
+(def ^:private matrix-resources
+  (machine-render-runtime/lazy-resources #'matrix-resources-holder
+    {:model #(obj/bake-obj-model (res/load-obj-model "matrix")
+                                 {:skip-flat-bottom-plane? true
+                                  :bottom-plane-epsilon 0.0008})
+     :texture #(res/texture-location "models/matrix")}))
 
-(def ^:private matrix-model
-  (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-model*
-                                        #(obj/bake-obj-model (res/load-obj-model "matrix")
-                                                             {:skip-flat-bottom-plane? true
-                                                              :bottom-plane-epsilon 0.0008})))
-
-(def ^:private matrix-texture
-  (machine-render-runtime/lazy-resource matrix-render-resource-lock #'*matrix-texture*
-                                        #(res/texture-location "models/matrix")))
-
-(defonce ^:private shield-cache
-  (machine-render-runtime/create-cache-runtime :last-shield-hw-state nil))
-
-(def ^:dynamic *wireless-matrix-render-runtime* (:runtime shield-cache))
+(def ^:private shield-cache-key :last-shield-hw-state)
 
 (defn last-shield-hw-state-atom []
-  (machine-render-runtime/cache-atom *wireless-matrix-render-runtime* :last-shield-hw-state))
+  (machine-render-runtime/render-cache-atom shield-cache-key nil))
 
 (defn last-shield-hw-state-snapshot []
-  (machine-render-runtime/cache-snapshot *wireless-matrix-render-runtime* :last-shield-hw-state))
+  (machine-render-runtime/render-cache-snapshot shield-cache-key nil))
 
 (defn clear-last-shield-hw-state! []
-  ((:reset-for-test! shield-cache) nil))
+  (machine-render-runtime/clear-render-cache! shield-cache-key nil))
 
 (defn reset-last-shield-hw-state-for-test!
   ([] (clear-last-shield-hw-state!))
-  ([state] ((:reset-for-test! shield-cache) state)))
+  ([state] (machine-render-runtime/reset-render-cache-for-test! shield-cache-key nil state)))
 
 (defn render-base
   [_tile pose-stack vertex-consumer packed-light packed-overlay]
-  (obj-tesr/render-obj-parts! (matrix-model) ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
+  (obj-tesr/render-obj-parts! (:model (matrix-resources)) ["Main" "Core"] pose-stack vertex-consumer packed-light packed-overlay))
 
 (defn render-shields
   [tile _partial-ticks pose-stack vertex-consumer packed-light packed-overlay]
@@ -65,14 +56,14 @@
               y-offset (* float-height (Math/sin (+ (* time 1.111) (* ht-phase-offset i))))]
           (pose/translate pose-stack (double 0.0) (double y-offset) (double 0.0))
           (pose/apply-y-rotation pose-stack (+ phase (* dtheta i)))
-          (obj/render-baked-part! (matrix-model) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
+          (obj/render-baked-part! (:model (matrix-resources)) "Shield" pose-stack vertex-consumer packed-light packed-overlay))
         (finally
           (pose/pop-pose pose-stack))))))
 
 (defn render-at-origin
   [tile partial-ticks pose-stack buffer-source packed-light packed-overlay]
   (obj-tesr/translate-obj-y-lift! pose-stack)
-  (let [vc (obj-tesr/get-solid-vc buffer-source (matrix-texture))]
+  (let [vc (obj-tesr/get-solid-vc buffer-source (:texture (matrix-resources)))]
     (render-base tile pose-stack vc packed-light packed-overlay)
     (render-shields tile partial-ticks pose-stack vc packed-light packed-overlay)))
 

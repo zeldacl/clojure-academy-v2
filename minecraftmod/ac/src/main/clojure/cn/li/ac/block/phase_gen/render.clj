@@ -15,23 +15,17 @@
 
 (def ^:private tank-size 8000)
 
-(def ^:private phase-render-resource-lock (Object.))
-(def ^:private ^:dynamic *phase-model* nil)
-(def ^:private ^:dynamic *phase-textures* nil)
-
-(def ^:private phase-model
-  (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-model*
-                                        #(obj/bake-obj-model (res/load-obj-model "ip_gen")
-                                                             {:skip-flat-bottom-plane? true
-                                                              :bottom-plane-epsilon 0.0008})))
-
-(def ^:private phase-textures
-  (machine-render-runtime/lazy-resource phase-render-resource-lock #'*phase-textures*
-                                        #(vec [(res/texture-location "models/ip_gen0")
-                                               (res/texture-location "models/ip_gen1")
-                                               (res/texture-location "models/ip_gen2")
-                                               (res/texture-location "models/ip_gen3")
-                                               (res/texture-location "models/ip_gen4")])))
+(def ^:private phase-resources-holder nil)
+(def ^:private phase-resources
+  (machine-render-runtime/lazy-resources #'phase-resources-holder
+    {:model #(obj/bake-obj-model (res/load-obj-model "ip_gen")
+                                 {:skip-flat-bottom-plane? true
+                                  :bottom-plane-epsilon 0.0008})
+     :textures #(vec [(res/texture-location "models/ip_gen0")
+                       (res/texture-location "models/ip_gen1")
+                       (res/texture-location "models/ip_gen2")
+                       (res/texture-location "models/ip_gen3")
+                       (res/texture-location "models/ip_gen4")])}))
 
 (defn- clamp-frame
   [v]
@@ -47,14 +41,14 @@
   [tile pose-stack buffer-source packed-light packed-overlay]
   (let [state (or (platform-be/get-custom-state tile) {})
         tex-idx (state->texture-index state)
-        textures (phase-textures)
+        {:keys [model textures]} (phase-resources)
         tex (nth textures tex-idx (first textures))
         vc (rb/get-solid-buffer buffer-source tex)]
     (pose/push-pose pose-stack)
     (try
       ;; Scripted BER origin is block corner; move OBJ to center like original.
       (pose/translate pose-stack 0.5 0.0 0.5)
-      (obj/render-baked-all! (phase-model) pose-stack vc packed-light packed-overlay)
+      (obj/render-baked-all! model pose-stack vc packed-light packed-overlay)
       (finally
         (pose/pop-pose pose-stack)))))
 

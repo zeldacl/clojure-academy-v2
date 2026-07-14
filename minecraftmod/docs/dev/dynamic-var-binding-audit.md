@@ -27,18 +27,9 @@ is pure decoration: safe to convert to a plain `def` + `install-root!`
 | `*owner*` | `ac/.../terminal/client/runtime.clj` | `runtime.clj:103` | `with-owner` macro |
 | `*reflection-chain-id*` | `ac/.../content/ability/vecmanip/vec_reflection.clj` | `vec_reflection.clj:409` | inline `binding` around chain dispatch |
 | `*get-player-uuid-fn*` | `ac/.../ability/client/keybinds.clj` | `client_effect_hooks.clj:36` | inline `binding` (cross-namespace) |
-| `*cat-engine-render-runtime*` | `ac/.../block/cat_engine/render.clj` | `render_runtime_state_test.clj:22` | `machine-render-runtime/with-bound-runtime` (**test-only**) |
-| `*wind-gen-render-runtime*` | `ac/.../block/wind_gen/render.clj` | `render_runtime_state_test.clj:24` | `machine-render-runtime/with-bound-runtime` (**test-only**) |
-| `*wireless-matrix-render-runtime*` | `ac/.../block/wireless_matrix/render.clj` | `render_runtime_state_test.clj:26` | `machine-render-runtime/with-bound-runtime` (**test-only**) |
-
-The last three share one generic macro,
-`cn.li.ac.block.machine.render-runtime/with-bound-runtime` — it wraps
-`(binding [runtime-var-sym runtime] ...)` and is only ever invoked from
-`ac/src/test/clojure/cn/li/ac/block/render_runtime_state_test.clj` for test
-isolation between cat-engine/wind-gen/wireless-matrix render state. This is
-the P4 plan's `with-bound-runtime` case: when P4 migrates these renderers,
-this three-var binding usage must become `with-fresh-framework` (or another
-test-isolation mechanism) rather than being silently dropped.
+| ~~`*cat-engine-render-runtime*`~~ | `ac/.../block/cat_engine/render.clj` | — | **P4: migrated.** `create-cache-runtime`/`with-bound-runtime` removed; cache now lives at Framework `[:service :render-cache :rotor-cache]` via `render_runtime.clj`'s `render-cache-atom`. `render_runtime_state_test.clj`'s only real test didn't exercise this cache at all — the 3-var `with-bound-runtime` fixture was vestigial and was deleted rather than replaced. |
+| ~~`*wind-gen-render-runtime*`~~ | `ac/.../block/wind_gen/render.clj` | — | **P4: migrated**, same as above (`:fan-rot-cache`). |
+| ~~`*wireless-matrix-render-runtime*`~~ | `ac/.../block/wireless_matrix/render.clj` | — | **P4: migrated**, same as above (`:last-shield-hw-state`). |
 
 Note: `create-cache-runtime` in the same file backs these three vars only —
 it is a *different* helper from `lazy-resource` (below), which never needs

@@ -13,17 +13,11 @@
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private silbarn-render-resource-lock (Object.))
-(def ^:private ^:dynamic *silbarn-model* nil)
-(def ^:private ^:dynamic *silbarn-texture* nil)
-
-(def ^:private silbarn-model
-  (machine-render-runtime/lazy-resource silbarn-render-resource-lock #'*silbarn-model*
-                                        #(obj/bake-obj-model (res/load-obj-model "silbarn"))))
-
-(def ^:private silbarn-texture
-  (machine-render-runtime/lazy-resource silbarn-render-resource-lock #'*silbarn-texture*
-                                        #(res/texture-location "models/silbarn")))
+(def ^:private silbarn-resources-holder nil)
+(def ^:private silbarn-resources
+  (machine-render-runtime/lazy-resources #'silbarn-resources-holder
+    {:model #(obj/bake-obj-model (res/load-obj-model "silbarn"))
+     :texture #(res/texture-location "models/silbarn")}))
 
 (def ^:private spin-degrees-per-tick
   "Matches original: 0.03 deg/ms render-loop spin at 20 ticks/sec (50 ms/tick)."
@@ -41,7 +35,8 @@
   [entity-id hit? age-ticks yaw partial-tick pose-stack buffer-source packed-light packed-overlay]
   (when-not hit?
     (try
-      (let [vc (rb/get-solid-buffer buffer-source (silbarn-texture))
+      (let [{:keys [model texture]} (silbarn-resources)
+            vc (rb/get-solid-buffer buffer-source texture)
             [ax ay az] (spin-axis entity-id)
             spin-angle (* spin-degrees-per-tick (+ (double age-ticks) (double partial-tick)))]
         (pose/push-pose pose-stack)
@@ -50,7 +45,7 @@
           (pose/apply-axis-rotation pose-stack spin-angle ax ay az)
           (pose/apply-y-rotation pose-stack (- (double yaw)))
           (pose/apply-x-rotation pose-stack 90.0)
-          (obj/render-baked-all! (silbarn-model) pose-stack vc packed-light packed-overlay)
+          (obj/render-baked-all! model pose-stack vc packed-light packed-overlay)
           (finally
             (pose/pop-pose pose-stack))))
       (catch Exception e

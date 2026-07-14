@@ -23,15 +23,12 @@
 ;; Lazy resource loading (same pattern as cat-engine/render.clj)
 ;; ---------------------------------------------------------------------------
 
-(def ^:private imag-proj-resource-lock (Object.))
-(def ^:private ^:dynamic *layer-textures* nil)
-
-(def ^:private layer-textures
-  (machine-render-runtime/lazy-resource
-    imag-proj-resource-lock #'*layer-textures*
-    #(vec [(res/texture-location "effects/imag_proj_liquid/0")
-           (res/texture-location "effects/imag_proj_liquid/1")
-           (res/texture-location "effects/imag_proj_liquid/2")])))
+(def ^:private imag-phase-resources-holder nil)
+(def ^:private imag-phase-resources
+  (machine-render-runtime/lazy-resources #'imag-phase-resources-holder
+    {:layer-textures #(vec [(res/texture-location "effects/imag_proj_liquid/0")
+                             (res/texture-location "effects/imag_proj_liquid/1")
+                             (res/texture-location "effects/imag_proj_liquid/2")])}))
 
 ;; ---------------------------------------------------------------------------
 ;; Layer definitions — mirror the original 3-layer configuration
@@ -98,7 +95,7 @@
   (let [height (height-fn ht)
         du (mod (* time vx) 1.0)
         dv (mod (* time vz) 1.0)
-        textures (layer-textures)
+        textures (:layer-textures (imag-phase-resources))
         tex (nth textures idx)
         vc (rb/get-translucent-buffer buffer-source tex)]
     (pose/push-pose pose-stack)

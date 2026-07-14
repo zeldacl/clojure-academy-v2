@@ -1,69 +1,70 @@
 (ns cn.li.ac.block.machine.render-runtime
-  "Shared client render runtime: dynamic binding, cache atoms, renderer init registration."
+  "Shared client render runtime: lazy resource baking, per-tile render caches,
+  renderer init registration."
   (:require [cn.li.mcmod.client.render.init :as render-init]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn create-render-runtime
-  "Create a render runtime map from cache key -> initial value pairs."
-  [cache-spec]
-  (into {} (map (fn [[k v]] [k (atom v)]) cache-spec)))
+;; ============================================================================
+;; Lazy resource baking — one holder var per renderer namespace
+;; ============================================================================
 
-(defn cache-atom
-  [runtime cache-key]
-  (get runtime cache-key))
+(def ^:private resource-bake-lock
+  "Render layer's sole remaining lock: guards the double-checked-locking bake
+  in lazy-resources below. One shared lock is fine — each holder-var bakes
+  exactly once per JVM lifetime, so contention only exists at first-render."
+  (Object.))
 
-(defn cache-snapshot
-  [runtime cache-key]
-  @(cache-atom runtime cache-key))
+(defn lazy-resources
+  "Return a thunk that bakes every {key loader-fn} pair in `loaders` exactly
+  once (under resource-bake-lock, double-checked), stores the resolved map in
+  `holder-var`, and returns that map on every call thereafter (plain root
+  deref — no thread-binding frame, no per-key locking after first bake)."
+  [holder-var loaders]
+  (fn []
+    (or (var-get holder-var)
+        (locking resource-bake-lock
+          (or (var-get holder-var)
+              (let [m (reduce-kv (fn [acc k loader] (assoc acc k (loader))) {} loaders)]
+                (alter-var-root holder-var (constantly m))
+                m))))))
 
-(defn clear-cache!
-  [runtime cache-key]
-  (reset! (cache-atom runtime cache-key) {})
+;; ============================================================================
+;; Per-tile render caches — Framework-backed, replaces create-cache-runtime +
+;; ^:dynamic pointer + with-bound-runtime. Render only ever runs client-side,
+;; post-framework-injection, so this is intentionally fail-fast (no framework
+;; -> ex-info) rather than falling back to a fresh atom every call, which
+;; would silently drop cached state instead of preserving it.
+;; ============================================================================
+
+(def ^:private render-cache-path [:service :render-cache])
+
+(defn render-cache-atom
+  "Return the Framework-backed atom for cache-key, auto-vivifying it with
+  initial-value on first access."
+  [cache-key initial-value]
+  (let [fw-atom (or (fw/fw-atom)
+                     (throw (ex-info "render-cache-atom called before framework injection"
+                                     {:cache-key cache-key})))
+        path (conj render-cache-path cache-key)]
+    (or (get-in @fw-atom path)
+        (let [a (atom initial-value)]
+          (swap! fw-atom assoc-in path a)
+          a))))
+
+(defn render-cache-snapshot
+  [cache-key initial-value]
+  @(render-cache-atom cache-key initial-value))
+
+(defn clear-render-cache!
+  [cache-key initial-value]
+  (reset! (render-cache-atom cache-key initial-value) initial-value)
   nil)
 
-(defn reset-cache-for-test!
-  ([runtime cache-key]
-   (clear-cache! runtime cache-key))
-  ([runtime cache-key value]
-   (reset! (cache-atom runtime cache-key) value)
-   nil))
-
-(defn create-cache-runtime
-  "Create installed render runtime with one or more cache keys.
-
-  Returns `{:runtime map :current-fn fn :with-binding macro usage via binding}`.
-  Callers typically:
-  - (defonce ^:private installed (create-cache-runtime :fan-rot-cache))
-  - (def ^:dynamic *rt* (:runtime installed))
-  - (defn current-rt [] *rt*)"
-  ([cache-key]
-   (create-cache-runtime cache-key {}))
-  ([cache-key initial-value]
-   (let [runtime (create-render-runtime {cache-key initial-value})]
-     {:runtime runtime
-      :cache-key cache-key
-      :snapshot #(cache-snapshot runtime cache-key)
-      :clear! #(clear-cache! runtime cache-key)
-      :reset-for-test! (fn
-                         ([] (reset-cache-for-test! runtime cache-key))
-                         ([v] (reset-cache-for-test! runtime cache-key v)))})))
-
-(defn lazy-resource
-  "Return a thunk that loads `resource` once under `lock` and stores in `var-sym`."
-  [lock var-sym loader]
-  (fn []
-    (or (var-get var-sym)
-        (locking lock
-          (or (var-get var-sym)
-              (let [v (loader)]
-                (alter-var-root var-sym (constantly v))
-                v))))))
-
-(defmacro with-bound-runtime
-  "Bind `runtime` to dynamic var `runtime-var-sym` for test isolation."
-  [runtime-var-sym runtime & body]
-  `(binding [~runtime-var-sym ~runtime]
-     ~@body))
+(defn reset-render-cache-for-test!
+  [cache-key initial-value value]
+  (reset! (render-cache-atom cache-key initial-value) value)
+  nil)
 
 (defn register-client-renderer-init!
   [init-ref]
