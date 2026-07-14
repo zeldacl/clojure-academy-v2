@@ -10,7 +10,11 @@
    Thread safety:
      - :registry/* — write-once (init phase), then freeze → lock-free HAMT reads
      - :service/* — runtime read/write via Facade API guard functions
-     - :platform/* — write-once (bootstrap), then read-only function map lookups"
+     - :platform/* — write-once (bootstrap), then read-only function map lookups
+
+   Exactly-once init guards live at :service/:install/:flags, written only
+   via cn.li.mcmod.runtime.install/framework-once! — see that namespace for
+   the two sanctioned exactly-once primitives (framework-once! / process-once!)."
   (:require [cn.li.mcmod.aot :as aot]))
 
 (def *framework*
@@ -52,12 +56,18 @@
                       :providers   {}
                       :keybinds    {}
                       :messages    {}
-                      :integrations {}}
+                      :integrations {}
+                      :textures    {}
+                      :worldgen    {}
+                      :render      {}
+                      :input       {}
+                      :arc-fx      {}}
            :service {:lifecycle {:content-init-fn nil
                                  :runtime-content-activation-fn nil
                                  :datagen-metadata-init-fns []
                                  :client-init-fns []
-                                 :post-spi-client-init-fns []}}
+                                 :post-spi-client-init-fns []}
+                     :install {:flags {}}}
            :platform {}})))
 
 (defn fw-atom

@@ -579,10 +579,17 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 ```
 
 **唯一例外**：
-- `^:dynamic *framework*` — 框架唯一的全局动态变量
+- `*framework*`（`cn.li.mcmod.framework/*framework*`）— 框架唯一的全局根变量；**非 `^:dynamic`**，靠 `alter-var-root` 设根绑定（对所有线程可见，零 ThreadLocal 开销）
 - 平台 SPI 适配器 `^:dynamic *runtime*` — 仅在 `mcmod/platform/*.clj` 中，且正逐步迁移至 Framework `[:platform :adapter-key]`
 - 渲染资源（texture registry、shader）— OpenGL 绑定，不入 Framework
 - 客户端 session 状态 — 闭包工厂管理，不入 Framework（详见下方 ThreadLocal 模式）
+
+**exactly-once 守卫只走两个原语（`cn.li.mcmod.runtime.install`，强制）**：新代码需要"只执行一次"的初始化守卫（原 `defonce-guard` / `^:dynamic` 布尔 + `Object` 锁 / 顶层 `let` 闭包 atom 三种历史形态均禁止新增）时，必须用：
+- `framework-once!`——守卫标志存于 Framework `[:service :install :flags]`；`with-fresh-framework` 注入新 atom 时自动复位，天然解决单测重复注册被进程级 guard 挡住的问题。适用于任何效果作用域限于 Framework 注册表/服务的初始化。
+- `process-once!`——守卫标志存于 `runtime.install` 内唯一保留的进程级 atom（全仓白名单里的唯一新豁免）。仅用于真正的 JVM 级一次性副作用（事件总线监听器注册、native/GLFW 挂接、`defmethod` 派发表加载），Framework 重建不应重做。
+- `install-root!`——替代『`^:dynamic` + `Object` 锁 + `alter-var-root`』SPI holder 三件套；单一写者在 init/install 期调用，读者直读普通 var（无 thread-binding frame 查找）。
+
+`docs/dev/TOP_LEVEL_STATE_GOVERNANCE.md` 与 `docs/dev/dynamic-var-binding-audit.md` 记录当前迁移进度与 `^:dynamic` keep/kill 分类依据。
 
 #### ThreadLocal + 高阶函数：客户端/服务端 session 上下文（强制）
 

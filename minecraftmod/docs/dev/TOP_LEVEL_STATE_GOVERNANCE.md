@@ -116,3 +116,18 @@ P0 starts with player state, dispatcher route/context state, sync scheduler, and
 GUI container owner keys. P1 follows with world/wireless identity,
 `vec_reflection`, and energy runtime state. Client FX/UI/RPC singleton cleanup is
 P2, while static registry freeze/dedupe and recipe reload policy are P3.
+
+## Exactly-once primitives (P0)
+
+`cn.li.mcmod.runtime.install` provides the two sanctioned exactly-once entry
+points — `framework-once!` (Framework-lifecycle-scoped; flag resets on
+`with-fresh-framework` reinjection) and `process-once!` (genuine JVM-process
+one-shot side effects only) — plus `install-root!` for SPI holders that no
+longer need `^:dynamic` + `Object` lock + `alter-var-root`. New init-guard or
+SPI-injection code must go through one of these; do not add another
+`defonce-guard`-shaped macro, `^:dynamic` boolean guard, or ad hoc lock.
+
+`docs/dev/dynamic-var-binding-audit.md` cross-references every current
+`^:dynamic` top-level def against real `(binding [...])` usage — a keep/kill
+list consumed by later migration phases that remove `^:dynamic` where it is
+pure decoration (no var is ever actually bound).
