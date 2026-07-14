@@ -5,7 +5,8 @@
   added incrementally in later phases.
 
   Expected map keys:
-  - :draw! (fn [render-ctx draw-plan entity partial-tick] -> nil)" )
+  - :draw! (fn [render-ctx draw-plan entity partial-tick] -> nil)"
+  (:require [cn.li.mcmod.runtime.deferred :as deferred]))
 
 ;; Wrapper function
 
@@ -22,24 +23,32 @@
   ([initial-executors]
    {:executors (atom initial-executors)}))
 
-(def ^:private _script-render-executor-runtime (delay (create-script-render-executor-runtime)))
+(def ^:private default-script-render-executor-runtime-holder
+  (deferred/deferred #(create-script-render-executor-runtime)))
 
-(def ^:dynamic *script-render-executor-runtime* nil)
+(def ^:private script-render-executor-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-script-render-executor-runtime — replaces the prior ^:dynamic +
+   binding pair. Single-threaded test execution only."
+  nil)
 
 (defn current-script-render-executor-runtime
   []
-  (or *script-render-executor-runtime*
-      @_script-render-executor-runtime))
-
-(defmacro with-script-render-executor-runtime
-  [runtime & body]
-  `(binding [*script-render-executor-runtime* ~runtime]
-     ~@body))
+  (or script-render-executor-runtime-override
+      @default-script-render-executor-runtime-holder))
 
 (defn call-with-script-render-executor-runtime
   [runtime f]
-  (binding [*script-render-executor-runtime* runtime]
-    (f)))
+  (let [prev script-render-executor-runtime-override]
+    (alter-var-root #'script-render-executor-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'script-render-executor-runtime-override (constantly prev))))))
+
+(defmacro with-script-render-executor-runtime
+  [runtime & body]
+  `(call-with-script-render-executor-runtime ~runtime (fn [] ~@body)))
 
 (defn executors-atom
   []

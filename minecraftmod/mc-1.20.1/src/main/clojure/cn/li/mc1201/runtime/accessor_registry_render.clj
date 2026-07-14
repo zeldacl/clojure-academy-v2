@@ -6,7 +6,8 @@
    - Texture mapping
    - Animation control
    - Lighting"
-  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
+  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ============================================================================
 ;; Render Accessor Registrations
@@ -94,22 +95,12 @@
   
   nil)
 
-(def ^:private render-accessor-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *render-accessors-registered?*
-  false)
-
 (defn register-render-accessors!
-  "Explicitly register render-domain accessors once."
+  "Explicitly register render-domain accessors once.
+   Process-scoped guard: the backing registry (accessor-registry-core's
+   registries*) is a process-level atom that throws on duplicate
+   registration, not reset by Framework reinjection. process-once! already
+   rolls back the flag and rethrows on failure, so a subsequent call retries."
   []
-  (when-not (var-get #'*render-accessors-registered?*)
-    (locking render-accessor-guard-lock
-      (when-not (var-get #'*render-accessors-registered?*)
-        (try
-          (register-render-accessors-impl!)
-          (alter-var-root #'*render-accessors-registered?* (constantly true))
-          (catch Throwable t
-            (alter-var-root #'*render-accessors-registered?* (constantly false))
-            (throw (ex-info "Failed to register render accessors" {} t)))))))
+  (install/process-once! ::render-accessors-registered register-render-accessors-impl!)
   nil)

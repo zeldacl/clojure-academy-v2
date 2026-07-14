@@ -3,6 +3,7 @@
   (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -10,12 +11,6 @@
            [net.minecraft.world.entity Entity EntityType LightningBolt]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
-
-(def ^:private install-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *installed?*
-  false)
 
 (defn- get-server ^MinecraftServer []
   (server-context/get-server))
@@ -44,13 +39,9 @@
                     (str (.getDescriptionId block)))}))
 
 (defn install-world-effects! []
-  (if (var-get #'*installed?*)
-    (log/info "Fabric world effects already installed, skipping")
-    (locking install-guard-lock
-      (if (var-get #'*installed?*)
-        (log/info "Fabric world effects already installed, skipping")
-        (do
-          (server-context/install-server-context!)
-          (world-effects/install-world-effects! (fabric-world-effects)
-                                                "Fabric world effects")
-          (alter-var-root #'*installed?* (constantly true)))))))
+  (install/framework-once! ::installed
+    #(do
+       (server-context/install-server-context!)
+       (world-effects/install-world-effects! (fabric-world-effects)
+                                             "Fabric world effects")))
+  nil)

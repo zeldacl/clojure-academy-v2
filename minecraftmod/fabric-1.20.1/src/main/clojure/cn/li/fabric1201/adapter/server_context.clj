@@ -1,6 +1,8 @@
 (ns cn.li.fabric1201.adapter.server-context
   "Fabric runtime server holder for adapter-style runtime APIs."
   (:require [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
+            [cn.li.mcmod.runtime.deferred :as deferred]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.event.lifecycle.v1 ServerLifecycleEvents
             ServerLifecycleEvents$ServerStarted
@@ -13,24 +15,32 @@
   ([initial-server]
    {:current-server (atom initial-server)}))
 
-(def ^:private _server-context-runtime (delay (create-server-context-runtime)))
+(def ^:private default-server-context-runtime-holder
+  (deferred/deferred #(create-server-context-runtime)))
 
-(def ^:dynamic *server-context-runtime* nil)
+(def ^:private server-context-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-server-context-runtime — replaces the prior ^:dynamic +
+   binding pair. Single-threaded test execution only."
+  nil)
 
 (defn current-server-context-runtime
   []
-  (or *server-context-runtime*
-      @_server-context-runtime))
-
-(defmacro with-server-context-runtime
-  [runtime & body]
-  `(binding [*server-context-runtime* ~runtime]
-     ~@body))
+  (or server-context-runtime-override
+      @default-server-context-runtime-holder))
 
 (defn call-with-server-context-runtime
   [runtime f]
-  (binding [*server-context-runtime* runtime]
-    (f)))
+  (let [prev server-context-runtime-override]
+    (alter-var-root #'server-context-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'server-context-runtime-override (constantly prev))))))
+
+(defmacro with-server-context-runtime
+  [runtime & body]
+  `(call-with-server-context-runtime ~runtime (fn [] ~@body)))
 
 (defn current-server-atom
   []
@@ -57,12 +67,6 @@
    (set-current-server! server)
    nil))
 
-(def ^:private server-context-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *installed?* false)
-(def ^:private ^:dynamic *spi-registered?* false)
-
 (declare install-server-context!)
 
 (defn get-server
@@ -72,31 +76,29 @@
 
 (defn- register-server-context-spi!
   []
-  (when-not (var-get #'*spi-registered?*)
-    (locking server-context-guard-lock
-      (when-not (var-get #'*spi-registered?*)
-        (server-context-spi/register-server-context-impl!
-          {:get-current-server get-server
-           :install! install-server-context!})
-        (alter-var-root #'*spi-registered?* (constantly true)))))
+  (install/framework-once! ::spi-registered
+    #(server-context-spi/register-server-context-impl!
+       {:get-current-server get-server
+        :install! install-server-context!}))
   nil)
 
 (defn install-server-context!
   []
   (register-server-context-spi!)
-  (when-not (var-get #'*installed?*)
-    (locking server-context-guard-lock
-      (when-not (var-get #'*installed?*)
-        (.register ServerLifecycleEvents/SERVER_STARTED
-                   (reify ServerLifecycleEvents$ServerStarted
-                     (onServerStarted [_ server]
-                       (set-current-server! server)
-                       (server-context-spi/notify-server-available! server))))
-        (.register ServerLifecycleEvents/SERVER_STOPPED
-                   (reify ServerLifecycleEvents$ServerStopped
-                     (onServerStopped [_ server]
-                       (clear-current-server!)
-                       (server-context-spi/notify-server-unavailable! server))))
-        (alter-var-root #'*installed?* (constantly true))
-        (log/info "Fabric runtime server context installed"))))
+  ;; Fabric's ServerLifecycleEvents bus is a static JVM-process singleton —
+  ;; re-registering listeners on Framework reinjection would double-fire
+  ;; after every world reload, so this is process-scoped, not framework-scoped.
+  (install/process-once! ::server-lifecycle-listeners
+    #(do
+       (.register ServerLifecycleEvents/SERVER_STARTED
+                  (reify ServerLifecycleEvents$ServerStarted
+                    (onServerStarted [_ server]
+                      (set-current-server! server)
+                      (server-context-spi/notify-server-available! server))))
+       (.register ServerLifecycleEvents/SERVER_STOPPED
+                  (reify ServerLifecycleEvents$ServerStopped
+                    (onServerStopped [_ server]
+                      (clear-current-server!)
+                      (server-context-spi/notify-server-unavailable! server))))
+       (log/info "Fabric runtime server context installed")))
   nil)

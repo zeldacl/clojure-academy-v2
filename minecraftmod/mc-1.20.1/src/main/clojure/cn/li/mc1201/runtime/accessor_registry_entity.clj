@@ -6,7 +6,8 @@
    - Player-specific operations
    - Damage and effects
    - Teleportation"
-  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
+  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]
+            [cn.li.mcmod.runtime.install :as install]))
 
 (defn- register-entity-accessors-impl!
   []
@@ -88,22 +89,12 @@
 
     nil)
 
-(def ^:private entity-accessor-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *entity-accessors-registered?*
-  false)
-
 (defn register-entity-accessors!
-  "Explicitly register entity-domain accessors once."
+  "Explicitly register entity-domain accessors once.
+   Process-scoped guard: the backing registry (accessor-registry-core's
+   registries*) is a process-level atom that throws on duplicate
+   registration, not reset by Framework reinjection. process-once! already
+   rolls back the flag and rethrows on failure, so a subsequent call retries."
   []
-  (when-not (var-get #'*entity-accessors-registered?*)
-    (locking entity-accessor-guard-lock
-      (when-not (var-get #'*entity-accessors-registered?*)
-        (try
-          (register-entity-accessors-impl!)
-          (alter-var-root #'*entity-accessors-registered?* (constantly true))
-          (catch Throwable t
-            (alter-var-root #'*entity-accessors-registered?* (constantly false))
-            (throw (ex-info "Failed to register entity accessors" {} t)))))))
+  (install/process-once! ::entity-accessors-registered register-entity-accessors-impl!)
   nil)

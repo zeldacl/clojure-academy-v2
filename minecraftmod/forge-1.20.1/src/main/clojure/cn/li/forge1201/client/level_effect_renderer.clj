@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.client.level-effect-renderer
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan."
   (:require [cn.li.mc1201.client.effects.level-renderer :as shared-level]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [cn.li.mc1201.client.render ModRenderTypes]
@@ -22,15 +23,6 @@
   plan context) into a V3 for zero-allocation local math."
   ^V3 [{:keys [x y z]}]
   (V3. (double (or x 0.0)) (double (or y 0.0)) (double (or z 0.0))))
-
-(def ^:private listener-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *tick-listener-registered?*
-  false)
-
-(def ^:private ^:dynamic *render-listener-registered?*
-  false)
 
 (defn- render-stage-eligible? [^RenderLevelStageEvent evt]
   ;; Stage is a fixed enum-like singleton set (RenderLevelStageEvent$Stage) — identical?
@@ -139,20 +131,14 @@
       (log/stacktrace "Level effect render failed" e))))
 
 (defn init! []
-  (when-not (var-get #'*tick-listener-registered?*)
-    (locking listener-guard-lock
-      (when-not (var-get #'*tick-listener-registered?*)
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false TickEvent$ClientTickEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-client-tick evt))))
-        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
-  (when-not (var-get #'*render-listener-registered?*)
-    (locking listener-guard-lock
-      (when-not (var-get #'*render-listener-registered?*)
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false RenderLevelStageEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-render-level-stage evt))))
-        (alter-var-root #'*render-listener-registered?* (constantly true)))))
+  (install/process-once! ::tick-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false TickEvent$ClientTickEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-client-tick evt)))))
+  (install/process-once! ::render-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false RenderLevelStageEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-render-level-stage evt)))))
   (log/info "Level effect renderer initialized"))

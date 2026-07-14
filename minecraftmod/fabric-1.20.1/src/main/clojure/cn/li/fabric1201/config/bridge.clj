@@ -2,27 +2,20 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson Gson GsonBuilder]
            [java.io File]
            [net.fabricmc.loader.api FabricLoader]))
 
-(def ^:private gson-lock
-  (Object.))
-
-(def ^:private ^:dynamic *gson*
-  nil)
+(def ^:private gson-holder
+  (deferred/deferred #(-> (GsonBuilder.)
+                          (.setPrettyPrinting)
+                          (.create))))
 
 (defn- gson
   []
-  (or (var-get #'*gson*)
-      (locking gson-lock
-        (or (var-get #'*gson*)
-            (let [codec (-> (GsonBuilder.)
-                            (.setPrettyPrinting)
-                            (.create))]
-              (alter-var-root #'*gson* (constantly codec))
-              codec)))))
+  @gson-holder)
 
 (defn- domain->file-name
   [domain extension]

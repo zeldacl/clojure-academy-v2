@@ -6,7 +6,8 @@
    - World state access
    - Raycast operations
   - Content-named world positions"
-  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
+  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]
+            [cn.li.mcmod.runtime.install :as install]))
 
 (defn- register-world-accessors-impl!
   []
@@ -81,22 +82,12 @@
 
     nil)
 
-(def ^:private world-accessor-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *world-accessors-registered?*
-  false)
-
 (defn register-world-accessors!
-  "Explicitly register world-domain accessors once."
+  "Explicitly register world-domain accessors once.
+   Process-scoped guard: the backing registry (accessor-registry-core's
+   registries*) is a process-level atom that throws on duplicate
+   registration, not reset by Framework reinjection. process-once! already
+   rolls back the flag and rethrows on failure, so a subsequent call retries."
   []
-  (when-not (var-get #'*world-accessors-registered?*)
-    (locking world-accessor-guard-lock
-      (when-not (var-get #'*world-accessors-registered?*)
-        (try
-          (register-world-accessors-impl!)
-          (alter-var-root #'*world-accessors-registered?* (constantly true))
-          (catch Throwable t
-            (alter-var-root #'*world-accessors-registered?* (constantly false))
-            (throw (ex-info "Failed to register world accessors" {} t)))))))
+  (install/process-once! ::world-accessors-registered register-world-accessors-impl!)
   nil)

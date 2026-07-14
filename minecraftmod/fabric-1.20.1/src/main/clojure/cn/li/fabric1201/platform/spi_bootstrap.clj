@@ -10,7 +10,8 @@
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.fabric1201.platform.bindings :as bindings])
+            [cn.li.fabric1201.platform.bindings :as bindings]
+            [cn.li.mcmod.runtime.install :as install])
   (:import [cn.li.fabric1201.block.entity ScriptedBlockEntity]
            [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
            [net.minecraft.core BlockPos]
@@ -21,12 +22,6 @@
            [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys BlockHitResult]))
-
-(def ^:private platform-init-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *initialized?*
-  false)
 
 (defn- resolve-binding! [binding-name]
   (require 'cn.li.fabric1201.platform.bindings)
@@ -124,35 +119,33 @@
 (defn init-platform!
   "Initialize Fabric 1.20.1 platform implementations via SPI entrypoint."
   []
-  (when-not (var-get #'*initialized?*)
-    (locking platform-init-guard-lock
-      (when-not (var-get #'*initialized?*)
-        (class-access/install-class-access! (:class-access fabric-adapter) "fabric")
-        (item-ops/install-item-platform-ops! (:item-ops-platform fabric-adapter) "fabric")
-        (player-ops/install-player-ops-platform! (:player-ops-platform fabric-adapter) "fabric")
-        (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops fabric-adapter) "fabric")
-        (world-block-ops/install-world-block-ops! (:world-block-ops fabric-adapter) "fabric")
-        (platform-init/install-platform-foundation+hooks!
-          fabric-adapter
-          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
-           :world-get-block-state (resolve-binding! 'world-get-block-state)
-           :world-set-block (resolve-binding! 'world-set-block)
-           :world-remove-block (resolve-binding! 'world-remove-block)
-           :world-break-block (resolve-binding! 'world-break-block)
-           :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
-           :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
-           :world-get-day-time (resolve-binding! 'world-get-day-time)
-           :world-get-game-time (resolve-binding! 'world-get-game-time)
-           :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
-           :world-server-session-id (resolve-binding! 'world-server-session-id)
-           :world-get-players (resolve-binding! 'world-get-players)
-           :world-is-raining (resolve-binding! 'world-is-raining)
-           :world-is-client-side (resolve-binding! 'world-is-client-side)
-           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
-          nil)
-        (install-be-ops!)
-        (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "fabric")
-        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "fabric")
-        (alter-var-root #'*initialized?* (constantly true))
-        (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
+  (install/framework-once! ::initialized
+    #(do
+       (class-access/install-class-access! (:class-access fabric-adapter) "fabric")
+       (item-ops/install-item-platform-ops! (:item-ops-platform fabric-adapter) "fabric")
+       (player-ops/install-player-ops-platform! (:player-ops-platform fabric-adapter) "fabric")
+       (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops fabric-adapter) "fabric")
+       (world-block-ops/install-world-block-ops! (:world-block-ops fabric-adapter) "fabric")
+       (platform-init/install-platform-foundation+hooks!
+         fabric-adapter
+         {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
+          :world-get-block-state (resolve-binding! 'world-get-block-state)
+          :world-set-block (resolve-binding! 'world-set-block)
+          :world-remove-block (resolve-binding! 'world-remove-block)
+          :world-break-block (resolve-binding! 'world-break-block)
+          :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
+          :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
+          :world-get-day-time (resolve-binding! 'world-get-day-time)
+          :world-get-game-time (resolve-binding! 'world-get-game-time)
+          :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
+          :world-server-session-id (resolve-binding! 'world-server-session-id)
+          :world-get-players (resolve-binding! 'world-get-players)
+          :world-is-raining (resolve-binding! 'world-is-raining)
+          :world-is-client-side (resolve-binding! 'world-is-client-side)
+          :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
+         nil)
+       (install-be-ops!)
+       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "fabric")
+       (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "fabric")
+       (log/info "fabric platform SPI bootstrap initialized via ServiceLoader entrypoint")))
   nil)

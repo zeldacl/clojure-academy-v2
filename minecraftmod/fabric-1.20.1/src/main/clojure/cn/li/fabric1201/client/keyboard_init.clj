@@ -5,12 +5,11 @@
    Fabric has no native keyboard events, so we rely entirely on GLFW polling
    for both :alternative and :original scheme inputs."
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc1201.glfw-polling-core :as glfw-polling]
             [cn.li.mc1201.client.session :as client-session])
   (:import [net.minecraft.client Minecraft]
            [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents]))
-
-(def ^:private ^:dynamic *keyboard-handler-installed?* false)
 
 (defn- get-current-player-uuid
   "Get the current player's UUID from client session"
@@ -53,15 +52,15 @@
    This polling handler is the primary input mechanism for Fabric."
   []
   (try
-    (when-not *keyboard-handler-installed?*
-      ;; Register end-of-tick listener
-      (.register ClientTickEvents/END_CLIENT_TICK
-        (reify java.util.function.Consumer
-          (accept [_this minecraft]
-            (on-client-tick-end minecraft))))
-      
-      (log/info "Fabric keyboard handler installed")
-      (alter-var-root (var *keyboard-handler-installed?*) (constantly true)))
-    
+    (install/process-once! ::keyboard-handler-installed
+      #(do
+         ;; Register end-of-tick listener
+         (.register ClientTickEvents/END_CLIENT_TICK
+           (reify java.util.function.Consumer
+             (accept [_this minecraft]
+               (on-client-tick-end minecraft))))
+
+         (log/info "Fabric keyboard handler installed")))
+
     (catch Exception e
       (log/error e "Failed to install Fabric keyboard handler"))))

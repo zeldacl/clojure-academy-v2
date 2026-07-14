@@ -13,28 +13,24 @@
   (:import [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
 
-(def ^:private gui-handler-registry-lock
-  (Object.))
-
-(def ^:private ^:dynamic *gui-handler-types*
-  ^{:doc "Map from GUI ID to registered MenuType instances"}
-  {})
+(def ^:private gui-handler-types
+  "Map from GUI ID to registered MenuType instances. Lock-free CAS updates
+   replace the prior ^:dynamic var + Object lock."
+  (atom {}))
 
 (defn- gui-handler-types-snapshot
   []
-  (var-get #'*gui-handler-types*))
+  @gui-handler-types)
 
 (defn- assoc-gui-handler-type!
   [gui-id handler-type]
-  (locking gui-handler-registry-lock
-    (alter-var-root #'*gui-handler-types* assoc gui-id handler-type)
-    nil))
+  (swap! gui-handler-types assoc gui-id handler-type)
+  nil)
 
 (defn- clear-gui-handler-types!
   []
-  (locking gui-handler-registry-lock
-    (alter-var-root #'*gui-handler-types* (constantly {}))
-    nil))
+  (reset! gui-handler-types {})
+  nil)
 
 (defn get-handler-type [gui-id]
   (get (gui-handler-types-snapshot) gui-id))

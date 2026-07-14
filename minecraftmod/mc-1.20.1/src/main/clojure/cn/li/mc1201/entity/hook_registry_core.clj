@@ -3,6 +3,7 @@
   (:require [clojure.string :as str]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.entity.hook-resolver :as hook-resolver]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
@@ -63,33 +64,17 @@
                      nil)
                    [hook-id (first classes)]))))))
 
-(def ^:private scripted-hook-install-lock
-  (Object.))
-
-(def ^:private ^:dynamic *scripted-hook-install-state*
-  {:effect false
-   :ray false
-   :marker false})
-
-(defn- scripted-hook-installed?
-  [install-key]
-  (true? (get (var-get #'*scripted-hook-install-state*) install-key)))
-
-(defn- mark-scripted-hook-installed!
-  [install-key]
-  (alter-var-root #'*scripted-hook-install-state* assoc install-key true))
-
 (defn register-hook-classes!
+  "Register one scripted-hook kind's Java hook classes exactly once per
+   process (registerScripted*HookClass is a Java-side static registry, not
+   Framework-scoped — must not redo on Framework reinjection)."
   [{:keys [install-key entries register-fn success-label]}]
-  (when-not (scripted-hook-installed? install-key)
-    (locking scripted-hook-install-lock
-      (when-not (scripted-hook-installed? install-key)
-        (mark-scripted-hook-installed! install-key)
-        (doseq [[hook-id class-name] entries]
-          (if (register-fn hook-id class-name)
-            (log/info success-label {:hook-id hook-id :class class-name})
-            (log/error (str "Failed to register " (str/lower-case success-label))
-                       {:hook-id hook-id :class class-name}))))))
+  (install/process-once! [::scripted-hook install-key]
+    #(doseq [[hook-id class-name] entries]
+       (if (register-fn hook-id class-name)
+         (log/info success-label {:hook-id hook-id :class class-name})
+         (log/error (str "Failed to register " (str/lower-case success-label))
+                    {:hook-id hook-id :class class-name}))))
   nil)
 
 (def scripted-hook-specs

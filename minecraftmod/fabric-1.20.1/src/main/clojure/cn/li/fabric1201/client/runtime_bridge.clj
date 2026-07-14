@@ -8,7 +8,8 @@
    - Vanilla suppression → mc1201/vanilla_input_control_core.clj
    
    Kept only for backward compatibility with existing tests."
-  (:require [cn.li.mcmod.util.log :as log]))
+  (:require [cn.li.mcmod.runtime.deferred :as deferred]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ===== Minimal Legacy Support (for existing tests only) =====
 
@@ -20,21 +21,29 @@
                          :raw-n-state {}}
                         initial-state))}))
 
-(def ^:private _input-runtime (delay (create-input-runtime)))
+(def ^:private default-input-runtime-holder
+  (deferred/deferred #(create-input-runtime)))
 
-(def ^:dynamic *input-runtime* nil)
+(def ^:private input-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-input-runtime — replaces the prior ^:dynamic + binding pair.
+   Single-threaded test execution only."
+  nil)
 
 (defn current-input-runtime []
-  (or *input-runtime*
-      @_input-runtime))
-
-(defmacro with-input-runtime [runtime & body]
-  `(binding [*input-runtime* ~runtime]
-     ~@body))
+  (or input-runtime-override
+      @default-input-runtime-holder))
 
 (defn call-with-input-runtime [runtime f]
-  (binding [*input-runtime* runtime]
-    (f)))
+  (let [prev input-runtime-override]
+    (alter-var-root #'input-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'input-runtime-override (constantly prev))))))
+
+(defmacro with-input-runtime [runtime & body]
+  `(call-with-input-runtime ~runtime (fn [] ~@body)))
 
 (defn input-runtime-state-atom []
   (:state (current-input-runtime)))

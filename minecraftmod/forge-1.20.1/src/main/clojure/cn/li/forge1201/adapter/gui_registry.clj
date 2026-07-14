@@ -10,6 +10,7 @@
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]
             [cn.li.mcmod.config :as modid]
+            [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.client.session :as client-session])
   (:import [cn.li.forge1201.shim ForgeBootstrapHelper ForgeContainerFactory]
@@ -27,41 +28,34 @@
 
 ;; Registries are locked before FMLCommonSetupEvent; MenuType must be registered
 ;; via DeferredRegister during RegisterEvent, just like blocks and items.
-(def ^:private gui-registry-lock
-  (Object.))
+;; DeferredRegister creation is inherently process-scoped (Forge registries
+;; cannot reopen once locked) — deferred/deferred's own lazy-once semantics
+;; are the correct guard here, not framework-once!.
+(def ^:private menu-register-holder
+  (deferred/deferred #(ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)))
 
-(def ^:private ^:dynamic *menu-register* nil)
-
-(def ^:private ^:dynamic *gui-menu-types*
-  ^{:doc "Map from GUI ID to RegistryObject<MenuType>.
-  Call (.get ro) to get the actual MenuType after registration fires.
-  Structure: {gui-id RegistryObject, ...}"}
-  {})
+(def ^:private gui-menu-types
+  "Map from GUI ID to RegistryObject<MenuType>.
+  Call (.get ro) to get the actual MenuType after registration fires."
+  (atom {}))
 
 (defn menu-register
   []
-  (or (var-get #'*menu-register*)
-      (locking gui-registry-lock
-        (or (var-get #'*menu-register*)
-            (let [created (ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)]
-              (alter-var-root #'*menu-register* (constantly created))
-              created)))))
+  @menu-register-holder)
 
 (defn- gui-menu-types-snapshot
   []
-  (var-get #'*gui-menu-types*))
+  @gui-menu-types)
 
 (defn- assoc-gui-menu-type!
   [gui-id menu-type]
-  (locking gui-registry-lock
-    (alter-var-root #'*gui-menu-types* assoc gui-id menu-type)
-    nil))
+  (swap! gui-menu-types assoc gui-id menu-type)
+  nil)
 
 (defn- clear-gui-menu-types!
   []
-  (locking gui-registry-lock
-    (alter-var-root #'*gui-menu-types* (constantly {}))
-    nil))
+  (reset! gui-menu-types {})
+  nil)
 
 (declare install-registry-contract!)
 

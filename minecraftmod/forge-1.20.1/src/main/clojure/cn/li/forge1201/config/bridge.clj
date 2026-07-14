@@ -13,21 +13,19 @@
            [net.minecraftforge.fml.event.config ModConfigEvent]
            [net.minecraftforge.fml.config ModConfig ModConfig$Type]))
 
-(def ^:private config-registry-lock
-  (Object.))
-
-(def ^:private ^:dynamic *registered-configs*
-  {})
+(def ^:private registered-configs
+  "Map of config file-name -> domain-info. Lock-free CAS updates replace the
+   prior ^:dynamic var + Object lock."
+  (atom {}))
 
 (defn- registered-configs-snapshot
   []
-  (var-get #'*registered-configs*))
+  @registered-configs)
 
 (defn- assoc-registered-config!
   [file-name domain-info]
-  (locking config-registry-lock
-    (alter-var-root #'*registered-configs* assoc file-name domain-info)
-    nil))
+  (swap! registered-configs assoc file-name domain-info)
+  nil)
 
 (defn- domain->file-name
   [domain extension]
@@ -121,8 +119,7 @@
   (let [^ModConfig mod-config (.getConfig event)
         file-name (.getFileName mod-config)]
     ;; Capture ModConfig reference for later .save() calls
-    (locking config-registry-lock
-      (alter-var-root #'*registered-configs* assoc-in [file-name :mod-config] mod-config))
+    (swap! registered-configs assoc-in [file-name :mod-config] mod-config)
     (when-let [domain-info (get (registered-configs-snapshot) file-name)]
       (load-domain-values! domain-info))))
 
@@ -148,13 +145,19 @@
   (some (fn [[_ v]] (when (= (:domain v) domain) v))
         (registered-configs-snapshot)))
 
+(def ^:private config-value-write-lock
+  "Serializes the Java-side ConfigValue.set()+ModConfig.save() sequence below
+   — a genuine external mutation race, not covered by the registered-configs
+   atom's own CAS semantics. Kept intentionally (JVM_PRIMITIVE_KEEP)."
+  (Object.))
+
 (defn set-config-value!
   "Set a single config value via Forge's ConfigValue.set() and persist to TOML file.
   domain — e.g. :cn.li.example/config-domain
   key    — e.g. :some-setting
   value  — the new value (boolean/int/double/string)"
   [domain key value]
-  (locking config-registry-lock
+  (locking config-value-write-lock
     (if-let [domain-info (registered-config-for-domain domain)]
       (if-let [^ForgeConfigSpec$ConfigValue cfg-value (get (:entries domain-info) key)]
         (do

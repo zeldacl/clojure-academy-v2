@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.client.level-effect-renderer
   "CLIENT-ONLY Fabric level effect renderer adapter."
   (:require [cn.li.mc1201.client.effects.level-renderer :as shared-level]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
            [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]
@@ -8,15 +9,6 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]))
-
-(def ^:private level-effect-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *tick-listener-registered?*
-  false)
-
-(def ^:private ^:dynamic *render-listener-registered?*
-  false)
 
 (defn- on-client-tick []
   (shared-level/tick-level-effects!))
@@ -45,20 +37,14 @@
 
 (defn init!
   []
-  (when-not (var-get #'*tick-listener-registered?*)
-    (locking level-effect-guard-lock
-      (when-not (var-get #'*tick-listener-registered?*)
-        (.register ClientTickEvents/END_CLIENT_TICK
-                   (reify ClientTickEvents$EndTick
-                     (onEndTick [_ _client]
-                       (on-client-tick))))
-        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
-  (when-not (var-get #'*render-listener-registered?*)
-    (locking level-effect-guard-lock
-      (when-not (var-get #'*render-listener-registered?*)
-        (.register WorldRenderEvents/AFTER_TRANSLUCENT
-                   (reify WorldRenderEvents$AfterTranslucent
-                     (afterTranslucent [_ context]
-                       (on-after-translucent-render context))))
-        (alter-var-root #'*render-listener-registered?* (constantly true)))))
+  (install/process-once! ::tick-listener-registered
+    #(.register ClientTickEvents/END_CLIENT_TICK
+                (reify ClientTickEvents$EndTick
+                  (onEndTick [_ _client]
+                    (on-client-tick)))))
+  (install/process-once! ::render-listener-registered
+    #(.register WorldRenderEvents/AFTER_TRANSLUCENT
+                (reify WorldRenderEvents$AfterTranslucent
+                  (afterTranslucent [_ context]
+                    (on-after-translucent-render context)))))
   (log/info "Fabric level effect renderer initialized"))

@@ -7,6 +7,7 @@
             [cn.li.mcmod.client.render.script-render-abi :as script-abi]
             [cn.li.mcmod.config.script-render :as render-config]
             [cn.li.mcmod.client.render.script-render-registry :as registry]
+            [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log]))
 
 (defn default-script-render-runtime-state
@@ -23,24 +24,32 @@
    {:state (atom (merge (default-script-render-runtime-state)
                         initial-state))}))
 
-(def ^:private _script-render-runtime (delay (create-script-render-runtime)))
+(def ^:private default-script-render-runtime-holder
+  (deferred/deferred #(create-script-render-runtime)))
 
-(def ^:dynamic *script-render-runtime* nil)
+(def ^:private script-render-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-script-render-runtime — replaces the prior ^:dynamic +
+   binding pair. Single-threaded test execution only."
+  nil)
 
 (defn current-script-render-runtime
   []
-  (or *script-render-runtime*
-      @_script-render-runtime))
-
-(defmacro with-script-render-runtime
-  [runtime & body]
-  `(binding [*script-render-runtime* ~runtime]
-     ~@body))
+  (or script-render-runtime-override
+      @default-script-render-runtime-holder))
 
 (defn call-with-script-render-runtime
   [runtime f]
-  (binding [*script-render-runtime* runtime]
-    (f)))
+  (let [prev script-render-runtime-override]
+    (alter-var-root #'script-render-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'script-render-runtime-override (constantly prev))))))
+
+(defmacro with-script-render-runtime
+  [runtime & body]
+  `(call-with-script-render-runtime ~runtime (fn [] ~@body)))
 
 (defn script-render-runtime-state-atom
   []

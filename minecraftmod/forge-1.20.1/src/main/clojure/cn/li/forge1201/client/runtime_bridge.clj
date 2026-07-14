@@ -6,6 +6,7 @@
             [cn.li.mc1201.client.session :as client-session]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.hooks.core :as power-runtime]
+             [cn.li.mcmod.runtime.install :as install]
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state]
              [cn.li.mc1201.client.font.msdf-tick :as msdf-tick])
@@ -13,12 +14,6 @@
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
-
-(def ^:private tick-listener-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *tick-listener-registered?*
-  false)
 
 (defn active-contexts []
   (power-runtime/client-active-contexts))
@@ -85,12 +80,9 @@
 
 (defn init! []
   (power-runtime/client-register-push-handlers!)
-  (when-not (var-get #'*tick-listener-registered?*)
-    (locking tick-listener-guard-lock
-      (when-not (var-get #'*tick-listener-registered?*)
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false TickEvent$ClientTickEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-client-tick evt))))
-        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
+  (install/process-once! ::tick-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false TickEvent$ClientTickEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-client-tick evt)))))
   (log/info "Client runtime bridge initialized"))

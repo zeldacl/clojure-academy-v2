@@ -4,7 +4,8 @@
   No Minecraft or loader imports — pure Clojure state management.
   Platform adapters supply explicit server-session owner data and the send-fn
   transport when calling tick-sync!."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]))
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mcmod.runtime.deferred :as deferred]))
 
 (def ^:private default-flush-interval-ticks 10)
 
@@ -24,9 +25,15 @@
     :scheduler-states* (atom {})
     :flush-interval-ticks flush-interval-ticks}))
 
-(def ^:dynamic *sync-scheduler-runtime* nil)
+(def ^:private default-sync-scheduler-runtime-holder
+  (deferred/deferred #(create-sync-scheduler-runtime)))
 
-(def ^:private _sync-scheduler-runtime (delay (create-sync-scheduler-runtime)))
+(def ^:private sync-scheduler-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-sync-scheduler-runtime — replaces the prior ^:dynamic +
+   binding pair. Single-threaded test execution only (clojure.test runs
+   deftest forms sequentially); not safe for concurrent binders."
+  nil)
 
 (defn- sync-scheduler-runtime?
   [runtime]
@@ -39,8 +46,12 @@
   (when-not (sync-scheduler-runtime? runtime)
     (throw (ex-info "Expected sync scheduler runtime"
                     {:runtime runtime})))
-  (binding [*sync-scheduler-runtime* runtime]
-    (f)))
+  (let [prev sync-scheduler-runtime-override]
+    (alter-var-root #'sync-scheduler-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'sync-scheduler-runtime-override (constantly prev))))))
 
 (defmacro with-sync-scheduler-runtime
   [runtime & body]
@@ -48,8 +59,8 @@
 
 (defn- current-sync-scheduler-runtime
   []
-  (or *sync-scheduler-runtime*
-      @_sync-scheduler-runtime))
+  (or sync-scheduler-runtime-override
+      @default-sync-scheduler-runtime-holder))
 
 (defn- scheduler-states-atom
   []

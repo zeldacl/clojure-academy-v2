@@ -1,55 +1,35 @@
 (ns cn.li.mc1201.runtime.spi.server-context
   "Shared server-context SPI for loader-specific runtime adapters.")
 
-(def ^:private server-context-state-lock
-  (Object.))
-
-(def ^:private ^:dynamic *server-context-impl* nil)
-
-(def ^:private ^:dynamic *lifecycle-callbacks*
-  {:available []
-   :unavailable []})
+(def ^:private spi-state
+  "Single atom backing SPI impl + lifecycle callback registration.
+   Lock-free CAS updates replace the prior ^:dynamic vars + Object lock."
+  (atom {:impl nil
+         :callbacks {:available [] :unavailable []}}))
 
 (defn- server-context-impl
   []
-  (var-get #'*server-context-impl*))
+  (:impl @spi-state))
 
 (defn- lifecycle-callbacks
   []
-  (var-get #'*lifecycle-callbacks*))
-
-(defn- update-lifecycle-callbacks!
-  [update-fn]
-  (locking server-context-state-lock
-    (let [updated (update-fn (lifecycle-callbacks))]
-      (alter-var-root #'*lifecycle-callbacks* (constantly updated))
-      updated)))
+  (:callbacks @spi-state))
 
 (defn reset-server-context-spi-for-test!
   []
-  (locking server-context-state-lock
-    (alter-var-root #'*server-context-impl* (constantly nil))
-    (alter-var-root #'*lifecycle-callbacks* (constantly {:available []
-                                                         :unavailable []})))
+  (reset! spi-state {:impl nil :callbacks {:available [] :unavailable []}})
   nil)
 
 (defn- register-callback!
   [callback-key callback-id callback]
-  (locking server-context-state-lock
-    (let [callbacks (lifecycle-callbacks)
-          existing (get callbacks callback-key [])
-          exists? (some #(= (:id %) callback-id) existing)]
-      (if exists?
-        false
-        (do
-          (alter-var-root #'*lifecycle-callbacks*
-            (constantly
-              (update callbacks callback-key
-                      (fn [cbs]
-                        (conj (vec cbs)
-                              {:id callback-id
-                               :callback callback})))))
-          true)))))
+  (let [[old new] (swap-vals! spi-state
+                    (fn [state]
+                      (let [existing (get-in state [:callbacks callback-key] [])]
+                        (if (some #(= (:id %) callback-id) existing)
+                          state
+                          (update-in state [:callbacks callback-key]
+                                     (fn [cbs] (conj (vec cbs) {:id callback-id :callback callback})))))))]
+    (not= old new)))
 
 (defn- run-callbacks!
   [callback-key value]
@@ -60,9 +40,8 @@
   [{:keys [get-current-server install!] :as impl}]
   (when-not (fn? get-current-server)
     (throw (ex-info "server-context SPI requires :get-current-server fn" {:impl impl})))
-  (locking server-context-state-lock
-    (alter-var-root #'*server-context-impl* (constantly {:get-current-server get-current-server
-                                                         :install! install!})))
+  (swap! spi-state assoc :impl {:get-current-server get-current-server
+                                :install! install!})
   nil)
 
 (defn server-state

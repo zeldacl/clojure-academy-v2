@@ -5,6 +5,7 @@
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.client.session :as mc-session])
   (:import [net.minecraft.client Minecraft]
@@ -39,12 +40,6 @@
                        player-uuid (assoc :player-uuid player-uuid))}
       f)))
 
-(def ^:private client-init-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *client-initialized?*
-  false)
-
 (defn send-to-server!
   [msg-id request-id payload]
   (ClientPlayNetworking/send shared/c2s-channel (shared/make-buf (packet-base/request-map msg-id request-id payload))))
@@ -53,24 +48,34 @@
   [msg-id payload request-id]
   (send-to-server! msg-id request-id payload))
 
+(defn- handle-client-response!
+  [request-id payload]
+  (with-client-response-owner payload
+    (fn []
+      (packet-base/dispatch-client-response!
+        runtime-hooks/*player-state-owner*
+        request-id
+        payload))))
+
+(defn- on-client-play-receive
+  [client _handler buf _sender]
+  (let [{:keys [request-id payload]} (packet-base/normalize-response (shared/read-buf-map buf))]
+    (.execute client
+              (reify Runnable
+                (run [_]
+                  (handle-client-response! request-id payload)))))
+  nil)
+
 (defn init-client!
+  "Process-scoped guard: ClientPlayNetworking/registerGlobalReceiver throws
+   if the channel already has a registered receiver, so this must not redo
+   on Framework reinjection."
   []
-  (when-not (var-get #'*client-initialized?*)
-    (locking client-init-guard-lock
-      (when-not (var-get #'*client-initialized?*)
-        (let [receiver (reify ClientPlayNetworking$PlayChannelHandler
-                         (receive [_ client _handler buf _sender]
-                           (let [{:keys [request-id payload]} (packet-base/normalize-response (shared/read-buf-map buf))]
-                             (.execute client
-                                       (reify Runnable
-                                         (run [_]
-                                           (with-client-response-owner payload
-                                             #(packet-base/dispatch-client-response!
-                                                runtime-hooks/*player-state-owner*
-                                                request-id
-                                                payload))))))
-                           nil))]
-          (ClientPlayNetworking/registerGlobalReceiver shared/s2c-channel receiver)
-          (alter-var-root #'*client-initialized?* (constantly true))
-          (log/info "Fabric GUI network client transport initialized")))))
+  (install/process-once! ::client-initialized
+    (fn []
+      (let [receiver (reify ClientPlayNetworking$PlayChannelHandler
+                       (receive [_ client _handler buf _sender]
+                         (on-client-play-receive client _handler buf _sender)))]
+        (ClientPlayNetworking/registerGlobalReceiver shared/s2c-channel receiver)
+        (log/info "Fabric GUI network client transport initialized"))))
   nil)

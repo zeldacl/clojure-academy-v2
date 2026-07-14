@@ -5,6 +5,7 @@
    Routes Forge keyboard events to the universal mcmod protocol."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc1201.client.session :as client-session]
             [cn.li.mc1201.glfw-polling-core :as glfw-polling]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter])
@@ -16,8 +17,6 @@
            [net.minecraft.client KeyMapping]))
 
 ;; ===== Forge Event Handler Registration =====
-
-(def ^:private ^:dynamic *event-handler-installed?* false)
 
 (defn- get-current-player-uuid
   "Get the current player's UUID from client session"
@@ -82,25 +81,25 @@
    This connects Forge events to the universal protocol."
   []
   (try
-    (when-not *event-handler-installed?*
-      (.addListener MinecraftForge/EVENT_BUS
-                    EventPriority/NORMAL
-                    false
-                    InputEvent$Key
-                    (reify java.util.function.Consumer
-                      (accept [_ evt]
-                        (on-key-input evt))))
+    (install/process-once! ::event-handler-installed
+      #(do
+         (.addListener MinecraftForge/EVENT_BUS
+                       EventPriority/NORMAL
+                       false
+                       InputEvent$Key
+                       (reify java.util.function.Consumer
+                         (accept [_ evt]
+                           (on-key-input evt))))
 
-      (.addListener MinecraftForge/EVENT_BUS
-                    EventPriority/NORMAL
-                    false
-                    TickEvent$ClientTickEvent
-                    (reify java.util.function.Consumer
-                      (accept [_ evt]
-                        (on-client-tick evt))))
-      
-      (log/info "Forge keyboard event handler installed")
-      (alter-var-root (var *event-handler-installed?*) (constantly true)))
-    
+         (.addListener MinecraftForge/EVENT_BUS
+                       EventPriority/NORMAL
+                       false
+                       TickEvent$ClientTickEvent
+                       (reify java.util.function.Consumer
+                         (accept [_ evt]
+                           (on-client-tick evt))))
+
+         (log/info "Forge keyboard event handler installed")))
+
     (catch Exception e
       (log/error e "Failed to install Forge keyboard event handler"))))

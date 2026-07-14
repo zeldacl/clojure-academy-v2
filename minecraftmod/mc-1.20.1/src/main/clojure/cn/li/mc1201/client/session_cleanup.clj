@@ -6,6 +6,7 @@
             [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]))
@@ -19,9 +20,14 @@
   {::runtime ::session-cleanup-runtime
    :lifecycle-state* (atom default-cleanup-state)})
 
-(def ^:dynamic *session-cleanup-runtime* nil)
+(def ^:private default-session-cleanup-runtime-holder
+  (deferred/deferred #(create-session-cleanup-runtime)))
 
-(def ^:private _session-cleanup-runtime (delay (create-session-cleanup-runtime)))
+(def ^:private session-cleanup-runtime-override
+  "Plain root var, nil in production. Test-only swap target for
+   call-with-session-cleanup-runtime — replaces the prior ^:dynamic +
+   binding pair. Single-threaded test execution only."
+  nil)
 
 (defn- session-cleanup-runtime?
   [runtime]
@@ -34,8 +40,12 @@
   (when-not (session-cleanup-runtime? runtime)
     (throw (ex-info "Expected session cleanup runtime"
                     {:runtime runtime})))
-  (binding [*session-cleanup-runtime* runtime]
-    (f)))
+  (let [prev session-cleanup-runtime-override]
+    (alter-var-root #'session-cleanup-runtime-override (constantly runtime))
+    (try
+      (f)
+      (finally
+        (alter-var-root #'session-cleanup-runtime-override (constantly prev))))))
 
 (defmacro with-session-cleanup-runtime
   [runtime & body]
@@ -43,8 +53,8 @@
 
 (defn- current-session-cleanup-runtime
   []
-  (or *session-cleanup-runtime*
-      @_session-cleanup-runtime))
+  (or session-cleanup-runtime-override
+      @default-session-cleanup-runtime-holder))
 
 (defn- lifecycle-state-atom
   []

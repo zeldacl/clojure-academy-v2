@@ -9,20 +9,18 @@
            [java.lang.reflect InvocationHandler Proxy]))
 
 
-(def ^:private resolved-vars-lock
-  (Object.))
-
-(def ^:private ^:dynamic *resolved-vars*
-  {})
+(def ^:private resolved-vars
+  "Per-symbol requiring-resolve memoization cache. requiring-resolve is
+   idempotent, so a lock-free CAS race just recomputes the same value at
+   worst — no locking needed, unlike the prior ^:dynamic var + Object lock."
+  (atom {}))
 
 (defn- resolve-var
   [var-sym]
-  (or (get (var-get #'*resolved-vars*) var-sym)
-      (locking resolved-vars-lock
-        (or (get (var-get #'*resolved-vars*) var-sym)
-            (let [v (requiring-resolve var-sym)]
-              (alter-var-root #'*resolved-vars* assoc var-sym v)
-              v)))))
+  (or (get @resolved-vars var-sym)
+      (let [v (requiring-resolve var-sym)]
+        (swap! resolved-vars assoc var-sym v)
+        v)))
 
 (defn- cap-call
   [var-sym & args]

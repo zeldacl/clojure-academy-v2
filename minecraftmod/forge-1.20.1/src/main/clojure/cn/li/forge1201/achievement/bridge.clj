@@ -5,16 +5,11 @@
   - input: {uuid achievement-id}
   - output: ModCustomTrigger.trigger(ServerPlayer, String)"
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.trigger ModTriggers]
            [java.util UUID]
            [net.minecraftforge.server ServerLifecycleHooks]))
-
-(def ^:private install-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *installed?*
-  false)
 
 (defn- resolve-player
   [uuid-str]
@@ -24,16 +19,15 @@
 
 (defn init!
   []
-  (when-not (var-get #'*installed?*)
-    (locking install-guard-lock
-      (when-not (var-get #'*installed?*)
-        (power-runtime/subscribe-achievement-trigger!
-          (fn [{:keys [uuid achievement-id]}]
-            (try
-              (when-let [player (resolve-player uuid)]
-                (.trigger ModTriggers/CUSTOM player (str achievement-id)))
-              (catch Exception e
-                (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
-        (alter-var-root #'*installed?* (constantly true))
-        (log/info "Forge achievement bridge initialized")))))
+  (install/process-once! ::installed
+    #(do
+       (power-runtime/subscribe-achievement-trigger!
+         (fn [{:keys [uuid achievement-id]}]
+           (try
+             (when-let [player (resolve-player uuid)]
+               (.trigger ModTriggers/CUSTOM player (str achievement-id)))
+             (catch Exception e
+               (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
+       (log/info "Forge achievement bridge initialized")))
+  nil)
 

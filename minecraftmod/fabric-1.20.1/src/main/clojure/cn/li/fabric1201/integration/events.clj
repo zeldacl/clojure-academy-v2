@@ -7,7 +7,8 @@
             [cn.li.fabric1201.commands :as commands]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.events.world-save-cache :as world-save-cache])
+            [cn.li.mcmod.events.world-save-cache :as world-save-cache]
+            [cn.li.mcmod.runtime.install :as install])
   (:import [net.fabricmc.fabric.api.command.v2 CommandRegistrationCallback]
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]
            [net.fabricmc.fabric.api.entity.event.v1 ServerPlayerEvents$CopyFrom
@@ -24,12 +25,6 @@
             AttackBlockCallback
             PlayerBlockBreakEvents$Before]))
 
-(def ^:private events-registration-lock
-  (Object.))
-
-(def ^:private ^:dynamic *events-registered?*
-  false)
-
 (defn handle-block-place-mixin
   "Handle Fabric block placement from BlockItem mixin.
    Returns true when placement should be canceled."
@@ -39,12 +34,8 @@
 (defn register-events
   "Register Fabric event listeners."
   []
-  (if (var-get #'*events-registered?*)
-    (log/info "Fabric event listeners already registered, skipping")
-    (locking events-registration-lock
-      (if (var-get #'*events-registered?*)
-        (log/info "Fabric event listeners already registered, skipping")
-        (do
+  (install/process-once! ::events-registered
+    #(do
           (log/info "Registering Fabric event listeners...")
 
       (.register UseBlockCallback/EVENT
@@ -121,5 +112,5 @@
 
           (lifecycle-events/install-server-stop-cleanup!)
 
-          (alter-var-root #'*events-registered?* (constantly true))
-          (log/info "Fabric event listeners registered"))))))
+          (log/info "Fabric event listeners registered")))
+  nil)

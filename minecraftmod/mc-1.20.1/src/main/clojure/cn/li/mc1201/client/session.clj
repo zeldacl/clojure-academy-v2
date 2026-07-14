@@ -102,6 +102,12 @@
                       {:client-session-id (client-session-id)
                        :player-uuid (local-player-uuid)}))))
 
-;; Register the default client owner hook so platform-agnostic modules (ac)
-;; can resolve a client owner without importing Minecraft classes.
-(runtime-hooks/set-default-client-owner-fn! current-local-player-owner)
+(defn init-default-owner-resolver!
+  "Register the default client owner hook so platform-agnostic modules (ac)
+  can resolve a client owner without importing Minecraft classes. Called
+  from platform client bootstrap (forge/fabric client init), not at
+  namespace load — reset! is naturally idempotent so no exactly-once guard
+  is needed here."
+  []
+  (runtime-hooks/set-default-client-owner-fn! current-local-player-owner)
+  nil)

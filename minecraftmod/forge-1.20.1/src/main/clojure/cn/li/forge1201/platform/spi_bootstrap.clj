@@ -11,7 +11,8 @@
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
             [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.forge1201.integration.side :as side])
+            [cn.li.forge1201.integration.side :as side]
+            [cn.li.mcmod.runtime.install :as install])
   (:import [cn.li.mc1201.runtime BlockRegistryShared ItemInventoryShared ItemPlayerOpsShared ItemRegistryShared ParticleEntityShared RuntimeAccessShared]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.entity.item ItemEntity]
@@ -21,12 +22,6 @@
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys BlockHitResult]))
 
-
-(def ^:private platform-init-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *initialized?*
-  false)
 
 (defn- resolve-binding! [binding-name]
   (require 'cn.li.forge1201.platform.bindings)
@@ -114,42 +109,40 @@
 
   Stable entrypoint for Java SPI provider invocation."
   []
-  (when-not (var-get #'*initialized?*)
-    (locking platform-init-guard-lock
-      (when-not (var-get #'*initialized?*)
-        (class-access/install-class-access! (:class-access forge-adapter) "forge")
-        (item-ops/install-item-platform-ops! (:item-ops-platform forge-adapter) "forge")
-        (player-ops/install-player-ops-platform! (:player-ops-platform forge-adapter) "forge")
-        (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops forge-adapter) "forge")
-        (world-block-ops/install-world-block-ops! (:world-block-ops forge-adapter) "forge")
-        (platform-init/install-platform-foundation+hooks!
-          forge-adapter
-          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
-           :world-get-block-state (resolve-binding! 'world-get-block-state)
-           :world-set-block (resolve-binding! 'world-set-block)
-           :world-remove-block (resolve-binding! 'world-remove-block)
-           :world-break-block (resolve-binding! 'world-break-block)
-           :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
-           :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
-           :world-get-day-time (resolve-binding! 'world-get-day-time)
-           :world-get-game-time (resolve-binding! 'world-get-game-time)
-           :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
-           :world-server-session-id (resolve-binding! 'world-server-session-id)
-           :world-get-players (resolve-binding! 'world-get-players)
-           :world-is-raining (resolve-binding! 'world-is-raining)
-           :world-is-client-side (resolve-binding! 'world-is-client-side)
-           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
-          {:be-get-level (resolve-binding! 'be-get-level)
-           :be-get-world (resolve-binding! 'be-get-world)
-           :be-get-custom-state (resolve-binding! 'be-get-custom-state)
-           :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
-           :be-get-block-id (resolve-binding! 'be-get-block-id)
-           :be-get-tile-id (resolve-binding! 'be-get-tile-id)
-           :be-set-changed! (resolve-binding! 'be-set-changed!)
-           :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)
-           :be-sync-to-client! (resolve-binding! 'be-sync-to-client!)})
-        (alter-var-root #'*initialized?* (constantly true))
-        (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "forge")
-        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
-        (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint"))))
+  (install/framework-once! ::initialized
+    #(do
+       (class-access/install-class-access! (:class-access forge-adapter) "forge")
+       (item-ops/install-item-platform-ops! (:item-ops-platform forge-adapter) "forge")
+       (player-ops/install-player-ops-platform! (:player-ops-platform forge-adapter) "forge")
+       (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops forge-adapter) "forge")
+       (world-block-ops/install-world-block-ops! (:world-block-ops forge-adapter) "forge")
+       (platform-init/install-platform-foundation+hooks!
+         forge-adapter
+         {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
+          :world-get-block-state (resolve-binding! 'world-get-block-state)
+          :world-set-block (resolve-binding! 'world-set-block)
+          :world-remove-block (resolve-binding! 'world-remove-block)
+          :world-break-block (resolve-binding! 'world-break-block)
+          :world-place-block-by-id (resolve-binding! 'world-place-block-by-id)
+          :world-is-chunk-loaded? (resolve-binding! 'world-is-chunk-loaded?)
+          :world-get-day-time (resolve-binding! 'world-get-day-time)
+          :world-get-game-time (resolve-binding! 'world-get-game-time)
+          :world-get-dimension-id (resolve-binding! 'world-get-dimension-id)
+          :world-server-session-id (resolve-binding! 'world-server-session-id)
+          :world-get-players (resolve-binding! 'world-get-players)
+          :world-is-raining (resolve-binding! 'world-is-raining)
+          :world-is-client-side (resolve-binding! 'world-is-client-side)
+          :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
+         {:be-get-level (resolve-binding! 'be-get-level)
+          :be-get-world (resolve-binding! 'be-get-world)
+          :be-get-custom-state (resolve-binding! 'be-get-custom-state)
+          :be-set-custom-state! (resolve-binding! 'be-set-custom-state!)
+          :be-get-block-id (resolve-binding! 'be-get-block-id)
+          :be-get-tile-id (resolve-binding! 'be-get-tile-id)
+          :be-set-changed! (resolve-binding! 'be-set-changed!)
+          :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)
+          :be-sync-to-client! (resolve-binding! 'be-sync-to-client!)})
+       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "forge")
+       (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
+       (log/info "forge platform SPI bootstrap initialized via ServiceLoader entrypoint")))
   nil)

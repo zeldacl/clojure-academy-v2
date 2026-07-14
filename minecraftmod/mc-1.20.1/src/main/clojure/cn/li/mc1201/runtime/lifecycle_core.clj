@@ -3,14 +3,9 @@
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
   (:require [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
-            [cn.li.mcmod.hooks.core :as player-hooks])
+            [cn.li.mcmod.hooks.core :as player-hooks]
+            [cn.li.mcmod.runtime.install :as install])
   (:import [net.minecraft.world.entity.player Player]))
-
-(def ^:private server-stop-cleanup-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *server-stop-cleanup-installed?*
-  false)
 
 (defn- player-uuid
   [^Player player]
@@ -76,15 +71,17 @@
              (cleanup-session! session-id)))))))
 
 (defn install-server-stop-cleanup!
+  "Register the on-server-stop cleanup callback exactly once per process.
+   Each call builds a fresh closure, so the SPI's own by-id callback dedup
+   can't catch repeats here — this guard is load-bearing. Process-scoped
+   (not Framework-scoped): the SPI's callback list is its own process-level
+   state with its own test-reset (reset-server-context-spi-for-test!)."
   [{:keys [cleanup-session!] :as opts}]
   (server-context-spi/install-server-context!)
-  (when-not (var-get #'*server-stop-cleanup-installed?*)
-    (locking server-stop-cleanup-guard-lock
-      (when-not (var-get #'*server-stop-cleanup-installed?*)
-        (server-context-spi/on-server-unavailable!
-          (fn [server]
-            (on-server-stop! server (assoc opts :cleanup-session! cleanup-session!))))
-        (alter-var-root #'*server-stop-cleanup-installed?* (constantly true)))))
+  (install/process-once! ::server-stop-cleanup-installed
+    #(server-context-spi/on-server-unavailable!
+       (fn [server]
+         (on-server-stop! server (assoc opts :cleanup-session! cleanup-session!)))))
   nil)
 
 (defn on-player-clone!

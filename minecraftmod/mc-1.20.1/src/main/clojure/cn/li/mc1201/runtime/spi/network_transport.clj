@@ -1,15 +1,11 @@
 (ns cn.li.mc1201.runtime.spi.network-transport
-  "Shared network transport SPI for runtime messaging.")
+  "Shared network transport SPI for runtime messaging."
+  (:require [cn.li.mcmod.runtime.install :as install]))
 
-(def ^:private transport-impl-lock
-  (Object.))
-
-(def ^:private ^:dynamic *transport-impl*
+(def ^:private transport-impl
+  "Plain root var, nil until installed. Single-writer replace via
+   install-root! — replaces the prior ^:dynamic var + Object lock."
   nil)
-
-(defn- transport-impl-snapshot
-  []
-  (var-get #'*transport-impl*))
 
 (defn register-transport-impl!
   [{:keys [send-to-server! send-push-to-client! find-player-by-uuid find-nearby-player-uuids]
@@ -20,17 +16,16 @@
                  [:find-player-by-uuid find-player-by-uuid]]]
     (when-not (fn? v)
       (throw (ex-info (str "network transport SPI requires " k " fn") {:impl impl :missing k}))))
-  (locking transport-impl-lock
-    (alter-var-root #'*transport-impl*
-                    (constantly {:send-to-server! send-to-server!
-                                 :send-push-to-client! send-push-to-client!
-                                 :find-player-by-uuid find-player-by-uuid
-                                 :find-nearby-player-uuids find-nearby-player-uuids})))
+  (install/install-root! #'transport-impl
+    {:send-to-server! send-to-server!
+     :send-push-to-client! send-push-to-client!
+     :find-player-by-uuid find-player-by-uuid
+     :find-nearby-player-uuids find-nearby-player-uuids})
   nil)
 
 (defn transport-impl!
   []
-  (or (transport-impl-snapshot)
+  (or transport-impl
       (throw (ex-info "Network transport SPI not installed"
                       {:hint "Call register-transport-impl! from platform runtime network init"}))))
 

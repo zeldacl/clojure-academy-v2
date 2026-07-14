@@ -177,7 +177,9 @@
   "Initialize client-side systems for Fabric 1.20.1."
   []
   (log/info "Initializing Fabric 1.20.1 client-side systems")
-  
+
+  (mc-session/init-default-owner-resolver!)
+
   ;; ===== Platform SPI Installation (before AC bootstrap) =====
   ;; Install Fabric-specific SPI implementations that AC will use
   (try

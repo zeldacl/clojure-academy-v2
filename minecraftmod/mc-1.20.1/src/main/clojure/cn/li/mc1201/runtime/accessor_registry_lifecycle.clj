@@ -6,7 +6,8 @@
    - World load/unload
    - Player login/logout
    - Mod lifecycle events"
-  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]))
+  (:require [cn.li.mc1201.runtime.accessor-registry-core :as core]
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ============================================================================
 ;; Lifecycle Accessor Registrations
@@ -114,22 +115,12 @@
   
   nil)
 
-(def ^:private lifecycle-accessor-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *lifecycle-accessors-registered?*
-  false)
-
 (defn register-lifecycle-accessors!
-  "Explicitly register lifecycle-domain accessors once."
+  "Explicitly register lifecycle-domain accessors once.
+   Process-scoped guard: the backing registry (accessor-registry-core's
+   registries*) is a process-level atom that throws on duplicate
+   registration, not reset by Framework reinjection. process-once! already
+   rolls back the flag and rethrows on failure, so a subsequent call retries."
   []
-  (when-not (var-get #'*lifecycle-accessors-registered?*)
-    (locking lifecycle-accessor-guard-lock
-      (when-not (var-get #'*lifecycle-accessors-registered?*)
-        (try
-          (register-lifecycle-accessors-impl!)
-          (alter-var-root #'*lifecycle-accessors-registered?* (constantly true))
-          (catch Throwable t
-            (alter-var-root #'*lifecycle-accessors-registered?* (constantly false))
-            (throw (ex-info "Failed to register lifecycle accessors" {} t)))))))
+  (install/process-once! ::lifecycle-accessors-registered register-lifecycle-accessors-impl!)
   nil)

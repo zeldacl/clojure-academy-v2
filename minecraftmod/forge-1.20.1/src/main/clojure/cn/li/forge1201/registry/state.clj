@@ -21,20 +21,17 @@
 	 :registered-effects {}
 	 :registered-particles {}})
 
-(def ^:private ^:dynamic *forge-registry-runtime*
-	(create-forge-registry-runtime))
-
-(def ^:private registry-runtime-lock
-	(Object.))
+(def ^:private forge-registry-runtime
+	"Lock-free CAS updates replace the prior ^:dynamic var + Object lock."
+	(atom (create-forge-registry-runtime)))
 
 (defn registry-runtime-state
 	[]
-	*forge-registry-runtime*)
+	@forge-registry-runtime)
 
 (defn update-registry-runtime!
 	[f & args]
-	(locking registry-runtime-lock
-		(apply alter-var-root #'*forge-registry-runtime* f args))
+	(apply swap! forge-registry-runtime f args)
 	nil)
 
 (defn- registry-bucket

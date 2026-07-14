@@ -6,6 +6,7 @@
 
   Uses the same MinecraftForge/EVENT_BUS pattern as item_handler.clj."
   (:require [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$ItemCraftedEvent
                                                  PlayerEvent$ItemSmeltedEvent]
@@ -76,21 +77,24 @@
 ;; Tick-based activation batching
 ;; ============================================================================
 
-(let [tick-counter (atom 0)]
-  (defn- on-player-tick
-    "Called on PlayerTickEvent (SERVER, END phase).
-    Every 3 ticks, calls process-pending-activations! for the player
-    to batch-check newly-satisfied tutorial conditions."
-    [^TickEvent$PlayerTickEvent event]
-    (when (and (= TickEvent$Phase/END (.phase event))
-               (instance? ServerPlayer (.player event)))
-      (let [c (swap! tick-counter inc)]
-        (when (zero? (mod c 3))
-          (let [^ServerPlayer player (.player event)]
-            (try
-              (tutorial-platform/process-pending-activations! player)
-              (catch Throwable e
-                (log/stacktrace "on-player-tick: process-pending-activations! failed" e)))))))))
+(def ^:private tick-counter
+  "Server-process-global tick batching counter (not per-player/session state)."
+  (atom 0))
+
+(defn- on-player-tick
+  "Called on PlayerTickEvent (SERVER, END phase).
+  Every 3 ticks, calls process-pending-activations! for the player
+  to batch-check newly-satisfied tutorial conditions."
+  [^TickEvent$PlayerTickEvent event]
+  (when (and (= TickEvent$Phase/END (.phase event))
+             (instance? ServerPlayer (.player event)))
+    (let [c (swap! tick-counter inc)]
+      (when (zero? (mod c 3))
+        (let [^ServerPlayer player (.player event)]
+          (try
+            (tutorial-platform/process-pending-activations! player)
+            (catch Throwable e
+              (log/stacktrace "on-player-tick: process-pending-activations! failed" e))))))))
 
 (defn- install-forge-tutorial-activated-bridge!
   []
@@ -115,39 +119,37 @@
 ;; Registration
 ;; ============================================================================
 
-(let [registered? (atom false)]
-  (defn init!
-    "Register Forge item event listeners for tutorial condition tracking
-    and tick-based activation batching.
-    Called from Forge client/server setup.  Idempotent."
-    []
-    (when-not @registered?
-      (locking registered?
-        (when-not @registered?
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false
-                      PlayerEvent$ItemCraftedEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-item-crafted evt))))
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false
-                      PlayerEvent$ItemSmeltedEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-item-smelted evt))))
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false
-                      EntityItemPickupEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-item-pickup evt))))
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false
-                      TickEvent$PlayerTickEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-player-tick evt))))
-        (try
-          (install-forge-tutorial-activated-bridge!)
-          (catch Throwable e
-            (log/stacktrace "init!: install-forge-tutorial-activated-bridge! failed" e)))
-        (reset! registered? true)
-        (log/info "Tutorial item event listeners registered"))))
-    nil))
+(defn init!
+  "Register Forge item event listeners for tutorial condition tracking
+  and tick-based activation batching.
+  Called from Forge client/server setup. Process-scoped guard: EVENT_BUS
+  listener registration must not redo on Framework reinjection."
+  []
+  (install/process-once! ::registered
+    #(do
+       (.addListener (MinecraftForge/EVENT_BUS)
+                     EventPriority/NORMAL false
+                     PlayerEvent$ItemCraftedEvent
+                     (reify java.util.function.Consumer
+                       (accept [_ evt] (on-item-crafted evt))))
+       (.addListener (MinecraftForge/EVENT_BUS)
+                     EventPriority/NORMAL false
+                     PlayerEvent$ItemSmeltedEvent
+                     (reify java.util.function.Consumer
+                       (accept [_ evt] (on-item-smelted evt))))
+       (.addListener (MinecraftForge/EVENT_BUS)
+                     EventPriority/NORMAL false
+                     EntityItemPickupEvent
+                     (reify java.util.function.Consumer
+                       (accept [_ evt] (on-item-pickup evt))))
+       (.addListener (MinecraftForge/EVENT_BUS)
+                     EventPriority/NORMAL false
+                     TickEvent$PlayerTickEvent
+                     (reify java.util.function.Consumer
+                       (accept [_ evt] (on-player-tick evt))))
+       (try
+         (install-forge-tutorial-activated-bridge!)
+         (catch Throwable e
+           (log/stacktrace "init!: install-forge-tutorial-activated-bridge! failed" e)))
+       (log/info "Tutorial item event listeners registered")))
+  nil)

@@ -272,6 +272,8 @@
   []
   (log/info "Initializing Forge 1.20.1 client-side systems")
 
+  (mc-session/init-default-owner-resolver!)
+
   ;; Bind client-side rendering implementations first
   (init-render-bindings!)
   (init-content-client-bridge!)

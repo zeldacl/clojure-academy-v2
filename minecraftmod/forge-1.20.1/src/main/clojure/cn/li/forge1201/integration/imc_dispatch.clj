@@ -10,37 +10,33 @@
 	it cannot disrupt subsequent ticks or other handlers."
 	(:require [cn.li.mcmod.util.log :as log]))
 
-(def ^:private handler-registry-lock
-	(Object.))
-
-(def ^:private ^:dynamic *network-handlers* [])
-(def ^:private ^:dynamic *node-handlers* [])
+(def ^:private network-handlers
+	"Lock-free CAS updates replace the prior ^:dynamic var + Object lock."
+	(atom []))
+(def ^:private node-handlers
+	(atom []))
 
 (defn- network-handlers-snapshot []
-	(var-get #'*network-handlers*))
+	@network-handlers)
 
 (defn- node-handlers-snapshot []
-	(var-get #'*node-handlers*))
+	@node-handlers)
 
 (defn- add-network-handler! [entry]
-	(locking handler-registry-lock
-		(alter-var-root #'*network-handlers* conj entry)
-		nil))
+	(swap! network-handlers conj entry)
+	nil)
 
 (defn- add-node-handler! [entry]
-	(locking handler-registry-lock
-		(alter-var-root #'*node-handlers* conj entry)
-		nil))
+	(swap! node-handlers conj entry)
+	nil)
 
 (defn- remove-network-handlers! [bad]
-	(locking handler-registry-lock
-		(alter-var-root #'*network-handlers* #(remove (set bad) %))
-		nil))
+	(swap! network-handlers #(remove (set bad) %))
+	nil)
 
 (defn- remove-node-handlers! [bad]
-	(locking handler-registry-lock
-		(alter-var-root #'*node-handlers* #(remove (set bad) %))
-		nil))
+	(swap! node-handlers #(remove (set bad) %))
+	nil)
 
 (defn register-network-handler!
 	"Register an IMC topology-network event handler.
@@ -89,10 +85,9 @@
 (defn reset-handlers-for-test!
 	"Clear all registered IMC handlers. Test isolation only."
 	[]
-	(locking handler-registry-lock
-		(alter-var-root #'*network-handlers* (constantly []))
-		(alter-var-root #'*node-handlers* (constantly []))
-		nil))
+	(reset! network-handlers [])
+	(reset! node-handlers [])
+	nil)
 
 (defn- invoke-safe
 	"Call f, return nil. If it throws, log and return ::remove-handler."

@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.client.hand-effect-renderer
   "CLIENT-ONLY first-person hand effect renderer for runtime animations." 
   (:require [cn.li.mc1201.client.effects.hand :as hand]
+            [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
            [net.minecraft.client Minecraft]
@@ -8,15 +9,6 @@
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraftforge.eventbus.api EventPriority]))
-
-(def ^:private listener-guard-lock
-  (Object.))
-
-(def ^:private ^:dynamic *tick-listener-registered?*
-  false)
-
-(def ^:private ^:dynamic *render-listener-registered?*
-  false)
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
   (when (= TickEvent$Phase/END (.phase evt))
@@ -42,20 +34,14 @@
       (log/stacktrace "DirectedShock hand render failed" e))))
 
 (defn init! []
-  (when-not (var-get #'*tick-listener-registered?*)
-    (locking listener-guard-lock
-      (when-not (var-get #'*tick-listener-registered?*)
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false TickEvent$ClientTickEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-client-tick evt))))
-        (alter-var-root #'*tick-listener-registered?* (constantly true)))))
-  (when-not (var-get #'*render-listener-registered?*)
-    (locking listener-guard-lock
-      (when-not (var-get #'*render-listener-registered?*)
-        (.addListener (MinecraftForge/EVENT_BUS)
-                      EventPriority/NORMAL false RenderHandEvent
-                      (reify java.util.function.Consumer
-                        (accept [_ evt] (on-render-hand evt))))
-        (alter-var-root #'*render-listener-registered?* (constantly true)))))
+  (install/process-once! ::tick-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false TickEvent$ClientTickEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-client-tick evt)))))
+  (install/process-once! ::render-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false RenderHandEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-render-hand evt)))))
   (log/info "Hand effect renderer initialized"))
