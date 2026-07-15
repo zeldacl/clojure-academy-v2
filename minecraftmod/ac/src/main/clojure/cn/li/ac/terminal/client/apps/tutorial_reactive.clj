@@ -198,10 +198,6 @@
   (let [{:keys [pvs]} ui-state
         view (preview/current-sub-view pvs)
         area (rt/node-by-id rt :preview-area)]
-    (cn.li.mcmod.util.log/info "[tutorial] refresh-preview! pvs-state:" (keys @pvs)
-                               "view:" (:type view)
-                               "recipe-kind:" (:recipe-kind view)
-                               "area-visible:" (when area (.isVisible area)))
     (rt/clear-children! rt area)
     (when view
       (rt/build-child! rt (preview/build-preview-spec view :current-preview) area)))

@@ -157,12 +157,9 @@
 (defonce ^:private recipe-widget-specs
   (delay
     (try
-      (let [path (modid/namespaced-path "guis/new/tutorial_windows.xml")
-            _ (log/info "[preview] loading recipe widgets from" path)
-            spec (ui-xml/load-spec path)
-            children (:children spec)
-            keys (mapv (comp name :id) children)]
-        (log/info "[preview] recipe widgets loaded, ids:" keys)
+      (let [spec (ui-xml/load-spec (modid/namespaced-path "guis/new/tutorial_windows.xml"))
+            children (:children spec)]
+        (log/info "[preview] recipe widgets loaded, ids:" (mapv (comp name :id) children))
         (reduce (fn [m child]
                   (if-let [cid (:id child)]
                     (assoc m (name cid) child)
@@ -173,21 +170,13 @@
         {}))))
 
 (defn- recipe-widget-spec [kind]
-  (let [specs @recipe-widget-specs
-        result (get specs kind)]
-    (log/info "[preview] recipe-widget-spec kind:" kind
-              "available-keys:" (keys specs)
-              "found:" (boolean result))
-    result))
+  (get @recipe-widget-specs kind))
 
 (defn build-preview-spec
   "Build a native node spec for a single sub-view, positioned relative to
    the 134×134 preview \"area\" origin (i.e. x/y are area-local, caller adds
    the area's own absolute offset when placing this as a child)."
   [view id]
-  (log/info "[preview] build-preview-spec type:" (:type view)
-            "recipe-kind:" (:recipe-kind view)
-            "id:" id)
   (case (:type view)
     :icon
     {:kind :image :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :src (:texture view)}}
@@ -196,13 +185,11 @@
     (if-let [widget-spec (recipe-widget-spec (:recipe-kind view))]
       ;; Use the full machine-GUI widget tree from tutorial_windows.xml
       ;; (background image + slots + progress bar), matching upstream CGUI.
-      (do
-        (log/info "[preview] using full recipe widget for" (:recipe-kind view))
-        (assoc widget-spec :id id))
+      (assoc widget-spec :id id)
       ;; Fallback: simple background image if the widget spec isn't loaded
       (let [kind (:recipe-kind view)
             [x y w h scale] (get recipe-geom kind [0.0 0.0 134.0 134.0 1.0])]
-        (log/warn "[preview] FALLBACK: using static bg image for" kind)
+        (log/warn "[preview] recipe widget not found for" kind "- using static bg fallback")
         {:kind :image :props {:id id :x x :y y :w w :h h :scale scale
                                :src (get recipe-bg kind)}}))
 
@@ -226,7 +213,7 @@
 
 (defn create-preview-state [tut-id]
   (let [groups (build-view-groups tut-id)]
-    (atom {:view-groups groups :group-index 0 :sub-index 0})))
+    {:view-groups groups :group-index 0 :sub-index 0}))
 
 (defn current-view-group [state*]
   (let [{:keys [view-groups group-index]} @state*
