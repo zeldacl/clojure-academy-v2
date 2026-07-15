@@ -130,9 +130,23 @@
 (def ^:private thumb-max-y 165.0)  ;; upstream DragBar upper
 (def ^:private thumb-travel (- thumb-max-y thumb-min-y))
 
+(defn- dirty-subtree! [^INode node]
+  "Set FLAG-LAYOUT-DIRTY on node and all visible descendants so the layout
+   pass recomputes absolute positions.  Needed when a :group container is
+   scrolled — without this only the container itself is relaid out, children
+   stay at stale positions, and hit-test drifts relative to the visual."
+  (.setFlag node node/FLAG-LAYOUT-DIRTY)
+  (let [nc (.getChildCount node)]
+    (loop [i 0]
+      (when (< i nc)
+        (when-let [^INode c (.getChild node i)]
+          (when (.isVisible c)
+            (dirty-subtree! c)))
+        (recur (unchecked-inc-int i))))))
+
 (defn- reposition-content! [^INode ctr scroll-y]
   (.setY ctr (- (double scroll-y)))
-  (.setFlag ctr node/FLAG-LAYOUT-DIRTY))
+  (dirty-subtree! ctr))
 
 (defn- sync-thumb! [^UiRt rt scroll-y max-scroll]
   (let [^INode thumb (rt/node-by-id rt :scroll-thumb)
@@ -293,7 +307,7 @@
     (.setVisible cp center-active?) (.setFlag cp node/FLAG-LAYOUT-DIRTY)
     (.setVisible rw true) (.setFlag rw node/FLAG-LAYOUT-DIRTY)))
 
-(defn- attach-first-open-animation! [^UiRt rt anim-start]
+(defn- attach-first-open-animation! [^UiRt rt _anim-start]
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
   ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) sets y to 63 immediately
   (when-let [^INode l3 (rt/node-by-id rt :logo3)]
@@ -303,12 +317,17 @@
   ;; over 0.4s starting at 0.7s. logo3 XML pos is at -36 (final position).
   (let [done? (atom false)
         logo3-final-y -36.0
-        logo3-start-y 63.0]
+        logo3-start-y 63.0
+        ;; Use wall-clock time: clock-ms-sig starts at 0 and is only updated on the
+        ;; first render frame, so capturing its value before the screen opens would
+        ;; give elapsed = game-time - 0 = instant completion. Wall-clock is always
+        ;; monotonic and avoids this race.
+        anim-start (System/currentTimeMillis)]
     (set-tick! rt :logo-anim-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
-        (fn [ms]
+        (fn [_]
           (when-not @done?
-            (let [elapsed (- (double ms) (double anim-start))]
+            (let [elapsed (- (System/currentTimeMillis) anim-start)]
               (doseq [[id start-ms dur-ms] logo-timings]
                 (set-logo-alpha! rt id (logo-fade-alpha elapsed start-ms dur-ms)))
               ;; logo3 blendY animation (matching upstream blendy(logo3, 0.7, 0.4, 63, -36))
@@ -465,7 +484,7 @@
         (let [^INode list-n (rt/node-by-id rt :list)
               delta (* (- (double (:delta evt 0.0))) 12.0)]
           (.setY list-n (max (- 400.0) (min 0.0 (+ (.getY list-n) delta))))
-          (.setFlag list-n node/FLAG-LAYOUT-DIRTY))))
+          (dirty-subtree! list-n))))
     ;; Drag-scrollbar interaction (matching upstream DragBar)
     (attach-scrollbar-drag! rt ui-state)))
 
@@ -515,7 +534,7 @@
     (events/on! r :btn-right :left-click
       (fn [_ _ _] (preview/cycle-sub-view! (:pvs ui-state) :next) (refresh-preview! r ui-state)))
     (if first-open?
-      (attach-first-open-animation! r (double (sig/sget-l (rt/clock-ms-sig r))))
+      (attach-first-open-animation! r nil)
       (setup-static-glow! r))
     r))
 

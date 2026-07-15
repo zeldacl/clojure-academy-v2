@@ -17,9 +17,12 @@
       <group id="logo1-anchor" pos="0.0,59.0" size="0.0,0.0" scale="0.25" align="center,center"/>
       <!-- Center markdown content area -->
       <group id="center-panel" pos="0.0,0.0" size="172.0,220.5" align="left,center"/>
-      <!-- Scrollbar -->
-      <image id="scroll-track" pos="0.0,0.0" size="9.5,216.5" align="right,center" src="my_mod:textures/guis/button/widget_scroll_1.png"/>
-      <image id="scroll-thumb" pos="0.0,2.0" size="9.5,53.0" align="right,top" src="my_mod:textures/guis/button/widget_scroll_2.png" tint="#CCFFFFFF"/>
+      <!-- Scrollbar container — 172px matches center content width so right-aligned
+           thumb sits near the content edge, not the screen edge -->
+      <group id="scroll-container" pos="0.0,0.0" size="172.0,220.5" align="left,center">
+        <image id="scroll-track" pos="0.0,0.0" size="9.5,216.5" align="right,center" src="my_mod:textures/guis/button/widget_scroll_1.png"/>
+        <image id="scroll-thumb" pos="0.0,2.0" size="9.5,53.0" align="right,top" src="my_mod:textures/guis/button/widget_scroll_2.png" tint="#CCFFFFFF"/>
+      </group>
       <!-- Preview window -->
       <group id="show-window" pos="0.0,0.0" size="158.5,136.0" align="right,top">
         <group id="preview-area" pos="0.0,-2.0" size="134.0,134.0" align="center,center"/>

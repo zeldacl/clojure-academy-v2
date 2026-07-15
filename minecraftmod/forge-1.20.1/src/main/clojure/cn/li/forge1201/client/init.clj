@@ -305,7 +305,11 @@
                     (accept [_ evt]
                       (let [^TickEvent$ClientTickEvent evt evt]
                         (when (= (.phase evt) TickEvent$Phase/END)
-                          (content-actions/run-client-tick-hooks!))))))
+                          ;; 铁律六：tick 事件是新调用链入口，必须重建客户端
+                          ;; session 上下文（与 runtime-bridge/packet handler 一致），
+                          ;; 否则 hook 内 read-model/owner-key 读不到 session-id。
+                          (mc-session/with-current-client-session
+                            content-actions/run-client-tick-hooks!))))))
     (catch Throwable _
       (log/warn "Failed to register client tick hooks")))
 
