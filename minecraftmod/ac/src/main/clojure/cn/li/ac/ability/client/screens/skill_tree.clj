@@ -297,9 +297,15 @@
 ;; ============================================================================
 
 (defn create-skill-tree-widget
-  "Widget factory for :ac/skill-tree — returns reactive screen descriptor."
+  "Widget factory for :ac/skill-tree — returns reactive screen descriptor.
+   owner comes from open-screen-dispatcher payload, which only provides :player-uuid
+   when invoked from a GUI key press (N key). Fall back to runtime-hooks for
+   client-session-id when the payload doesn't supply one."
   [{:keys [player-uuid client-session-id learn-context] :as payload}]
-  (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
+  (let [owner {:client-session-id (or client-session-id
+                                      (try ((requiring-resolve 'cn.li.mcmod.hooks.core/client-session-id))
+                                           (catch Throwable _ "")))
+               :player-uuid player-uuid}
         create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/create-runtime)
         on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/on-close!)
         r (create-runtime owner :learn-context learn-context)]

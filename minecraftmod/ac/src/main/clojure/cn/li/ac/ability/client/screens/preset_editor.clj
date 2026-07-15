@@ -56,47 +56,77 @@
   [skill-spec]
   (or (:skill-id skill-spec) (:id skill-spec)))
 
+(defn- slot-info
+  "Build slot info map for a controllable pair. Returns nil if skill not found."
+  [pair]
+  (when (and (vector? pair) (= 2 (count pair)))
+    (let [[cat-id ctrl-id] pair
+          skill-obj (skill-query/get-skill-by-controllable cat-id ctrl-id)]
+      (when skill-obj
+        {:skill-id skill-obj
+         :skill-name (:name (skill-registry/get-skill skill-obj))
+         :skill-icon (skill-query/get-skill-icon-path skill-obj)
+         :cat-id cat-id
+         :ctrl-id ctrl-id}))))
+
+(defn- presets-all-slots
+  "Build slot info for all 4 presets. Returns map {preset-idx [slot-0 slot-1 slot-2 slot-3]}."
+  [slots-data]
+  (into {}
+    (for [preset-idx (range 4)]
+      [preset-idx
+       (mapv (fn [key-idx]
+               (slot-info (get slots-data [preset-idx key-idx])))
+             (range 4))])))
+
+(defn- assigned-ctrl-ids
+  "Set of controllable ids already assigned in the given preset."
+  [slots-data preset-idx]
+  (set (keep (fn [key-idx]
+               (when-let [pair (get slots-data [preset-idx key-idx])]
+                 (second pair)))
+             (range 4))))
+
 (defn build-preset-editor-render-data
-  "Build complete preset editor render data."
+  "Build complete preset editor render data.
+   Returns nil if player state is unavailable."
   [owner]
   (let [state (editor-state-snapshot owner)
         owner-key (editor-owner-key owner)]
-  (when-let [_player-uuid (:player-uuid state)]
-    (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
-      (let [ability-data (:ability-data player-state)
-            preset-data (:preset-data player-state)
-            category-id (:category-id ability-data)
-            learned-skills (when category-id
-                     (filter #(adata/is-learned? ability-data (spec-skill-id %))
-                       (skill-query/get-skills-for-category category-id)))
-                controllable-skills (filter #(and (:enabled %) (:controllable? %)) learned-skills)
-            current-preset (:selected-preset state)
-            active-preset (:active-preset preset-data)
-            slots (:slots preset-data)]
-        {:presets (range 4)
-         :selected-preset current-preset
-         :active-preset active-preset
-         :slots (vec
-                  (for [idx (range 4)]
-                    (when-let [slot (get-in slots [[current-preset idx]])]
-                      (when (and (vector? slot) (= 2 (count slot)))
-                        (let [[cat-id ctrl-id] slot
-                              skill-obj (skill-query/get-skill-by-controllable cat-id ctrl-id)]
-                          (when skill-obj
-                            {:idx idx
-                             :skill-id skill-obj
-                             :skill-name (:name (skill-registry/get-skill skill-obj))
-                             :skill-icon (skill-query/get-skill-icon-path skill-obj)}))))))
-         :available-skills (mapv
-                             (fn [s]
-                               {:skill-id (spec-skill-id s)
-                                :skill-name (:name s)
-                                :skill-icon (skill-query/get-skill-icon-path (spec-skill-id s))
-                                :cat-id (:category-id s)
-                                :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
-                             controllable-skills)
-         :selected-skill (:selected-skill state)
-         :has-changes (not (empty? (:pending-changes state)))})))))
+    (when-let [_player-uuid (:player-uuid state)]
+      (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
+        (let [ability-data (:ability-data player-state)
+              preset-data (:preset-data player-state)
+              category-id (:category-id ability-data)
+              slots-data (:slots preset-data {})
+              current-preset (:selected-preset state)
+              active-preset (:active-preset preset-data 0)
+              ;; All learned + enabled + controllable skills in current category
+              learned-skills (when category-id
+                               (filter #(adata/is-learned? ability-data (spec-skill-id %))
+                                 (skill-query/get-skills-for-category category-id)))
+              controllable-skills (filter #(and (:enabled %) (:controllable? %)) learned-skills)
+              ;; Exclude skills already assigned in current preset (matching upstream)
+              assigned-ids (assigned-ctrl-ids slots-data current-preset)
+              available-for-preset (remove #(contains? assigned-ids (:ctrl-id %)) controllable-skills)]
+          {:presets (range 4)
+           :selected-preset current-preset
+           :active-preset active-preset
+           ;; All 4 presets' slot data (for carousel)
+           :all-preset-slots (presets-all-slots slots-data)
+           ;; Selected preset's slots (for detail view / selector)
+           :slots (mapv (fn [idx] (slot-info (get slots-data [current-preset idx]))) (range 4))
+           ;; Skills NOT yet in current preset (matching upstream filter)
+           :available-skills (mapv
+                               (fn [s]
+                                 {:skill-id (spec-skill-id s)
+                                  :skill-name (:name s)
+                                  :skill-icon (skill-query/get-skill-icon-path (spec-skill-id s))
+                                  :cat-id (:category-id s)
+                                  :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
+                               available-for-preset)
+           :selected-skill (:selected-skill state)
+           :has-changes (not (empty? (:pending-changes state)))})))))
 
 ;; ============================================================================
 ;; Event Handlers
@@ -160,9 +190,15 @@
 ;; ============================================================================
 
 (defn create-preset-editor-widget
-  "Widget factory for :ac/preset-editor — returns reactive screen descriptor."
+  "Widget factory for :ac/preset-editor — returns reactive screen descriptor.
+   owner comes from open-screen-dispatcher payload, which only provides :player-uuid
+   when invoked from a GUI key press (M key). Fall back to runtime-hooks for
+   client-session-id when the payload doesn't supply one."
   [{:keys [player-uuid client-session-id]}]
-  (let [owner {:client-session-id (or client-session-id "") :player-uuid player-uuid}
+  (let [owner {:client-session-id (or client-session-id
+                                      (try ((requiring-resolve 'cn.li.mcmod.hooks.core/client-session-id))
+                                           (catch Throwable _ "")))
+               :player-uuid player-uuid}
         create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/create-runtime)
         on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.preset-editor-reactive/on-close!)
         r (create-runtime owner)]

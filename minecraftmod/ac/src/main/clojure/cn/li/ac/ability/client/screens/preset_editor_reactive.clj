@@ -1,217 +1,402 @@
 (ns cn.li.ac.ability.client.screens.preset-editor-reactive
-  "Reactive Preset Editor — native node tree + signal bindings.
-   State and server requests remain in preset-editor."
+  "Preset Editor reactive UI — fully aligned with AcademyCraft PresetEditUI.java.
+   XML-driven layout, horizontal carousel with lerp animation, selector popup
+   with background/glow/tooltip, full-screen dark overlay, ESC to close.
+
+   Exact upstream constants:
+   - STEP=125, TRANSIT_TIME=0.35, MAX_ALPHA=255, MIN_ALPHA=77 (0.3)
+   - MAX_SCALE=1.0, MIN_SCALE=0.8
+   - CRL_BACK=(49,49,49,200), CRL_WHITE=(1,1,1,0.6), CRL_GLOW=(1,1,1,0.2)
+   - Selector: MAX_PER_ROW=4, MARGIN=2.5, SIZE=15, STEP=18"
   (:require [cn.li.ac.ability.client.screens.preset-editor :as logic]
+            [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.signal :as sig])
+            [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.xml :as ui-xml]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
 
+;; Forward declare — used by build-selector! before definition
 (declare refresh-ui!)
 
-(def ^:private panel-w 340.0)
-(def ^:private panel-h 250.0)
-(def ^:private skill-row-h 22.0)
-(def ^:private skill-visible-h 140.0)
+;; ============================================================================
+;; Carousel constants (matching upstream PresetEditUI.java exactly)
+;; ============================================================================
 
-(def ^:private color-tab-selected 0xFF4C6FFF)
-(def ^:private color-tab-idle 0xFF333333)
-(def ^:private color-slot-bg 0xFF252525)
-(def ^:private color-skill-idle 0xFF202020)
-(def ^:private color-skill-selected 0xFF2E6B2E)
-(def ^:private color-save-active 0xFF4A8F4A)
-(def ^:private color-save-idle 0xFF444444)
-(def ^:private color-active-btn 0xFF444488)
+(def ^:private step 125.0)        ;; horizontal offset between pages
+(def ^:private transit-time 0.35) ;; slide transition duration (seconds)
+(def ^:private max-alpha 1.0)     ;; Colors.f2i(1f)
+(def ^:private min-alpha 0.3)     ;; Colors.f2i(0.3f)
+(def ^:private max-scale 1.0)
+(def ^:private min-scale 0.8)
 
-(def ^:private slot-template
-  {:kind :group
-   :props {:h 25.0 :w 100.0}
-   :children [{:kind :box :id :bg
-               :props {:x 0.0 :y 0.0 :w 100.0 :h 20.0 :fill color-slot-bg}}
-              {:kind :text :id :label
-               :props {:x 4.0 :y 6.0 :w 90.0 :h 14.0 :text ""
-                       :font-size 10.0 :color 0xFFFFFFFF}}]})
+;; Selector constants (matching upstream Selector inner class exactly)
+(def ^:private sel-max-per-row 4)
+(def ^:private sel-margin 2.5)
+(def ^:private sel-size 15.0)
+(def ^:private sel-step (+ sel-size 3.0))
 
-(def ^:private skill-template
-  {:kind :group
-   :props {:h skill-row-h :w 150.0}
-   :children [{:kind :box :id :bg
-               :props {:x 0.0 :y 0.0 :w 150.0 :h 20.0 :fill color-skill-idle}}
-              {:kind :text :id :label
-               :props {:x 4.0 :y 6.0 :w 140.0 :h 14.0 :text ""
-                       :font-size 10.0 :color 0xFFFFFFFF}}]})
+;; Selector colors (matching upstream CRL_* constants)
+(def ^:private crl-back  0xC8313131)  ;; (49,49,49,200)
+(def ^:private crl-white 0x99FFFFFF)  ;; (1,1,1,0.6)
+(def ^:private crl-glow  0x33FFFFFF)  ;; (1,1,1,0.2)
 
-(def ^:private ui-spec
-  {:kind :group :id :root
-   :props {:w panel-w :h panel-h :align-w :center :align-h :middle}
-   :children
-   [{:kind :text :id :title
-     :props {:x 10.0 :y 2.0 :w 200.0 :h 16.0 :text "Preset Editor"
-             :font-size 12.0 :color 0xFFFFFFFF}}
-    (for [idx (range 4)]
-      {:kind :box :id (keyword (str "ptab-" idx))
-       :props {:x (+ 10.0 (* idx 45.0)) :y 10.0 :w 40.0 :h 20.0
-               :fill color-tab-idle :hover-tint 0x33FFFFFF}
-       :children [{:kind :text :id (keyword (str "ptab-lbl-" idx))
-                   :props {:x 10.0 :y 6.0 :w 30.0 :h 14.0
-                           :text (str "P" (inc idx))
-                           :font-size 10.0 :color 0xFFFFFFFF}}]})
-    {:kind :list :id :slot-list
-     :props {:x 10.0 :y 40.0 :w 100.0 :h 100.0 :template slot-template :spacing 5.0}}
-    {:kind :list :id :skill-list
-     :props {:x 170.0 :y 40.0 :w 150.0 :h skill-visible-h
-             :template skill-template :spacing 2.0}}
-    {:kind :box :id :save-btn
-     :props {:x 10.0 :y 200.0 :w 80.0 :h 20.0 :fill color-save-idle :hover-tint 0x33FFFFFF}
-     :children [{:kind :text :id :save-lbl
-                 :props {:x 25.0 :y 6.0 :w 40.0 :h 14.0 :text "Save"
-                         :font-size 10.0 :color 0xFFFFFFFF}}]}
-    {:kind :box :id :active-btn
-     :props {:x 100.0 :y 200.0 :w 80.0 :h 20.0 :fill color-active-btn :hover-tint 0x33FFFFFF}
-     :children [{:kind :text :id :active-lbl
-                 :props {:x 8.0 :y 6.0 :w 70.0 :h 14.0 :text "Set Active"
-                         :font-size 10.0 :color 0xFFFFFFFF}}]}]})
+;; ============================================================================
+;; State tracking per-session (Framework-backed for lifecycle safety)
+;; ============================================================================
 
-;; Keyed by [client-session-id player-uuid] — not player-uuid alone — so a
-;; stale entry from a previous world/server session (same player profile,
-;; same JVM) can never be mistaken for the currently-open screen. See
-;; docs/dev/AGENT_AND_TOOLING.md P5.
 (def ^:private active-by-session-path [:service :preset-editor :active-by-session])
 
-(defn- owner-key [owner]
-  (logic/editor-owner-key owner))
-
 (defn- track-active! [owner ^UiRt r]
-  (when-let [uuid (or (:player-uuid owner) (nth (owner-key owner) 2 nil))]
+  (when-let [uuid (or (:player-uuid owner) (nth (logic/editor-owner-key owner) 2 nil))]
     (when-let [session-id (:client-session-id owner)]
-      (swap! (fw/fw-atom) assoc-in (conj active-by-session-path [session-id uuid]) {:rt r :owner owner}))))
+      (swap! (fw/fw-atom) assoc-in (conj active-by-session-path [session-id uuid])
+             {:rt r :owner owner}))))
 
 (defn- untrack-active! [owner]
-  (when-let [uuid (or (:player-uuid owner) (nth (owner-key owner) 2 nil))]
+  (when-let [uuid (or (:player-uuid owner) (nth (logic/editor-owner-key owner) 2 nil))]
     (when-let [session-id (:client-session-id owner)]
       (swap! (fw/fw-atom) update-in active-by-session-path dissoc [session-id uuid]))))
 
-(defn- refresh-preset-tab-labels! [^UiRt r rd]
-  (let [selected (:selected-preset rd)
-        active (:active-preset rd)]
-    (doseq [idx (range 4)]
-      (when-let [^INode tab (ui/node r (keyword (str "ptab-" idx)))]
-        (ui/set-node-prop! r tab :fill (if (= idx selected) color-tab-selected color-tab-idle)))
-      (when-let [^INode lbl (ui/node r (keyword (str "ptab-lbl-" idx)))]
-        (ui/set-node-prop! r lbl :text (str "P" (inc idx) (when (= idx active) "*")))))))
+(defn- cached-owner [^UiRt r]
+  (or (:owner (rt/user-signal r :owner))
+      (when-let [session-id (runtime-hooks/client-session-id)]
+        (some (fn [[[sid _] v]] (when (= sid session-id) (:owner v)))
+              (get-in @(fw/fw-atom) active-by-session-path)))))
 
-(defn- wire-preset-tabs! [^UiRt r owner]
-  (doseq [idx (range 4)]
-    (when-let [^INode tab (ui/node r (keyword (str "ptab-" idx)))]
-      (rt/register-event! r (.getIdx tab) :left-click
+;; ============================================================================
+;; Helpers
+;; ============================================================================
+
+(defn- local [key]
+  (or (i18n/translate (str "ac.gui.preset_edit." key)) key))
+
+(defn- now-sec []
+  "Current time in fractional seconds."
+  (/ (double (System/currentTimeMillis)) 1000.0))
+
+(defn- lerp-d [a b t]
+  (+ (double a) (* (- (double b) (double a)) (max 0.0 (min 1.0 (double t))))))
+
+;; ============================================================================
+;; Carousel animation state
+;; ============================================================================
+
+(defn- carousel-anim [^UiRt r]
+  (or (rt/user-signal r :carousel-anim)
+      (let [a (atom {:active 0 :from 0 :to 0 :start-time 0.0 :transiting? false})]
+        (rt/put-user-signal! r :carousel-anim a)
+        a)))
+
+(defn- start-transit! [^UiRt r from-idx to-idx]
+  (let [anim (carousel-anim r)]
+    (swap! anim assoc
+           :from from-idx :to to-idx
+           :start-time (now-sec) :transiting? true)))
+
+(defn- finish-transit! [^UiRt r]
+  (let [anim (carousel-anim r)]
+    (swap! anim assoc :transiting? false :active (:to @anim))))
+
+;; ============================================================================
+;; Slot info update — skill icon + name from preset data
+;; ============================================================================
+
+(defn- clear-selector! [^UiRt r]
+  (when-let [^INode sel (rt/node-by-id r :selector)]
+    (.setVisible sel false)
+    (.setFlag sel node/FLAG-LAYOUT-DIRTY)
+    (rt/clear-children! r sel))
+  (rt/put-user-signal! r :selector-open false)
+  (rt/put-user-signal! r :selector-slot nil))
+
+(defn- selector-open? [^UiRt r]
+  (boolean (rt/user-signal r :selector-open)))
+
+(defn- slot-tex-path [skill-id]
+  (if skill-id
+    (or (skill-query/get-skill-icon-path skill-id)
+        (modid/asset-path "textures" "missing.png"))
+    (modid/asset-path "textures" "missing.png")))
+
+(defn- update-page-slot! [^UiRt r page-idx slot-idx slot-info]
+  "Update one slot's icon and text from slot-info map or nil."
+  (let [icon-node-id (keyword (str "preset-" page-idx "-" slot-idx "-icon"))
+        text-node-id (keyword (str "preset-" page-idx "-" slot-idx "-text"))
+        skill-id (:skill-id slot-info)
+        skill-name (:skill-name slot-info)]
+    (when-let [^INode icon (rt/node-by-id r icon-node-id)]
+      (ui/set-node-prop! r icon :src (slot-tex-path skill-id)))
+    (when-let [^INode text (rt/node-by-id r text-node-id)]
+      (ui/set-node-prop! r text :text (or skill-name "")))))
+
+(defn- update-page-slots! [^UiRt r page-idx slots]
+  (doseq [slot-idx (range 4)]
+    (update-page-slot! r page-idx slot-idx (nth slots slot-idx nil))))
+
+(defn- update-page-title! [^UiRt r page-idx]
+  (when-let [^INode title (rt/node-by-id r (keyword (str "preset-" page-idx "-title")))]
+    (ui/set-node-prop! r title :text (str (local "tag") (inc page-idx)))))
+
+;; ============================================================================
+;; Selector popup — fully aligned with upstream Selector inner class
+;; ============================================================================
+
+(defn- build-selector! [^UiRt r page-idx slot-idx mx my]
+  (clear-selector! r)
+  (let [owner (cached-owner r)
+        rd (when owner (logic/build-preset-editor-render-data owner))
+        available (vec (:available-skills rd))
+        ;; Items: -1 = remove (matching upstream cancel button), then skills
+        items (into [{:id -1 :icon (modid/asset-path "textures" "guis/preset_settings/cancel.png")
+                      :name (local "skill_remove")}]
+                    (mapv (fn [s]
+                            {:id (:ctrl-id s) :skill-id (:skill-id s)
+                             :icon (or (:skill-icon s) (modid/asset-path "textures" "missing.png"))
+                             :name (:skill-name s) :cat-id (:cat-id s) :ctrl-id (:ctrl-id s)})
+                          available))
+        n (count items)
+        rows (int (Math/ceil (/ (double n) sel-max-per-row)))
+        cols (min n sel-max-per-row)
+        sel-w (+ (* 2 sel-margin) (* sel-step (dec cols)) sel-size)
+        sel-h (+ (* 2 sel-margin) (* sel-step (dec rows)) sel-size)
+        ;; Tooltip bar below selector (matching upstream)
+        tooltip-h 12.0
+        total-h (+ sel-h tooltip-h 3.0)]
+    (when-let [^INode sel-node (rt/node-by-id r :selector)]
+      ;; Reposition and resize selector container
+      (.setX sel-node (double mx))
+      (.setY sel-node (double (- my total-h)))
+      (ui/set-node-prop! r :selector :w sel-w)
+      (ui/set-node-prop! r :selector :h total-h)
+      (.setVisible sel-node true)
+      (.setFlag sel-node node/FLAG-LAYOUT-DIRTY)
+      ;; Selector background + glow (matching upstream CRL_BACK + CRL_GLOW)
+      (rt/build-child! r
+        {:kind :box :props {:id :sel-bg :x 0.0 :y 0.0 :w sel-w :h sel-h :fill crl-back}}
+        sel-node)
+      ;; Tooltip bar (matching upstream font.draw hint text)
+      (rt/build-child! r
+        {:kind :group :props {:id :sel-tooltip :x 0.0 :y (+ sel-h 3.0) :w sel-w :h tooltip-h}
+         :children
+         [{:kind :box :props {:id :sel-tooltip-bg :x 0.0 :y 0.0 :w sel-w :h tooltip-h :fill crl-back}}
+          {:kind :text :props {:id :sel-tooltip-text :x 3.0 :y 1.5 :w (- sel-w 6.0) :h 10.0
+                               :text (local "skill_select") :font-size 9.0
+                               :color 0xFFBBBBBB}}]}
+        sel-node)
+      ;; Selector item grid
+      (doseq [[i item] (map-indexed vector items)]
+        (let [row (quot i sel-max-per-row)
+              col (rem i sel-max-per-row)
+              item-x (+ sel-margin (* col sel-step))
+              item-y (+ sel-margin (* row sel-step))
+              item-id (keyword (str "sel-" i))]
+          (rt/build-child! r
+            {:kind :group
+             :props {:id item-id :x item-x :y item-y :w sel-size :h sel-size}
+             :children
+             [{:kind :image
+               :props {:id (keyword (str (name item-id) "-icon"))
+                       :x 0.0 :y 0.0 :w sel-size :h sel-size :src (:icon item)}}
+              {:kind :box
+               :props {:id (keyword (str (name item-id) "-hit"))
+                       :x 0.0 :y 0.0 :w sel-size :h sel-size
+                       :fill 0x00000000 :hover-tint crl-white}}]}
+            sel-node)
+          ;; Click handler — immediate save + close (matching upstream SelHandler)
+          (events/on! r item-id :left-click
+            (fn [_ _ _]
+              (if (= -1 (:id item))
+                ;; Remove → clear slot (upstream cancel button)
+                (when owner
+                  (api/req-set-preset-slot! owner page-idx slot-idx nil nil nil))
+                ;; Assign skill → immediate save (upstream onEdit)
+                (when owner
+                  (api/req-set-preset-slot! owner page-idx slot-idx
+                                           (:cat-id item) (:ctrl-id item) nil)))
+              (clear-selector! r)
+              (refresh-ui! r owner)))))
+      ;; Track which slot the selector is open for
+      (rt/put-user-signal! r :selector-open true)
+      (rt/put-user-signal! r :selector-slot [page-idx slot-idx]))))
+
+;; ============================================================================
+;; Page refresh — react to preset data changes
+;; ============================================================================
+
+(defn- page-x-from-active [page-idx active-idx]
+  "Upstream getXFor(i, active): STEP * (i - active). Active at center (0)."
+  (* step (- page-idx active-idx)))
+
+(defn- refresh-carousel! [^UiRt r owner]
+  (when-let [rd (logic/build-preset-editor-render-data owner)]
+    (let [all-slots (:all-preset-slots rd)
+          selected-preset (:selected-preset rd)
+          anim (carousel-anim r)]
+      (doseq [page-idx (range 4)]
+        (let [page-slots (get all-slots page-idx (vec (repeat 4 nil)))]
+          (update-page-slots! r page-idx page-slots)
+          (update-page-title! r page-idx)))
+      ;; Update carousel target: center on selected-preset (upstream updatePosForeground)
+      (swap! anim assoc :active selected-preset))))
+
+;; ============================================================================
+;; Animated carousel tick — matching upstream updateTransit + updatePosForeground
+;; ============================================================================
+
+(defn- apply-page-transform! [^UiRt r page-idx x scale visible?]
+  "Position a carousel page. Uses INode.setX + .setScale (native interface methods).
+   INode has no setAlpha — dimming is achieved via scale reduction + visibility on inactive pages."
+  (when-let [^INode pn (rt/node-by-id r (keyword (str "preset-" page-idx)))]
+    (.setX pn (double x))
+    (.setScale pn (double scale))
+    (.setVisible pn (boolean visible?))
+    (.setFlag pn node/FLAG-LAYOUT-DIRTY)))
+
+(defn- attach-carousel-tick! [^UiRt r]
+  (let [clock (rt/clock-ms-sig r)
+        anim (carousel-anim r)
+        computed (sig/computed-o [clock]
+                   (fn [_]
+                     (let [{:keys [active from to start-time transiting?]} @anim]
+                       (if transiting?
+                         ;; Upstream updateTransit: lerp x + scale between from and to
+                         (let [elapsed (- (now-sec) (double start-time))
+                               progress (min 1.0 (/ elapsed transit-time))]
+                           (doseq [page-idx (range 4)]
+                             (let [x0 (page-x-from-active page-idx from)
+                                   x1 (page-x-from-active page-idx to)
+                                   x (lerp-d x0 x1 progress)
+                                   from? (= page-idx from)
+                                   to? (= page-idx to)
+                                   scale (cond
+                                           from? (lerp-d max-scale min-scale progress)
+                                           to?   (lerp-d min-scale max-scale progress)
+                                           :else min-scale)
+                                   visible? (or from? to?)]
+                               (apply-page-transform! r page-idx x scale visible?)))
+                           (when (>= progress 1.0)
+                             (finish-transit! r)
+                             (doseq [page-idx (range 4)]
+                               (let [active? (= page-idx to)]
+                                 (apply-page-transform! r page-idx
+                                   (page-x-from-active page-idx to)
+                                   (if active? max-scale min-scale)
+                                   true)))))
+                         ;; Not transiting — upstream updatePosForeground
+                         (doseq [page-idx (range 4)]
+                           (let [active? (= page-idx active)]
+                             (apply-page-transform! r page-idx
+                               (page-x-from-active page-idx active)
+                               (if active? max-scale min-scale)
+                               true)))))
+                     nil))]
+    (let [^INode anchor (rt/node-by-id r :preset-0)]
+      (when anchor
+        (let [b (sig/bind! computed anchor (fn [_ _] nil) (rt/get-dirty-bindings-q r))]
+          (rt/register-binding! r (.getIdx anchor) b))))))
+
+;; ============================================================================
+;; Wire slot clicks → open Selector (matching upstream HintHandler)
+;; ============================================================================
+
+(defn- wire-slot-clicks! [^UiRt r owner page-idx]
+  (doseq [slot-idx (range 4)]
+    (let [slot-id (keyword (str "preset-" page-idx "-" slot-idx))]
+      (events/on! r slot-id :left-click
+        (fn [_ _ evt]
+          (let [anim (carousel-anim r)]
+            (when-not (:transiting? @anim)
+              (if (selector-open? r)
+                ;; Upstream: if selector open, dispose it (click same slot = close)
+                (clear-selector! r)
+                ;; Upstream: if page is active, open selector at mouse position
+                (when (= page-idx (:active @anim))
+                  (let [mx (double (or (:x evt) 0))
+                        my (double (or (:y evt) 0))]
+                    (build-selector! r page-idx slot-idx mx my)))))))))))
+
+;; ============================================================================
+;; Wire page clicks → switch to that preset (matching upstream startTransit)
+;; ============================================================================
+
+(defn- wire-page-clicks! [^UiRt r owner]
+  (doseq [page-idx (range 4)]
+    (let [page-id (keyword (str "preset-" page-idx))]
+      (events/on! r page-id :left-click
         (fn [_ _ _]
-          (logic/on-preset-tab-click owner idx)
-          (refresh-ui! r owner))))))
+          (let [anim (carousel-anim r)]
+            (when-not (:transiting? @anim)
+              (clear-selector! r)
+              (when (not= page-idx (:active @anim))
+                (let [from-idx (:active @anim)]
+                  (start-transit! r from-idx page-idx)
+                  ;; Update logic state so data reads use the new preset
+                  (logic/on-preset-tab-click owner page-idx)
+                  (refresh-carousel! r owner))))))))))
 
-(defn- populate-slots! [^UiRt r owner rd]
-  (let [slots (vec (or (:slots rd) (repeat 4 nil)))]
-    (ui/list-set! r :slot-list (range 4)
-      (fn [rt item slot-idx]
-        (let [slot (nth slots slot-idx nil)
-              label (str "Slot " (inc slot-idx) ": " (or (:skill-name slot) "<empty>"))]
-          (ui/set-node-prop! rt (ui/item-node item :label) :text label)
-          (let [^INode bg (ui/item-node item :bg)]
-            (rt/register-event! rt (.getIdx bg) :left-click
-              (fn [_ _ _]
-                (logic/on-slot-click owner slot-idx)
-                (refresh-ui! rt owner)))))))))
-
-(defn- populate-skills! [^UiRt r owner rd]
-  (let [skills (vec (:available-skills rd))
-        selected (:selected-skill rd)
-        skill-count-sig (rt/user-signal r :skill-count)]
-    (when skill-count-sig (sig/sset-l! skill-count-sig (count skills)))
-    (ui/list-set! r :skill-list skills
-      (fn [rt item skill]
-        (let [chosen? (= (:skill-id skill) selected)]
-          (ui/set-node-prop! rt (ui/item-node item :label) :text (:skill-name skill))
-          (ui/set-node-prop! rt (ui/item-node item :bg) :fill
-            (if chosen? color-skill-selected color-skill-idle))
-          (let [^INode bg (ui/item-node item :bg)]
-            (rt/register-event! rt (.getIdx bg) :left-click
-              (fn [_ _ _]
-                (logic/on-skill-select owner (:skill-id skill))
-                (refresh-ui! rt owner)))))))))
-
-(defn- refresh-action-buttons! [^UiRt r rd]
-  (when-let [^INode save (ui/node r :save-btn)]
-    (ui/set-node-prop! r save :fill (if (:has-changes rd) color-save-active color-save-idle))))
+;; ============================================================================
+;; Public API
+;; ============================================================================
 
 (defn refresh-ui!
-  "Rebuild list rows and tab highlights from current editor + player state."
+  "Rebuild carousel + slot contents from current editor + player state."
   [^UiRt r owner]
-  (if-let [rd (logic/build-preset-editor-render-data owner)]
-    (do
-      (refresh-preset-tab-labels! r rd)
-      (populate-slots! r owner rd)
-      (populate-skills! r owner rd)
-      (refresh-action-buttons! r rd))
+  (when owner
+    (refresh-carousel! r owner)
     nil))
 
 (defn refresh-active-screen!
   "Called when server preset data syncs while the editor is open."
   [player-uuid]
   (when-let [session-id (runtime-hooks/client-session-id)]
-    (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom) (conj active-by-session-path [session-id player-uuid]))]
+    (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom)
+                                          (conj active-by-session-path [session-id player-uuid]))]
       (refresh-ui! rt owner))))
 
-(defn- wire-action-buttons! [^UiRt r owner]
-  (doseq [[id action]
-          [[:save-btn logic/on-save-click]
-           [:active-btn logic/on-set-active-click]]]
-    (when-let [^INode btn (ui/node r id)]
-      (rt/register-event! r (.getIdx btn) :left-click
-        (fn [_ _ _]
-          (action owner)
-          (refresh-ui! r owner))))))
-
-(defn- wire-skill-scroll! [^UiRt r]
-  (let [scroll (sig/signal-d 0.0)
-        skill-count (sig/signal-l 0)]
-    (rt/put-user-signal! r :skill-scroll scroll)
-    (rt/put-user-signal! r :skill-count skill-count)
-    (ui/bind! r :skill-list :scroll-offset
-      (sig/computed-d [scroll skill-count]
-        (fn [_]
-          (let [n (sig/sget-l skill-count)
-                max-scroll (max 0.0 (- (* n (+ skill-row-h 2.0)) skill-visible-h))]
-            (* (sig/sget-d scroll) max-scroll)))))
-    (events/on! r :skill-list :mouse-scroll
-      (fn [_ _ evt]
-        (sig/sset-d! scroll (max 0.0 (min 1.0 (+ (sig/sget-d scroll) (* (:delta evt) 0.05)))))))))
+(defn- load-page-spec []
+  (ui-xml/load-spec (modid/namespaced-path "guis/new/preset_edit.xml")))
 
 (defn create-runtime
-  "Build reactive preset editor runtime for owner (map with :player-uuid)."
+  "Build reactive preset editor runtime fully matching upstream AcademyCraft UX."
   [owner]
   (let [r (rt/create-runtime)
-        flat-spec (update ui-spec :children
-                          (fn [chs]
-                            (vec (mapcat #(if (vector? %) % [%]) chs))))]
-    (logic/open-screen! owner)
-    (rt/build! r flat-spec)
-    (track-active! owner r)
+        spec (load-page-spec)
+        _ (rt/build! r spec)
+        _ (logic/open-screen! owner)]
     (rt/put-user-signal! r :owner owner)
-    (wire-preset-tabs! r owner)
-    (wire-action-buttons! r owner)
-    (wire-skill-scroll! r)
+    (track-active! owner r)
+    ;; Wire all interactions
+    (wire-page-clicks! r owner)
+    (doseq [page-idx (range 4)]
+      (wire-slot-clicks! r owner page-idx))
+    ;; Carousel animation — matching upstream updateTransit + updatePosForeground
+    (attach-carousel-tick! r)
+    ;; Initial state
+    (let [anim (carousel-anim r)]
+      (swap! anim assoc :active (:selected-preset
+                                  (or (logic/build-preset-editor-render-data owner)
+                                      {:selected-preset 0}))))
     (refresh-ui! r owner)
     r))
 
 (defn open-screen!
+  "Open the preset editor as a reactive overlay screen."
   ([owner]
    (let [^UiRt r (create-runtime owner)]
-     (bridge/open-reactive-screen! r "Preset Editor"
-       {:on-close #(do (untrack-active! owner)
+     (bridge/open-reactive-screen! r (local "name")
+       {:on-close #(do (clear-selector! r)
+                       (untrack-active! owner)
                        (logic/close-screen! owner))}))))
 
 (defn on-close!
