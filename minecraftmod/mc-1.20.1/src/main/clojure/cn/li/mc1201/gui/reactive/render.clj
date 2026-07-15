@@ -387,15 +387,124 @@
 (defn bake-shader-progress! [^INode _node] nil)
 
 ;; ============================================================================
-;; :gradient
+;; :gradient — pre-compute stops into baked bands, render via BufferBuilder strips
 ;; ============================================================================
 
+(def ^:private SLOT-GRAD-ALPHA 0)
+(def ^:private SLOT-GRAD-ANGLE 1)
+(def ^:private SLOT-GRAD-STOPS  0)    ;; oslot: vector of [pos color] pairs
+(def ^:private SLOT-GRAD-BAKED  2)    ;; backend oslot: baked int-array bands
+
+(defn- interpolate-color [c0 c1 t]
+  "Interpolate between two ARGB int colors. t in [0,1]."
+  (let [a0 (bit-and (bit-shift-right c0 24) 0xFF)
+        r0 (bit-and (bit-shift-right c0 16) 0xFF)
+        g0 (bit-and (bit-shift-right c0 8) 0xFF)
+        b0 (bit-and c0 0xFF)
+        a1 (bit-and (bit-shift-right c1 24) 0xFF)
+        r1 (bit-and (bit-shift-right c1 16) 0xFF)
+        g1 (bit-and (bit-shift-right c1 8) 0xFF)
+        b1 (bit-and c1 0xFF)
+        a (int (+ (double a0) (* (- (double a1) (double a0)) t)))
+        r (int (+ (double r0) (* (- (double r1) (double r0)) t)))
+        g (int (+ (double g0) (* (- (double g1) (double g0)) t)))
+        b (int (+ (double b0) (* (- (double b1) (double b0)) t)))]
+    (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b)))
+
+(defn- gradient-color-at [stops pos]
+  "Get the interpolated ARGB color at position [0,1] from an ordered stops vector."
+  (let [n (count stops)]
+    (if (zero? n)
+      0x00000000
+      (let [first-stop (nth stops 0) last-stop (nth stops (dec n))]
+        (if (<= pos (double (first first-stop)))
+          (int (second first-stop))
+          (if (>= pos (double (first last-stop)))
+            (int (second last-stop))
+            (loop [i 0]
+              (let [s0 (nth stops i) s1 (nth stops (inc i))
+                    p0 (double (first s0)) p1 (double (first s1))]
+                (if (and (>= pos p0) (<= pos p1))
+                  (let [t (/ (- pos p0) (- p1 p0))]
+                    (interpolate-color (int (second s0)) (int (second s1)) t))
+                  (if (< (inc i) (dec n))
+                    (recur (inc i))
+                    0x00000000))))))))))
+
+(defn- bake-gradient-bands [stops n-bands]
+  "Pre-compute n-bands evenly-spaced ARGB colors from stops."
+  (let [bands (int-array n-bands)]
+    (dotimes [i n-bands]
+      (let [pos (/ (double i) (double (dec n-bands)))]
+        (aset bands i (int (gradient-color-at stops pos)))))
+    bands))
+
+(defn bake-gradient! [^INode node]
+  (when (nil? (.getOSlot node SLOT-GRAD-BAKED))
+    (when-let [stops (.getOSlot node SLOT-GRAD-STOPS)]
+      (when (and (vector? stops) (seq stops))
+        (let [w (.getW node) h (.getH node)
+              scale (.getCumScale node)
+              pixel-w (* w scale) pixel-h (* h scale)
+              n-bands (int (max 16 (min 128 (max pixel-w pixel-h))))]
+          (.setOSlot node SLOT-GRAD-BAKED (bake-gradient-bands stops n-bands)))))))
+
 (defn render-gradient! [^GuiGraphics gg ^INode node]
-  (let [x (node-abs-x node) y (node-abs-y node) w (scaled-w node) h (scaled-h node)]
-    (.fill gg (unchecked-int x) (unchecked-int y)
-           (unchecked-int (+ x w)) (unchecked-int (+ y h))
-           (unchecked-int 0x40FFFFFF))))
-(defn bake-gradient! [^INode _node] nil)
+  (let [bands (.getOSlot node SLOT-GRAD-BAKED)]
+    (when bands
+      (let [n (alength ^ints bands)
+            x (node-abs-x node) y (node-abs-y node)
+            w (scaled-w node) h (scaled-h node)
+            raw-alpha (.getDSlot node SLOT-GRAD-ALPHA)
+            alpha (if (pos? (double raw-alpha)) (max 0.0 (min 1.0 (double raw-alpha))) 1.0)
+            angle (double (.getDSlot node SLOT-GRAD-ANGLE))
+            horizontal? (< (Math/abs (- angle 90.0)) 45.0)
+            ^PoseStack ps (.pose gg)
+            ^PoseStack$Pose entry (.last ps)
+            ^Matrix4f pose-matrix (.pose entry)
+            ^Tesselator tess (Tesselator/getInstance)
+            ^BufferBuilder bb (.getBuilder tess)]
+        (RenderSystem/enableBlend)
+        (RenderSystem/defaultBlendFunc)
+        (if horizontal?
+          ;; Vertical bands for horizontal-ish gradient
+          (let [band-w (/ (double w) (double (max 1 (dec n))))]
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_COLOR)
+            (dotimes [i (dec n)]
+              (let [x0 (+ x (* band-w (double i))) x1 (+ x0 band-w)
+                    c0 (aget ^ints bands i) c1 (aget ^ints bands (inc i))
+                    a0 (float (* alpha (/ (double (bit-and (bit-shift-right c0 24) 0xFF)) 255.0)))
+                    r0 (float (/ (double (bit-and (bit-shift-right c0 16) 0xFF)) 255.0))
+                    g0 (float (/ (double (bit-and (bit-shift-right c0 8) 0xFF)) 255.0))
+                    b0 (float (/ (double (bit-and c0 0xFF)) 255.0))
+                    a1 (float (* alpha (/ (double (bit-and (bit-shift-right c1 24) 0xFF)) 255.0)))
+                    r1 (float (/ (double (bit-and (bit-shift-right c1 16) 0xFF)) 255.0))
+                    g1 (float (/ (double (bit-and (bit-shift-right c1 8) 0xFF)) 255.0))
+                    b1 (float (/ (double (bit-and c1 0xFF)) 255.0))]
+                (.vertex bb pose-matrix (float x0) (float y) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
+                (.vertex bb pose-matrix (float x1) (float y) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
+                (.vertex bb pose-matrix (float x1) (float (+ y h)) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
+                (.vertex bb pose-matrix (float x0) (float (+ y h)) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)))
+            (BufferUploader/drawWithShader (.end bb)))
+          ;; Horizontal bands for vertical-ish gradient
+          (let [band-h (/ (double h) (double (max 1 (dec n))))]
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_COLOR)
+            (dotimes [i (dec n)]
+              (let [y0 (+ y (* band-h (double i))) y1 (+ y0 band-h)
+                    c0 (aget ^ints bands i) c1 (aget ^ints bands (inc i))
+                    a0 (float (* alpha (/ (double (bit-and (bit-shift-right c0 24) 0xFF)) 255.0)))
+                    r0 (float (/ (double (bit-and (bit-shift-right c0 16) 0xFF)) 255.0))
+                    g0 (float (/ (double (bit-and (bit-shift-right c0 8) 0xFF)) 255.0))
+                    b0 (float (/ (double (bit-and c0 0xFF)) 255.0))
+                    a1 (float (* alpha (/ (double (bit-and (bit-shift-right c1 24) 0xFF)) 255.0)))
+                    r1 (float (/ (double (bit-and (bit-shift-right c1 16) 0xFF)) 255.0))
+                    g1 (float (/ (double (bit-and (bit-shift-right c1 8) 0xFF)) 255.0))
+                    b1 (float (/ (double (bit-and c1 0xFF)) 255.0))]
+                (.vertex bb pose-matrix (float x) (float y0) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
+                (.vertex bb pose-matrix (float (+ x w)) (float y0) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
+                (.vertex bb pose-matrix (float (+ x w)) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
+                (.vertex bb pose-matrix (float x) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)))
+            (BufferUploader/drawWithShader (.end bb)))))))
 
 ;; ============================================================================
 ;; :line
@@ -611,6 +720,51 @@
           (BufferUploader/drawWithShader (.end bb)))))))
 
 ;; ============================================================================
+;; :preview-item — renders an ItemStack scaled to fill the node area
+;; ============================================================================
+
+(def ^:private SLOT-PREVIEW-ITEM-ID 0)
+(def ^:private SLOT-PREVIEW-BAKED  2)  ;; backend oslot: ItemStack
+
+(defn bake-preview-item! [^INode node]
+  (when (nil? (.getOSlot node SLOT-PREVIEW-BAKED))
+    (when-let [item-id-val (.getOSlot node SLOT-PREVIEW-ITEM-ID)]
+      (when (string? item-id-val)
+        (try
+          (let [item-id (str item-id-val)
+                rl (if (str/includes? item-id ":")
+                     (let [parts (str/split item-id #":" 2)]
+                       (ResourceLocation. (first parts) (second parts)))
+                     (ResourceLocation. item-id))
+                ^net.minecraft.world.item.Item item
+                (.get net.minecraft.core.registries.BuiltInRegistries/ITEM rl)]
+            (if (and item (not= item net.minecraft.world.item.Items/AIR))
+              (.setOSlot node SLOT-PREVIEW-BAKED (net.minecraft.world.item.ItemStack. item))
+              ;; Try block registry (for :block-3d views where block may not have a direct item)
+              (let [^net.minecraft.world.level.block.Block block
+                    (.get net.minecraft.core.registries.BuiltInRegistries/BLOCK rl)]
+                (when (and block (not= block net.minecraft.world.level.block.Blocks/AIR))
+                  (.setOSlot node SLOT-PREVIEW-BAKED
+                    (net.minecraft.world.item.ItemStack. (.asItem block)))))))
+          (catch Throwable _
+            nil))))))
+
+(defn render-preview-item! [^GuiGraphics gg ^INode node]
+  (when-let [^net.minecraft.world.item.ItemStack stack (.getOSlot node SLOT-PREVIEW-BAKED)]
+    (let [x (node-abs-x node) y (node-abs-y node)
+          w (scaled-w node) h (scaled-h node)
+          item-size 16.0
+          scale-x (/ w item-size) scale-y (/ h item-size)
+          scale (min scale-x scale-y)
+          cx (+ x (/ w 2.0)) cy (+ y (/ h 2.0))
+          ^PoseStack ps (.pose gg)]
+      (.pushPose ps)
+      (.translate ps cx cy 0.0)
+      (.scale ps (float scale) (float scale) 1.0)
+      (.renderFakeItem gg stack -8 0)
+      (.popPose ps))))
+
+;; ============================================================================
 ;; :crosshair
 ;; ============================================================================
 
@@ -678,6 +832,7 @@
    :list            {:render! render-list!            :bake! bake-list!}
    :nine-slice      {:render! render-nine-slice!      :bake! bake-nine-slice!}
    :glow-line       {:render! render-glow-line!       :bake! bake-glow-line!}
+   :preview-item    {:render! render-preview-item!    :bake! bake-preview-item!}
    :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}})
 
 ;; ============================================================================

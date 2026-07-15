@@ -242,4 +242,11 @@
     :oslots {}
     :oslots-backend-base 0
     :prop-writers {}
+    :hit? false}
+
+   :preview-item
+   {:dslots {}
+    :oslots {:item-id 0}
+    :oslots-backend-base 2
+    :prop-writers {:item-id {:slot :oslot :idx 0 :sig :o}}
     :hit? false}})

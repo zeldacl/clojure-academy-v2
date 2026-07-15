@@ -5,16 +5,9 @@
    builders (create-icon-preview, create-recipe-preview, load-recipe-widget,
    etc.) are replaced with native node specs.
 
-   Simplification versus the original (no functional loss — verified via
-   repo-wide grep that no forge/mc-1.20.1 code ever consumed the
-   \"preview-block\"/\"preview-item\"/\"preview-grid\"/\"slot_in\"/\"slot_out\"/
-   \"mode\"/\"amount\" widget names, meaning the old :block-3d/:item-3d preview
-   and the recipe-widget's item slots were ALREADY inert placeholders with
-   nothing rendered into them — only the recipe background texture + a
-   hardcoded near-zero progress value from tutorial_windows.xml's XML
-   defaults were ever visible). This port keeps exactly what was visibly
-   there: recipe background texture, static progress sliver, icon/crafting-
-   grid textures; :block-3d/:item-3d remain empty placeholder boxes."
+   :block-3d and :item-3d views now render as scaled ItemStacks via the
+   :preview-item kind (using GuiGraphics.renderFakeItem), replacing the
+   previous empty placeholder boxes with actual item model rendering."
   (:require [clojure.string :as str]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as terminal-catalog]
@@ -175,10 +168,13 @@
     {:kind :image :props {:id id :x 10.0 :y 5.0 :w 114.0 :h 114.0 :src crafting-grid-bg}}
 
     (:block-3d :item-3d)
-    ;; No functional loss: nothing was ever rendered into these in the old
-    ;; system either (verified — no forge/mc1201 code reads these widget
-    ;; names). Empty placeholder, matching current actual behavior.
-    {:kind :box :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :fill 0x00000000}}
+    ;; Render the block/item as a scaled ItemStack in the preview area.
+    ;; Upstream AcademyCraft renders these with GL perspective projection +
+    ;; auto-rotation; we render at the full 134x134 area size with the item
+    ;; model via GuiGraphics.renderFakeItem.
+    (let [item-id (or (:item-id view) (:block-id view))]
+      {:kind :preview-item :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
+                                    :item-id (str item-id)}})
 
     {:kind :box :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :fill 0x00000000}}))
 

@@ -12,13 +12,11 @@
    this file's own logo1/logo2 abs position against rx/rw, both of which
    matched independently, so confidence is high).
 
-   Simplifications versus the original (cosmetic-only, no functional loss):
-   - Glow gradient-fill → flat translucent box (the framework's own :gradient
-     kind renders a fixed flat color today regardless of :stops, so this
-     matches actual current rendering capability, not a regression).
-   - :block-3d/:item-3d recipe/3D preview → empty placeholder (verified via
-     repo-wide grep that nothing ever rendered real content into these in
-     the old system either — see preview_reactive.clj's docstring)."
+   Simplifications versus the original (documented, cosmetic-only):
+   - 3D block auto-rotation: upstream rotates blocks around Y axis at
+     (time/80)%360 degrees; v2 renders stationary scaled ItemStack model.
+   - Full GL perspective projection (gluPerspective/FOV 50): replaced by
+     PoseStack-transformed GuiGraphics.renderFakeItem for the preview area."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.tutorial.content :as tut-content]
