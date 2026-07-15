@@ -5,17 +5,17 @@
   (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn handle-key-pressed
-  "Dispatch key to focus node. Return semantics match old cgui host:
-   - focused editable text or focused node consumes the key → true
-   - no focus: ESC (256) → true (screen closes), other keys → false"
+  "Dispatch key to focus node.
+   Returns true only when an editable-text or focused node consumes the key.
+   Returns false otherwise — this lets Minecraft's default Screen.keyPressed
+   handle ESC (close screen), F3, etc.  Previously ESC returned true which
+   told MC the key was consumed and the screen stayed open."
   [^UiRt rt key-code scan-code modifiers]
   (if (events/dispatch-editable-key! rt key-code (char 0))
     true
     (do
       (events/dispatch-key! rt key-code scan-code modifiers 0)
-      (if (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0)
-        true
-        (= (long key-code) 256)))))
+      (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0))))
 
 (defn handle-char-typed [^UiRt rt code-point _modifiers]
   (if (events/dispatch-editable-key! rt 0 (char code-point))

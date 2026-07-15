@@ -148,6 +148,14 @@
   (.setY ctr (- (double scroll-y)))
   (dirty-subtree! ctr))
 
+(defn- set-node-visible! [^UiRt rt ^INode node visible?]
+  "Set node visibility, flag it layout-dirty, and mark tree dirty so the
+   render tape is rebuilt.  Without treeDirty the tape (which skips invisible
+   nodes) never reflects the visibility change."
+  (.setVisible node visible?)
+  (.setFlag node node/FLAG-LAYOUT-DIRTY)
+  (.setTreeDirty rt true))
+
 (defn- sync-thumb! [^UiRt rt scroll-y max-scroll]
   (let [^INode thumb (rt/node-by-id rt :scroll-thumb)
         progress (if (pos? max-scroll) (/ (double scroll-y) (double max-scroll)) 0.0)
@@ -227,8 +235,8 @@
         cnt (count (or (:sub-views vg) []))
         ^INode bl (rt/node-by-id rt :btn-left)
         ^INode br (rt/node-by-id rt :btn-right)]
-    (.setVisible bl (> cnt 1)) (.setFlag bl node/FLAG-LAYOUT-DIRTY)
-    (.setVisible br (> cnt 1)) (.setFlag br node/FLAG-LAYOUT-DIRTY)))
+    (set-node-visible! rt bl (> cnt 1))
+    (set-node-visible! rt br (> cnt 1))))
 
 (defn- attach-tag-hover-tick! [^UiRt rt]
   (set-tick! rt :tag-hover-tick
@@ -239,7 +247,7 @@
               display-text (get hover-map hover-idx)
               ^INode tt (rt/node-by-id rt :tag-tooltip)]
           (when tt
-            (.setVisible tt (boolean display-text))
+            (set-node-visible! rt tt (boolean display-text))
             (when display-text
               (ui/set-node-prop! rt tt :text display-text)
               ;; Position tooltip above hovered tag (matching upstream font.draw at 0, -8)
@@ -311,9 +319,9 @@
 
 (defn- reveal-panels! [^UiRt rt center-active?]
   (let [^INode cp (rt/node-by-id rt :center-panel)
-        ^INode rw (rt/node-by-id rt :right-window-bg)]
-    (.setVisible cp center-active?) (.setFlag cp node/FLAG-LAYOUT-DIRTY)
-    (.setVisible rw true) (.setFlag rw node/FLAG-LAYOUT-DIRTY)))
+        ^INode rw (rt/node-by-id rt :right-window)]
+    (set-node-visible! rt cp center-active?)
+    (set-node-visible! rt rw true)))
 
 (defn- attach-first-open-animation! [^UiRt rt _anim-start]
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
@@ -365,13 +373,12 @@
                     ;; Phase 1: len grows 0→500; right: (cl, len) left: (-len, -cl)
                     (let [len (* ln (/ dt b1))]
                       (when (> len cl)
-                        (.setVisible gr true)
+                        (set-node-visible! rt gr true)
                         (.setDSlot gr 0 (* s cl))  (.setDSlot gr 1 (* s len))
                         (.setDSlot gr 2 glow-y) (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
-                        (.setVisible gl true)
+                        (set-node-visible! rt gl true)
                         (.setDSlot gl 0 (* s (- len))) (.setDSlot gl 1 (* s (- cl)))
-                        (.setDSlot gl 2 glow-y) (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
-                        (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))
+                        (.setDSlot gl 2 glow-y) (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)))
                     ;; Phase 2: len2 lerps (ln-2cl=400)→ln2(300); right: (ln-len2, ln) left: (-ln, -(ln-len2))
                     (let [ldt (min (- dt b1) b2)
                           len2 (+ (- ln cl cl) (* (- ln2 (- ln cl cl)) (/ ldt b2)))]
@@ -389,7 +396,7 @@
                       (.setFlag lbg node/FLAG-RENDER-DIRTY)))))
               (when (>= elapsed 2400.0)
                 (let [^INode list-n (rt/node-by-id rt :list)]
-                  (.setVisible list-n true) (.setFlag list-n node/FLAG-LAYOUT-DIRTY))
+                  (set-node-visible! rt list-n true))
                 (when-let [owner (runtime-hooks/default-client-owner)]
                   (net-client/send-to-server owner (tut-msg/msg-id :tutorial/mark-first-open-done) {} nil))
                 (client-state/apply-sync! {:first-open? false})
@@ -399,7 +406,7 @@
 
 (defn- setup-static-glow! [^UiRt rt]
   (doseq [id [:logo0 :logo2 :logo3]]
-    (let [^INode n (rt/node-by-id rt id)] (.setVisible n false) (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+    (let [^INode n (rt/node-by-id rt id)] (set-node-visible! rt n false)))
   (set-logo-alpha! rt :logo1 255)
   ;; Glow-line dslots are screen-pixel offsets from the glow-line node's absolute
   ;; position (which is at logo1-anchor center → logo1 screen center).
@@ -417,12 +424,12 @@
         glow-sz (max 1.0 (* s 5.0))
         ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
     (when gr
-      (.setVisible gr true)
+      (set-node-visible! rt gr true)
       (.setDSlot gr 0 r-x0) (.setDSlot gr 1 r-x1) (.setDSlot gr 2 glow-y)
       (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
       (.setFlag gr node/FLAG-LAYOUT-DIRTY))
     (when gl
-      (.setVisible gl true)
+      (set-node-visible! rt gl true)
       (.setDSlot gl 0 l-x0) (.setDSlot gl 1 l-x1) (.setDSlot gl 2 glow-y)
       (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
       (.setFlag gl node/FLAG-LAYOUT-DIRTY))))
@@ -446,7 +453,7 @@
               (doseq [id [:logo0 :logo1 :logo2 :logo3]] (set-logo-alpha! rt id alpha))
               (when (>= elapsed 300.0)
                 (doseq [id [:logo0 :logo1 :logo2 :logo3]]
-                  (let [^INode n (rt/node-by-id rt id)] (.setVisible n false) (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+                  (let [^INode n (rt/node-by-id rt id)] (set-node-visible! rt n false)))
                 (reset! done? true)
                 (set-tick! rt :logo-anim-tick nil))))
           nil)))))
@@ -467,7 +474,7 @@
           (reset! current-cd cd)
           (reset! scroll-y 0.0) (reset! max-scroll 0.0)
           (let [^INode cp (rt/node-by-id rt :center-panel)]
-            (.setVisible cp active?) (.setFlag cp node/FLAG-LAYOUT-DIRTY))
+            (set-node-visible! rt cp active?))
           (when active?
             (let [{:keys [segs total-h]} (render-content-segs (:id tut) lang (:content cd)
                                                                (client-state/get-misaka-id player-uuid))]
@@ -532,8 +539,12 @@
       (rt/build-child! r {:kind :glow-line :props {:id :glow-right :x 0.0 :y 0.0 :w 0.0 :h 0.0 :visible? false}} anchor)
       (rt/build-child! r {:kind :glow-line :props {:id :glow-left  :x 0.0 :y 0.0 :w 0.0 :h 0.0 :visible? false}} anchor))
     (when first-open?
-      (let [^INode list-n (rt/node-by-id r :list)]
-        (.setVisible list-n false) (.setFlag list-n node/FLAG-LAYOUT-DIRTY))
+      ;; During the staggered logo animation only the logos + glow are visible;
+      ;; the tutorial list, center content, and right info window stay hidden
+      ;; until the animation completes (list) or the first entry click (panels).
+      (set-node-visible! r (rt/node-by-id r :list) false)
+      (set-node-visible! r (rt/node-by-id r :center-panel) false)
+      (set-node-visible! r (rt/node-by-id r :right-window) false)
       ;; Hide left panel bg until it fades in (matching upstream blend(leftPart, 1.75, 0.3))
       (when-let [^INode lbg (rt/node-by-id r :left-bg)]
         (.setDSlot lbg 0 0.0)
