@@ -504,7 +504,7 @@
                 (.vertex bb pose-matrix (float (+ x w)) (float y0) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
                 (.vertex bb pose-matrix (float (+ x w)) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
                 (.vertex bb pose-matrix (float x) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)))
-            (BufferUploader/drawWithShader (.end bb)))))))
+            (BufferUploader/drawWithShader (.end bb))))))))
 
 ;; ============================================================================
 ;; :line
