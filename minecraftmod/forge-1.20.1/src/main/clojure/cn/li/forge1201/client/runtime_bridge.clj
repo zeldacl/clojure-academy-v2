@@ -9,11 +9,13 @@
              [cn.li.mcmod.runtime.install :as install]
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state]
-             [cn.li.mc1201.client.font.msdf-tick :as msdf-tick])
+             [cn.li.mc1201.client.font.msdf-tick :as msdf-tick]
+             [cn.li.mcmod.spi.key-scheme-provider :as key-provider])
   (:import [cn.li.mc1201.client.effect ScriptedEffectSpawner]
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
-           [net.minecraftforge.eventbus.api EventPriority]))
+           [net.minecraftforge.eventbus.api EventPriority]
+           [net.minecraft.client Minecraft]))
 
 (defn active-contexts []
   (power-runtime/client-active-contexts))
@@ -67,11 +69,47 @@
 (defn abort-all! []
   (client-session/with-current-client-session #(power-runtime/client-abort-all!)))
 
+;; ===== Key State Function for keybinds/tick-keys! =====
+;; Maps logical key queries to GLFW key codes and queries keyboard state.
+
+(def ^:private slot-glfw-keys [90 88 67 86])   ;; Z, X, C, V → skill slots 0-3
+(def ^:private movement-glfw-keys {:forward 87  ;; W
+                                   :back 83     ;; S
+                                   :left 65     ;; A
+                                   :right 68})  ;; D
+(def ^:private screen-glfw-keys {:primary 78    ;; N → skill tree
+                                 :secondary 77}) ;; M → preset editor
+
+(defn- glfw-key-state-fn
+  "key-state-fn callback for keybinds/tick-keys!. Takes [:slot idx], [:movement kw],
+   or [:screen kw] and returns boolean key state from GLFW."
+  [[kind sub-key]]
+  (let [key-code (case kind
+                   :slot (nth slot-glfw-keys sub-key nil)
+                   :movement (get movement-glfw-keys sub-key)
+                   :screen (get screen-glfw-keys sub-key)
+                   nil)]
+    (when key-code
+      (try
+        (key-provider/query-key-down? :original key-code)
+        (catch Throwable _ false)))))
+
+(defn- get-player-uuid-str
+  "Get current player UUID as string for keybinds context."
+  []
+  (try
+    (when-let [^Minecraft mc (Minecraft/getInstance)]
+      (when-let [player (.player mc)]
+        (str (.getUUID player))))
+    (catch Throwable _ nil)))
+
 (defn tick-client! []
   (session-cleanup/tick-connection-change! {})
   (particle/tick-particles!)
   (sound/tick-sounds!)
   (msdf-tick/client-tick!)
+  ;; Per-frame key polling for skill slot keys (Z/X/C/V held) + movement keys + GUI keys
+  (power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str)
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]

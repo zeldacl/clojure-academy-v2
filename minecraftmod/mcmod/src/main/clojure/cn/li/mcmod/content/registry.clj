@@ -264,13 +264,9 @@
   []
   (list-descriptors :player-persistence))
 
-(defn register-client-input-descriptor!
-  [descriptor]
-  (register-descriptor! :client-input descriptor))
-
-(defn emit-client-input!
-  [input-id context payload]
-  (invoke-descriptor-handler! :client-input input-id [context payload]))
+;; Client input is now dispatched solely through mcmod.protocol.keyboard-input.
+;; Former System B (client-input descriptors) was dead code — emit-client-input! was
+;; never called from any platform event loop. Removed to consolidate into one system.
 
 (defn register-smoke-manifest!
   [descriptor]

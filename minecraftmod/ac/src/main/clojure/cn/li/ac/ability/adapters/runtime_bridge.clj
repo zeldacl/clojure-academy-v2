@@ -105,7 +105,10 @@
     (client-keybinds/install-default-handlers!)
     (install-sync-descriptors!)
     (install-player-persistence-descriptors!)
-    (client-ui/install-client-input-descriptors!)
+    ;; NOTE: Client input is now dispatched solely through mcmod.protocol.keyboard-input
+    ;; (System A). input_ids.clj handlers call keybinds/trigger-mode-switch! and
+    ;; keybinds/switch-preset! directly. The old register-client-input-descriptor!
+    ;; path (System B) was dead code (emit-client-input! was never called).
     (runtime-hooks/register-runtime-hook-keys! ac-runtime-hook-keys)
     (runtime-hooks/register-power-runtime-hooks!
       (merge (server-hooks/runtime-server-hooks)

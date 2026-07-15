@@ -1,12 +1,12 @@
 (ns cn.li.mc1201.glfw-polling-core
   "Shared GLFW key polling implementation for all platforms.
-   
+
    Eliminates 95% code duplication between Forge and Fabric.
    Both platforms use the same GLFW_KEY_* constants and polling.
-   
+
    Usage by platform:
    - Forge: call poll-all-inputs! in client tick event (AFTER event parsing)
-   - Fabric: call poll-all-inputs! in client tick event"
+   - Fabric: call poll-all-inputs! in client tick event (primary input mechanism)"
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.spi.key-scheme-provider :as key-provider]))
@@ -15,6 +15,7 @@
 (def GLFW_KEY_Z 90)
 (def GLFW_KEY_X 88)
 (def GLFW_KEY_R 82)
+(def GLFW_KEY_V 86)
 
 (defn ^:private is-key-pressed?
   "Query key state through installed KeySchemeProvider SPI."
@@ -34,30 +35,29 @@
   (atom {}))
 
 (defn poll-all-inputs!
-  "Poll all :original scheme inputs and emit keyboard events.
+  "Poll hardcoded key inputs and emit keyboard events.
 
    Called once per tick by Forge/Fabric platform layer.
 
+   For Forge: supplements the KeyMapping event system (handles edge cases).
+   For Fabric: the PRIMARY input mechanism (Fabric has no KeyMapping events).
+
    Polling targets:
    - :content/cycle-selection (R key)
-   - Other :original scheme inputs added later
+   - :content/toggle-primary-state (V key)
 
    Flow:
-   1. Poll GLFW state for each :original input
+   1. Poll GLFW state for each input
    2. Detect press transition (released → pressed)
    3. Emit keyboard-input event via protocol
 
    Context provided to handlers:
    {:player-uuid 'current-player-uuid'
     :client-session-id 'session-id'
-    :logical-side :client}
-
-   Note: All :alternative scheme inputs are handled by Forge/Fabric KeyMapping
-   events. This polling is ONLY for :original scheme (which includes
-   hardcoded platform keys like LMB/RMB that have no event source)."
+    :logical-side :client}"
   [_minecraft-client player-uuid client-session-id]
   (try
-    ;; Cycle selection (R key, :original scheme)
+    ;; Cycle selection (R key)
     (let [key-code GLFW_KEY_R
           is-pressed (is-key-pressed? :original key-code)
           was-pressed (get @last-poll-time :cycle-selection false)]
@@ -68,6 +68,18 @@
            :client-session-id client-session-id
            :logical-side :client}))
       (swap! last-poll-time assoc :cycle-selection is-pressed))
+
+    ;; Toggle primary state (V key — mode switch)
+    (let [key-code GLFW_KEY_V
+          is-pressed (is-key-pressed? :original key-code)
+          was-pressed (get @last-poll-time :toggle-primary-state false)]
+      (when (should-trigger? :toggle-primary-state was-pressed is-pressed)
+        (kb-proto/emit-keyboard-input!
+          :content/toggle-primary-state
+          {:player-uuid player-uuid
+           :client-session-id client-session-id
+           :logical-side :client}))
+      (swap! last-poll-time assoc :toggle-primary-state is-pressed))
 
     nil
     (catch Exception e

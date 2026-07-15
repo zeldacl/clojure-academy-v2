@@ -7,7 +7,6 @@
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc1201.client.session :as client-session]
-            [cn.li.mc1201.glfw-polling-core :as glfw-polling]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -58,15 +57,17 @@
       (log/warn e "Error in Forge key input handler"))))
 
 (defn ^:private on-client-tick
-  "Handle Forge client tick end - poll GLFW for :original scheme inputs."
+  "Handle Forge client tick end.
+   NOTE: Forge KeyMapping events (InputEvent$Key) handle all :alternative scheme
+   keys (Z, X, R, V, Left Alt). GLFW polling in this handler is reserved for
+   future :original scheme keys (LMB/RMB) that have no KeyMapping event source.
+   Currently, no :original scheme keys are registered, so poll-all-inputs! is skipped
+   to avoid double-firing with KeyMapping events."
   [^TickEvent$ClientTickEvent event]
   (try
     (when (= TickEvent$Phase/END (.phase event))
-      (let [player-uuid (get-current-player-uuid)
-            session-id (get-client-session-id)
-            mc (Minecraft/getInstance)]
-        (when (and player-uuid session-id mc)
-          (glfw-polling/poll-all-inputs! mc player-uuid session-id))))
+      ;; Reserved for future :original scheme key polling via glfw-polling/poll-all-inputs!
+      nil)
     (catch Exception e
       (log/warn e "Error in Forge client tick keyboard polling"))))
 

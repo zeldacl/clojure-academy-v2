@@ -413,15 +413,10 @@
               [])]
     (try (f player) (catch Throwable e (log/stacktrace "Error running server player login hook" e)))))
 
-(defn register-client-input-descriptor!
-  "Register a content-owned client input descriptor through the neutral registry."
-  [descriptor]
-  (content-registry/register-client-input-descriptor! descriptor))
-
-(defn emit-client-input!
-  "Emit a neutral client input event by opaque id."
-  [input-id context payload]
-  (content-registry/emit-client-input! input-id context payload))
+;; Client input is now dispatched solely through mcmod.protocol.keyboard-input.
+;; register-client-input-descriptor! / emit-client-input! (former System B) were dead
+;; code — emit-client-input! was never called from any platform event loop.
+;; Use mcmod.protocol.keyboard-input/register-input-id! and emit-keyboard-input! instead.
 
 (defn on-player-login!
   [player-uuid]

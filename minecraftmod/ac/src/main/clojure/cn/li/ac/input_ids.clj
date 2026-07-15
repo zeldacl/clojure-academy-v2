@@ -23,6 +23,7 @@
                                     ;             :logical-side :client}
    }"
   (:require [cn.li.ac.terminal.client.actions :as terminal-actions]
+            [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]))
 
@@ -31,29 +32,32 @@
 ;; Context structure: {:player-uuid string, :client-session-id string, :logical-side :client}
 
 (defn- on-slot-0-activate
-  "Handle slot 0 activation"
+  "Handle slot 0 activation (slot key Z, index 0)"
   [context]
   (log/debug "Slot 0 activated" {:context context})
-  ;; TODO: Call AC's slot activation logic
+  ;; Slot keys are polled per-frame by keybinds/tick-keys!, not via event dispatch.
+  ;; This handler exists for future event-based slot activation.
   nil)
 
 (defn- on-slot-1-activate
-  "Handle slot 1 activation"
+  "Handle slot 1 activation (slot key X, index 1)"
   [context]
   (log/debug "Slot 1 activated" {:context context})
   nil)
 
 (defn- on-cycle-selection
-  "Handle cycle selection"
-  [context]
-  (log/debug "Cycle selection" {:context context})
-  nil)
+  "Handle cycle selection (R key press) — switch to next preset."
+  [{:keys [player-uuid]}]
+  (log/debug "Cycle selection — switching preset" {:uuid player-uuid})
+  (when player-uuid
+    (keybinds/switch-preset! player-uuid)))
 
 (defn- on-toggle-primary-state
-  "Handle primary state toggle (LMB)"
-  [context]
-  (log/debug "Toggle primary state" {:context context})
-  nil)
+  "Handle primary state toggle (V key press) — toggle ability mode on/off."
+  [{:keys [player-uuid]}]
+  (log/debug "Toggle primary state — toggling ability mode" {:uuid player-uuid})
+  (when player-uuid
+    (keybinds/trigger-mode-switch! player-uuid)))
 
 (defn- on-toggle-terminal
   "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
@@ -103,17 +107,16 @@
                    :translation-key "key.content.cycle.selection"
                    :category "keybind.category.content"}
      :handler #'on-cycle-selection}
-    
-    ;; ===== :original scheme (keys are platform-fixed) =====
-    ;; These shortcuts are hardcoded by the platform (Forge's LMB/RMB require raw GLFW polling).
-    ;; AC only defines the handler; :fixed-key is documentation only.
-    
+
+    ;; V key — toggle ability mode on/off (or abort active skills when in ability mode)
     :content/toggle-primary-state
     {:input-id :content/toggle-primary-state
-     :scheme :original
-     :description "Toggle ability active"
+     :scheme :alternative
+     :description "Toggle ability mode"
      :event-type :short-press
-     :fixed-key :lmb  ; documentation only, not used at runtime
+     :key-mapping {:key 86  ; GLFW_KEY_V
+                   :translation-key "key.content.toggle.primary"
+                   :category "keybind.category.content"}
      :handler #'on-toggle-primary-state}
 
     ;; Terminal toggle — matching original AcademyCraft KEY_LMENU (Left Alt)

@@ -392,30 +392,10 @@
   ([owner circles last-spawn-ms]
    (reactive-hud/seed-vm-wave-state-for-test! owner circles last-spawn-ms)))
 
-(def ^:private toggle-primary-state-input-id :content/toggle-primary-state)
-(def ^:private cycle-selection-input-id :content/cycle-selection)
-
-(defn- handle-toggle-primary-state-input!
-  [{:keys [player-uuid]} _payload]
-  (when player-uuid
-    (client-keybinds/trigger-mode-switch! player-uuid)))
-
-(defn- handle-cycle-selection-input!
-  [{:keys [player-uuid]} _payload]
-  (when player-uuid
-    (client-keybinds/switch-preset! player-uuid)))
-
-(defn install-client-input-descriptors!
-  []
-  (runtime-hooks/register-client-input-descriptor!
-   {:id toggle-primary-state-input-id
-    :content-id "ac"
-    :handler handle-toggle-primary-state-input!})
-  (runtime-hooks/register-client-input-descriptor!
-   {:id cycle-selection-input-id
-    :content-id "ac"
-    :handler handle-cycle-selection-input!})
-  nil)
+;; Client input descriptors are now managed solely through mcmod.protocol.keyboard-input
+;; (System A). See cn.li.ac.input-ids for keybinding configuration and handler registration.
+;; The old register-client-input-descriptor! / emit-client-input! path (System B) was dead
+;; code — emit-client-input! was never called from any platform event loop.
 
 (defn- railgun-charge-item-max-ticks []
   (skill-config/tunable-int :railgun :charge.item-charge-ticks))
