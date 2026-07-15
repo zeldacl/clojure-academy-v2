@@ -512,7 +512,9 @@
               (fn [resp] (when resp (client-state/apply-sync! resp)))))
         lang (tut-content/current-lang)
         entries (tut-registry/all-tutorials)
-        first-open? (client-state/first-open? player-uuid)
+        ;; FIXME: forced true for testing — revert to
+        ;; (client-state/first-open? player-uuid)
+        first-open? true
         r (rt/create-runtime)
         ui-state {:current-tut-id (atom nil)
                   :scroll-y (atom 0.0)

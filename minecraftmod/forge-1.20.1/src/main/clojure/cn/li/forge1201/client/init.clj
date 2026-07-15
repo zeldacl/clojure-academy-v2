@@ -32,7 +32,8 @@
             [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
-            [cn.li.forge1201.registry.state :as registry-state])
+            [cn.li.forge1201.registry.state :as registry-state]
+            [cn.li.forge1201.integration.recipe-query :as recipe-query])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
            [cn.li.forge1201.mixin GuiGraphicsInvoker]
            [net.minecraft.client Minecraft]
@@ -244,7 +245,7 @@
        :stop-all-media! (fn [player-uuid]
                           (sound/stop-all-media!))
        :has-recipes? (fn [item-id]
-                       (cn.li.forge1201.integration.recipe-query/has-recipes? item-id))
+                       (recipe-query/has-recipes? item-id))
        :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                               (.invokeInnerBlit ^GuiGraphicsInvoker graphics
                                 texture (int x1) (int x2) (int y1) (int y2) (int z)
