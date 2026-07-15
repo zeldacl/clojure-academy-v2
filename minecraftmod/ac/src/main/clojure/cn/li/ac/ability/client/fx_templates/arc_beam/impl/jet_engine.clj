@@ -301,5 +301,5 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:jet-engine :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:jet-engine :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :jet-engine [store owner-key]
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :jet-engine [_ store owner-key]
   (update store :fx-state dissoc owner-key))

@@ -9,52 +9,44 @@
             [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
-(defn- memory-position-store
-  [store]
-  (reify position-store/INamedPositionStore
-    (save-location! [_ player-uuid location-name world-id x y z]
-      (swap! store assoc-in [player-uuid location-name]
-             {:name location-name
-              :world-id world-id
-              :x (double x)
-              :y (double y)
-              :z (double z)})
-      true)
-    (delete-location! [_ player-uuid location-name]
-      (let [exists? (contains? (get @store player-uuid {}) location-name)]
-        (swap! store update player-uuid dissoc location-name)
-        exists?))
-    (get-location [_ player-uuid location-name]
-      (get-in @store [player-uuid location-name]))
-    (list-locations [_ player-uuid]
-      (->> (vals (get @store player-uuid {}))
-           (sort-by :name)
-           vec))
-    (get-location-count [_ player-uuid]
-      (count (get @store player-uuid {})))
-    (has-location? [_ player-uuid location-name]
-      (contains? (get @store player-uuid {}) location-name))))
-
 (defn- with-platform-runtimes!
+  "Bind the starred named-position-store / teleportation platform fns to an
+   in-memory store atom (the platform layer is a function map now — no
+   protocol to reify)."
   [store current-pos f]
-  (let [pos-store (memory-position-store store)]
-    (with-redefs [position-store/available? (constantly true)
-                  position-store/save-location!* (fn [& args]
-                                                 (apply position-store/save-location! pos-store args))
-                  position-store/delete-location!* (fn [& args]
-                                                     (apply position-store/delete-location! pos-store args))
-                  position-store/get-location* (fn [& args]
-                                               (apply position-store/get-location pos-store args))
-                  position-store/list-locations* (fn [& args]
-                                                   (apply position-store/list-locations pos-store args))
-                  position-store/get-location-count* (fn [& args]
-                                                       (apply position-store/get-location-count pos-store args))
-                  position-store/has-location?* (fn [& args]
-                                                (apply position-store/has-location? pos-store args))
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (constantly current-pos)
-                  teleportation/get-player-dimension* (constantly (:world-id current-pos))]
-      (f))))
+  (with-redefs [position-store/available? (constantly true)
+                position-store/save-location!*
+                (fn [player-uuid location-name world-id x y z]
+                  (swap! store assoc-in [player-uuid location-name]
+                         {:name location-name
+                          :world-id world-id
+                          :x (double x)
+                          :y (double y)
+                          :z (double z)})
+                  true)
+                position-store/delete-location!*
+                (fn [player-uuid location-name]
+                  (let [exists? (contains? (get @store player-uuid {}) location-name)]
+                    (swap! store update player-uuid dissoc location-name)
+                    exists?))
+                position-store/get-location*
+                (fn [player-uuid location-name]
+                  (get-in @store [player-uuid location-name]))
+                position-store/list-locations*
+                (fn [player-uuid]
+                  (->> (vals (get @store player-uuid {}))
+                       (sort-by :name)
+                       vec))
+                position-store/get-location-count*
+                (fn [player-uuid]
+                  (count (get @store player-uuid {})))
+                position-store/has-location?*
+                (fn [player-uuid location-name]
+                  (contains? (get @store player-uuid {}) location-name))
+                teleportation/available? (constantly true)
+                teleportation/get-player-position* (constantly current-pos)
+                teleportation/get-player-dimension* (constantly (:world-id current-pos))]
+    (f)))
 
 (deftest save-query-delete-saved-location-roundtrip-test
   (let [store (atom {})
@@ -171,7 +163,7 @@
                                  :max-location-name-length 16}
                         :current-pos nil
                         :locations []}]
-    (with-redefs [net-srv/register-handler (fn [msg-id f]
+    (with-redefs [net-srv/register-handler (fn [msg-id f & _contract]
                                              (swap! handlers* assoc msg-id f)
                                              nil)
                   uuid/player-uuid (fn [player] player)

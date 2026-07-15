@@ -164,5 +164,5 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:current-charging :hand]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:current-charging :hand] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :current-charging [store owner-key]
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :current-charging [_ store owner-key]
   (assoc store :states (dissoc (:states store) owner-key)))

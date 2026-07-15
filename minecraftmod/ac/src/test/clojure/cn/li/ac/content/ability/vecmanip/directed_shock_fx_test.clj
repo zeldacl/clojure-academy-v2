@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.directed-shock-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-shock :as ds-impl]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
@@ -74,15 +75,17 @@
       (is (nil? (owner-state "ctx-1")))))
 
 (deftest punch-tick-clears-expired-state-test
-  (let [
-        now* (atom 1000)]
-    (with-redefs [cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-shock/now-ms (fn [] @now*)
-                  client-sounds/queue-current-sound-effect! (fn [_] nil)]
-      (invoke-hand-enqueue! "ctx-a" :directed-shock/fx-perform {:mode :perform})
-      (swap! now* + 301)
-      (hand-effects/update-effect-state! :directed-shock
-        (fn [store] (arc-beam/effect-tick-state! :hand :directed-shock store)))
-      (is (empty? (:effect-state (dsfx/fx-snapshot)))))))
+  (let [now* (atom 1000)]
+    ;; now-ms is private — bind through the var literal (with-redefs on a
+    ;; qualified symbol can't resolve private vars at compile time).
+    (with-redefs-fn {#'ds-impl/now-ms (fn [] @now*)
+                     #'client-sounds/queue-current-sound-effect! (fn [_] nil)}
+      (fn []
+        (invoke-hand-enqueue! "ctx-a" :directed-shock/fx-perform {:mode :perform})
+        (swap! now* + 301)
+        (hand-effects/update-effect-state! :directed-shock
+          (fn [store] (arc-beam/effect-tick-state! :hand :directed-shock store)))
+        (is (empty? (:effect-state (dsfx/fx-snapshot))))))))
 
 (deftest two-owners-keep-directed-shock-state-independent-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]

@@ -185,5 +185,5 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:thunder-clap :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:thunder-clap :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :thunder-clap [store owner-key]
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :thunder-clap [_ store owner-key]
   (-> store (update :effect-state dissoc owner-key) (update :impacts dissoc owner-key)))

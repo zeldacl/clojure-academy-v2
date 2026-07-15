@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.developer.handlers-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.developer.handlers :as handlers]
+            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.block.machine.handlers :as machine-handlers]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
@@ -28,6 +29,10 @@
     (with-redefs [machine-handlers/open-container-tile (network-support/open-tile-mock :tile)
                   net-helpers/get-world (fn [_] :world)
                   entity/player-get-name (fn [_] "Player")
+                  ;; handle-start-development forces immediate re-validation and
+                  ;; overwrites :structure-valid — stub it so the wrong-user
+                  ;; guard (validate-common) is what rejects.
+                  developer-logic/check-structure-valid? (constantly true)
                   machine-runtime/state-or-default (fn [_ _]
                                                        {:structure-valid true :user-uuid "owner"})
                   uuid/player-uuid (fn [_] "other")]

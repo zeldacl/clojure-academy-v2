@@ -1,11 +1,13 @@
 (ns cn.li.ac.terminal.client.runtime-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.terminal.client.runtime :as runtime]
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
             [cn.li.mcmod.network.client :as net-client]))
 
 (defn- reset-fixture [f]
-  (runtime/call-with-runtime
-    (runtime/create-runtime)
+  ;; Terminal runtime state lives in the Framework atom
+  ;; ([:service :terminal-runtime]) — a fresh framework isolates it.
+  (with-fresh-framework
     (fn []
       (runtime/reset-states-for-test!)
       (try

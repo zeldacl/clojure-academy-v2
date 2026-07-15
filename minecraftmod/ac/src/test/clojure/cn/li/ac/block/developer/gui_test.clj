@@ -5,6 +5,7 @@
             [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
             [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
@@ -24,11 +25,10 @@
                   (fn [& args] (swap! calls conj args))
                   bdsl/get-block-spec (fn [_] nil)
                   world/world-is-client-side* (fn [_] true)]
+      ;; make-open-gui-handler* handlers take positional args
+      ;; (player world pos block-id & {:keys [sneaking item-stack]}).
       ((developer-logic/open-developer-gui-for "developer-normal")
-       {:player :player-1
-        :world :client-world
-        :pos [10 20 30]
-        :sneaking false})
+       :player-1 :client-world [10 20 30] "developer-normal" :sneaking false)
       (is (= [[:player-1
                :developer
                :client-world
@@ -36,13 +36,15 @@
              @calls)))))
 
 (deftest developer-gui-init-registers-once-test
-  (with-redefs [gui-reg/register-block-gui! (fn [& _] nil)]
-    ;; init-developer-reactive! is guarded by install/framework-once! —
-    ;; calling it repeatedly across the test suite is safe and a no-op after
-    ;; the first successful registration.
-    (developer-gui-reactive/init-developer-reactive!)
-    (developer-gui-reactive/init-developer-reactive!)
-    (is true)))
+  (with-fresh-framework
+    (fn []
+      (with-redefs [gui-reg/register-block-gui! (fn [& _] nil)]
+        ;; init-developer-reactive! is guarded by install/framework-once! —
+        ;; calling it repeatedly across the test suite is safe and a no-op after
+        ;; the first successful registration.
+        (developer-gui-reactive/init-developer-reactive!)
+        (developer-gui-reactive/init-developer-reactive!)
+        (is true)))))
 
 (deftest developer-on-close-clears-user-session-state-test
   (let [saved (atom nil)]
@@ -61,22 +63,26 @@
 
 (deftest right-panel-mode-no-category-returns-console-test
   "When player has no category, right panel mode should be :console."
-  (with-redefs [store/get-player-state*
-                (fn [_ _]{:ability-data {:category-id nil}})
-                uuid/player-uuid (fn [_] "player-uuid")]
-    (with-player-state-owner
-      "player-uuid"
-      (fn []
-        (let [mode (panel-reactive/right-panel-mode nil nil :player)]
-          (is (= :console mode)))))))
+  (with-fresh-framework   ;; magnetic-coil check probes entity-ops availability
+    (fn []
+      (with-redefs [store/get-player-state*
+                    (fn [_ _]{:ability-data {:category-id nil}})
+                    uuid/player-uuid (fn [_] "player-uuid")]
+        (with-player-state-owner
+          "player-uuid"
+          (fn []
+            (let [mode (panel-reactive/right-panel-mode nil nil :player)]
+              (is (= :console mode)))))))))
 
 (deftest right-panel-mode-with-category-returns-skill-tree-test
   "When player has a category, right panel mode should be :skill-tree."
-  (with-redefs [store/get-player-state*
-                (fn [_ _]{:ability-data {:category-id :electromaster}})
-                uuid/player-uuid (fn [_] "player-uuid")]
-    (with-player-state-owner
-      "player-uuid"
-      (fn []
-        (let [mode (panel-reactive/right-panel-mode nil nil :player)]
-          (is (= :skill-tree mode)))))))
+  (with-fresh-framework
+    (fn []
+      (with-redefs [store/get-player-state*
+                    (fn [_ _]{:ability-data {:category-id :electromaster}})
+                    uuid/player-uuid (fn [_] "player-uuid")]
+        (with-player-state-owner
+          "player-uuid"
+          (fn []
+            (let [mode (panel-reactive/right-panel-mode nil nil :player)]
+              (is (= :skill-tree mode)))))))))

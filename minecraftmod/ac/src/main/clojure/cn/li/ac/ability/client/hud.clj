@@ -134,9 +134,11 @@
 
 (defn build-combat-notice-data
   [combat-notice-component now-ms]
-  (when (and combat-notice-component runtime-hooks/client-session-id)
+  ;; NB: client-session-id is a FUNCTION (hooks core 调用规范 #4) — invoke it.
+  (when-let [session-id (when combat-notice-component
+                          (runtime-hooks/client-session-id))]
     (when-let [{:keys [text color alpha]} (combat-notice/active-notice combat-notice-component
-                                                                       runtime-hooks/client-session-id
+                                                                       session-id
                                                                        :teleporter-crit
                                                                        now-ms)]
       {:type :combat-notice

@@ -2,17 +2,12 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
             [cn.li.mcmod.hooks.core :as hooks]))
 
-(defn- reset-fixture [f]
-  (let [state-atom ((deref #'cn.li.mcmod.hooks.core/hooks-core-state-atom))
-        saved-runtime-hooks @state-atom]
-    (try
-      (f)
-      (finally
-        (reset! state-atom saved-runtime-hooks)))))
-
-(use-fixtures :each reset-fixture)
+;; Runtime hooks live in the Framework atom ([:registry :hooks :runtime-hooks]);
+;; a fresh framework per test isolates the registrations.
+(use-fixtures :each with-fresh-framework)
 
 (deftest runtime-hooks-delegate-precheck-side-effects-test
   (let [calls (atom [])]

@@ -80,7 +80,8 @@
   (store/set-player-state!* :session-a "player-a" (activated-state))
   (store/set-player-state!* :session-a "player-b" (activated-state))
   (let [requests (atom [])]
-    (with-redefs [client-api/req-switch-preset! (fn [preset-idx callback]
+    (with-redefs [client-bridge/game-time-ms (constantly 0)   ;; no platform bridge in tests
+                  client-api/req-switch-preset! (fn [_owner preset-idx callback]
                                                   (swap! requests conj preset-idx)
                                                   (when callback (callback {:success true})))]
       (binding [keybinds/*client-session-id* :session-a]
@@ -118,7 +119,9 @@
                   runtime-hooks/set-client-overlay-activated! (fn [_ _] nil)
                   ctx/abort-all-contexts-for-player! (fn [& _]
                                                        (throw (ex-info "legacy abort path should not be used" {})))]
-      (keybinds/trigger-mode-switch! "p1"))
+      ;; keybind owner resolution needs an explicit client session in tests
+      (binding [keybinds/*client-session-id* :session-a]
+        (keybinds/trigger-mode-switch! "p1")))
     (is (= [:abort-hook] @aborted))))
 
 

@@ -27,7 +27,9 @@
       owner-map
       [(require-owner-value owner ":client-session-id"
                             (or (:client-session-id owner-map)
-                                runtime-hooks/client-session-id))
+                                ;; NB: client-session-id is a FUNCTION (hooks
+                                ;; core 调用规范 #4) — must be invoked.
+                                (runtime-hooks/client-session-id)))
        screen-id
        (require-owner-value owner ":player-uuid"
                             (some-> (or (:player-uuid owner-map)

@@ -7,16 +7,22 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]))
 
 (defn- reset-screen-fixture [f]
-  (managed-screens/call-with-managed-screen-runtime
-    (managed-screens/create-managed-screen-runtime)
+  ;; Managed-screen state lives in the Framework atom — without one, every
+  ;; read/write gets a fresh throwaway atom and screen state is lost.
+  (with-fresh-framework
     (fn []
-      (runtime-hooks/with-client-ctx {:session-id :test-session
-                                      :player-owner {:client-session-id :test-session}}
-        (f)))))
+      (managed-screens/call-with-managed-screen-runtime
+        (managed-screens/create-managed-screen-runtime)
+        (fn []
+          (runtime-hooks/with-client-ctx {:session-id :test-session
+                                          :player-owner {:client-session-id :test-session}}
+            (f)))))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -32,6 +38,7 @@
                                       :max-overload 100.0}}
         skill-spec {:id :generic/brain-course
                     :category-id :generic
+                    :enabled true   ;; render-data filters to enabled skills
                     :name-key "ability.skill.generic.brain_course"
                     :description-key "ability.skill.generic.brain_course.desc"
                     :icon "textures/abilities/generic/skills/brain_course.png"
@@ -50,7 +57,8 @@
                   skill-registry/get-skill (fn [_] skill-spec)
                   skill/get-skill-icon-path (fn [_] "textures/abilities/generic/skills/brain_course.png")
                   learning-rules/check-all-conditions (fn [_ _ _ _] {:pass? true :failures []})
-                  i18n/*translate-fn* (fn [k] (get translate-map (str k) (str k)))]
+                  client-bridge/game-time-ms (constantly 0)   ;; no platform bridge in tests
+                  i18n/*translate-fn* (fn [k & _] (get translate-map (str k) (str k)))]
       (screen/open-screen! "player-1")
       (let [render-data (screen/build-screen-render-data "player-1")
             node (first (:skill-nodes render-data))]
@@ -69,12 +77,13 @@
                         (screen/screen-state-snapshot {:client-session-id :session-a}))))
 
 (deftest screen-state-isolated-by-player-owner-test
-  (screen/open-screen! "player-1" {:developer-type :portable})
-  (screen/open-screen! "player-2" {:developer-type :normal})
-  (is (= {:developer-type :portable}
-         (:learn-context (screen/screen-state-snapshot "player-1"))))
-  (is (= {:developer-type :normal}
-         (:learn-context (screen/screen-state-snapshot "player-2"))))
-  (screen/close-screen! "player-1")
-  (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
-  (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2")))))
+  (with-redefs [client-bridge/game-time-ms (constantly 0)]   ;; no platform bridge in tests
+    (screen/open-screen! "player-1" {:developer-type :portable})
+    (screen/open-screen! "player-2" {:developer-type :normal})
+    (is (= {:developer-type :portable}
+           (:learn-context (screen/screen-state-snapshot "player-1"))))
+    (is (= {:developer-type :normal}
+           (:learn-context (screen/screen-state-snapshot "player-2"))))
+    (screen/close-screen! "player-1")
+    (is (nil? (:player-uuid (screen/screen-state-snapshot "player-1"))))
+    (is (= "player-2" (:player-uuid (screen/screen-state-snapshot "player-2"))))))

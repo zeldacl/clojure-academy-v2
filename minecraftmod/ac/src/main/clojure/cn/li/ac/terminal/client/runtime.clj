@@ -40,7 +40,8 @@
   (require-owner-value owner ":client-session-id"
                        (or (:client-session-id owner)
                            (:session-id owner)
-                           runtime-hooks/client-session-id)))
+                           ;; NB: client-session-id is a FUNCTION — invoke it.
+                           (runtime-hooks/client-session-id))))
 
 (defn- owner-player-id
   [owner]

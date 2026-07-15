@@ -145,4 +145,4 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :level] [_ _ store] (level-tick! store))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :hand] [_ _ store] (hand-tick-state! store))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :groundshock [_ _ _] nil)
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :groundshock [store owner-key] (update store :hand-state dissoc owner-key))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :groundshock [_ store owner-key] (update store :hand-state dissoc owner-key))
