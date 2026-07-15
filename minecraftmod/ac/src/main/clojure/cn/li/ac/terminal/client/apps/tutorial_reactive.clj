@@ -13,9 +13,6 @@
    matched independently, so confidence is high).
 
    Simplifications versus the original (cosmetic-only, no functional loss):
-   - Drag-scrollbar → mouse-wheel only, for both the left tutorial list and
-     the center markdown content. The scrollbar thumb still renders and
-     tracks position, just isn't itself draggable.
    - Glow gradient-fill → flat translucent box (the framework's own :gradient
      kind renders a fixed flat color today regardless of :stops, so this
      matches actual current rendering capability, not a regression).
@@ -48,7 +45,7 @@
 ;; ============================================================================
 
 (def ^:private eh 12.0) (def ^:private lih 207.0) (def ^:private liw 72.0)
-(def ^:private cow 160.0) (def ^:private coh 210.5)
+(def ^:private cow 150.0) (def ^:private coh 210.5)
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run
@@ -128,8 +125,12 @@
           (recur (rest sg) (+ y h) (inc n)))))))
 
 ;; ============================================================================
-;; Scroll — mouse-wheel only (drag-scrollbar simplification, see ns docstring)
+;; Scroll — mouse-wheel + drag-scrollbar (matching upstream DragBar + wheel)
 ;; ============================================================================
+
+(def ^:private thumb-min-y 2.0)    ;; upstream DragBar lower
+(def ^:private thumb-max-y 165.0)  ;; upstream DragBar upper
+(def ^:private thumb-travel (- thumb-max-y thumb-min-y))
 
 (defn- reposition-content! [^INode ctr scroll-y]
   (.setY ctr (- (double scroll-y)))
@@ -137,11 +138,37 @@
 
 (defn- sync-thumb! [^UiRt rt scroll-y max-scroll]
   (let [^INode thumb (rt/node-by-id rt :scroll-thumb)
-        travel (- 165.0 2.0)
         progress (if (pos? max-scroll) (/ (double scroll-y) (double max-scroll)) 0.0)
-        thumb-y (+ 2.0 (* progress travel))]
-    (.setY thumb (+ 11.75 (- thumb-y 2.0)))
+        thumb-y (+ thumb-min-y (* progress thumb-travel))]
+    (.setY thumb (double thumb-y))
     (.setFlag thumb node/FLAG-LAYOUT-DIRTY)))
+
+(defn- thumb-y->progress [thumb-y]
+  (max 0.0 (min 1.0 (/ (- (double thumb-y) thumb-min-y) thumb-travel))))
+
+(defn- attach-scrollbar-drag! [^UiRt rt ui-state]
+  "Wire drag-scrollbar on :scroll-thumb matching upstream DragBar behavior.
+   DragBar range: lower=2, upper=165."
+  (let [{:keys [scroll-y max-scroll]} ui-state
+        drag-state (atom {:drag-start-y 0.0 :drag-start-scroll 0.0})]
+    (events/on! rt :scroll-thumb :drag
+      (fn [_ ^INode _node evt]
+        (let [{:keys [dy]} evt
+              start-y (:drag-start-y @drag-state)
+              start-scroll (:drag-start-scroll @drag-state)
+              new-thumb-y (+ start-y (double dy))
+              clamped-y (max thumb-min-y (min thumb-max-y new-thumb-y))
+              progress (thumb-y->progress clamped-y)
+              new-scroll (* progress (double @max-scroll))]
+          (reset! scroll-y new-scroll)
+          (when-let [^INode ctr (rt/node-by-id rt :center-panel)]
+            (reposition-content! ctr new-scroll))
+          (sync-thumb! rt new-scroll @max-scroll))))
+    (events/on! rt :scroll-thumb :drag-start
+      (fn [_ _ _]
+        (swap! drag-state assoc
+               :drag-start-y (.getY ^INode (rt/node-by-id rt :scroll-thumb))
+               :drag-start-scroll @scroll-y)))))
 
 ;; ============================================================================
 ;; Preview area + tag navigation
@@ -180,8 +207,8 @@
         cd @current-cd]
     (ui/set-prop! rt :title-text :text (or (:title cd) ""))
     (when-let [brief (:brief cd)]
-      (let [segs (mr/render-segments brief (client-state/get-misaka-id player-uuid))]
-        (rebuild-segments! rt :brief-content segs 124.0))))
+      (let [segs (mr/render-segments brief (client-state/get-misaka-id player-uuid) 130)]
+        (rebuild-segments! rt :brief-content segs 130.0))))
   ;; Nav buttons visible only when >1 sub-view
   (let [{:keys [pvs]} ui-state
         vg (preview/current-view-group pvs)
@@ -195,12 +222,18 @@
   (set-tick! rt :tag-hover-tick
     (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [_]
-        (let [hover-map (or (rt/user-signal rt :tag-hover-map) {})
-              display-text (get hover-map (rt/hovered-idx rt))
+        (let [hover-idx (rt/hovered-idx rt)
+              hover-map (or (rt/user-signal rt :tag-hover-map) {})
+              display-text (get hover-map hover-idx)
               ^INode tt (rt/node-by-id rt :tag-tooltip)]
           (when tt
             (.setVisible tt (boolean display-text))
-            (when display-text (ui/set-node-prop! rt tt :text display-text))
+            (when display-text
+              (ui/set-node-prop! rt tt :text display-text)
+              ;; Position tooltip above hovered tag (matching upstream font.draw at 0, -8)
+              (when-let [^INode hovered-node (rt/node-by-idx rt hover-idx)]
+                (.setX tt (.getX hovered-node))
+                (.setY tt (+ (.getY hovered-node) -8.0))))
             (.setFlag tt node/FLAG-LAYOUT-DIRTY)))
         nil))))
 
@@ -230,7 +263,7 @@
             title (or (:title (tut-content/load-tutorial-content lang (:id tut))) (name (:id tut)))
             id (keyword (str "tut-entry-" idx))
             spec {:kind :box :props {:id id :x 0.0 :y (* idx eh) :w liw :h eh
-                                      :fill 0x00000000 :hover-tint 0.2}
+                                      :fill 0x00000000 :hover-tint 0.3}
                   :children [{:kind :text :props {:x 3.0 :y 1.0 :w (- liw 6.0) :h 10.0
                                                    :text title :font-size 9.0
                                                    :color (if active? 0xFFFFFFFF 0xFF999999)}}]}]
@@ -264,7 +297,15 @@
 
 (defn- attach-first-open-animation! [^UiRt rt anim-start]
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
-  (let [done? (atom false)]
+  ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) sets y to 63 immediately
+  (when-let [^INode l3 (rt/node-by-id rt :logo3)]
+    (.setY l3 63.0)
+    (.setFlag l3 node/FLAG-LAYOUT-DIRTY))
+  ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) — slides from y=63 to y=-36
+  ;; over 0.4s starting at 0.7s. logo3 XML pos is at -36 (final position).
+  (let [done? (atom false)
+        logo3-final-y -36.0
+        logo3-start-y 63.0]
     (set-tick! rt :logo-anim-tick
       (sig/computed-o [(rt/clock-ms-sig rt)]
         (fn [ms]
@@ -272,23 +313,51 @@
             (let [elapsed (- (double ms) (double anim-start))]
               (doseq [[id start-ms dur-ms] logo-timings]
                 (set-logo-alpha! rt id (logo-fade-alpha elapsed start-ms dur-ms)))
-              ;; Glow animation (logo1-local unscaled coords via the scaled anchor group)
-              ;; :glow-line dslots: x0=0 x1=1 y=2 line-w=3 glow-sz=4
+              ;; logo3 blendY animation (matching upstream blendy(logo3, 0.7, 0.4, 63, -36))
+              (let [blendy-start 700.0 blendy-dur 400.0
+                    blendy-t (max 0.0 (min 1.0 (/ (- elapsed blendy-start) blendy-dur)))
+                    blendy-y (+ logo3-start-y (* (- logo3-final-y logo3-start-y) blendy-t))]
+                (when-let [^INode l3 (rt/node-by-id rt :logo3)]
+                  (when (and (>= elapsed blendy-start) (<= elapsed (+ blendy-start blendy-dur)))
+                    (.setY l3 (double blendy-y))
+                    (.setFlag l3 node/FLAG-LAYOUT-DIRTY))))
+              ;; Glow animation — screen-space offsets from logo1-anchor center (scale 0.25).
+              ;; Upstream: glow at logo1 center, lineglow coords in unscaled space.
+              ;; DSLOT values are screen-pixel offsets (post 0.25 scale).
               (let [dt (- elapsed 400.0) b1 300.0 b2 200.0
-                    ln 500.0 ln2 300.0 cl 50.0 half-w 449.5
+                    s 0.25                                     ;; logo1-anchor scale
+                    ln 500.0 ln2 300.0 cl 50.0
+                    glow-y (* s 15.0)                          ;; 15 unscaled px below center
+                    line-w (max 1.0 (* s 5.0))
+                    glow-sz (max 1.0 (* s 5.0))
                     ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
                 (when (and (>= dt 0) gr gl)
                   (if (< dt b1)
+                    ;; Phase 1: len grows 0→500; right: (cl, len) left: (-len, -cl)
                     (let [len (* ln (/ dt b1))]
                       (when (> len cl)
-                        (.setVisible gr true) (.setDSlot gr 0 (+ half-w cl)) (.setDSlot gr 1 (+ half-w len))
-                        (.setVisible gl true) (.setDSlot gl 0 (- half-w len)) (.setDSlot gl 1 (- half-w cl))
+                        (.setVisible gr true)
+                        (.setDSlot gr 0 (* s cl))  (.setDSlot gr 1 (* s len))
+                        (.setDSlot gr 2 glow-y) (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
+                        (.setVisible gl true)
+                        (.setDSlot gl 0 (* s (- len))) (.setDSlot gl 1 (* s (- cl)))
+                        (.setDSlot gl 2 glow-y) (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
                         (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))
+                    ;; Phase 2: len2 lerps (ln-2cl=400)→ln2(300); right: (ln-len2, ln) left: (-ln, -(ln-len2))
                     (let [ldt (min (- dt b1) b2)
                           len2 (+ (- ln cl cl) (* (- ln2 (- ln cl cl)) (/ ldt b2)))]
-                      (.setDSlot gr 0 (+ half-w (- ln len2))) (.setDSlot gr 1 (+ half-w len2))
-                      (.setDSlot gl 0 (- half-w ln)) (.setDSlot gl 1 (- (+ half-w ln) len2))
+                      (.setDSlot gr 0 (* s (- ln len2))) (.setDSlot gr 1 (* s ln))
+                      (.setDSlot gr 2 glow-y) (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
+                      (.setDSlot gl 0 (* s (- ln))) (.setDSlot gl 1 (* s (- (+ ln) len2)))
+                      (.setDSlot gl 2 glow-y) (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
                       (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))))
+              ;; Left panel bg fade-in (matching upstream blend(leftPart, 1.75, 0.3))
+              (let [left-blend-start 1750.0 left-blend-dur 300.0]
+                (when-let [^INode lbg (rt/node-by-id rt :left-bg)]
+                  (let [left-t (max 0.0 (min 1.0 (/ (- elapsed left-blend-start) left-blend-dur)))]
+                    (when (>= elapsed left-blend-start)
+                      (.setDSlot lbg 0 (double left-t))
+                      (.setFlag lbg node/FLAG-RENDER-DIRTY)))))
               (when (>= elapsed 2400.0)
                 (let [^INode list-n (rt/node-by-id rt :list)]
                   (.setVisible list-n true) (.setFlag list-n node/FLAG-LAYOUT-DIRTY))
@@ -303,12 +372,31 @@
   (doseq [id [:logo0 :logo2 :logo3]]
     (let [^INode n (rt/node-by-id rt id)] (.setVisible n false) (.setFlag n node/FLAG-LAYOUT-DIRTY)))
   (set-logo-alpha! rt :logo1 255)
-  (let [ln 500.0 ln2 300.0 half-w 449.5
+  ;; Glow-line dslots are screen-pixel offsets from the glow-line node's absolute
+  ;; position (which is at logo1-anchor center → logo1 screen center).
+  ;; Upstream lineglow coords × 0.25 scale → screen coords.
+  ;; lineglow(200,500,5) + lineglow(-500,-200,5) at y=center+15 unscaled.
+  (let [s 0.25                ;; logo1-anchor scale
+        ln 500.0 ln2 300.0 cl 50.0
+        ;; Screen-space offsets from logo1 screen center
+        r-x0 (* s (- ln ln2))   ;; 50.0  (= 200×0.25)
+        r-x1 (* s ln)           ;; 125.0 (= 500×0.25)
+        l-x0 (* s (- ln))       ;; -125.0 (= -500×0.25)
+        l-x1 (* s (- (+ ln) ln2)) ;; -50.0 (= -200×0.25)
+        glow-y (* s 15.0)       ;; 3.75  (upstream y=height/2+15 → 15 from center)
+        line-w (max 1.0 (* s 5.0))
+        glow-sz (max 1.0 (* s 5.0))
         ^INode gr (rt/node-by-id rt :glow-right) ^INode gl (rt/node-by-id rt :glow-left)]
-    ;; :glow-line dslots: x0=0 x1=1
-    (.setVisible gr true) (.setDSlot gr 0 (+ half-w (- ln ln2))) (.setDSlot gr 1 (+ half-w ln2))
-    (.setVisible gl true) (.setDSlot gl 0 (- half-w ln)) (.setDSlot gl 1 (- (+ half-w ln) ln2))
-    (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))
+    (when gr
+      (.setVisible gr true)
+      (.setDSlot gr 0 r-x0) (.setDSlot gr 1 r-x1) (.setDSlot gr 2 glow-y)
+      (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
+      (.setFlag gr node/FLAG-LAYOUT-DIRTY))
+    (when gl
+      (.setVisible gl true)
+      (.setDSlot gl 0 l-x0) (.setDSlot gl 1 l-x1) (.setDSlot gl 2 glow-y)
+      (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
+      (.setFlag gl node/FLAG-LAYOUT-DIRTY))))
 
 ;; ============================================================================
 ;; Logo fade-out — triggered on the FIRST tutorial-entry click, regardless of
@@ -379,7 +467,9 @@
         (let [^INode list-n (rt/node-by-id rt :list)
               delta (* (- (double (:delta evt 0.0))) 12.0)]
           (.setY list-n (max (- 400.0) (min 0.0 (+ (.getY list-n) delta))))
-          (.setFlag list-n node/FLAG-LAYOUT-DIRTY))))))
+          (.setFlag list-n node/FLAG-LAYOUT-DIRTY))))
+    ;; Drag-scrollbar interaction (matching upstream DragBar)
+    (attach-scrollbar-drag! rt ui-state)))
 
 ;; ============================================================================
 ;; Entry point
@@ -403,9 +493,20 @@
                   :player-uuid player-uuid
                   :lang lang}]
     (rt/build! r (root-spec))
+    ;; Create glow-line nodes inside logo1-anchor for staged/static glow rendering.
+    ;; These are :glow-line kind nodes (dslots: x0=0 x1=1 y=2 line-w=3 glow-sz=4).
+    ;; Positioned at (0,0) inside the anchor so node-abs-x/y = logo1 screen center.
+    ;; DSLOT values are screen-pixel offsets (post 0.25 scale).
+    (let [anchor (rt/node-by-id r :logo1-anchor)]
+      (rt/build-child! r {:kind :glow-line :props {:id :glow-right :x 0.0 :y 0.0 :w 0.0 :h 0.0 :visible? false}} anchor)
+      (rt/build-child! r {:kind :glow-line :props {:id :glow-left  :x 0.0 :y 0.0 :w 0.0 :h 0.0 :visible? false}} anchor))
     (when first-open?
       (let [^INode list-n (rt/node-by-id r :list)]
-        (.setVisible list-n false) (.setFlag list-n node/FLAG-LAYOUT-DIRTY)))
+        (.setVisible list-n false) (.setFlag list-n node/FLAG-LAYOUT-DIRTY))
+      ;; Hide left panel bg until it fades in (matching upstream blend(leftPart, 1.75, 0.3))
+      (when-let [^INode lbg (rt/node-by-id r :left-bg)]
+        (.setDSlot lbg 0 0.0)
+        (.setFlag lbg node/FLAG-RENDER-DIRTY)))
     (populate-list! r ui-state entries)
     (attach-scroll! r ui-state)
     (attach-tag-hover-tick! r)
