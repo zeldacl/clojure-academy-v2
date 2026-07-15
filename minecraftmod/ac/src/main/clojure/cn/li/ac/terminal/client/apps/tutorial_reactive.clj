@@ -232,8 +232,8 @@
 
 (defn- attach-tag-hover-tick! [^UiRt rt]
   (set-tick! rt :tag-hover-tick
-    (sig/computed-o [(rt/clock-ms-sig rt)]
-      (fn [_]
+    (sig/computed-o [(rt/clock-ms-sig rt) (rt/partial-ticks-sig rt)]
+      (fn [_ _]
         (let [hover-idx (rt/hovered-idx rt)
               hover-map (or (rt/user-signal rt :tag-hover-map) {})
               display-text (get hover-map hover-idx)
@@ -274,13 +274,21 @@
       (let [active? (is-active? player-uuid tut)
             title (or (:title (tut-content/load-tutorial-content lang (:id tut))) (name (:id tut)))
             id (keyword (str "tut-entry-" idx))
+            overlay-id (keyword (str "tut-entry-" idx "-overlay"))
             spec {:kind :box :props {:id id :x 0.0 :y (* idx eh) :w liw :h eh
-                                      :fill 0x00000000 :hover-tint 0.3}
+                                      :fill 0x00000000}
                   :children [{:kind :text :props {:x 3.0 :y 1.0 :w (- liw 6.0) :h 10.0
                                                    :text title :font-size 9.0
-                                                   :color (if active? 0xFFFFFFFF 0xFF999999)}}]}]
+                                                   :color (if active? 0xFFFFFFFF 0xFF999999)}}
+                             ;; Overlay box — same size as the entry row, transparent fill,
+                             ;; highest z so hit-test always returns this node (not the text
+                             ;; child) and the hover-tint covers the full row area.
+                             ;; Click handlers are registered on this node because
+                             ;; dispatch-click! does NOT walk up the parent chain.
+                             {:kind :box :props {:id overlay-id :x 0.0 :y 0.0 :w liw :h eh
+                                                  :fill 0x00000000 :hover-tint 0.3 :z 1.0}}]}]
         (rt/build-child! rt spec list-node)
-        (events/on! rt id :left-click
+        (events/on! rt overlay-id :left-click
           (fn [_ _ _] (select-entry! rt ui-state tut)))))))
 
 ;; ============================================================================
@@ -323,9 +331,13 @@
         ;; give elapsed = game-time - 0 = instant completion. Wall-clock is always
         ;; monotonic and avoids this race.
         anim-start (System/currentTimeMillis)]
+    ;; Depend on both clock-ms-sig AND partial-ticks-sig: clock-ms-sig uses
+    ;; game time which freezes when a GUI screen is open, so the animation
+    ;; would fire once then stall.  partial-ticks-sig changes every frame
+    ;; (it's driven by the system render timer), keeping the animation alive.
     (set-tick! rt :logo-anim-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
-        (fn [_]
+      (sig/computed-o [(rt/clock-ms-sig rt) (rt/partial-ticks-sig rt)]
+        (fn [_ _]
           (when-not @done?
             (let [elapsed (- (System/currentTimeMillis) anim-start)]
               (doseq [[id start-ms dur-ms] logo-timings]
@@ -425,8 +437,8 @@
 (defn- fade-out-logos! [^UiRt rt fade-start]
   (let [done? (atom false)]
     (set-tick! rt :logo-anim-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
-        (fn [ms]
+      (sig/computed-o [(rt/clock-ms-sig rt) (rt/partial-ticks-sig rt)]
+        (fn [ms _]
           (when-not @done?
             (let [elapsed (- (double ms) (double fade-start))
                   t (max 0.0 (min 1.0 (/ elapsed 300.0)))
