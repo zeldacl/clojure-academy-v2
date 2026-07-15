@@ -74,7 +74,9 @@
         ;; Poll one-shot inputs (R, V key presses) via glfw-polling-core
         (glfw-polling/poll-all-inputs! minecraft player-uuid session-id)
         ;; Poll per-frame held keys (skill slots + movement + GUI) via keybinds
-        (power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str)))
+        ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+        (client-session/with-current-client-session
+          #(power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str))))
     (catch Exception e
       (log/warn e "Error polling Fabric keyboard inputs"))))
 

@@ -109,7 +109,9 @@
   (sound/tick-sounds!)
   (msdf-tick/client-tick!)
   ;; Per-frame key polling for skill slot keys (Z/X/C/V held) + movement keys + GUI keys
-  (power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str)
+  ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+  (client-session/with-current-client-session
+    #(power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
