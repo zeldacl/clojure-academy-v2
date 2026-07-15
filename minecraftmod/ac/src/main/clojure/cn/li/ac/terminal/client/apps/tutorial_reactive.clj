@@ -198,6 +198,10 @@
   (let [{:keys [pvs]} ui-state
         view (preview/current-sub-view pvs)
         area (rt/node-by-id rt :preview-area)]
+    (cn.li.mcmod.util.log/info "[tutorial] refresh-preview! pvs-state:" (keys @pvs)
+                               "view:" (:type view)
+                               "recipe-kind:" (:recipe-kind view)
+                               "area-visible:" (when area (.isVisible area)))
     (rt/clear-children! rt area)
     (when view
       (rt/build-child! rt (preview/build-preview-spec view :current-preview) area)))
@@ -389,7 +393,7 @@
                           len2 (+ (- ln cl cl) (* (- ln2 (- ln cl cl)) (/ ldt b2)))]
                       (.setDSlot gr 0 (* s (- ln len2))) (.setDSlot gr 1 (* s ln))
                       (.setDSlot gr 2 glow-y) (.setDSlot gr 3 line-w) (.setDSlot gr 4 glow-sz)
-                      (.setDSlot gl 0 (* s (- ln))) (.setDSlot gl 1 (* s (- (+ ln) len2)))
+                      (.setDSlot gl 0 (* s (- ln))) (.setDSlot gl 1 (* s (- len2 ln)))
                       (.setDSlot gl 2 glow-y) (.setDSlot gl 3 line-w) (.setDSlot gl 4 glow-sz)
                       (.setFlag gr node/FLAG-LAYOUT-DIRTY) (.setFlag gl node/FLAG-LAYOUT-DIRTY)))))
               ;; Left panel bg fade-in (matching upstream blend(leftPart, 1.75, 0.3))
@@ -423,7 +427,7 @@
         r-x0 (* s (- ln ln2))   ;; 50.0  (= 200×0.25)
         r-x1 (* s ln)           ;; 125.0 (= 500×0.25)
         l-x0 (* s (- ln))       ;; -125.0 (= -500×0.25)
-        l-x1 (* s (- (+ ln) ln2)) ;; -50.0 (= -200×0.25)
+        l-x1 (* s (- ln2 ln))   ;; -50.0 (= -200×0.25)
         glow-y (* s 15.0)       ;; 3.75  (upstream y=height/2+15 → 15 from center)
         line-w (max 1.0 (* s 5.0))
         glow-sz (max 1.0 (* s 5.0))
@@ -457,8 +461,9 @@
                   alpha (int (* 255.0 (- 1.0 t)))]
               (doseq [id [:logo0 :logo1 :logo2 :logo3]] (set-logo-alpha! rt id alpha))
               (when (>= elapsed 300.0)
-                (doseq [id [:logo0 :logo1 :logo2 :logo3]]
-                  (let [^INode n (rt/node-by-id rt id)] (set-node-visible! rt n false)))
+                (doseq [id [:logo0 :logo1 :logo2 :logo3 :glow-right :glow-left]]
+                  (when-let [^INode n (rt/node-by-id rt id)]
+                    (set-node-visible! rt n false)))
                 (reset! done? true)
                 (set-tick! rt :logo-anim-tick nil))))
           nil)))))
