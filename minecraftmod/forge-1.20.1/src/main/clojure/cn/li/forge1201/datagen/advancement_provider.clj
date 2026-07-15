@@ -47,5 +47,5 @@
                   target-path (.resolve ^Path out-root ^String rel-path)]
               (swap! writes conj (DataProvider/saveStable cached ^JsonElement json-tree ^Path target-path))))
           (CompletableFuture/allOf (into-array CompletableFuture @writes))))
-      (getName [_] (str modid/*mod-id* " Advancement Provider")))))
+      (getName [_] (str modid/mod-id " Advancement Provider")))))
 

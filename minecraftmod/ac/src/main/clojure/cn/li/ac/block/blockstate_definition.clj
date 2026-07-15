@@ -30,7 +30,7 @@
 ;; ============================================================================
 
 (defn- mod-id []
-  mcmod-config/*mod-id*)
+  mcmod-config/mod-id)
 
 (defn- plain->definition
   [{:keys [registry-name properties parts]}]

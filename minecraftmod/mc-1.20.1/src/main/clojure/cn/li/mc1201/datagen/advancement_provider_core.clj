@@ -28,11 +28,11 @@
 
 (defn ach-path
   [id]
-  (str "data/" modid/*mod-id* "/advancements/achievements/" (normalize-id id) ".json"))
+  (str "data/" modid/mod-id "/advancements/achievements/" (normalize-id id) ".json"))
 
 (defn root-path
   [tab-id]
-  (str "data/" modid/*mod-id* "/advancements/achievements/" (name tab-id) "/root.json"))
+  (str "data/" modid/mod-id "/advancements/achievements/" (name tab-id) "/root.json"))
 
 (defn tab-root-id
   [tab-id]

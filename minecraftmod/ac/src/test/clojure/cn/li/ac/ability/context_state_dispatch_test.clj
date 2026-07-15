@@ -73,7 +73,7 @@
                                          :actions {:perform! (fn [& _]
                                                                (reset! invoked? true))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/*context-owner* (test-context-owner uuid)]
+      (binding [ctx/context-owner (test-context-owner uuid)]
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (true? @invoked?) ":instant key-down must invoke :perform!")))))
 
@@ -93,7 +93,7 @@
                                          :actions {:activate! (fn [& _] (swap! actions conj :activate!))
                                                    :deactivate! (fn [& _] (swap! actions conj :deactivate!))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/*context-owner* (test-context-owner uuid)]
+      (binding [ctx/context-owner (test-context-owner uuid)]
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (true? (rt/handle-key-up! ctx-id {})))
         (is (= [:activate! :deactivate!] @actions))))))
@@ -113,6 +113,6 @@
                                                    :cost-fail! (fn [_ _ _ _ _ _ _ stage _]
                                                                  (swap! stages conj stage))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/*context-owner* (test-context-owner uuid)]
+      (binding [ctx/context-owner (test-context-owner uuid)]
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (= [:down] @stages) "cost failure must invoke :cost-fail! with :down stage")))))

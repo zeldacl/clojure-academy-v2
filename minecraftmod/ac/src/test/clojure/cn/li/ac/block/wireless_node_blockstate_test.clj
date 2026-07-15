@@ -4,7 +4,7 @@
             [cn.li.mcmod.config :as mcmod-config]))
 
 (deftest node-definitions-use-exclusive-energy-connected-parts-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"]
+  (with-redefs [mcmod-config/mod-id "my_mod"]
     (let [definition (node-blockstate/get-node-blockstate-definition :wireless-node-basic)
           parts (:parts definition)
           conditions (map :condition parts)]
@@ -31,7 +31,7 @@
                  connected-models)))))))
 
 (deftest node-model-texture-config-supports-combined-connected-variant-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"]
+  (with-redefs [mcmod-config/mod-id "my_mod"]
     (let [cfg (node-blockstate/get-node-model-texture-config "node_basic_energy_3_connected")]
       (is (= "my_mod:block/node_basic_side_3" (:side cfg)))
       (is (= "my_mod:block/node_top_1" (:vert cfg))))))

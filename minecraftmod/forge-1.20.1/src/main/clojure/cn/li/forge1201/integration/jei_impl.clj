@@ -179,7 +179,7 @@
   []
   (reify IModPlugin
     (getPluginUid [_]
-      (ResourceLocation. mod-config/*mod-id* "content_plugin"))
+      (ResourceLocation. mod-config/mod-id "content_plugin"))
 
     (registerCategories [_ registration]
       (log/info "Registering JEI categories for content descriptors...")

@@ -177,7 +177,7 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (binding [vr/*reflection-chain-id* "chain-shared"]
         (vr/mark-reflecting-for-test! "p" "a" "ctx-other" "chain-shared")
-        (binding [ctx/*context-owner* (test-context-owner "p")]
+        (binding [ctx/context-owner (test-context-owner "p")]
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
 
@@ -205,7 +205,7 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (vr/mark-reflecting-for-test! "p" "a" "ctx-current" "chain-other")
       (binding [vr/*reflection-chain-id* "chain-current"]
-        (binding [ctx/*context-owner* (test-context-owner "p")]
+        (binding [ctx/context-owner (test-context-owner "p")]
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
 

@@ -27,7 +27,7 @@
       owner-map
       [(require-owner-value owner ":client-session-id"
                             (or (:client-session-id owner-map)
-                                runtime-hooks/*client-session-id*))
+                                runtime-hooks/client-session-id))
        screen-id
        (require-owner-value owner ":player-uuid"
                             (some-> (or (:player-uuid owner-map)
@@ -82,7 +82,7 @@
 (defn get-player-contexts-for-player
   "Read contexts for one player from projected player-state only."
   ([player-uuid]
-   (if-let [session-id (runtime-hooks/*client-session-id*)]
+   (if-let [session-id (runtime-hooks/client-session-id)]
      (get-player-contexts-for-player player-uuid session-id nil)
      []))
   ([player-uuid session-id screen-id]

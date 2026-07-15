@@ -17,7 +17,7 @@
    the two sanctioned exactly-once primitives (framework-once! / process-once!)."
   (:require [cn.li.mcmod.aot :as aot]))
 
-(def *framework*
+(def framework
   "Single var for lifecycle-wide Framework access.
 
    INITIALIZED TO nil — the real atom is injected at runtime via alter-var-root
@@ -25,7 +25,7 @@
    instantiation, macro expansion, and classloader pollution.
 
    Entry points inject the atom:
-     (alter-var-root #'*framework* (constantly (create-framework)))
+     (alter-var-root #'framework (constantly (create-framework)))
 
    No ^:dynamic — alter-var-root sets the ROOT binding visible to ALL threads.
    Zero ThreadLocal overhead, zero async NPE on ForkJoinPool."
@@ -73,8 +73,8 @@
 
 (defn fw-atom
   "Return the current Framework atom.
-   Derefs *framework* — the root binding is set via alter-var-root at startup.
+   Derefs framework — the root binding is set via alter-var-root at startup.
    Returns nil before startup completes."
   ^clojure.lang.IAtom
   []
-  *framework*)
+  framework)

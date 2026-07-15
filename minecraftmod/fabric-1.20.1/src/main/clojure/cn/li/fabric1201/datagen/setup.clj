@@ -20,6 +20,6 @@
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)]
     (provider-registration/register-providers!
       :fabric-1.20.1
-      {:mod-id modid/*mod-id*
+      {:mod-id modid/mod-id
        :register-provider! (fn [provider]
                              (provider-factory/add-provider! pack provider))})))

@@ -455,6 +455,49 @@ tasks.register('auditTopLevelMutableState') {
             kinds as List
         }
 
+        // ------------------------------------------------------------------
+        // Report-only detection (Phase P0 of the top-level-state refactor).
+        // These categories are surfaced in dedicated report sections with
+        // labels that verifyMultiplayerOwnerGuards' extractCount() never
+        // matches, so they cannot fail the build yet. They exist purely to
+        // give the migration plan (docs/dev/TOP_LEVEL_STATE_GOVERNANCE.md)
+        // full visibility before later phases promote any of them to a hard
+        // gate. Do not fold these into `mutableKinds` / the whitelist-backed
+        // `findings` pipeline above — that pipeline is what
+        // verifyMultiplayerOwnerGuards hard-fails on today.
+        // ------------------------------------------------------------------
+        def reportOnlyKinds = { String formText, String defType ->
+            def kinds = [] as LinkedHashSet<String>
+            if ((formText =~ /\^:dynamic\b/).find()) {
+                kinds << 'dynamic'
+            }
+            if (formText.contains('ThreadLocal.')) {
+                kinds << 'thread-local'
+            }
+            if (formText.contains('ConcurrentHashMap.')) {
+                kinds << 'concurrent-hash-map'
+            }
+            if (formText.contains('ConcurrentLinkedQueue')) {
+                kinds << 'concurrent-queue'
+            }
+            if ((formText =~ /\(Object\.\)/).find()) {
+                kinds << 'lock-object'
+            }
+            if ((formText =~ /\((long|double|int|float|boolean|object)-array\b/).find()) {
+                kinds << 'array'
+            }
+            if (defType == 'defonce' && mutableKinds(formText).isEmpty() && kinds.isEmpty()) {
+                kinds << 'bare-defonce'
+            }
+            kinds as List
+        }
+
+        def allowedTopLevelHeads = [
+            'ns', 'def', 'defn', 'defn-', 'defonce', 'defmacro', 'defmethod',
+            'defmulti', 'definterface', 'deftype', 'defrecord', 'declare',
+            'comment', 'gen-class'
+        ] as Set
+
         def nestedAtomCount = { String formText ->
             def matcher = (formText =~ /\((?:clojure\.core\/)?atom\b/)
             int count = 0
@@ -505,29 +548,38 @@ tasks.register('auditTopLevelMutableState') {
         }
 
         def findings = []
+        def reportOnlyFindings = []
         def processForm = { File sourceFile, String rel, int startLine, List<String> formLines ->
             def formText = formLines.join(System.lineSeparator())
-            def kinds = mutableKinds(formText)
-            if (kinds.isEmpty()) {
-                return
-            }
             def header = parseDefHeader(formText)
             if (header == null) {
                 return
             }
-            def key = "${rel}\t${header.symbol}".toString()
-            def entry = whitelist[key]
-            findings << [
-                path          : rel,
-                line          : startLine,
-                symbol        : header.symbol,
-                defType       : header.defType,
-                kinds         : kinds,
-                nestedAtomCount: nestedAtomCount(formText),
-                classification: entry?.classification ?: 'UNCLASSIFIED',
-                owner         : entry?.owner ?: '',
-                notes         : entry?.notes ?: ''
-            ]
+            def kinds = mutableKinds(formText)
+            if (!kinds.isEmpty()) {
+                def key = "${rel}\t${header.symbol}".toString()
+                def entry = whitelist[key]
+                findings << [
+                    path          : rel,
+                    line          : startLine,
+                    symbol        : header.symbol,
+                    defType       : header.defType,
+                    kinds         : kinds,
+                    nestedAtomCount: nestedAtomCount(formText),
+                    classification: entry?.classification ?: 'UNCLASSIFIED',
+                    owner         : entry?.owner ?: '',
+                    notes         : entry?.notes ?: ''
+                ]
+            }
+            def reportKinds = reportOnlyKinds(formText, header.defType)
+            if (!reportKinds.isEmpty()) {
+                reportOnlyFindings << [
+                    path  : rel,
+                    line  : startLine,
+                    symbol: header.symbol,
+                    kinds : reportKinds
+                ]
+            }
         }
 
         def sourceFiles = mutableStateSources.files.sort { File a, File b -> a.path <=> b.path }
@@ -561,6 +613,57 @@ tasks.register('auditTopLevelMutableState') {
                         capturing = false
                         depth = 0
                         formLines = []
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        // Report-only pass 2: top-level forms whose head symbol is not a
+        // recognized declaration form. Catches load-time side-effect calls
+        // (bare `(register-x! ...)`, bare `(require ...)`, a `(let [...]
+        // (defn ...))` closure wrapper) that the def/defonce-only scan above
+        // never sees. Same paren-balance walker, independent capture.
+        // ------------------------------------------------------------------
+        def topLevelSideEffectFindings = []
+        sourceFiles.each { File sourceFile ->
+            def rel = project.rootDir.toPath().relativize(sourceFile.toPath()).toString().replace('\\', '/')
+            def lines = sourceFile.readLines('UTF-8')
+            boolean capturing = false
+            int depth = 0
+            int startLine = 0
+            String headSymbol = null
+            def recordIfViolation = {
+                def bareHead = headSymbol.contains('/') ? headSymbol.substring(headSymbol.lastIndexOf('/') + 1) : headSymbol
+                if (!allowedTopLevelHeads.contains(bareHead)) {
+                    topLevelSideEffectFindings << [path: rel, line: startLine, head: headSymbol]
+                }
+            }
+            lines.eachWithIndex { String line, int idx ->
+                if (!capturing) {
+                    def trimmed = line.trim()
+                    if (trimmed.startsWith('(')) {
+                        def headMatcher = (trimmed =~ /^\(([^\s\)]+)/)
+                        if (headMatcher.find()) {
+                            capturing = true
+                            depth = countParenDelta(line)
+                            startLine = idx + 1
+                            headSymbol = headMatcher.group(1)
+                            if (depth <= 0) {
+                                recordIfViolation()
+                                capturing = false
+                                depth = 0
+                                headSymbol = null
+                            }
+                        }
+                    }
+                } else {
+                    depth += countParenDelta(line)
+                    if (depth <= 0) {
+                        recordIfViolation()
+                        capturing = false
+                        depth = 0
+                        headSymbol = null
                     }
                 }
             }
@@ -612,6 +715,8 @@ tasks.register('auditTopLevelMutableState') {
         report << "Nested atom hints: ${nestedAtomHints.size()}"
         report << "FX/UI runtime hints: ${fxUiRuntimeHints.size()}"
         report << "Forbidden runtime pattern violations: ${forbiddenRuntimeViolations.size()}"
+        report << "Report-only dynamic/JVM-primitive findings (not gated): ${reportOnlyFindings.size()}"
+        report << "Report-only top-level side-effect forms (not gated): ${topLevelSideEffectFindings.size()}"
         report << ''
         report << '## Summary by classification'
         report << ''
@@ -683,6 +788,35 @@ tasks.register('auditTopLevelMutableState') {
             report << ''
             unclassified.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
                 report << "- `${finding.path}:${finding.line}` `${finding.symbol}` (${finding.kinds.join(',')})"
+            }
+            report << ''
+        }
+        if (!reportOnlyFindings.isEmpty()) {
+            report << '## Report-only: dynamic vars / JVM primitives / bare defonce (not gated)'
+            report << ''
+            report << 'Visibility-only for the top-level-state refactor plan. Does not affect'
+            report << 'verifyMultiplayerOwnerGuards; a later phase promotes selected categories'
+            report << 'to the hard-gated whitelist once each is triaged into a keep/kill list.'
+            report << ''
+            report << '| path | line | symbol | kind |'
+            report << '| --- | ---: | --- | --- |'
+            reportOnlyFindings.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
+                report << "| `${md(finding.path)}` | ${finding.line} | `${md(finding.symbol)}` | `${md(finding.kinds.join(','))}` |"
+            }
+            report << ''
+        }
+        if (!topLevelSideEffectFindings.isEmpty()) {
+            report << '## Report-only: top-level non-declaration forms (not gated)'
+            report << ''
+            report << 'Forms at column 0 whose head symbol is not in the declaration allowlist'
+            report << "(${allowedTopLevelHeads.sort().join(', ')}). May include load-time side"
+            report << 'effects (register!/install! calls, bare require) or false positives from'
+            report << 'unusual formatting — read-only signal pending manual triage.'
+            report << ''
+            report << '| path | line | head symbol |'
+            report << '| --- | ---: | --- |'
+            topLevelSideEffectFindings.sort { a, b -> (a.path <=> b.path) ?: (a.line <=> b.line) }.each { finding ->
+                report << "| `${md(finding.path)}` | ${finding.line} | `${md(finding.head)}` |"
             }
             report << ''
         }

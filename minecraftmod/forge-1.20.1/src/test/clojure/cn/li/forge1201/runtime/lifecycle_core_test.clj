@@ -137,7 +137,7 @@
   (let [seen (atom nil)]
     (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
                      #'runtime-hooks/on-player-login! (fn [_]
-                                                        (reset! seen runtime-hooks/*player-state-owner*))}
+                                                        (reset! seen runtime-hooks/player-state-owner))}
       (fn []
         (lifecycle-core/on-player-login! :player test-owner)))
     (is (= test-owner @seen))))
@@ -148,7 +148,7 @@
         seen-owner (atom nil)
         called (atom [])]
     (with-redefs-fn {#'runtime-hooks/on-server-stop! (fn [session-id]
-                                                       (reset! seen-owner runtime-hooks/*player-state-owner*)
+                                                       (reset! seen-owner runtime-hooks/player-state-owner)
                                                        (swap! called conj [:hook session-id]))}
       (fn []
         (lifecycle-core/on-server-stop!

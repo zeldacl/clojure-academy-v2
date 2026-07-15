@@ -65,28 +65,28 @@
   [schema*]
   (schema/require-valid field-schema (field-schema-validator) :block-state-field-schema schema*))
 
-(def ^:private *network-get-world-fn*
+(def ^:private network-get-world-fn
   (fn [_] nil))
 
-(def ^:private *network-get-tile-at-fn*
+(def ^:private network-get-tile-at-fn
   (fn [_ _] nil))
 
 (defn register-network-helper-fns!
   "Register helper fns used by generated network handlers."
   [{:keys [get-world get-tile-at]}]
   (when get-world
-    (install/install-root! #'*network-get-world-fn* get-world))
+    (install/install-root! #'network-get-world-fn get-world))
   (when get-tile-at
-    (install/install-root! #'*network-get-tile-at-fn* get-tile-at))
+    (install/install-root! #'network-get-tile-at-fn get-tile-at))
   nil)
 
 (defn get-network-world
   [player]
-  (*network-get-world-fn* player))
+  (network-get-world-fn player))
 
 (defn get-network-tile-at
   [world payload]
-  (*network-get-tile-at-fn* world payload))
+  (network-get-tile-at-fn world payload))
 
 (def ^:private nbt-writers
   "NBT writers extracted from nbt.dsl/type-converters"

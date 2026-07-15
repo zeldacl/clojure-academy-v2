@@ -24,8 +24,8 @@
         captured (atom nil)]
     (with-redefs [cn.li.mcmod.gui.container-state/get-container-for-menu (fn [_] container)]
       (screen-impl/with-screen-client-owner menu
-        #(reset! captured {:client-session-id runtime-hooks/*client-session-id*
-                           :owner runtime-hooks/*player-state-owner*})))
+        #(reset! captured {:client-session-id runtime-hooks/client-session-id
+                           :owner runtime-hooks/player-state-owner})))
     (is (= :session-a (:client-session-id @captured)))
     (is (= "player-a" (:player-uuid (:owner @captured))))))
 

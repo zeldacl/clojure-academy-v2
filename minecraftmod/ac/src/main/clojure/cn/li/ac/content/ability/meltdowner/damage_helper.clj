@@ -24,7 +24,7 @@
 
 (defn- current-server-tick-id
   []
-  (some-> (hooks/*player-state-owner*) :server-tick-id))
+  (some-> (hooks/player-state-owner) :server-tick-id))
 
 (defn clear-all-marks!
   []

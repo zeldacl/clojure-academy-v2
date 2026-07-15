@@ -194,7 +194,7 @@
     (ctx/register-context! (ctx/new-server-context "player-a" :sk "unique-ctx" owner-a))
     (ctx/register-context! (ctx/new-server-context "player-b" :sk "dup-ctx" owner-b))
     (is (= "player-a"
-           (binding [ctx/*context-owner* owner-a]
+           (binding [ctx/context-owner owner-a]
              (get-player-uuid "dup-ctx"))))
     (is (= "player-a" (get-player-uuid "unique-ctx")))
     (is (nil? (get-player-uuid "dup-ctx")))))

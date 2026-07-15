@@ -19,19 +19,19 @@
   {:renderer-registry {}
    :scripted-renderer-registry {}})
 
-(def ^:private *renderer-registry*
+(def ^:private renderer-registry
   {})
 
-(def ^:private *scripted-renderer-registry*
+(def ^:private scripted-renderer-registry
   {})
 
 (defn renderer-registry-snapshot
   []
-  *renderer-registry*)
+  renderer-registry)
 
 (defn scripted-renderers-snapshot
   []
-  *scripted-renderer-registry*)
+  scripted-renderer-registry)
 
 (defn register-tile-renderer!
   "Register a renderer for a specific TileEntity type
@@ -44,7 +44,7 @@
     (register-tile-renderer! TileMatrix my-renderer-obj)"
   [tile-class renderer-fn]
   (log/info "Registering TileEntity renderer for" tile-class)
-  (install/install-root! #'*renderer-registry* (assoc *renderer-registry* tile-class renderer-fn))
+  (install/install-root! #'renderer-registry (assoc renderer-registry tile-class renderer-fn))
   nil)
 
 ;; Scripted block entities: dispatch by block-id (string). Platform registers
@@ -56,7 +56,7 @@
   render-scripted-tile-entity(block-id, be, x, y, z)."
   [block-id renderer-obj]
   (log/info "Registering scripted TileEntity renderer for" block-id)
-  (install/install-root! #'*scripted-renderer-registry* (assoc *scripted-renderer-registry* block-id renderer-obj))
+  (install/install-root! #'scripted-renderer-registry (assoc scripted-renderer-registry block-id renderer-obj))
   nil)
 
 (defn get-scripted-tile-renderer [block-id]

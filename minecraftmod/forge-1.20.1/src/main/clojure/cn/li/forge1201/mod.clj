@@ -26,7 +26,7 @@
 
 (defn- current-mod-id
   []
-  modid/*mod-id*)
+  modid/mod-id)
 
 ;; ============================================================================
 ;; Unified deferred holders (replaces old cached-once! + dynamic vars)
@@ -210,7 +210,7 @@
   (log/info "[BOOTSTRAP_TRACE] start-forge-mod! enter"
             {:compile-context (aot/compile-context)})
   (when-let [fw-inst (fw/create-framework)]
-    (alter-var-root #'fw/*framework* (constantly fw-inst)))
+    (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle-with-error-handling!
     {:datagen-run? (datagen-run?)
      :on-common-setup on-common-setup

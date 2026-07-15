@@ -57,7 +57,7 @@
         (if-not known-custom?
           (do (log/warn "Unknown potion effect type:" effect-type) nil)
           (let [registry-name (registry-metadata/get-effect-registry-name effect-id)
-                rl (ResourceLocation. modid/*mod-id* registry-name)
+                rl (ResourceLocation. modid/mod-id registry-name)
                 effect (.get BuiltInRegistries/MOB_EFFECT rl)]
             (when-not effect
               (log/warn "Custom effect not found in MOB_EFFECT registry:" rl))

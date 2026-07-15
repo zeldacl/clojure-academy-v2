@@ -133,9 +133,9 @@
 
 (defn build-combat-notice-data
   [combat-notice-component now-ms]
-  (when (and combat-notice-component runtime-hooks/*client-session-id*)
+  (when (and combat-notice-component runtime-hooks/client-session-id)
     (when-let [{:keys [text color alpha]} (combat-notice/active-notice combat-notice-component
-                                                                       runtime-hooks/*client-session-id*
+                                                                       runtime-hooks/client-session-id
                                                                        :teleporter-crit
                                                                        now-ms)]
       {:type :combat-notice

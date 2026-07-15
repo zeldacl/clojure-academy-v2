@@ -34,7 +34,7 @@
   "ModelEvent.RegisterAdditional handler.
   Registers the _3d variant for every item with :item-model-3d-obj."
   [^ModelEvent$RegisterAdditional event]
-  (let [mod-id (str modid/*mod-id*)]
+  (let [mod-id (str modid/mod-id)]
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
             mrl (ModelResourceLocation.
@@ -49,7 +49,7 @@
   delegates to the 2D model for GUI/ground and the 3D OBJ model for handheld."
   [^ModelEvent$ModifyBakingResult event]
   (let [^Map registry (.getModels event)
-        mod-id (str modid/*mod-id*)]
+        mod-id (str modid/mod-id)]
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
             gui-mrl (ModelResourceLocation.

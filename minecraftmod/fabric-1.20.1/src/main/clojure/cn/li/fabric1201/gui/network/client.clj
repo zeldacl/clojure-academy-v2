@@ -53,7 +53,7 @@
   (with-client-response-owner payload
     (fn []
       (packet-base/dispatch-client-response!
-        runtime-hooks/*player-state-owner*
+        runtime-hooks/player-state-owner
         request-id
         payload))))
 

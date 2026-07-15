@@ -12,7 +12,7 @@
 
 (defn create-provider
     [^PackOutput output]
-  (let [^String mod-id (str modid/*mod-id*)
+  (let [^String mod-id (str modid/mod-id)
       path-provider (.createPathProvider output PackOutput$Target/DATA_PACK "recipes")
       ^Gson gson (gson-util/create-pretty-gson)]
     (reify DataProvider

@@ -7,7 +7,7 @@
 (deftest default-definition-generation-test
   (with-redefs [metadata/get-all-block-ids (fn [] ["demo-block"])
                 metadata/get-block-registry-name (fn [_] "demo_block")
-                config/*mod-id* "my_mod"]
+                config/mod-id "my_mod"]
     (let [all-defs (#'sut/basic-get-all-definitions)
           definition (get all-defs :demo-block)]
       (testing "basic definitions are generated from metadata"

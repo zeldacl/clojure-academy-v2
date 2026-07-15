@@ -10,17 +10,17 @@
             [cn.li.mcmod.framework :as fw]))
 
 (defn- reset-ability-init-fixture [f]
-  (let [prev-fw fw/*framework*]
+  (let [prev-fw fw/framework]
     (try
       (when-let [fw-inst (fw/create-framework)]
-        (alter-var-root #'fw/*framework* (constantly fw-inst)))
+        (alter-var-root #'fw/framework (constantly fw-inst)))
       (runtime-container/install-ability-runtime-container!
         (runtime-container/create-ability-runtime-container))
       (discovery/reset-bootstrap-attempts-for-test!)
       (discovery-registry/reset-provider-registry-for-test!)
       (f)
       (finally
-        (alter-var-root #'fw/*framework* (constantly prev-fw))))))
+        (alter-var-root #'fw/framework (constantly prev-fw))))))
 
 (use-fixtures :each reset-ability-init-fixture)
 

@@ -13,7 +13,7 @@
 
 (defn- resolve-store-session-id
   []
-  (or (some-> (ctx/*context-owner*) owner/store-session-id)
+  (or (some-> (ctx/context-owner) owner/store-session-id)
       (runtime-hooks/player-state-session-id)
       (runtime-hooks/require-player-state-session-id "toggle")))
 

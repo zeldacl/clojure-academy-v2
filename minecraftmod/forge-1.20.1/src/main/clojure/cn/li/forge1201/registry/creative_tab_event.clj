@@ -64,7 +64,7 @@
       ;; Distinct display name so the variant doesn't duplicate the default entry
       (when-let [label (:label variant)]
         (let [label-key (str/replace (str label) #"-" "_")
-              mod-id (var-get #'modid/*mod-id*)
+              mod-id (var-get #'modid/mod-id)
               translation-key (str "item." mod-id "." item-id "_" label-key)]
           (.setHoverName variant-stack (Component/translatable translation-key))))
       (.accept event variant-stack))
@@ -103,7 +103,7 @@
   Items with :creative-tab nil are skipped (e.g. internal logo item)."
   [^BuildCreativeModeTabContentsEvent event]
   (let [tab-location (.location (.getTabKey event))
-        mod-id-str (var-get #'modid/*mod-id*)]
+        mod-id-str (var-get #'modid/mod-id)]
     (when (= (.getNamespace tab-location) mod-id-str)
       (doseq [entry (registry-metadata/get-all-creative-tab-entries)]
         (when (some? (:tab entry))

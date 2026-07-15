@@ -39,7 +39,7 @@
 (defn- update-lifecycle!
   "Atomically update lifecycle state within Framework.
    Initializes state if not yet present.
-   No-op during AOT compilation when *framework* is nil."
+   No-op during AOT compilation when framework is nil."
   [f & args]
   (let [fw-atom (fw/fw-atom)]
     (when fw-atom

@@ -40,7 +40,7 @@
   (require-owner-value owner ":client-session-id"
                        (or (:client-session-id owner)
                            (:session-id owner)
-                           runtime-hooks/*client-session-id*)))
+                           runtime-hooks/client-session-id)))
 
 (defn- owner-player-id
   [owner]
@@ -93,7 +93,7 @@
 
 (defn player-owner
   [player-uuid]
-  {:client-session-id (or runtime-hooks/*client-session-id*
+  {:client-session-id (or runtime-hooks/client-session-id
                           [:terminal-client player-uuid])
    :screen-id :terminal
    :player-uuid player-uuid})

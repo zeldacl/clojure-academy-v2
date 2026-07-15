@@ -46,7 +46,7 @@
                                          :cooldown {:mode :default}
                                          :cooldown-ticks 7})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/*context-owner* (test-context-owner uuid)]
+      (binding [ctx/context-owner (test-context-owner uuid)]
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
         (is (= 20 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
@@ -62,7 +62,7 @@
                                          :cooldown {:mode :manual}
                                          :cooldown-ticks 9})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/*context-owner* (test-context-owner uuid)]
+      (binding [ctx/context-owner (test-context-owner uuid)]
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
         (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))

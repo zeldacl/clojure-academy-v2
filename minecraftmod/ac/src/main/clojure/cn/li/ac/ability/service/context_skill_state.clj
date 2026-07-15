@@ -8,7 +8,7 @@
 
 (defn current-owner
   []
-  (or (ctx/*context-owner*)
+  (or (ctx/context-owner)
       (runtime-hooks/current-player-state-owner)))
 
 (defn get-context

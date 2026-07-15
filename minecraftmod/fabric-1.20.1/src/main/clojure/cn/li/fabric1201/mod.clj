@@ -23,7 +23,7 @@
 
 (defn- current-mod-id
   []
-  modid/*mod-id*)
+  modid/mod-id)
 
 ;; Unified deferred holders (AOT-safe lazy + runtime tripwire)
 (defonce registered-blocks-holder
@@ -75,7 +75,7 @@
   []
   (log/info "Initializing MyMod (Fabric 1.20.1) from Clojure...")
   (when-let [fw-inst (fw/create-framework)]
-    (alter-var-root #'fw/*framework* (constantly fw-inst)))
+    (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle!
     {:init-platform! platform-bootstrap/init-platform!
      :init-from-java! init/init-from-java

@@ -119,7 +119,7 @@
                             #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
               (with-client-response-owner payload
                 #(packet-base/dispatch-client-response!
-                   (runtime-hooks/*player-state-owner*)
+                   (runtime-hooks/player-state-owner)
                    request-id
                    payload)))
             (catch Throwable t

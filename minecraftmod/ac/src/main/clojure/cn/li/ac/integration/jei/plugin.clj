@@ -45,15 +45,15 @@
   (categories/format-recipe-for-jei recipe))
 
 ;; JEI integration status
-(def ^:private *jei-available?*
+(def ^:private jei-available?
   false)
 
 (defn jei-loaded?
   "Check if JEI is loaded and available."
   []
-  *jei-available?*)
+  jei-available?)
 
 (defn mark-jei-loaded!
   "Mark JEI as loaded. Called by platform implementation."
   []
-  (install/install-root! #'*jei-available?* true))
+  (install/install-root! #'jei-available? true))

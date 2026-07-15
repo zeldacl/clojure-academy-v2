@@ -10,14 +10,14 @@
 (defn register-block
   [block-id ^Block block-instance]
   (log/info "Registering block with Fabric BuiltInRegistries:" block-id)
-  (RegistryDispatchShared/registerBlock modid/*mod-id* (str block-id) block-instance))
+  (RegistryDispatchShared/registerBlock modid/mod-id (str block-id) block-instance))
 
 (defn register-item
   [item-id ^Item item-instance]
   (log/info "Registering item with Fabric BuiltInRegistries:" item-id)
-  (RegistryDispatchShared/registerItem modid/*mod-id* (str item-id) item-instance))
+  (RegistryDispatchShared/registerItem modid/mod-id (str item-id) item-instance))
 
 (defn register-particle
   [particle-id always-show?]
   (log/info "Registering particle with Fabric BuiltInRegistries:" particle-id)
-  (FabricParticleHelper/registerParticle modid/*mod-id* (str particle-id) (boolean always-show?)))
+  (FabricParticleHelper/registerParticle modid/mod-id (str particle-id) (boolean always-show?)))

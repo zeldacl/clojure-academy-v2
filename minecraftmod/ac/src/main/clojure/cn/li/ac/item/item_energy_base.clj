@@ -50,8 +50,8 @@
   (when item-stack
     (let [item-obj (item/item-get-item item-stack)
           registry-id (some-> item-obj item/item-get-registry-name str)
-          expected-energy-id (str modid/*mod-id* ":energy_unit")
-          expected-portable-id (str modid/*mod-id* ":developer_portable")
+          expected-energy-id (str modid/mod-id ":energy_unit")
+          expected-portable-id (str modid/mod-id ":developer_portable")
           nbt-data (item/item-get-tag-compound item-stack)
           nbt-type (when nbt-data (nbt/nbt-get-string nbt-data "batteryType"))]
       (or (when (seq nbt-type) (keyword nbt-type))

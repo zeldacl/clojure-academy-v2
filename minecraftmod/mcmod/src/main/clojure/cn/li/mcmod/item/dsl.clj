@@ -215,15 +215,15 @@
   (apply merge template-and-options))
 
 ;; Multimethod for version-specific item creation
-(def *forge-version* nil)
+(def forge-version nil)
 
 (defmulti create-platform-item
   "Create a version-specific item instance"
-  (fn [_item-spec] *forge-version*))
+  (fn [_item-spec] forge-version))
 
 (defmethod create-platform-item :default [item-spec]
   (throw (ex-info "No item implementation for version"
-                  {:version *forge-version*
+                  {:version forge-version
                    :item-id (:id item-spec)})))
 
 ;; Item interaction handlers

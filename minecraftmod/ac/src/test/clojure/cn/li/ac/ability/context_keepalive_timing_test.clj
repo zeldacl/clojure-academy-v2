@@ -43,7 +43,7 @@
 
         (ctx-mgr/tick-context-manager!)
 
-        (binding [ctx/*context-owner* test-context-owner]
+        (binding [ctx/context-owner test-context-owner]
           (is (= ctx/STATUS-ALIVE (:status (ctx/get-context in-window-id))))
           (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context expired-id)))))
         (is (= [expired-id] @sends))))))

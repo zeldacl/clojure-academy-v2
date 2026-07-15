@@ -38,7 +38,7 @@
     (let [ctx-id "ctx-own-1"
           events (atom [])]
       (seed-owned-alive-context! "owner" ctx-id)
-      (binding [ctx/*context-owner* (server-owner "owner")]
+      (binding [ctx/context-owner (server-owner "owner")]
         (ctx/ctx-on! ctx-id :fx #(swap! events conj %)))
 
       (is (nil? (with-server-player-owner "attacker"

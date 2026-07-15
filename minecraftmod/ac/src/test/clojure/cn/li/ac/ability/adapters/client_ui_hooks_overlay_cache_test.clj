@@ -20,7 +20,7 @@
 
 ;; The overlay-plan cache lives inside the Framework atom (client-ui-hooks'
 ;; owner-keyed runtime state, see client_ui_hooks.clj's `client-ui-runtime-state-atom`),
-;; which only persists across calls when *framework* is initialized — hence
+;; which only persists across calls when framework is initialized — hence
 ;; clean-player-states-fixture (not just reset-client-ui-state-for-test!) is required
 ;; here, unlike simpler tests that only call build-client-overlay-plan once.
 (defn- reset-ui-state! [f]
@@ -63,7 +63,7 @@
                  ;; runtime atom under the SAME Framework path prefix ([:service :client-ui ...])
                  ;; that client-ui-hooks' own runtime state atom occupies as a leaf value —
                  ;; a pre-existing path collision (ClassCastException) unrelated to the overlay
-                 ;; cache under test, triggered only once *framework* is actually live across
+                 ;; cache under test, triggered only once framework is actually live across
                  ;; calls (see clean-player-states-fixture above). Stub these away rather than
                  ;; fix that unrelated bug here — matches the plan's explicit scope boundary.
                  toast/active-toasts-snapshot (fn [] [])

@@ -30,7 +30,7 @@
 
 (defn- ach-id
   [id]
-  (str modid/*mod-id* ":achievements/" (normalize-id id)))
+  (str modid/mod-id ":achievements/" (normalize-id id)))
 
 (defn- metadata-fn
   "Wrap a metadata lookup function so it returns nil on missing input."
@@ -100,7 +100,7 @@
 
 (defn create-provider
   [^PackOutput output]
-  (let [^String mod-id (str modid/*mod-id*)
+  (let [^String mod-id (str modid/mod-id)
         path-provider (.createPathProvider output PackOutput$Target/DATA_PACK "advancements")]
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
@@ -127,4 +127,4 @@
                   (swap! writes conj (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))
 
           (CompletableFuture/allOf (into-array CompletableFuture @writes))))
-      (getName [_] (str modid/*mod-id* " Advancement Provider")))))
+      (getName [_] (str modid/mod-id " Advancement Provider")))))

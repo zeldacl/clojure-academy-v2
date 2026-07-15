@@ -40,23 +40,23 @@
    - run content-owned datagen metadata hooks
 
    Called by both Forge and Fabric datagen entry points.
-   Note: Uses cn.li.mcmod.config/*mod-id* for logging, so modid binding
+   Note: Uses cn.li.mcmod.config/mod-id for logging, so modid binding
    must be set up before calling this function."
   []
   (try
     ;; Ensure Framework is initialized.
     ;; Normal mod init (start-forge-mod!) already injects via alter-var-root.
     ;; Only inject here if datagen runs standalone (e.g. via --existing).
-    (when (nil? fw/*framework*)
+    (when (nil? fw/framework)
       (when-let [fw-inst (fw/create-framework)]
-        (alter-var-root #'fw/*framework* (constantly fw-inst))))
+        (alter-var-root #'fw/framework (constantly fw-inst))))
     (mc-content/register-all-content!)
     (run-init-pipeline!)
     (let [initial (snapshot-counts)]
       (when-not (populated? initial)
-        (println (str "[" modid/*mod-id* "] WARNING: datagen metadata still empty after SPI bootstrap, "
+        (println (str "[" modid/mod-id "] WARNING: datagen metadata still empty after SPI bootstrap, "
                       "counts=" initial))))
     (catch Throwable t
-      (println (str "[" modid/*mod-id* "] WARNING: failed to load content for datagen: "
+      (println (str "[" modid/mod-id "] WARNING: failed to load content for datagen: "
                     (ex-message t)))
       (.printStackTrace t))))

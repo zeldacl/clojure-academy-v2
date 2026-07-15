@@ -36,7 +36,7 @@
 
     (provider-registration/register-providers!
       :forge-1.20.1
-      {:mod-id modid/*mod-id*
+      {:mod-id modid/mod-id
        :register-provider! (fn [provider]
                              (provider-factory/add-provider! generator exfile-helper provider))})))
 
@@ -44,9 +44,9 @@
   "Static entry point used by Java annotation wrapper."
   [^GatherDataEvent event]
   (try
-    (println (str "[" modid/*mod-id* "] Gathering data generators..."))
+    (println (str "[" modid/mod-id "] Gathering data generators..."))
     (-gatherData event)
-    (println (str "[" modid/*mod-id* "] DataGenerator event processed!"))
+    (println (str "[" modid/mod-id "] DataGenerator event processed!"))
     (catch Exception e
       (println (str "Error handling GatherDataEvent: " e))
       (.printStackTrace e))))

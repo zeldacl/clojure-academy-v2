@@ -42,7 +42,7 @@
             registry-name
             {}
             [(->BlockStatePart nil
-                               [(str config/*mod-id* ":block/" registry-name)])])])))
+                               [(str config/mod-id ":block/" registry-name)])])])))
 
 (defn- basic-get-block-state-definition
   [block-key]
@@ -57,32 +57,32 @@
   [mod-id registry-name]
   (str mod-id ":block/" registry-name))
 
-(def ^:private *get-all-definitions-hook*
+(def ^:private get-all-definitions-hook
   basic-get-all-definitions)
 
-(def ^:private *get-block-state-definition-hook*
+(def ^:private get-block-state-definition-hook
   basic-get-block-state-definition)
 
-(def ^:private *is-multipart-block-hook*
+(def ^:private is-multipart-block-hook
   basic-is-multipart-block?)
 
-(def ^:private *get-model-cube-texture-config-hook*
+(def ^:private get-model-cube-texture-config-hook
   (fn [_model-name] nil))
 
-(def ^:private *get-model-texture-config-hook*
+(def ^:private get-model-texture-config-hook
   (fn [_model-name] nil))
 
-(def ^:private *get-item-model-id-hook*
+(def ^:private get-item-model-id-hook
   basic-get-item-model-id)
 
 (defn blockstate-hooks-snapshot
   []
-  {:get-all-definitions *get-all-definitions-hook*
-   :get-block-state-definition *get-block-state-definition-hook*
-   :is-multipart-block? *is-multipart-block-hook*
-   :get-model-cube-texture-config *get-model-cube-texture-config-hook*
-   :get-model-texture-config *get-model-texture-config-hook*
-   :get-item-model-id *get-item-model-id-hook*})
+  {:get-all-definitions get-all-definitions-hook
+   :get-block-state-definition get-block-state-definition-hook
+   :is-multipart-block? is-multipart-block-hook
+   :get-model-cube-texture-config get-model-cube-texture-config-hook
+   :get-model-texture-config get-model-texture-config-hook
+   :get-item-model-id get-item-model-id-hook})
 
 (defn restore-blockstate-hooks!
   [{:keys [get-all-definitions
@@ -91,53 +91,53 @@
            get-model-cube-texture-config
            get-model-texture-config
            get-item-model-id]}]
-  (install/install-root! #'*get-all-definitions-hook* get-all-definitions)
-  (install/install-root! #'*get-block-state-definition-hook* get-block-state-definition)
-  (install/install-root! #'*is-multipart-block-hook* is-multipart-block?)
-  (install/install-root! #'*get-model-cube-texture-config-hook* get-model-cube-texture-config)
-  (install/install-root! #'*get-model-texture-config-hook* get-model-texture-config)
-  (install/install-root! #'*get-item-model-id-hook* get-item-model-id)
+  (install/install-root! #'get-all-definitions-hook get-all-definitions)
+  (install/install-root! #'get-block-state-definition-hook get-block-state-definition)
+  (install/install-root! #'is-multipart-block-hook is-multipart-block?)
+  (install/install-root! #'get-model-cube-texture-config-hook get-model-cube-texture-config)
+  (install/install-root! #'get-model-texture-config-hook get-model-texture-config)
+  (install/install-root! #'get-item-model-id-hook get-item-model-id)
   nil)
 
 (defn register-blockstate-hooks!
   [hooks]
   (when-let [f (:get-all-definitions hooks)]
-    (install/install-root! #'*get-all-definitions-hook* f))
+    (install/install-root! #'get-all-definitions-hook f))
   (when-let [f (:get-block-state-definition hooks)]
-    (install/install-root! #'*get-block-state-definition-hook* f))
+    (install/install-root! #'get-block-state-definition-hook f))
   (when-let [f (:is-multipart-block? hooks)]
-    (install/install-root! #'*is-multipart-block-hook* f))
+    (install/install-root! #'is-multipart-block-hook f))
   (when-let [f (:get-model-cube-texture-config hooks)]
-    (install/install-root! #'*get-model-cube-texture-config-hook* f))
+    (install/install-root! #'get-model-cube-texture-config-hook f))
   (when-let [f (:get-model-texture-config hooks)]
-    (install/install-root! #'*get-model-texture-config-hook* f))
+    (install/install-root! #'get-model-texture-config-hook f))
   (when-let [f (:get-item-model-id hooks)]
-    (install/install-root! #'*get-item-model-id-hook* f))
+    (install/install-root! #'get-item-model-id-hook f))
   nil)
 
 (defn get-all-definitions
   []
-  (*get-all-definitions-hook*))
+  (get-all-definitions-hook))
 
 (defn get-block-state-definition
   [block-key]
-  (*get-block-state-definition-hook* block-key))
+  (get-block-state-definition-hook block-key))
 
 (defn is-multipart-block?
   "Multipart when parts count > 1."
   [definition]
-  (*is-multipart-block-hook* definition))
+  (is-multipart-block-hook definition))
 
 (defn get-model-cube-texture-config
   [model-name]
-  (*get-model-cube-texture-config-hook* model-name))
+  (get-model-cube-texture-config-hook model-name))
 
 (defn get-model-texture-config
   [model-name]
-  (*get-model-texture-config-hook* model-name))
+  (get-model-texture-config-hook model-name))
 
 (defn get-item-model-id
   [mod-id registry-name]
-  (*get-item-model-id-hook* mod-id registry-name))
+  (get-item-model-id-hook mod-id registry-name))
 
 ;; End of file

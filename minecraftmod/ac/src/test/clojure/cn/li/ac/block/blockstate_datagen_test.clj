@@ -7,7 +7,7 @@
             [cn.li.mcmod.protocol.metadata :as metadata]))
 
 (deftest properties-from-schema-match-runtime-shape-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"]
+  (with-redefs [mcmod-config/mod-id "my_mod"]
     (let [fusor-def (get (datagen/complex-definitions-map) :imag-fusor)
           former-def (get (datagen/complex-definitions-map) :metal-former)
           fusor (:properties fusor-def)
@@ -21,7 +21,7 @@
       (is (= 4 (count (:parts former-def)))))))
 
 (deftest ability-interferer-on-parts-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"]
+  (with-redefs [mcmod-config/mod-id "my_mod"]
     (let [def (get (datagen/complex-definitions-map) :ability-interferer)]
       (is (= #{true false}
              (set (map #(get-in % [:condition :on]) (:parts def)))))
@@ -30,7 +30,7 @@
              (map first (map :models (:parts def))))))))
 
 (deftest blockstate-definition-uses-schema-datagen-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"
+  (with-redefs [mcmod-config/mod-id "my_mod"
                 metadata/get-all-block-ids (fn [] [])
                 metadata/get-block-registry-name identity]
     (let [def (blockstate-def/get-block-state-definition :metal-former)]
@@ -40,7 +40,7 @@
              (first (:models (first (:parts def)))))))))
 
 (deftest state-driven-shape-blocks-use-exclusive-conditional-parts-test
-  (with-redefs [mcmod-config/*mod-id* "my_mod"]
+  (with-redefs [mcmod-config/mod-id "my_mod"]
     (let [complex-defs (datagen/complex-definitions-map)
           node-defs (node-blockstate/get-all-node-definitions)
           target-defs [(get complex-defs :ability-interferer)

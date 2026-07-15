@@ -8,10 +8,10 @@
            [net.minecraft.resources ResourceLocation]))
 
 (def ^ResourceLocation c2s-channel
-  (ResourceLocation. mod-config/*mod-id* "clj_rpc_c2s"))
+  (ResourceLocation. mod-config/mod-id "clj_rpc_c2s"))
 
 (def ^ResourceLocation s2c-channel
-  (ResourceLocation. mod-config/*mod-id* "clj_rpc_s2c"))
+  (ResourceLocation. mod-config/mod-id "clj_rpc_s2c"))
 
 (defn make-buf
   [payload]

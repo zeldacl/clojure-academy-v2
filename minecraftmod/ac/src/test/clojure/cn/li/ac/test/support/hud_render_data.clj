@@ -12,7 +12,7 @@
 (defn- player-contexts
   [player-uuid]
   (read-model/get-player-contexts-for-player (str player-uuid)
-                                             runtime-hooks/*client-session-id*
+                                             runtime-hooks/client-session-id
                                              :hud))
 
 (defn build-skill-slot-render-data

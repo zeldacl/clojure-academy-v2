@@ -31,14 +31,14 @@
     (or (get-in block-spec [:rendering :item-texture])
         (get-in block-spec [:rendering :textures :all])
         (get-in block-spec [:rendering :texture])
-        (str modid/*mod-id* ":block/" registry-name))))
+        (str modid/mod-id ":block/" registry-name))))
 
 (defn block-texture-from-spec
   [registry-name]
   (let [block-spec (registry-name->block-spec registry-name)]
     (or (get-in block-spec [:rendering :textures :all])
         (get-in block-spec [:rendering :texture])
-        (str modid/*mod-id* ":block/" registry-name))))
+        (str modid/mod-id ":block/" registry-name))))
 
 (defn block-parent-from-spec
   [registry-name]
@@ -100,7 +100,7 @@
   [registry-name multipart?]
   (let [block-spec (registry-name->block-spec registry-name)
         flat-item? (true? (get-in block-spec [:rendering :flat-item-icon?]))
-  item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)]
+  item-model-id (blockstate-def/get-item-model-id modid/mod-id registry-name)]
     (if (and flat-item? (not multipart?))
       (bs-support/flat-item-model-json (item-texture-from-spec registry-name))
       (bs-support/parent-model-json item-model-id))))
@@ -117,7 +117,7 @@
     (mapcat
      (fn [[block-key definition]]
        (let [registry-name (:registry-name definition)
-             blockstate-id (str modid/*mod-id* ":" registry-name)
+             blockstate-id (str modid/mod-id ":" registry-name)
              first-model (some-> definition :parts first :models first)
              blockstate-json (if (blockstate-def/is-multipart-block? definition)
                                (bs-support/multipart-blockstate-json (:parts definition))
@@ -127,20 +127,20 @@
                             distinct)
              block-model-entries (for [model-id model-ids
                                        :let [model-name (model-id->model-name model-id)
-                                             model-id-str (str modid/*mod-id* ":" model-name)
+                                             model-id-str (str modid/mod-id ":" model-name)
                                              model-json (block-model-json model-name)]]
                                    {:path-key :block-model
                                     :id model-id-str
                                     :payload model-json})
              item-model-entries (when (registry-metadata/should-create-block-item? (name block-key))
-                      (let [item-model-id (blockstate-def/get-item-model-id modid/*mod-id* registry-name)
+                      (let [item-model-id (blockstate-def/get-item-model-id modid/mod-id registry-name)
                                         item-model-name (model-id->model-name item-model-id)
                                         known-model-ids (set model-ids)
                                         item-block-model-entry (when-not (contains? known-model-ids item-model-id)
                                                                  {:path-key :block-model
-                                                                  :id (str modid/*mod-id* ":" item-model-name)
+                                                                  :id (str modid/mod-id ":" item-model-name)
                                                                   :payload (block-model-json item-model-name)})
-                                        item-id (str modid/*mod-id* ":" registry-name)
+                                        item-id (str modid/mod-id ":" registry-name)
                                         multipart? (blockstate-def/is-multipart-block? definition)]
                                     (concat
                                      (when item-block-model-entry [item-block-model-entry])

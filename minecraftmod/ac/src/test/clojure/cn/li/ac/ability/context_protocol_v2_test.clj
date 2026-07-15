@@ -19,7 +19,7 @@
                               :to-client nil
                               :to-except-local nil})
         (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen test-client-context-owner) :id ctx-id))
-        (binding [ctx/*context-owner* test-client-context-owner]
+        (binding [ctx/context-owner test-client-context-owner]
           (ctx/ctx-send-to-server! ctx-id :first {:n 1})
           (ctx/ctx-send-to-server! ctx-id :second {:n 2})
 
@@ -50,7 +50,7 @@
                               :to-except-local (fn [ctx-id* channel payload _ctx-map]
                                                  (swap! route-sends conj [ctx-id* channel payload]))})
     (ctx/register-context! (ctx/new-server-context "p1" :arc-gen ctx-id test-server-context-owner))
-    (binding [ctx/*context-owner* test-server-context-owner]
+    (binding [ctx/context-owner test-server-context-owner]
       (ctx/terminate-context! ctx-id nil)
 
       (ctx/ctx-send-to-server! ctx-id :late {:n 1})
@@ -81,9 +81,9 @@
       (is (= :client (:logical-side (ctx/get-context client-owner ctx-id))))
       (is (= :server (:logical-side (ctx/get-context server-owner ctx-id))))
 
-      (binding [ctx/*context-owner* client-owner]
+      (binding [ctx/context-owner client-owner]
         (ctx/ctx-send-to-server! ctx-id :up {:n 1}))
-      (binding [ctx/*context-owner* server-owner]
+      (binding [ctx/context-owner server-owner]
         (ctx/ctx-send-to-client! ctx-id :down {:n 2}))
 
       (is (= [[ctx-id :up {:n 1}]] @client-sends))
@@ -107,10 +107,10 @@
     (ctx/register-context! (ctx/new-server-context "player-a" :arc-gen ctx-id owner-a))
     (ctx/register-context! (ctx/new-server-context "player-b" :arc-gen ctx-id owner-b))
 
-    (binding [ctx/*context-owner* owner-a]
+    (binding [ctx/context-owner owner-a]
       (ctx/ctx-send-to-client! ctx-id :fx {:n 1})
       (ctx/ctx-send-to-except-local! ctx-id :fx {:n 2}))
-    (binding [ctx/*context-owner* owner-b]
+    (binding [ctx/context-owner owner-b]
       (ctx/ctx-send-to-client! ctx-id :fx {:n 3})
       (ctx/ctx-send-to-except-local! ctx-id :fx {:n 4}))
 

@@ -193,7 +193,7 @@
    container's canonical owner (set at menu-open). Unlike
    require-player-state-session-id, this works on the client render thread:
    the container screen pushes no per-frame session/owner context, so the
-   ThreadLocal *player-state-owner* is nil during flush!. The container map
+   ThreadLocal player-state-owner is nil during flush!. The container map
    carries the owner, so reading it here is stable and context-free. Falls back
    to the bound owner for any caller without an enriched container."
   [container]

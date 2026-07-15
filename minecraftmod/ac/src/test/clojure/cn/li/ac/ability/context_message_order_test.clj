@@ -31,7 +31,7 @@
 (deftest out-of-order-key-tick-and-key-up-before-key-down-are-ignored-test
   (let [ctx-id "ctx-order-1"]
     (seed-owned-alive-context! "p1" ctx-id)
-    (binding [ctx/*context-owner* (server-owner "p1")]
+    (binding [ctx/context-owner (server-owner "p1")]
       (is (nil? (ctx-rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
       (is (nil? (ctx-rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
       (let [ctx-map (ctx/get-context ctx-id)]

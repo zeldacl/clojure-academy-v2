@@ -109,7 +109,7 @@
                    (ctx/new-context player-uuid skill-id owner)
                    (ctx/new-context player-uuid skill-id))]
      (ctx/register-context! new-ctx)
-     (binding [ctx/*context-owner* owner]
+     (binding [ctx/context-owner owner]
        (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
                                   {:ctx-id (:id new-ctx)
                                    :skill-id skill-id}))
@@ -257,7 +257,7 @@
   on-player-tick!, but the sweep itself is global (not player-scoped), so it
   actually runs at most once per unique server tick id — see sweep-guard-atom."
   []
-  (let [tick-id (some-> (runtime-hooks/*player-state-owner*) :server-tick-id)
+  (let [tick-id (some-> (runtime-hooks/player-state-owner) :server-tick-id)
         guard (sweep-guard-atom)]
     (when (or (nil? tick-id) (not= tick-id @guard))
       (when tick-id (reset! guard tick-id))

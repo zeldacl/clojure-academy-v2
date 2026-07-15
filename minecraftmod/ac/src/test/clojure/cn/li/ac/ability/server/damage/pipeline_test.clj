@@ -9,14 +9,14 @@
 
 (defn- set-platform-fns!
   [{:keys [attack attack-ignore-armor nearby-players]}]
-  (alter-var-root #'pl/*attack-fn* (constantly attack))
-  (alter-var-root #'pl/*attack-ignore-armor-fn* (constantly attack-ignore-armor))
-  (alter-var-root #'pl/*nearby-players-fn* (constantly nearby-players)))
+  (alter-var-root #'pl/attack-fn (constantly attack))
+  (alter-var-root #'pl/attack-ignore-armor-fn (constantly attack-ignore-armor))
+  (alter-var-root #'pl/nearby-players-fn (constantly nearby-players)))
 
 (defn- snapshot-platform-fns []
-  [(deref #'pl/*attack-fn*)
-   (deref #'pl/*attack-ignore-armor-fn*)
-   (deref #'pl/*nearby-players-fn*)])
+  [(deref #'pl/attack-fn)
+   (deref #'pl/attack-ignore-armor-fn)
+   (deref #'pl/nearby-players-fn)])
 
 (defn- restore-platform-fns! [[atk ign nearby]]
   (set-platform-fns!
@@ -56,7 +56,7 @@
           {:attack (fn [a t d] (swap! calls conj {:a a :t t :d d}))
            :attack-ignore-armor nil
            :nearby-players nil})
-        (is (fn? (deref #'pl/*attack-fn*)))
+        (is (fn? (deref #'pl/attack-fn)))
         (is (= 15.0 (pl/attack "att" "tgt" :s1 10.0)))
         (is (= [{:a "att" :t "tgt" :d 15.0}] @calls))
         (finally
@@ -73,8 +73,8 @@
                             {:distance 10.0 :id :c}])
          :attack (fn [a t d] (swap! attacks conj [a t d]) d)
          :attack-ignore-armor nil})
-      (is (fn? (deref #'pl/*nearby-players-fn*)))
-      (is (fn? (deref #'pl/*attack-fn*)))
+      (is (fn? (deref #'pl/nearby-players-fn)))
+      (is (fn? (deref #'pl/attack-fn)))
       ;; attack-range returns a lazy seq; realize it so injected attack-fn runs
       (dorun (pl/attack-range "att" {:x 0 :y 0 :z 0} 10.0 100.0 :sk))
       (is (= 3 (count @attacks)))

@@ -32,7 +32,7 @@
 ;; cannot reopen once locked) — deferred/deferred's own lazy-once semantics
 ;; are the correct guard here, not framework-once!.
 (def ^:private menu-register-holder
-  (deferred/deferred #(ForgeBootstrapHelper/createMenusRegister modid/*mod-id*)))
+  (deferred/deferred #(ForgeBootstrapHelper/createMenusRegister modid/mod-id)))
 
 (def ^:private gui-menu-types
   "Map from GUI ID to RegistryObject<MenuType>.

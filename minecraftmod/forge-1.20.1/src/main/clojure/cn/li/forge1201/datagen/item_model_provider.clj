@@ -27,15 +27,15 @@
                                         (.mcLoc provider "item/generated"))
         ^ItemModelBuilder builder (.withExistingParent provider (str model-name) parent-rl)]
     (doseq [[layer texture-id] (:textures json)]
-      (.texture builder (name layer) ^ResourceLocation (rl/parse-resource-location texture-id modid/*mod-id*)))
+      (.texture builder (name layer) ^ResourceLocation (rl/parse-resource-location texture-id modid/mod-id)))
     ;; Forge model pipeline reverses the override array at load time,
     ;; so write overrides in reverse order (half first, then full) so that
     ;; after reversal the highest threshold (1.0) is checked first.
     (doseq [{:keys [predicate model]} (reverse (:overrides json))]
       (let [override-builder (.override builder)
-            model-file (ModelFile$ExistingModelFile. (rl/parse-resource-location model modid/*mod-id*) exfile-helper)]
+            model-file (ModelFile$ExistingModelFile. (rl/parse-resource-location model modid/mod-id) exfile-helper)]
         (doseq [[predicate-id value] predicate]
-          (.predicate override-builder (rl/parse-resource-location predicate-id modid/*mod-id*) (float value)))
+          (.predicate override-builder (rl/parse-resource-location predicate-id modid/mod-id) (float value)))
         (.model override-builder model-file)
         (.end override-builder)))
     builder))
@@ -93,7 +93,7 @@
   CustomLoaderBuilder whose toJson() produces the final model JSON."
   [^ItemModelProvider provider ^ExistingFileHelper _exfile-helper {:keys [model-name] :as spec}]
   (let [^ItemModelBuilder builder (.withExistingParent provider (str model-name) "item/generated")
-        mod-id (str modid/*mod-id*)
+        mod-id (str modid/mod-id)
         loader-rl (rl/parse-resource-location "forge:obj")]
     (.customLoader builder
                    (reify java.util.function.BiFunction
@@ -107,7 +107,7 @@
   "Create Item Model DataProvider instance (factory signature: PackOutput -> DataProvider)"
   [^PackOutput pack-output ^ExistingFileHelper exfile-helper]
   (DelegatingItemModelProvider.
-    pack-output modid/*mod-id* exfile-helper
+    pack-output modid/mod-id exfile-helper
     (fn [^DelegatingItemModelProvider this-provider]
       (let [{:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
             (item-model-core/gather-model-specs)]

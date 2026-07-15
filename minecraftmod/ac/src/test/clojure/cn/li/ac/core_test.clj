@@ -33,10 +33,10 @@
 (deftest register-lifecycle-hooks-with-framework-test
   (testing "hooks register when Framework atom already exists (normal mod startup order)"
     (let [calls (atom [])
-          prev-fw fw/*framework*]
+          prev-fw fw/framework]
       (try
         (when-let [fw-inst (fw/create-framework)]
-          (alter-var-root #'fw/*framework* (constantly fw-inst))
+          (alter-var-root #'fw/framework (constantly fw-inst))
           (with-redefs-for-hook-calls calls
             (is (false? (ac-core/lifecycle-hooks-guard-snapshot)))
             (ac-core/register-lifecycle-hooks!)
@@ -45,4 +45,4 @@
           (is (= [:smoke :content-init :runtime-activation :datagen-init :client-init]
                  @calls)))
         (finally
-          (alter-var-root #'fw/*framework* (constantly prev-fw)))))))
+          (alter-var-root #'fw/framework (constantly prev-fw)))))))

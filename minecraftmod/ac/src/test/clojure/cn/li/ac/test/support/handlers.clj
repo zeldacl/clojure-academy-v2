@@ -13,7 +13,7 @@
 
 (defn with-server-player-owner
   [player-uuid f]
-  (binding [runtime-hooks/*player-state-owner*
+  (binding [runtime-hooks/player-state-owner
             {:server-session-id owner-support/default-server-session-id
              :player-uuid (str player-uuid)}]
     (f)))

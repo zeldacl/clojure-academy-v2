@@ -131,7 +131,7 @@
 
 (defn- current-client-session-id
   []
-  (or client-keybinds/*client-session-id* (runtime-hooks/*client-session-id*)))
+  (or client-keybinds/*client-session-id* (runtime-hooks/client-session-id)))
 
 (defn- require-client-owner-value
   [owner label value]
@@ -666,7 +666,7 @@
       (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
       (with-client-context-owner player-uuid
         (fn [_owner]
-          (binding [ctx/*context-owner* (client-context-owner player-uuid)]
+          (binding [ctx/context-owner (client-context-owner player-uuid)]
             (ctx/terminate-context! ctx-id nil))))
       ctx-id)))
 
@@ -1112,7 +1112,7 @@
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (when-let [owner (runtime-hooks/current-player-state-owner)]
-          (binding [ctx/*context-owner* owner]
+          (binding [ctx/context-owner owner]
             (ctx/transition-to-alive! owner ctx-id server-id
                                       (fn [msg]
                                         (flush-buffered-context-message!

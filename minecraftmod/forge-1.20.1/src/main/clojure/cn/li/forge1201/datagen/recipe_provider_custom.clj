@@ -42,7 +42,7 @@
   the default method from FinishedRecipe."
   [^Consumer writer recipe ^RecipeSerializer serializer]
   (let [json-obj (clj-map->json-object (recipe-core/recipe-json recipe))
-        ^String mod-id modid/*mod-id*
+        ^String mod-id modid/mod-id
         ^String recipe-id (recipe-core/normalize-recipe-id (:id recipe))
         ^ResourceLocation id (ResourceLocation. mod-id recipe-id)
         finished (DelegatingFinishedRecipe.

@@ -53,14 +53,14 @@
 (defn with-current-client-session
   "Set client session context in Framework [:service :client-ctx] for duration of f.
   Uses Framework atom instead of ThreadLocal binding — compatible with
-  *client-session-id* defn migration to Framework-based reader."
+  client-session-id defn migration to Framework-based reader."
   [f]
   (runtime-hooks/with-client-ctx-fn {:session-id (client-session-id)} f))
 
 (defn with-bound-client-owner
   "Set client session + player owner in Framework [:service :client-ctx] for duration of f.
   Uses Framework atom instead of ThreadLocal binding — compatible with
-  *client-session-id* / *player-state-owner* defn migration."
+  client-session-id / player-state-owner defn migration."
   [owner f]
   (let [owner* (or owner {})
         session-id (:client-session-id owner*)

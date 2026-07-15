@@ -50,7 +50,7 @@
 
 (defn- server-owner-for-player
   [player]
-  (let [runtime-owner runtime-hooks/*player-state-owner*
+  (let [runtime-owner runtime-hooks/player-state-owner
         server-session-id (require-owner-value runtime-owner
                                                ":server-session-id"
                                                (:server-session-id runtime-owner))

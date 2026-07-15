@@ -49,7 +49,7 @@
     (doseq [[k spec] (:key metadata)]
       (define-key! builder k spec))
     (add-unlock-to-builder! builder recipe)
-    (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
+    (.save builder writer (ResourceLocation. modid/mod-id (str (:id recipe))))))
 
 (defn- emit-shapeless!
   [^Consumer writer recipe]
@@ -61,7 +61,7 @@
     (doseq [ingredient-spec (:ingredients metadata)]
       (.requires builder ^Ingredient (metadata-resolver/ingredient-from-spec ingredient-spec rl/parse-resource-location)))
     (add-unlock-to-builder! builder recipe)
-    (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
+    (.save builder writer (ResourceLocation. modid/mod-id (str (:id recipe))))))
 
 (defn- emit-smelting!
   [^Consumer writer recipe]
@@ -78,7 +78,7 @@
          experience
          cooking-time)]
     (add-unlock-to-builder! builder recipe)
-    (.save builder writer (ResourceLocation. modid/*mod-id* (str (:id recipe))))))
+    (.save builder writer (ResourceLocation. modid/mod-id (str (:id recipe))))))
 
 (defn build-recipes!
   "Emit all supported vanilla recipes through Minecraft recipe builders.

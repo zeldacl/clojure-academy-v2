@@ -35,7 +35,7 @@
      {:context-registry {"ctx-nested" {:id "ctx-nested" :skill-id :skill :status :constructed}}})
     (ctx/register-context! c)
     (runtime-hooks/with-client-ctx {:player-owner test-player/test-player-state-owner}
-      (binding [ctx/*context-owner* (server-context-owner "p")]
+      (binding [ctx/context-owner (server-context-owner "p")]
         (state/execute-assoc-state! "ctx-nested" "p" {:k [:a :b] :v 1})
         (is (= 1 (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))
         (state/execute-assoc-state! "ctx-nested" "p" {:k [] :v {:a {}}})
@@ -44,7 +44,7 @@
 (deftest buffer-message-while-constructed-test
   (let [c (ctx/new-context "p" :sk test-client-context-owner)]
     (ctx/register-context! c)
-    (binding [ctx/*context-owner* test-client-context-owner]
+    (binding [ctx/context-owner test-client-context-owner]
       (ctx/ctx-send-to-server! (:id c) :ch {:x 1})
       (is (= 1 (count (:message-buffer (ctx/get-context (:id c)))))))))
 
@@ -81,7 +81,7 @@
         id (:id c)
         flushed (atom [])]
     (ctx/register-context! c)
-    (binding [ctx/*context-owner* test-client-context-owner]
+    (binding [ctx/context-owner test-client-context-owner]
       (ctx/ctx-send-to-server! id :ch {:n 1})
       (ctx/transition-to-alive! id "srv-1" (fn [msg] (swap! flushed conj msg)))
       (is (= ctx/STATUS-ALIVE (:status (ctx/get-context id))))
@@ -89,7 +89,7 @@
       (is (empty? (:message-buffer (ctx/get-context id)))))))
 
 (deftest update-missing-context-does-not-create-phantom-test
-  (binding [ctx/*context-owner* (server-context-owner "p")]
+  (binding [ctx/context-owner (server-context-owner "p")]
     (state/execute-assoc-state! "missing-context" "p" {:k :last-keepalive-ms :v 1})
     (is (nil? (ctx/get-context "missing-context"))))
   (is (empty? (ctx/get-all-contexts))))

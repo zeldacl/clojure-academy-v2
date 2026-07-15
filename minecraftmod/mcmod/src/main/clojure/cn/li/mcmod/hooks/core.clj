@@ -140,7 +140,7 @@
 
   This is used by content modules to opt into content-owned hook/request
   entrypoints while keeping the neutral contract validation fail-fast.
-  No-op during AOT compilation when *framework* is nil."
+  No-op during AOT compilation when framework is nil."
   [hook-keys]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom
@@ -178,17 +178,17 @@
 (defn- get-client-ctx [] (.get ^ThreadLocal client-ctx-thread-local))
 (defn- set-client-ctx! [ctx] (.set ^ThreadLocal client-ctx-thread-local ctx))
 
-(defn *client-session-id*
+(defn client-session-id
   "Read client session id from ThreadLocal."
   [] (:session-id (get-client-ctx)))
 
-(defn *player-state-owner*
+(defn player-state-owner
   "Read player state owner from ThreadLocal."
   [] (or (:player-owner (get-client-ctx)) (:context-owner (get-client-ctx))))
 
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
-  [] (*player-state-owner*))
+  [] (player-state-owner))
 
 (defn player-state-session-id
   "Resolve store session-id from a canonical owner map (server > client)."
@@ -253,7 +253,7 @@
   1. 唯一入口：设置/恢复必须通过本函数或 with-player-state-owner-fn，禁止直接操作 ThreadLocal
   2. 网络重建：Packet Handler 必须在分派前重建上下文（见 forge/fabric gui/network）
   3. 异步边界：传给 enqueueWork / future / CompletableFuture 的闭包必须在内部重新建立上下文
-  4. 读取规范：*client-session-id* 和 *player-state-owner* 是函数，必须加括号调用
+  4. 读取规范：client-session-id 和 player-state-owner 是函数，必须加括号调用
 
   ⚠️ 铁律六：上下文不跨越异步边界。Minecraft 的 enqueueWork / future 启动新调用链时，
   必须在新线程上重新调用 with-client-ctx-fn 建立上下文。
@@ -373,7 +373,7 @@
 (defn register-player-state-domain!
   "Register a player state domain mapping: {:domain-key kw :nbt-key str}.
   Called by content modules during init. Platform nbt layer reads this at runtime.
-  No-op during AOT compilation when *framework* is nil."
+  No-op during AOT compilation when framework is nil."
   [{:keys [domain-key nbt-key]}]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in player-state-domains-path
@@ -398,7 +398,7 @@
 (defn register-server-player-login-hook!
   "Register a content-owned server player login hook fn.
   fn receives the raw ServerPlayer object. Called by content modules during init.
-  No-op during AOT compilation when *framework* is nil."
+  No-op during AOT compilation when framework is nil."
   [f]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in server-player-login-hooks-path

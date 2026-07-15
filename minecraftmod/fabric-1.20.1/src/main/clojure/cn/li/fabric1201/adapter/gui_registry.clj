@@ -38,7 +38,7 @@
 (defn create-extended-screen-handler-type [gui-id]
   (let [registry-name (gui/get-registry-name gui-id)]
     (ScreenHandlerRegistry/registerExtended
-      (ResourceLocation. modid/*mod-id* registry-name)
+      (ResourceLocation. modid/mod-id registry-name)
       (reify net.fabricmc.fabric.api.screenhandler.v1.ScreenHandlerRegistry$ExtendedClientHandlerFactory
         (create [_ sync-id player-inventory buf]
           (let [{:keys [gui-id pos]} (registry-common/read-extended-open-payload buf)

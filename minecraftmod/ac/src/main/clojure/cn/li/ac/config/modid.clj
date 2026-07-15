@@ -17,7 +17,7 @@
   This is intentionally explicit: requiring this namespace must not mutate
   shared configuration state."
   []
-  (install/install-root! #'mcmod-config/*mod-id* MOD-ID)
+  (install/install-root! #'mcmod-config/mod-id MOD-ID)
   (platform-resource/install-resource-location-fn!
    (fn [namespace path]
      (if namespace

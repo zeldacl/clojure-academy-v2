@@ -112,18 +112,18 @@
 
 ;; --- Client-side language helper ---
 
-(def ^:private *current-lang* nil)
+(def ^:private current-lang-fn nil)
 
 (defn install-current-lang-fn!
   "Install a 0-arg function that returns the current Minecraft language string
   (e.g. \"en_us\").  Called from platform client init."
   [lang-fn]
-  (install/install-root! #'*current-lang* lang-fn))
+  (install/install-root! #'current-lang-fn lang-fn))
 
 (defn current-lang
   "Resolve the current Minecraft language setting.
   Returns \"en_US\" when the lang-fn is not installed (e.g. on server side)."
   []
-  (or (when-let [f *current-lang*]
+  (or (when-let [f current-lang-fn]
         (try (f) (catch Throwable _ fallback-lang)))
       fallback-lang))

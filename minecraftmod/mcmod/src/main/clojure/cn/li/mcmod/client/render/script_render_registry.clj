@@ -17,37 +17,37 @@
    :duplicate-warned-ids #{}})
 
 
-(def ^:private *profile-registry*
+(def ^:private profile-registry
   {})
 
-(def ^:private *registry-frozen?*
+(def ^:private registry-frozen?
   false)
 
-(def ^:private *duplicate-warned-ids*
+(def ^:private duplicate-warned-ids
   #{})
 
 (defn profile-registry-snapshot
   []
-  *profile-registry*)
+  profile-registry)
 
 (defn frozen?
   []
-  *registry-frozen?*)
+  registry-frozen?)
 
 (defn freeze!
   []
-  (install/install-root! #'*registry-frozen?* true)
+  (install/install-root! #'registry-frozen? true)
   nil)
 
 (defn unfreeze!
   []
-  (install/install-root! #'*registry-frozen?* false)
+  (install/install-root! #'registry-frozen? false)
   nil)
 
 (defn clear!
   []
-  (install/install-root! #'*profile-registry* {})
-  (install/install-root! #'*duplicate-warned-ids* #{})
+  (install/install-root! #'profile-registry {})
+  (install/install-root! #'duplicate-warned-ids #{})
   nil)
 
 (defn register-profile!
@@ -57,15 +57,15 @@
                     {:id (:id profile)})))
   (let [validated (abi/validate-profile! profile)
         profile-id (:id validated)
-        existing (get *profile-registry* profile-id)]
+        existing (get profile-registry profile-id)]
     (if existing
       (do
-        (when-not (contains? *duplicate-warned-ids* profile-id)
-          (install/install-root! #'*duplicate-warned-ids* (conj *duplicate-warned-ids* profile-id))
+        (when-not (contains? duplicate-warned-ids profile-id)
+          (install/install-root! #'duplicate-warned-ids (conj duplicate-warned-ids profile-id))
           (log/warn "Duplicate ScriptRender profile ignored: " profile-id))
         existing)
       (do
-        (install/install-root! #'*profile-registry* (assoc *profile-registry* profile-id validated))
+        (install/install-root! #'profile-registry (assoc profile-registry profile-id validated))
         validated))))
 
 (defn register-profiles!

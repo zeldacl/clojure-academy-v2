@@ -17,7 +17,7 @@
 (defn register!
   "Call from client setup after items are registered."
   []
-  (let [pred-rl (ResourceLocation. modid/*mod-id* "energy")]
+  (let [pred-rl (ResourceLocation. modid/mod-id "energy")]
     (doseq [item-id (registry-metadata/get-all-item-ids)]
       (when (get-in (registry-metadata/get-item-spec item-id) [:properties :item-model-energy-levels])
         (when-let [item (get-registered-item item-id)]

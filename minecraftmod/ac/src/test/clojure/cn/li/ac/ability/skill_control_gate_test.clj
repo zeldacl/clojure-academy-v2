@@ -47,7 +47,7 @@
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
     (with-redefs [skill-registry/get-skill (fn [_] skill-spec)]
-      (let [ctx-map (binding [ctx/*context-owner* test-context-owner]
+      (let [ctx-map (binding [ctx/context-owner test-context-owner]
               (cm/establish-context! player-uuid ctx-id skill-id))]
         {:ctx ctx-map
          :messages @out}))))

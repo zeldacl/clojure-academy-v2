@@ -4,13 +4,13 @@
             [cn.li.mcmod.hooks.core :as hooks]))
 
 (defn- with-framework [f]
-  (let [prev-fw fw/*framework*]
+  (let [prev-fw fw/framework]
     (try
       (when-let [fw-inst (fw/create-framework)]
-        (alter-var-root #'fw/*framework* (constantly fw-inst)))
+        (alter-var-root #'fw/framework (constantly fw-inst)))
       (f)
       (finally
-        (alter-var-root #'fw/*framework* (constantly prev-fw))))))
+        (alter-var-root #'fw/framework (constantly prev-fw))))))
 
 (defn- clean-hooks-fixture
   [f]

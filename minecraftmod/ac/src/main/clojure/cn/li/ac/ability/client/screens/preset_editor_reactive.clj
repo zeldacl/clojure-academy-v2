@@ -161,7 +161,7 @@
 (defn refresh-active-screen!
   "Called when server preset data syncs while the editor is open."
   [player-uuid]
-  (when-let [session-id (runtime-hooks/*client-session-id*)]
+  (when-let [session-id (runtime-hooks/client-session-id)]
     (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom) (conj active-by-session-path [session-id player-uuid]))]
       (refresh-ui! rt owner))))
 

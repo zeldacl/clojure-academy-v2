@@ -13,7 +13,7 @@
   [texture-name]
   (if (str/includes? (str texture-name) ":")
     (str texture-name)
-    (str (str modid/*mod-id*) ":item/" texture-name)))
+    (str (str modid/mod-id) ":item/" texture-name)))
 
 (defn- normalize-parent
   [parent]
@@ -31,7 +31,7 @@
         (item-model-patterns/energy-tier-model-spec item-id {:texture-empty texture-empty
                                                              :texture-half texture-half
                                                              :texture-full texture-full})
-        mod-id (str modid/*mod-id*)]
+        mod-id (str modid/mod-id)]
     [{:model-name half-model
       :json {:parent "item/generated"
              :textures {:layer0 (texture-path half-texture)}}}
@@ -61,7 +61,7 @@
                    :json {:parent "item/generated"
                           :textures {:layer0 (if (str/includes? still-texture ":")
                                                still-texture
-                                               (str modid/*mod-id* ":item/" still-texture))}}})))))
+                                               (str modid/mod-id ":item/" still-texture))}}})))))
         (registry-metadata/get-all-fluid-ids)))
 
 (defn gather-model-specs

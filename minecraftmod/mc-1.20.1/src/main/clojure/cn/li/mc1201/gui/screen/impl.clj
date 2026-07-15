@@ -52,7 +52,7 @@
             owner-contract/require-client-owner)))
 
 (defn with-screen-client-owner
-  "Execute f with *player-state-owner* bound from the menu's Clojure container."
+  "Execute f with player-state-owner bound from the menu's Clojure container."
   [menu f]
   (if-let [owner (owner-for-screen-menu menu)]
     (client-session/with-bound-client-owner owner f)

@@ -40,7 +40,7 @@
     (view/refresh-screen! r owner mx my)))
 
 (defn refresh-active-screen! [player-uuid]
-  (when-let [session-id (runtime-hooks/*client-session-id*)]
+  (when-let [session-id (runtime-hooks/client-session-id)]
     (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom) (conj active-by-session-path [session-id player-uuid]))]
       (refresh! rt owner))))
 

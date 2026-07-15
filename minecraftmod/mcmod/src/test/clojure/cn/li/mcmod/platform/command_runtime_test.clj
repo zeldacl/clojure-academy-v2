@@ -4,15 +4,15 @@
             [cn.li.mcmod.platform.command-runtime :as sut]))
 
 (defn- with-framework [f]
-  (let [prev-fw fw/*framework*]
+  (let [prev-fw fw/framework]
     (try
       (when-let [fw-inst (fw/create-framework)]
-        (alter-var-root #'fw/*framework* (constantly fw-inst))
+        (alter-var-root #'fw/framework (constantly fw-inst))
         (sut/reset-command-hooks-for-test!)
         (f))
       (finally
         (sut/reset-command-hooks-for-test!)
-        (alter-var-root #'fw/*framework* (constantly prev-fw))))))
+        (alter-var-root #'fw/framework (constantly prev-fw))))))
 
 (use-fixtures :each with-framework)
 

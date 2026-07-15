@@ -210,8 +210,8 @@
                        :player-uuid "p1"}
         screen-calls (atom [])
         keybind-clears (atom [])]
-    (binding [ctx/*context-owner* context-owner
-              runtime-hooks/*player-state-owner* owner]
+    (binding [ctx/context-owner context-owner
+              runtime-hooks/player-state-owner owner]
       (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
                                     :id "ctx-cleanup"))
                   (store/set-player-state!* :session-a "p1" {:resource-data {:activated true}}))
@@ -249,7 +249,7 @@
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
     (runtime-hooks/with-client-ctx {:player-owner owner}
       (is (nil? (store/get-player-state* :session-a "p1"))))
-    (binding [ctx/*context-owner* context-owner]
+    (binding [ctx/context-owner context-owner]
       (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
 (deftest hud-render-data-hidden-when-not-activated-test
