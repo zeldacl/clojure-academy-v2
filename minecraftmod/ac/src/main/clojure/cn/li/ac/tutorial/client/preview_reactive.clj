@@ -12,6 +12,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as terminal-catalog]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
+            [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -149,6 +150,26 @@
 (def ^:private crafting-grid-bg
   (modid/asset-path "textures/guis" "tutorial/crafting_grid.png"))
 
+;; ============================================================================
+;; Recipe widget spec cache — loaded once from tutorial_windows.xml
+;; ============================================================================
+
+(defonce ^:private recipe-widget-specs
+  (delay
+    (try
+      (let [spec (ui-xml/load-spec (modid/namespaced-path "guis/new/tutorial_windows.xml"))
+            children (:children spec)]
+        (reduce (fn [m child]
+                  (if-let [cid (:id child)]
+                    (assoc m (name cid) child)
+                    m))
+                {} children))
+      (catch Throwable _
+        {}))))
+
+(defn- recipe-widget-spec [kind]
+  (get @recipe-widget-specs kind))
+
 (defn build-preview-spec
   "Build a native node spec for a single sub-view, positioned relative to
    the 134×134 preview \"area\" origin (i.e. x/y are area-local, caller adds
@@ -159,10 +180,15 @@
     {:kind :image :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :src (:texture view)}}
 
     :recipe
-    (let [kind (:recipe-kind view)
-          [x y w h scale] (get recipe-geom kind [0.0 0.0 134.0 134.0 1.0])]
-      {:kind :image :props {:id id :x x :y y :w w :h h :scale scale
-                             :src (get recipe-bg kind)}})
+    (if-let [widget-spec (recipe-widget-spec (:recipe-kind view))]
+      ;; Use the full machine-GUI widget tree from tutorial_windows.xml
+      ;; (background image + slots + progress bar), matching upstream CGUI.
+      (assoc widget-spec :id id)
+      ;; Fallback: simple background image if the widget spec isn't loaded
+      (let [kind (:recipe-kind view)
+            [x y w h scale] (get recipe-geom kind [0.0 0.0 134.0 134.0 1.0])]
+        {:kind :image :props {:id id :x x :y y :w w :h h :scale scale
+                               :src (get recipe-bg kind)}}))
 
     :crafting-grid
     {:kind :image :props {:id id :x 10.0 :y 5.0 :w 114.0 :h 114.0 :src crafting-grid-bg}}

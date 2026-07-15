@@ -34,6 +34,7 @@ public class ModFeatures {
      * Block ID is read from the mcmod platform-neutral worldgen registry.
      */
     private static final Supplier<Block> POOL_FILL_SUPPLIER = () -> {
+        ClojureInterop.requireNamespace("cn.li.mcmod.worldgen");
         Object result = ClojureInterop.invoke("cn.li.mcmod.worldgen", "get-pool-fill-block-id");
         String blockId = result instanceof String s ? s : null;
         Block block = blockId != null ? BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId)) : null;

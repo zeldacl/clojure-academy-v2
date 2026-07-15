@@ -227,8 +227,9 @@
         cd @current-cd]
     (ui/set-prop! rt :title-text :text (or (:title cd) ""))
     (when-let [brief (:brief cd)]
-      (let [segs (mr/render-segments brief (client-state/get-misaka-id player-uuid) 130)]
-        (rebuild-segments! rt :brief-content segs 130.0))))
+      (let [w 124.0
+            segs (mr/render-segments brief (client-state/get-misaka-id player-uuid) (int w))]
+        (rebuild-segments! rt :brief-content segs w))))
   ;; Nav buttons visible only when >1 sub-view
   (let [{:keys [pvs]} ui-state
         vg (preview/current-view-group pvs)
@@ -319,8 +320,12 @@
 
 (defn- reveal-panels! [^UiRt rt center-active?]
   (let [^INode cp (rt/node-by-id rt :center-panel)
+        ^INode sc (rt/node-by-id rt :scroll-container)
+        ^INode sw (rt/node-by-id rt :show-window)
         ^INode rw (rt/node-by-id rt :right-window)]
     (set-node-visible! rt cp center-active?)
+    (set-node-visible! rt sc true)
+    (set-node-visible! rt sw true)
     (set-node-visible! rt rw true)))
 
 (defn- attach-first-open-animation! [^UiRt rt _anim-start]
@@ -544,6 +549,8 @@
       ;; until the animation completes (list) or the first entry click (panels).
       (set-node-visible! r (rt/node-by-id r :list) false)
       (set-node-visible! r (rt/node-by-id r :center-panel) false)
+      (set-node-visible! r (rt/node-by-id r :scroll-container) false)
+      (set-node-visible! r (rt/node-by-id r :show-window) false)
       (set-node-visible! r (rt/node-by-id r :right-window) false)
       ;; Hide left panel bg until it fades in (matching upstream blend(leftPart, 1.75, 0.3))
       (when-let [^INode lbg (rt/node-by-id r :left-bg)]
