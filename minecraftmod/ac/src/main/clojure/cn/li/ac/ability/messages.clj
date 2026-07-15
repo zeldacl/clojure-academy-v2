@@ -25,6 +25,7 @@
 
    :req-learn-node "ability:req/learn-skill"
    :req-level-up "ability:req/level-up"
+   :req-portable-dev-start "ability:req/portable-dev-start"
    :req-set-preset "ability:req/set-preset"
    :req-switch-preset "ability:req/switch-preset"
    :req-set-activated "ability:req/set-activated"
@@ -52,6 +53,7 @@
 
 (def MSG-REQ-LEARN-NODE (:req-learn-node message-ids))
 (def MSG-REQ-LEVEL-UP (:req-level-up message-ids))
+(def MSG-REQ-PORTABLE-DEV-START (:req-portable-dev-start message-ids))
 (def MSG-REQ-SET-PRESET (:req-set-preset message-ids))
 (def MSG-REQ-SWITCH-PRESET (:req-switch-preset message-ids))
 (def MSG-REQ-SET-ACTIVATED (:req-set-activated message-ids))

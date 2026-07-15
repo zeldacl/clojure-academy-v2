@@ -23,6 +23,17 @@
                              catalog/MSG-REQ-LEVEL-UP {}
                              callback))
 
+(defn req-portable-dev-start!
+  "Start a timed development session on the held portable developer.
+   action: :learn-skill | :level-up (server turns a category-less :level-up
+   into an awaken, matching the block developer)."
+  [owner action skill-id callback]
+  (net-client/send-to-server (require-client-owner! owner)
+                             catalog/MSG-REQ-PORTABLE-DEV-START
+                             (cond-> {:action (name action)}
+                               skill-id (assoc :skill-id (name skill-id)))
+                             callback))
+
 (defn req-set-activated! [owner activated callback]
   (net-client/send-to-server (require-client-owner! owner)
                              catalog/MSG-REQ-SET-ACTIVATED

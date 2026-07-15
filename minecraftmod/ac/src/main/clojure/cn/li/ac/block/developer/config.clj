@@ -11,8 +11,9 @@
   100)
 
 (def ^:private default-wireless-bandwidth-by-tier
-  {:normal 1000.0
-   :advanced 1200.0})
+  ;; Upstream TileReceiverBase: NORMAL latency 100, ADVANCED latency 300 IF/t.
+  {:normal 100.0
+   :advanced 300.0})
 
 (def descriptors
   (vec
@@ -58,7 +59,7 @@
               :section (keyword (str "devices.developer.tiers." (name tier)))
               :path (str prefix ".wireless-bandwidth")
               :type :double
-              :default (get default-wireless-bandwidth-by-tier tier 1000.0)
+              :default (get default-wireless-bandwidth-by-tier tier 100.0)
               :min 0.0
               :max 100000000.0
               :comment (str "Developer " (name tier) " tier wireless receiver bandwidth in IF/t.")}]))

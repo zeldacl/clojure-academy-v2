@@ -62,20 +62,3 @@
                  (:icon-path entry))
           text ((:text-fn entry) condition)]
       {:icon-path icon :hint-text text})))
-
-(defn condition-accepted?
-  "Check if a condition from :failures is accepted.
-  Conditions in the :failures list are the ones that FAILED."
-  [failure]
-  false)  ;; failures are always rejected
-
-(defn condition-accepted-icon
-  "Return icon path for a condition in accepted state."
-  [_condition]
-  nil  ;; TODO: use full-color variant
-  )
-
-(defn condition-rejected-icon
-  "Return icon path for a condition in rejected state (mono-shaded)."
-  [condition]
-  (:icon-path (condition-display-info condition)))

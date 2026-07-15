@@ -48,7 +48,7 @@
                                                  :texture-full "developer_portable_full"}
                       :energy-item? true
                       :energy-capacity 10000.0
-                      :energy-bandwidth 0.3
+                      :energy-bandwidth 50.0
                       :battery-type "developer_portable"
                       :item-model-3d-obj {:obj-model "models/developer_portable.obj"
                                           :texture "models/developer_portable"

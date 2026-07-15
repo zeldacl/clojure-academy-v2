@@ -166,7 +166,7 @@
 		(fn [] (machine-runtime/state-or-default be dev-default-state))
 		(fn [s] (machine-runtime/commit-from-tile! be dev-default-state s))
 		{:max-energy (fn [] (double (:max-energy (machine-runtime/state-or-default be dev-default-state) 50000.0)))
-		 :bandwidth (fn [] (double (:wireless-bandwidth (machine-runtime/state-or-default be dev-default-state) 1000.0)))
+		 :bandwidth (fn [] (double (:wireless-bandwidth (machine-runtime/state-or-default be dev-default-state) 100.0)))
 		 :after-inject!
 		 (fn [^double accepted]
 			 (when (pos? accepted)

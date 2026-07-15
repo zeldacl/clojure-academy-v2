@@ -301,6 +301,94 @@
   [m k v]
   (if (= (get m k) v) m (assoc m k v)))
 
+;; ============================================================================
+;; Sub-Reducer: timed development on player-state (:develop-data)
+;; ============================================================================
+;; The portable developer's session host (upstream PortableDevData +
+;; DevelopData): same state machine as the block developer's tile session,
+;; with per-tick energy pulled from the held item by the shell (state-tick).
+
+(defn- cmd-develop-start
+  "Start a timed development session in player-state's :develop-data.
+
+  Command fields:
+    :action          :learn-skill | :level-up | :awaken
+    :skill-id        keyword (learn-skill)
+    :target-category keyword (awaken — decided by the shell, which consumes
+                     an induction factor or picks a random category)
+    :developer-type  keyword (default :portable)"
+  [player-state {:keys [action skill-id target-category developer-type]}]
+  (let [dev-type (or (some-> developer-type keyword) :portable)
+        ad (:ability-data player-state)
+        dd (or (:develop-data player-state) (ddata/new-develop-data))]
+    (if (ddata/developing? dd)
+      (rejected player-state :already-developing)
+      (case (keyword action)
+        :learn-skill
+        (let [spec (skill-registry/get-skill (keyword skill-id))]
+          (cond
+            (nil? spec) (rejected player-state :unknown-skill)
+            (not (:pass? (learning/check-all-conditions spec ad (int (:level ad 1)) dev-type)))
+            (rejected player-state :conditions-not-met)
+            :else
+            (let [{:keys [develop-data error]}
+                  (develop-rules/start-skill-learning dd dev-type (:id spec))]
+              (if error
+                (rejected player-state error)
+                (ok (assoc player-state :develop-data develop-data))))))
+
+        :level-up
+        (if-not (:category-id ad)
+          (rejected player-state :no-category)   ;; shell issues :awaken instead
+          (let [{:keys [develop-data error]}
+                (develop-rules/start-level-up dd dev-type (int (:level ad 1)))]
+            (if error
+              (rejected player-state error)
+              (ok (assoc player-state :develop-data develop-data)))))
+
+        :awaken
+        (if-not target-category
+          (rejected player-state :no-target-category)
+          (ok (assoc player-state :develop-data
+                     (ddata/start-develop dd dev-type :awaken
+                                          {:target-category (keyword target-category)
+                                           :target-level 1}
+                                          (ddata/level-up-stims 0)))))
+
+        (rejected player-state :unknown-develop-action)))))
+
+(defn- cmd-develop-fail
+  "Mark the current player-state development as failed — energy shortfall or
+   device gone (upstream DevelopData.resetProgress(true))."
+  [player-state _cmd]
+  (if (some-> (:develop-data player-state) ddata/developing?)
+    (ok (update player-state :develop-data ddata/fail))
+    (ok player-state)))
+
+(defn- develop-completion-valid?
+  "Re-validate a completed development against CURRENT ability data before
+   applying it — upstream DevelopData.tick calls type.validate() on the last
+   stim tick. Mirrors the block developer session's completion check."
+  [player-state dd]
+  (let [ad (:ability-data player-state)]
+    (case (:action-type dd)
+      :learn-skill
+      (let [skill-id (:skill-id (:action-data dd))
+            spec (when skill-id (skill-registry/get-skill skill-id))]
+        (boolean (and spec
+                      (:pass? (learning/check-all-conditions
+                               spec ad (int (:level ad 1)) (:developer-type dd))))))
+      :level-up
+      (let [cat-id (:category-id ad)
+            skills (when cat-id
+                     (skill-query/get-controllable-skills-at-level cat-id (int (:level ad 1))))
+            cat-rate (when cat-id (category/get-prog-incr-rate cat-id))]
+        (boolean (or (not cat-id)
+                     (learning/can-level-up? ad skills cat-rate
+                                             (cfg/prog-incr-rate) (cfg/max-level)))))
+      ;; :awaken validated at start; anything else applies as-is.
+      true)))
+
 (defn- cmd-server-tick
   "Advance one server tick: resource/cooldown recovery, develop tick, completion.
 
@@ -323,18 +411,27 @@
         develop-data (:develop-data ticked-state)
         dev-result (when (and develop-data (ddata/developing? develop-data))
                      (develop-rules/tick-develop develop-data))
-        new-dev (if dev-result (:develop-data dev-result) develop-data)
-        completion (when (and dev-result (:completed? dev-result) uuid-str)
+        completed? (boolean (and dev-result (:completed? dev-result)))
+        valid? (when completed?
+                 (develop-completion-valid? ticked-state (:develop-data dev-result)))
+        new-dev (cond
+                  (and completed? (not valid?)) (ddata/fail (:develop-data dev-result))
+                  dev-result (:develop-data dev-result)
+                  :else develop-data)
+        completion (when (and completed? valid? uuid-str)
                      (develop-rules/apply-completion
                       new-dev
                       (:ability-data ticked-state)
                       (:resource-data ticked-state)
                       uuid-str))
+        ;; Keep :develop-data in its terminal :done/:failed state rather than
+        ;; completion's reset — upstream DevelopData stays DONE until the next
+        ;; startDeveloping, and the client reads that terminal state to show
+        ;; success/failure. cmd-develop-start overwrites it on the next session.
         final-state (cond-> ticked-state
                       (some? new-dev) (assoc :develop-data new-dev)
                       completion (assoc :ability-data (:ability-data completion)
-                                        :resource-data (:resource-data completion)
-                                        :develop-data (:develop-data completion)))
+                                        :resource-data (:resource-data completion)))
         completion-events (or (:events completion) [])]
     (ok final-state completion-events)))
 
@@ -919,6 +1016,8 @@
 (defmethod apply-command :set-preset-slot [ps cmd] (cmd-set-preset-slot ps cmd))
 (defmethod apply-command :switch-preset   [ps cmd] (cmd-switch-preset ps cmd))
 (defmethod apply-command :server-tick     [ps cmd] (cmd-server-tick ps cmd))
+(defmethod apply-command :develop-start   [ps cmd] (cmd-develop-start ps cmd))
+(defmethod apply-command :develop-fail    [ps cmd] (cmd-develop-fail ps cmd))
 (defmethod apply-command :register-context [ps cmd] (cmd-register-context ps cmd))
 (defmethod apply-command :update-context-status [ps cmd] (cmd-update-context-status ps cmd))
 (defmethod apply-command :touch-context-keepalive [ps cmd] (cmd-touch-context-keepalive ps cmd))

@@ -29,7 +29,9 @@
 (def energy-item-configs
   ^{:doc "Energy item configurations: name -> [max-energy bandwidth]"}
   {:energy-unit        [10000.0 20.0]
-   :developer-portable [10000.0 0.3]})
+   ;; Upstream ItemDeveloper: 10,000 IF, charge bandwidth 50 IF/t (its 0.3 is
+   ;; the developer syncRate, not the item bandwidth).
+   :developer-portable [10000.0 50.0]})
 
 (defn create-energy-item
   "Create an energy item spec with specified configuration."

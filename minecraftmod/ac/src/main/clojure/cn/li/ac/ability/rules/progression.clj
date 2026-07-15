@@ -9,9 +9,10 @@
 		 (* level level (cfg/skill-learning-cost-level-square-factor))))
 
 (defn skill-learning-stims
-	"Stim count to learn a skill."
+	"Stim count to learn a skill. Truncated, matching upstream
+	 Skill.getLearningStims: (int)(3 + level^2 * 0.5)."
 	[skill-level]
-	(int (Math/ceil (learning-cost skill-level))))
+	(int (learning-cost skill-level)))
 
 (defn level-up-stims
 	"Stim count to level up from current-level."

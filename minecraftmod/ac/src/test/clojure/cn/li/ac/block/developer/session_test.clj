@@ -64,7 +64,10 @@
         (is (= :learn-skill (:development-action state)))
         (is (= :generic/foo (get-in state [:development-payload :skill-id])))))))
 
-(deftest validate-and-start-level-up-rejects-insufficient-progress-test
+(deftest validate-and-start-level-up-defers-progress-validation-test
+  ;; Progress validation happens at COMPLETION time (upstream DevelopData.tick
+  ;; → type.validate() on the last stim tick), so starting a level-up session
+  ;; succeeds even when can-level-up? is currently false.
   (let [player :stub-player
         ability (assoc (adata/new-ability-data) :category-id :generic :level 3)]
     (with-redefs [runtime-hooks/require-player-state-session-id (constantly :test-session)
@@ -72,11 +75,13 @@
                   skill-query/get-controllable-skills-at-level (constantly [])
                   category/get-prog-incr-rate (constantly 1.0)
                   learning-rules/can-level-up? (constantly false)]
-      (let [result (session/validate-and-start
-                     {:structure-valid true :tier "normal"}
-                     player
-                     {:action :level-up})]
-        (is (= {:ok? false :reason "not-enough-progress"} result))))))
+      (let [{:keys [ok? state]} (session/validate-and-start
+                                  {:structure-valid true :tier "normal"}
+                                  player
+                                  {:action :level-up})]
+        (is (true? ok?))
+        (is (= :level-up (:development-action state)))
+        (is (true? (:is-developing state)))))))
 
 (deftest clear-session-resets-fields-test
   (is (= {:is-developing false

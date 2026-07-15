@@ -15,6 +15,7 @@
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
+            [cn.li.ac.ability.server.handlers.portable-dev-handler :as portable-dev-handler]
             [cn.li.ac.ability.server.handlers.common :as handler-common]
             [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
@@ -116,6 +117,7 @@
 (defn register-handlers! []
   (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request    ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-LEVEL-UP       level-handler/handle-level-up-request ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-REQ-PORTABLE-DEV-START portable-dev-handler/handle-portable-dev-start-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     preset-handler/handle-set-preset-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  preset-handler/handle-switch-preset-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request ability-handler-contract)

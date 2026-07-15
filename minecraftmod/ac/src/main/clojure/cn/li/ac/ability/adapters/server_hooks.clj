@@ -19,6 +19,8 @@
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
+            [cn.li.ac.block.developer.session :as dev-session]
+            [cn.li.ac.item.developer-portable-energy :as portable-energy]
             [cn.li.ac.ability.service.player-runtime-commands :as player-runtime-cmd]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.runtime.install :as install]
@@ -28,6 +30,9 @@
 (def ^:private fn-reset-server-runtimes :ability/reset-server-runtimes!)
 (def ^:private fn-register-network-handlers :ability/register-network-handlers!)
 (def ^:private fn-try-pull-developer-energy :ability/try-pull-developer-energy!)
+(def ^:private fn-held-portable-dev-energy :ability/held-portable-dev-energy)
+(def ^:private fn-pull-portable-dev-energy :ability/pull-portable-dev-energy!)
+(def ^:private fn-resolve-awaken-category :ability/resolve-awaken-category!)
 
 (defn- unique-context-by-id
   [ctx-id]
@@ -148,6 +153,12 @@
                                        network/register-handlers!)
   (platform-hooks/register-platform-fn! fn-try-pull-developer-energy
                                        developer-logic/try-pull-energy!)
+  (platform-hooks/register-platform-fn! fn-held-portable-dev-energy
+                                       portable-energy/held-portable-energy)
+  (platform-hooks/register-platform-fn! fn-pull-portable-dev-energy
+                                       portable-energy/try-pull-portable-energy!)
+  (platform-hooks/register-platform-fn! fn-resolve-awaken-category
+                                       dev-session/resolve-awaken-category!)
   nil)
 
 (defn register-lifecycle-subscriptions!

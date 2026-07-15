@@ -33,6 +33,7 @@
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
+            [cn.li.ac.ability.rules.progression :as progression]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
@@ -128,8 +129,14 @@
         state-tier (some-> (:tier container) deref normalize-tier)]
     (or block-tier state-tier :normal)))
 
+(defn- container-has-developer?
+  "Upstream `developer != null` — true for the block tile and the portable
+   item, false only for the skill-tree viewer (SkillTreeAppUI equivalent)."
+  [container]
+  (not= :skill-tree-viewer (:container-type container)))
+
 (defn- category-ui-model
-  [{:keys [ad cat dev? developer-type energy max-energy bandwidth]}]
+  [{:keys [ad cat dev? developer-type energy max-energy bandwidth has-developer?]}]
   (let [cat-id (:category-id ad)
         has-category? (boolean cat)
         lvl (if has-category? (long (or (:level ad) 1)) 0)
@@ -145,8 +152,10 @@
                        (max 0.02 (bal/clamp01 (/ level-prog thresh)))
                        (if (>= lvl 5) 1.0 0.02))
                      0.0)
-        can-upgrade? (and has-category? (< lvl 5)
-                          (developer/gte? developer-type (developer/min-for-level (inc lvl)))
+        ;; Upstream visibility (SkillTree.scala initLeftPanel): developer != null
+        ;; && hasCategory && LearningHelper.canLevelUp — canLevelUp ignores the
+        ;; developer tier entirely (LearningHelper.java), so no min-for-level gate.
+        can-upgrade? (and has-developer? has-category? (< lvl 5)
                           (if thresh (>= level-prog thresh) true))
         ability-name (if has-category? (i18n/translate (:name-key cat)) "N/A")
         icon-path (if has-category?
@@ -186,6 +195,7 @@
         developer-type (current-developer-type container)]
     (category-ui-model {:ad ad :cat cat :dev? dev? :developer-type developer-type
                         :energy energy :max-energy max-energy
+                        :has-developer? (container-has-developer? container)
                         :bandwidth (:bandwidth (developer/developer-spec developer-type) 0.7)})))
 
 (defn- panel-session-id
@@ -491,7 +501,8 @@
         skill-spec (skill/get-skill skill-id)
         skill-name (or (:name skill-spec) (name skill-id) "Unknown")
         skill-level (int (or (:level skill-spec) 1))
-        est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* skill-level skill-level 0.5))))
+        ;; Upstream LearningHelper.getEstimatedConsumption: CPS * stimulations.
+        est-consumption (long (* (:cps dev-spec 700.0) (progression/skill-learning-stims skill-level)))
         session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
@@ -505,6 +516,7 @@
         last-updated (atom nil)
         node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
                    :skill-icon skill-icon :skill-description skill-description
+                   :viewer? (not (container-has-developer? container))
                    :learned (adata/is-learned? ad0 skill-id)
                    :exp (double (or (adata/get-skill-exp ad0 skill-id) 0.0))
                    :conditions (learning-rules/conditions-with-status
@@ -516,7 +528,8 @@
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]
-               (and (not (:learned (get-ad))) (not (:is-developing? s)) (nil? (:result s)))))
+               (and (container-has-developer? container)
+                    (not (:learned (get-ad))) (not (:is-developing? s)) (nil? (:result s)))))
       (fn []
         (let [energy (double (or @(:energy container) 0.0))
               ad (get-ad) player-level (int (or (:level ad) 1))]
@@ -578,7 +591,8 @@
         ad (:ability-data pstate)
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
-        est-consumption (long (* (:cps dev-spec 700.0) (+ 3 (* target-level target-level 0.5))))
+        ;; Upstream LearningHelper.getEstimatedConsumption: CPS * stimulations.
+        est-consumption (long (* (:cps dev-spec 700.0) (progression/level-up-stims current-level)))
         cx 200.0 cy 93.5
         btn-x (- cx 16.0) btn-y (+ cy 70.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
@@ -621,9 +635,8 @@
           nil)))))
 
 ;; ============================================================================
-;; Skill-tree area — embedded render + native click hit-targets (hover via
-;; the framework's own hovered-idx tracking; parallax camera-shift from the
-;; original is a cosmetic-only omission, not a functional one)
+;; Skill-tree area — embedded render + native click hit-targets (node parallax,
+;; background UV drift and hover scaling all match upstream SkillTree.scala)
 ;; ============================================================================
 
 (defn- clear-area! [^UiRt rt]
@@ -668,7 +681,7 @@
         ;; unless the skill data itself changed.
         last-ver (atom (hash (:ability-data pstate0)))
         last-mouse (atom ::none)
-        last-hover (atom ::none)
+        last-ms (double-array 1 Double/NaN)
         ^INode area-node (rt/node-by-id rt :area)
         embed-rt (rt/create-runtime)
         ;; Tree structure built ONCE; handles are mutated for parallax/anim.
@@ -699,6 +712,10 @@
           (when (nil? @open-ms) (reset! open-ms (double now-ms)))
           (let [anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
                 anim-active? (< anim-s 1.0)          ;; reveal settles by ~0.92s
+                dt-sec (let [prev (aget last-ms 0)]
+                         (aset last-ms 0 (double now-ms))
+                         (if (Double/isNaN prev) 0.0
+                             (max 0.0 (/ (- (double now-ms) prev) 1000.0))))
                 mouse (or @mouse-a [(/ area-w 2.0) (/ area-h 2.0)])
                 hv @hover-a
                 pstate (get-pstate)
@@ -715,20 +732,43 @@
             (when (or anim-active? skill-changed? (not @anim-settled?))
               (skill-tree-view/apply-anim! embed-rt @handles-a (when anim-active? anim-s))
               (when-not anim-active? (reset! anim-settled? true)))
-            ;; Parallax: move the node container (+ re-layout) on pointer move / rebuild.
+            ;; Parallax: move the node container (+ re-layout) and drift the
+            ;; background UV on pointer move / rebuild (upstream texAreaBack).
             (when (or skill-changed? (not= mouse @last-mouse))
               (reset! last-mouse mouse)
               (skill-tree-view/apply-parallax! embed-rt @handles-a
+                (first mouse) (second mouse) area-w area-h)
+              (skill-tree-view/apply-bg-uv! embed-rt
                 (first mouse) (second mouse) area-w area-h))
-            ;; Hover: scale the node under the pointer (no tooltip); only on change.
-            (when (or skill-changed? (not= hv @last-hover))
-              (reset! last-hover hv)
-              (skill-tree-view/set-hover! embed-rt @handles-a hv)))
+            ;; Hover: ease the node under the pointer toward 1.2× each frame
+            ;; (0.1s transition, upstream StateHover); settled nodes are no-ops.
+            (skill-tree-view/step-hover! embed-rt @handles-a hv dt-sec))
           nil)))))
 
 ;; ============================================================================
 ;; Right-panel mode dispatch — reuses right-panel-mode verbatim
 ;; ============================================================================
+
+(defn- make-reset-precheck
+  "Client-side DevelopActionReset.canReset, mirroring session.clj's
+   start-reset-action guards. Returns nil when reset may proceed, else the
+   console i18n key suffix to print (upstream SkillTree.scala initReset)."
+  [container player]
+  (fn []
+    (let [dev-type (current-developer-type container)
+          session-id (panel-session-id container)
+          uuid-str (when player (uuid/player-uuid player))
+          ad (:ability-data (when uuid-str (store/get-player-state* session-id uuid-str)))
+          level (int (or (:level ad) 1))
+          factor (special-items/find-induction-factor player)]
+      (cond
+        (not (developer/gte? dev-type :advanced)) :reset_fail_dev
+        (or (< level 3)
+            (not= special-items/magnetic-coil-item-id
+                  (entity/player-get-main-hand-item-id player))
+            (nil? factor)
+            (= (:category factor) (:category-id ad)))
+        :reset_fail_other))))
 
 (defn- attach-right-panel-dispatch! [^UiRt rt container player]
   (let [last-mode (atom nil)]
@@ -744,15 +784,18 @@
                 :console (console-reactive/attach! rt :area area-w area-h
                            {:mode :learn :container container
                             :player-name (or @(:user-name container) "Player")
-                            :has-developer (boolean (:tile-entity container))
+                            :has-developer (container-has-developer? container)
                             :on-start-development
-                            (fn [] (req-start-development! container :level-up))})
+                            (when (container-has-developer? container)
+                              (fn [] (req-start-development! container :level-up)))})
                 :reset-console (console-reactive/attach! rt :area area-w area-h
                                   {:mode :reset :container container
                                    :player-name (or @(:user-name container) "Player")
-                                   :has-developer (boolean (:tile-entity container))
+                                   :has-developer (container-has-developer? container)
+                                   :reset-precheck (make-reset-precheck container player)
                                    :on-start-development
-                                   (fn [] (req-start-development! container :reset))})
+                                   (when (container-has-developer? container)
+                                     (fn [] (req-start-development! container :reset)))})
                 :skill-tree (build-skill-tree-area! rt container player)
                 nil)))
           nil)))))
@@ -801,3 +844,37 @@
      :no-slots? true  ;; developer is a full-screen UI; hide the menu's inventory slots
      :size-dx (- root-w 176.0)
      :size-dy (- root-h 166.0)}))
+
+;; ============================================================================
+;; Skill-tree viewer — upstream SkillTreeAppUI: the classic developer layout
+;; with developer == null. Opened by the N key and the terminal skill-tree app.
+;; ============================================================================
+
+(defn- make-viewer-container
+  "Device-less container: no energy, no wireless, no learn/level-up. The
+   :portable tier only feeds condition-icon greying in the tree render."
+  [player]
+  {:energy                (atom 0.0)
+   :max-energy            (atom 1.0)
+   :tier                  (atom :portable)
+   :is-developing         (atom false)
+   :development-progress  (atom 0.0)
+   :development-complete? (atom false)
+   :structure-valid       (atom true)
+   :user-uuid             (atom (or (uuid/player-uuid player) ""))
+   :user-name             (atom (or (entity/player-get-name player) ""))
+   :player                player
+   :tile-entity           nil
+   :container-type        :skill-tree-viewer
+   :metadata              (atom {})})
+
+(defn create-viewer-runtime
+  "Build the viewer variant: machine panel hidden, ui_left swapped to the
+   skilltree texture (upstream SkillTree.scala's developer == null branch)."
+  [player]
+  (let [r (build-runtime! (make-viewer-container player) player)]
+    (when-let [^INode pm (rt/node-by-id r :panel-machine)]
+      (.setVisible pm false)
+      (.setFlag pm node/FLAG-LAYOUT-DIRTY))
+    (ui/set-prop! r :ui-left :src (modid/asset-path "textures" "guis/ui/ui_developerleft_skilltree.png"))
+    r))

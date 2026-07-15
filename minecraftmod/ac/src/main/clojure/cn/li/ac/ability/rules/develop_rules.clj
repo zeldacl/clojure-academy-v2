@@ -106,6 +106,22 @@
          :events [event]
          :develop-data (dev/complete-and-reset develop-data)})
 
+      :awaken
+      ;; Category-less level-up (upstream DevelopActionLevel.onLearned with no
+      ;; category): assign the category decided at start. set-category resets
+      ;; level to 1 and clears skills; presets are empty pre-awakening.
+      (let [target-category (:target-category action-data)
+            old-category (:category-id ability-data)
+            data2 (adata/set-category ability-data target-category)
+            new-res (-> resource-data
+                        (rdata/reset-add-max)
+                        (rdata/recalc-max-values (:level data2 1)))
+            event (evt/make-category-change-event uuid old-category target-category)]
+        {:ability-data data2
+         :resource-data new-res
+         :events [event]
+         :develop-data (dev/complete-and-reset develop-data)})
+
       {:ability-data ability-data
        :resource-data resource-data
        :events []

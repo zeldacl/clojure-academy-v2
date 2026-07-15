@@ -29,12 +29,6 @@
 (defn- developer-type-from-state [state]
   (keyword (or (:tier state) :normal)))
 
-(defn- find-induction-factor [player]
-  (some (fn [[item-id category]]
-          (when (pos? (int (entity/player-count-item-by-id player item-id)))
-            {:item-id item-id :category category}))
-        (special-items/induction-factor-catalog)))
-
 (defn- ability-state
   "Get or create player ability state. Accepts either:
    - [session-id pid] : explicit ids (used during tile tick, no player context)
@@ -83,30 +77,29 @@
                   {:cat-id cat-id :level level}
                   develop-data))))
 
+(defn resolve-awaken-category!
+  "Decide the awaken target category (upstream DevelopActionLevel.chooseCategory):
+   consume an induction factor and use its category when the player carries one,
+   otherwise pick a random category. Returns the category keyword or nil.
+   Shared by the block developer session and the portable developer handler."
+  [player]
+  (if-let [{:keys [item-id category]} (special-items/find-induction-factor player)]
+    (when (entity/player-consume-item-by-id! player item-id 1)
+      category)
+    (let [categories (category/get-all-categories)]
+      (when (seq categories)
+        (:id (nth categories (rand-int (count categories))))))))
+
 (defn- start-awaken-action [state player dev-type]
-  ;; Matching original AcademyCraft DevelopActionLevel.chooseCategory():
-  ;; - If player has induction factor -> consume it and use that category
-  ;; - Otherwise -> assign a random category (induction factor is OPTIONAL)
   (let [{:keys [develop-data error]}
         (develop-rules/start-level-up (dev-model/new-develop-data) dev-type 0)]
     (if error
       (err (name error))
-      (if-let [{:keys [item-id category]} (find-induction-factor player)]
-        ;; Player has induction factor → consume it and use that category
-        (if (entity/player-consume-item-by-id! player item-id 1)
-          (ok-session state dev-type :awaken
-                      {:target-category category :induction-item-id item-id}
-                      develop-data)
-          (err "missing-induction-factor"))
-        ;; No induction factor → random category (matching original random awakening)
-        (let [categories (category/get-all-categories)
-              random-cat (when (seq categories)
-                           (nth categories (rand-int (count categories))))]
-          (if random-cat
-            (ok-session state dev-type :awaken
-                        {:target-category (:id random-cat) :random? true}
-                        develop-data)
-            (err "no-categories-available")))))))
+      (if-let [category (resolve-awaken-category! player)]
+        (ok-session state dev-type :awaken
+                    {:target-category category}
+                    develop-data)
+        (err "no-awaken-category")))))
 
 (defn- start-level-up-action [state player dev-type ability-data]
   (let [cat-id (:category-id ability-data)
@@ -143,7 +136,7 @@
       (< level 3) (err "level-too-low")
       (not= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player)) (err "missing-magnetic-coil")
       :else
-      (if-let [{:keys [item-id category]} (find-induction-factor player)]
+      (if-let [{:keys [item-id category]} (special-items/find-induction-factor player)]
         (if (= category cat-id)
           (err "same-category")
           (let [max-stim (* level 10)]  ;; reset-specific formula: level * 10 (matching original)

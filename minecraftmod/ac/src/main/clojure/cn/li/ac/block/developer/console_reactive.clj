@@ -17,9 +17,9 @@
 (def ^:private max-lines 10)
 (def ^:private max-history 50)
 (def ^:private line-h 10.0)
-(def ^:private font-color 0xFF00CC00)
-(def ^:private input-color 0xFFFFFFFF)
-(def ^:private dim-color 0xFF008800)
+;; Upstream Console draws every line with FontOption(8) whose default color is
+;; Colors.white() — body and input lines alike.
+(def ^:private font-color 0xFFFFFFFF)
 (def ^:private prompt-str "OS >")
 
 ;; i18n key prefix — matching upstream ac.skill_tree.console.*
@@ -66,6 +66,7 @@
    :cursor-timer 0.0
    :exec-cmd nil
    :on-start-development nil
+   :reset-precheck nil       ;; (fn [] nil | :reset_fail_dev | :reset_fail_other)
    :container nil
    :task-queue []             ;; queued {:type :slow-print/:pause/:backspace-clear/:print :text ... :delay ...}
    :current-task nil
@@ -208,7 +209,6 @@
 (defn msg [k]
   (case k
     :dev-begin    (loc :dev_begin)
-    :no-developer "No developer device detected."
     :invalid-cmd  (loc :invalid_command)
     :reset-begin  (loc :reset_begin)
     :done         "Done."
@@ -302,22 +302,18 @@
 
       (register-command! "learn"
         (fn [state]
-          (if (= :learn (:mode state))
-            (if (:on-start-development state)
-              (do
-                ((:on-start-development state))
-                [(-> state
-                     (update :lines conj (str prompt-str))
-                     (update :lines conj (msg :dev-begin))
-                     (update :lines conj (loc :progress "00"))
-                     (update :lines clamp-lines)
-                     (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
-                 :developing])
-              [(-> (update state :lines conj (str prompt-str))
-                   (update :lines conj (msg :no-developer))
+          (if (and (= :learn (:mode state)) (:on-start-development state))
+            (do
+              ((:on-start-development state))
+              [(-> state
+                   (update :lines conj (str prompt-str))
+                   (update :lines conj (msg :dev-begin))
+                   (update :lines conj (loc :progress "00"))
                    (update :lines clamp-lines)
-                   (assoc :phase :idle :exec-cmd nil))
-               nil])
+                   (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+               :developing])
+            ;; No developer device / wrong mode — upstream never registers the
+            ;; command in those states, so it falls through to "Invalid command."
             [(-> (update state :lines conj (str prompt-str))
                  (update :lines conj (msg :invalid-cmd))
                  (update :lines clamp-lines)
@@ -326,8 +322,16 @@
 
       (register-command! "reset"
         (fn [state]
-          (if (= :reset (:mode state))
-            (if (:on-start-development state)
+          (if (and (= :reset (:mode state)) (:on-start-development state))
+            ;; Client-side canReset pre-check, matching upstream SkillTree.scala
+            ;; initReset: refused resets print a specific error and never enter
+            ;; the progress loop. Server-side validation stays authoritative.
+            (if-let [fail-key (some-> (:reset-precheck state) (#(%)))]
+              [(-> (update state :lines conj (str prompt-str))
+                   (update :lines conj (loc fail-key))
+                   (update :lines clamp-lines)
+                   (assoc :phase :idle :exec-cmd nil))
+               nil]
               (do
                 ((:on-start-development state))
                 [(-> state
@@ -336,12 +340,7 @@
                      (update :lines conj (loc :progress "00"))
                      (update :lines clamp-lines)
                      (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
-                 :developing])
-              [(-> (update state :lines conj (str prompt-str))
-                   (update :lines conj (msg :no-developer))
-                   (update :lines clamp-lines)
-                   (assoc :phase :idle :exec-cmd nil))
-               nil])
+                 :developing]))
             [(-> (update state :lines conj (str prompt-str))
                  (update :lines conj (msg :invalid-cmd))
                  (update :lines clamp-lines)
@@ -385,10 +384,11 @@
   {:kind :group
    :props {:id id :x 0.0 :y 0.0 :w w :h h :clip? true}
    :children
+   ;; Upstream draws from (5, 5) with 10px line spacing.
    (vec (for [i (range (inc max-lines))]
           {:kind :text
            :props {:id (keyword (str (name id) "-line-" i))
-                   :x 5.0 :y (* i line-h) :w (- w 10.0) :h line-h
+                   :x 5.0 :y (+ 5.0 (* i line-h)) :w (- w 10.0) :h line-h
                    :text "" :font-size 8.0 :color font-color}}))})
 
 ;; ============================================================================
@@ -428,8 +428,9 @@
         :else
         (assoc state :dev-progress prog :dev-grace 0)))
     :done
+    ;; Upstream pauses 0.5s after printing the result, then rebuilds.
     (let [dt (+ (:done-timer state 0.0) dt-sec)]
-      (if (>= dt 2.0)
+      (if (>= dt 0.5)
         (assoc state :phase :idle :done-timer 0.0 :dev-progress 0.0 :dev-result nil)
         (assoc state :done-timer dt)))
     (tick-idle state dt-sec)))
@@ -451,9 +452,6 @@
         (if (= :reset mode) (loc :reset_fail) (loc :dev_fail))))
     ""))
 
-(defn- input-line-color [phase]
-  (case phase (:idle :executing) input-color dim-color))
-
 (defn- render-console! [^UiRt rt line-nodes state]
   (let [lines (:lines state)
         total (count lines)
@@ -464,8 +462,7 @@
       (when-let [^INode n (nth line-nodes i nil)]
         (ui/set-node-prop! rt n :text (if (< i vc) (nth visible i) ""))))
     (when-let [^INode input-n (nth line-nodes body-count nil)]
-      (ui/set-node-prop! rt input-n :text (input-line-text state))
-      (ui/set-node-prop! rt input-n :color (input-line-color (:phase state))))))
+      (ui/set-node-prop! rt input-n :text (input-line-text state)))))
 
 ;; ============================================================================
 ;; Attach — build console into an existing parent group, wire key input
@@ -474,10 +471,11 @@
 (defn attach!
   "Build the console into `parent-id` (an existing group node in `rt`).
    opts: {:mode :learn|:reset :container :player-name :has-developer
-          :on-start-development (fn [])}
+          :on-start-development (fn [])
+          :reset-precheck (fn [] nil | i18n-key-suffix)}
    Returns a zero-arg detach fn (removes handlers; caller still owns
    clearing the parent's children on mode switch)."
-  [^UiRt rt parent-id w h {:keys [mode container player-name has-developer on-start-development]}]
+  [^UiRt rt parent-id w h {:keys [mode container player-name has-developer on-start-development reset-precheck]}]
   (let [console-id (keyword (str (name parent-id) "-console"))
         spec (console-spec console-id w h)
         ^INode root (rt/build-child! rt spec (rt/node-by-id rt parent-id))
@@ -485,7 +483,8 @@
                            (ui/item-node root (keyword (str (name console-id) "-line-" i)))))
         state-a (atom (assoc (init-state mode player-name has-developer)
                               :container container
-                              :on-start-development on-start-development))
+                              :on-start-development on-start-development
+                              :reset-precheck reset-precheck))
         clock (rt/clock-ms-sig rt)
         last-ms (double-array 1 (double (sig/sget-l clock)))
         tick-sig (sig/computed-o [clock]

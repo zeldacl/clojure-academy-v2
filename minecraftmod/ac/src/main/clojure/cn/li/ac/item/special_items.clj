@@ -29,6 +29,15 @@
           [(modid/namespaced-path suffix) category])
         induction-factor->category))
 
+(defn find-induction-factor
+  "First induction factor in `player`'s inventory as {:item-id :category},
+   else nil. Works on both sides (inventory item counts are client-visible)."
+  [player]
+  (some (fn [[item-id category]]
+          (when (pos? (int (entity/player-count-item-by-id player item-id)))
+            {:item-id item-id :category category}))
+        (induction-factor-catalog)))
+
 (def magnetic-coil-item-id (modid/namespaced-path "magnetic_coil"))
 (def ^:private matter-unit-item-id (modid/namespaced-path "matter_unit"))
 (def ^:private imag-phase-block-id (modid/namespaced-path "imag_phase"))

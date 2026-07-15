@@ -8,6 +8,8 @@
    instead of a tile-entity's server-synced schema."
   (:require [cn.li.ac.ability.client.api :as api]
             [cn.li.ac.ability.client.read-model :as read-model]
+            [cn.li.ac.ability.model.develop :as dev-model]
+            [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
             [cn.li.ac.energy.operations :as energy]
@@ -40,8 +42,10 @@
 (defn- make-portable-on-dev-start [owner]
   (fn [action extra callback]
     (case action
-      :learn-skill (api/req-learn-skill! owner (-> extra :skill-id keyword) callback)
-      :level-up    (api/req-level-up! owner callback)
+      ;; Timed stimulation session on the server (player-state :develop-data),
+      ;; matching the block developer — no instant learn/level-up.
+      (:learn-skill :level-up)
+      (api/req-portable-dev-start! owner action (some-> extra :skill-id keyword) callback)
       (when callback (callback {:success false :reason "not-available-on-portable"})))))
 
 (defn make-portable-container [player owner]
@@ -84,6 +88,7 @@
         owner (read-model/canonical-client-owner
                 {:client-session-id session-id :player-uuid (uuid/player-uuid player)}
                 :skill-tree)
+        uuid-str (uuid/player-uuid player)
         container (make-portable-container player owner)
         _ (read-model/ensure-player-state! (read-model/owner-key owner :skill-tree))
         r (panel-reactive/build-runtime! container player)]
@@ -91,10 +96,21 @@
     (let [^INode wb (rt/node-by-id r :button-wireless) ^INode wt (rt/node-by-id r :text-wireless)]
       (when wb (.setVisible wb false) (.setFlag wb node/FLAG-LAYOUT-DIRTY))
       (when wt (.setVisible wt false) (.setFlag wt node/FLAG-LAYOUT-DIRTY)))
-    ;; Energy synced from the held item each frame (instead of tile-entity sync)
+    ;; Per frame: energy from the held item; develop session projected from the
+    ;; player-state :develop-data sync domain (server drives the timed session,
+    ;; see ability.service.state-tick + reducer :develop-start).
     (set-tick! r :portable-energy-tick
       (sig/computed-o [(rt/clock-ms-sig r)]
-        (fn [_] (reset! (:energy container) (current-energy-from-held-item player)) nil)))
+        (fn [_]
+          (reset! (:energy container) (current-energy-from-held-item player))
+          (let [dd (:develop-data (store/get-player-state* session-id uuid-str))]
+            (reset! (:is-developing container)
+                    (boolean (some-> dd dev-model/developing?)))
+            (reset! (:development-progress container)
+                    (double (if dd (dev-model/progress dd) 0.0)))
+            (reset! (:development-complete? container)
+                    (boolean (some-> dd dev-model/done?))))
+          nil)))
     r))
 
 (defn open! [player]

@@ -13,7 +13,13 @@
     (is (> (:energy-consumed t1) 0.0))
     (is (= d0 (develop/tick-develop d0)))
     (is (= 0.0 (develop/progress d0)))
-    (is (= (int (Math/ceil (+ 3.0 (* 4 4 0.5)))) (develop/skill-learning-stims 4)))
+    ;; Truncated stim counts, matching upstream Skill.getLearningStims
+    ;; (int)(3 + level^2 * 0.5): fractional costs round DOWN.
+    (is (= 3 (develop/skill-learning-stims 1)))
+    (is (= 5 (develop/skill-learning-stims 2)))
+    (is (= 7 (develop/skill-learning-stims 3)))
+    (is (= 11 (develop/skill-learning-stims 4)))
+    (is (= 15 (develop/skill-learning-stims 5)))
     (is (= 15 (develop/level-up-stims 2)))))
 
 (deftest develop-formulas-use-config-test

@@ -47,6 +47,17 @@
         scale-fn (fn [x] (+ (* (- x 0.5) back-scale-inv) 0.5))]
     [(float (scale-fn bg-dx)) (float (scale-fn bg-dy))]))
 
+(defn apply-bg-uv!
+  "Drift the :bg image's UV with the pointer (upstream texAreaBack parallax:
+   ±0.005 UV at the edges). Shared by the full-screen tree and the developer
+   panel embed."
+  [^UiRt rt mx my w h]
+  (let [[bu bv] (bg-uv mx my w h)]
+    (when-let [^INode bg (ui/node rt :bg)]
+      (.setDSlot bg 1 (double bu))
+      (.setDSlot bg 2 (double bv))
+      (.setFlag bg node/FLAG-RENDER-DIRTY))))
+
 (defn- line-color [m-alpha child-learned?]
   (let [line-alpha (* (or m-alpha 0.7) (if child-learned? 1.0 0.4))
         alpha-byte (int (* 255.0 (clamp01 line-alpha)))]
@@ -68,48 +79,24 @@
                :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
                :color (line-color m-alpha child-learned?)}})))
 
-(defn- shell-spec [w h]
+(defn- shell-spec
+  "Minimal embed shell: parallax background + tree + popup layer. (The former
+   full-screen 420×260 chrome — header texts, tooltip, level button — went
+   away with the reactive full-screen tree; the classic-layout viewer and the
+   developer panel host this embed instead.)"
+  [w h]
   {:kind :group :id :root
    :props {:w (double w) :h (double h) :align-w :center :align-h :middle}
    :children
    [{:kind :image :id :bg :props {:x 0.0 :y 0.0 :w (double w) :h (double h)
                                   :src (tex-src :bg-area) :alpha 1.0}}
-    {:kind :box :id :overlay :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0xA0101010}}
-    {:kind :text :id :cat-text :props {:x 12.0 :y 8.0 :w 200.0 :h 12.0 :text "" :font-size 9.0 :color 0xFFFFFFFF}}
-    {:kind :text :id :lvl-text :props {:x 12.0 :y 22.0 :w 200.0 :h 12.0 :text "" :font-size 9.0 :color 0xFFE8E8E8}}
-    {:kind :text :id :cp-text :props {:x 12.0 :y 36.0 :w 200.0 :h 12.0 :text "" :font-size 9.0 :color 0xFFAED7FF}}
-    {:kind :text :id :ov-text :props {:x 12.0 :y 50.0 :w 200.0 :h 12.0 :text "" :font-size 9.0 :color 0xFFFFB8A6}}
     {:kind :group :id :tree-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h)}}
-    {:kind :group :id :tooltip :props {:x 230.0 :y 8.0 :w 180.0 :h 68.0}
-     :children
-     [{:kind :box :id :tip-bg :props {:x 0.0 :y 0.0 :w 180.0 :h 68.0 :fill 0xC0202020}}
-      {:kind :text :id :tip-name :props {:x 6.0 :y 6.0 :w 170.0 :h 12.0 :text "" :font-size 12.0 :color 0xFFFFFFFF}}
-      {:kind :text :id :tip-desc :props {:x 6.0 :y 20.0 :w 170.0 :h 24.0 :text "" :font-size 9.0 :color 0xFFDDDDDD}}
-      {:kind :text :id :tip-prog :props {:x 6.0 :y 34.0 :w 170.0 :h 12.0 :text "" :font-size 8.0 :color 0xFFDDDDDD}}
-      {:kind :text :id :tip-state :props {:x 6.0 :y 48.0 :w 170.0 :h 12.0 :text "" :font-size 8.0 :color 0xFF88FF88}}]}
-    {:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h)}}
-    {:kind :box :id :level-btn :props {:x 10.0 :y 200.0 :w 80.0 :h 20.0 :fill 0xAA22AA22 :hover-tint 0x33FFFFFF}}
-    {:kind :text :id :level-lbl :props {:x 18.0 :y 206.0 :w 64.0 :h 12.0 :text "Level Up"
-                                        :font-size 9.0 :color 0xFFFFFFFF}}
-    {:kind :box :id :input-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h) :fill 0x00000000}}]})
+    {:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h)}}]})
 
 (defn ensure-shell!
   [^UiRt rt w h]
   (when-not (ui/node rt :root)
     (rt/build! rt (shell-spec w h))))
-
-(defn- set-visible! [^INode n visible?]
-  (when n (.setVisible n (boolean visible?))))
-
-(defn- refresh-header! [^UiRt rt ab]
-  (ui/set-prop! rt :cat-text :text (str "Category: " (:category-name ab)))
-  (ui/set-prop! rt :lvl-text :text (format "Level: %d" (int (or (:level ab) 0))))
-  (ui/set-prop! rt :cp-text :text (format "CP: %.0f / %.0f"
-                                          (double (get-in ab [:cp :cur] 0.0))
-                                          (double (get-in ab [:cp :max] 0.0))))
-  (ui/set-prop! rt :ov-text :text (format "Overload: %.0f / %.0f"
-                                          (double (get-in ab [:overload :cur] 0.0))
-                                          (double (get-in ab [:overload :max] 0.0)))))
 
 (defn- clear-popup! [^UiRt rt]
   (when-let [^INode layer (ui/node rt :popup-layer)]
@@ -195,8 +182,11 @@
                                        :props {:x (+ left (* step (double i))) :y (+ cy 50.0) :w isz :h isz
                                                :src (icon-src (:icon-path info))
                                                :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))))
-          (when message (ctext (+ cy 66.0) 280 10.0 0xFFCCCCCC message))
-          (when-not developing?
+          ;; Viewer (SkillTreeAppUI, developer == null): conditions still show,
+          ;; but there is no device to learn with — no prompt, no LEARN button.
+          (when (and message (not (:viewer? node)))
+            (ctext (+ cy 66.0) 280 10.0 0xFFCCCCCC message))
+          (when-not (or developing? (:viewer? node))
             (let [btn-x (- cx 16.0) btn-y (+ cy 82.0)]
               (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                         :src (tex-src :tex-button)}} layer)
@@ -275,60 +265,10 @@
        (double (Math/round (- (/ (double h) 2.0) (* bcy s))))])
     [1.0 0.0 0.0]))
 
-;; Shared build-once/mutate core (defined below) — used by both the full-screen
-;; refresh-screen! and the developer-panel embed, so they don't diverge.
-(declare build-tree! apply-parallax! apply-anim! set-hover!)
-
-(defn refresh-screen!
-  "Refresh full-screen skill tree (420×260)."
-  [^UiRt rt owner mx my]
-  (let [w 420 h 260
-        _ (ensure-shell! rt w h)
-        st (logic/screen-state-snapshot owner)
-        rd (logic/build-screen-render-data owner)
-        [bu bv] (bg-uv mx my w h)]
-    (when rd
-      (when-let [^INode bg (ui/node rt :bg)]
-        (.setDSlot bg 1 (double bu))
-        (.setDSlot bg 2 (double bv))
-        (.setFlag bg node/FLAG-RENDER-DIRTY))
-      (refresh-header! rt (:ability-info rd))
-      ;; Shared build-once + mutate: rebuild the node tree only when the node/
-      ;; connection data changes; otherwise just move the camera (parallax). The
-      ;; handles persist on the runtime across the input-driven refreshes.
-      (let [ver (hash [(:skill-nodes rd) (:connections rd)])
-            handles (if (or (nil? (rt/user-signal rt :screen-tree-handles))
-                            (not= ver (rt/user-signal rt :screen-tree-ver)))
-                      (let [hs (build-tree! rt rd w h)]
-                        (rt/put-user-signal! rt :screen-tree-handles hs)
-                        (rt/put-user-signal! rt :screen-tree-ver ver)
-                        (apply-anim! rt hs nil)   ;; full alpha (no reveal fade on full-screen)
-                        hs)
-                      (rt/user-signal rt :screen-tree-handles))]
-        (apply-parallax! rt handles mx my w h)
-        ;; Shared hover-scale (same code as the embed) instead of a tooltip.
-        (set-hover! rt handles (:hover-skill rd)))
-      (set-visible! (ui/node rt :tooltip) false)
-      (cond
-        (:showing-level-up-popup? st)
-        (refresh-levelup-popup! rt (inc (int (get-in rd [:ability-info :level] 1)))
-                                (:level-up-dev-state st) 420 260 true)
-        (:selected-skill st)
-        (let [sel (:selected-skill st)
-              node (first (filter #(= (:skill-id %) sel) (:skill-nodes rd)))]
-          (if node (refresh-detail-popup! rt node 420 260 true) (clear-popup! rt)))
-        :else (clear-popup! rt))
-      (let [show-level? (and (get-in rd [:ability-info :can-level-up])
-                             (not (:showing-level-up-popup? st)))]
-        (set-visible! (ui/node rt :level-btn) show-level?)
-        (set-visible! (ui/node rt :level-lbl) show-level?))
-      (rt/mark-tree-dirty! rt))))
-
 ;; ============================================================================
-;; Build-once + mutate — shared by the full-screen refresh-screen! and the
-;; developer-panel embed. The tree structure is built once and only rebuilt when
-;; skill data changes. Parallax moves the node container, hover updates the
-;; tooltip, and the reveal animation mutates node alphas — none rebuild the tree.
+;; Build-once + mutate — the tree structure is built once and only rebuilt when
+;; skill data changes. Parallax moves the node container, hover eases the node
+;; scale, and the reveal animation mutates node alphas — none rebuild the tree.
 ;; ============================================================================
 
 (defn- mark-subtree-dirty! [^INode n]
@@ -403,11 +343,6 @@
    later mutation. Only a skill-data change should call this again."
   [^UiRt rt render-data w h]
   (ensure-shell! rt w h)
-  (set-visible! (ui/node rt :level-btn) false)
-  (set-visible! (ui/node rt :level-lbl) false)
-  (set-visible! (ui/node rt :overlay) false)
-  (doseq [id [:cat-text :lvl-text :cp-text :ov-text]] (set-visible! (ui/node rt id) false))
-  (set-visible! (ui/node rt :tooltip) false)  ;; no tree tooltip (upstream); hover scales the node
   (clear-popup! rt)
   (build-tree! rt render-data w h))
 
@@ -427,21 +362,27 @@
     (.setY cam (- (double offy) (* (double pdy) (double s))))
     (mark-subtree-dirty! cam)))
 
-(defn set-hover!
-  "Hover feedback — scale the node under the pointer to 1.2× (upstream
-   StateHover); upstream shows no tooltip in the tree. Only touches nodes whose
-   scale actually changes."
-  [^UiRt rt handles hover-id]
-  (doseq [h (:nodes handles)]
-    (let [^INode g (:group h)
-          want (if (= (:skill-id h) hover-id) 1.2 1.0)]
-      (when (not= want (.getScale g))
-        ;; grow from the node centre: offset by (want-1)*size/2
-        (let [off (* logic/total-size (/ (- want 1.0) 2.0))]
-          (.setScale g want)
-          (.setX g (- (double (:bx h)) off))
-          (.setY g (- (double (:by h)) off))
-          (mark-subtree-dirty! g))))))
+(defn step-hover!
+  "Hover feedback — ease each node's scale toward 1.2× when hovered, 1.0
+   otherwise (upstream StateHover/StateIdle with TransitTime 0.1s: 0.2 scale
+   delta at 2.0 units/s). Call every frame with that frame's dt in seconds;
+   nodes already at their target are untouched. Upstream shows no tooltip in
+   the tree."
+  [^UiRt rt handles hover-id dt-sec]
+  (let [step (* 2.0 (max 0.0 (double dt-sec)))]
+    (doseq [h (:nodes handles)]
+      (let [^INode g (:group h)
+            target (if (= (:skill-id h) hover-id) 1.2 1.0)
+            cur (double (.getScale g))
+            delta (- target cur)
+            nxt (if (<= (Math/abs delta) step) target (+ cur (* (Math/signum delta) step)))]
+        (when (not= nxt cur)
+          ;; grow from the node centre: offset by (scale-1)*size/2
+          (let [off (* logic/total-size (/ (- nxt 1.0) 2.0))]
+            (.setScale g nxt)
+            (.setX g (- (double (:bx h)) off))
+            (.setY g (- (double (:by h)) off))
+            (mark-subtree-dirty! g)))))))
 
 (defn refresh-detail-overlay!
   "Standalone detail popup runtime (developer panel overlay)."

@@ -216,11 +216,7 @@
           (api/req-level-up! owner
             (fn [resp]
               (swap-screen-state! owner update :level-up-dev-state
-                assoc :result (if (:success resp) :success :failed))
-              (when-let [refresh (requiring-resolve
-                                   'cn.li.ac.ability.client.screens.skill-tree-reactive/refresh-active-screen!)]
-                (when-let [pu (:player-uuid (screen-state-snapshot owner))]
-                  (refresh pu)))))
+                assoc :result (if (:success resp) :success :failed))))
           (swap-screen-state! owner assoc
             :showing-level-up-popup? false :level-up-dev-state nil))
         true)
@@ -297,22 +293,17 @@
 ;; ============================================================================
 
 (defn create-skill-tree-widget
-  "Widget factory for :ac/skill-tree — returns reactive screen descriptor.
-   owner comes from open-screen-dispatcher payload, which only provides :player-uuid
-   when invoked from a GUI key press (N key). Fall back to runtime-hooks for
-   client-session-id when the payload doesn't supply one."
-  [{:keys [player-uuid client-session-id learn-context] :as payload}]
-  (let [owner {:client-session-id (or client-session-id
-                                      (try ((requiring-resolve 'cn.li.mcmod.hooks.core/client-session-id))
-                                           (catch Throwable _ "")))
-               :player-uuid player-uuid}
-        create-runtime (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/create-runtime)
-        on-close! (requiring-resolve 'cn.li.ac.ability.client.screens.skill-tree-reactive/on-close!)
-        r (create-runtime owner :learn-context learn-context)]
+  "Widget factory for :ac/skill-tree — the skill-tree viewer (upstream
+   SkillTreeAppUI): the classic developer layout with developer == null.
+   Opened by the N key and the terminal skill-tree app. requiring-resolve
+   avoids a static cycle (panel-reactive requires this ns's tree logic)."
+  [_payload]
+  (let [create-viewer-runtime (requiring-resolve 'cn.li.ac.block.developer.panel-reactive/create-viewer-runtime)
+        get-client-player (requiring-resolve 'cn.li.mcmod.client.platform-bridge/get-client-player)
+        player (get-client-player)]
     {:type :reactive-screen
-     :runtime r
-     :title "Node Tree"
-     :on-close #(on-close! owner)}))
+     :runtime (create-viewer-runtime player)
+     :title "Node Tree"}))
 
 (defn install-widget-factory!
   "Register skill-tree CGui widget factory. Idempotent."

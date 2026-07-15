@@ -1,7 +1,8 @@
 (ns cn.li.ac.block.developer.console-test
   "Tests for the console pure state machine."
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.ac.block.developer.console-reactive :as console]))
+            [cn.li.ac.block.developer.console-reactive :as console]
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]))
 
 (def ^:private null-char (char 0))
 
@@ -79,3 +80,48 @@
     (is (= :reset (:mode state)))
     (is (= :boot (:phase state)))
     (is (= false (:has-developer state)))))
+
+(deftest reset-command-precheck-test
+  ;; Client-side canReset gate, matching upstream SkillTree.scala initReset:
+  ;; a refused reset prints one error line and never enters :developing.
+  (with-fresh-framework
+    (fn []
+      (console/register-builtin-commands!)
+      (let [started (atom 0)
+            base (-> (console/init-state :reset "P1" true)
+                     (assoc :phase :executing :exec-cmd "reset"
+                            :on-start-development (fn [] (swap! started inc))))]
+        (testing "non-advanced developer → reset_fail_dev, stays idle"
+          (let [[s action] (console/exec-cmd
+                             (assoc base :reset-precheck (constantly :reset_fail_dev)))]
+            (is (nil? action))
+            (is (= :idle (:phase s)))
+            (is (= 0 @started))
+            (is (.contains ^String (last (:lines s)) "reset_fail_dev"))))
+        (testing "other unmet condition → reset_fail_other, stays idle"
+          (let [[s action] (console/exec-cmd
+                             (assoc base :reset-precheck (constantly :reset_fail_other)))]
+            (is (nil? action))
+            (is (= :idle (:phase s)))
+            (is (= 0 @started))
+            (is (.contains ^String (last (:lines s)) "reset_fail_other"))))
+        (testing "precheck passes (nil) → development starts"
+          (let [[s action] (console/exec-cmd
+                             (assoc base :reset-precheck (constantly nil)))]
+            (is (= :developing action))
+            (is (= :developing (:phase s)))
+            (is (= 1 @started))))))))
+
+(deftest command-without-developer-is-invalid-test
+  ;; Upstream never registers learn/reset when developer == null (viewer),
+  ;; so typing them falls through to "Invalid command."
+  (with-fresh-framework
+    (fn []
+      (console/register-builtin-commands!)
+      (let [state (-> (console/init-state :learn "P1" false)
+                      (assoc :phase :executing :exec-cmd "learn"
+                             :on-start-development nil))
+            [s action] (console/exec-cmd state)]
+        (is (nil? action))
+        (is (= :idle (:phase s)))
+        (is (.contains ^String (last (:lines s)) "invalid_command"))))))
