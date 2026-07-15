@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -92,8 +93,8 @@
           i3 (vec3/v- (vec3/v- center inner-side) inner-up)
           outer-a (int (max 0 (min 255 (* 165.0 ttl-k))))
           inner-a (int (max 0 (min 255 (* 210.0 ttl-k))))]
-      [(ru/quad-op "my_mod:textures/effects/glow_circle.png" o0 o1 o2 o3 {:r 145 :g 220 :b 255 :a outer-a})
-       (ru/quad-op "my_mod:textures/effects/glow_circle.png" i0 i1 i2 i3 {:r 225 :g 252 :b 255 :a inner-a})])
+      [(ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png") o0 o1 o2 o3 {:r 145 :g 220 :b 255 :a outer-a})
+       (ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png") i0 i1 i2 i3 {:r 225 :g 252 :b 255 :a inner-a})])
     []))
 
 (defn- impact-spike-ops [^V3 target ttl trigger-ticks]
@@ -158,7 +159,7 @@
       :mark-start
       (do
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.jet_charge" :volume 0.45 :pitch 1.0})
+          {:type :sound :sound-id (modid/namespaced-path "md.jet_charge") :volume 0.45 :pitch 1.0})
         (assoc-in store* [:fx-state owner-key*]
                   {:phase :marking
                    :target target
@@ -187,7 +188,7 @@
                            (spawn-diamond-shield!))]
         (when entering-trigger?
           (client-sounds/queue-current-sound-effect!
-            {:type :sound :sound-id "my_mod:md.jet_engine" :volume 0.8 :pitch 1.0}))
+            {:type :sound :sound-id (modid/namespaced-path "md.jet_engine") :volume 0.8 :pitch 1.0}))
         (assoc-in store* [:fx-state owner-key*]
                   (merge prev-state
                          {:phase :triggering

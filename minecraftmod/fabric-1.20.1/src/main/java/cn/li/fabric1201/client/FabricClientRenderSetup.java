@@ -40,7 +40,7 @@ public final class FabricClientRenderSetup {
         CoreShaderRegistrationCallback.EVENT.register(context -> {
             try {
                 context.register(
-                        new ResourceLocation("my_mod", "msdf_text"),
+                        new ResourceLocation(cn.li.mcmod.ModId.ID, "msdf_text"),
                         MsdfRenderTypes.MSDF_TEXT_FORMAT,
                         shader -> {
                             MsdfRenderTypes.setMsdfShader(shader);
@@ -57,7 +57,7 @@ public final class FabricClientRenderSetup {
     }
 
     public static void registerParticleProviders() {
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(cn.li.mcmod.ModId.ID, "silbarn_frag"));
         if (fragTypeRaw instanceof SimpleParticleType spt) {
             ParticleFactoryRegistry.getInstance().register(spt, SilbarnFragParticle.Provider::new);
         }

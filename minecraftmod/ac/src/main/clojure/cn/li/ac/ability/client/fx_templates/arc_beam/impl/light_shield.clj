@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -29,7 +30,7 @@
       :start
       (do
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.shield_on" :volume 0.7 :pitch 1.0})
+          {:type :sound :sound-id (modid/namespaced-path "md.shield_on") :volume 0.7 :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :phase :startup})))
       :end
@@ -92,14 +93,14 @@
           p1 (vec3/v+ (vec3/v+ center side) lift)
           p2 (vec3/v- (vec3/v+ center side) lift)
           p3 (vec3/v- (vec3/v- center side) lift)
-          glow-op (ru/quad-op "my_mod:textures/effects/glow_circle.png"
+          glow-op (ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png")
                               p0 p1 p2 p3
                               (ru/with-alpha {:r 165 :g 245 :b 255} 90))]
       {:ops (vec (cons glow-op ring-ops))})))
 
 (defn- shield-end-sound! [_ctx-id _channel _payload]
   (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id "my_mod:md.shield_loop" :volume 0.35 :pitch 0.95}))
+    {:type :sound :sound-id (modid/namespaced-path "md.shield_loop") :volume 0.35 :pitch 0.95}))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:light-shield :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:light-shield :level]

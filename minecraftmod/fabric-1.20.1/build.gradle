@@ -196,6 +196,16 @@ tasks.named('processResources').configure {
     filesMatching(['fabric.mod.json']) {
         expand replaceProperties + [project: project]
     }
+
+    // Rename mixin config file: my_mod.mixins.json → ${mod_id}.mixins.json
+    rename '^my_mod\\.mixins\\.json$', "${mod_id}.mixins.json"
+
+    // Replace my_mod: prefix in XML/JSON resource files with the current mod_id.
+    filesMatching(['**/*.xml', '**/*.json']) {
+        filter { String line ->
+            line.replace('my_mod:', mod_id + ':')
+        }
+    }
 }
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {

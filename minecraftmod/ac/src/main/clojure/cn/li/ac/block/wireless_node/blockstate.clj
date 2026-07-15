@@ -41,7 +41,7 @@
   node-schema/blockstate-property-fields)
 
 (defn- mod-id []
-  (or mcmod-config/mod-id "my_mod"))
+  mcmod-config/mod-id)
 
 (defn- extract-blockstate-props
   "Extract BlockState properties from schema into a map.

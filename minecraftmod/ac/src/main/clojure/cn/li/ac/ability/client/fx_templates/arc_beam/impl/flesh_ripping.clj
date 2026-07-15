@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
@@ -74,7 +75,7 @@
           ;; EntityBloodSplash on hit (matching original EntityBloodSplash)
           (spawn-blood-splash!))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:tp.guts" :volume 0.6 :pitch 0.95})
+          {:type :sound :sound-id (modid/namespaced-path "tp.guts") :volume 0.6 :pitch 0.95})
         ;; Remove marker after perform
         (remove-marker!)
         state*)

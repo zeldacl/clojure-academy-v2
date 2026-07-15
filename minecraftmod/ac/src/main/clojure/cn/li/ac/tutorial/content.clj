@@ -15,7 +15,7 @@
 
 ;; --- Path construction ---
 
-(def ^:private resource-root "assets/my_mod/tutorials")
+(def ^:private resource-root (str "assets/" modid/MOD-ID "/tutorials"))
 
 (def ^:private supported-langs
   "Languages that have tutorial translations available.

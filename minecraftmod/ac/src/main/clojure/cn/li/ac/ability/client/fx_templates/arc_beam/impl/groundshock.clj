@@ -8,11 +8,12 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
 
-(def ^:private sound-id "my_mod:vecmanip.groundshock")
+(def ^:private sound-id (modid/namespaced-path "vecmanip.groundshock"))
 
 
 ;; ---------------------------------------------------------------------------

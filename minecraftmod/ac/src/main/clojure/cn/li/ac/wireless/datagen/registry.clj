@@ -1,46 +1,47 @@
 (ns cn.li.ac.wireless.datagen.registry
   "Datagen registry for wireless domain.
    Provides lightweight metadata output for wireless configuration and labels."
-  (:require [cn.li.ac.wireless.config :as wireless-config]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.wireless.config :as wireless-config]
             [cn.li.mcmod.datagen.metadata :as metadata]))
 
 (defn- descriptor->entry
   [{:keys [path comment default]}]
-  [(str "config.my_mod." path)
+  [(str "config." modid/MOD-ID "." path)
    (str comment " (default=" default ")")])
 
 (defn- wireless-translation-map
   []
   (let [descriptor-entries (into {} (map descriptor->entry wireless-config/descriptors))]
     {:en_us (merge
-              {"domain.my_mod.wireless" "Wireless System"
-               "wireless.my_mod.network" "Wireless Network"
-               "wireless.my_mod.node" "Wireless Node"}
+              {(str "domain." modid/MOD-ID ".wireless") "Wireless System"
+               (str "wireless." modid/MOD-ID ".network") "Wireless Network"
+               (str "wireless." modid/MOD-ID ".node") "Wireless Node"}
               descriptor-entries)
      :zh_cn (merge
-              {"domain.my_mod.wireless" "无线系统"
-               "wireless.my_mod.network" "无线网络"
-               "wireless.my_mod.node" "无线节点"}
+              {(str "domain." modid/MOD-ID ".wireless") "无线系统"
+               (str "wireless." modid/MOD-ID ".network") "无线网络"
+               (str "wireless." modid/MOD-ID ".node") "无线节点"}
               descriptor-entries)
      :zh_tw (merge
-              {"domain.my_mod.wireless" "無線系統"
-               "wireless.my_mod.network" "無線網路"
-               "wireless.my_mod.node" "無線節點"}
+              {(str "domain." modid/MOD-ID ".wireless") "無線系統"
+               (str "wireless." modid/MOD-ID ".network") "無線網路"
+               (str "wireless." modid/MOD-ID ".node") "無線節點"}
               descriptor-entries)
      :ja_jp (merge
-              {"domain.my_mod.wireless" "無線システム"
-               "wireless.my_mod.network" "無線ネットワーク"
-               "wireless.my_mod.node" "無線ノード"}
+              {(str "domain." modid/MOD-ID ".wireless") "無線システム"
+               (str "wireless." modid/MOD-ID ".network") "無線ネットワーク"
+               (str "wireless." modid/MOD-ID ".node") "無線ノード"}
               descriptor-entries)
      :ko_kr (merge
-              {"domain.my_mod.wireless" "무선 시스템"
-               "wireless.my_mod.network" "무선 네트워크"
-               "wireless.my_mod.node" "무선 노드"}
+              {(str "domain." modid/MOD-ID ".wireless") "무선 시스템"
+               (str "wireless." modid/MOD-ID ".network") "무선 네트워크"
+               (str "wireless." modid/MOD-ID ".node") "무선 노드"}
               descriptor-entries)
      :ru_ru (merge
-              {"domain.my_mod.wireless" "Беспроводная система"
-               "wireless.my_mod.network" "Беспроводная сеть"
-               "wireless.my_mod.node" "Беспроводной узел"}
+              {(str "domain." modid/MOD-ID ".wireless") "Беспроводная система"
+               (str "wireless." modid/MOD-ID ".network") "Беспроводная сеть"
+               (str "wireless." modid/MOD-ID ".node") "Беспроводной узел"}
               descriptor-entries)}))
 
 (defn register-datagen-metadata!

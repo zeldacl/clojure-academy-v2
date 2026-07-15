@@ -8,7 +8,8 @@
   AOE radius: lerp(15,30,exp) with distance falloff
   Cooldown: ticks * lerp(10,6,exp)
   Exp: 0.003 per use"
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
@@ -105,9 +106,9 @@
   c_spawnEffect: EntitySurroundArc(BOLD) + EntityRippleMark."
   [_ctx-id player-id player]
   (when player
-    (entity/player-spawn-entity-by-id! player "my_mod:entity_surround_arc" 0.0)
+    (entity/player-spawn-entity-by-id! player (modid/namespaced-path "entity_surround_arc") 0.0)
     (when-let [hit-pos (resolve-raycast-target player-id)]
-      (entity/player-spawn-entity-by-id! player "my_mod:entity_ripple_mark" 0.0))))
+      (entity/player-spawn-entity-by-id! player (modid/namespaced-path "entity_ripple_mark") 0.0))))
 
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]

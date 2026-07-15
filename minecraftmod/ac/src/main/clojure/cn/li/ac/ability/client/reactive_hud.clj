@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.client.reactive-hud
   "Reactive HUD snapshot — independent of build-client-overlay-plan.
    Reads player projection + hud.clj builders; no element-vector plan."
-  (:require [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.ac.ability.client.read-model :as read-model]
@@ -18,7 +19,7 @@
 
 (def ^:private rh-path [:service :reactive-hud])
 (def ^:private cui-path [:service :client-ui :runtime]) ; shared client-ui runtime atom leaf (see client-ui-hooks)
-(def ^:private vm-wave-glow "my_mod:textures/effects/glow_circle.png")
+(def ^:private vm-wave-glow (modid/asset-path "textures" "effects/glow_circle.png"))
 (def ^:private coin-dot-count 12)
 
 (defn- owner-key [player-uuid]

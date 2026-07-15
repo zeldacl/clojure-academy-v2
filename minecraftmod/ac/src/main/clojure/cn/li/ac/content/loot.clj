@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.loot
   "Data-driven loot injection declarations."
-  (:require [cn.li.mcmod.loot.dsl :as ldsl]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.loot.dsl :as ldsl]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
@@ -12,7 +13,7 @@
     ;; Missing target item IDs are skipped safely at runtime in Forge helper.
     (ldsl/defloot {:id "dungeon_skill_book"
                    :target-table "minecraft:chests/simple_dungeon"
-                   :item-id "my_mod:electromaster_brain_course"
+                   :item-id (modid/namespaced-path "electromaster_brain_course")
                    :weight 3
                    :quality 0
                    :min-count 1.0

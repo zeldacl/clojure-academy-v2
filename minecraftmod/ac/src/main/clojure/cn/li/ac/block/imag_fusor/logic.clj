@@ -8,7 +8,8 @@
    - Dynamic light: Original emits light level 6 when working (getLightValue).
      Not yet implemented — requires forge-layer Block.getLightEmission override
      keyed on the frame blockstate property."
-  (:require [cn.li.ac.block.imag-fusor.config :as fusor-config]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.block.imag-fusor.config :as fusor-config]
             [cn.li.ac.block.imag-fusor.recipes :as recipes]
             [cn.li.ac.block.imag-fusor.schema :as fusor-schema]
             [cn.li.ac.block.machine.container :as machine-container]
@@ -190,7 +191,7 @@
     (inc (mod (quot (long day-time) 8) 4))
     0))
 
-(def fusor-sound-id "my_mod:machine.imag_fusor_work")
+(def fusor-sound-id (modid/namespaced-path "machine.imag_fusor_work"))
 (def ^:private fusor-sound-interval 20)
 
 (defn- trigger-work-sound!

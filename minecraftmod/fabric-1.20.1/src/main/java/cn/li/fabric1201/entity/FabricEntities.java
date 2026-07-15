@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
+import cn.li.mcmod.ModId;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
@@ -17,12 +18,12 @@ import java.util.Map;
 
 /**
  * Fabric entity type registration.
- * 
+ *
  * Registers the five scripted entity types (projectile, effect, ray, marker, block-body)
  * using Fabric's Registry system.
  */
 public final class FabricEntities {
-    private static final String MOD_ID = "my_mod";
+    private static final String MOD_ID = ModId.ID;
     private static final Map<String, EntityType<?>> ENTITY_TYPES = new HashMap<>();
 
     private FabricEntities() {

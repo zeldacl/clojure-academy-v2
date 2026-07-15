@@ -11,7 +11,8 @@
   Exp: +0.0004 per damage absorbed
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -116,7 +117,7 @@
     (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
     ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
     (when player-ref
-      (entity/player-spawn-entity-by-id! player-ref "my_mod:entity_md_shield" 0.0)))
+      (entity/player-spawn-entity-by-id! player-ref (modid/namespaced-path "entity_md_shield") 0.0)))
   (log/info "LightShield: Activated"))
 
 (defn light-shield-deactivate!

@@ -9,6 +9,7 @@
    tab pair); it builds a bare page_wireless.xml runtime instead, matching
    the old single-page layout exactly."
   (:require [cn.li.mcmod.runtime.install :as install]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.util.log :as log]
@@ -19,7 +20,6 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.xml :as ui-xml]
-            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.ac.integration.block.energy-converter.schema :as ec-schema]))
 

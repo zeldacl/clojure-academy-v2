@@ -46,7 +46,7 @@
     (metadata-fn metadata/get-item-registry-name)
     (metadata-fn metadata/get-all-block-ids)
     (metadata-fn metadata/get-block-registry-name)
-    "my_mod"))
+    (str modid/mod-id)))
 
 (defn- item-predicate
   [item-id]
@@ -57,8 +57,8 @@
   [{:keys [id background]}]
   (let [nid (normalize-id id)]
     {"display" {"icon" {"item" "minecraft:book"}
-                "title" {"translate" (str "advancement.my_mod." nid)}
-                "description" {"translate" (str "advancement.my_mod." nid ".description")}
+                "title" {"translate" (str "advancement." modid/mod-id "." nid)}
+                "description" {"translate" (str "advancement." modid/mod-id "." nid ".description")}
               "background" (str background)
               "frame" "task"
               "show_toast" false
@@ -89,8 +89,8 @@
                     root-rl)]
     {"parent" parent-rl
      "display" {"icon" {"item" (item-registry/safe-item-id (:icon ach) known rl/parse-resource-location)}
-                "title" {"translate" (str "advancement.my_mod." nid)}
-                "description" {"translate" (str "advancement.my_mod." nid ".description")}
+                "title" {"translate" (str "advancement." modid/mod-id "." nid)}
+                "description" {"translate" (str "advancement." modid/mod-id "." nid ".description")}
                 "frame" (name (or (:frame ach) :task))
                 "show_toast" true
                 "announce_to_chat" false
@@ -120,7 +120,7 @@
                                (some-> (first tabs) :id))
                   root-rl (if root-tab
                             (ach-id (str (normalize-id root-tab) "_root"))
-                            "my_mod:achievements/root")
+                            (str modid/mod-id ":achievements/root"))
                   json-tree (.toJsonTree gson (ach-json ach root-rl known))
                     target-id (ResourceLocation. mod-id (str "achievements/" (normalize-id (:id ach))))
                     target-path (.json ^PackOutput$PathProvider path-provider target-id)]

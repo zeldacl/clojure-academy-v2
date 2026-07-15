@@ -10,6 +10,7 @@
    framework's own hoveredIdx tracking) instead of manually-tracked
    :hovering? metadata."
   (:require [cn.li.ac.ability.messages :as catalog]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -183,7 +184,7 @@
           (events/on! rt (keyword (str (name id) "-tp")) :left-click
             (fn [_ _ _]
               (client-sounds/queue-current-sound-effect!
-                {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.0})
+                {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
               (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-PERFORM {:name (:name loc)} owner-key)
               (bridge/close-screen!))))
         (events/on! rt (keyword (str (name id) "-del")) :left-click

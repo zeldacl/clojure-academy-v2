@@ -1,7 +1,8 @@
 (ns cn.li.ac.ability.client.effects.arc-fx
   "L-system lightning arc generation for beam effects.
   Ported from original AcademyCraft ArcFactory.java + SubArcHandler.java."
-  (:require [cn.li.ac.ability.client.render-util :as ru]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]))
 
 ;; ---------------------------------------------------------------------------
@@ -163,7 +164,7 @@
 (defn- segment->quads
   "Convert a list of arc segments to render ops (textured quads)."
   [segments]
-  (let [texture "my_mod:textures/effects/arc/line_segment.png"]
+  (let [texture (modid/asset-path "textures" "effects/arc/line_segment.png")]
     (vec
      (for [[{:keys [start end alpha]} seg-idx] (map vector segments (range))
            :let [start-pos (:pos start)

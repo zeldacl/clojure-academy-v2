@@ -5,11 +5,12 @@
   the repeated ability-side concerns around style maps: RGB + alpha composition,
   fading ttl/max-ttl beams, direct beam rendering, and small glow-line helpers
   used by trajectory previews."
-  (:require [cn.li.ac.ability.client.effects.beam-render :as beam-render]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.beam-render :as beam-render]
             [cn.li.ac.ability.client.render-util :as ru]))
 
 (def default-glow-line-texture
-  "my_mod:textures/effects/glow_line.png")
+  (modid/asset-path "textures" "effects/glow_line.png"))
 
 (defn resolve-value
   "Resolve either a constant value or a `[context life]` callback."

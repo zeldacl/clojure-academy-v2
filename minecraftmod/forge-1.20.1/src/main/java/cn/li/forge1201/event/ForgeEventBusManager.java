@@ -1,5 +1,6 @@
 package cn.li.forge1201.event;
 
+import cn.li.mcmod.ModId;
 import cn.li.forge1201.MyMod1201;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -9,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 @Mod.EventBusSubscriber(modid = MyMod1201.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class ForgeEventBusManager {
-    private static final Logger LOGGER = LoggerFactory.getLogger("my_mod");
+    private static final Logger LOGGER = LoggerFactory.getLogger(ModId.ID);
 
     private ForgeEventBusManager() {
     }

@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "id": "my_mod",
+  "id": "${mod_id}",
   "version": "${mod_version}",
   "name": "${mod_name} (Fabric)",
   "description": "A multi-loader Minecraft mod written in Clojure",
   "authors": ["${mod_authors}"],
   "contact": {
     "homepage": "https://example.com/",
-    "sources": "https://github.com/example/my_mod"
+    "sources": "https://github.com/example/${mod_id}"
   },
   "license": "MIT",
-  "icon": "assets/my_mod/icon.png",
+  "icon": "assets/${mod_id}/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -24,7 +24,7 @@
     ]
   },
   "mixins": [
-    "my_mod.mixins.json"
+    "${mod_id}.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=0.15.0",

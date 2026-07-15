@@ -1,11 +1,12 @@
 (ns cn.li.ac.content.ability.electromaster.body-intensify-fx
   "Client FX for body-intensify."
-  (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(def ^:private activate-sound-id "my_mod:em.intensify_activate")
+(def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
 (def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
 (def ^:private intensify-effect-id "intensify_effect")
 

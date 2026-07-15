@@ -38,7 +38,8 @@
 (defn call-with-resource-location-fn [location-fn f] (f location-fn))
 
 (def ^:private default-resource-namespace
-  (or (System/getenv "MOD_ID") "my_mod"))
+  "Default resource namespace, sourced from cn.li.mcmod.ModId (generated from gradle.properties)."
+  cn.li.mcmod.ModId/ID)
 
 (defn invoke-resource-location
   "Call the injected resource-location function."

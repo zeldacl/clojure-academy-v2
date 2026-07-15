@@ -83,7 +83,7 @@
               (when (and (not @done?) (>= dt (+ anim-length wait-time)))
                 (reset! done? true)
                 (when-let [p (bridge/get-client-player)]
-                  (bridge/send-system-message! p "terminal.my_mod.key_hint" "Left Alt"))
+                  (bridge/send-system-message! p (str "terminal." modid/MOD-ID ".key_hint") "Left Alt"))
                 (bridge/close-screen!)
                 (terminal-actions/open-terminal! player)))
             nil))))

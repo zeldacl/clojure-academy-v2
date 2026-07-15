@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -49,7 +50,7 @@
                :x (:x target) :y (double (or (:y target) 0.0)) :z (:z target)
                :count 16 :speed 0.08 :offset-x 0.9 :offset-y 0.8 :offset-z 0.9})
             (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-              {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.0}))
+              {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0}))
           state*)
 
       :end
@@ -107,8 +108,8 @@
         h2 (vec3/v- (vec3/v+ center halo-side) halo-up)
         h3 (vec3/v- (vec3/v- center halo-side) halo-up)
         alpha (+ 85 (* 35 (+ 1.0 (Math/sin (* 0.25 (double ticks))))))]
-    [(ru/quad-op "my_mod:textures/effects/glow_circle.png" h0 h1 h2 h3 {:r 160 :g 196 :b 255 :a (int alpha)})
-     (ru/quad-op "my_mod:textures/effects/glow_circle.png" p0 p1 p2 p3 {:r 245 :g 250 :b 255 :a 180})]))
+    [(ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png") h0 h1 h2 h3 {:r 160 :g 196 :b 255 :a (int alpha)})
+     (ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png") p0 p1 p2 p3 {:r 245 :g 250 :b 255 :a 180})]))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
   (let [^V3 cam-v (vec3/map->v3 camera-pos)

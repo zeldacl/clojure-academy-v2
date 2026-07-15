@@ -1,40 +1,41 @@
 (ns cn.li.ac.terminal.catalog
-  "Immutable terminal app catalog and pure queries (server-safe metadata only).")
+  "Immutable terminal app catalog and pure queries (server-safe metadata only)."
+  (:require [cn.li.ac.config.modid :as modid]))
 
 (def apps
   [{:id :skill-tree
     :name "Skill Tree"
-    :icon "my_mod:textures/guis/apps/skill_tree/icon.png"
+    :icon (modid/asset-path "textures/guis/apps" "skill_tree/icon.png")
     :description "View and manage your abilities"
     :category :abilities}
    {:id :settings
     :name "Settings"
-    :icon "my_mod:textures/guis/apps/settings/icon.png"
+    :icon (modid/asset-path "textures/guis/apps" "settings/icon.png")
     :description "Configure game settings"
     :category :system
     :pre-installed? true}
    {:id :tutorial
     :name "MisakaCloud"
-    :icon "my_mod:textures/guis/apps/tutorial/icon.png"
-    :icons ["my_mod:textures/guis/apps/tutorial/icon_0.png"
-            "my_mod:textures/guis/apps/tutorial/icon_1.png"
-            "my_mod:textures/guis/apps/tutorial/icon_2.png"]
+    :icon (modid/asset-path "textures/guis/apps" "tutorial/icon.png")
+    :icons [(modid/asset-path "textures/guis/apps" "tutorial/icon_0.png")
+            (modid/asset-path "textures/guis/apps" "tutorial/icon_1.png")
+            (modid/asset-path "textures/guis/apps" "tutorial/icon_2.png")]
     :description "Learn how to use your abilities"
     :category :help
     :pre-installed? true}
    {:id :freq-transmitter
     :name "Frequency Transmitter"
-    :icon "my_mod:textures/guis/apps/freq_transmitter/icon.png"
+    :icon (modid/asset-path "textures/guis/apps" "freq_transmitter/icon.png")
     :description "Manage wireless frequencies"
     :category :wireless}
    {:id :media-player
     :name "Media Player"
-    :icon "my_mod:textures/guis/apps/media_player/icon.png"
+    :icon (modid/asset-path "textures/guis/apps" "media_player/icon.png")
     :description "Browse AcademyCraft media tracks"
     :category :media}
    {:id :about
     :name "About"
-    :icon "my_mod:textures/guis/apps/about/icon.png"
+    :icon (modid/asset-path "textures/guis/apps" "about/icon.png")
     :description "Credits and information"
     :category :help
     :pre-installed? true}])

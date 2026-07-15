@@ -6,6 +6,7 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn build-cp-bar-render-data
@@ -29,8 +30,8 @@
      :percent (double percent)
      :hint-percent (when hint-percent (max 0.0 (double hint-percent)))
      :icon-cutout {:x-offset 84 :w 16}
-     :bg-texture "my_mod:textures/guis/cpbar/back_normal.png"
-     :fg-texture "my_mod:textures/guis/cpbar/cp.png"
+     :bg-texture (modid/asset-path "textures" "guis/cpbar/back_normal.png")
+     :fg-texture (modid/asset-path "textures" "guis/cpbar/cp.png")
      :category-icon (:category-icon model)
      :full-glow? (>= percent 1.0)}))
 
@@ -59,9 +60,9 @@
      :overloaded (not fine)
      :scroll-offset scroll-offset
      :bg-texture (if fine
-                   "my_mod:textures/guis/cpbar/back_normal.png"
-                   "my_mod:textures/guis/cpbar/back_overload.png")
-     :fg-texture "my_mod:textures/guis/cpbar/front_overload.png"}))
+                   (modid/asset-path "textures" "guis/cpbar/back_normal.png")
+                   (modid/asset-path "textures" "guis/cpbar/back_overload.png"))
+     :fg-texture (modid/asset-path "textures" "guis/cpbar/front_overload.png")}))
 
 (defn build-skill-slot-shape
   "Per-slot identity/shape: skill lookup, icon, name, key-label, position,

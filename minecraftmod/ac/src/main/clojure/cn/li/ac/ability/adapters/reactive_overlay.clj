@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.reactive-overlay
   "Reactive HUD overlay — native node tree + signals; no build-client-overlay-plan."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -104,7 +105,7 @@
   (dsl/box {:id :dot :w 6 :h 6 :fill 0x80FFD700}))
 
 (defn- vm-wave-template []
-  (dsl/image {:id :wave :w 16 :h 16 :src "my_mod:textures/effects/glow_circle.png" :alpha 0.0}))
+  (dsl/image {:id :wave :w 16 :h 16 :src (modid/asset-path "textures" "effects/glow_circle.png") :alpha 0.0}))
 
 (defn- debug-line-template []
   (dsl/text {:id :line :text "" :color 0xFFFFFFFF}))
@@ -128,13 +129,13 @@
       (dsl/text {:id :coin-qte-pct :text "" :color 0xFFFFD700}))
     (dsl/progress {:id :cp-bar :x 8 :y 8 :w 100 :h 10
                    :icon-cutout {:x-offset 84 :w 16}
-                   :bg-src "my_mod:textures/guis/cpbar/back_normal.png"
-                   :fg-src "my_mod:textures/guis/cpbar/cp.png"})
+                   :bg-src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
+                   :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")})
     (dsl/progress {:id :overload-bar :x 8 :y 22 :w 100 :h 10
-                   :bg-src "my_mod:textures/guis/cpbar/back_normal.png"
-                   :fg-src "my_mod:textures/guis/cpbar/front_overload.png"})
+                   :bg-src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
+                   :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")})
     (dsl/image {:id :cp-glow :x 8 :y 8 :w 100 :h 10
-                :src "my_mod:textures/guis/cpbar/cp.png" :visible? false})
+                :src (modid/asset-path "textures" "guis/cpbar/cp.png") :visible? false})
     (dsl/text {:id :activation-dot :x (int (/ sw 2)) :y 10 :text "*" :color 0xFF888888})
     (dsl/text {:id :activation-hint :x (+ (int (/ sw 2)) 12) :y 10 :text "" :color 0xFFCCCCCC :visible? false})
     (dsl/text {:id :cp-numbers :x 115 :y 14 :text "" :color 0xFFFFFFFF :visible? false})
@@ -577,8 +578,8 @@
                   overloaded? (boolean (:overloaded ol))]
               (ui/set-prop! r :overload-bar :bg-src
                             (if overloaded?
-                              "my_mod:textures/guis/cpbar/back_overload.png"
-                              "my_mod:textures/guis/cpbar/back_normal.png"))))
+                              (modid/asset-path "textures" "guis/cpbar/back_overload.png")
+                              (modid/asset-path "textures" "guis/cpbar/back_normal.png")))))
           (set-visible! r :cp-glow (and (:activated? snapshot) (:cp-full-glow? snapshot)))
           (update-activation-indicator! r snapshot)
           (update-numbers! r snapshot)

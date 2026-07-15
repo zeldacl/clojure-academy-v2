@@ -22,7 +22,7 @@
     protocol-metadata/get-item-registry-name
     protocol-metadata/get-all-block-ids
     protocol-metadata/get-block-registry-name
-    "my_mod"))
+    (str modid/mod-id)))
 
 (defn create
   [^PackOutput pack-output _exfile-helper]

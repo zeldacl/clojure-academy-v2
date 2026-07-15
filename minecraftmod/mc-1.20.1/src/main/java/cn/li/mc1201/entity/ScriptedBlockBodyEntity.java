@@ -30,8 +30,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     private static final String HOOK_SILBARN = "silbarn";
     private static final int SILBARN_GRAVITY_DELAY_TICKS = 50;
     private static final int SILBARN_DESPAWN_DELAY_TICKS = 10;
-    private static final String SOUND_SILBARN_HEAVY = "my_mod:entity.silbarn_heavy";
-    private static final String SOUND_SILBARN_LIGHT = "my_mod:entity.silbarn_light";
+    private static final String SOUND_SILBARN_HEAVY = cn.li.mcmod.ModId.ID + ":entity.silbarn_heavy";
+    private static final String SOUND_SILBARN_LIGHT = cn.li.mcmod.ModId.ID + ":entity.silbarn_light";
 
     private int silbarnDespawnCountdown = -1;
 
@@ -97,7 +97,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(cn.li.mcmod.ModId.ID, "silbarn_frag"));
         if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
             return;
         }

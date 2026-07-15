@@ -11,7 +11,8 @@
   settlement and the client FX receives a single-ray visual event.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -22,7 +23,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :electron-bomb)
-(def ^:private mdball-entity-id "my_mod:entity_md_ball")
+(def ^:private mdball-entity-id (modid/namespaced-path "entity_md_ball"))
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------

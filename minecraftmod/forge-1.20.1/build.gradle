@@ -121,6 +121,30 @@ tasks.named('processResources').configure {
     // files under build/resources/main makes Windows file locks from Gradle/JDT/old
     // Clojure processes surface as opaque "Failed to clean up stale outputs" errors.
     exclude '**/*.clj', '**/*.cljc'
+
+    // Expand mod_id/mod_name tokens in mods.toml and other metadata files.
+    def expandProperties = [
+        mod_id      : mod_id,
+        mod_name    : mod_name,
+        mod_version : mod_version,
+        mod_authors : mod_authors,
+        mod_description: mod_description
+    ]
+    inputs.properties expandProperties
+
+    filesMatching(['META-INF/mods.toml']) {
+        expand expandProperties
+    }
+
+    // Rename mixin config file: mixins.my_mod.json → mixins.${mod_id}.json
+    rename '^mixins\\.my_mod\\.json$', "mixins.${mod_id}.json"
+
+    // Replace my_mod: prefix in XML/JSON resource files with the current mod_id.
+    filesMatching(['**/*.xml', '**/*.json']) {
+        filter { String line ->
+            line.replace('my_mod:', mod_id + ':')
+        }
+    }
 }
 
 dependencies {

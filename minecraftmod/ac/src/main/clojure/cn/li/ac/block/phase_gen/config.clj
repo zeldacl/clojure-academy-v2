@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.phase-gen.config
   "Phase Generator configuration aligned with AcademyCraft TilePhaseGen."
-  (:require [cn.li.ac.config.common :as config-common]))
+  (:require [cn.li.ac.config.common :as config-common]
+            [cn.li.ac.config.modid :as modid]))
 
 ;; Energy generation parity:
 ;; CONSUME_PER_TICK = 100 mB, GEN_PER_MB = 0.5 IF
@@ -90,6 +91,6 @@
 (def total-slots 3)
 
 ;; Matter unit mapping reused by parity logic.
-(def matter-unit-item-id "my_mod:matter_unit")
+(def matter-unit-item-id (modid/namespaced-path "matter_unit"))
 (def matter-unit-none-meta 0)
 (def matter-unit-phase-liquid-meta 1)

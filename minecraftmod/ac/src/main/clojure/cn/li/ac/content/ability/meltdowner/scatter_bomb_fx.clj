@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.scatter-bomb-fx
   "Client FX for ScatterBomb: ball spawn + scatter beam flashes."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -46,7 +47,7 @@
       :start
       (do
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.sb_charge" :volume 0.5 :pitch 1.0})
+          {:type :sound :sound-id (modid/namespaced-path "md.sb_charge") :volume 0.5 :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :balls 0})))
       :ball
@@ -81,7 +82,7 @@
           (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
             {:effect-id "entity_md_ray_small"}))
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.4 :pitch 1.2})
+          {:type :sound :sound-id (modid/namespaced-path "md.eb_explode") :volume 0.4 :pitch 1.2})
         store*)
       :end
       (update store* :effect-state dissoc owner-key*)

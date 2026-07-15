@@ -15,12 +15,11 @@
   original AcademyCraft TutorialInit.java — we preserve that decision by NOT
   including it here.
 
-  Pattern follows catalog.clj `apps` vector style.")
-
-(def ^:private mod-prefix "my_mod:")
+  Pattern follows catalog.clj `apps` vector style."
+  (:require [cn.li.ac.config.modid :as modid]))
 
 (defn- item [suffix]
-  (str mod-prefix suffix))
+  (modid/namespaced-path suffix))
 
 ;; --- Tutorial entries ---
 

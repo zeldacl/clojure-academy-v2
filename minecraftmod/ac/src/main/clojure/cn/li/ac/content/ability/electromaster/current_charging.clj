@@ -4,7 +4,8 @@
   Pattern: :hold-channel
   Cost: overload lerp(65,48) on down; CP lerp(3,7)/tick while charging
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -17,8 +18,8 @@
 
 (def-skill-config-ops :current-charging)
 (def ^:private current-charging-skill-id :current-charging)
-(def ^:private surround-arc-entity-id "my_mod:entity_surround_arc")
-(def ^:private charging-arc-entity-id "my_mod:entity_charging_arc")
+(def ^:private surround-arc-entity-id (modid/namespaced-path "entity_surround_arc"))
+(def ^:private charging-arc-entity-id (modid/namespaced-path "entity_charging_arc"))
 
 (defn- targeting-range []
   (cfg-double :targeting.range))
@@ -168,7 +169,7 @@
     (when player
       (entity/player-spawn-entity-by-id!
        player
-       (if is-item "my_mod:entity_surround_arc_thin" surround-arc-entity-id)
+       (if is-item (modid/namespaced-path "entity_surround_arc_thin") surround-arc-entity-id)
        0.0))
     (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
               (fx-payload player-id {:is-item is-item}))))

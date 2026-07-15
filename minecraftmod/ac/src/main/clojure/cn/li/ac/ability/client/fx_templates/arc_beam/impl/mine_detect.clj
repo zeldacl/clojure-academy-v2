@@ -8,13 +8,14 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
 (def ^:private mineview-texture
-  "my_mod:textures/effects/mineview.png")
+  (modid/namespaced-path "textures/effects/mineview.png"))
 
 (def ^:private default-life-ticks 100)
 (def ^:private default-rescan-interval 5)
@@ -128,7 +129,7 @@
   [owner-key ctx-id channel {:keys [range advanced? life-ticks rescan-interval source-player-id world-id]}]
   (client-sounds/queue-current-sound-effect!
     {:type :sound
-     :sound-id "my_mod:em.minedetect"
+     :sound-id (modid/namespaced-path "em.minedetect")
      :volume 0.8
      :pitch 1.0})
   {:owner-key owner-key

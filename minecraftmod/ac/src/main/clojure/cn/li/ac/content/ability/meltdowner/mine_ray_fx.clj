@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-fx
   "Client FX for all mine-ray variants: beam glow + block progress indicator."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -11,9 +12,9 @@
 (defn- start-sound-id
   [variant]
   (case variant
-    :expert "my_mod:md.mine_expert_startup"
-    :luck "my_mod:md.mine_luck_startup"
-    "my_mod:md.mine_basic_startup"))
+    :expert (modid/namespaced-path "md.mine_expert_startup")
+    :luck (modid/namespaced-path "md.mine_luck_startup")
+    (modid/namespaced-path "md.mine_basic_startup")))
 
 (defn default-mine-ray-fx-runtime-state
   []

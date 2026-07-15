@@ -2,7 +2,8 @@
   "Component items - building blocks for Wireless Matrix system
 
   These items are used to construct matrix cores, nodes, and other wireless components."
-  (:require [cn.li.mcmod.item.dsl :as idsl]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -14,7 +15,7 @@
 ;; Silbarn - thrown marker entity (matches original ItemSilbarn behavior)
 ;; ============================================================================
 
-(def ^:private silbarn-entity-id "my_mod:entity_silbarn")
+(def ^:private silbarn-entity-id (modid/namespaced-path "entity_silbarn"))
 
 (defn- play-silbarn-throw-sound!
   "Matches original ItemSilbarn#onItemRightClick: egg-throw sound, volume 0.5,

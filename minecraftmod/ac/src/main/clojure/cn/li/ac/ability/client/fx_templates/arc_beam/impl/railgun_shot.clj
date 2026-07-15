@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -118,7 +119,7 @@
   (let [elapsed-ms (if charge-start-ms (max 0 (- (* (double game-ticks) 50.0) (double charge-start-ms))) 0)
         ;; 40 frames at 40ms each = 1.6s total animation
         frame (min 39 (int (/ elapsed-ms 40.0)))
-        texture-path (str "my_mod:textures/effects/arc_burst/" frame ".png")
+        texture-path (str (modid/namespaced-path "textures/effects/arc_burst/") frame ".png")
         alpha (if coin-active? 1.0 0.8)
         ;; Billboard quad: 0.6x0.6 square facing camera, centered at hand-center
         ;; Original uses scale 0.4 with offset (0.26, -0.15, -0.24)

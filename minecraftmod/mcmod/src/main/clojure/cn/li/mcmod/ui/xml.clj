@@ -5,6 +5,7 @@
   (:refer-clojure :exclude [parse-double])
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.ui.spec :as ui-spec])
   (:import [javax.xml.parsers SAXParserFactory SAXParser]
            [org.xml.sax ContentHandler Attributes InputSource]
@@ -254,7 +255,7 @@
   [resource-path]
   (let [path (str/replace resource-path #"^[^:]+:" "")
         res (or (io/resource path)
-                (io/resource (str "assets/my_mod/" path)))]
+                (io/resource (str "assets/" modid/mod-id "/" path)))]
     (when-not res
       (throw (ex-info (str "XML resource not found: " resource-path) {:path path})))
     (let [root (parse-xml (io/input-stream res))

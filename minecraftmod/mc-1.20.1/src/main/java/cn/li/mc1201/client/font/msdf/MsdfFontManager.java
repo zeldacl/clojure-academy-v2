@@ -1,5 +1,6 @@
 package cn.li.mc1201.client.font.msdf;
 
+import cn.li.mcmod.ModId;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
@@ -22,7 +23,7 @@ public final class MsdfFontManager {
     private static final Logger LOGGER = LogManager.getLogger();
 
     public static final ResourceLocation SHADOW_FONT_ID =
-            new ResourceLocation("my_mod", "msdf_shadow");
+            new ResourceLocation(ModId.ID, "msdf_shadow");
 
     public static final float DESIGN_PIXEL_HEIGHT = 32.0f;
     public static final float CGUI_BASE_HEIGHT = 32.0f;

@@ -1,12 +1,14 @@
 (ns cn.li.mcmod.config
-  "Mod-id and resource helper utilities shared across platforms.")
+  "Mod-id and resource helper utilities shared across platforms.
+   The mod-id value is sourced from cn.li.mcmod.ModId/ID,
+   which is generated at build time from gradle.properties mod_id.")
 
 (require '[cn.li.mcmod.platform.resource :as resource])
 
 (def mod-id
   "Primary mod identifier used by resource locations.
-   Default: \"my_mod\" (can be overridden via MOD_ID env var)."
-  (or (System/getenv "MOD_ID") "my_mod"))
+   Sourced from cn.li.mcmod.ModId (generated from gradle.properties)."
+  cn.li.mcmod.ModId/ID)
 
 (defn resource-location
   "Create a platform-specific resource identifier.

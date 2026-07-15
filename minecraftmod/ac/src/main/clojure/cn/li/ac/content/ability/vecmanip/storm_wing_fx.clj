@@ -1,13 +1,14 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-fx
   "Client FX for Storm Wing: tornado ring visuals + dirt particles."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]))
 
 (def ^:private storm-wing-effect-id :storm-wing)
-(def ^:private loop-sound "my_mod:vecmanip.storm_wing")
+(def ^:private loop-sound (modid/namespaced-path "vecmanip.storm_wing"))
 
 (defn default-storm-wing-fx-runtime-state
   []

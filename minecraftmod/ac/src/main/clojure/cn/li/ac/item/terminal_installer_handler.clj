@@ -1,7 +1,8 @@
 (ns cn.li.ac.item.terminal-installer-handler
   "Server-driven terminal installer right-click handler matching original
    ItemTerminalInstaller.onItemRightClick (AcademyCraft Forge 1.12)."
-  (:require [cn.li.ac.ability.util.uuid :as uuid]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.ac.terminal.player :as terminal-player]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
@@ -22,7 +23,7 @@
     (if installed?
       ;; Already installed: always consume (matching original SUCCESS)
       (do
-        (player-feedback/send-chat-message! uuid-str "terminal.my_mod.alrdy_installed" [] true)
+        (player-feedback/send-chat-message! uuid-str (str "terminal." modid/MOD-ID ".alrdy_installed") [] true)
         {:consume? true})
       ;; Not installed: install, trigger achievement, push effect to client
       (do

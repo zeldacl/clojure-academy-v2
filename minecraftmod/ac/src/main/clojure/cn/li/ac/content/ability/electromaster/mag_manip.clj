@@ -5,7 +5,8 @@
   Cost:     CP lerp(140,270) / overload lerp(35,20) - only charged when holding block nearby
   Cooldown: manual, lerp(60,40) ticks by exp
   Exp:      +0.005 on successful throw"
-  (:require [clojure.string :as str]
+  (:require
+            [cn.li.ac.config.modid :as modid] [clojure.string :as str]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -191,7 +192,7 @@
                             :focus focus})
     ;; Spawn visible block entity (matching original MagManipEntityBlock)
     (when-let [player-id (get-in (ctx-skill/get-context ctx-id) [:player-uuid])]
-      (entity/player-spawn-entity-by-id! player-id "my_mod:entity_magmanip_block_body" 0.0))
+      (entity/player-spawn-entity-by-id! player-id (modid/namespaced-path "entity_magmanip_block_body") 0.0))
     (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
               {:focus focus
                :block-id (:block-id held-block)})))

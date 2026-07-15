@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-fx
   "Client FX for ElectronMissile: orbiting sparks + impact flash per fired ball."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -60,7 +61,7 @@
       :start
       (do
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:md.em_start" :volume 0.5 :pitch 1.0})
+          {:type :sound :sound-id (modid/namespaced-path "md.em_start") :volume 0.5 :pitch 1.0})
         (assoc-in store* [:charge-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :balls 0})))
       :update
@@ -90,7 +91,7 @@
 
                       :else store*)]
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id "my_mod:md.em_fire" :volume 0.35 :pitch (+ 0.85 (rand 0.3))})
+          {:type :sound :sound-id (modid/namespaced-path "md.em_fire") :volume 0.35 :pitch (+ 0.85 (rand 0.3))})
         store*)
       :end
       (-> store*

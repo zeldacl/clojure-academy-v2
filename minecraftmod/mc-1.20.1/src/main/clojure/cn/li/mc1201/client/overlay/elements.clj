@@ -2,6 +2,7 @@
   "Shared overlay element renderer for legacy plan-based tests.
    Not used by reactive overlay."
   (:require [clojure.string :as str]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]
@@ -17,8 +18,8 @@
   (when (and path (not (str/blank? path)))
     (cond
       (str/includes? path ":") path
-      (str/starts-with? path "textures/") (str "my_mod:" path)
-      :else (str "my_mod:textures/" path))))
+      (str/starts-with? path "textures/") (str modid/mod-id ":" path)
+      :else (str modid/mod-id ":textures/" path))))
 
 (defn- argb-map [{:keys [a r g b]}]
   (bit-or (bit-shift-left (int (or a 255)) 24)

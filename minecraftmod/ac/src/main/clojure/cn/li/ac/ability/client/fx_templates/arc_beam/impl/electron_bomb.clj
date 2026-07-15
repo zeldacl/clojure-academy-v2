@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -28,7 +29,7 @@
 			:spawn
 			(do
 				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-					{:type :sound :sound-id "my_mod:md.eb_spawn" :volume 0.6 :pitch 1.2})
+					{:type :sound :sound-id (modid/namespaced-path "md.eb_spawn") :volume 0.6 :pitch 1.2})
 				(assoc-in store* [:effect-state owner-key*]
 									(merge base-meta
 												 {:active? true
@@ -60,7 +61,7 @@
 						 :count 8 :speed 0.2
 						 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
 				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-					{:type :sound :sound-id "my_mod:md.eb_explode" :volume 0.8 :pitch 1.0})
+					{:type :sound :sound-id (modid/namespaced-path "md.eb_explode") :volume 0.8 :pitch 1.0})
 				(update store* :effect-state dissoc owner-key*))
 
 			:end

@@ -29,7 +29,7 @@
       (if (str/includes? s ":")
         (let [idx (.indexOf s ":")]
           (ResourceLocation. (subs s 0 idx) (subs s (inc idx))))
-        (ResourceLocation. (or modid-config/mod-id "my_mod") s)))))
+        (ResourceLocation. modid-config/mod-id s)))))
 
 (defn reset-texture-registry-for-test!
   "Clear all registered textures. Intended for tests."

@@ -1,15 +1,15 @@
 (ns cn.li.ac.config.modid
-  "Centralized mod-id configuration for easy portability across projects.
-   Change MOD-ID here to update mod identification across all modules."
+  "AC-layer mod-id configuration. Delegates to cn.li.mcmod.ModId (generated
+   from gradle.properties). Change mod_id in gradle.properties and rebuild."
   (:require [cn.li.mcmod.config :as mcmod-config]
             [cn.li.mcmod.platform.resource :as platform-resource]
             [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:const MOD-ID
   "The primary mod identifier used across all resource locations, registries,
-   and mod identification. Change this value to adapt the codebase for
-   different mod projects."
-  (or (System/getenv "MOD_ID") "my_mod"))
+   and mod identification. Sourced from cn.li.mcmod.ModId (generated from gradle.properties).
+   Change mod_id in gradle.properties and rebuild to update."
+  cn.li.mcmod.ModId/ID)
 
 (defn install-modid!
   "Install AC's mod id into the shared mcmod config namespace.

@@ -17,7 +17,8 @@
       newly activated.
 
   All functions are pure — no platform imports."
-  (:require [cn.li.ac.tutorial.model :as model]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.tutorial.model :as model]
             [clojure.string :as str]))
 
 ;; ============================================================================
@@ -35,7 +36,7 @@
   "Convert an app keyword id to its installer item id string.
   E.g. :skill-tree → \"my_mod:app_skill_tree\""
   [app-id]
-  (str "my_mod:app_" (str/replace (name app-id) "-" "_")))
+  (modid/namespaced-path (str "app_" (str/replace (name app-id) "-" "_"))))
 
 (defn extend-terminal-conditions
   "Add item-obtained conditions for non-pre-installed terminal apps to

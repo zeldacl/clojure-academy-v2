@@ -8,7 +8,8 @@
   Delegates ore/liquid descriptor storage to the platform-neutral
   cn.li.mcmod.worldgen registry. Content modules call mcmod.worldgen
   functions directly; this namespace reads them at datagen time."
-  (:require [cn.li.mcmod.worldgen :as mcmod-worldgen]))
+  (:require [cn.li.mcmod.config :as modid]
+            [cn.li.mcmod.worldgen :as mcmod-worldgen]))
 
 ;; ============================================================================
 ;; Content-owned worldgen registries (delegated to mcmod)
@@ -41,14 +42,14 @@
              "discard_chance_on_air_exposure" 0.0
              "targets" [{"target" {"predicate_type" "minecraft:tag_match"
                                    "tag" "minecraft:stone_ore_replaceables"}
-                         "state" {"Name" (str "my_mod:" id)}}
+                         "state" {"Name" (str modid/mod-id ":" id)}}
                         {"target" {"predicate_type" "minecraft:tag_match"
                                    "tag" "minecraft:deepslate_ore_replaceables"}
-                         "state" {"Name" (str "my_mod:" id)}}]}})
+                         "state" {"Name" (str modid/mod-id ":" id)}}]}})
 
 (defn- ore-placed-feature-data
   [{:keys [id count]}]
-  {"feature" (str "my_mod:" id)
+  {"feature" (str modid/mod-id ":" id)
    "placement" [{"type" "minecraft:count" "count" count}
                 {"type" "minecraft:in_square"}
                 {"type" "minecraft:height_range"
@@ -59,12 +60,12 @@
 
 (defn- pool-configured-feature-data
   [_def]
-  {"type" "my_mod:configurable_pool"
+  {"type" (str modid/mod-id ":configurable_pool")
    "config" {}})
 
 (defn- pool-placed-feature-data
   [{:keys [id rarity min-y max-y]}]
-  {"feature" (str "my_mod:" id)
+  {"feature" (str modid/mod-id ":" id)
    "placement" [{"type" "minecraft:rarity_filter" "chance" rarity}
                 {"type" "minecraft:in_square"}
                 {"type" "minecraft:height_range"
@@ -77,7 +78,7 @@
   [feature-id step]
   {"type" "forge:add_features"
    "biomes" "#minecraft:is_overworld"
-   "features" (str "my_mod:" feature-id)
+   "features" (str modid/mod-id ":" feature-id)
    "step" step})
 
 ;; ============================================================================

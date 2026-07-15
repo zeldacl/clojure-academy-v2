@@ -1,5 +1,6 @@
 package cn.li.mc1201.runtime;
 
+import cn.li.mcmod.ModId;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import net.minecraft.core.particles.ParticleOptions;
 import net.minecraft.core.particles.ParticleType;
@@ -22,7 +23,7 @@ public final class ParticleEntityShared {
             try {
                 ResourceLocation id = particleType.contains(":")
                         ? new ResourceLocation(particleType)
-                        : new ResourceLocation("my_mod", particleType.replace('-', '_'));
+                        : new ResourceLocation(ModId.ID, particleType.replace('-', '_'));
                 ParticleType<?> dynamicType = BuiltInRegistries.PARTICLE_TYPE.get(id);
                 if (dynamicType instanceof ParticleOptions options) {
                     return options;

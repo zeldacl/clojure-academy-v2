@@ -4,6 +4,7 @@
   Replaces cn.lambdalib2.render.obj runtime dependency with data-first API."
   (:require [clojure.string :as str]
             [clojure.java.io :as io]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.parse :as parse]
             [cn.li.mcmod.client.render.buffer :as buffer]))
 
@@ -603,7 +604,7 @@
 
 (defn- merge-mtllibs [asset-parent mtllib-names]
   (reduce (fn [acc mtl]
-            (let [path (str "assets/my_mod/" asset-parent mtl)
+            (let [path (str "assets/" modid/mod-id "/" asset-parent mtl)
                   txt (read-resource-slurp-optional path)]
               (if txt (merge acc (parse-mtl txt asset-parent)) acc)))
           {}
@@ -1107,7 +1108,7 @@
   ([asset-path opts]
    (let [slash (.lastIndexOf ^String asset-path (int \/))
          parent (if (pos? slash) (subs asset-path 0 (inc slash)) "")]
-     (parse-obj (read-obj-data (str "assets/my_mod/" asset-path))
+     (parse-obj (read-obj-data (str "assets/" modid/mod-id "/" asset-path))
                 (merge {:asset-parent parent} opts)))))
 
 (def ^:private default-mtl-key ::default-mtl)

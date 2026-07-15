@@ -8,12 +8,13 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
 
-(def ^:private hold-loop-sound "my_mod:em.lf_loop")
-(def ^:private perform-sound "my_mod:em.mag_manip")
+(def ^:private hold-loop-sound (modid/namespaced-path "em.lf_loop"))
+(def ^:private perform-sound (modid/namespaced-path "em.mag_manip"))
 
 
 (def ^:private default-state

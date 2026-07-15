@@ -14,7 +14,9 @@
           :properties {:gen_speed speed-fn :status status-fn}
           :wireless? true
           :wireless-role :generator}))"
-  (:require [cn.li.ac.gui.tech-ui-tabs-reactive :as tech-tabs]
+  (:require
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.gui.tech-ui-tabs-reactive :as tech-tabs]
             [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
             [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -22,7 +24,6 @@
             [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.ui.node INode]))
 
@@ -97,8 +98,8 @@
               {:kind :nine-slice
                :props {:id :info-area-bg :x 179.0 :y 5.0 :w 100.0 :h 177.0
                        :margin 4.0
-                       :src "my_mod:textures/guis/blend_quad"
-                       :line-tex "my_mod:textures/guis/line"}}
+                       :src (modid/asset-path "textures" "guis/blend_quad")
+                       :line-tex (modid/asset-path "textures" "guis/line")}}
               {:kind :group
                :props {:id :info-area :x 179.0 :y 5.0 :w 100.0 :h 177.0 :clip? true}}]})
 

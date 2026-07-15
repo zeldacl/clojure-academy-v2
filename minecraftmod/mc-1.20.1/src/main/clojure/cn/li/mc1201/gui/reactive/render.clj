@@ -5,6 +5,7 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.gui.reactive.clock :as clock]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
@@ -547,14 +548,14 @@
 (defn- bake-glow-line! [^INode node]
   (when (nil? (.getOSlot node 0))
     (.setOSlot node 0
-                {:lu (resolve-rl "my_mod:textures/guis/glow_lu")
-                 :ru (resolve-rl "my_mod:textures/guis/glow_ru")
-                 :ld (resolve-rl "my_mod:textures/guis/glow_ld")
-                 :rd (resolve-rl "my_mod:textures/guis/glow_rd")
-                 :l  (resolve-rl "my_mod:textures/guis/glow_left")
-                 :r  (resolve-rl "my_mod:textures/guis/glow_right")
-                 :u  (resolve-rl "my_mod:textures/guis/glow_up")
-                 :d  (resolve-rl "my_mod:textures/guis/glow_down")})))
+                {:lu (resolve-rl (modid/asset-path "textures" "guis/glow_lu"))
+                 :ru (resolve-rl (modid/asset-path "textures" "guis/glow_ru"))
+                 :ld (resolve-rl (modid/asset-path "textures" "guis/glow_ld"))
+                 :rd (resolve-rl (modid/asset-path "textures" "guis/glow_rd"))
+                 :l  (resolve-rl (modid/asset-path "textures" "guis/glow_left"))
+                 :r  (resolve-rl (modid/asset-path "textures" "guis/glow_right"))
+                 :u  (resolve-rl (modid/asset-path "textures" "guis/glow_up"))
+                 :d  (resolve-rl (modid/asset-path "textures" "guis/glow_down"))})))
 
 (defn- glow-quad! [^Matrix4f pm ^BufferBuilder bb x0 y0 x1 y1 u0 v0 u1 v1]
   (.vertex bb pm (float x0) (float y1) 0.0) (.uv bb (float u0) (float v1)) (.endVertex bb)
@@ -604,7 +605,7 @@
           (glow-quad! pm bb gx0 gy1 gx1 gly1 0.0 0.0 1.0 1.0)
           (BufferUploader/drawWithShader (.end bb))
           ;; center bright line
-          (RenderSystem/setShaderTexture 0 (resolve-rl "my_mod:textures/guis/line"))
+          (RenderSystem/setShaderTexture 0 (resolve-rl (modid/asset-path "textures" "guis/line")))
           (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
           (glow-quad! pm bb gx0 (- gy hw) gx1 (+ gy hw) 0.0 0.0 1.0 1.0)
           (BufferUploader/drawWithShader (.end bb)))))))

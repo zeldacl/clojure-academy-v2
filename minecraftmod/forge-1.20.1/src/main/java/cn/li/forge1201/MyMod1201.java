@@ -1,5 +1,6 @@
 package cn.li.forge1201;
 
+import cn.li.mcmod.ModId;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Var;
@@ -11,7 +12,7 @@ import net.minecraftforge.fml.common.Mod;
  */
 @Mod(MyMod1201.MODID)
 public class MyMod1201 {
-    public static final String MODID = "my_mod";
+    public static final String MODID = ModId.ID;
 
     public MyMod1201() {
         // Load and instantiate the Clojure mod class for both normal run and datagen.

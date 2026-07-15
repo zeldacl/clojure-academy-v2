@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.imag-fusor.config
-  "Imaginary Fusor configuration - AcademyCraft parity values")
+  "Imaginary Fusor configuration - AcademyCraft parity values"
+  (:require [cn.li.ac.config.modid :as modid]))
 
 ;; Energy consumption
 (def energy-per-tick
@@ -58,7 +59,7 @@
 
 (def matter-unit-item-id
   "Registry id of matter unit item used by old AcademyCraft logic."
-  "my_mod:matter_unit")
+  (modid/namespaced-path "matter_unit"))
 
 (def matter-unit-none-meta
   "MatterUnit damage/meta for MAT_NONE in original AC."

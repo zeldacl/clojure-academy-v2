@@ -1,11 +1,12 @@
 (ns cn.li.ac.content.ability.electromaster.railgun
-  "Railgun skill ù?coin-QTE + iron-item charge mechanic.
+  "Railgun skill ÔøΩ?coin-QTE + iron-item charge mechanic.
 
   Complex skill using the escape-hatch pattern: fn hooks for the custom
   coin-QTE / item-charge logic; :beam op (effect.beam) for the actual shot.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -36,7 +37,7 @@
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
 (defn- railgun-exp-gain [_hit? reflection-hit?]
-  ;; Original: hitEntity only set on reflection hit ù?0.01; otherwise 0.005
+  ;; Original: hitEntity only set on reflection hit ÔøΩ?0.01; otherwise 0.005
   (if reflection-hit?
     (cfg-double :progression.exp-reflection-hit)   ;; 0.01 reflection hit only
     (cfg-double :progression.exp-hit)))             ;; 0.005 normal hit or miss
@@ -67,7 +68,7 @@
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
   If the player is currently in item-charge mode, that charge is aborted first
-  (mirrors original informThrowCoin ù?onKeyAbort() behavior)."
+  (mirrors original informThrowCoin ÔøΩ?onKeyAbort() behavior)."
   [player-id payload]
   (let [_now-ms (long (or (:timestamp-ms payload) (System/currentTimeMillis)))]
     ;; Abort any in-progress item charge so the coin QTE takes priority.
@@ -210,7 +211,7 @@
           (world-effects/play-sound!*
                                      world-id
                                      (:x eye) (:y eye) (:z eye)
-                                     "my_mod:em.railgun"
+                                     (modid/namespaced-path "em.railgun")
                                      :ambient
                                      0.5
                                      1.0))
@@ -401,9 +402,9 @@
 (defn init!
   []
   (item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
-  (item-actions/register-item-action! "my_mod:coin" :railgun-coin-throw)
+  (item-actions/register-item-action! (modid/namespaced-path "coin") :railgun-coin-throw)
   (item-actions/register-action-handler! :railgun-coin-throw register-coin-throw!)
   (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
-  (item-actions/register-item-entity-spawn! "my_mod:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
+  (item-actions/register-item-entity-spawn! (modid/namespaced-path "coin") {:entity-id "entity_coin_throwing" :speed 0.0})
   nil)
 

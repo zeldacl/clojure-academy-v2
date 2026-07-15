@@ -8,13 +8,14 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
 
-(def ^:private sound-id "my_mod:vecmanip.blood_retro")
+(def ^:private sound-id (modid/namespaced-path "vecmanip.blood_retro"))
 (def ^:private splash-life 10)
 (def ^:private spray-life 1200)
 
@@ -137,7 +138,7 @@
 				p3 (vec3/v- (vec3/v- center side) lift)
 				age (long (- (long (or max-ttl splash-life)) (long (or ttl splash-life))))
 				frame (max 0 (min 9 age))]
-		[(ru/quad-op (str "my_mod:textures/effects/blood_splash/" frame ".png")
+		[(ru/quad-op (str (modid/namespaced-path "textures/effects/blood_splash/") frame ".png")
 								 p0 p1 p2 p3
 								 {:r 213 :g 29 :b 29 :a 200})]))
 
@@ -171,7 +172,7 @@
 				life (if (and ttl (< ttl 60)) (/ (double ttl) 60.0) 1.0)
 				tex-folder (if (contains? #{:up :down} face) "wall" "grnd")
 				tex-index (max 0 (min 2 (long (or texture-id 0))))]
-		[(ru/quad-op (str "my_mod:textures/effects/blood_spray/" tex-folder "/" tex-index ".png")
+		[(ru/quad-op (str (modid/namespaced-path "textures/effects/blood_spray/") tex-folder "/" tex-index ".png")
 								 p0 p1 p2 p3
 								 {:r 255 :g 255 :b 255 :a (int (+ 40 (* 180 life)))})]))
 

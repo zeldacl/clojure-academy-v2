@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.entities.all
   "Content entrypoint for AC entity declarations."
-  (:require [cn.li.mcmod.entity.dsl :as edsl]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.runtime.install :as install]))
 
 (defn init-entities!
@@ -17,7 +18,7 @@
          :height 0.5
          :client-tracking-range 64
          :update-interval 1
-         :properties {:projectile {:default-item-id "my_mod:mag_hook"
+         :properties {:projectile {:default-item-id (modid/namespaced-path "mag_hook")
                                    :gravity 0.05
                                    :damage 4.0
                                    :drop-item-on-discard? true

@@ -9,6 +9,7 @@
   (:require [clojure.string :as str]
             [cn.li.ac.ability.config-common :as ability-config-common]
             [cn.li.ac.config.common :as config-common]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.util.log :as log]))
 
@@ -50,7 +51,7 @@
     "minecraft:minecart"
     "minecraft:spawner_minecart"
     "minecraft:tnt_minecart"
-    "my_mod:entity_mag_hook"]
+    (modid/namespaced-path "entity_mag_hook")]
 
    :init-cp [1800.0 2800.0 4000.0 5800.0 8000.0]
    :add-cp [900.0 1000.0 1500.0 1700.0 12000.0]

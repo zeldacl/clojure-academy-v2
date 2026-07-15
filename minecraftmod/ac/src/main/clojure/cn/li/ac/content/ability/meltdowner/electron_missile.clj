@@ -16,6 +16,7 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -29,7 +30,7 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :electron-missile)
-(def ^:private mdball-entity-id "my_mod:entity_md_ball")
+(def ^:private mdball-entity-id (modid/namespaced-path "entity_md_ball"))
 (def ^:private electron-missile-skill-id :electron-missile)
 
 (defn- missile-filter-self

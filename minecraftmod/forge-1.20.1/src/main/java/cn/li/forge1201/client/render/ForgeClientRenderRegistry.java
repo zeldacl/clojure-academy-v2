@@ -117,7 +117,7 @@ public final class ForgeClientRenderRegistry {
     }
 
     public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation("my_mod", "silbarn_frag"));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(cn.li.mcmod.ModId.ID, "silbarn_frag"));
         if (fragTypeRaw instanceof SimpleParticleType spt) {
             event.registerSpriteSet(spt, SilbarnFragParticle.Provider::new);
         }

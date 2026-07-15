@@ -5,7 +5,8 @@
   directly in player persistent NBT (like @SerializeIncluded), completely
   independent of the runtime store lifecycle.  This guarantees reliable
   persistence because Minecraft handles player NBT save/load natively."
-  (:require [cn.li.ac.ability.util.uuid :as uuid]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.tutorial.config :as tut-config]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
@@ -14,7 +15,7 @@
             [cn.li.mcmod.util.log :as log])
   )
 
-(def tutorial-item-id "my_mod:tutorial")
+(def tutorial-item-id (modid/namespaced-path "tutorial"))
 (def ^:private nbt-key "academy_tutorial_acquired")
 
 (defn- tutorial-acquired-in-nbt?

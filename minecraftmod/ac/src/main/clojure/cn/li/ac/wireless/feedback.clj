@@ -3,7 +3,8 @@
 
   Pure functions — callers are responsible for attaching :messages to
   handler response maps and for client-side toast rendering."
-  (:require [cn.li.mcmod.i18n :as i18n]))
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.i18n :as i18n]))
 
 
 ;; ============================================================================
@@ -13,45 +14,45 @@
 (def ^:private reason->key
   "Maps [domain reason] to translation keys from ac_content_translations.clj.
   Keys follow the original AcademyCraft pattern: app.my_mod.freq_transmitter.eN"
-  {:node    {:password  "app.my_mod.freq_transmitter.e1"
-             :capacity  "app.my_mod.freq_transmitter.e2"
-             :range     "app.my_mod.freq_transmitter.e2"
-             :aborted   "app.my_mod.freq_transmitter.e4"
-             :success   "app.my_mod.freq_transmitter.e6"
-             :pending   "app.my_mod.freq_transmitter.e5"}
-   :matrix  {:not-initialized "app.my_mod.freq_transmitter.e0"
-             :password        "app.my_mod.freq_transmitter.e1"
-             :ssid-exists     "app.my_mod.freq_transmitter.e2"
-             :ssid-taken      "app.my_mod.freq_transmitter.e2"
-             :capacity        "app.my_mod.freq_transmitter.e2"
-             :not-found       "app.my_mod.freq_transmitter.e0"
-             :aborted         "app.my_mod.freq_transmitter.e4"
-             :success         "app.my_mod.freq_transmitter.e6"}
-   :generator {:password      "app.my_mod.freq_transmitter.e1"
-               :capacity      "app.my_mod.freq_transmitter.e2"
-               :range         "app.my_mod.freq_transmitter.e2"
-               :not-a-generator "app.my_mod.freq_transmitter.e0"
-               :aborted       "app.my_mod.freq_transmitter.e4"
-               :success       "app.my_mod.freq_transmitter.e6"
-               :pending       "app.my_mod.freq_transmitter.e5"}
-   :developer {:password     "app.my_mod.freq_transmitter.e1"
-               :capacity     "app.my_mod.freq_transmitter.e2"
-               :range        "app.my_mod.freq_transmitter.e2"
-               :not-found    "app.my_mod.freq_transmitter.e0"
-               :not-a-node   "app.my_mod.freq_transmitter.e0"
-               :not-a-receiver "app.my_mod.freq_transmitter.e0"
-               :not-a-generator "app.my_mod.freq_transmitter.e0"
-               :aborted      "app.my_mod.freq_transmitter.e4"
-               :success      "app.my_mod.freq_transmitter.e6"
-               :pending      "app.my_mod.freq_transmitter.e5"}
-   :ability-interferer {:password      "app.my_mod.freq_transmitter.e1"
-                        :capacity      "app.my_mod.freq_transmitter.e2"
-                        :range         "app.my_mod.freq_transmitter.e2"
-                        :not-a-node    "app.my_mod.freq_transmitter.e0"
-                        :not-a-receiver "app.my_mod.freq_transmitter.e0"
-                        :aborted       "app.my_mod.freq_transmitter.e4"
-                        :success       "app.my_mod.freq_transmitter.e6"
-                        :pending       "app.my_mod.freq_transmitter.e5"}})
+  {:node    {:password  (str "app." modid/MOD-ID ".freq_transmitter.e1")
+             :capacity  (str "app." modid/MOD-ID ".freq_transmitter.e2")
+             :range     (str "app." modid/MOD-ID ".freq_transmitter.e2")
+             :aborted   (str "app." modid/MOD-ID ".freq_transmitter.e4")
+             :success   (str "app." modid/MOD-ID ".freq_transmitter.e6")
+             :pending   (str "app." modid/MOD-ID ".freq_transmitter.e5")}
+   :matrix  {:not-initialized (str "app." modid/MOD-ID ".freq_transmitter.e0")
+             :password        (str "app." modid/MOD-ID ".freq_transmitter.e1")
+             :ssid-exists     (str "app." modid/MOD-ID ".freq_transmitter.e2")
+             :ssid-taken      (str "app." modid/MOD-ID ".freq_transmitter.e2")
+             :capacity        (str "app." modid/MOD-ID ".freq_transmitter.e2")
+             :not-found       (str "app." modid/MOD-ID ".freq_transmitter.e0")
+             :aborted         (str "app." modid/MOD-ID ".freq_transmitter.e4")
+             :success         (str "app." modid/MOD-ID ".freq_transmitter.e6")}
+   :generator {:password      (str "app." modid/MOD-ID ".freq_transmitter.e1")
+               :capacity      (str "app." modid/MOD-ID ".freq_transmitter.e2")
+               :range         (str "app." modid/MOD-ID ".freq_transmitter.e2")
+               :not-a-generator (str "app." modid/MOD-ID ".freq_transmitter.e0")
+               :aborted       (str "app." modid/MOD-ID ".freq_transmitter.e4")
+               :success       (str "app." modid/MOD-ID ".freq_transmitter.e6")
+               :pending       (str "app." modid/MOD-ID ".freq_transmitter.e5")}
+   :developer {:password     (str "app." modid/MOD-ID ".freq_transmitter.e1")
+               :capacity     (str "app." modid/MOD-ID ".freq_transmitter.e2")
+               :range        (str "app." modid/MOD-ID ".freq_transmitter.e2")
+               :not-found    (str "app." modid/MOD-ID ".freq_transmitter.e0")
+               :not-a-node   (str "app." modid/MOD-ID ".freq_transmitter.e0")
+               :not-a-receiver (str "app." modid/MOD-ID ".freq_transmitter.e0")
+               :not-a-generator (str "app." modid/MOD-ID ".freq_transmitter.e0")
+               :aborted      (str "app." modid/MOD-ID ".freq_transmitter.e4")
+               :success      (str "app." modid/MOD-ID ".freq_transmitter.e6")
+               :pending      (str "app." modid/MOD-ID ".freq_transmitter.e5")}
+   :ability-interferer {:password      (str "app." modid/MOD-ID ".freq_transmitter.e1")
+                        :capacity      (str "app." modid/MOD-ID ".freq_transmitter.e2")
+                        :range         (str "app." modid/MOD-ID ".freq_transmitter.e2")
+                        :not-a-node    (str "app." modid/MOD-ID ".freq_transmitter.e0")
+                        :not-a-receiver (str "app." modid/MOD-ID ".freq_transmitter.e0")
+                        :aborted       (str "app." modid/MOD-ID ".freq_transmitter.e4")
+                        :success       (str "app." modid/MOD-ID ".freq_transmitter.e6")
+                        :pending       (str "app." modid/MOD-ID ".freq_transmitter.e5")}})
 
 
 ;; ============================================================================

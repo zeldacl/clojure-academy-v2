@@ -2,6 +2,7 @@
   "Shared recipe datagen helpers used by Forge/Fabric providers."
   (:require [clojure.string :as str]
             [cn.li.mc1201.datagen.recipe-patterns :as recipe-patterns]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
 
 (defn load-recipes
@@ -69,7 +70,7 @@
 
 (defn imag-fusor-json
   [recipe]
-  {:type "my_mod:imag_fusor"
+  {:type (str modid/mod-id ":imag_fusor")
    :input (ingredient-json (:input recipe))
    :output (machine-output-json (:output recipe))
    :consume_liquid (int (or (:consume-liquid recipe) 0))
@@ -77,7 +78,7 @@
 
 (defn metal-former-json
   [recipe]
-  {:type "my_mod:metal_former"
+  {:type (str modid/mod-id ":metal_former")
    :input (ingredient-json (:input recipe))
    :output (machine-output-json (:output recipe))
    :mode (:mode recipe)})

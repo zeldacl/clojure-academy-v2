@@ -1,6 +1,7 @@
 (ns cn.li.ac.gui.info-area-reactive
   "Reactive TechUI info-area — replaces tech-ui-common add-property/add-sepline/add-button."
-  (:require [cn.li.mcmod.ui.core :as ui]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -24,8 +25,8 @@
         {:kind :nine-slice
          :props {:id :info-area-bg :x 179.0 :y 5.0 :w 100.0 :h 177.0
                  :margin 4.0
-                 :src "my_mod:textures/guis/blend_quad"
-                 :line-tex "my_mod:textures/guis/line"}}
+                 :src (modid/asset-path "textures" "guis/blend_quad")
+                 :line-tex (modid/asset-path "textures" "guis/line")}}
         root)
       (rt/build-child! rt
         {:kind :group
@@ -152,7 +153,7 @@
     (events/on! rt btn-id :left-click (fn [_ _ _] (on-click)))
     (advance! ctx 12.0)))
 
-(def ^:private histogram-tex "my_mod:textures/guis/histogram.png")
+(def ^:private histogram-tex (modid/asset-path "textures" "guis/histogram.png"))
 
 (defn- write-box-height!
   "Binding writer: set a box's height to full-h × pct (source ISigD 0..1). With

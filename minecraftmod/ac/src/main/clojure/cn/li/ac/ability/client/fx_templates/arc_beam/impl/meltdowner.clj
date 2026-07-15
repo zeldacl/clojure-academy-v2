@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -17,8 +18,8 @@
 (defn- update-meltdowner-fx-state!
   [f & args]
   (apply level-effects/update-effect-state! :meltdowner f args))
-(def ^:private charge-loop-sound "my_mod:md.md_charge")
-(def ^:private fire-sound "my_mod:md.meltdowner")
+(def ^:private charge-loop-sound (modid/namespaced-path "md.md_charge"))
+(def ^:private fire-sound (modid/namespaced-path "md.meltdowner"))
 (def ^:private meltdowner-ray-style
   {:width (fn [{:keys [is-reflect?]} life]
             (if is-reflect?

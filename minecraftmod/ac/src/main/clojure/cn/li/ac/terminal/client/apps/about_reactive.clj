@@ -17,7 +17,7 @@
 ;; ============================================================================
 
 (defn- load-about-data []
-  (try (let [path (io/resource "assets/my_mod/config/about.edn")]
+  (try (let [path (io/resource (str "assets/" modid/MOD-ID "/config/about.edn"))]
          (edn/read-string (slurp path)))
        (catch Throwable e (log/warn "Failed to load about.edn" (ex-message e))
          {:credits {:header [] :staff [] :donators [] :donators-info ""}

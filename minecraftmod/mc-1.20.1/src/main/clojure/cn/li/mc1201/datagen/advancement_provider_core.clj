@@ -17,7 +17,7 @@
      "conditions" {"items" (mapv item-predicate (:items entry))}}
 
     :custom
-    {"trigger" "my_mod:custom"
+    {"trigger" (str modid/mod-id ":custom")
      "conditions" {"criterion_id" (:criterion-id entry)}}
 
     {"trigger" "minecraft:impossible"}))
@@ -36,11 +36,11 @@
 
 (defn tab-root-id
   [tab-id]
-  (str "my_mod:achievements/" (name tab-id) "/root"))
+  (str modid/mod-id ":achievements/" (name tab-id) "/root"))
 
 (defn ach-id
   [id]
-  (str "my_mod:achievements/" (normalize-id id)))
+  (str modid/mod-id ":achievements/" (normalize-id id)))
 
 (defn root-json
   [{:keys [id background]}]

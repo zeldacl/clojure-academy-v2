@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
@@ -61,7 +62,7 @@
                    :x (+ (:x from-pos) (* dx t)) :y (+ (:y from-pos) (* dy t)) :z (+ (:z from-pos) (* dz t))
                    :count 2 :speed 0.05 :offset-x 0.2 :offset-y 0.2 :offset-z 0.2}))))
           (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-            {:type :sound :sound-id "my_mod:tp.tp" :volume 0.5 :pitch 1.1})
+            {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.1})
           state*)
       :end
       (do (remove-entity-marker!) (update state* :fx-state dissoc owner-key*))

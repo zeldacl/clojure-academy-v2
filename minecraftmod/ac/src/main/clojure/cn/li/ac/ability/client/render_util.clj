@@ -8,7 +8,8 @@
   Uses V3 (rv3), not the map-based cn.li.ac.util.math.vec3 — this is the
   per-frame render hot path; vec3.clj stays map-based for its other 28
   non-render consumers (see rv3.clj docstring)."
-  (:require [cn.li.ac.ability.client.effects.rv3 :as vec3]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.ability.client.arc-patterns :as arc])
   (:import [cn.li.mcmod.math V3]))
 
@@ -40,7 +41,7 @@
   {:kind :line :p1 p1 :p2 p2 :color color})
 
 (def ^:private default-beam-texture
-  "my_mod:textures/effects/arc.png")
+  (modid/asset-path "textures" "effects/arc.png"))
 
 (declare beam-right-axis)
 

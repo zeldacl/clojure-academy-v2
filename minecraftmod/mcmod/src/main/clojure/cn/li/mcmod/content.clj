@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.content
   "Helpers for triggering shared game content initialization via content SPI."
   (:require [clojure.string :as str]
+            [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.content.spi ContentInitBootstraps
                                      ClojureNamespaceBootstrapInvoker]))
@@ -36,9 +37,9 @@
   (try
     (when-not (or (boolean (ContentInitBootstraps/register (str content-id)))
                   (require-content-core! content-id))
-      (println (str "[my_mod] WARNING: no content bootstrap found for " content-id)))
+      (println (str "[" modid/mod-id "] WARNING: no content bootstrap found for " content-id)))
     (catch Throwable t
-      (println (str "[my_mod] WARNING: ContentInitBootstraps/register(" content-id ") failed:")
+      (println (str "[" modid/mod-id "] WARNING: ContentInitBootstraps/register(" content-id ") failed:")
                (ex-message t))
       nil))
   nil)
@@ -54,7 +55,7 @@
   (try
     (let [registered (long (ContentInitBootstraps/registerAll))]
       (when (zero? registered)
-        (println "[my_mod] WARNING: no content bootstrap providers found")))
+        (println (str "[" modid/mod-id "] WARNING: no content bootstrap providers found"))))
     (catch Throwable t
       (log/warn "ContentInitBootstraps/registerAll() failed:" (ex-message t))
       (log/stacktrace "ContentInitBootstraps/registerAll()" t)))

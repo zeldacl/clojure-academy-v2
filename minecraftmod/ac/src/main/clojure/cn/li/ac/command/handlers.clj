@@ -20,6 +20,7 @@
     {:action :enable-cheats :player player-obj}
     {:action :disable-cheats :player player-obj}"
   (:require [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.registry.skill :as skill]
             [clojure.string :as str]))
 
@@ -54,7 +55,7 @@
   (let [raw (str advancement-str)]
     (if (str/includes? raw ":")
       raw
-      (str "my_mod:achievements/" (str/replace raw "." "/")))))
+      (modid/namespaced-path (str "achievements/" (str/replace raw "." "/"))))))
 
 ;; ============================================================================
 ;; /acach Command Handler

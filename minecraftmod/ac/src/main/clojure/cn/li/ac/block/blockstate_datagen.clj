@@ -13,7 +13,7 @@
   ["north" "east" "south" "west"])
 
 (defn- mod-id []
-  (or mcmod-config/mod-id "my_mod"))
+  mcmod-config/mod-id)
 
 (defn- blockstate-fields
   [schema]

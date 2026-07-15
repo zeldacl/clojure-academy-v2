@@ -40,48 +40,48 @@
   (case tut-id
     :ores
     [{:tag :view :display-text "Constraint Metal Ore"
-      :sub-views [{:type :block-3d :block-id "my_mod:constrained_ore"}]}
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "constrained_ore")}]}
      {:tag :view :display-text "Imag Silicon Ore"
-      :sub-views [{:type :block-3d :block-id "my_mod:imaginary_ore"}]}
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "imaginary_ore")}]}
      {:tag :view :display-text "Crystal Ore"
-      :sub-views [{:type :block-3d :block-id "my_mod:crystal_ore"}]}
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "crystal_ore")}]}
      {:tag :view :display-text "Resonant Crystal Ore"
-      :sub-views [{:type :block-3d :block-id "my_mod:reso_ore"}]}
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "reso_ore")}]}
      {:tag :view :display-text "Phase Liquid"
       :sub-views [{:type :icon
                    :texture (modid/asset-path "textures/items" "phase_liquid_mat.png")
                    :tag :view}]}
      {:tag :craft :display-text "Crafting: Constraint Plate"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:constrained_plate"}]}
+                  :item-id (modid/namespaced-path "constrained_plate")}]}
      {:tag :craft :display-text "Crafting: Imag Silicon Ingot"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:imag_silicon_ingot"}]}
+                  :item-id (modid/namespaced-path "imag_silicon_ingot")}]}
      {:tag :craft :display-text "Crafting: Wafer"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:wafer"}]}
+                  :item-id (modid/namespaced-path "wafer")}]}
      {:tag :craft :display-text "Crafting: Imag Silicon Piece"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:imag_silicon_piece"}]}]
+                  :item-id (modid/namespaced-path "imag_silicon_piece")}]}]
 
     :phase_generator
     [{:tag :craft :display-text "Crafting: Phase Generator"
-      :sub-views [(if (query-recipes? "my_mod:phase_gen")
-                    {:type :recipe :recipe-kind "ImagFusor" :item-id "my_mod:phase_gen"}
-                    {:type :item-3d :item-id "my_mod:phase_gen"})]}]
+      :sub-views [(if (query-recipes? (modid/namespaced-path "phase_gen"))
+                    {:type :recipe :recipe-kind "ImagFusor" :item-id (modid/namespaced-path "phase_gen")}
+                    {:type :item-3d :item-id (modid/namespaced-path "phase_gen")})]}]
 
     :solar_generator
     [{:tag :craft :display-text "Crafting: Solar Generator"
-      :sub-views [(if (query-recipes? "my_mod:solar_gen")
-                    {:type :recipe :recipe-kind "Smelting" :item-id "my_mod:solar_gen"}
-                    {:type :item-3d :item-id "my_mod:solar_gen"})]}]
+      :sub-views [(if (query-recipes? (modid/namespaced-path "solar_gen"))
+                    {:type :recipe :recipe-kind "Smelting" :item-id (modid/namespaced-path "solar_gen")}
+                    {:type :item-3d :item-id (modid/namespaced-path "solar_gen")})]}]
 
     :wind_generator
     (vec (for [[item-id display-name]
-               [["my_mod:windgen_base" "Crafting: Windgen Base"]
-                ["my_mod:windgen_pillar" "Crafting: Windgen Pillar"]
-                ["my_mod:windgen_main" "Crafting: Windgen Main"]
-                ["my_mod:windgen_fan" "Crafting: Windgen Fan"]]]
+               [[(modid/namespaced-path "windgen_base") "Crafting: Windgen Base"]
+                [(modid/namespaced-path "windgen_pillar") "Crafting: Windgen Pillar"]
+                [(modid/namespaced-path "windgen_main") "Crafting: Windgen Main"]
+                [(modid/namespaced-path "windgen_fan") "Crafting: Windgen Fan"]]]
            {:tag :craft :display-text display-name
             :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                         :item-id item-id}]}))
@@ -89,24 +89,24 @@
     :imag_fusor
     [{:tag :craft :display-text "Crafting: Imag Fusor"
       :sub-views [{:type :recipe :recipe-kind "ImagFusor"
-                  :item-id "my_mod:imag_fusor"}]}]
+                  :item-id (modid/namespaced-path "imag_fusor")}]}]
 
     :metal_former
     [{:tag :craft :display-text "Crafting: Metal Former"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:metal_former"}]}]
+                  :item-id (modid/namespaced-path "metal_former")}]}]
 
     :terminal
     (let [base [{:tag :craft :display-text "Crafting: Terminal Installer"
                  :sub-views [{:type :recipe :recipe-kind "Smelting"
-                             :item-id "my_mod:terminal_installer"}]}]
+                             :item-id (modid/namespaced-path "terminal_installer")}]}]
           apps (try (terminal-catalog/ordered-apps)
                     (catch Throwable e
                       (log/warn "Failed to load terminal catalog; app tutorial entries may be missing:" (ex-message e))
                       nil))
           app-groups (mapv (fn [app]
-                            (let [app-installer-id (str "my_mod:app_"
-                                                       (str/replace (name (:id app)) "-" "_"))
+                            (let [app-installer-id (modid/namespaced-path (str "app_"
+                                                       (str/replace (name (:id app)) "-" "_")))
                                   has-recipe? (query-recipes? app-installer-id)]
                               {:tag (if has-recipe? :craft :view)
                                :display-text (str "App: " (:name app))
@@ -123,13 +123,13 @@
     :ability_developer
     [{:tag :craft :display-text "Crafting: Portable Developer"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:developer_portable"}]}
+                  :item-id (modid/namespaced-path "developer_portable")}]}
      {:tag :craft :display-text "Crafting: Normal Developer"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:developer_normal"}]}
+                  :item-id (modid/namespaced-path "developer_normal")}]}
      {:tag :craft :display-text "Crafting: Advanced Developer"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id "my_mod:developer_advanced"}]}]
+                  :item-id (modid/namespaced-path "developer_advanced")}]}]
 
     []))
 

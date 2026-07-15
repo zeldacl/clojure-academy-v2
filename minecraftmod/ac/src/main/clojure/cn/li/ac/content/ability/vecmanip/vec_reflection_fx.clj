@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx
   "Client FX for VecReflection: double ring + reflection wave billboards."
-  (:require [cn.li.ac.ability.client.effects.rv3 :as vec3]
+  (:require
+            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -8,7 +9,7 @@
   (:import [cn.li.mcmod.math V3]))
 
 (def ^:private vec-reflection-effect-id :vec-reflection)
-(def ^:private sound-id "my_mod:vecmanip.vec_reflection")
+(def ^:private sound-id (modid/namespaced-path "vecmanip.vec_reflection"))
 
 (defn default-vec-reflection-fx-runtime-state
   []
@@ -154,7 +155,7 @@
         p1 (vec3/v+ (vec3/v+ center side) lift)
         p2 (vec3/v- (vec3/v+ center side) lift)
         p3 (vec3/v- (vec3/v- center side) lift)]
-    [(ru/quad-op "my_mod:textures/effects/glow_circle.png"
+    [(ru/quad-op (modid/asset-path "textures" "effects/glow_circle.png")
                  p0 p1 p2 p3
                  {:r 255 :g 200 :b 160 :a alpha})]))
 

@@ -154,7 +154,7 @@
                 :y (lerp icon-start-y icon-end-y icon-progress)
                 :w icon-size :h icon-size :alpha icon-alpha}
          :title {:x title-x :y title-y
-                 :text (i18n/translate "tutorial.my_mod.update")
+                 :text (i18n/translate (str "tutorial." modid/MOD-ID ".update"))
                  :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}
          :content {:x content-x :y content-y
                    :text (:title notif)

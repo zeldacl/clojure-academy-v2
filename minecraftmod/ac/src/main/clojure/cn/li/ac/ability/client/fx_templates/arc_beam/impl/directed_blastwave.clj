@@ -8,13 +8,14 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
 
-(def ^:private sound-id "my_mod:vecmanip.directed_blast")
+(def ^:private sound-id (modid/namespaced-path "vecmanip.directed_blast"))
 (def ^:private wave-life 15)
 
 
@@ -161,7 +162,7 @@
                     p2 (vec3/v- (vec3/v+ center side) vertical)
                     p3 (vec3/v- (vec3/v- center side) vertical)
                     alpha-i (int (max 0 (min 255 (* 255.0 real-alpha 0.7))))]
-                [(ru/quad-op "my_mod:textures/effects/glow_circle.png"
+                [(ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png")
                              p0 p1 p2 p3
                              {:r 255 :g 255 :b 255 :a alpha-i})]))))
         rings))))

@@ -1,6 +1,7 @@
 (ns cn.li.ac.item.special-items
   "Special migrated items with original gameplay behavior."
-  (:require [cn.li.mcmod.item.dsl :as idsl]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.item.dsl :as idsl]
             [clojure.string :as str]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
@@ -18,20 +19,20 @@
    "induction_factor_vecmanip" :vecmanip})
 
 (def induction-factor-item-ids
-  (mapv (fn [suffix] (str "my_mod:" suffix))
+  (mapv (fn [suffix] (modid/namespaced-path suffix))
         (keys induction-factor->category)))
 
 (defn induction-factor-catalog
   "Vector of [item-id category-kw] for developer material checks."
   []
   (mapv (fn [[suffix category]]
-          [(str "my_mod:" suffix) category])
+          [(modid/namespaced-path suffix) category])
         induction-factor->category))
 
-(def magnetic-coil-item-id "my_mod:magnetic_coil")
-(def ^:private matter-unit-item-id "my_mod:matter_unit")
-(def ^:private imag-phase-block-id "my_mod:imag_phase")
-(def ^:private mag-hook-entity-id "my_mod:entity_mag_hook")
+(def magnetic-coil-item-id (modid/namespaced-path "magnetic_coil"))
+(def ^:private matter-unit-item-id (modid/namespaced-path "matter_unit"))
+(def ^:private imag-phase-block-id (modid/namespaced-path "imag_phase"))
+(def ^:private mag-hook-entity-id (modid/namespaced-path "entity_mag_hook"))
 
 (defn matter-unit-overlay-data
   "Render metadata for client item overlay/decorator.
@@ -43,9 +44,9 @@
      :phase-liquid? phase-liquid?
      :alpha (if phase-liquid? 0.88 0.0)
      :scroll-offset scroll-offset
-     :base-texture "my_mod:textures/item/matter_unit.png"
-     :liquid-texture "my_mod:textures/item/matter_unit_phase_liquid.png"
-     :mask-texture "my_mod:textures/item/matter_unit_overlay.png"}))
+     :base-texture (modid/asset-path "textures" "item/matter_unit.png")
+     :liquid-texture (modid/asset-path "textures" "item/matter_unit_phase_liquid.png")
+     :mask-texture (modid/asset-path "textures" "item/matter_unit_overlay.png")}))
 
 (defn- apply-induction-factor!
   "Induction factors are consumed via the developer block timed session, not direct use."

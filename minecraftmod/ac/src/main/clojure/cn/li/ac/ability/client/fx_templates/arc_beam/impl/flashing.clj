@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
@@ -39,7 +40,7 @@
       :perform
       (do (remove-tp-marking!)
           (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-            {:type :sound :sound-id "my_mod:tp.tp_flashing" :volume 1.0 :pitch (+ 0.95 (rand 0.2))})
+            {:type :sound :sound-id (modid/namespaced-path "tp.tp_flashing") :volume 1.0 :pitch (+ 0.95 (rand 0.2))})
           (update state* :fx-state update owner-key*
                   (fn [st] (update (merge base-meta (or st {:preview nil :burst []})) :burst (fnil conj [])
                                    {:ttl 8 :from {:x (:from-x payload) :y (:from-y payload) :z (:from-z payload)}
