@@ -3,11 +3,19 @@
   (:require [cn.li.mc1201.integration.event-support :as event-support]
             [cn.li.mc1201.runtime.nbt-core :as runtime-nbt]
             [cn.li.mc1201.runtime.sync-core :as runtime-sync]
+            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.fabric1201.adapter.network :as runtime-network]
             [cn.li.mc1201.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
-           [net.minecraft.server.players PlayerList]
            [net.minecraft.server.level ServerLevel ServerPlayer]))
+
+;; Immutable loader VTable, captured by ServerRuntime on its first tick.
+(def ^:private tick-callbacks
+  {:mark-player-dirty! runtime-sync/mark-player-dirty!
+   :tick-sync! runtime-sync/tick-sync!
+   :send-sync-fn runtime-network/send-sync-to-client!
+   :world-tick! (fn [_runtime level]
+                  (wireless-world/on-world-tick level))})
 
 (defn- dimension-id
   [^ServerLevel level]
@@ -95,15 +103,10 @@
 (defn handle-player-tick
   [^MinecraftServer server]
   (event-support/guarded-call
-    "fabric player tick"
+    "fabric server tick"
     nil
     (fn []
-      (let [^PlayerList player-list (.getPlayerList server)]
-        (doseq [^ServerPlayer player (.getPlayers player-list)]
-          (lifecycle-core/on-player-tick! player (merge (lifecycle-owner server)
-                                                        {:mark-player-dirty! runtime-sync/mark-player-dirty!
-                                                         :tick-sync! runtime-sync/tick-sync!
-                                                         :send-sync-fn runtime-network/send-sync-to-client!})))))))
+      (lifecycle-core/run-server-tick! server tick-callbacks))))
 
 (defn install-server-stop-cleanup!
   []

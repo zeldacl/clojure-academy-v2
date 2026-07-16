@@ -81,30 +81,17 @@
        :target-player-uuid uuid})))
 
 (defn create-sync-sender
-  "Create a runtime sync sender that fans a sync payload into all sync message variants."
+  "Create the single-packet runtime v2 sync sender."
   [find-player-by-uuid push-to-client!]
   (fn [uuid payload]
     (let [player (require-target-player! find-player-by-uuid
                                          uuid
-                                         {:operation :runtime-sync-send})
-          payloads (vec (sync-message-payloads uuid payload))]
-      (if (empty? payloads)
-        {:sent 0
-         :reason :no-sync-message-payloads
-         :target-player-uuid uuid}
-        (reduce (fn [result {:keys [msg-id payload]}]
-                  (try
-                    (push-to-client! player msg-id payload)
-                    (-> result
-                        (update :sent inc)
-                        (update :msg-ids conj msg-id))
-                    (catch Exception e
-                      (log/error "Failed to send runtime sync message" msg-id "for" uuid ":" (.getMessage e))
-                      (update result :failed-msg-ids (fnil conj []) msg-id))))
-                {:sent 0
-                 :target-player-uuid uuid
-                 :msg-ids []}
-                payloads)))))
+                                         {:operation :runtime-sync-v2-send})
+          message-id (msg-id :sync-v2)]
+      (push-to-client! player message-id payload)
+      {:sent 1
+       :msg-id message-id
+       :target-player-uuid uuid})))
 
 (defn default-send-to-server!
   [msg-id payload]

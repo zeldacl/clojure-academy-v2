@@ -123,6 +123,5 @@
     {:id :ac/wireless-world-data
      :on-load on-world-load
      :on-unload on-world-unload
-     :on-save on-world-save
-     :on-tick on-world-tick})
+     :on-save on-world-save})
   (log/info "World data system initialized"))

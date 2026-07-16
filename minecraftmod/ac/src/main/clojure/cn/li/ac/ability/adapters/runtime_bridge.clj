@@ -11,33 +11,17 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private sync-descriptors
-  [{:id :ac/sync-runtime
+  [{:id :ac/sync-v2
     :content-id "ac"
-    :message-key :sync-runtime
-    :payload-key :ability-data
-    :order 0}
-   {:id :ac/sync-resource
-    :content-id "ac"
-    :message-key :sync-resource
-    :payload-key :resource-data
-    :order 10}
-   {:id :ac/sync-cooldown
-    :content-id "ac"
-    :message-key :sync-cooldown
-    :payload-key :cooldown-data
-    :order 20}
-   {:id :ac/sync-preset
-    :content-id "ac"
-    :message-key :sync-preset
-    :payload-key :preset-data
-    :order 30}])
+    :message-key :sync-v2
+    :order 0}])
 
 (def ^:private player-persistence-descriptors
   [{:id :ac/player-runtime-state
     :content-id "ac"
     :kind :runtime-state
-    :format :edn
-    :nbt-key "ac_ability_state"
+    :format :compound-tag
+    :nbt-key "ac_runtime_v2"
     :order 0}
    {:id :ac/saved-locations
     :content-id "ac"
@@ -81,6 +65,7 @@
   (runtime-hooks/register-player-state-domain! {:domain-key :ability-data :nbt-key "ac_ability"})
   (runtime-hooks/register-player-state-domain! {:domain-key :resource-data :nbt-key "ac_resource"})
   (runtime-hooks/register-player-state-domain! {:domain-key :preset-data :nbt-key "ac_preset"})
+  (runtime-hooks/register-player-state-domain! {:domain-key :develop-data :nbt-key "ac_develop"})
   nil)
 
 (defn- install-runtime-components!

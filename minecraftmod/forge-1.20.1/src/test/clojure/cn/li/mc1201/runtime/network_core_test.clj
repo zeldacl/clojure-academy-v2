@@ -7,8 +7,7 @@
 
 (def ^:private test-message-ids
   {:ctx-channel "ability:ctx/channel"
-   :sync-runtime "ability:sync/ability-data"
-   :sync-resource "ability:sync/resource-data"})
+   :sync-v2 "ability:sync/runtime-v2"})
 
 (defn- network-fixture
   [f]
@@ -22,19 +21,6 @@
       (content-registry/clear-registry!))))
 
 (use-fixtures :each network-fixture)
-
-(defn- register-sync-descriptors!
-  []
-  (content-registry/register-sync-descriptor!
-    {:id :sync/ability
-     :message-key :sync-runtime
-     :payload-key :ability-data
-     :order 1})
-  (content-registry/register-sync-descriptor!
-    {:id :sync/resource
-     :message-key :sync-resource
-     :payload-key :resource-data
-     :order 2}))
 
 (deftest targeted-sender-requires-existing-player-test
   (let [sent (atom [])
@@ -57,7 +43,6 @@
         (is (= "missing-player" (:target-player-uuid (ex-data e))))))))
 
 (deftest sync-sender-reports-counts-and-missing-targets-test
-  (register-sync-descriptors!)
   (let [sent (atom [])
         sender (network-core/create-sync-sender
                  (fn [uuid]
@@ -65,19 +50,14 @@
                      {:player uuid}))
                  (fn [player msg-id payload]
                    (swap! sent conj [player msg-id payload])))]
-    (is (= {:sent 2
-            :target-player-uuid "player-a"
-            :msg-ids [(:sync-runtime test-message-ids)
-                      (:sync-resource test-message-ids)]}
-           (sender "player-a" {:ability-data {:a 1}
-                                :resource-data {:r 2}})))
-    (is (= [[{:player "player-a"}
-             (:sync-runtime test-message-ids)
-             {:uuid "player-a" :ability-data {:a 1}}]
-            [{:player "player-a"}
-             (:sync-resource test-message-ids)
-             {:uuid "player-a" :resource-data {:r 2}}]]
-           @sent))
+    (let [payload {:version 2 :opcode 2 :revision 7 :dirty-mask 3
+                   :ability-data {:a 1} :resource-data {:r 2}}]
+      (is (= {:sent 1
+              :target-player-uuid "player-a"
+              :msg-id (:sync-v2 test-message-ids)}
+             (sender "player-a" payload)))
+      (is (= [[{:player "player-a"} (:sync-v2 test-message-ids) payload]]
+             @sent)))
     (try
       (sender "missing-player" {:ability-data {:a 1}})
       (is false "missing target should throw")

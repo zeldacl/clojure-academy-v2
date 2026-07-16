@@ -1,8 +1,7 @@
 (ns cn.li.ac.ability.messages
   "AC-owned runtime network message catalog.
 
-  Wire values intentionally keep existing protocol strings for compatibility
-  across old/new clients and servers."
+  Protocol v2 is intentionally incompatible with old clients and servers."
   (:require [cn.li.mcmod.hooks.messages :as message-registry]))
 
 (def message-ids
@@ -18,10 +17,7 @@
    :slot-key-up "ability:skill/key-up"
    :slot-key-abort "ability:skill/key-abort"
 
-   :sync-runtime "ability:sync/ability-data"
-   :sync-resource "ability:sync/resource-data"
-   :sync-cooldown "ability:sync/cooldown-data"
-   :sync-preset "ability:sync/preset-data"
+   :sync-v2 "ability:sync/runtime-v2"
 
    :req-learn-node "ability:req/learn-skill"
    :req-level-up "ability:req/level-up"
@@ -46,10 +42,7 @@
 (def MSG-SLOT-KEY-UP (:slot-key-up message-ids))
 (def MSG-SLOT-KEY-ABORT (:slot-key-abort message-ids))
 
-(def MSG-SYNC-RUNTIME (:sync-runtime message-ids))
-(def MSG-SYNC-RESOURCE (:sync-resource message-ids))
-(def MSG-SYNC-COOLDOWN (:sync-cooldown message-ids))
-(def MSG-SYNC-PRESET (:sync-preset message-ids))
+(def MSG-SYNC-V2 (:sync-v2 message-ids))
 
 (def MSG-REQ-LEARN-NODE (:req-learn-node message-ids))
 (def MSG-REQ-LEVEL-UP (:req-level-up message-ids))

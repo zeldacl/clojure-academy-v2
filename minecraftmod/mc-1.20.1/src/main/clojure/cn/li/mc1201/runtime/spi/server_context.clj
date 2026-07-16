@@ -5,6 +5,7 @@
   "Single atom backing SPI impl + lifecycle callback registration.
    Lock-free CAS updates replace the prior ^:dynamic vars + Object lock."
   (atom {:impl nil
+         :runtime nil
          :callbacks {:available [] :unavailable []}}))
 
 (defn- server-context-impl
@@ -17,8 +18,28 @@
 
 (defn reset-server-context-spi-for-test!
   []
-  (reset! spi-state {:impl nil :callbacks {:available [] :unavailable []}})
+  (reset! spi-state {:impl nil :runtime nil :callbacks {:available [] :unavailable []}})
   nil)
+
+(defn current-server-runtime
+  "Return the runtime owned by the current server, if one has been installed.
+
+  Platform tick adapters call this once per server tick, never once per
+  player.  Runtime consumers receive the resulting handle explicitly."
+  []
+  (:runtime @spi-state))
+
+(defn install-server-runtime!
+  [runtime]
+  (when-not runtime
+    (throw (IllegalArgumentException. "install-server-runtime! requires runtime")))
+  (swap! spi-state assoc :runtime runtime)
+  runtime)
+
+(defn clear-server-runtime!
+  []
+  (let [[old _] (swap-vals! spi-state assoc :runtime nil)]
+    (:runtime old)))
 
 (defn- register-callback!
   [callback-key callback-id callback]
@@ -99,4 +120,5 @@
    (notify-server-unavailable! nil))
   ([server]
    (run-callbacks! :unavailable server)
+   (clear-server-runtime!)
    nil))

@@ -62,6 +62,8 @@
    .offer is non-blocking, lock-free — safe from any thread at any frequency."
   [^ConcurrentLinkedQueue q kind owner-or-session effect-cmd]
   (let [session-id (normalize-session-id kind owner-or-session)]
+    (when (>= (.size q) 8192)
+      (.poll q))
     (.offer q [session-id effect-cmd]))
   nil)
 

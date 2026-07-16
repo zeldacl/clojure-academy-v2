@@ -14,8 +14,10 @@
                :structure-valid true
                :update-ticker 0}
         be :be
-        next (dev-logic/developer-tick-state state :lvl :pos nil be)]
-    (is (< (:energy next) (:energy state)))
+        runtime-state (machine-runtime/ensure-machine-state state dev-logic/dev-default-state)
+        old-energy (:energy runtime-state)
+        next (dev-logic/developer-tick-state runtime-state :lvl :pos nil be)]
+    (is (< (:energy next) old-energy))
     (is (>= (:development-progress next) 0.0))
     (is (<= (:development-progress next) 1.0))))
 

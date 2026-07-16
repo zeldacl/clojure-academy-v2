@@ -30,9 +30,8 @@
 
 (defn clear-all-tasks!
   []
-  (let [session-id (prt-cmd/session-id)
-        store-ref (store/get-store)]
-    (doseq [player-uuid (store/list-players store-ref session-id)]
+  (let [session-id (prt-cmd/session-id)]
+    (doseq [player-uuid (store/list-players session-id)]
       (clear-player-tasks! player-uuid)))
   nil)
 

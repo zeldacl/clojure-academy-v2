@@ -231,6 +231,49 @@
        {:command :hydrate-player-state
         :preset-data preset-data}))))
 
+(declare runtime-sync-resets-input?
+         resource-sync-disables-input?
+         abort-all-slot-contexts-for-owner!)
+
+(defn- apply-client-runtime-v2!
+  [{:keys [version opcode uuid revision dirty-mask] :as payload}]
+  (when (and (= 2 version) (or (= 1 opcode) (= 2 opcode)) uuid
+             (integer? revision) (integer? dirty-mask))
+    (let [old-state (get-client-player-state uuid)
+          old-revision (long (get old-state :sync-revision -1))
+          mask (long dirty-mask)]
+      (when (> (long revision) old-revision)
+        (let [command (cond-> {:command :hydrate-player-state
+                               :sync-revision (long revision)}
+                        (not (zero? (bit-and mask store/ability-data-mask)))
+                        (assoc :ability-data (:ability-data payload))
+                        (not (zero? (bit-and mask store/resource-data-mask)))
+                        (assoc :resource-data (:resource-data payload))
+                        (not (zero? (bit-and mask store/cooldown-data-mask)))
+                        (assoc :cooldown-data (:cooldown-data payload))
+                        (not (zero? (bit-and mask store/preset-data-mask)))
+                        (assoc :preset-data (:preset-data payload))
+                        (not (zero? (bit-and mask store/develop-data-mask)))
+                        (assoc :develop-data (:develop-data payload)))]
+          (with-client-player-state-owner uuid
+            (fn [session-id player-uuid]
+              (command-rt/run-command-in-session! session-id player-uuid command
+                                                  {:mark-dirty? false})))
+          (when (and (not (zero? (bit-and mask store/ability-data-mask)))
+                     (runtime-sync-resets-input? (:ability-data old-state)
+                                                 (:ability-data payload)))
+            (abort-all-slot-contexts-for-owner! uuid)
+            (client-keybinds/clear-client-keybind-state! uuid)
+            (client-keybinds/clear-key-group! :default))
+          (when (and (not (zero? (bit-and mask store/resource-data-mask)))
+                     (resource-sync-disables-input? (:resource-data old-state)
+                                                    (:resource-data payload)))
+            (abort-all-slot-contexts-for-owner! uuid)
+            (client-keybinds/clear-client-keybind-state! uuid))
+          (when-not (zero? (bit-and mask store/preset-data-mask))
+            (client-keybinds/update-default-group! uuid)
+            (preset-editor-reactive/refresh-active-screen! uuid)))))))
+
 (defn- validate-managed-screen-payload
   [screen-key payload]
   (let [payload (or payload {})
@@ -1055,7 +1098,8 @@
     (skill-tree-screen/install-widget-factory!)
     (preset-editor-screen/install-widget-factory!)
     (location-teleport-reactive/init!)
-    (net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
+    (net-client/register-push-handler! catalog/MSG-SYNC-V2 apply-client-runtime-v2!)
+    #_(net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
       (fn [{:keys [uuid ability-data]}]
         (when (and uuid ability-data)
           (let [old-ability-data (get-in (get-client-player-state uuid) [:ability-data])]
@@ -1067,7 +1111,7 @@
               (abort-all-slot-contexts-for-owner! uuid)
               (client-keybinds/clear-client-keybind-state! uuid)
               (client-keybinds/clear-key-group! :default))))))
-    (net-client/register-push-handler! catalog/MSG-SYNC-RESOURCE
+    #_(net-client/register-push-handler! catalog/MSG-SYNC-RESOURCE
       (fn [{:keys [uuid resource-data]}]
         (when (and uuid resource-data)
           (let [old-resource-data (get-in (get-client-player-state uuid) [:resource-data])]
@@ -1076,12 +1120,12 @@
             (when (resource-sync-disables-input? old-resource-data resource-data)
               (abort-all-slot-contexts-for-owner! uuid)
               (client-keybinds/clear-client-keybind-state! uuid))))))
-    (net-client/register-push-handler! catalog/MSG-SYNC-COOLDOWN
+    #_(net-client/register-push-handler! catalog/MSG-SYNC-COOLDOWN
       (fn [{:keys [uuid cooldown-data]}]
         (when (and uuid cooldown-data)
           (ensure-client-player-state! uuid)
           (update-client-cooldown-data! uuid cooldown-data))))
-    (net-client/register-push-handler! catalog/MSG-SYNC-PRESET
+    #_(net-client/register-push-handler! catalog/MSG-SYNC-PRESET
       (fn [{:keys [uuid preset-data]}]
         (when (and uuid preset-data)
           (ensure-client-player-state! uuid)

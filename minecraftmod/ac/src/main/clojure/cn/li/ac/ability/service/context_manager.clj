@@ -19,44 +19,24 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.messages :as catalog]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private default-terminated-context-grace-ms 1000)
-(def ^:private default-keepalive-timeout-ms 1500)
-
-;; Keepalive/purge sweep guard — Framework [:service :ctx-manager-sweep-guard].
-;; on-player-tick! invokes tick-context-manager! once per online player per server
-;; tick; this guard collapses that to at most one real sweep per unique server tick.
-(def ^:private sweep-guard-path [:service :ctx-manager-sweep-guard])
-
-(defn- sweep-guard-atom
-  ^clojure.lang.IAtom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom sweep-guard-path)
-        (get-in (swap! fw-atom update-in sweep-guard-path #(or % (atom nil)))
-                sweep-guard-path))
-    (atom nil)))
+(def ^:private configured-terminated-context-grace-ms 1000)
+(def ^:private configured-keepalive-timeout-ms 1500)
 
 (defn keepalive-timeout-ms
   "Server-side keepalive timeout threshold in milliseconds.
-  Configurable through -Dac.ctx.keepalive-timeout-ms (default 1500).
-  Read on every call (not cached): `dispatcher-timing-can-be-overridden-via-
-  system-properties-test` requires runtime System/setProperty to take effect
-  without a JVM restart."
+  Frozen at runtime bootstrap; hot sweeps never read system properties."
   []
-  (context-domain/positive-long-prop "ac.ctx.keepalive-timeout-ms"
-                                     default-keepalive-timeout-ms))
+  configured-keepalive-timeout-ms)
 
 (defn terminated-context-grace-ms
   "Grace window before terminated contexts are purged from registry.
-  Configurable through -Dac.ctx.terminated-grace-ms (default 1000).
-  Read on every call — see `keepalive-timeout-ms`."
+  Frozen at runtime bootstrap."
   []
-  (context-domain/positive-long-prop "ac.ctx.terminated-grace-ms"
-                                     default-terminated-context-grace-ms))
+  configured-terminated-context-grace-ms)
 
 (defn- resolve-server-session-id
   [reason]
@@ -83,21 +63,22 @@
     (store/get-player-state* session-id player-uuid)))
 
 (defn- active-server-contexts-for-player
-  [player-uuid]
+  [owner player-uuid]
   (let [pid (str player-uuid)
-        matches (->> (ctx/snapshot-context-registry)
-                    vals
-                    (reduce (fn [acc ctx-map]
-                              (if (and (= :server (:logical-side ctx-map))
-                                       (= pid (:player-uuid ctx-map))
-                                       (= ctx/STATUS-ALIVE (:status ctx-map))
-                                       (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
-                                (conj acc ctx-map)
-                                acc))
-                            []))]
-    (if (next matches)
-      (sort-by #(vector (get % :id) (get % :server-id)) matches)
-      matches)))
+        contexts (ctx/transport-contexts-for-player owner player-uuid)
+        size (count contexts)]
+    (loop [index 0
+           matches (transient [])]
+      (if (< index size)
+        (let [ctx-map (nth contexts index)]
+          (recur (unchecked-inc-int index)
+                 (if (and (= :server (:logical-side ctx-map))
+                          (= pid (:player-uuid ctx-map))
+                          (= ctx/STATUS-ALIVE (:status ctx-map))
+                          (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
+                   (conj! matches ctx-map)
+                   matches)))
+        (persistent! matches)))))
 
 (defn activate-context!
   "Called on the CLIENT when player triggers a skill (e.g., key press).
@@ -244,7 +225,7 @@
   [player-uuid]
   (when (seq (:context-registry (server-player-state player-uuid)))
     (let [owner (server-context-owner player-uuid)]
-      (doseq [spec (active-server-contexts-for-player player-uuid)]
+      (doseq [spec (active-server-contexts-for-player owner player-uuid)]
         (tick-context-entry! owner send-terminated-context! spec))
       (when-let [server-session-id (owner/store-session-id owner)]
         (command-rt/run-command-in-session!
@@ -253,12 +234,6 @@
          {:command :purge-terminated-contexts})))))
 
 (defn tick-context-manager!
-  "Keepalive/purge sweep. Called once per online player per server tick from
-  on-player-tick!, but the sweep itself is global (not player-scoped), so it
-  actually runs at most once per unique server tick id — see sweep-guard-atom."
+  "Run the global keepalive/purge sweep once from server-tick-start!."
   []
-  (let [tick-id (some-> (runtime-hooks/player-state-owner) :server-tick-id)
-        guard (sweep-guard-atom)]
-    (when (or (nil? tick-id) (not= tick-id @guard))
-      (when tick-id (reset! guard tick-id))
-      (sweep-contexts!))))
+  (sweep-contexts!))

@@ -1,12 +1,14 @@
 (ns cn.li.ac.block.wireless-node-tick-test
   (:require [clojure.test :refer [deftest is testing]]
+            [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
             [cn.li.ac.wireless.config :as node-config]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.world :as world]))
 
 (deftest node-tick-state-increments-ticker-test
-  (is (= 1 (:update-ticker (node-logic/node-tick-state {} :w :p nil :be)))))
+  (let [state (machine-runtime/ensure-machine-state {} node-logic/node-default-state)]
+    (is (= 1 (:update-ticker (node-logic/node-tick-state state :w :p nil :be))))))
 
 (deftest node-scripted-tick-fn-uses-machine-wrapper-test
   (testing "tick fn commits via machine runtime on server"

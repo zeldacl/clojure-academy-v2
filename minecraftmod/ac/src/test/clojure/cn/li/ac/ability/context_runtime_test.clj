@@ -219,15 +219,11 @@
         (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
-(deftest context-state-session-resolution-still-fail-fast-test
-  (let [uuid "test-player-implicit-fail"
-        ctx-id "ctx-implicit-fail"]
+(deftest context-state-uses-context-owned-session-without-thread-player-owner-test
+  (let [uuid "test-player-context-owner"
+        ctx-id "ctx-context-owner"]
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
     (ctx/with-context-owner (test-context-owner uuid)
       (runtime-hooks/with-player-state-owner nil
-        (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                              #"requires bound session-id"
-                              (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))))))
-
-
+        (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))))))
 

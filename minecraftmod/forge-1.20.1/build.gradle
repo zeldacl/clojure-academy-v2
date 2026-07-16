@@ -252,6 +252,79 @@ remapJar {
     dependsOn jar
 }
 
+// Forge's normal jar also contains mirrored Clojure AOT from several output
+// roots. Strip the complete artifact so TinyRemapper never observes an LVT,
+// regardless of which duplicate-free source supplied a class.
+def strippedForgeJarFile = layout.buildDirectory.file(
+    "tmp/release-aot/${project.name}-${project.version}-no-lvt.jar")
+def stripForgeJarLvt = tasks.register('stripForgeJarLvt') {
+    dependsOn tasks.named('jar')
+    inputs.file(tasks.named('jar').flatMap { it.archiveFile })
+    outputs.file(strippedForgeJarFile)
+    doLast {
+        def input = tasks.named('jar').get().archiveFile.get().asFile
+        def output = strippedForgeJarFile.get().asFile
+        output.parentFile.mkdirs()
+        def rewritten = 0
+        def copied = 0
+        new java.util.zip.ZipFile(input).withCloseable { zip ->
+            new java.util.zip.ZipOutputStream(new FileOutputStream(output)).withCloseable { out ->
+                zip.entries().each { entry ->
+                    def next = new java.util.zip.ZipEntry(entry.name)
+                    next.time = 0L
+                    out.putNextEntry(next)
+                    if (!entry.isDirectory()) {
+                        byte[] bytes = zip.getInputStream(entry).withCloseable { it.bytes }
+                        if (entry.name.endsWith('.class')) {
+                            def reader = new org.objectweb.asm.ClassReader(bytes)
+                            def writer = new org.objectweb.asm.ClassWriter(0)
+                            def dropped = [0]
+                            reader.accept(new org.objectweb.asm.ClassVisitor(
+                                org.objectweb.asm.Opcodes.ASM9, writer) {
+                                @Override
+                                org.objectweb.asm.MethodVisitor visitMethod(
+                                    int access, String methodName, String methodDescriptor,
+                                    String methodSignature, String[] exceptions) {
+                                    def delegate = super.visitMethod(access, methodName,
+                                                                     methodDescriptor,
+                                                                     methodSignature, exceptions)
+                                    return new org.objectweb.asm.MethodVisitor(
+                                        org.objectweb.asm.Opcodes.ASM9, delegate) {
+                                        @Override
+                                        void visitLocalVariable(String localName,
+                                                                String localDescriptor,
+                                                                String localSignature,
+                                                                org.objectweb.asm.Label start,
+                                                                org.objectweb.asm.Label end,
+                                                                int index) {
+                                            dropped[0]++
+                                        }
+                                    }
+                                }
+                            }, 0)
+                            if (dropped[0] > 0) {
+                                bytes = writer.toByteArray()
+                                rewritten++
+                            } else {
+                                copied++
+                            }
+                        }
+                        out.write(bytes)
+                    }
+                    out.closeEntry()
+                }
+            }
+        }
+        logger.lifecycle('[stripForgeJarLvt] rewrote {} classes; copied {} unchanged',
+                         rewritten, copied)
+    }
+}
+
+tasks.named('remapJar').configure {
+    inputFile = strippedForgeJarFile
+    dependsOn stripForgeJarLvt
+}
+
 tasks.named('jar', Jar).configure {
     // AOT classes exist in both build/clojure/main and build/classes/java/main
     // after copyClojureClassesToJavaOutput; keep the first entry when packaging.

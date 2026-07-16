@@ -84,10 +84,9 @@
 
 (defn- runtime-mark-clean!
   [player-uuid]
-  (command-rt/run-command-in-session!
+  (store/clear-dirty!
    (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
-   player-uuid
-   {:command :set-dirty-flag :dirty? false})
+   player-uuid)
   nil)
 
 (defn- build-sync-payload-impl
@@ -100,18 +99,23 @@
   message entirely rather than send a stale/nil value over it."
   [player-uuid full?]
   (when-let [state (runtime-get-player-state player-uuid)]
-    (let [domains (if full? store/sync-domains (or (:dirty-domains state) #{}))]
-      (cond-> {:uuid player-uuid}
-        (contains? domains :ability-data)  (assoc :ability-data (:ability-data state))
-        (contains? domains :resource-data) (assoc :resource-data (:resource-data state))
-        (contains? domains :cooldown-data) (assoc :cooldown-data (:cooldown-data state))
-        (contains? domains :preset-data)   (assoc :preset-data (:preset-data state))
-        (contains? domains :develop-data)  (assoc :develop-data (:develop-data state))))))
+    (let [session-id (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+          mask (if full? store/all-sync-mask (store/dirty-mask session-id player-uuid))]
+      (cond-> {:version 2
+               :opcode (if full? 1 2)
+               :uuid player-uuid
+               :revision (store/player-revision session-id player-uuid)
+               :dirty-mask mask}
+        (not (zero? (bit-and mask store/ability-data-mask))) (assoc :ability-data (:ability-data state))
+        (not (zero? (bit-and mask store/resource-data-mask))) (assoc :resource-data (:resource-data state))
+        (not (zero? (bit-and mask store/cooldown-data-mask))) (assoc :cooldown-data (:cooldown-data state))
+        (not (zero? (bit-and mask store/preset-data-mask))) (assoc :preset-data (:preset-data state))
+        (not (zero? (bit-and mask store/develop-data-mask))) (assoc :develop-data (:develop-data state))))))
 
 (defn- runtime-list-player-uuids
   []
-  (store/list-players (store/get-store)
-                      (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")))
+  (store/list-players
+   (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")))
 
 (defn- run-runtime-command!
   [player-uuid command]
@@ -229,7 +233,7 @@
    :on-server-stop!
    (fn [session-id]
     (ctx/clear-store-session-contexts! session-id)
-     (store/remove-session! (store/get-store) session-id)
+     (store/remove-session! session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
@@ -258,16 +262,24 @@
    (fn [cat-id]
      (vec (skill-query/get-skills-for-category cat-id)))
 
+   :on-server-tick-start!
+   (fn [_tick-id]
+     ;; Global work is driven once per server tick, before the player phase.
+     (md-damage/tick-marks!)
+     (ctx-mgr/tick-context-manager!))
+
    :on-player-tick!
    (fn [player-uuid]
      (runtime-get-or-create-player-state! player-uuid)
-     (md-damage/tick-marks!)
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
      (ctx-mgr/tick-player-contexts! player-uuid)
-     (delayed-projectiles/tick-player! player-uuid)
-     (ctx-mgr/tick-context-manager!))
+     (delayed-projectiles/tick-player! player-uuid))
+
+   :on-server-tick-end!
+   (fn [_tick-id]
+     nil)
 
    :list-player-uuids
    (fn []
@@ -280,7 +292,9 @@
 
    :player-state-dirty?
    (fn [player-uuid]
-     (boolean (seq (:dirty-domains (runtime-get-player-state player-uuid)))))
+     (not (zero? (store/dirty-mask
+                  (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+                  player-uuid))))
 
    :mark-player-clean!
    (fn [player-uuid]

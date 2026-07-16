@@ -186,8 +186,8 @@
 
 (defn matrix-tick-state
   [state _level pos _block-state _be]
-  (let [ticker (inc (int (get state :update-ticker 0)))
-        state1 (assoc state :update-ticker ticker)]
+  (let [ticker (machine-runtime/advance-tick! state)
+        state1 state]
     (if (and (zero? (:sub-id state1 0))
              (zero? (mod ticker (matrix-config/gui-sync-interval))))
       (try

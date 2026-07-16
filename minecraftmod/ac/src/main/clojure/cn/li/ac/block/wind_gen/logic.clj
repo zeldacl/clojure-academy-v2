@@ -146,8 +146,8 @@
 
 (defn main-tick-state
   [state level pos _block-state _be]
-  (let [ticker (inc (int (get state :update-ticker 0)))
-        state1 (assoc state :update-ticker ticker)]
+  (let [ticker (machine-runtime/advance-tick! state)
+        state1 state]
     (if (zero? (mod ticker (wind-config/structure-update-interval)))
       (let [fan? (boolean (fan-item-stack? (get-in state1 [:inventory 0])))
             base-info (find-base-below level pos)
@@ -162,8 +162,8 @@
 
 (defn base-tick-state
   [state level pos _block-state _be]
-  (let [ticker (inc (int (get state :update-ticker 0)))
-        state1 (assoc state :update-ticker ticker)
+  (let [ticker (machine-runtime/advance-tick! state)
+        state1 state
         scan-info (when (zero? (mod ticker (wind-config/structure-update-interval)))
                     (find-main-above-from-base level pos))
         state2 (if scan-info
@@ -198,7 +198,8 @@
 
 (defn pillar-tick-state
   [state _level _pos _block-state _be]
-  (update state :update-ticker (fnil inc 0)))
+  (machine-runtime/advance-tick! state)
+  state)
 
 (defn- controller-tick-fn
   [tick-spec]

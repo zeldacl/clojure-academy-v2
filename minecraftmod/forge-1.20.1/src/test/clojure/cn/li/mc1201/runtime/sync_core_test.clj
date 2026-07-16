@@ -9,74 +9,54 @@
       (sync-core/create-sync-scheduler-runtime)
       f)))
 
-(deftest player-tick-multiplicity-does-not-accelerate-scheduler-test
+(deftest duplicate-end-phase-does-not-send-twice-test
   (let [owner {:server-session-id :test-session}
         sent (atom [])]
-    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid] {:uuid uuid})
+    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid _full?] {:uuid uuid})
                   runtime-hooks/mark-player-clean! (fn [_uuid] nil)]
       (sync-core/mark-player-dirty! owner "p1")
-      (doseq [server-tick-id (range 1 6)]
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              (assoc owner :server-tick-id server-tick-id))
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              (assoc owner :server-tick-id server-tick-id)))
-      (is (empty? @sent))
-
-      (doseq [server-tick-id (range 6 11)]
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              (assoc owner :server-tick-id server-tick-id)))
+      (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                            (assoc owner :server-tick-id 1))
+      (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                            (assoc owner :server-tick-id 1))
       (is (= [["p1" {:uuid "p1"}]] @sent)))))
 
 (deftest sessions-flush-independently-test
   (let [sent (atom [])]
-    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid] {:uuid uuid})
+    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid _full?] {:uuid uuid})
                   runtime-hooks/mark-player-clean! (fn [_uuid] nil)]
       (sync-core/mark-player-dirty! {:server-session-id :a} "pa")
       (sync-core/mark-player-dirty! {:server-session-id :b} "pb")
-
-      (doseq [server-tick-id (range 1 11)]
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              {:server-session-id :a
-                               :server-tick-id server-tick-id}))
-
+      (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                            {:server-session-id :a :server-tick-id 1})
       (is (= [["pa" {:uuid "pa"}]] @sent))
       (is (contains? (get-in (sync-core/scheduler-snapshot) [:b :dirty-players]) "pb")))))
 
 (deftest successful-send-clears-only-sent-player-test
   (let [owner {:server-session-id :test-session}
         sent (atom [])]
-    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid]
+    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid _full?]
                                                      (when (= uuid "online")
                                                        {:uuid uuid}))
                   runtime-hooks/mark-player-clean! (fn [_uuid] nil)]
       (sync-core/mark-player-dirty! owner "online")
       (sync-core/mark-player-dirty! owner "offline")
-
-      (doseq [server-tick-id (range 1 11)]
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              (assoc owner :server-tick-id server-tick-id)))
-
+      (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
+                            (assoc owner :server-tick-id 1))
       (is (= [["online" {:uuid "online"}]] @sent))
       (is (not (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "online")))
       (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "offline")))))
 
-(deftest full-sync-safety-net-flushes-clean-online-players-test
+(deftest clean-players-are-never-periodically-sent-test
   (let [owner {:server-session-id :test-session}
         sent (atom [])]
-    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid] {:uuid uuid})
+    (with-redefs [runtime-hooks/build-sync-payload (fn [uuid _full?] {:uuid uuid})
                   runtime-hooks/mark-player-clean! (fn [_uuid] nil)
                   runtime-hooks/list-player-uuids (fn [] ["never-dirty"])]
-      ;; Advance to tick 190 (19 flush cycles of 10) without anyone dirty.
-      (doseq [server-tick-id (range 1 191)]
+      (doseq [server-tick-id (range 1 201)]
         (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
                               (assoc owner :server-tick-id server-tick-id)))
-      (is (empty? @sent))
-      ;; Tick 200 is a forced full-sync boundary — flushes even though
-      ;; "never-dirty" was never marked dirty.
-      (doseq [server-tick-id (range 191 201)]
-        (sync-core/tick-sync! (fn [uuid payload] (swap! sent conj [uuid payload]))
-                              (assoc owner :server-tick-id server-tick-id)))
-      (is (= [["never-dirty" {:uuid "never-dirty"}]] @sent)))))
+      (is (empty? @sent)))))
 
 (deftest scheduler-owner-is-required-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -98,13 +78,11 @@
         runtime-b (sync-core/create-sync-scheduler-runtime)]
     (sync-core/mark-player-dirty! owner "outer")
     (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "outer"))
-
     (sync-core/call-with-sync-scheduler-runtime
       runtime-b
       (fn []
         (is (empty? (sync-core/scheduler-snapshot)))
         (sync-core/mark-player-dirty! owner "inner")
         (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "inner"))))
-
     (is (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "outer"))
     (is (not (contains? (get-in (sync-core/scheduler-snapshot) [:test-session :dirty-players]) "inner")))))

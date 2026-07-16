@@ -1,214 +1,187 @@
 (ns cn.li.mc1201.runtime.sync-core
-  "Loader-agnostic dirty-player tracking and sync flush scheduling.
+  "Allocation-bounded dirty-player sync scheduler.
 
-  No Minecraft or loader imports — pure Clojure state management.
-  Platform adapters supply explicit server-session owner data and the send-fn
-  transport when calling tick-sync!."
+  The server tick coordinator calls tick-sync! once per server tick. Mutable
+  HashMaps and primitive counters are confined to that thread; no per-call
+  atom, persistent scheduler map, result map, or periodic full snapshot is
+  created."
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.runtime.deferred :as deferred]))
+            [cn.li.mcmod.runtime.deferred :as deferred])
+  (:import [java.util ArrayList HashMap Iterator Map$Entry]))
 
-(def ^:private default-flush-interval-ticks 10)
+(def default-flush-interval-ticks 1)
 
-;; Low-frequency full-sync safety net: with per-player dirty tracking (see
-;; lifecycle-core/on-player-tick!), a write path that changes runtime state
-;; without going through the reducer's dirty marking would silently stop
-;; syncing that player. Force a full snapshot of every online player at this
-;; interval regardless of tracked dirty state so such a gap self-heals.
-(def ^:private full-sync-interval-ticks 200)
+(definterface ISyncSession
+  (^java.util.HashMap dirtyPlayers [])
+  (^long tickCounter [])
+  (^long lastServerTick [])
+  (^void advance [^long server-tick]))
+
+(deftype SyncSession
+  [^HashMap dirty-players
+   ^:unsynchronized-mutable ^long tick-counter
+   ^:unsynchronized-mutable ^long last-server-tick]
+  ISyncSession
+  (dirtyPlayers [_] dirty-players)
+  (tickCounter [_] tick-counter)
+  (lastServerTick [_] last-server-tick)
+  (advance [_ server-tick]
+    (set! tick-counter (unchecked-inc tick-counter))
+    (set! last-server-tick server-tick)))
+
+(definterface ISyncScheduler
+  (^java.util.HashMap sessions [])
+  (^long flushInterval []))
+
+(deftype SyncScheduler [^HashMap session-states ^long flush-interval]
+  ISyncScheduler
+  (sessions [_] session-states)
+  (flushInterval [_] flush-interval))
 
 (defn create-sync-scheduler-runtime
   ([]
    (create-sync-scheduler-runtime {}))
   ([{:keys [flush-interval-ticks]
      :or {flush-interval-ticks default-flush-interval-ticks}}]
-   {::runtime ::sync-scheduler-runtime
-    :scheduler-states* (atom {})
-    :flush-interval-ticks flush-interval-ticks}))
+   (let [interval (long flush-interval-ticks)]
+     (when-not (pos? interval)
+       (throw (IllegalArgumentException. "flush-interval-ticks must be positive")))
+     (SyncScheduler. (HashMap.) interval))))
 
 (def ^:private default-sync-scheduler-runtime-holder
-  (deferred/deferred #(create-sync-scheduler-runtime)))
+  (deferred/deferred create-sync-scheduler-runtime))
 
-(def ^:private sync-scheduler-runtime-override
-  "Plain root var, nil in production. Test-only swap target for
-   call-with-sync-scheduler-runtime — replaces the prior ^:dynamic +
-   binding pair. Single-threaded test execution only (clojure.test runs
-   deftest forms sequentially); not safe for concurrent binders."
-  nil)
+(def ^:private sync-scheduler-runtime-override nil)
 
 (defn- sync-scheduler-runtime?
   [runtime]
-  (and (map? runtime)
-       (= ::sync-scheduler-runtime (::runtime runtime))
-       (some? (:scheduler-states* runtime))))
+  (instance? ISyncScheduler runtime))
 
 (defn call-with-sync-scheduler-runtime
   [runtime f]
   (when-not (sync-scheduler-runtime? runtime)
-    (throw (ex-info "Expected sync scheduler runtime"
-                    {:runtime runtime})))
-  (let [prev sync-scheduler-runtime-override]
+    (throw (ex-info "Expected sync scheduler runtime" {:runtime runtime})))
+  (let [previous sync-scheduler-runtime-override]
     (alter-var-root #'sync-scheduler-runtime-override (constantly runtime))
     (try
       (f)
       (finally
-        (alter-var-root #'sync-scheduler-runtime-override (constantly prev))))))
+        (alter-var-root #'sync-scheduler-runtime-override (constantly previous))))))
 
 (defmacro with-sync-scheduler-runtime
   [runtime & body]
   `(call-with-sync-scheduler-runtime ~runtime (fn [] ~@body)))
 
-(defn- current-sync-scheduler-runtime
-  []
+(defn- current-runtime
+  ^ISyncScheduler []
   (or sync-scheduler-runtime-override
       @default-sync-scheduler-runtime-holder))
 
-(defn- scheduler-states-atom
-  []
-  (:scheduler-states* (current-sync-scheduler-runtime)))
-
-(defn- scheduler-states-snapshot
-  []
-  @(scheduler-states-atom))
-
-(defn- update-scheduler-states!
-  [f & args]
-  (apply swap! (scheduler-states-atom) f args))
-
-(defn- flush-interval-ticks
-  []
-  (:flush-interval-ticks (current-sync-scheduler-runtime)))
-
-(defn- session-id
+(defn- require-session-id
   [owner]
-  (let [sid (:server-session-id owner)]
-    (when-not sid
+  (or (:server-session-id owner)
       (throw (ex-info "Sync scheduler owner requires :server-session-id"
-                      {:owner owner})))
-    sid))
+                      {:owner owner}))))
 
-(defn- empty-scheduler-state
-  []
-  {:tick-counter 0
-   :last-server-tick-id nil
-   :dirty-players {}})
-
-(defn- scheduler-state
-  [states session-key]
-  (merge (empty-scheduler-state)
-         (get states session-key)))
-
-(defn- current-session-tick
-  [session-key]
-	(:tick-counter (scheduler-state (scheduler-states-snapshot) session-key)))
-
-(defn- mark-player-dirty-in-session!
-  [session-key uuid]
-  (let [tick (current-session-tick session-key)]
-		(update-scheduler-states! update-in [session-key :dirty-players uuid]
-           (fn [entry]
-             (assoc (or entry {}) :last-dirty-tick tick)))))
+(defn- ensure-session
+  ^ISyncSession [^ISyncScheduler runtime session-id]
+  (let [^HashMap sessions (.sessions runtime)]
+    (or (.get sessions session-id)
+        (let [session (SyncSession. (HashMap.) 0 Long/MIN_VALUE)]
+          (.put sessions session-id session)
+          session))))
 
 (defn mark-player-dirty!
   [owner uuid]
-  (mark-player-dirty-in-session! (session-id owner) uuid))
+  (let [session-id (require-session-id owner)
+        ^ISyncSession session (ensure-session (current-runtime) session-id)]
+    (.put (.dirtyPlayers session) uuid (.tickCounter session)))
+  nil)
 
 (defn clear-player-dirty!
   [owner uuid]
-  (update-scheduler-states! update-in [(session-id owner) :dirty-players] dissoc uuid))
+  (let [session-id (require-session-id owner)]
+    (when-let [^ISyncSession session (.get (.sessions (current-runtime)) session-id)]
+      (.remove (.dirtyPlayers session) uuid)))
+  nil)
 
 (defn mark-all-dirty!
   [owner]
-  (let [session-key (session-id owner)
-        tick (current-session-tick session-key)
-        players (power-runtime/with-client-ctx {:player-owner owner}
-                  (set (power-runtime/list-player-uuids)))]
-		(update-scheduler-states! assoc-in [session-key :dirty-players]
-           (into {}
-                 (map (fn [uuid] [uuid {:last-dirty-tick tick}])
-                 players)))))
+  (doseq [uuid (power-runtime/list-player-uuids)]
+    (mark-player-dirty! owner uuid))
+  nil)
 
-(defn- build-sync-payload [uuid full?]
-  (power-runtime/build-sync-payload uuid full?))
+(defn clear-session-scheduler-state!
+  [session-id]
+  (.remove (.sessions (current-runtime)) session-id)
+  nil)
 
-(defn- advance-scheduler!
-  [owner]
-  (let [session-key (session-id owner)
-        server-tick-id (:server-tick-id owner)
-        result (atom nil)]
-		(update-scheduler-states!
-           (fn [states]
-             (let [state (scheduler-state states session-key)
-                   duplicate-server-tick? (and (some? server-tick-id)
-                                               (= server-tick-id (:last-server-tick-id state)))
-                   next-state (if duplicate-server-tick?
-                                state
-                                (-> state
-                                    (update :tick-counter inc)
-                                    (assoc :last-server-tick-id server-tick-id)))
-                   tick (:tick-counter next-state)
-                   due? (and (not duplicate-server-tick?)
-							 (zero? (mod tick (flush-interval-ticks))))
-                   force-full? (and due? (zero? (mod tick full-sync-interval-ticks)))
-                   dirty-uuids (when due? (keys (:dirty-players next-state)))]
-               (reset! result {:advanced? (not duplicate-server-tick?)
-                               :due? due?
-                               :force-full? force-full?
-                               :tick tick
-                               :session-key session-key
-                               :dirty-uuids (vec dirty-uuids)})
-               (assoc states session-key next-state))))
-    @result))
+(defn- remove-flushed-entry!
+  [^Iterator iterator ^Map$Entry entry ^long flush-tick]
+  (when (<= (long (.getValue entry)) flush-tick)
+    (.remove iterator)))
 
-(defn- mark-player-flushed!
-  [session-key uuid tick]
-	(update-scheduler-states! update-in [session-key :dirty-players]
-         (fn [dirty]
-           (if-let [entry (get dirty uuid)]
-             (if (<= (:last-dirty-tick entry 0) tick)
-               (dissoc dirty uuid)
-               (assoc dirty uuid (assoc entry :last-flush-tick tick)))
-             dirty))))
+(defn- flush-dirty!
+  [^ISyncSession session send-fn]
+  (let [flush-tick (.tickCounter session)
+        ^Iterator iterator (.iterator (.entrySet (.dirtyPlayers session)))]
+    (while (.hasNext iterator)
+      (let [^Map$Entry entry (.next iterator)
+            uuid (.getKey entry)]
+        (when-let [payload (power-runtime/build-sync-payload uuid false)]
+          (try
+            (when send-fn
+              (send-fn uuid payload))
+            (power-runtime/mark-player-clean! uuid)
+            (remove-flushed-entry! iterator entry flush-tick)
+            (catch Throwable _
+              nil)))))))
+
+(defn tick-sync!
+  "Advance and flush one session. Must be called once at server-tick end."
+  [send-fn owner]
+  (let [session-id (require-session-id owner)
+        server-tick (long (or (:server-tick-id owner) Long/MIN_VALUE))
+        ^ISyncScheduler runtime (current-runtime)
+        ^ISyncSession session (ensure-session runtime session-id)]
+    (when-not (= server-tick (.lastServerTick session))
+      (.advance session server-tick)
+      (when (and (not (.isEmpty (.dirtyPlayers session)))
+                 (zero? (mod (.tickCounter session) (.flushInterval runtime))))
+        (flush-dirty! session send-fn))))
+  nil)
 
 (defn scheduler-snapshot
   []
-	(scheduler-states-snapshot))
-
-(defn clear-session-scheduler-state!
-  "Remove all scheduler state for one server session."
-  [session-key]
-	(update-scheduler-states! dissoc session-key)
-  nil)
+  (let [^ISyncScheduler runtime (current-runtime)
+        sessions (transient {})]
+    (doseq [^Map$Entry session-entry (.entrySet (.sessions runtime))]
+      (let [session-id (.getKey session-entry)
+            ^ISyncSession session (.getValue session-entry)
+            dirty (transient {})]
+        (doseq [^Map$Entry dirty-entry (.entrySet (.dirtyPlayers session))]
+          (assoc! dirty (.getKey dirty-entry)
+                  {:last-dirty-tick (.getValue dirty-entry)}))
+        (assoc! sessions session-id
+                {:tick-counter (.tickCounter session)
+                 :last-server-tick-id (.lastServerTick session)
+                 :dirty-players (persistent! dirty)})))
+    (persistent! sessions)))
 
 (defn reset-scheduler-for-test!
   ([]
    (reset-scheduler-for-test! {}))
   ([states]
-		(reset! (scheduler-states-atom) states)
+   (let [^ISyncScheduler runtime (current-runtime)
+         ^HashMap sessions (.sessions runtime)]
+     (.clear sessions)
+     (doseq [[session-id state] states]
+       (let [session (SyncSession. (HashMap.)
+                                   (long (or (:tick-counter state) 0))
+                                   (long (or (:last-server-tick-id state) Long/MIN_VALUE)))]
+         (doseq [[uuid entry] (:dirty-players state)]
+           (.put (.dirtyPlayers ^ISyncSession session)
+                 uuid
+                 (long (or (:last-dirty-tick entry) 0))))
+         (.put sessions session-id session))))
    nil))
-
-(defn tick-sync!
-  "Flush dirty player snapshots periodically. Every full-sync-interval-ticks,
-  flushes all online players regardless of tracked dirty state (safety net —
-  see full-sync-interval-ticks).
-  send-fn: (fn [uuid payload]) — supplied by the platform network bridge."
-  [send-fn owner]
-  (let [{:keys [due? force-full? tick session-key dirty-uuids]} (advance-scheduler! owner)]
-    (when due?
-      ;; `owner` is invariant across this whole flush — establish the client
-      ;; ctx ThreadLocal once instead of once per uuid (was N pushes/pops per
-      ;; flush, now 1).
-      (power-runtime/with-client-ctx {:player-owner owner}
-        (let [flush-uuids (if force-full?
-                            (vec (into (set dirty-uuids)
-                                       (power-runtime/list-player-uuids)))
-                            dirty-uuids)]
-          (doseq [uuid flush-uuids]
-            (when-let [payload (build-sync-payload uuid force-full?)]
-              (try
-                (when send-fn
-                  (send-fn uuid payload))
-                (power-runtime/mark-player-clean! uuid)
-                (mark-player-flushed! session-key uuid tick)
-                (catch Throwable _
-                  ;; Keep the dirty marker so a later tick can retry.
-                  nil)))))))))

@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.service.command-runtime-test
-  (:require [clojure.string :as str]
-            [clojure.test :refer [deftest is testing]]
+  (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.reducer :as reducer]
@@ -31,8 +30,7 @@
         (is (= "session-A" (:session-id @captured-command)))
         (is (= "player-A" (:player-uuid @captured-command)))
         (is (= :level-up (:command @captured-command)))
-        (is (string? (:command-id @captured-command)))
-        (is (not (str/blank? (:command-id @captured-command))))))))
+        (is (nil? (:command-id @captured-command)))))))
 
 (deftest run-command-in-session-preserves-command-id-test
   (testing "existing command-id is preserved during normalization"

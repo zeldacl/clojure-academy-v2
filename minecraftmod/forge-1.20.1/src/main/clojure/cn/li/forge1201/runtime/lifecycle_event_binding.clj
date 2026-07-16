@@ -8,7 +8,7 @@
 																	PlayerEvent$Clone
 																	PlayerEvent$PlayerChangedDimensionEvent]
 					 [net.minecraftforge.event.entity.living LivingDeathEvent]
-					 [net.minecraftforge.event TickEvent$PlayerTickEvent]))
+					 [net.minecraftforge.event TickEvent$ServerTickEvent]))
 
 (defn reset-lifecycle-listeners-registration-for-test!
 	[]
@@ -28,13 +28,13 @@
 					 on-player-clone
 					 on-player-death
 					 on-player-dimension-change
-					 on-player-tick]}]
+					 on-server-tick]}]
 	[[PlayerEvent$PlayerLoggedInEvent on-player-login]
 	 [PlayerEvent$PlayerLoggedOutEvent on-player-logout]
 	 [PlayerEvent$Clone on-player-clone]
 	 [LivingDeathEvent on-player-death]
 	 [PlayerEvent$PlayerChangedDimensionEvent on-player-dimension-change]
-	 [TickEvent$PlayerTickEvent on-player-tick]])
+	 [TickEvent$ServerTickEvent on-server-tick]])
 
 (defn register-lifecycle-listeners!
 	[{:keys [on-player-login
@@ -42,14 +42,14 @@
 					 on-player-clone
 					 on-player-death
 					 on-player-dimension-change
-					 on-player-tick]}]
+					 on-server-tick]}]
 	(install/process-once! ::lifecycle-listeners-registered
 		#(doseq [[event-class handler]
 					(listener-bindings {:on-player-login on-player-login
 											 :on-player-logout on-player-logout
 											 :on-player-clone on-player-clone
 											 :on-player-death on-player-death
-											 :on-player-dimension-change on-player-dimension-change
-											 :on-player-tick on-player-tick})]
+												 :on-player-dimension-change on-player-dimension-change
+												 :on-server-tick on-server-tick})]
 			(add-listener! event-class handler)))
 	nil)

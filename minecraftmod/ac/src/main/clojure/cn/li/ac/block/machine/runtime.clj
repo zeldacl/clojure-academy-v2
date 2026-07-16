@@ -5,7 +5,184 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [clojure.lang ILookup IPersistentMap MapEntry]
+           [java.util HashMap Map$Entry]))
+
+(def ^:const save-dirty-mask 0x01)
+(def ^:const client-sync-mask 0x02)
+(def ^:const block-state-mask 0x04)
+(def ^:const wireless-topology-mask 0x08)
+(def ^:private changed-mask 0x10)
+(def ^:private absent-value (Object.))
+
+(definterface IMachineState
+  (^long stateFlags [])
+  (^long stateVersion [])
+  (^long advanceTick [])
+  (previousValue [key notFound])
+  (clearDirty [])
+  (snapshot []))
+
+(declare machine-snapshot)
+
+(deftype PreviousMachineState [^IMachineState state]
+  ILookup
+  (valAt [_ key]
+    (.previousValue state key nil))
+  (valAt [_ key not-found]
+    (.previousValue state key not-found)))
+
+(deftype MachineState [^HashMap values
+                       ^HashMap field-flags
+                       ^HashMap previous
+                       ^:unsynchronized-mutable ^long ticker
+                       ^:unsynchronized-mutable ^long flags
+                       ^:unsynchronized-mutable ^long version]
+  IMachineState
+  (stateFlags [_] flags)
+  (stateVersion [_] version)
+  (advanceTick [_]
+    (set! ticker (unchecked-inc ticker))
+    ticker)
+  (previousValue [_ key not-found]
+    (if (.containsKey previous key)
+      (let [value (.get previous key)]
+        (if (identical? value absent-value) not-found value))
+      (if (= key :update-ticker)
+        ticker
+        (if (.containsKey values key) (.get values key) not-found))))
+  (clearDirty [_]
+    (.clear previous)
+    (set! flags 0)
+    nil)
+  (snapshot [this]
+    (machine-snapshot this))
+
+  ILookup
+  (valAt [_ key]
+    (if (= key :update-ticker) ticker (.get values key)))
+  (valAt [_ key not-found]
+    (if (= key :update-ticker)
+      ticker
+      (if (.containsKey values key) (.get values key) not-found)))
+
+  IPersistentMap
+  (containsKey [_ key]
+    (or (= key :update-ticker) (.containsKey values key)))
+  (entryAt [this key]
+    (when (.containsKey ^IPersistentMap this key)
+      (MapEntry/create key (.valAt ^ILookup this key))))
+  (assoc [this key value]
+    (if (= key :update-ticker)
+      (set! ticker (long value))
+      (let [present? (.containsKey values key)
+            old-value (when present? (.get values key))]
+        (when (or (not present?) (not= old-value value))
+          (let [mask-value (.get field-flags key)
+                mask (long (if (nil? mask-value) changed-mask mask-value))]
+            (when (and (not (zero? mask)) (not (.containsKey previous key)))
+              (.put previous key (if present? old-value absent-value)))
+            (.put values key value)
+            (set! flags (bit-or flags mask))
+            (set! version (unchecked-inc version))))))
+    this)
+  (assocEx [this key value]
+    (when (.containsKey ^IPersistentMap this key)
+      (throw (RuntimeException. (str "Key already present: " key))))
+    (.assoc ^IPersistentMap this key value))
+  (without [this key]
+    (when (and (not= key :update-ticker) (.containsKey values key))
+      (let [old-value (.get values key)
+            mask-value (.get field-flags key)
+            mask (long (if (nil? mask-value) changed-mask mask-value))]
+        (when (and (not (zero? mask)) (not (.containsKey previous key)))
+          (.put previous key old-value))
+        (.remove values key)
+        (set! flags (bit-or flags mask))
+        (set! version (unchecked-inc version))))
+    this)
+
+  clojure.lang.IPersistentCollection
+  (count [_]
+    (+ (.size values) (if (.containsKey field-flags :update-ticker) 1 0)))
+  (cons [this value]
+    (cond
+      (instance? Map$Entry value)
+      (.assoc ^IPersistentMap this (.getKey ^Map$Entry value) (.getValue ^Map$Entry value))
+
+      (and (vector? value) (= 2 (count value)))
+      (.assoc ^IPersistentMap this (nth value 0) (nth value 1))
+
+      :else
+      (do
+        (doseq [entry value]
+          (.cons ^clojure.lang.IPersistentCollection this entry))
+        this)))
+  (empty [_] {})
+  (equiv [this other]
+    (= (machine-snapshot this) other))
+
+  clojure.lang.Seqable
+  (seq [this]
+    (seq (machine-snapshot this)))
+
+  Object
+  (toString [this]
+    (str (machine-snapshot this))))
+
+(defn machine-state?
+  [value]
+  (instance? MachineState value))
+
+(defn machine-snapshot
+  [^MachineState state]
+  (let [^HashMap values (.-values state)
+        iterator (.iterator (.entrySet values))]
+    (loop [result (transient {})]
+      (if (.hasNext iterator)
+        (let [^Map$Entry entry (.next iterator)]
+          (recur (assoc! result (.getKey entry) (.getValue entry))))
+        (let [snapshot (persistent! result)]
+          (if (.containsKey ^HashMap (.-field-flags state) :update-ticker)
+            (assoc snapshot :update-ticker (long (.valAt ^ILookup state :update-ticker)))
+            snapshot))))))
+
+(defn- field-runtime-mask
+  [spec]
+  (if (= (:key spec) :update-ticker)
+    0
+    (bit-or changed-mask
+            (if (:persist? spec) save-dirty-mask 0)
+            (if (:client-sync? spec) client-sync-mask 0)
+            (if (:block-state spec) block-state-mask 0)
+            (if (:wireless-topology? spec) wireless-topology-mask 0))))
+
+(defn- schema-field-flags
+  [schema]
+  (reduce (fn [result spec]
+            (assoc result (:key spec) (field-runtime-mask spec)))
+          {}
+          schema))
+
+(defn- create-machine-state
+  [state default-state]
+  (let [initial (merge default-state state)
+        ticker (long (get initial :update-ticker 0))
+        values (HashMap. ^java.util.Map (dissoc initial :update-ticker))
+        ^java.util.Map field-mask-map (or (::field-flags (meta default-state)) {})
+        flags (HashMap. field-mask-map)]
+    (MachineState. values flags (HashMap.) ticker 0 0)))
+
+(defn ensure-machine-state
+  [state default-state]
+  (if (machine-state? state)
+    state
+    (create-machine-state (or state {}) default-state)))
+
+(defn advance-tick!
+  ^long [^IMachineState state]
+  (.advanceTick state))
 
 (defn schema-runtime
   "Build runtime bundle from a full or server schema vector."
@@ -13,10 +190,12 @@
   (let [server-schema (if server-only?
                         schema
                         (state-schema/filter-server-fields schema))
-        blockstate-fields (filterv #(get % :block-state) server-schema)]
+        blockstate-fields (filterv #(get % :block-state) server-schema)
+        default-state (with-meta (state-schema/schema->default-state server-schema)
+                        {::field-flags (schema-field-flags server-schema)})]
     {:schema schema
      :server-schema server-schema
-     :default-state (state-schema/schema->default-state server-schema)
+     :default-state default-state
      :load-fn (state-schema/schema->load-fn server-schema)
      :save-fn (state-schema/schema->save-fn server-schema)
      :blockstate-fields blockstate-fields
@@ -28,6 +207,24 @@
   [be default-state]
   (or (platform-be/get-custom-state be) default-state))
 
+(defn- commit-machine-state!
+  [be level pos ^MachineState state blockstate-updater mark-changed? sync-client? after-commit!]
+  (let [flags (.stateFlags ^IMachineState state)
+        changed? (not (zero? (bit-and flags changed-mask)))
+        old-state (when (and changed? after-commit!) (PreviousMachineState. state))]
+    (when changed?
+      (when (and mark-changed? (not (zero? (bit-and flags save-dirty-mask))))
+        (try (platform-be/set-changed! be) (catch Exception _ nil)))
+      (when (and sync-client? (not (zero? (bit-and flags changed-mask))))
+        (try (platform-be/sync-to-client! be) (catch Exception _ nil)))
+      (when (and blockstate-updater level pos
+                 (not (zero? (bit-and flags block-state-mask))))
+        (blockstate-updater state level pos))
+      (when after-commit!
+        (after-commit! be level pos old-state state))
+      (.clearDirty ^IMachineState state))
+    flags))
+
 (defn commit-state!
   "Single boundary for BE state writes, dirty flag, client sync, and optional blockstate projection.
 
@@ -37,14 +234,17 @@
   DataSlots. Declare true only when a TESR reads BE custom-state directly."
   [be level pos old-state new-state & {:keys [blockstate-updater mark-changed? sync-client?]
                                        :or {mark-changed? true sync-client? false}}]
-  (when (not= new-state old-state)
-    (platform-be/set-custom-state! be new-state)
-    (when mark-changed?
-      (try (platform-be/set-changed! be) (catch Exception _ nil)))
-    (when sync-client?
-      (try (platform-be/sync-to-client! be) (catch Exception _ nil)))
-    (when (and blockstate-updater level pos)
-      (blockstate-updater new-state level pos))))
+  (if (machine-state? new-state)
+    (commit-machine-state! be level pos new-state blockstate-updater
+                           (boolean mark-changed?) (boolean sync-client?) nil)
+    (when (not= new-state old-state)
+      (platform-be/set-custom-state! be new-state)
+      (when mark-changed?
+        (try (platform-be/set-changed! be) (catch Exception _ nil)))
+      (when sync-client?
+        (try (platform-be/sync-to-client! be) (catch Exception _ nil)))
+      (when (and blockstate-updater level pos)
+        (blockstate-updater new-state level pos)))))
 
 (defn- resolve-tile-level-pos
   "Return [level pos] for a tile, or [nil nil] when unavailable."
@@ -74,14 +274,16 @@
                                    :or {mark-changed? true sync-client? false}}]
   (when tile
     (let [[level pos] (resolve-tile-level-pos tile)
-          old (state-or-default tile default-state)
-          new-state (transform old)]
-      (commit-state! tile level pos old new-state
-                     :blockstate-updater blockstate-updater
-                     :mark-changed? mark-changed?
-                     :sync-client? sync-client?)
-      (when (and after-commit! (not= new-state old))
-        (after-commit! tile level pos old new-state)))))
+          raw-state (state-or-default tile default-state)
+          old (ensure-machine-state raw-state default-state)
+          _ (when-not (identical? raw-state old)
+              (platform-be/set-custom-state! tile old))
+          new-state (transform old)
+          state (ensure-machine-state new-state default-state)]
+      (when-not (identical? state old)
+        (platform-be/set-custom-state! tile state))
+      (commit-machine-state! tile level pos state blockstate-updater
+                             (boolean mark-changed?) (boolean sync-client?) after-commit!))))
 
 (defn commit-from-tile!
   "Commit an explicit new state for a tile (old state read from tile).
@@ -90,13 +292,13 @@
                                    :or {mark-changed? true sync-client? false}}]
   (when tile
     (let [[level pos] (resolve-tile-level-pos tile)
-          old (state-or-default tile default-state)]
-      (commit-state! tile level pos old new-state
-                     :blockstate-updater blockstate-updater
-                     :mark-changed? mark-changed?
-                     :sync-client? sync-client?)
-      (when (and after-commit! (not= new-state old))
-        (after-commit! tile level pos old new-state)))))
+          raw-state (state-or-default tile default-state)
+          old (ensure-machine-state raw-state default-state)
+          state (ensure-machine-state new-state default-state)]
+      (when-not (identical? raw-state state)
+        (platform-be/set-custom-state! tile state))
+      (commit-machine-state! tile level pos state blockstate-updater
+                             (boolean mark-changed?) (boolean sync-client?) after-commit!))))
 
 (defn server-side?
   [level]
@@ -117,18 +319,20 @@
     :or {mark-changed? true sync-client? false}}]
   (fn [level pos block-state be]
     (when (server-side? level)
-      (let [state0 (if initial-state
-                     (initial-state be level pos block-state)
-                     (state-or-default be default-state))
-            state1 (tick-state state0 level pos block-state be)
-            dirty? (compute-dirty-flag mark-changed? state0 state1)
-            sync?  (compute-dirty-flag sync-client? state0 state1)]
-        (commit-state! be level pos state0 state1
-                       :blockstate-updater blockstate-updater
-                       :mark-changed? dirty?
-                       :sync-client? sync?)
-        (when (and after-commit! (not= state1 state0))
-          (after-commit! be level pos state0 state1))))))
+      (let [raw-state (if initial-state
+                        (initial-state be level pos block-state)
+                        (state-or-default be default-state))
+            state0 (ensure-machine-state raw-state default-state)
+            _ (when-not (identical? raw-state state0)
+                (platform-be/set-custom-state! be state0))
+            result (tick-state state0 level pos block-state be)
+            state1 (ensure-machine-state result default-state)]
+        (when-not (identical? state1 state0)
+          (platform-be/set-custom-state! be state1))
+        (commit-machine-state! be level pos state1 blockstate-updater
+                               (if (fn? mark-changed?) true (boolean mark-changed?))
+                               (if (fn? sync-client?) true (boolean sync-client?))
+                               after-commit!)))))
 
 (defn make-open-gui-handler*
   "Build a block right-click handler that opens an AC GUI.
@@ -159,7 +363,8 @@
 (defn inc-update-ticker
   "Common helper for machines that track :update-ticker."
   [state]
-  (update state :update-ticker (fn [t] (inc (long (or t 0))))))
+  (advance-tick! state)
+  state)
 
 (defn changed-ignoring-ticker?
   "Dirty/sync predicate for machines using `inc-update-ticker`: a real change is
@@ -168,4 +373,6 @@
   only per-tick mutation is the bookkeeping ticker never marks NBT dirty or sends a
   client packet."
   [old-state new-state]
-  (not= (dissoc old-state :update-ticker) (dissoc new-state :update-ticker)))
+  (if (machine-state? new-state)
+    (not (zero? (bit-and (.stateFlags ^IMachineState new-state) changed-mask)))
+    (not= old-state new-state)))

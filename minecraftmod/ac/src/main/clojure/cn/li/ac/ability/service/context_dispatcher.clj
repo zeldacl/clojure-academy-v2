@@ -8,6 +8,7 @@
             [cn.li.ac.ability.service.context-domain :as context-domain]
             [cn.li.ac.ability.service.context-projection :as ctx-proj]
             [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
@@ -20,36 +21,17 @@
 
 (def ^:private STATIC-ROUTE-OWNER [::static-routes ::process])
 
-;; Context owner stored in Framework [:service :client-ctx :context-owner]
-;; instead of ^:dynamic ThreadLocal. Replaced pattern: read via (context-owner).
 (defn context-owner
-  "Read context owner from Framework client context (or use provided owner, or nil)."
+  "Read the explicitly scoped thread owner, or use the provided owner."
   ([]
-   (when-let [fw-inst (fw/fw-atom)]
-     (when (instance? clojure.lang.IAtom fw-inst)
-       (get-in @fw-inst [:service :client-ctx :context-owner]))))
+   (runtime-hooks/current-context-owner))
   ([owner]
-   (or owner
-       (when-let [fw-inst (fw/fw-atom)]
-         (when (instance? clojure.lang.IAtom fw-inst)
-           (get-in @fw-inst [:service :client-ctx :context-owner]))))))
+   (or owner (context-owner))))
 
 (defn with-context-owner-fn
-  "Run `thunk` with the Framework context-owner set to `ctx-owner`, restoring
-   the previous value afterwards. Replaces the deleted ^:dynamic context-owner
-   binding pattern — `(binding [context-owner ...])` throws on a plain fn var."
+  "Run thunk with an explicitly scoped owner without touching Framework."
   [ctx-owner thunk]
-  (let [fw-atom (fw/fw-atom)
-        prev (when fw-atom (get-in @fw-atom [:service :client-ctx :context-owner]))]
-    (try
-      (when fw-atom
-        (swap! fw-atom assoc-in [:service :client-ctx :context-owner] ctx-owner))
-      (thunk)
-      (finally
-        (when fw-atom
-          (if (some? prev)
-            (swap! fw-atom assoc-in [:service :client-ctx :context-owner] prev)
-            (swap! fw-atom update-in [:service :client-ctx] dissoc :context-owner)))))))
+  (runtime-hooks/with-client-ctx-fn {:context-owner ctx-owner} thunk))
 
 (defmacro with-context-owner
   "Macro wrapper over with-context-owner-fn."
@@ -58,6 +40,7 @@
 
 (def ^:private default-dispatcher-state
   {:transport-contexts {}
+   :player-index       {}
    :route-fns          {}
    :client-id-counter  {}
    :server-id-counter  {}})
@@ -110,9 +93,16 @@
   []
   (:route-fns (dispatcher-state-snapshot)))
 
+(declare context-player-index-key)
+
 (defn- assoc-transport!
   [key ctx]
-  (update-dispatcher-state! assoc-in [:transport-contexts key] ctx)
+  (let [index-key (context-player-index-key ctx)]
+    (update-dispatcher-state!
+     (fn [state]
+       (-> state
+           (assoc-in [:transport-contexts key] ctx)
+           (update-in [:player-index index-key] (fnil conj #{}) key)))))
   ctx)
 
 (defn- update-transport-if-present!
@@ -125,7 +115,15 @@
 
 (defn- dissoc-transport!
   [key]
-  (update-dispatcher-state! update :transport-contexts dissoc key)
+  (update-dispatcher-state!
+   (fn [state]
+     (if-let [ctx (get-in state [:transport-contexts key])]
+       (let [index-key (context-player-index-key ctx)
+             remaining (disj (get-in state [:player-index index-key] #{}) key)]
+         (cond-> (update state :transport-contexts dissoc key)
+           (seq remaining) (assoc-in [:player-index index-key] remaining)
+           (empty? remaining) (update :player-index dissoc index-key)))
+       state)))
   nil)
 
 (defn- clear-route-fns!
@@ -149,6 +147,12 @@
 (defn- context-registry-key
   [ctx]
   [(context-logical-side ctx) (owner/transport-route-key ctx) (:id ctx)])
+
+(defn- context-player-index-key
+  [ctx]
+  [(context-logical-side ctx)
+   (owner/transport-route-key ctx)
+   (some-> (:player-uuid ctx) str)])
 
 (defn- route-owner-key
   [owner-map]
@@ -309,15 +313,32 @@
     (and (= logical-side (context-logical-side ctx))
          (= route-key (owner/transport-route-key ctx)))))
 
+(defn transport-contexts-for-player
+  "Return raw transport contexts through the player index.
+
+  The explicit-owner arity is the server/client hot path and performs no
+  global context scan."
+  ([owner player-uuid]
+   (let [[logical-side route-key] (route-owner-key owner)
+         state (dispatcher-state-snapshot)
+         registry (:transport-contexts state)
+         keys (get-in state [:player-index [logical-side route-key (str player-uuid)]] #{})]
+     (loop [remaining (seq keys)
+            result (transient [])]
+       (if remaining
+         (recur (next remaining) (conj! result (get registry (first remaining))))
+         (persistent! result)))))
+  ([player-uuid]
+   (let [pid (str player-uuid)]
+     (->> (vals (transport-contexts-snapshot))
+          (filter #(= pid (:player-uuid %)))
+          vec))))
+
 (defn get-all-contexts-for-player
   ([player-uuid]
-   (filter #(= (str player-uuid) (:player-uuid %))
-           (map as-public-context (vals (transport-contexts-snapshot)))))
+   (mapv as-public-context (transport-contexts-for-player player-uuid)))
   ([owner player-uuid]
-   (->> (vals (transport-contexts-snapshot))
-        (filter #(and (= (str player-uuid) (:player-uuid %))
-                      (owner-matches-context? owner %)))
-        (map as-public-context))))
+   (mapv as-public-context (transport-contexts-for-player owner player-uuid))))
 
 (defn snapshot-context-registry []
   (get-all-contexts))
@@ -328,18 +349,46 @@
   []
   (vals (transport-contexts-snapshot)))
 
+(defn- index-context-entry
+  [index registry-key ctx]
+  (update index (context-player-index-key ctx) (fnil conj #{}) registry-key))
+
+(defn- build-player-index
+  [registry]
+  (reduce-kv index-context-entry {} registry))
+
+(defn- remove-owner-context-entry
+  [owner-key result registry-key ctx-map]
+  (if (= owner-key [(context-logical-side ctx-map)
+                    (owner/transport-route-key ctx-map)])
+    result
+    (assoc result registry-key ctx-map)))
+
+(defn- remove-session-context-entry
+  [store-session-id result registry-key ctx-map]
+  (if (= store-session-id (context-store-session-id ctx-map))
+    result
+    (assoc result registry-key ctx-map)))
+
+(defn- counter-for-other-session
+  [store-session-id result counter-key counter]
+  (let [[_side route-key] counter-key
+        counter-session (if (vector? route-key) (first route-key) route-key)]
+    (if (= store-session-id counter-session)
+      result
+      (assoc result counter-key counter))))
+
 (defn clear-owner-contexts!
   [owner]
   (let [owner-key (route-owner-key owner)]
     (update-dispatcher-state!
       (fn [state]
-        (let [filtered-contexts (into {}
-                                      (remove (fn [[_ctx-id ctx-map]]
-                                                (= owner-key [(context-logical-side ctx-map)
-                                                              (owner/transport-route-key ctx-map)])))
-                                      (:transport-contexts state))]
+        (let [filtered-contexts (reduce-kv (partial remove-owner-context-entry owner-key)
+                                           {}
+                                           (:transport-contexts state))]
           (-> state
               (assoc :transport-contexts filtered-contexts)
+              (assoc :player-index (build-player-index filtered-contexts))
               (update :client-id-counter dissoc owner-key)
               (update :server-id-counter dissoc owner-key))))))
   nil)
@@ -349,25 +398,20 @@
   [store-session-id]
   (update-dispatcher-state!
     (fn [state]
-      (-> state
-          (update :transport-contexts
-                  (fn [registry]
-                    (into {}
-                          (remove (fn [[_ctx-id ctx-map]]
-                                    (= store-session-id (context-store-session-id ctx-map))))
-                          registry)))
-          (update :client-id-counter
-                  (fn [counters]
-                    (into {}
-                          (remove (fn [[[_side route-key] _counter]]
-                                    (= store-session-id (if (vector? route-key) (first route-key) route-key))))
-                          counters)))
-          (update :server-id-counter
-                  (fn [counters]
-                    (into {}
-                          (remove (fn [[[_side route-key] _counter]]
-                                    (= store-session-id (if (vector? route-key) (first route-key) route-key))))
-                          counters))))))
+      (let [contexts (reduce-kv (partial remove-session-context-entry store-session-id)
+                                {}
+                                (:transport-contexts state))]
+        (-> state
+            (assoc :transport-contexts contexts)
+            (assoc :player-index (build-player-index contexts))
+            (assoc :client-id-counter
+                   (reduce-kv (partial counter-for-other-session store-session-id)
+                              {}
+                              (:client-id-counter state)))
+            (assoc :server-id-counter
+                   (reduce-kv (partial counter-for-other-session store-session-id)
+                              {}
+                              (:server-id-counter state)))))))
   nil)
 
 (defn reset-contexts-for-test!
@@ -378,6 +422,7 @@
      (fn [state]
        (-> state
            (assoc :transport-contexts contexts)
+           (assoc :player-index (build-player-index contexts))
            (assoc :client-id-counter {})
            (assoc :server-id-counter {}))))
    nil))

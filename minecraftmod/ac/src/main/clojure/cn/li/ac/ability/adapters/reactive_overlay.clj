@@ -68,12 +68,22 @@
 
 (defn- set-box-node-at! [_r ^INode n x y w h rgba]
   (when n
-    (.setX n (double x))
-    (.setY n (double y))
-    (.setW n (double w))
-    (.setH n (double h))
-    (.setDSlot n 0 (unchecked-int (rgba-map->argb rgba)))
-    (.setFlag n node/FLAG-RENDER-DIRTY)))
+    (let [x* (double x)
+          y* (double y)
+          w* (double w)
+          h* (double h)
+          color (double (unchecked-int (rgba-map->argb rgba)))]
+      (when (or (not (== x* (.getX n)))
+                (not (== y* (.getY n)))
+                (not (== w* (.getW n)))
+                (not (== h* (.getH n)))
+                (not (== color (.getDSlot n 0))))
+        (.setX n x*)
+        (.setY n y*)
+        (.setW n w*)
+        (.setH n h*)
+        (.setDSlot n 0 color)
+        (.setFlag n node/FLAG-RENDER-DIRTY)))))
 
 (defn- set-box-rgba! [r id rgba]
   (when-let [^INode n (ui/node r id)]

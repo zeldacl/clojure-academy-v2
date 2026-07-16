@@ -10,6 +10,7 @@
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
+            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.util.log :as log])
@@ -18,8 +19,9 @@
                                    PlayerEvent$Clone
                                    PlayerEvent$PlayerChangedDimensionEvent]
            [net.minecraftforge.event.entity.living LivingDeathEvent]
-           [net.minecraftforge.event TickEvent$PlayerTickEvent TickEvent$Phase]
+           [net.minecraftforge.event TickEvent$ServerTickEvent TickEvent$Phase]
            [net.minecraft.resources ResourceKey]
+           [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]))
 
 
@@ -81,14 +83,11 @@
                     :send-sync-now! runtime-network/send-sync-to-client!
                     :clear-player-dirty! runtime-sync/clear-player-dirty!}))))
 
-(defn- on-player-tick [^TickEvent$PlayerTickEvent evt]
-  (when (and (= TickEvent$Phase/END (.phase evt))
-             (server-player (.player evt)))
-    (let [^ServerPlayer p (.player evt)]
-      (lifecycle-core/on-player-tick! p (merge (lifecycle-owner p)
-                                               {:mark-player-dirty! runtime-sync/mark-player-dirty!
-                                                :tick-sync! runtime-sync/tick-sync!
-                                                :send-sync-fn runtime-network/send-sync-to-client!})))))
+(defn- on-server-tick
+  [callbacks ^TickEvent$ServerTickEvent evt]
+  (when (= TickEvent$Phase/END (.phase evt))
+    (let [^MinecraftServer server (.getServer evt)]
+      (lifecycle-core/run-server-tick! server callbacks))))
 
 (defn init-common!
   "Register all forge-side lifecycle listeners for runtime bridge."
@@ -103,13 +102,18 @@
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
                          (runtime-sync/clear-session-scheduler-state! session-id))})
-  (lifecycle-event-binding/register-lifecycle-listeners!
-    {:on-player-login on-player-login
-     :on-player-logout on-player-logout
-     :on-player-clone on-player-clone
-     :on-player-death on-player-death
-      :on-player-dimension-change on-player-dimension-change
-     :on-player-tick on-player-tick})
+  (let [tick-callbacks {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                        :tick-sync! runtime-sync/tick-sync!
+                        :send-sync-fn runtime-network/send-sync-to-client!
+                        :world-tick! (fn [_runtime level]
+                                       (wireless-world/on-world-tick level))}]
+    (lifecycle-event-binding/register-lifecycle-listeners!
+      {:on-player-login on-player-login
+       :on-player-logout on-player-logout
+       :on-player-clone on-player-clone
+       :on-player-death on-player-death
+       :on-player-dimension-change on-player-dimension-change
+       :on-server-tick (partial on-server-tick tick-callbacks)}))
 
   ;; Initialize damage handlers after all protocols are installed
   (power-runtime/init-damage-handlers!)

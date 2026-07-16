@@ -195,9 +195,8 @@
 (defn interferer-tick-state
   "Pure state step; ability I/O runs in interferer-after-commit!."
   [base-state level pos _block-state _be]
-  (let [ticker (inc (long (get base-state :update-ticker 0)))
+  (let [ticker (machine-runtime/advance-tick! base-state)
         state0 (assoc base-state
-                      :update-ticker ticker
                       :max-energy (double (interferer-config/max-energy))
                       :range (clamp-range (:range base-state)))
         battery-item (get-in state0 [:inventory battery-slot])

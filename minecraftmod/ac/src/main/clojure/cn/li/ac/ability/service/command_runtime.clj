@@ -7,7 +7,6 @@
   3) persist resulting state
   4) execute emitted events/effects"
   (:require
-            [cn.li.ac.ability.application.contracts :as contracts]
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.effects.interpreter :as interpreter]
             [cn.li.ac.ability.service.reducer :as reducer]
@@ -22,7 +21,6 @@
 ;; only commands with an explicit :command-id (idempotent network retries) are ever
 ;; traced or looked up, so this map stays small and is never touched by tick commands.
 (def ^:private command-traces-path [:service :ability-command-traces])
-(def ^:private command-seq-path [:service :ability-command-id-seq])
 
 (defn- command-traces-atom
   ^clojure.lang.IAtom []
@@ -31,15 +29,6 @@
         (get-in (swap! fw-atom update-in command-traces-path #(or % (atom {})))
                 command-traces-path))
     (atom {})))
-
-(defn- command-seq-counter
-  ^java.util.concurrent.atomic.AtomicLong []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom command-seq-path)
-        (get-in (swap! fw-atom update-in command-seq-path
-                       #(or % (java.util.concurrent.atomic.AtomicLong.)))
-                command-seq-path))
-    (java.util.concurrent.atomic.AtomicLong.)))
 
 (defn- now-ms
   []
@@ -97,19 +86,25 @@
   []
   @(command-traces-atom))
 
-(defn- next-auto-command-id
-  []
-  (str "auto-" (.incrementAndGet (command-seq-counter))))
-
 (defn- ensure-command-owner-fields
   [session-id uuid command]
   (-> command
-      contracts/trim-command-meta
-      (update :command-id #(or % (next-auto-command-id)))
       (assoc :uuid uuid)
       (assoc :player-uuid uuid)
       (cond->
         session-id (assoc :session-id session-id))))
+
+(defn- normalize-commands
+  [session-id uuid commands]
+  (let [command-count (count commands)]
+    (loop [index 0
+           result (transient [])]
+      (if (< index command-count)
+        (recur (unchecked-inc-int index)
+               (conj! result
+                      (ensure-command-owner-fields session-id uuid
+                                                   (nth commands index))))
+        (persistent! result)))))
 
 (defn- resolve-session-id
   [session-id]
@@ -123,10 +118,8 @@
   [session-id uuid command {:keys [mark-dirty?]
                             :or {mark-dirty? true}
                             :as opts}]
-  (contracts/assert-command! command)
-  ;; Captured before normalization: only an explicit command-id (idempotent network
-  ;; retries) is ever traced. Auto-generated ids (internal tick commands) skip trace
-  ;; recording entirely — they can never be looked up again.
+  ;; Network boundaries validate before enqueueing. Internal commands are trusted
+  ;; and pay no schema/assertion or generated-id cost.
   (let [explicit-command-id (:command-id command)
         session-id (resolve-session-id session-id)
         normalized (ensure-command-owner-fields session-id uuid command)
@@ -144,15 +137,16 @@
                            :client-session-id session-id})))
             state (store/get-or-create-player-state! session-id uuid)
             result (reducer/apply-command state normalized)
-            _ (contracts/assert-reducer-result! result)
             next-state (:state result)]
         (when (and next-state (not= next-state state))
-          (let [domains (store/changed-sync-domains state next-state)]
-            (store/set-player-state!* session-id uuid next-state)
-            (when mark-dirty?
-              (store/mark-player-dirty! session-id uuid domains))))
-        (runtime-hooks/with-player-state-owner owner
-          (interpreter/execute-reducer-result! result))
+          (let [mask (if mark-dirty?
+                       (store/changed-sync-mask state next-state)
+                       0)]
+            (store/commit-player-state! session-id uuid next-state mask)))
+        (if (= owner (runtime-hooks/current-player-state-owner))
+          (interpreter/execute-reducer-result! result)
+          (runtime-hooks/with-player-state-owner owner
+            (interpreter/execute-reducer-result! result)))
         (when explicit-command-id
           (record-command-trace! session-id uuid explicit-command-id result))
         result))))
@@ -169,25 +163,24 @@
 (defn- run-commands*
   [session-id uuid commands {:keys [mark-dirty?]
                              :or {mark-dirty? true}}]
-  (doseq [command commands]
-    (contracts/assert-command! command))
-    (let [session-id (resolve-session-id session-id)
+  (let [session-id (resolve-session-id session-id)
       owner (or (runtime-hooks/current-player-state-owner)
                 (when session-id
                   {:logical-side :server
                    :server-session-id session-id}))
         state (store/get-or-create-player-state! session-id uuid)
-        normalized (mapv #(ensure-command-owner-fields session-id uuid %) commands)
+        normalized (normalize-commands session-id uuid commands)
         result (reducer/apply-commands state normalized)
-        _ (contracts/assert-reducer-result! result)
         next-state (:state result)]
     (when (and next-state (not= next-state state))
-      (let [domains (store/changed-sync-domains state next-state)]
-        (store/set-player-state!* session-id uuid next-state)
-        (when mark-dirty?
-          (store/mark-player-dirty! session-id uuid domains))))
-    (runtime-hooks/with-player-state-owner owner
-      (interpreter/execute-reducer-result! result))
+      (let [mask (if mark-dirty?
+                   (store/changed-sync-mask state next-state)
+                   0)]
+        (store/commit-player-state! session-id uuid next-state mask)))
+    (if (= owner (runtime-hooks/current-player-state-owner))
+      (interpreter/execute-reducer-result! result)
+      (runtime-hooks/with-player-state-owner owner
+        (interpreter/execute-reducer-result! result)))
     result))
 
 (defn run-commands-in-session!

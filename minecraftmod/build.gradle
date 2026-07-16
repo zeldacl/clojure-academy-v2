@@ -57,10 +57,27 @@ subprojects {
             task.forkOptions.jvmArgs = jvmArgs
         }
 
+        tasks.matching { task -> task.name == 'compileClojure' }.configureEach { task ->
+            if (rootProject.hasProperty('releaseAot')) {
+                def releaseArgs = (task.forkOptions.jvmArgs ?: []) as List
+                ['-Dclojure.compiler.direct-linking=true',
+                 '-Dclojure.compiler.elide-meta=[:doc :file :line :arglists]'].each { arg ->
+                    if (!releaseArgs.contains(arg)) {
+                        releaseArgs << arg
+                    }
+                }
+                task.forkOptions.jvmArgs = releaseArgs
+            }
+        }
+
     }
 
     // 只有应用了 java 或 clojure 插件的子工程才添加此 Task
     plugins.withType(JavaPlugin) {
+        tasks.withType(Jar).configureEach {
+            exclude '**/*.clj', '**/*.cljc'
+            duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        }
         tasks.register('printClasspath') {
             doLast {
                 def classpathFiles = sourceSets.main.compileClasspath +
@@ -70,6 +87,36 @@ subprojects {
                 // 打印出该子工程的完整类路径
                 println(classpathFiles.filter { it.exists() }.join(File.pathSeparator))
             }
+        }
+    }
+}
+
+tasks.register('verifyReleaseJarContents') {
+    group = 'verification'
+    description = 'Verify Forge/Fabric release jars contain no Clojure source or duplicate entries.'
+    dependsOn ':forge-1.20.1:remapJar', ':fabric-1.20.1:remapJar'
+    doLast {
+        [project(':forge-1.20.1'), project(':fabric-1.20.1')].each { platform ->
+            def archive = platform.tasks.named('remapJar').get().archiveFile.get().asFile
+            def seen = new HashSet<String>()
+            def duplicates = []
+            def clojureSources = []
+            def zip = new java.util.zip.ZipFile(archive)
+            try {
+                def entries = zip.entries()
+                while (entries.hasMoreElements()) {
+                    def name = entries.nextElement().name
+                    if (!seen.add(name)) duplicates << name
+                    if (name.endsWith('.clj') || name.endsWith('.cljc')) clojureSources << name
+                }
+            } finally {
+                zip.close()
+            }
+            if (!duplicates.isEmpty() || !clojureSources.isEmpty()) {
+                throw new GradleException("${platform.path} release jar invalid: duplicates=${duplicates.size()}, clojureSources=${clojureSources.size()}")
+            }
+            logger.lifecycle('[verifyReleaseJarContents] {} entries={}, duplicate=0, clj=0',
+                             platform.name, seen.size())
         }
     }
 }

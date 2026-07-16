@@ -69,6 +69,79 @@ remapJar {
     dependsOn shadowJar
 }
 
+// TinyRemapper inspects every class in the shaded artifact, including the
+// Clojure runtime and other third-party jars. Some of those classes contain
+// local-variable tables that TinyRemapper 0.12 cannot process. Strip LVT from
+// the complete shaded artifact immediately before remapping; line numbers and
+// all executable bytecode are preserved.
+def strippedShadowJarFile = layout.buildDirectory.file(
+    "tmp/release-aot/${project.name}-${project.version}-shadow-no-lvt.jar")
+def stripShadowJarLvt = tasks.register('stripShadowJarLvt') {
+    dependsOn tasks.named('shadowJar')
+    inputs.file(tasks.named('shadowJar').flatMap { it.archiveFile })
+    outputs.file(strippedShadowJarFile)
+    doLast {
+        def input = tasks.named('shadowJar').get().archiveFile.get().asFile
+        def output = strippedShadowJarFile.get().asFile
+        output.parentFile.mkdirs()
+        def rewritten = 0
+        def copied = 0
+        new java.util.zip.ZipFile(input).withCloseable { zip ->
+            new java.util.zip.ZipOutputStream(new FileOutputStream(output)).withCloseable { out ->
+                zip.entries().each { entry ->
+                    def next = new java.util.zip.ZipEntry(entry.name)
+                    next.time = 0L
+                    out.putNextEntry(next)
+                    if (!entry.isDirectory()) {
+                        byte[] bytes = zip.getInputStream(entry).withCloseable { it.bytes }
+                        if (entry.name.endsWith('.class')) {
+                            def reader = new org.objectweb.asm.ClassReader(bytes)
+                            def writer = new org.objectweb.asm.ClassWriter(0)
+                            def dropped = [0]
+                            reader.accept(new org.objectweb.asm.ClassVisitor(
+                                org.objectweb.asm.Opcodes.ASM9, writer) {
+                                @Override
+                                org.objectweb.asm.MethodVisitor visitMethod(
+                                    int access, String name, String descriptor,
+                                    String signature, String[] exceptions) {
+                                    def delegate = super.visitMethod(access, name, descriptor,
+                                                                     signature, exceptions)
+                                    return new org.objectweb.asm.MethodVisitor(
+                                        org.objectweb.asm.Opcodes.ASM9, delegate) {
+                                        @Override
+                                        void visitLocalVariable(String localName, String localDescriptor,
+                                                                String localSignature,
+                                                                org.objectweb.asm.Label start,
+                                                                org.objectweb.asm.Label end,
+                                                                int index) {
+                                            dropped[0]++
+                                        }
+                                    }
+                                }
+                            }, 0)
+                            if (dropped[0] > 0) {
+                                bytes = writer.toByteArray()
+                                rewritten++
+                            } else {
+                                copied++
+                            }
+                        }
+                        out.write(bytes)
+                    }
+                    out.closeEntry()
+                }
+            }
+        }
+        logger.lifecycle('[stripShadowJarLvt] rewrote {} classes; copied {} unchanged',
+                         rewritten, copied)
+    }
+}
+
+tasks.named('remapJar').configure {
+    inputFile = strippedShadowJarFile
+    dependsOn stripShadowJarLvt
+}
+
 clojure {
     builds {
         main {
@@ -139,6 +212,9 @@ def copyClojureClassesToJavaOutput = tasks.register('copyClojureClassesToJavaOut
     from fabricClojureAotDir
     into layout.buildDirectory.dir('classes/java/main')
     dependsOn tasks.named('compileClojure')
+    // When packaging, copy the already stripped bytes. For dev runs stripAotLvt
+    // is absent from the graph, so this ordering constraint adds no extra work.
+    mustRunAfter stripAotLvt
     include '**/*.class'
 }
 
@@ -212,4 +288,3 @@ tasks.matching { it.name == 'checkClojure' }.configureEach {
     reflection = 'fail'
     dependsOn tasks.named('compileClojure')
 }
-

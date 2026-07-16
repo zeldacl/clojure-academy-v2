@@ -74,8 +74,7 @@
 
 (defn reset-all-content-runtimes!
   []
-  (let [sid (session-id)
-        store-ref (store/get-store)]
-    (doseq [player-uuid (store/list-players store-ref sid)]
+  (let [sid (session-id)]
+    (doseq [player-uuid (store/list-players sid)]
       (reset-content-runtime-for-player! player-uuid)))
   nil)

@@ -27,7 +27,9 @@
    :on-player-clone! noop
    :on-player-death! noop
    :on-player-dimension-change! noop
+   :on-server-tick-start! noop
    :on-player-tick! noop
+   :on-server-tick-end! noop
    :init-damage-handlers! noop
    :list-player-uuids (fn [] [])
    :build-sync-payload (fn ([_] nil) ([_ _] nil))
@@ -116,6 +118,15 @@
         (default-runtime-hooks-state))
     (default-runtime-hooks-state)))
 
+(defn freeze-runtime-hooks
+  "Capture the installed runtime VTable after bootstrap.
+
+  ServerRuntime stores this immutable map and calls it directly for the
+  lifetime of a server.  This removes Framework atom derefs and nested HAMT
+  lookups from player/server tick paths."
+  []
+  (hooks-core-state-snapshot))
+
 (defn- update-hooks-core-state! [f & args]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom
@@ -189,6 +200,15 @@
 (defn current-player-state-owner
   "Return the currently bound runtime player-state owner map (or nil)."
   [] (player-state-owner))
+
+(defn current-context-owner
+  "Return the explicitly scoped context-routing owner.
+
+  Context routing remains stable when command execution temporarily installs a
+  different player-state owner in the same thread."
+  []
+  (or (:context-owner (get-client-ctx))
+      (:player-owner (get-client-ctx))))
 
 (defn player-state-session-id
   "Resolve store session-id from a canonical owner map (server > client)."
@@ -319,6 +339,25 @@
   []
   (.remove ^ThreadLocal client-ctx-thread-local))
 
+(defn push-player-state-owner!
+  "Install a player-state owner without allocating a per-call thunk.
+
+  This entrypoint is reserved for the server tick coordinator, which pushes
+  once around the complete start/player/end pipeline. Returns the previous
+  context for pop-client-context!."
+  [owner]
+  (let [old (get-client-ctx)]
+    (set-client-ctx! (assoc (or old {}) :player-owner owner))
+    old))
+
+(defn pop-client-context!
+  "Restore a context returned by push-player-state-owner!."
+  [old]
+  (if old
+    (set-client-ctx! old)
+    (.remove ^ThreadLocal client-ctx-thread-local))
+  nil)
+
 
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."
@@ -442,9 +481,17 @@
   [player-uuid from-dim to-dim]
   ((:on-player-dimension-change! (hooks-core-state-snapshot)) player-uuid from-dim to-dim))
 
+(defn on-server-tick-start!
+  [tick-id]
+  ((:on-server-tick-start! (hooks-core-state-snapshot)) tick-id))
+
 (defn on-player-tick!
   [player-uuid]
   ((:on-player-tick! (hooks-core-state-snapshot)) player-uuid))
+
+(defn on-server-tick-end!
+  [tick-id]
+  ((:on-server-tick-end! (hooks-core-state-snapshot)) tick-id))
 
 (defn init-damage-handlers!
   []

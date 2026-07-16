@@ -101,9 +101,8 @@
 
 (defn former-tick-state
   [state _level _pos _block-state _be]
-  (let [state (assoc state
-                     :update-ticker (inc (int (get state :update-ticker 0)))
-                     :max-energy (double former-config/max-energy))
+  (machine-runtime/advance-tick! state)
+  (let [state (assoc state :max-energy (double former-config/max-energy))
         energy-item (get-in state [:inventory energy-slot])
         state (if (and energy-item (energy/is-energy-item-supported? energy-item))
                 (let [cur-energy (double (:energy state 0.0))

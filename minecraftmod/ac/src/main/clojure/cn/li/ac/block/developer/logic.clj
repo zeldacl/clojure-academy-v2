@@ -109,8 +109,8 @@
 		(machine-runtime/commit-transform! be dev-default-state dev-session/clear-session)))
 
 (defn developer-tick-state [state level pos _block-state be]
-	(let [ticker (inc (long (get state :update-ticker 0)))
-				state1 (-> state (assoc :update-ticker ticker) (ensure-tier-defaults be))
+	(let [ticker (machine-runtime/advance-tick! state)
+				state1 (ensure-tier-defaults state be)
 				state2 (if (zero? (mod ticker (dev-config/validate-interval)))
 								 (let [block-spec (some-> (platform-be/get-block-id be) bdsl/get-block-spec)]
 									 (assoc state1 :structure-valid (boolean (and block-spec (validate-structure level pos block-spec)))))

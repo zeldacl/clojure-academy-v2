@@ -54,14 +54,13 @@
 	 :messages [{:type :translatable :key message-key :args (vec args)}]})
 
 (defn cat-tick-state [state _level _pos _block-state be]
-	(let [ticker (inc (long (get state :update-ticker 0)))
-				energy (double (get state :energy 0.0))
+	(machine-runtime/advance-tick! state)
+	(let [energy (double (get state :energy 0.0))
 				max-energy (double (cat-config/max-energy))
 				generated (min (double (cat-config/generation-per-tick))
 											 (max 0.0 (- max-energy energy)))
 				state1 (-> state
-									 (assoc :update-ticker ticker
-													:energy (+ energy generated)
+									 (assoc :energy (+ energy generated)
 													:max-energy max-energy
 													:this-tick-gen (double generated)
 													:gen-speed (double (cat-config/generator-bandwidth))))]

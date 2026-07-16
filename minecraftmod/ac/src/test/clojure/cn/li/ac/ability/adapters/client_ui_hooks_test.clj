@@ -315,9 +315,13 @@
                                                          (swap! rebuilt conj player-uuid)
                                                          nil)]
       (client-ui-hooks/register-client-push-handlers!)
-      ((get @handlers catalog/MSG-SYNC-PRESET) {:uuid "p1"
-                                                :preset-data {:active-preset 0
-                                                              :presets []}})
+      ((get @handlers catalog/MSG-SYNC-V2) {:version 2
+                                            :opcode 2
+                                            :uuid "p1"
+                                            :revision 1
+                                            :dirty-mask store/preset-data-mask
+                                            :preset-data {:active-preset 0
+                                                          :presets []}})
       (is (= ["p1"] @rebuilt)))))
 
 (deftest sync-runtime-push-clears-keybind-state-and-aborts-active-slot-contexts-test
@@ -349,9 +353,13 @@
                                                      (swap! cleared-groups conj group)
                                                      nil)]
       (client-ui-hooks/register-client-push-handlers!)
-      ((get @handlers catalog/MSG-SYNC-RUNTIME) {:uuid "p1"
-                                                 :ability-data {:category-id :meltdowner
-                                                                :learned-skills []}})
+      ((get @handlers catalog/MSG-SYNC-V2) {:version 2
+                                            :opcode 2
+                                            :uuid "p1"
+                                            :revision 1
+                                            :dirty-mask store/ability-data-mask
+                                            :ability-data {:category-id :meltdowner
+                                                           :learned-skills []}})
       (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
                :payload {:ctx-id "ctx-runtime-reset" :key-idx 0}}]
              (network-support/sent-without-callbacks @sent)))
@@ -386,10 +394,14 @@
                                                                 (swap! cleared conj owner)
                                                                 nil)]
       (client-ui-hooks/register-client-push-handlers!)
-      ((get @handlers catalog/MSG-SYNC-RESOURCE) {:uuid "p1"
-                                                  :resource-data {:activated false
-                                                                  :overload-fine true
-                                                                  :interferences #{}}})
+      ((get @handlers catalog/MSG-SYNC-V2) {:version 2
+                                            :opcode 2
+                                            :uuid "p1"
+                                            :revision 1
+                                            :dirty-mask store/resource-data-mask
+                                            :resource-data {:activated false
+                                                            :overload-fine true
+                                                            :interferences #{}}})
       (is (= [{:msg-id catalog/MSG-SLOT-KEY-ABORT
                :payload {:ctx-id "ctx-resource-reset" :key-idx 0}}]
              (network-support/sent-without-callbacks @sent)))
@@ -586,4 +598,3 @@
               {:ctx-id "ctx-flashing" :channel :flashing/move-tick :payload {:key :forward}}
               {:ctx-id "ctx-flashing" :channel :flashing/move-up :payload {:key :forward}}]
              (mapv :payload @sent))))))
-

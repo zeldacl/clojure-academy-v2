@@ -22,8 +22,13 @@ ext.configureMcmodContentRuntime = {
     def mcmodProject = project(':mcmod')
     def mcmodClojureSources = mcmodProject.file('src/main/clojure')
     def mcmodJavaClasses = mcmodProject.layout.buildDirectory.dir('classes/java/main')
-    def mcmodClojureAotClasses = mcmodProject.layout.buildDirectory.dir('clojure/main')
+    def releaseAot = rootProject.hasProperty('releaseAot')
+    def mcmodClojureAotClasses = mcmodProject.layout.buildDirectory.dir(
+        releaseAot ? 'clojure/main-stripped' : 'clojure/main')
     def mcmodResources = mcmodProject.layout.buildDirectory.dir('resources/main')
+    def mcmodPackagingDeps = releaseAot
+        ? [mcmodProject.tasks.named('classes'), mcmodProject.tasks.named('stripAotLvt')]
+        : [mcmodProject.tasks.named('classes')]
 
     dependencies {
         compileOnly mcmodProject.sourceSets.main.output
@@ -36,8 +41,14 @@ ext.configureMcmodContentRuntime = {
     }
 
     tasks.named('jar', Jar).configure {
-        dependsOn mcmodProject.tasks.named('classes')
-        from(mcmodProject.sourceSets.main.output) {
+        dependsOn mcmodPackagingDeps
+        from(mcmodJavaClasses) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(mcmodResources) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(mcmodClojureAotClasses) {
             exclude 'META-INF/MANIFEST.MF'
         }
         from(mcmodClojureSources) {
@@ -46,8 +57,14 @@ ext.configureMcmodContentRuntime = {
     }
 
     tasks.matching { it.name == 'shadowJar' }.configureEach {
-        dependsOn mcmodProject.tasks.named('classes')
-        from(mcmodProject.sourceSets.main.output) {
+        dependsOn mcmodPackagingDeps
+        from(mcmodJavaClasses) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(mcmodResources) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(mcmodClojureAotClasses) {
             exclude 'META-INF/MANIFEST.MF'
         }
         from(mcmodClojureSources) {
@@ -63,7 +80,7 @@ ext.configureMcmodContentRuntime = {
     }
 
     def copyMcmodJavaClassesToPlatformOutput = tasks.register('copyMcmodJavaClassesToPlatformOutput', Copy) {
-        dependsOn mcmodProject.tasks.named('classes')
+        dependsOn mcmodPackagingDeps
         group = 'build'
         description = 'Mirror mcmod Java/runtime classes and Clojure runtime sources into the platform Java output for dev launchers and GameTest.'
         mustRunAfter tasks.named('compileJava')
@@ -117,8 +134,13 @@ ext.configureAcContentRuntime = {
     def acProject = project(':ac')
     def acClojureSources = acProject.file('src/main/clojure')
     def acJavaClasses = acProject.layout.buildDirectory.dir('classes/java/main')
-    def acClojureAotClasses = acProject.layout.buildDirectory.dir('clojure/main')
+    def releaseAot = rootProject.hasProperty('releaseAot')
+    def acClojureAotClasses = acProject.layout.buildDirectory.dir(
+        releaseAot ? 'clojure/main-stripped' : 'clojure/main')
     def acResources = acProject.layout.buildDirectory.dir('resources/main')
+    def acPackagingDeps = releaseAot
+        ? [acProject.tasks.named('classes'), acProject.tasks.named('stripAotLvt')]
+        : [acProject.tasks.named('classes')]
 
     dependencies {
         // Use file/source-set outputs instead of `implementation project(':ac')`.
@@ -131,8 +153,11 @@ ext.configureAcContentRuntime = {
     }
 
     tasks.named('jar', Jar).configure {
-        dependsOn acProject.tasks.named('classes')
-        from(acProject.sourceSets.main.output) {
+        dependsOn acPackagingDeps
+        from(acJavaClasses) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acResources) {
             exclude 'META-INF/MANIFEST.MF'
         }
         // AC AOT Clojure classes are output to clojure/main (isolated from Java
@@ -147,8 +172,11 @@ ext.configureAcContentRuntime = {
     }
 
     tasks.matching { it.name == 'shadowJar' }.configureEach {
-        dependsOn acProject.tasks.named('classes')
-        from(acProject.sourceSets.main.output) {
+        dependsOn acPackagingDeps
+        from(acJavaClasses) {
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(acResources) {
             exclude 'META-INF/MANIFEST.MF'
         }
         from(acClojureAotClasses) {
@@ -175,7 +203,7 @@ ext.configureAcContentRuntime = {
     }
 
     def copyAcJavaClassesToPlatformOutput = tasks.register('copyAcJavaClassesToPlatformOutput', Copy) {
-        dependsOn acProject.tasks.named('classes')
+        dependsOn acPackagingDeps
         group = 'build'
         description = 'Mirror AC Java/runtime classes and Clojure runtime sources into the platform Java output for dev launchers and GameTest.'
         mustRunAfter tasks.named('compileJava')

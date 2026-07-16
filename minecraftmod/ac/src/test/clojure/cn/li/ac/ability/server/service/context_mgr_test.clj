@@ -193,23 +193,9 @@
                                      :player-uuid "p1"}
                                      (:id client-ctx)))))))
 
-(deftest dispatcher-timing-can-be-overridden-via-system-properties-test
-  (let [keepalive-key "ac.ctx.keepalive-timeout-ms"
-        grace-key "ac.ctx.terminated-grace-ms"
-        old-keepalive (System/getProperty keepalive-key)
-        old-grace (System/getProperty grace-key)]
-    (try
-      (System/setProperty keepalive-key "42")
-      (System/setProperty grace-key "84")
-      (is (= 42 (cm/keepalive-timeout-ms)))
-      (is (= 84 (cm/terminated-context-grace-ms)))
-      (finally
-        (if (some? old-keepalive)
-          (System/setProperty keepalive-key old-keepalive)
-          (System/clearProperty keepalive-key))
-        (if (some? old-grace)
-          (System/setProperty grace-key old-grace)
-          (System/clearProperty grace-key))))))
+(deftest dispatcher-timing-is-frozen-for-runtime-test
+  (is (= 1500 (cm/keepalive-timeout-ms)))
+  (is (= 1000 (cm/terminated-context-grace-ms))))
 
 (deftest establish-context-uses-bound-server-session-test
   (let [out (atom [])
@@ -244,5 +230,4 @@
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound"
                           (cm/abort-player-contexts! "p-fail")))))
-
 

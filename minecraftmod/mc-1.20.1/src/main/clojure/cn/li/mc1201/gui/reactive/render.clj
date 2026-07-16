@@ -336,7 +336,7 @@
             (if (pos? diag-tan)
               (let [^PoseStack ps (.pose gg)
                     ^Matrix4f pose (.pose (.last ps))
-                    ^BufferBuilder bb (.builder (Tesselator/getInstance))
+                    ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))
                     x0   (float seg-start)
                     x1   (float seg-end)
                     y0   (float iy)

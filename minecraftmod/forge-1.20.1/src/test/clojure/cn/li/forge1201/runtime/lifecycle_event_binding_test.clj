@@ -6,7 +6,7 @@
                                                  PlayerEvent$Clone
                                                  PlayerEvent$PlayerChangedDimensionEvent]
            [net.minecraftforge.event.entity.living LivingDeathEvent]
-           [net.minecraftforge.event TickEvent$PlayerTickEvent]))
+           [net.minecraftforge.event TickEvent$ServerTickEvent]))
 
 (defn- reset-registration!
   [f]
@@ -25,7 +25,7 @@
    :on-player-clone identity
    :on-player-death identity
    :on-player-dimension-change identity
-   :on-player-tick identity})
+   :on-server-tick identity})
 
 (deftest register-lifecycle-listeners-is-idempotent-test
   (let [registrations (atom [])]
@@ -38,7 +38,7 @@
             [PlayerEvent$Clone identity]
             [LivingDeathEvent identity]
             [PlayerEvent$PlayerChangedDimensionEvent identity]
-            [TickEvent$PlayerTickEvent identity]]
+            [TickEvent$ServerTickEvent identity]]
            @registrations))))
 
 (deftest reset-allows-re-registration-test

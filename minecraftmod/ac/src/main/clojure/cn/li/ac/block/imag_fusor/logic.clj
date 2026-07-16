@@ -212,8 +212,8 @@
 
 (defn fusor-tick-state
   [state level pos _block-state _be]
+  (machine-runtime/advance-tick! state)
   (let [state (assoc state
-                     :update-ticker (inc (long (get state :update-ticker 0)))
                      :tank-size (int (:tank-size state fusor-config/tank-size))
                      :check-cooldown (int (:check-cooldown state fusor-config/check-interval))
                      :sound-cooldown (int (get state :sound-cooldown 0)))

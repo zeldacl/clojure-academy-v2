@@ -2,10 +2,15 @@
   "Loader-agnostic player lifecycle flow for runtime state.
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
-  (:require [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
+  (:require [cn.li.mc1201.runtime.server-runtime :as server-runtime]
+            [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as player-hooks]
             [cn.li.mcmod.runtime.install :as install])
-  (:import [net.minecraft.world.entity.player Player]))
+  (:import [java.util HashMap]
+           [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.level ServerPlayer]
+           [net.minecraft.server.players PlayerList]
+           [net.minecraft.world.entity.player Player]))
 
 (defn- player-uuid
   [^Player player]
@@ -68,7 +73,10 @@
         #(do
            (player-hooks/on-server-stop! session-id)
            (when cleanup-session!
-             (cleanup-session! session-id)))))))
+             (cleanup-session! session-id))))
+      (when-let [runtime (server-context-spi/current-server-runtime)]
+        (server-runtime/dispose-server-runtime! runtime)
+        (server-context-spi/clear-server-runtime!)))))
 
 (defn install-server-stop-cleanup!
   "Register the on-server-stop cleanup callback exactly once per process.
@@ -146,3 +154,97 @@
              (mark-player-dirty! owner uuid))
            (when tick-sync!
              (tick-sync! send-sync-fn owner)))))))
+
+;; ---------------------------------------------------------------------------
+;; Server-owned four-phase runtime. Platform adapters call run-server-tick!
+;; once, instead of invoking the global scheduler from every PlayerTickEvent.
+;; ---------------------------------------------------------------------------
+
+(defn- same-server-runtime?
+  [runtime ^MinecraftServer server]
+  (and runtime
+       (not (.disposed ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime))
+       (identical? server (.server ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime))))
+
+(defn create-server-runtime!
+  [^MinecraftServer server callbacks]
+  (server-runtime/create-server-runtime!
+   server callbacks (player-hooks/freeze-runtime-hooks)))
+
+(defn ensure-server-runtime!
+  [^MinecraftServer server callbacks]
+  (let [current (server-context-spi/current-server-runtime)]
+    (if (same-server-runtime? current server)
+      current
+      (do
+        (when current
+          (server-runtime/dispose-server-runtime! current))
+        (server-context-spi/install-server-runtime!
+         (create-server-runtime! server callbacks))))))
+
+(defn- cached-player-uuid
+  [runtime ^ServerPlayer player]
+  (let [^HashMap cache (.players ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+        uuid (.getUUID player)]
+    (or (.get cache uuid)
+        (let [value (str uuid)]
+          (.put cache uuid value)
+          value))))
+
+(defn server-tick-start!
+  [runtime ^long game-time]
+  (.beginTick ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime game-time)
+  ((get (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+        :on-server-tick-start!)
+   game-time)
+  nil)
+
+(defn player-tick!
+  [runtime ^ServerPlayer player owner]
+  (let [uuid (cached-player-uuid runtime player)
+        hooks (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+        callbacks (.callbacks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)]
+    ((get hooks :on-player-tick!) uuid)
+    (when ((get hooks :player-state-dirty?) uuid)
+      (when-let [mark-dirty! (get callbacks :mark-player-dirty!)]
+        (mark-dirty! owner uuid))))
+  nil)
+
+(defn world-tick!
+  [runtime level]
+  (when-let [tick-world! (get (.callbacks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+                              :world-tick!)]
+    (tick-world! runtime level))
+  nil)
+
+(defn server-tick-end!
+  [runtime ^long game-time owner]
+  (let [hooks (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+        callbacks (.callbacks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)]
+    ((get hooks :on-server-tick-end!) game-time)
+    (when-let [tick-sync! (get callbacks :tick-sync!)]
+      (tick-sync! (get callbacks :send-sync-fn) owner)))
+  nil)
+
+(defn run-server-tick!
+  "Run start -> N players -> end/sync exactly once for one server tick."
+  [^MinecraftServer server callbacks]
+  (let [runtime (ensure-server-runtime! server callbacks)
+        game-time (long (.getTickCount server))]
+    (.beginTick ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime game-time)
+    (let [owner (server-runtime/runtime-owner runtime)
+          old-context (player-hooks/push-player-state-owner! owner)]
+      (try
+        ((get (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+              :on-server-tick-start!)
+         game-time)
+        (let [^PlayerList player-list (.getPlayerList server)]
+          (doseq [^ServerPlayer player (.getPlayers player-list)]
+            (player-tick! runtime player owner)))
+        (doseq [level (.getAllLevels server)]
+          (world-tick! runtime level))
+        (server-tick-end! runtime game-time owner)
+        (finally
+          (.finishTick ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
+          (player-hooks/pop-client-context! old-context))))
+    runtime))
