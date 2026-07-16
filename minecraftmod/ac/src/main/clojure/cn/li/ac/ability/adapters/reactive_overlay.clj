@@ -111,51 +111,70 @@
   (dsl/text {:id :line :text "" :color 0xFFFFFFFF}))
 
 (defn- build-overlay-spec [sw sh]
-  (dsl/group {:id :root :w sw :h sh}
-    (dsl/box {:id :bg-mask :x 0 :y 0 :w sw :h sh :fill 0x00000000})
-    (dsl/box {:id :overload-pulse :x 0 :y 0 :w sw :h sh :fill 0x00000000 :visible? false})
-    (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
-    (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
-      (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x6E081220})
-      (dsl/box {:id :charging-bar-bg :w 140 :h 8 :fill 0x96081230})
-      (dsl/box {:id :charging-bar-fill :w 2 :h 8 :fill 0xC85AD2FF})
-      (dsl/text {:id :charging-label :text "" :color 0xFFFFFFFF})
-      (dsl/box {:id :charging-mark-v :w 4 :h 16 :fill 0xC878DCFF})
-      (dsl/box {:id :charging-mark-h :w 16 :h 4 :fill 0xC878DCFF}))
-    (dsl/group {:id :coin-qte-layer :w sw :h sh :visible? false}
-      (dsl/box {:id :coin-qte-bg :w 48 :h 48 :fill 0x6414120A})
-      (dsl/list-node {:id :coin-qte-dots :w 48 :h 48 :template (coin-dot-template)})
-      (dsl/box {:id :coin-qte-marker :w 4 :h 4 :fill 0xF0FFDC50})
-      (dsl/text {:id :coin-qte-pct :text "" :color 0xFFFFD700}))
-    (dsl/progress {:id :cp-bar :x 8 :y 8 :w 100 :h 10
-                   :icon-cutout {:x-offset 84 :w 16}
-                   :bg-src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
-                   :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")})
-    (dsl/progress {:id :overload-bar :x 8 :y 22 :w 100 :h 10
-                   :bg-src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
-                   :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")})
-    (dsl/image {:id :cp-glow :x 8 :y 8 :w 100 :h 10
-                :src (modid/asset-path "textures" "guis/cpbar/cp.png") :visible? false})
-    (dsl/text {:id :activation-dot :x (int (/ sw 2)) :y 10 :text "*" :color 0xFF888888})
-    (dsl/text {:id :activation-hint :x (+ (int (/ sw 2)) 12) :y 10 :text "" :color 0xFFCCCCCC :visible? false})
-    (dsl/text {:id :cp-numbers :x 115 :y 14 :text "" :color 0xFFFFFFFF :visible? false})
-    (dsl/text {:id :ol-numbers :x 115 :y 29 :text "" :color 0xFFFFFFFF :visible? false})
-    (dsl/list-node {:id :skill-slots :spacing 2 :w 120 :h 88 :template (skill-slot-template)})
-    (dsl/group {:id :preset-row :x (int (/ sw 2)) :y (- sh 45) :w 40 :h 8}
-      (dsl/box {:id :preset-prev :x -18 :y 0 :w 8 :h 8 :fill 0x80666666 :visible? false})
-      (dsl/box {:id :preset-curr :x -4 :y 0 :w 8 :h 8 :fill 0x80FFAA00 :visible? false}))
-    (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
-    (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
-    (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
-      (dsl/image {:id :tut-bg :x 0 :y 15 :w 129 :h 43 :src "" :alpha 0.0})
-      (dsl/image {:id :tut-icon :w 83 :h 83 :src "" :alpha 0.0})
-      (dsl/text {:id :tut-title :text "" :color 0xFFFFFFFF})
-      (dsl/text {:id :tut-content :text "" :color 0xFFFFFFFF}))
-    (dsl/list-node {:id :debug-lines :w 300 :h 200 :template (debug-line-template)})
-    (dsl/group {:id :overlay-app-layer :w sw :h sh :visible? false}
-      (dsl/box {:id :overlay-app-panel :fill 0xC0202020})
-      (dsl/text {:id :overlay-app-title :text "" :color 0xFFFFFFFF})
-      (dsl/text {:id :overlay-app-subtitle :text "" :color 0xFF888888 :visible? false}))))
+  (let [bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
+        bar-y 12
+        bar-w 193           ;; 964 * 0.2
+        bar-h 29]           ;; 147 * 0.2
+    (dsl/group {:id :root :w sw :h sh}
+      (dsl/box {:id :bg-mask :x 0 :y 0 :w sw :h sh :fill 0x00000000})
+      (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
+      (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
+        (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x6E081220})
+        (dsl/box {:id :charging-bar-bg :w 140 :h 8 :fill 0x96081230})
+        (dsl/box {:id :charging-bar-fill :w 2 :h 8 :fill 0xC85AD2FF})
+        (dsl/text {:id :charging-label :text "" :color 0xFFFFFFFF})
+        (dsl/box {:id :charging-mark-v :w 4 :h 16 :fill 0xC878DCFF})
+        (dsl/box {:id :charging-mark-h :w 16 :h 4 :fill 0xC878DCFF}))
+      (dsl/group {:id :coin-qte-layer :w sw :h sh :visible? false}
+        (dsl/box {:id :coin-qte-bg :w 48 :h 48 :fill 0x6414120A})
+        (dsl/list-node {:id :coin-qte-dots :w 48 :h 48 :template (coin-dot-template)})
+        (dsl/box {:id :coin-qte-marker :w 4 :h 4 :fill 0xF0FFDC50})
+        (dsl/text {:id :coin-qte-pct :text "" :color 0xFFFFD700}))
+      ;; ===== CP Bar Area (right-aligned, matching upstream CPBar layout) =====
+      ;; Bar frame background (full bar, switches on overload)
+      (dsl/image {:id :cpbar-bg :x bar-x :y bar-y :w bar-w :h bar-h
+                  :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")})
+      ;; Overload fill (behind CP fill, scroll-animated)
+      (dsl/progress {:id :overload-bar :x bar-x :y (+ bar-y 4) :w (- bar-w 4) :h 21
+                     :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")
+                     :scroll-offset 0.0})
+      ;; CP fill (diagonal cut + icon overlay)
+      (dsl/progress {:id :cp-bar :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
+                     :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
+                     :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
+                     :icon-src ""     ;; set per-frame to category icon
+                     :icon-cutout {:x-offset 161 :w 16 :y-offset 0 :h 17}})
+      ;; Overload highlight (pulsing overlay when overloaded)
+      (dsl/image {:id :overload-highlight :x bar-x :y bar-y :w bar-w :h bar-h
+                  :src (modid/asset-path "textures" "guis/cpbar/highlight_overload.png")
+                  :visible? false :alpha 0.0})
+      ;; ===== CP/OL Numbers (within bar area) =====
+      (dsl/text {:id :cp-numbers :x (- sw 183) :y 23 :text "" :color 0xFFFFFFFF :visible? false})
+      (dsl/text {:id :ol-numbers :x (- sw 183) :y 29 :text "" :color 0xFFFFFFFF :visible? false})
+      ;; ===== Activation hint (within bar area, with background box) =====
+      (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
+        (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
+        (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
+      ;; ===== Skill Slots (right-aligned, center-vertical) =====
+      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210
+                      :x (- sw 150) :y (- (/ sh 2) 105)
+                      :template (skill-slot-template)})
+      ;; ===== Preset indicators (within bar area) =====
+      (dsl/group {:id :preset-row :x (- sw 89) :y 39 :w 212 :h 52}
+        (dsl/box {:id :preset-prev :x -18 :y 0 :w 8 :h 8 :fill 0x80666666 :visible? false})
+        (dsl/box {:id :preset-curr :x -4  :y 0 :w 8 :h 8 :fill 0x80FFAA00 :visible? false}))
+      (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
+      (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
+      (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
+        (dsl/image {:id :tut-bg :x 0 :y 15 :w 129 :h 43 :src "" :alpha 0.0})
+        (dsl/image {:id :tut-icon :w 83 :h 83 :src "" :alpha 0.0})
+        (dsl/text {:id :tut-title :text "" :color 0xFFFFFFFF})
+        (dsl/text {:id :tut-content :text "" :color 0xFFFFFFFF}))
+      (dsl/list-node {:id :debug-lines :w 300 :h 200 :template (debug-line-template)})
+      (dsl/group {:id :overlay-app-layer :w sw :h sh :visible? false}
+        (dsl/box {:id :overlay-app-panel :fill 0xC0202020})
+        (dsl/text {:id :overlay-app-title :text "" :color 0xFFFFFFFF})
+        (dsl/text {:id :overlay-app-subtitle :text "" :color 0xFF888888 :visible? false})))))
 
 (defn- attach-overlay-bindings! [r]
   (let [clock (rt/clock-ms-sig r)
@@ -167,7 +186,7 @@
         bg-smooth (anim/smoothed-color bg-target clock)
         cp-smooth (anim/smoothed cp-target clock 2.0)
         ol-smooth (anim/smoothed ol-target clock 2.0)
-        glow-alpha (anim/breathe clock 1500.0 0.2 0.35)
+        hl-alpha  (anim/breathe clock 4000.0 0.3 0.65)
         jitter-x (anim/jitter-offset clock 0)
         jitter-y (anim/jitter-offset clock 1)
         ^INode bg-mask (ui/node r :bg-mask)]
@@ -176,6 +195,7 @@
     (rt/put-user-signal! r :ol-target ol-target)
     (rt/put-user-signal! r :cp-hint cp-hint)
     (rt/put-user-signal! r :ol-scroll ol-scroll)
+    (rt/put-user-signal! r :hl-alpha hl-alpha)
     (rt/put-user-signal! r :jitter-x jitter-x)
     (rt/put-user-signal! r :jitter-y jitter-y)
     (rt/put-user-signal! r :last-skill-slot-ids (atom []))
@@ -183,13 +203,20 @@
     (rt/put-user-signal! r :last-toast-count (atom -1))
     (rt/put-user-signal! r :last-debug-line-count (atom -1))
     (rt/put-user-signal! r :last-coin-dot-count (atom -1))
+    ;; Incremental update caches (avoid per-frame dirty flags)
+    (rt/put-user-signal! r :last-cp-icon    (atom ""))
+    (rt/put-user-signal! r :last-overloaded (atom false))
+    (rt/put-user-signal! r :ol-hl-visible   (atom false))
     (let [b (sig/bind! bg-smooth bg-mask write-fill-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
+    ;; CP bar: progress + hint line
     (ui/bind! r :cp-bar :progress cp-smooth)
-    (ui/bind! r :overload-bar :progress ol-smooth)
-    (ui/bind! r :cp-bar :hint cp-hint)
+    (ui/bind! r :cp-bar :hint     cp-hint)
+    ;; Overload bar: progress + scroll offset
+    (ui/bind! r :overload-bar :progress      ol-smooth)
     (ui/bind! r :overload-bar :scroll-offset ol-scroll)
-    (ui/bind! r :cp-glow :alpha glow-alpha)
+    ;; Overload highlight: breathing alpha
+    (ui/bind! r :overload-highlight :alpha hl-alpha)
     r))
 
 (defn build-overlay-runtime
@@ -213,19 +240,16 @@
       (.setFlag n node/FLAG-RENDER-DIRTY))))
 
 (defn- update-activation-indicator! [r snapshot]
-  (when-let [ind (:activation-indicator snapshot)]
-    (let [activated? (:activated ind)
-          hint (:hint ind)]
-      (set-visible! r :cp-bar (:activated? snapshot))
-      (set-visible! r :overload-bar (:activated? snapshot))
-      (set-visible! r :cp-glow (and (:activated? snapshot) (:cp-full-glow? snapshot)))
-      (when-let [^INode dot (ui/node r :activation-dot)]
-        (ui/set-node-prop! r dot :text "*")
-        (ui/set-node-prop! r dot :color (if activated? 0xFF00FF00 0xFF888888)))
-      (when hint
-        (set-visible! r :activation-hint true)
-        (ui/set-prop! r :activation-hint :text (str hint)))
-      (set-visible! r :activation-hint (boolean (and activated? hint))))))
+  (let [ind       (:activation-indicator snapshot)
+        activated (:activated snapshot)
+        hint      (:hint ind)]
+    ;; Show/hide the bar-area activation hint group
+    (set-visible! r :cp-bar (:activated? snapshot))
+    (set-visible! r :overload-bar (:activated? snapshot))
+    (set-visible! r :cpbar-bg (:activated? snapshot))
+    (set-visible! r :activation-hint-group (boolean (and activated hint)))
+    (when hint
+      (ui/set-prop! r :activation-hint :text (str hint)))))
 
 (defn- update-numbers! [r snapshot]
   (let [texts (:numbers-texts snapshot)]
@@ -248,7 +272,7 @@
         prev (first indicators)
         curr (last indicators)]
     (when-let [^INode row (ui/node r :preset-row)]
-      (.setX row (double (int (/ sw 2)))))
+      (.setX row (double (- sw 89))))
     (if (seq indicators)
       (do
         (when prev
@@ -327,14 +351,6 @@
         (.setDSlot n 1 (double (:intensity ch)))
         (.setFlag n node/FLAG-RENDER-DIRTY)))
     (set-visible! r :crosshair false)))
-
-(defn- update-overload-pulse! [r snapshot]
-  (if-let [intensity (:overload-pulse-intensity snapshot)]
-    (when-let [^INode n (ui/node r :overload-pulse)]
-      (let [alpha (int (* 40.0 (double intensity)))]
-        (set-visible! r :overload-pulse (pos? alpha))
-        (ui/set-node-prop! r n :fill (bit-or (bit-shift-left alpha 24) 0x00FF2200))))
-    (set-visible! r :overload-pulse false)))
 
 (defn- update-toast-item! [r item toast]
   (let [^INode grp item
@@ -522,7 +538,13 @@
         (set-visible! r :overlay-app-subtitle false))
       (set-visible! r :cp-bar false)
       (set-visible! r :overload-bar false)
-      (set-visible! r :skill-slots false))
+      (set-visible! r :skill-slots false)
+      (set-visible! r :cpbar-bg false)
+      (set-visible! r :overload-highlight false)
+      (set-visible! r :activation-hint-group false)
+      (set-visible! r :cp-numbers false)
+      (set-visible! r :ol-numbers false)
+      (set-visible! r :preset-row false))
     (set-visible! r :overlay-app-layer false)))
 
 (defn- apply-jitter! [r interfered?]
@@ -540,7 +562,7 @@
         (.setFlag root node/FLAG-LAYOUT-DIRTY)))))
 
 (defn- apply-screen-size! [r sw sh]
-  (doseq [id [:root :bg-mask :overload-pulse]]
+  (doseq [id [:root :bg-mask]]
     (when-let [^INode n (ui/node r id)]
       (when (or (not= (double sw) (.getW n)) (not= (double sh) (.getH n)))
         (.setW n (double sw))
@@ -573,20 +595,36 @@
             (sig/sset-d! cp-hint (double (or (:hint-percent (:cp-bar snapshot)) 0.0))))
           (when-let [ol-scroll (rt/user-signal r :ol-scroll)]
             (sig/sset-d! ol-scroll (double (or (:scroll-offset (:overload-bar snapshot)) 0.0))))
-          (when-let [^INode ol-bar (ui/node r :overload-bar)]
-            (let [ol (:overload-bar snapshot)
-                  overloaded? (boolean (:overloaded ol))]
-              (ui/set-prop! r :overload-bar :bg-src
-                            (if overloaded?
-                              (modid/asset-path "textures" "guis/cpbar/back_overload.png")
-                              (modid/asset-path "textures" "guis/cpbar/back_normal.png")))))
-          (set-visible! r :cp-glow (and (:activated? snapshot) (:cp-full-glow? snapshot)))
+          ;; Category icon — only dirty when actually changed
+          (when-let [last* (rt/user-signal r :last-cp-icon)]
+            (let [icon-src (or (:category-icon (:cp-bar snapshot)) "")]
+              (when (not= @last* icon-src)
+                (reset! last* icon-src)
+                (when-let [^INode n (ui/node r :cp-bar)]
+                  (.setOSlot n 3 icon-src)
+                  (.setFlag n node/FLAG-RENDER-DIRTY)))))
+          ;; Bar background — only switch on overload state change
+          (when-let [last* (rt/user-signal r :last-overloaded)]
+            (let [overloaded? (boolean (:overloaded (:overload-bar snapshot)))]
+              (when (not= @last* overloaded?)
+                (reset! last* overloaded?)
+                (ui/set-prop! r :cpbar-bg :src
+                              (if overloaded?
+                                (modid/asset-path "textures" "guis/cpbar/back_overload.png")
+                                (modid/asset-path "textures" "guis/cpbar/back_normal.png"))))))
+          ;; Overload highlight — only toggle visibility on state change
+          (when-let [last* (rt/user-signal r :ol-hl-visible)]
+            (let [ol-pct      (double (or (:percent (:overload-bar snapshot)) 0.0))
+                  overloaded? (boolean (:overloaded (:overload-bar snapshot)))
+                  should-show (or overloaded? (> ol-pct 0.8))]
+              (when (not= @last* should-show)
+                (reset! last* should-show)
+                (set-visible! r :overload-highlight should-show))))
           (update-activation-indicator! r snapshot)
           (update-numbers! r snapshot)
           (update-preset-indicators! r snapshot sw)
           (update-skill-slots! r snapshot)
-          (update-crosshair! r snapshot)
-          (update-overload-pulse! r snapshot)))
+          (update-crosshair! r snapshot)))
       (update-vm-waves! r snapshot)
       (update-charging-layer! r snapshot sw sh)
       (update-coin-qte-layer! r snapshot)

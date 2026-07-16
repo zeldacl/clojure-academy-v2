@@ -297,48 +297,83 @@
 ;; ============================================================================
 
 (defn bake-progress! [^INode node]
-  (let [bg (.getOSlot node 1)
-        fg (.getOSlot node 2)]
-    (when (string? bg) (.setOSlot node 8 (resolve-rl bg)))
-    (when (string? fg) (.setOSlot node 9 (resolve-rl fg)))))
+  (let [bg   (.getOSlot node 1)
+        fg   (.getOSlot node 2)
+        icon (.getOSlot node 3)]
+    (when (string? bg)   (.setOSlot node 8  (resolve-rl bg)))
+    (when (string? fg)   (.setOSlot node 9  (resolve-rl fg)))
+    (when (string? icon) (.setOSlot node 10 (resolve-rl icon)))))
 
 (defn- icon-cutout [^INode node]
   (get (.getStaticProps node) :icon-cutout))
 
 (defn render-progress! [^GuiGraphics gg ^INode node]
-  (let [x       (node-abs-x node)   y       (node-abs-y node)
-        w       (scaled-w node)     h       (scaled-h node)
-        percent (double (.getDSlot node SLOT-PROG-PROGRESS))
-        hint    (.getDSlot node 2)
-        scroll  (.getDSlot node 3)
+  (let [x        (node-abs-x node)   y        (node-abs-y node)
+        w        (scaled-w node)     h        (scaled-h node)
+        percent  (double (.getDSlot node SLOT-PROG-PROGRESS))
+        diag-tan (double (.getDSlot node 1))            ;; :corner dslot (0=rect, 0.695=44deg)
+        hint     (.getDSlot node 2)                      ;; :hint-percent
+        scroll   (.getDSlot node 3)                      ;; :scroll-offset
         filled-w (int (* percent w))
         ix (unchecked-int x) iy (unchecked-int y)
         iw (unchecked-int w) ih (unchecked-int (+ y h))
-        ^ResourceLocation bg-rl (.getOSlot node 8)
-        ^ResourceLocation fg-rl (.getOSlot node 9)
-        cutout (icon-cutout node)
-        cutout-start (when cutout (+ ix (int (:x-offset cutout 0))))
-        cutout-width (when cutout (int (:w cutout 0)))
-        cutout-end (when cutout (+ cutout-start cutout-width))]
+        ^ResourceLocation bg-rl    (.getOSlot node 8)
+        ^ResourceLocation fg-rl    (.getOSlot node 9)
+        ^ResourceLocation icon-rl  (.getOSlot node 10)   ;; baked icon
+        cutout     (icon-cutout node)
+        cutout-x0  (when cutout (+ ix (int (:x-offset cutout 0))))
+        cutout-w   (when cutout (int (:w cutout 0)))
+        cutout-x1  (when cutout (+ cutout-x0 cutout-w))
+        cutout-y0  (when cutout (+ iy (int (or (:y-offset cutout 0) 0))))
+        cutout-h   (when cutout (int (or (:h cutout 0) (- ih iy))))
+
+        ;; Draw a textured trapezoid via BufferBuilder (1 draw call, zero alloc).
+        ;; When diag-tan=0 draws a plain rectangle; when >0 the left edge tilts
+        ;; inward such that the bottom-left corner is offset right by diag-tan*h.
+        draw-trap!
+        (fn draw-trap! [seg-start seg-end]
+          (when (< seg-start seg-end)
+            (if (pos? diag-tan)
+              (let [^PoseStack ps (.pose gg)
+                    ^Matrix4f pose (.pose (.last ps))
+                    ^BufferBuilder bb (.builder (Tesselator/getInstance))
+                    x0   (float seg-start)
+                    x1   (float seg-end)
+                    y0   (float iy)
+                    y1   (float ih)
+                    x0b  (float (+ seg-start (* diag-tan h)))  ;; bottom-left offset
+                    u-at (fn [^double sx]
+                           (float (/ (- sx (double ix)) (double iw))))]
+                (RenderSystem/setShaderTexture 0 fg-rl)
+                (RenderSystem/setShader GameRenderer/getPositionTexShader)
+                (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+                (.vertex bb pose x0  y0 0.0)  (.uv bb (u-at x0)  0.0)  (.endVertex bb)
+                (.vertex bb pose x0b y1 0.0)  (.uv bb (u-at x0b) 1.0)  (.endVertex bb)
+                (.vertex bb pose x1  y1 0.0)  (.uv bb (u-at x1)  1.0)  (.endVertex bb)
+                (.vertex bb pose x1  y0 0.0)  (.uv bb (u-at x1)  0.0)  (.endVertex bb)
+                (BufferUploader/drawWithShader (.end bb)))
+              ;; Rectangular fill: existing scissor+blit path
+              (let [uoff (float (* scroll iw))]
+                (.enableScissor gg seg-start iy seg-end ih)
+                (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
+                (.disableScissor gg)))))]
+    ;; ---- background ----
     (when bg-rl
       (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
+    ;; ---- hint line ----
     (when (and (pos? hint) (< hint percent))
       (let [hint-x (int (+ x (* hint w)))]
         (.fill gg hint-x iy (+ hint-x 1) ih (unchecked-int 0x80FF4444))))
-    (letfn [(draw-segment! [seg-start seg-end]
-              (when (< seg-start seg-end)
-                (when fg-rl
-                  (let [uoff (float (* scroll w))]
-                    (.enableScissor gg seg-start iy seg-end ih)
-                    (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
-                    (.disableScissor gg)))))]
-      (when (and fg-rl (pos? filled-w))
-        (let [bar-start ix
-              bar-end (int (+ x filled-w))]
-          (if (and cutout-start cutout-width (pos? cutout-width))
-            (do (draw-segment! bar-start (min bar-end cutout-start))
-                (draw-segment! (max bar-start cutout-end) bar-end))
-            (draw-segment! bar-start bar-end)))))))
+    ;; ---- foreground fill ----
+    (when (and fg-rl (pos? filled-w))
+      (let [bar-end (int (+ x filled-w))]
+        (if (and cutout-x0 cutout-w (pos? cutout-w))
+          (do (draw-trap! ix       (min bar-end cutout-x0))
+              (draw-trap! cutout-x1 (min bar-end         iw)))
+          (draw-trap! ix (min bar-end iw)))))
+    ;; ---- icon overlay ----
+    (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
+      (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))))
 
 ;; ============================================================================
 ;; :shader-quad / :shader-ring / :shader-progress

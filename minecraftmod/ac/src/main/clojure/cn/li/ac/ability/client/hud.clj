@@ -82,7 +82,7 @@
              :idx idx
              :x (- screen-width 120)
              :y (+ (- screen-height 100) (* idx 22))
-             :key-label (nth ["Z" "X" "C" "B"] idx)
+             :key-label (nth ["Z" "X" "C" "V"] idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))
