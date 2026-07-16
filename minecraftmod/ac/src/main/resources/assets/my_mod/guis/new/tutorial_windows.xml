@@ -9,7 +9,7 @@
   <image id="MetalFormer" pos="0.0,0.0" size="192.0,192.0" scale="0.50" align="center,center" src="my_mod:textures/guis/tutorial_metalformer.png">
     <group id="progress" pos="77.7,83.5" size="36.7,23.3" align="left,top"/>
     <group id="slot_out" pos="155.3,88.5" size="25.0,25.0" align="left,top"/>
-    <image id="mode" pos="82.7,22.7" size="25.0,25.0" align="left,top" src="lambdalib:textures/cgui/missing.png"/>
+    <image id="mode" pos="82.7,22.7" size="25.0,25.0" align="left,top" src="my_mod:textures/guis/missing.png"/>
     <group id="slot_in" pos="11.3,88.5" size="25.0,25.0" align="left,top"/>
   </image>
   <image id="Smelting" pos="0.0,0.0" size="192.0,128.0" scale="0.60" align="center,center" src="my_mod:textures/guis/tutorial_smelting.png">
