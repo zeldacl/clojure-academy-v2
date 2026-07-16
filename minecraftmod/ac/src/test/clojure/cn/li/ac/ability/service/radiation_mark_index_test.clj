@@ -49,7 +49,14 @@
 ;; Stateful API — needs a framework atom (fresh per test, see with-framework)
 ;; ============================================================================
 
-(use-fixtures :each ps-fix/with-test-player-state-owner)
+(defn- with-clean-radiation-runtime [f]
+  (ps-fix/with-test-player-state-owner
+    (fn []
+      (rad-index/reset-for-test!)
+      (try (f)
+           (finally (rad-index/reset-for-test!))))))
+
+(use-fixtures :each with-clean-radiation-runtime)
 
 (def ^:private sid ps-fix/test-session-id)
 

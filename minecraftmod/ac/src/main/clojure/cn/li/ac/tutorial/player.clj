@@ -9,23 +9,40 @@
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.tutorial.conditions :as conditions]
             [cn.li.ac.tutorial.model :as model]
+            [cn.li.ac.persistence.nbt-collections :as nbt-coll]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private nbt-key "academy_tutorial")
+(def ^:private nbt-key "ac_tutorial_v2")
+(def ^:private schema-version 2)
 
 ;; --- NBT helpers ---
 
 (defn- load-state
   [tag]
   (when (nbt/nbt-has-key-safe? tag nbt-key)
-    (try (clojure.edn/read-string (nbt/nbt-get-string tag nbt-key))
-         (catch Exception e (log/warn "Failed to load tutorial NBT state:" (ex-message e)) nil))))
+    (let [root (nbt/nbt-get-compound tag nbt-key)]
+      (when (= schema-version (nbt/nbt-get-int root "schema"))
+        {:activated-tuts (nbt-coll/read-keyword-set root "activated")
+         :condition-flags (nbt-coll/read-int-set root "conditions")
+         :misaka-id (when (nbt/nbt-get-boolean root "has_misaka")
+                      (nbt/nbt-get-int root "misaka"))
+         :first-open? (nbt/nbt-get-boolean root "first_open")
+         :dirty? false}))))
 
 (defn- save-state!
   [tag state]
-  (nbt/nbt-set-string! tag nbt-key (pr-str state)))
+  (let [root (nbt/create-nbt-compound)
+        misaka-id (:misaka-id state)]
+    (nbt/nbt-set-int! root "schema" schema-version)
+    (nbt-coll/write-keyword-set! root "activated" (:activated-tuts state))
+    (nbt-coll/write-int-set! root "conditions" (:condition-flags state))
+    (nbt/nbt-set-boolean! root "has_misaka" (some? misaka-id))
+    (when (some? misaka-id)
+      (nbt/nbt-set-int! root "misaka" (int misaka-id)))
+    (nbt/nbt-set-boolean! root "first_open" (boolean (:first-open? state)))
+    (nbt/nbt-set-tag! tag nbt-key root)))
 
 ;; --- Public API ---
 

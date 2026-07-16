@@ -51,11 +51,6 @@
     :gui-data-slot? true
     :gui-data-slot-status-codes ["STOPPED" "WEAK" "STRONG"]}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}
-
    {:key :wind-change-ticker
     :type :int
     :default 0
@@ -126,11 +121,6 @@
     :gui-sync? true
     :gui-data-slot? false}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}
-
    {:key :structure-valid
     :type :boolean
     :default false
@@ -167,7 +157,4 @@
     :default false
     :persist? false}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}])
+   ])

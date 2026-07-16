@@ -245,7 +245,6 @@
      :initial-state (fn [be _level _pos _block-state]
                       (node-safe-state be (platform-be/get-block-id be)))
      :tick-state node-tick-state
-     :mark-changed? machine-runtime/changed-ignoring-ticker?
      :after-commit! sync-blockstate-if-changed!}))
 
 ;; ============================================================================

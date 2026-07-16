@@ -116,11 +116,6 @@
     :save-fn inv-helpers/save-inventory
     :doc "Two generic item slots (classic developer inventory size)."}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}
-
    {:key :wireless-inject-this-tick
     :type :double
     :default 0.0

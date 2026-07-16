@@ -275,7 +275,6 @@
   (machine-runtime/make-tick-fn
     {:default-state interferer-default-state
      :tick-state interferer-tick-state
-     :mark-changed? machine-runtime/changed-ignoring-ticker?
      :after-commit! interferer-after-commit!}))
 
 ;; ============================================================================

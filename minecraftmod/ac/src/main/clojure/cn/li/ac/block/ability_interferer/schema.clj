@@ -80,7 +80,4 @@
     :default []
     :persist? false}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}])
+   ])

@@ -8,8 +8,7 @@
   tracking and revisions are primitive mutable fields."
   (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.model.preset :as pdata]
-            [cn.li.mcmod.framework :as fw])
+            [cn.li.ac.ability.model.preset :as pdata])
   (:import [java.util ArrayDeque HashMap]))
 
 (def ability-data-mask 0x01)
@@ -119,19 +118,15 @@
   IAbilityStore
   (sessions [_] session-runtimes))
 
-(def ^:private store-path [:service :ability-store])
-
 (defn create-store
   ^IAbilityStore []
   (AbilityStore. (HashMap.)))
 
+(defonce ^:private default-store (create-store))
+
 (defn- ensure-store
   ^IAbilityStore []
-  (when-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom store-path)
-        (let [candidate (create-store)]
-          (get-in (swap! fw-atom update-in store-path #(or % candidate))
-                  store-path)))))
+  default-store)
 
 (defn get-store
   ^IAbilityStore []
@@ -331,8 +326,7 @@
 
 (defn reset-store!
   []
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in store-path (create-store)))
+  (.clear ^HashMap (.sessions ^IAbilityStore default-store))
   nil)
 
 (defn snapshot

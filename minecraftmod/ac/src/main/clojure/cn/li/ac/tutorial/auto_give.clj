@@ -16,7 +16,7 @@
   )
 
 (def tutorial-item-id (modid/namespaced-path "tutorial"))
-(def ^:private nbt-key "academy_tutorial_acquired")
+(def ^:private nbt-key "ac_tutorial_acquired_v2")
 
 (defn- tutorial-acquired-in-nbt?
   [tag]

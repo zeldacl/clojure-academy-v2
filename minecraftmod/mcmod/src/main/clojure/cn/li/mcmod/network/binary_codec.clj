@@ -1,9 +1,8 @@
 (ns cn.li.mcmod.network.binary-codec
   "Tag-framed binary wire codec for network payloads (Clojure data <-> byte[]).
 
-  Replaces the EDN pr-str/read-string boundary on the network path (NBT
-  persistence keeps using cn.li.mc1201.runtime.edn-state — this codec is for
-  wire messages only). Strings use an explicit int length prefix rather than
+  Restricted to generic GUI RPC messages. Runtime sync v2 and native NBT use
+  dedicated fixed-schema codecs. Strings use an explicit int length prefix rather than
   DataOutputStream/FriendlyByteBuf's writeUTF (64KB) / writeUtf (32767-char)
   ceilings, since ability payloads can exceed both."
   (:import [java.io ByteArrayOutputStream ByteArrayInputStream DataOutputStream DataInputStream]

@@ -20,9 +20,6 @@
 
 (def ^:private shield-cache-key :last-shield-hw-state)
 
-(defn last-shield-hw-state-atom []
-  (machine-render-runtime/render-cache-atom shield-cache-key nil))
-
 (defn last-shield-hw-state-snapshot []
   (machine-render-runtime/render-cache-snapshot shield-cache-key nil))
 
@@ -48,7 +45,7 @@
         ht-phase-offset 40.0
         hw-state {:plate-count plate-count :core-level core-level :active-plates active-plates}]
     (when (not= hw-state (last-shield-hw-state-snapshot))
-      (reset! (last-shield-hw-state-atom) hw-state))
+      (machine-render-runtime/put-render-cache! shield-cache-key hw-state))
     (dotimes [i active-plates]
       (pose/push-pose pose-stack)
       (try

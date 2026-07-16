@@ -6,23 +6,32 @@
   handles save/load automatically."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.model :as model]
+            [cn.li.ac.persistence.nbt-collections :as nbt-coll]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private nbt-key "academy_terminal")
+(def ^:private nbt-key "ac_terminal_v2")
+(def ^:private schema-version 2)
 
 ;; --- NBT helpers ---
 
 (defn- load-state
   [tag]
   (when (nbt/nbt-has-key-safe? tag nbt-key)
-    (try (clojure.edn/read-string (nbt/nbt-get-string tag nbt-key))
-         (catch Exception e (log/stacktrace "Failed to deserialize terminal state from NBT" e) nil))))
+    (let [root (nbt/nbt-get-compound tag nbt-key)]
+      (when (= schema-version (nbt/nbt-get-int root "schema"))
+        {:terminal-installed? (nbt/nbt-get-boolean root "installed")
+         :installed-apps (nbt-coll/read-keyword-set root "apps")}))))
 
 (defn- save-state!
   [tag state]
-  (nbt/nbt-set-string! tag nbt-key (pr-str state)))
+  (let [state (model/normalize-state state)
+        root (nbt/create-nbt-compound)]
+    (nbt/nbt-set-int! root "schema" schema-version)
+    (nbt/nbt-set-boolean! root "installed" (:terminal-installed? state))
+    (nbt-coll/write-keyword-set! root "apps" (:installed-apps state))
+    (nbt/nbt-set-tag! tag nbt-key root)))
 
 ;; --- Public API ---
 

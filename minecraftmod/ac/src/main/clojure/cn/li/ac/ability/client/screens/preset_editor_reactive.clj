@@ -13,7 +13,6 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.ui.core :as ui]
@@ -24,7 +23,8 @@
             [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcmod.ui.node INode]))
+           [cn.li.mcmod.ui.node INode]
+           [java.util HashMap]))
 
 ;; Forward declare — used by build-selector! before definition
 (declare refresh-ui!)
@@ -55,24 +55,25 @@
 ;; State tracking per-session (Framework-backed for lifecycle safety)
 ;; ============================================================================
 
-(def ^:private active-by-session-path [:service :preset-editor :active-by-session])
+(defonce ^:private ^HashMap active-by-session (HashMap.))
 
 (defn- track-active! [owner ^UiRt r]
   (when-let [uuid (or (:player-uuid owner) (nth (logic/editor-owner-key owner) 2 nil))]
     (when-let [session-id (:client-session-id owner)]
-      (swap! (fw/fw-atom) assoc-in (conj active-by-session-path [session-id uuid])
-             {:rt r :owner owner}))))
+      (.put active-by-session [session-id uuid] {:rt r :owner owner}))))
 
 (defn- untrack-active! [owner]
   (when-let [uuid (or (:player-uuid owner) (nth (logic/editor-owner-key owner) 2 nil))]
     (when-let [session-id (:client-session-id owner)]
-      (swap! (fw/fw-atom) update-in active-by-session-path dissoc [session-id uuid]))))
+      (.remove active-by-session [session-id uuid]))))
 
 (defn- cached-owner [^UiRt r]
   (or (:owner (rt/user-signal r :owner))
       (when-let [session-id (runtime-hooks/client-session-id)]
-        (some (fn [[[sid _] v]] (when (= sid session-id) (:owner v)))
-              (get-in @(fw/fw-atom) active-by-session-path)))))
+        (some (fn [entry]
+                (let [[sid _] (.getKey ^java.util.Map$Entry entry)]
+                  (when (= sid session-id) (:owner (.getValue ^java.util.Map$Entry entry)))))
+              (.entrySet active-by-session)))))
 
 ;; ============================================================================
 ;; Helpers
@@ -360,8 +361,7 @@
   "Called when server preset data syncs while the editor is open."
   [player-uuid]
   (when-let [session-id (runtime-hooks/client-session-id)]
-    (when-let [{:keys [rt owner]} (get-in @(fw/fw-atom)
-                                          (conj active-by-session-path [session-id player-uuid]))]
+    (when-let [{:keys [rt owner]} (.get active-by-session [session-id player-uuid])]
       (refresh-ui! rt owner))))
 
 (defn- load-page-spec []

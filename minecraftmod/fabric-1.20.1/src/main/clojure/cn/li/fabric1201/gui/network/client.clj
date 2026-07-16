@@ -44,9 +44,10 @@
   [msg-id request-id payload]
   (ClientPlayNetworking/send shared/c2s-channel (shared/make-buf (packet-base/request-map msg-id request-id payload))))
 
-(defmethod net-client/send-request :fabric-1.20.1
-  [msg-id payload request-id]
-  (send-to-server! msg-id request-id payload))
+(net-client/register-request-transport!
+  :fabric-1.20.1
+  (fn [msg-id payload request-id]
+    (send-to-server! msg-id request-id payload)))
 
 (defn- handle-client-response!
   [request-id payload]

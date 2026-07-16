@@ -103,11 +103,6 @@
     :persist? true
     :size 5}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}
-
   {:key :check-cooldown
    :nbt-key "CheckCooldown"
    :type :int

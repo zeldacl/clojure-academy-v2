@@ -10,7 +10,8 @@
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.be :as platform-be]))
+            [cn.li.mcmod.platform.be :as platform-be])
+  (:import [java.util HashMap]))
 
 (def ^:private obj-bake-opts
   {:skip-flat-bottom-plane? true :bottom-plane-epsilon 0.0008})
@@ -30,23 +31,22 @@
 
 (def ^:private fan-rot-cache-key :fan-rot-cache)
 
-(defn- fan-rot-cache-atom
-  []
-  (machine-render-runtime/render-cache-atom fan-rot-cache-key {}))
+(defn- fan-rot-cache ^HashMap []
+  (machine-render-runtime/render-cache fan-rot-cache-key (HashMap.)))
 
 (defn fan-rot-cache-snapshot
   []
-  (machine-render-runtime/render-cache-snapshot fan-rot-cache-key {}))
+  (into {} (fan-rot-cache)))
 
 (defn clear-fan-rot-cache!
   []
-  (machine-render-runtime/clear-render-cache! fan-rot-cache-key {}))
+  (machine-render-runtime/clear-render-cache! fan-rot-cache-key (HashMap.)))
 
 (defn reset-fan-rot-cache-for-test!
   ([]
    (clear-fan-rot-cache!))
   ([cache]
-   (machine-render-runtime/reset-render-cache-for-test! fan-rot-cache-key {} cache)))
+   (machine-render-runtime/reset-render-cache-for-test! fan-rot-cache-key (HashMap.) (HashMap. ^java.util.Map cache))))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]
@@ -56,10 +56,13 @@
   [tile speed-deg-per-sec]
   (let [k (tile-key tile)
         now (render/get-render-time)
-        prev (get (fan-rot-cache-snapshot) k {:t now :rot 0.0})
-        dt (max 0.0 (- now (:t prev)))
-        next-rot (+ (:rot prev) (* speed-deg-per-sec dt))]
-    (swap! (fan-rot-cache-atom) assoc k {:t now :rot next-rot})
+        ^HashMap cache (fan-rot-cache)
+        ^doubles prev (or (.get cache k) (double-array [now 0.0]))
+        dt (max 0.0 (- now (aget prev 0)))
+        next-rot (+ (aget prev 1) (* speed-deg-per-sec dt))]
+    (aset-double prev 0 now)
+    (aset-double prev 1 next-rot)
+    (.put cache k prev)
     next-rot))
 
 (defn- render-base-at-origin

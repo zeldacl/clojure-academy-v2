@@ -7,10 +7,10 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.context-domain :as context-domain]
             [cn.li.ac.ability.service.context-projection :as ctx-proj]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap HashSet]))
 
 (def STATUS-CONSTRUCTED context-domain/status-constructed)
 (def STATUS-ALIVE context-domain/status-alive)
@@ -38,35 +38,47 @@
   [ctx-owner & body]
   `(with-context-owner-fn ~ctx-owner (fn [] ~@body)))
 
-(def ^:private default-dispatcher-state
-  {:transport-contexts {}
-   :player-index       {}
-   :route-fns          {}
-   :client-id-counter  {}
-   :server-id-counter  {}})
 ;; Context dispatcher — Framework [:service :context-dispatcher]
 
-(def ^:private disp-path [:service :context-dispatcher])
+(definterface IDispatcherRuntime
+  (^Object contexts [])
+  (^Object playerIndex [])
+  (^Object routeFns [])
+  (^Object clientCounters [])
+  (^Object serverCounters []))
 
-(defn- dispatcher-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom disp-path)
-        (let [a (atom default-dispatcher-state)]
-          (swap! fw-atom assoc-in disp-path a) a))
-    (atom default-dispatcher-state)))
+(deftype DispatcherRuntime
+  [^HashMap transport-contexts ^HashMap player-index ^HashMap route-fns
+   ^HashMap client-counters ^HashMap server-counters]
+  IDispatcherRuntime
+  (contexts [_] transport-contexts)
+  (playerIndex [_] player-index)
+  (routeFns [_] route-fns)
+  (clientCounters [_] client-counters)
+  (serverCounters [_] server-counters))
 
+(defn create-dispatcher-runtime
+  ^IDispatcherRuntime []
+  (DispatcherRuntime. (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.)))
 
-(defn- dispatcher-state-snapshot
-  []
-  @(dispatcher-state-atom))
+(defonce ^:private default-runtime (create-dispatcher-runtime))
+(def ^:dynamic *dispatcher-runtime* nil)
 
-(defn- update-dispatcher-state!
-  [f & args]
-  (apply swap! (dispatcher-state-atom) f args))
+(defn- current-runtime
+  ^IDispatcherRuntime []
+  (or *dispatcher-runtime* default-runtime))
+
+(defn- dispatcher-state-snapshot []
+  (let [^IDispatcherRuntime runtime (current-runtime)]
+    {:transport-contexts (into {} (.contexts runtime))
+     :player-index (into {} (.playerIndex runtime))
+     :route-fns (into {} (.routeFns runtime))
+     :client-id-counter (into {} (.clientCounters runtime))
+     :server-id-counter (into {} (.serverCounters runtime))}))
 
 (defn- transport-contexts-snapshot
   []
-  (:transport-contexts (dispatcher-state-snapshot)))
+  (.contexts (current-runtime)))
 
 (defn- context-store-session-id
   [ctx]
@@ -91,49 +103,53 @@
 
 (defn- route-fns-snapshot
   []
-  (:route-fns (dispatcher-state-snapshot)))
+  (.routeFns (current-runtime)))
 
 (declare context-player-index-key)
 
 (defn- assoc-transport!
   [key ctx]
-  (let [index-key (context-player-index-key ctx)]
-    (update-dispatcher-state!
-     (fn [state]
-       (-> state
-           (assoc-in [:transport-contexts key] ctx)
-           (update-in [:player-index index-key] (fnil conj #{}) key)))))
+  (let [^IDispatcherRuntime runtime (current-runtime)
+        ^HashMap registry (.contexts runtime)
+        ^HashMap index (.playerIndex runtime)
+        index-key (context-player-index-key ctx)
+        ^HashSet keys (or (.get index index-key)
+                          (let [created (HashSet.)]
+                            (.put index index-key created)
+                            created))]
+    (.put registry key ctx)
+    (.add keys key))
   ctx)
 
 (defn- update-transport-if-present!
   [key f & args]
-  (update-dispatcher-state!
-    (fn [state]
-      (if (contains? (:transport-contexts state) key)
-        (apply update-in state [:transport-contexts key] f args)
-        state))))
+  (let [^HashMap registry (.contexts (current-runtime))]
+    (when-let [current (.get registry key)]
+      (.put registry key (apply f current args))))
+  nil)
 
 (defn- dissoc-transport!
   [key]
-  (update-dispatcher-state!
-   (fn [state]
-     (if-let [ctx (get-in state [:transport-contexts key])]
-       (let [index-key (context-player-index-key ctx)
-             remaining (disj (get-in state [:player-index index-key] #{}) key)]
-         (cond-> (update state :transport-contexts dissoc key)
-           (seq remaining) (assoc-in [:player-index index-key] remaining)
-           (empty? remaining) (update :player-index dissoc index-key)))
-       state)))
+  (let [^IDispatcherRuntime runtime (current-runtime)
+        ^HashMap registry (.contexts runtime)
+        ^HashMap index (.playerIndex runtime)]
+    (when-let [ctx (.remove registry key)]
+      (let [index-key (context-player-index-key ctx)
+            ^HashSet keys (.get index index-key)]
+        (when keys
+          (.remove keys key)
+          (when (.isEmpty keys)
+            (.remove index index-key))))))
   nil)
 
 (defn- clear-route-fns!
   []
-  (update-dispatcher-state! assoc :route-fns {})
+  (.clear ^HashMap (.routeFns (current-runtime)))
   nil)
 
 (defn- register-route-fns-entry!
   [owner-key routes]
-  (update-dispatcher-state! assoc-in [:route-fns owner-key] routes)
+  (.put ^HashMap (.routeFns (current-runtime)) owner-key routes)
   nil)
 
 (defn- context-logical-side
@@ -178,11 +194,12 @@
 
 (defn- next-context-id!
   [counter-key owner prefix]
-  (let [new-state (update-dispatcher-state!
-                    (fn [state]
-                      (let [next-counter (inc (get-in state [counter-key owner] 0))]
-                        (assoc-in state [counter-key owner] next-counter))))
-        next-counter (get-in new-state [counter-key owner])]
+  (let [^IDispatcherRuntime runtime (current-runtime)
+        ^HashMap counters (if (= counter-key :client-id-counter)
+                            (.clientCounters runtime)
+                            (.serverCounters runtime))
+        next-counter (unchecked-inc (long (or (.get counters owner) 0)))]
+    (.put counters owner next-counter)
     (str prefix "-" next-counter)))
 
 (defn- resolve-context-owner
@@ -320,9 +337,10 @@
   global context scan."
   ([owner player-uuid]
    (let [[logical-side route-key] (route-owner-key owner)
-         state (dispatcher-state-snapshot)
-         registry (:transport-contexts state)
-         keys (get-in state [:player-index [logical-side route-key (str player-uuid)]] #{})]
+         ^IDispatcherRuntime runtime (current-runtime)
+         ^HashMap registry (.contexts runtime)
+         ^HashSet keys (.get ^HashMap (.playerIndex runtime)
+                             [logical-side route-key (str player-uuid)])]
      (loop [remaining (seq keys)
             result (transient [])]
        (if remaining
@@ -380,51 +398,49 @@
 
 (defn clear-owner-contexts!
   [owner]
-  (let [owner-key (route-owner-key owner)]
-    (update-dispatcher-state!
-      (fn [state]
-        (let [filtered-contexts (reduce-kv (partial remove-owner-context-entry owner-key)
-                                           {}
-                                           (:transport-contexts state))]
-          (-> state
-              (assoc :transport-contexts filtered-contexts)
-              (assoc :player-index (build-player-index filtered-contexts))
-              (update :client-id-counter dissoc owner-key)
-              (update :server-id-counter dissoc owner-key))))))
+  (let [owner-key (route-owner-key owner)
+        ^IDispatcherRuntime runtime (current-runtime)
+        doomed (java.util.ArrayList.)]
+    (doseq [[registry-key ctx-map] (.entrySet ^HashMap (.contexts runtime))]
+      (when (= owner-key [(context-logical-side ctx-map)
+                          (owner/transport-route-key ctx-map)])
+        (.add doomed registry-key)))
+    (doseq [registry-key doomed]
+      (dissoc-transport! registry-key))
+    (.remove ^HashMap (.clientCounters runtime) owner-key)
+    (.remove ^HashMap (.serverCounters runtime) owner-key))
   nil)
 
 (defn clear-store-session-contexts!
   "Clear all registered contexts and counters for one store session token."
   [store-session-id]
-  (update-dispatcher-state!
-    (fn [state]
-      (let [contexts (reduce-kv (partial remove-session-context-entry store-session-id)
-                                {}
-                                (:transport-contexts state))]
-        (-> state
-            (assoc :transport-contexts contexts)
-            (assoc :player-index (build-player-index contexts))
-            (assoc :client-id-counter
-                   (reduce-kv (partial counter-for-other-session store-session-id)
-                              {}
-                              (:client-id-counter state)))
-            (assoc :server-id-counter
-                   (reduce-kv (partial counter-for-other-session store-session-id)
-                              {}
-                              (:server-id-counter state)))))))
+  (let [^IDispatcherRuntime runtime (current-runtime)
+        doomed (java.util.ArrayList.)]
+    (doseq [[registry-key ctx-map] (.entrySet ^HashMap (.contexts runtime))]
+      (when (= store-session-id (context-store-session-id ctx-map))
+        (.add doomed registry-key)))
+    (doseq [registry-key doomed]
+      (dissoc-transport! registry-key))
+    (doseq [^HashMap counters [(.clientCounters runtime) (.serverCounters runtime)]]
+      (let [iterator (.iterator (.keySet counters))]
+        (while (.hasNext iterator)
+          (let [[_side route-key] (.next iterator)
+                counter-session (if (vector? route-key) (first route-key) route-key)]
+            (when (= store-session-id counter-session)
+              (.remove iterator)))))))
   nil)
 
 (defn reset-contexts-for-test!
   ([]
    (reset-contexts-for-test! {}))
   ([contexts]
-   (update-dispatcher-state!
-     (fn [state]
-       (-> state
-           (assoc :transport-contexts contexts)
-           (assoc :player-index (build-player-index contexts))
-           (assoc :client-id-counter {})
-           (assoc :server-id-counter {}))))
+   (let [^IDispatcherRuntime runtime (current-runtime)]
+     (.clear ^HashMap (.contexts runtime))
+     (.clear ^HashMap (.playerIndex runtime))
+     (.clear ^HashMap (.clientCounters runtime))
+     (.clear ^HashMap (.serverCounters runtime))
+     (doseq [[registry-key ctx-map] contexts]
+       (assoc-transport! registry-key ctx-map)))
    nil))
 
 (defn reset-route-fns-for-test!
@@ -605,13 +621,8 @@
       :callback-key callback-key
       :event        event})))
 
-(defn create-dispatcher-runtime
-  "Test/runtime factory for the context dispatcher store."
-  []
-  {::runtime ::context-dispatcher
-   :state* (dispatcher-state-atom)})
-
 (defn call-with-dispatcher-runtime
-  "Run `f` with dispatcher runtime installed (identity wrapper for test isolation)."
-  [_runtime f]
-  (f))
+  "Run `f` with an isolated dispatcher runtime."
+  [runtime f]
+  (binding [*dispatcher-runtime* runtime]
+    (f)))

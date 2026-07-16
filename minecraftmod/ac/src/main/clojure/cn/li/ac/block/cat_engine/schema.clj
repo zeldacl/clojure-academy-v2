@@ -63,7 +63,4 @@
     :gui-sync? false
     :gui-coerce boolean}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}])
+   ])

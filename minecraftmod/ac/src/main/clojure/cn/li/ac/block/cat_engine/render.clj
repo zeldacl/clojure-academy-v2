@@ -11,7 +11,8 @@
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.position :as pos]))
+            [cn.li.mcmod.platform.position :as pos])
+  (:import [java.util HashMap]))
 
 (def ^:private cat-engine-resources-holder nil)
 (def ^:private cat-engine-resources
@@ -20,23 +21,22 @@
 
 (def ^:private rotor-cache-key :rotor-cache)
 
-(defn rotor-cache-atom
-  []
-  (machine-render-runtime/render-cache-atom rotor-cache-key {}))
+(defn- rotor-cache ^HashMap []
+  (machine-render-runtime/render-cache rotor-cache-key (HashMap.)))
 
 (defn rotor-cache-snapshot
   []
-  (machine-render-runtime/render-cache-snapshot rotor-cache-key {}))
+  (into {} (rotor-cache)))
 
 (defn clear-rotor-cache!
   []
-  (machine-render-runtime/clear-render-cache! rotor-cache-key {}))
+  (machine-render-runtime/clear-render-cache! rotor-cache-key (HashMap.)))
 
 (defn reset-rotor-cache-for-test!
   ([]
    (clear-rotor-cache!))
   ([cache]
-   (machine-render-runtime/reset-render-cache-for-test! rotor-cache-key {} cache)))
+   (machine-render-runtime/reset-render-cache-for-test! rotor-cache-key (HashMap.) (HashMap. ^java.util.Map cache))))
 
 (defn- tile-key [tile]
   (let [p (pos/position-get-block-pos tile)]
@@ -46,12 +46,15 @@
   [tile tick-gen]
   (let [k (tile-key tile)
         now-ms (long (* 1000.0 (render/get-render-time)))
-        prev (get (rotor-cache-snapshot) k {:t now-ms :rot 0.0})
-        dt-ms (max 0 (- now-ms (:t prev)))
-        rot (mod (+ (double (:rot prev))
+        ^HashMap cache (rotor-cache)
+        ^doubles prev (or (.get cache k) (double-array [(double now-ms) 0.0]))
+        dt-ms (max 0 (- now-ms (long (aget prev 0))))
+        rot (mod (+ (aget prev 1)
                     (* (double dt-ms) (double tick-gen) 1.0e-2))
                  360.0)]
-    (swap! (rotor-cache-atom) assoc k {:t now-ms :rot rot})
+    (aset-double prev 0 (double now-ms))
+    (aset-double prev 1 rot)
+    (.put cache k prev)
     rot))
 
 (def ^:private quad-vertices

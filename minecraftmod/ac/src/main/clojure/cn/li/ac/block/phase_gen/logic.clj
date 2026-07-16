@@ -51,8 +51,8 @@
   ;; 1) Drain liquid → generate energy (this tick uses liquid from previous round)
   ;; 2) Consume matter unit → add liquid (available for NEXT tick)
   ;; 3) Charge output energy item
+  (machine-runtime/advance-tick! state)
   (let [state-prep (-> state
-                       machine-runtime/inc-update-ticker
                        (assoc :tank-size (int (phase-config/tank-size))
                               :max-energy (double (phase-config/max-energy))))
         ;; Step 1: Generate energy from liquid currently in tank
@@ -83,9 +83,8 @@
   (machine-runtime/make-tick-fn
     {:default-state phase-default-state
      :tick-state phase-tick-state
-     :mark-changed? machine-runtime/changed-ignoring-ticker?
      ;; render.clj reads :liquid-amount directly (texture frame 0-4).
-     :sync-client? machine-runtime/changed-ignoring-ticker?}))
+     :sync-client? true}))
 
 (defn- can-place? [_be ^long slot item _face]
   (case slot

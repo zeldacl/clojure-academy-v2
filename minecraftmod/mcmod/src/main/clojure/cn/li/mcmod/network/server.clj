@@ -2,27 +2,39 @@
   "Server-side RPC handler registry for GUI/network logic"
   (:require [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.gui.owner-contract :as owner-contract]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap]))
 
-;; Network server handlers stored in Framework [:service :network-server]
+(definterface INetworkServerRuntime
+  (handlersMap [])
+  (^boolean frozenState [])
+  (setFrozen [^boolean value]))
 
-(def ^:private server-path [:service :network-server])
+(deftype NetworkServerRuntime [^HashMap handlers
+                               ^:unsynchronized-mutable ^boolean frozen]
+  INetworkServerRuntime
+  (handlersMap [_] handlers)
+  (frozenState [_] frozen)
+  (setFrozen [_ value] (set! frozen value)))
 
-(defn- network-server-state-snapshot []
-  (if-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom server-path {:handlers {} :frozen? false})
-    {:handlers {} :frozen? false}))
+(defn create-network-server-runtime []
+  (NetworkServerRuntime. (HashMap.) false))
 
-(defn- update-network-server-state! [f & args]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom update-in server-path
-           (fn [current] (apply f (or current {:handlers {} :frozen? false}) args))))
-  nil)
+(defonce ^:private runtime-slot
+  (object-array [(create-network-server-runtime)]))
+
+(defn- current-runtime ^NetworkServerRuntime []
+  (aget ^objects runtime-slot 0))
+
+(defn call-with-network-server-runtime [runtime thunk]
+  (let [previous (aget ^objects runtime-slot 0)]
+    (aset ^objects runtime-slot 0 runtime)
+    (try (thunk)
+         (finally (aset ^objects runtime-slot 0 previous)))))
 
 (defn- assert-not-frozen!
   []
-  (when (:frozen? (network-server-state-snapshot))
+  (when (.frozenState ^INetworkServerRuntime (current-runtime))
     (throw (ex-info "Network server handlers are frozen" {}))))
 
 (defn register-handler
@@ -38,39 +50,37 @@
    (registry-contract/validate-handler-fn! msg-id handler-fn)
    (let [entry (registry-contract/handler-entry handler-fn contract)]
      (assert-not-frozen!)
-     (update-network-server-state!
-       update :handlers
-       (fn [registry]
-         (if-let [existing (get registry msg-id)]
-           (if (and (identical? (registry-contract/registered-handler-fn existing)
-                                 handler-fn)
-                    (registry-contract/contracts-compatible?
-                     (registry-contract/registered-handler-contract existing)
-                     (:contract entry)))
-             registry
-             (throw (ex-info "Conflicting network handler id"
-                             {:msg-id msg-id
-                              :existing (registry-contract/registered-handler-contract existing)
-                              :new (:contract entry)})))
-           (assoc registry msg-id entry))))
+     (let [^HashMap handlers (.handlersMap ^INetworkServerRuntime (current-runtime))]
+       (if-let [existing (.get handlers msg-id)]
+         (when-not (and (identical? (registry-contract/registered-handler-fn existing) handler-fn)
+                        (registry-contract/contracts-compatible?
+                         (registry-contract/registered-handler-contract existing)
+                         (:contract entry)))
+           (throw (ex-info "Conflicting network handler id"
+                           {:msg-id msg-id
+                            :existing (registry-contract/registered-handler-contract existing)
+                            :new (:contract entry)})))
+         (.put handlers msg-id entry)))
      (log/info "Registered network handler for" msg-id
                "owner-spec=" (:owner-spec (:contract entry)))
      nil)))
 
 (defn freeze-handlers!
   []
-  (update-network-server-state! assoc :frozen? true)
+  (.setFrozen ^INetworkServerRuntime (current-runtime) true)
   nil)
 
 (defn reset-handlers-for-test!
   []
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in server-path {:handlers {} :frozen? false}))
+  (.clear ^HashMap (.handlersMap ^INetworkServerRuntime (current-runtime)))
+  (.setFrozen ^INetworkServerRuntime (current-runtime) false)
   nil)
 
 (defn handlers-snapshot
   []
-  (network-server-state-snapshot))
+  (let [runtime (current-runtime)]
+    {:handlers (into {} (.handlersMap ^INetworkServerRuntime runtime))
+     :frozen? (.frozenState ^INetworkServerRuntime runtime)}))
 
 (defn- validate-payload-routing!
   [contract payload]
@@ -88,7 +98,7 @@
   - player: player entity
   - respond-fn: (fn [request-id response-map]) or nil"
   [msg-id request-id payload player respond-fn]
-  (if-let [entry (get (:handlers (network-server-state-snapshot)) msg-id)]
+  (if-let [entry (.get ^HashMap (.handlersMap ^INetworkServerRuntime (current-runtime)) msg-id)]
     (let [handler (registry-contract/registered-handler-fn entry)
           contract (registry-contract/registered-handler-contract entry)]
       (try

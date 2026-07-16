@@ -175,13 +175,7 @@
 ;; Fields that exist at runtime but are not saved to NBT.
 ;; Used by: block.clj (server-side)
 
-(def ephemeral-fields
-  [{:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false
-    :gui-sync? false
-    :doc "Server-side tick counter (not synced)"}])
+(def ephemeral-fields [])
 
 ;; ============================================================================
 ;; UNIFIED SCHEMA

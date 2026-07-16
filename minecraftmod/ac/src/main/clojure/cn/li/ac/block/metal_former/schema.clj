@@ -58,11 +58,6 @@
     :persist? true
     :size 3}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false}
-
    {:key :facing
     :nbt-key "Facing"
     :type :string

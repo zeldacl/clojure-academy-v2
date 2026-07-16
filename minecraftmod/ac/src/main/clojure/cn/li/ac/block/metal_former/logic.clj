@@ -121,7 +121,7 @@
   (machine-runtime/make-tick-fn
     {:default-state former-default-state
      :tick-state former-tick-state
-     :mark-changed? machine-runtime/changed-ignoring-ticker?}))
+     }))
 
 (defn- can-place? [_be slot item face]
   (or (and (= slot input-slot)

@@ -9,7 +9,7 @@
            [cn.li.mcmod.uipojo.signal SigD SigL IApply Binding SignalSupport]
            [cn.li.mcmod.ui.node INode]
            [clojure.lang IPersistentMap PersistentArrayMap]
-           [java.util ArrayList]))
+           [java.util ArrayList HashMap]))
 
 (defn create-runtime ^UiRt []
   (UiRt. (SigL. 0 (SignalSupport/newOuts 16))
@@ -93,31 +93,46 @@
   (.setEvents rt (dissoc (.getEvents rt) (int node-idx)))
   nil)
 
-(defonce ^:private bindings-by-rt (atom {}))
-
-(defn- rt-bindings-key [^UiRt rt]
-  (System/identityHashCode rt))
-
 (defn register-binding! [^UiRt rt ^long node-idx ^Binding b]
-  (swap! bindings-by-rt update-in [(rt-bindings-key rt) (int node-idx)] (fnil conj []) b)
+  (let [^HashMap bindings (.getBindingsByNode rt)
+        node-key (Integer/valueOf (int node-idx))
+        ^ArrayList node-bindings (or (.get bindings node-key)
+                                     (let [created (ArrayList. 4)]
+                                       (.put bindings node-key created)
+                                       created))]
+    (.add node-bindings b))
   nil)
 
 (defn unbind-node-bindings! [^UiRt rt ^long node-idx]
-  (let [rt-key (rt-bindings-key rt)
-        node-key (int node-idx)]
-    (when-let [bs (get-in @bindings-by-rt [rt-key node-key])]
-      (doseq [^Binding b bs] (sig/unbind! b))
-      (swap! bindings-by-rt update rt-key dissoc node-key)))
+  (let [^HashMap bindings (.getBindingsByNode rt)
+        node-key (Integer/valueOf (int node-idx))]
+    (when-let [^ArrayList node-bindings (.remove bindings node-key)]
+      (loop [index 0]
+        (when (< index (.size node-bindings))
+          (sig/unbind! ^Binding (.get node-bindings index))
+          (recur (unchecked-inc-int index))))))
   nil)
 
 (defn clear-rt-bindings! [^UiRt rt]
-  (swap! bindings-by-rt dissoc (rt-bindings-key rt))
+  (let [^HashMap bindings (.getBindingsByNode rt)]
+    (doseq [^ArrayList node-bindings (.values bindings)]
+      (loop [index 0]
+        (when (< index (.size node-bindings))
+          (sig/unbind! ^Binding (.get node-bindings index))
+          (recur (unchecked-inc-int index)))))
+    (.clear bindings))
   nil)
 
 (defn binding-count
   "Test/diagnostic: total registered bindings for this runtime."
   ^long [^UiRt rt]
-  (long (reduce + 0 (map count (vals (or (get @bindings-by-rt (rt-bindings-key rt)) {}))))))
+  (let [^HashMap bindings (.getBindingsByNode rt)]
+    (loop [remaining (seq (.values bindings))
+           total 0]
+      (if remaining
+        (recur (next remaining)
+               (+ total (.size ^ArrayList (first remaining))))
+        (long total)))))
 
 (defn unbind-subtree!
   "Remove all signal bindings and event handlers from node and descendants."

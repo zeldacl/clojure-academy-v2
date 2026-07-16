@@ -43,7 +43,6 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-client-ui-runtime-state
@@ -68,14 +67,9 @@
 ;; not occupy [:service :client-ui] directly — doing so made assoc-in on the
 ;; sibling leaves throw ClassCastException (Atom cannot be cast to Associative).
 
-(def ^:private cui-path [:service :client-ui :runtime])
+(defonce ^:private client-ui-state* (atom default-client-ui-runtime-state))
 
-(defn- client-ui-runtime-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom cui-path)
-        (let [a (atom default-client-ui-runtime-state)]
-          (swap! fw-atom assoc-in cui-path a) a))
-    (atom default-client-ui-runtime-state)))
+(defn- client-ui-runtime-state-atom [] client-ui-state*)
 
 (defn- managed-screen-runtime []
   (managed-screens/create-managed-screen-runtime))
@@ -1099,39 +1093,7 @@
     (preset-editor-screen/install-widget-factory!)
     (location-teleport-reactive/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-V2 apply-client-runtime-v2!)
-    #_(net-client/register-push-handler! catalog/MSG-SYNC-RUNTIME
-      (fn [{:keys [uuid ability-data]}]
-        (when (and uuid ability-data)
-          (let [old-ability-data (get-in (get-client-player-state uuid) [:ability-data])]
-            (ensure-client-player-state! uuid)
-            (update-client-ability-data! uuid ability-data)
-            ;; The skill-tree viewer's embedded tree re-renders per frame off
             ;; the player-state hash — no push-refresh needed.
-            (when (runtime-sync-resets-input? old-ability-data ability-data)
-              (abort-all-slot-contexts-for-owner! uuid)
-              (client-keybinds/clear-client-keybind-state! uuid)
-              (client-keybinds/clear-key-group! :default))))))
-    #_(net-client/register-push-handler! catalog/MSG-SYNC-RESOURCE
-      (fn [{:keys [uuid resource-data]}]
-        (when (and uuid resource-data)
-          (let [old-resource-data (get-in (get-client-player-state uuid) [:resource-data])]
-            (ensure-client-player-state! uuid)
-            (update-client-resource-data! uuid resource-data)
-            (when (resource-sync-disables-input? old-resource-data resource-data)
-              (abort-all-slot-contexts-for-owner! uuid)
-              (client-keybinds/clear-client-keybind-state! uuid))))))
-    #_(net-client/register-push-handler! catalog/MSG-SYNC-COOLDOWN
-      (fn [{:keys [uuid cooldown-data]}]
-        (when (and uuid cooldown-data)
-          (ensure-client-player-state! uuid)
-          (update-client-cooldown-data! uuid cooldown-data))))
-    #_(net-client/register-push-handler! catalog/MSG-SYNC-PRESET
-      (fn [{:keys [uuid preset-data]}]
-        (when (and uuid preset-data)
-          (ensure-client-player-state! uuid)
-          (update-client-preset-data! uuid preset-data)
-          (client-keybinds/update-default-group! uuid)
-          (preset-editor-reactive/refresh-active-screen! uuid))))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (when-let [owner (runtime-hooks/current-player-state-owner)]

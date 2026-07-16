@@ -10,9 +10,9 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.effects.interpreter :as interpreter]
             [cn.li.ac.ability.service.reducer :as reducer]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.runtime.owner :as owner]))
+            [cn.li.mcmod.runtime.owner :as owner])
+  (:import [java.util HashMap Map$Entry]))
 
 (def ^:private default-command-trace-ttl-ms 60000)
 (def ^:private default-max-command-traces 2048)
@@ -20,15 +20,7 @@
 ;; Trace map and the auto-id sequence both live under Framework [:service ...] —
 ;; only commands with an explicit :command-id (idempotent network retries) are ever
 ;; traced or looked up, so this map stays small and is never touched by tick commands.
-(def ^:private command-traces-path [:service :ability-command-traces])
-
-(defn- command-traces-atom
-  ^clojure.lang.IAtom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom command-traces-path)
-        (get-in (swap! fw-atom update-in command-traces-path #(or % (atom {})))
-                command-traces-path))
-    (atom {})))
+(defonce ^:private ^HashMap command-traces (HashMap.))
 
 (defn- now-ms
   []
@@ -38,27 +30,24 @@
   [session-id uuid command-id]
   [session-id uuid command-id])
 
-(defn- prune-command-traces
-  [snapshot now ttl-ms max-size]
-  (let [fresh (into {}
-                    (filter (fn [[_ {:keys [completed-at-ms]}]]
-                              (<= (- now (long completed-at-ms)) ttl-ms))
-                            snapshot))]
-    (if (<= (count fresh) max-size)
-      fresh
-      (let [to-drop (- (count fresh) max-size)
-            sorted-keys (->> fresh
-                             (sort-by (fn [[_ {:keys [completed-at-ms]}]]
-                                        (long completed-at-ms)))
-                             (map first))]
-        (reduce (fn [m k] (dissoc m k))
-                fresh
-                (take to-drop sorted-keys))))))
+(defn- prune-command-traces!
+  [^long now ^long ttl-ms ^long max-size]
+  (let [iterator (.iterator (.entrySet command-traces))]
+    (while (.hasNext iterator)
+      (let [^Map$Entry entry (.next iterator)
+            value (.getValue entry)]
+        (when (> (- now (long (:completed-at-ms value))) ttl-ms)
+          (.remove iterator)))))
+  (while (> (.size command-traces) max-size)
+    (let [iterator (.iterator (.entrySet command-traces))]
+      (when (.hasNext iterator)
+        (.next iterator)
+        (.remove iterator)))))
 
 (defn- lookup-command-trace
   [session-id uuid command-id]
   (when command-id
-    (get @(command-traces-atom) (trace-key session-id uuid command-id))))
+    (.get command-traces (trace-key session-id uuid command-id))))
 
 (defn- record-command-trace!
   "Only ever called for commands carrying an explicit :command-id — auto-generated
@@ -69,22 +58,19 @@
         max-size default-max-command-traces
         k (trace-key session-id uuid command-id)
         entry {:completed-at-ms at :result result}]
-    (swap! (command-traces-atom)
-           (fn [snapshot]
-             (let [snapshot (assoc snapshot k entry)]
-               (if (> (count snapshot) max-size)
-                 (prune-command-traces snapshot at ttl-ms max-size)
-                 snapshot)))))
+    (.put command-traces k entry)
+    (when (> (.size command-traces) max-size)
+      (prune-command-traces! at ttl-ms max-size)))
   nil)
 
 (defn reset-command-traces-for-test!
   []
-  (reset! (command-traces-atom) {})
+  (.clear command-traces)
   nil)
 
 (defn command-traces-snapshot
   []
-  @(command-traces-atom))
+  (into {} command-traces))
 
 (defn- ensure-command-owner-fields
   [session-id uuid command]

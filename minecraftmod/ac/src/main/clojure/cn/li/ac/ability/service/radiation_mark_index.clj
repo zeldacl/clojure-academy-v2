@@ -8,17 +8,19 @@
 
   Tests must not seed radiation-marks via seed-player-state!/reset-store!
   directly — always go through commands so the index stays in sync."
-  (:require [cn.li.mcmod.framework :as fw]))
+  (:import [java.util HashMap ArrayList]))
 
-(def ^:private index-path [:service :radiation-mark-index])
+(defonce ^:private ^HashMap sessions (HashMap.))
 
-(defn- index-atom
-  ^clojure.lang.IAtom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom index-path)
-        (get-in (swap! fw-atom update-in index-path #(or % (atom {})))
-                index-path))
-    (atom {})))
+(defn- session-index
+  ^HashMap [session-id create?]
+  (or (.get sessions session-id)
+      (when create?
+        (let [idx (HashMap.)]
+          (.put idx :by-source (HashMap.))
+          (.put idx :by-target (HashMap.))
+          (.put sessions session-id idx)
+          idx))))
 
 ;; @index shape:
 ;; {server-session-id
@@ -49,12 +51,31 @@
 (defn sync-source-marks!
   "Idempotent full replacement of one player's mark entries in the index."
   [session-id source-id marks]
-  (swap! (index-atom)
-         (fn [top]
-           (let [nxt (apply-source-marks (get top session-id {}) (str source-id) (or marks {}))]
-             (if (or (:by-source nxt) (:by-target nxt))
-               (assoc top session-id nxt)
-               (dissoc top session-id)))))
+  (let [source-id (str source-id)
+        ^HashMap idx (session-index session-id true)
+        ^HashMap by-source (.get idx :by-source)
+        ^HashMap by-target (.get idx :by-target)
+        old-marks (.get by-source source-id)
+        new-marks (or marks {})]
+    (when old-marks
+      (doseq [target-id (keys old-marks)]
+        (when-not (contains? new-marks target-id)
+          (when-let [^HashMap sources (.get by-target (str target-id))]
+            (.remove sources source-id)
+            (when (.isEmpty sources)
+              (.remove by-target (str target-id)))))))
+    (doseq [[target-id mark] new-marks]
+      (let [target-id (str target-id)
+            ^HashMap sources (or (.get by-target target-id)
+                                 (let [m (HashMap.)]
+                                   (.put by-target target-id m)
+                                   m))]
+        (.put sources source-id mark)))
+    (if (seq new-marks)
+      (.put by-source source-id new-marks)
+      (.remove by-source source-id))
+    (when (and (.isEmpty by-source) (.isEmpty by-target))
+      (.remove sessions session-id)))
   nil)
 
 (defn execute-index-sync!
@@ -65,32 +86,49 @@
 (defn mark-holders
   "Player-uuid strings that currently hold at least one outgoing mark."
   [session-id]
-  (keys (get-in @(index-atom) [session-id :by-source])))
+  (if-let [^HashMap idx (session-index session-id false)]
+    (ArrayList. (.keySet ^HashMap (.get idx :by-source)))
+    ()))
 
 (defn sources-for-target
   [session-id target-id]
-  (keys (get-in @(index-atom) [session-id :by-target (str target-id)])))
+  (if-let [^HashMap idx (session-index session-id false)]
+    (if-let [^HashMap sources (.get ^HashMap (.get idx :by-target) (str target-id))]
+      (ArrayList. (.keySet sources))
+      ())
+    ()))
 
 (defn strongest-mark-for-target
   "Deterministic: the mark with the greatest :ticks-left among all sources
   currently marking target-id (matches mark-target!'s refresh-to-max semantics)."
   [session-id target-id]
-  (when-let [by-src (not-empty (get-in @(index-atom) [session-id :by-target (str target-id)]))]
-    (apply max-key #(long (or (:ticks-left %) 0)) (vals by-src))))
+  (when-let [^HashMap idx (session-index session-id false)]
+    (when-let [^HashMap by-src (.get ^HashMap (.get idx :by-target) (str target-id))]
+      (when-not (.isEmpty by-src)
+        (reduce (fn [best mark]
+                  (if (or (nil? best)
+                          (> (long (or (:ticks-left mark) 0))
+                             (long (or (:ticks-left best) 0))))
+                    mark best))
+                nil
+                (.values by-src))))))
 
 (defn snapshot-by-target
   [session-id]
-  (reduce-kv (fn [acc t by-src]
-               (assoc acc t (apply max-key #(long (or (:ticks-left %) 0)) (vals by-src))))
-             {}
-             (get-in @(index-atom) [session-id :by-target] {})))
+  (if-let [^HashMap idx (session-index session-id false)]
+    (reduce (fn [acc entry]
+              (let [target-id (.getKey ^java.util.Map$Entry entry)]
+                (assoc acc target-id (strongest-mark-for-target session-id target-id))))
+            {}
+            (.entrySet ^HashMap (.get idx :by-target)))
+    {}))
 
 (defn clear-session!
   [session-id]
-  (swap! (index-atom) dissoc session-id)
+  (.remove sessions session-id)
   nil)
 
 (defn reset-for-test!
   []
-  (reset! (index-atom) {})
+  (.clear sessions)
   nil)

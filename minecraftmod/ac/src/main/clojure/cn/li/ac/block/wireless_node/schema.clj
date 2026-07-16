@@ -294,12 +294,7 @@
     :gui-close-reset false
     :doc "Currently charging to output slot (server-side, synced to GUI)"}
 
-   {:key :update-ticker
-    :type :int
-    :default 0
-    :persist? false
-    :gui-sync? false
-    :doc "Server-side tick counter (not synced)"}])
+   ])
 
 ;; ============================================================================
 ;; UNIFIED SCHEMA
@@ -366,7 +361,7 @@
   6. EPHEMERAL-FIELDS (3 fields)
      - Runtime state, not persisted
      - Used by: block.clj (tick logic), gui.clj (animations)
-     - Examples: charging-in/out, update-ticker
+     - Examples: charging-in/out
 
   Fields can appear in multiple groups (e.g., :energy is both NBT-PERSISTED and BLOCKSTATE-PROPERTY).
   The unified schema merges all definitions by :key.")

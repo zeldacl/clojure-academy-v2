@@ -211,21 +211,19 @@
 (def main-tick-fn
   (controller-tick-fn {:default-state main-default-state
                        :tick-state main-tick-state
-                       :mark-changed? machine-runtime/changed-ignoring-ticker?
                        ;; render.clj reads :fan-installed/:no-obstacle/:complete directly.
-                       :sync-client? machine-runtime/changed-ignoring-ticker?}))
+                       :sync-client? true}))
 
 (def base-tick-fn
   (controller-tick-fn {:default-state base-default-state
                        :tick-state base-tick-state
-                       :mark-changed? machine-runtime/changed-ignoring-ticker?
                        ;; render.clj reads :status directly (normal vs disabled texture).
-                       :sync-client? machine-runtime/changed-ignoring-ticker?}))
+                       :sync-client? true}))
 
 (def pillar-tick-fn
   (machine-runtime/make-tick-fn {:default-state pillar-default-state
                                  :tick-state pillar-tick-state
-                                 :mark-changed? machine-runtime/changed-ignoring-ticker?}))
+                                 }))
 
 (defn- main-controller-pos-at
   [level p bid]

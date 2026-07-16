@@ -2,8 +2,8 @@
   "Shared client render runtime: lazy resource baking, per-tile render caches,
   renderer init registration."
   (:require [cn.li.mcmod.client.render.init :as render-init]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap]))
 
 ;; ============================================================================
 ;; Lazy resource baking — one holder var per renderer namespace
@@ -37,33 +37,31 @@
 ;; would silently drop cached state instead of preserving it.
 ;; ============================================================================
 
-(def ^:private render-cache-path [:service :render-cache])
+(defonce ^:private ^HashMap render-caches (HashMap.))
 
-(defn render-cache-atom
-  "Return the Framework-backed atom for cache-key, auto-vivifying it with
-  initial-value on first access."
+(defn render-cache
   [cache-key initial-value]
-  (let [fw-atom (or (fw/fw-atom)
-                     (throw (ex-info "render-cache-atom called before framework injection"
-                                     {:cache-key cache-key})))
-        path (conj render-cache-path cache-key)]
-    (or (get-in @fw-atom path)
-        (let [a (atom initial-value)]
-          (swap! fw-atom assoc-in path a)
-          a))))
+  (if (.containsKey render-caches cache-key)
+    (.get render-caches cache-key)
+    (do (.put render-caches cache-key initial-value) initial-value)))
 
 (defn render-cache-snapshot
   [cache-key initial-value]
-  @(render-cache-atom cache-key initial-value))
+  (render-cache cache-key initial-value))
+
+(defn put-render-cache!
+  [cache-key value]
+  (.put render-caches cache-key value)
+  value)
 
 (defn clear-render-cache!
   [cache-key initial-value]
-  (reset! (render-cache-atom cache-key initial-value) initial-value)
+  (.put render-caches cache-key initial-value)
   nil)
 
 (defn reset-render-cache-for-test!
   [cache-key initial-value value]
-  (reset! (render-cache-atom cache-key initial-value) value)
+  (.put render-caches cache-key value)
   nil)
 
 (defn register-client-renderer-init!

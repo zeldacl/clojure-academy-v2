@@ -3,8 +3,8 @@
   (:require [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap]))
 
 (def ^:private CLIENT-RPC-CHANNEL :client-rpc)
 (def ^:private DEFAULT-REQUEST-TIMEOUT-MS 30000)
@@ -213,19 +213,21 @@
         :ensure-installed-client-network-session! ensure-installed-client-network-session!
         :clear-client-session-state! clear-client-session-state!}))))
 
-;; Client runtime stored in Framework [:service :network-client]
+(defonce ^:private client-runtime-slot
+  (object-array [(create-client-runtime)]))
 
-(def ^:private client-path [:service :network-client])
+(defn- ensure-client-runtime [] (aget ^objects client-runtime-slot 0))
 
-(defn- ensure-client-runtime
-  "Lazy-init the client runtime in Framework on first access."
-  []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom client-path)
-        (let [rt (create-client-runtime)]
-          (swap! fw-atom assoc-in client-path rt)
-          rt))
-    (create-client-runtime)))
+(defn call-with-client-runtime
+  "Run thunk with an explicit client-thread runtime. Used by lifecycle tests
+  and integrated-server session boundaries; it does not create a ThreadLocal."
+  [runtime thunk]
+  (let [previous (aget ^objects client-runtime-slot 0)]
+    (aset ^objects client-runtime-slot 0 runtime)
+    (try
+      (thunk)
+      (finally
+        (aset ^objects client-runtime-slot 0 previous)))))
 
 (defn client-runtime?
   [value]
@@ -392,13 +394,20 @@
        (log/warn "No push handler registered for" msg-id)
        (handle-push msg-id payload)))))
 
-(defmulti send-request
-  "Platform-specific transport for RPC requests"
-  (fn [_msg-id _payload _request-id] (platform-dispatch/current-platform-version)))
+(defonce ^:private ^HashMap request-transports (HashMap.))
 
-(defmethod send-request :default [_msg-id _payload _request-id]
-  (throw (ex-info "No network transport for version"
-                  {:version (platform-dispatch/current-platform-version)})))
+(defn register-request-transport!
+  "Install one frozen loader transport during startup."
+  [platform-version transport-fn]
+  (.put request-transports platform-version transport-fn)
+  nil)
+
+(defn send-request
+  [msg-id payload request-id]
+  (let [version (platform-dispatch/current-platform-version)]
+    (if-let [transport (.get request-transports version)]
+      (transport msg-id payload request-id)
+      (throw (ex-info "No network transport for version" {:version version})))))
 
 (defn send-to-server
   "Send a request to server and optionally receive a response.

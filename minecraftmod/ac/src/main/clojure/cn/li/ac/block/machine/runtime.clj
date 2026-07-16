@@ -49,9 +49,7 @@
     (if (.containsKey previous key)
       (let [value (.get previous key)]
         (if (identical? value absent-value) not-found value))
-      (if (= key :update-ticker)
-        ticker
-        (if (.containsKey values key) (.get values key) not-found))))
+      (if (.containsKey values key) (.get values key) not-found)))
   (clearDirty [_]
     (.clear previous)
     (set! flags 0)
@@ -61,38 +59,34 @@
 
   ILookup
   (valAt [_ key]
-    (if (= key :update-ticker) ticker (.get values key)))
+    (.get values key))
   (valAt [_ key not-found]
-    (if (= key :update-ticker)
-      ticker
-      (if (.containsKey values key) (.get values key) not-found)))
+    (if (.containsKey values key) (.get values key) not-found))
 
   IPersistentMap
   (containsKey [_ key]
-    (or (= key :update-ticker) (.containsKey values key)))
+    (.containsKey values key))
   (entryAt [this key]
     (when (.containsKey ^IPersistentMap this key)
       (MapEntry/create key (.valAt ^ILookup this key))))
   (assoc [this key value]
-    (if (= key :update-ticker)
-      (set! ticker (long value))
-      (let [present? (.containsKey values key)
-            old-value (when present? (.get values key))]
-        (when (or (not present?) (not= old-value value))
-          (let [mask-value (.get field-flags key)
-                mask (long (if (nil? mask-value) changed-mask mask-value))]
-            (when (and (not (zero? mask)) (not (.containsKey previous key)))
-              (.put previous key (if present? old-value absent-value)))
-            (.put values key value)
-            (set! flags (bit-or flags mask))
-            (set! version (unchecked-inc version))))))
+    (let [present? (.containsKey values key)
+          old-value (when present? (.get values key))]
+      (when (or (not present?) (not= old-value value))
+        (let [mask-value (.get field-flags key)
+              mask (long (if (nil? mask-value) changed-mask mask-value))]
+          (when (and (not (zero? mask)) (not (.containsKey previous key)))
+            (.put previous key (if present? old-value absent-value)))
+          (.put values key value)
+          (set! flags (bit-or flags mask))
+          (set! version (unchecked-inc version)))))
     this)
   (assocEx [this key value]
     (when (.containsKey ^IPersistentMap this key)
       (throw (RuntimeException. (str "Key already present: " key))))
     (.assoc ^IPersistentMap this key value))
   (without [this key]
-    (when (and (not= key :update-ticker) (.containsKey values key))
+    (when (.containsKey values key)
       (let [old-value (.get values key)
             mask-value (.get field-flags key)
             mask (long (if (nil? mask-value) changed-mask mask-value))]
@@ -105,7 +99,7 @@
 
   clojure.lang.IPersistentCollection
   (count [_]
-    (+ (.size values) (if (.containsKey field-flags :update-ticker) 1 0)))
+    (.size values))
   (cons [this value]
     (cond
       (instance? Map$Entry value)
@@ -143,20 +137,15 @@
       (if (.hasNext iterator)
         (let [^Map$Entry entry (.next iterator)]
           (recur (assoc! result (.getKey entry) (.getValue entry))))
-        (let [snapshot (persistent! result)]
-          (if (.containsKey ^HashMap (.-field-flags state) :update-ticker)
-            (assoc snapshot :update-ticker (long (.valAt ^ILookup state :update-ticker)))
-            snapshot))))))
+        (persistent! result)))))
 
 (defn- field-runtime-mask
   [spec]
-  (if (= (:key spec) :update-ticker)
-    0
-    (bit-or changed-mask
-            (if (:persist? spec) save-dirty-mask 0)
-            (if (:client-sync? spec) client-sync-mask 0)
-            (if (:block-state spec) block-state-mask 0)
-            (if (:wireless-topology? spec) wireless-topology-mask 0))))
+  (bit-or changed-mask
+          (if (:persist? spec) save-dirty-mask 0)
+          (if (:client-sync? spec) client-sync-mask 0)
+          (if (:block-state spec) block-state-mask 0)
+          (if (:wireless-topology? spec) wireless-topology-mask 0)))
 
 (defn- schema-field-flags
   [schema]
@@ -168,11 +157,10 @@
 (defn- create-machine-state
   [state default-state]
   (let [initial (merge default-state state)
-        ticker (long (get initial :update-ticker 0))
-        values (HashMap. ^java.util.Map (dissoc initial :update-ticker))
+        values (HashMap. ^java.util.Map initial)
         ^java.util.Map field-mask-map (or (::field-flags (meta default-state)) {})
         flags (HashMap. field-mask-map)]
-    (MachineState. values flags (HashMap.) ticker 0 0)))
+    (MachineState. values flags (HashMap.) 0 0 0)))
 
 (defn ensure-machine-state
   [state default-state]
@@ -215,7 +203,7 @@
     (when changed?
       (when (and mark-changed? (not (zero? (bit-and flags save-dirty-mask))))
         (try (platform-be/set-changed! be) (catch Exception _ nil)))
-      (when (and sync-client? (not (zero? (bit-and flags changed-mask))))
+      (when (and sync-client? (not (zero? (bit-and flags client-sync-mask))))
         (try (platform-be/sync-to-client! be) (catch Exception _ nil)))
       (when (and blockstate-updater level pos
                  (not (zero? (bit-and flags block-state-mask))))
@@ -359,20 +347,3 @@
   "Build a block right-click handler that opens an AC GUI by business type keyword."
   [gui-type]
   (make-open-gui-handler* gui-type (fn [_ _ _ _ _] true)))
-
-(defn inc-update-ticker
-  "Common helper for machines that track :update-ticker."
-  [state]
-  (advance-tick! state)
-  state)
-
-(defn changed-ignoring-ticker?
-  "Dirty/sync predicate for machines using `inc-update-ticker`: a real change is
-  anything besides :update-ticker differing. Use as :mark-changed? (and, when the
-  TESR reads BE custom-state directly, also :sync-client?) so an idle machine whose
-  only per-tick mutation is the bookkeeping ticker never marks NBT dirty or sends a
-  client packet."
-  [old-state new-state]
-  (if (machine-state? new-state)
-    (not (zero? (bit-and (.stateFlags ^IMachineState new-state) changed-mask)))
-    (not= old-state new-state)))

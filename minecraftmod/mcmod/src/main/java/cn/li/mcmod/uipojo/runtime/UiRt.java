@@ -7,6 +7,7 @@ import cn.li.mcmod.uipojo.signal.SigL;
 import clojure.lang.IPersistentMap;
 import clojure.lang.PersistentArrayMap;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 /**
  * UI runtime — one instance per screen or overlay.
@@ -20,6 +21,7 @@ public final class UiRt {
     private final ArrayList<IUiNode> nodes;
     private IPersistentMap idToNode;
     private final ArrayList<Binding> dirtyBindings;
+    private final HashMap<Integer, ArrayList<Binding>> bindingsByNode;
     private Object[] tape;
     private boolean treeDirty;
     private double screenW;
@@ -42,6 +44,7 @@ public final class UiRt {
         this.nodes = new ArrayList<>(64);
         this.idToNode = PersistentArrayMap.EMPTY;
         this.dirtyBindings = new ArrayList<>(32);
+        this.bindingsByNode = new HashMap<>(32);
         this.tape = new Object[0];
         this.treeDirty = true;
         this.screenW = 0.0;
@@ -68,6 +71,7 @@ public final class UiRt {
     public void setIdToNode(IPersistentMap idToNode) { this.idToNode = idToNode; }
 
     public ArrayList<Binding> getDirtyBindings() { return dirtyBindings; }
+    public HashMap<Integer, ArrayList<Binding>> getBindingsByNode() { return bindingsByNode; }
 
     public Object[] getTape() { return tape; }
     public void setTape(Object[] tape) { this.tape = tape; }

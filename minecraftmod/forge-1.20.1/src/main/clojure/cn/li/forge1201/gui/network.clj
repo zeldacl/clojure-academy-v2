@@ -77,9 +77,10 @@
     (throw (IllegalArgumentException.
              (str "Unknown ClojureNetwork method: " method-name)))))
 
-(defmethod net-client/send-request :forge-1.20.1
-  [msg-id payload request-id]
-  (invoke-network-static "sendToServer" msg-id (int request-id) (packet-base/encode-payload-bytes payload)))
+(net-client/register-request-transport!
+  :forge-1.20.1
+  (fn [msg-id payload request-id]
+    (invoke-network-static "sendToServer" msg-id (int request-id) (packet-base/encode-payload-bytes payload))))
 
 ;; ---------------------------------------------------------------------------
 ;; Initialization

@@ -82,6 +82,10 @@ tasks.named('compileClojure').configure {
 
 // Ensure stale mirrored classes from previous output layouts do not shadow fresh Clojure output.
 tasks.named('compileJava').configure {
+    // This task deliberately clears its output to prevent stale mirrored AOT
+    // classes. Incremental javac would otherwise compile only changed sources
+    // against files that the doFirst action just removed.
+    options.incremental = false
     doFirst {
         delete(layout.buildDirectory.dir('classes/java/main').get().asFile)
     }
