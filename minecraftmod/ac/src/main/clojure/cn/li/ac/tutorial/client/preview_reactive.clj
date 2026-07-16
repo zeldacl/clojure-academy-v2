@@ -12,7 +12,6 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as terminal-catalog]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
-            [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -26,12 +25,87 @@
       (log/warn "Recipe query failed for" item-id (ex-message e))
       false)))
 
+(defn- recipe-kind->query-kind [kind]
+  (case kind
+    "ImagFusor" :imag-fusor
+    "MetalFormer" :metal-former
+    "Smelting" :smelting
+    "Crafting" :crafting
+    :crafting))
+
+(defn- find-recipe-kind-for
+  "Look through ALL recipe types to find which one has recipes for this item.
+   The tutorial definition may hardcode a recipe kind that doesn't match the
+   actual registered recipes (e.g. says ImagFusor but recipe is actually
+   crafting).  Returns [kind-string recipes] or nil."
+  [item-id]
+  (try
+    (if-let [result (platform-bridge/find-recipes item-id)]
+      (let [_ (log/info "[pv] find-recipes raw for" (str item-id)
+                        "crafting:" (count (:crafting result))
+                        "smelting:" (count (:smelting result))
+                        "imag-fusor:" (count (:imag-fusor result))
+                        "metal-former:" (count (:metal-former result)))
+            kinds [[:crafting "Crafting"]
+                   [:smelting "Smelting"]
+                   [:imag-fusor "ImagFusor"]
+                   [:metal-former "MetalFormer"]]]
+        (some (fn [[qk kind-name]]
+                (when-let [recipes (seq (get result qk))]
+                  [kind-name recipes]))
+              kinds))
+      (log/warn "[pv] find-recipes returned nil for" (str item-id)))
+    (catch Throwable e
+      (log/warn "[pv] find-recipe-kind-for failed:" (ex-message e))
+      nil)))
+
+(defn- expand-view-groups
+  "Process the full view-groups list.  For recipe/crafting-grid groups, query
+   the recipe manager and expand into one view-group per recipe variant so
+   each gets its own tag icon (matching upstream AcademyCraft).  Groups with
+   a single unchanged sub-view stay as-is (no recipe data → 3D item fallback)."
+  [vgs]
+  (mapcat (fn [vg]
+            (let [svs (:sub-views vg)
+                  sv (first svs)
+                  sv-type (:type sv)]
+              (if (and (= 1 (count svs))
+                       (or (= :recipe sv-type) (= :crafting-grid sv-type)))
+                (let [item-id (:item-id sv)
+                      hardcoded-kind (:recipe-kind sv)
+                      [actual-kind recipes] (find-recipe-kind-for item-id)]
+                  (log/info "[pv] expand-recipe" (str item-id)
+                            "type:" sv-type
+                            "hardcoded:" hardcoded-kind
+                            "actual:" actual-kind
+                            "count:" (count recipes))
+                  (if recipes
+                    (let [kind-changed? (not= hardcoded-kind actual-kind)
+                          base (assoc sv :recipe-kind (or actual-kind hardcoded-kind) :type :recipe)]
+                      (if (> (count recipes) 1)
+                        ;; Multiple recipes → one view-group per recipe, each with its own tag icon
+                        (mapv (fn [idx recipe]
+                                (assoc vg
+                                  :sub-views [(assoc base :recipe-input (:input recipe)
+                                                       :recipe-count (:count recipe))]
+                                  :display-text (str (:display-text vg) " #" (inc idx))))
+                              (range) recipes)
+                        ;; Single recipe → one view-group with input attached
+                        [(assoc vg :sub-views
+                                [(assoc base :recipe-input (:input (first recipes))
+                                          :recipe-count (:count (first recipes)))])]))
+                    ;; No recipe found → fall back to 3D item view
+                    [(assoc vg :sub-views [(assoc sv :type :item-3d)])]))
+                ;; Non-recipe groups pass through unchanged
+                [vg])))
+          vgs))
+
 (defn build-view-groups
   "Build the ViewGroup list for a tutorial, matching original AcademyCraft
    TutorialInit definitions. Each group = {:tag :view|:craft :display-text ...
    :sub-views [{:type ...}]}"
   [tut-id]
-  (case tut-id
+  (let [raw (case tut-id
     :ores
     [{:tag :view :display-text "Constraint Metal Ore"
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "constrained_ore")}]}
@@ -125,7 +199,9 @@
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "developer_advanced")}]}]
 
-    []))
+    [])
+      expanded (expand-view-groups raw)]
+    expanded))
 
 ;; ============================================================================
 ;; Preview node specs — native replacement for build-preview-widget.
@@ -151,26 +227,92 @@
   (modid/asset-path "textures/guis" "tutorial/crafting_grid.png"))
 
 ;; ============================================================================
-;; Recipe widget spec cache — loaded once from tutorial_windows.xml
+;; Recipe slot layout — slot positions within the 134×134 preview area,
+;; hand-derived from tutorial_windows.xml slot coords × scale + recipe-geom offset.
 ;; ============================================================================
 
-(defonce ^:private recipe-widget-specs
-  (delay
-    (try
-      (let [spec (ui-xml/load-spec (modid/namespaced-path "guis/new/tutorial_windows.xml"))
-            children (:children spec)]
-        (log/info "[preview] recipe widgets loaded, ids:" (mapv (comp name :id) children))
-        (reduce (fn [m child]
-                  (if-let [cid (:id child)]
-                    (assoc m (name cid) child)
-                    m))
-                {} children))
-      (catch Throwable e
-        (log/warn "[preview] FAILED to load recipe widgets:" (ex-message e))
-        {}))))
+(def ^:private recipe-slots
+  "Per recipe-kind: list of {:id :x :y :w :h :role} for each slot within the
+   134×134 preview area.  :role is :input or :output."
+  {"ImagFusor"    [{:id :slot-in  :x 19.6  :y 66.1  :w 19.2 :h 18.6 :role :input}
+                   {:id :slot-out :x 96.4  :y 66.1  :w 19.2 :h 18.6 :role :output}]
+   "MetalFormer"  [{:id :slot-in  :x 24.65 :y 63.25 :w 12.5 :h 12.5 :role :input}
+                   {:id :slot-out :x 96.65 :y 63.25 :w 12.5 :h 12.5 :role :output}]
+   "Smelting"     [{:id :slot-in  :x 27.4  :y 54.52 :w 19.2 :h 19.2 :role :input}
+                   {:id :slot-out :x 83.38 :y 54.52 :w 19.2 :h 19.2 :role :output}]})
 
-(defn- recipe-widget-spec [kind]
-  (get @recipe-widget-specs kind))
+(defn- recipe-preview-spec
+  "Build a recipe preview spec: machine background + item renders in slots.
+   Uses recipe data from the sub-view (pre-queried by expand-recipe-sub-views)
+   or falls back to platform-bridge/first-recipe-for for single-recipe views."
+  [view id]
+  (let [kind (:recipe-kind view)
+        item-id (:item-id view)
+        input-items (or (:recipe-input view)
+                        (try (when-let [r (platform-bridge/first-recipe-for
+                                           item-id (recipe-kind->query-kind kind))]
+                               (:input r))
+                             (catch Throwable _ nil))
+                        [])
+        output-item (or (:item-id view) item-id)]
+    (if (= kind "Crafting")
+      ;; Crafting table: 196×128 widget scaled 0.6 placed at ImagFusor offset.
+      ;; Slot coords from upstream RecipeHandler.CraftingGridDisplay:
+      ;;   STEP=43, input pos(5+col*43, 5+row*43), StackDisplay 32×34
+      ;;   output pos(153, 49), StackDisplay 32×34
+      ;; Scaled by 0.6 + offset [8.2, 28.6] into 134×134 preview.
+      (let [step (* 43.0 0.6)      ;; 25.8
+            base-x (+ 8.2 (* 5.0 0.6))  ;; 11.2
+            base-y (+ 28.6 (* 5.0 0.6)) ;; 31.6
+            slot-w (* 32.0 0.6)   ;; 19.2
+            slot-h (* 34.0 0.6)   ;; 20.4
+            out-x (+ 8.2 (* 153.0 0.6)) ;; 100.0
+            out-y (+ 28.6 (* 49.0 0.6)) ;; 58.0
+            slot-children
+            (into []
+              (keep-indexed
+                (fn [i input-id]
+                  (when input-id
+                    (let [col (mod i 3) row (quot i 3)]
+                      {:kind :preview-item
+                       :props {:id (keyword (str (name id) "-in-" i))
+                               :x (+ base-x (* col step))
+                               :y (+ base-y (* row step))
+                               :w slot-w :h slot-h
+                               :item-id (str input-id)}})))
+                input-items))]
+        {:kind :group :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0}
+         :children (into [{:kind :image :props {:id (keyword (str (name id) "-bg"))
+                                                 :x 8.2 :y 28.6 :w 196.0 :h 128.0 :scale 0.6
+                                                 :src crafting-grid-bg}}]
+                         (conj slot-children
+                               (when output-item
+                                 {:kind :preview-item
+                                  :props {:id (keyword (str (name id) "-out"))
+                                          :x out-x :y out-y :w slot-w :h slot-h
+                                          :item-id (str output-item)}})))})
+      ;; Machine GUI: background image + items in defined slot positions
+      (let [[x y w h scale] (get recipe-geom kind [0.0 0.0 134.0 134.0 1.0])
+            bg-src (get recipe-bg kind)
+            slots (get recipe-slots kind [])
+            slot-children
+            (into []
+              (keep (fn [slot]
+                      (let [slot-item (case (:role slot)
+                                        :input (first input-items)
+                                        :output output-item
+                                        nil)]
+                        (when slot-item
+                          {:kind :preview-item
+                           :props {:id (keyword (str (name id) "-" (name (:id slot))))
+                                   :x (:x slot) :y (:y slot) :w (:w slot) :h (:h slot)
+                                   :item-id (str slot-item)}}))))
+                  slots)]
+        {:kind :group :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0}
+         :children (into [{:kind :image :props {:id (keyword (str (name id) "-bg"))
+                                                 :x x :y y :w w :h h :scale scale
+                                                 :src bg-src}}]
+                         slot-children)}))))
 
 (defn build-preview-spec
   "Build a native node spec for a single sub-view, positioned relative to
@@ -182,25 +324,12 @@
     {:kind :image :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :src (:texture view)}}
 
     :recipe
-    (if-let [widget-spec (recipe-widget-spec (:recipe-kind view))]
-      ;; Use the full machine-GUI widget tree from tutorial_windows.xml
-      ;; (background image + slots + progress bar), matching upstream CGUI.
-      (assoc widget-spec :id id)
-      ;; Fallback: simple background image if the widget spec isn't loaded
-      (let [kind (:recipe-kind view)
-            [x y w h scale] (get recipe-geom kind [0.0 0.0 134.0 134.0 1.0])]
-        (log/warn "[preview] recipe widget not found for" kind "- using static bg fallback")
-        {:kind :image :props {:id id :x x :y y :w w :h h :scale scale
-                               :src (get recipe-bg kind)}}))
+    (recipe-preview-spec view id)
 
     :crafting-grid
-    {:kind :image :props {:id id :x 10.0 :y 5.0 :w 114.0 :h 114.0 :src crafting-grid-bg}}
+    (recipe-preview-spec view id)
 
     (:block-3d :item-3d)
-    ;; Render the block/item as a scaled ItemStack in the preview area.
-    ;; Upstream AcademyCraft renders these with GL perspective projection +
-    ;; auto-rotation; we render at the full 134x134 area size with the item
-    ;; model via GuiGraphics.renderFakeItem.
     (let [item-id (or (:item-id view) (:block-id view))]
       {:kind :preview-item :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
                                     :item-id (str item-id)}})
@@ -224,8 +353,8 @@
 
 (defn current-sub-view [state*]
   (when-let [vg (current-view-group state*)]
-    (let [{:keys [sub-views sub-index]} vg
-          svs (or sub-views [])
+    (let [svs (or (:sub-views vg) [])
+          sub-index (:sub-index @state* 0)
           idx (or sub-index 0)
           i (max 0 (min (dec (max 1 (count svs))) idx))]
       (when (seq svs)

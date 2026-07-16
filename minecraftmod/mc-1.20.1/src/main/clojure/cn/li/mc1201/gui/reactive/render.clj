@@ -796,7 +796,7 @@
       (.pushPose ps)
       (.translate ps cx cy 0.0)
       (.scale ps (float scale) (float scale) 1.0)
-      (.renderFakeItem gg stack -8 0)
+      (.renderFakeItem gg stack -8 -8)
       (.popPose ps))))
 
 ;; ============================================================================

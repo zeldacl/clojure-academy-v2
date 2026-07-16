@@ -44,12 +44,13 @@
   "Get all recipes of a given RecipeType whose output matches target-id."
   [^RecipeManager rm ^RecipeType rtype target-id]
   (try
-    (let [recipes (.getAllRecipesFor rm rtype)]
-      (filter (fn [^Recipe recipe]
-                (= target-id (stack->item-id (.getResultItem recipe nil))))
-              recipes))
+    (when rtype
+      (let [recipes (.getAllRecipesFor rm rtype)]
+        (filter (fn [^Recipe recipe]
+                  (= target-id (stack->item-id (.getResultItem recipe nil))))
+                recipes)))
     (catch Exception e
-      (log/warn "recipes-for-type failed for" target-id ":" (ex-message e))
+      (log/warn "[rq] recipes-for-type failed for" target-id ":" (ex-message e))
       nil)))
 
 (defn find-recipes
@@ -65,7 +66,7 @@
            :imag-fusor (recipes-for-type rm (.get ModRecipeTypes/IMAG_FUSOR_TYPE) target-id)
            :metal-former (recipes-for-type rm (.get ModRecipeTypes/METAL_FORMER_TYPE) target-id)})))
     (catch Exception e
-      (log/debug "Recipe query failed for" target-id ":" (.getMessage e))
+      (log/debug "[rq] Recipe query failed for" target-id ":" (.getMessage e))
       nil)))
 
 (defn has-recipes?
@@ -99,3 +100,28 @@
           (catch Exception e
             (log/warn "first-recipe-for failed for" target-id recipe-kind ":" (ex-message e))
             nil))))))
+
+(defn all-recipes-for
+  "Get all recipes of a given kind for `target-id`.
+  Returns vector of {:input [item-id...] :output item-id :count N} or nil."
+  [^String target-id recipe-kind]
+  (when-let [result (find-recipes target-id)]
+    (when-let [recipes (get result (case recipe-kind
+                                     :smelting :smelting
+                                     :imag-fusor :imag-fusor
+                                     :metal-former :metal-former
+                                     :crafting :crafting
+                                     nil))]
+      (seq (keep (fn [^Recipe recipe]
+                   (try
+                     (let [^ItemStack output (.getResultItem recipe nil)]
+                       {:input (mapv (fn [^Ingredient ing]
+                                       (when-let [stacks (.getItems ing)]
+                                         (when-let [^ItemStack s (first (seq stacks))]
+                                           (stack->item-id s))))
+                                     (.getIngredients recipe))
+                        :output (stack->item-id output)
+                        :count (.getCount output)})
+                     (catch Exception _
+                       nil)))
+                 recipes)))))

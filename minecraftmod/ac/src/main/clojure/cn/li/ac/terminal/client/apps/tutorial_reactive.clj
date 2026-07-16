@@ -217,7 +217,8 @@
                                   (get preview/tag-textures (:tag vg :view)))]}
             ^INode n (rt/build-child! rt spec tag-area)]
         (swap! tag-idx->id assoc (.getIdx n) (:display-text vg))
-        (events/on! rt id :left-click
+        ;; Register click on the icon image (deepest hit-test node), not the box.
+        (events/on! rt (keyword (str "tag-" idx "-icon")) :left-click
           (fn [_ _ _]
             (preview/switch-view-group! (:pvs ui-state) idx)
             (refresh-preview! rt ui-state)))))
@@ -236,6 +237,7 @@
         cnt (count (or (:sub-views vg) []))
         ^INode bl (rt/node-by-id rt :btn-left)
         ^INode br (rt/node-by-id rt :btn-right)]
+    (cn.li.mcmod.util.log/info "[tut] nav-btns cnt:" cnt "visible:" (> cnt 1))
     (set-node-visible! rt bl (> cnt 1))
     (set-node-visible! rt br (> cnt 1))))
 

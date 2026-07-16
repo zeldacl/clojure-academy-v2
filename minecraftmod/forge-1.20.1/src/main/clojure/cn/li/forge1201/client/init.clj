@@ -247,6 +247,12 @@
                           (sound/stop-all-media!))
        :has-recipes? (fn [item-id]
                        (recipe-query/has-recipes? item-id))
+       :first-recipe-for (fn [item-id recipe-kind]
+                           (recipe-query/first-recipe-for item-id recipe-kind))
+       :all-recipes-for (fn [item-id recipe-kind]
+                          (recipe-query/all-recipes-for item-id recipe-kind))
+       :find-recipes (fn [item-id]
+                       (recipe-query/find-recipes item-id))
        :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                               (.invokeInnerBlit ^GuiGraphicsInvoker graphics
                                 texture (int x1) (int x2) (int y1) (int y2) (int z)
