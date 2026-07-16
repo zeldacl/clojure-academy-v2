@@ -5,26 +5,18 @@
   load time.  The infrastructure dispatches enqueue / tick / transform calls
   without any skill-specific knowledge."
   (:require [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+  (:import [java.util ArrayDeque HashMap ArrayList]))
 
 ;; ---------------------------------------------------------------------------
 ;; Camera pitch delta accumulator (shared across all hand effects)
 ;; ---------------------------------------------------------------------------
 
-(def ^:private cp-path [:service :camera-pitch])
+(defonce ^:private fallback-camera-pitch-queue (ArrayDeque. 1024))
 
-(defonce ^:private fallback-camera-pitch-queue (ConcurrentLinkedQueue.))
-
-(defn- camera-pitch-deltas-queue ^ConcurrentLinkedQueue
+(defn- camera-pitch-deltas-queue ^ArrayDeque
   []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom cp-path)
-        (let [q (ConcurrentLinkedQueue.)]
-          (swap! fw-atom assoc-in cp-path q)
-          q))
-    fallback-camera-pitch-queue))
+  fallback-camera-pitch-queue)
 
 (defn- normalize-session-id
   [owner-or-session]
@@ -61,7 +53,7 @@
    (clear-session-camera-pitch-deltas! nil))
   ([owner-or-session]
    (let [session-id (normalize-session-id owner-or-session)
-         ^ConcurrentLinkedQueue q (camera-pitch-deltas-queue)]
+         ^ArrayDeque q (camera-pitch-deltas-queue)]
      (.removeIf q (reify java.util.function.Predicate
                     (test [_ entry]
                       (= session-id (first entry))))))
@@ -109,35 +101,20 @@
    :effect-states {}
    :frozen? false})
 
-(def ^:private he-path [:service :hand-effects])
+(defonce ^:private ^HashMap hand-effect-registry (HashMap.))
+(defonce ^:private ^ArrayList hand-effect-order (ArrayList.))
+(defonce ^:private ^HashMap hand-effect-states (HashMap.))
+(defonce ^:private hand-effect-frozen (boolean-array 1))
 
-(defonce ^:private fallback-hand-effect-state
-  (atom (default-hand-effect-runtime-state)))
-
-(defn- hand-effect-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom he-path)
-        (let [a (atom (default-hand-effect-runtime-state))]
-          (swap! fw-atom assoc-in he-path a) a))
-    fallback-hand-effect-state))
-
-(defn- hand-effect-state-snapshot
-  []
-  @(hand-effect-state-atom))
-
-(defn- update-hand-effect-state!
-  [f & args]
-  (apply swap! (hand-effect-state-atom) f args))
-
-(defn- assoc-effect-state
-  [state effect-id effect-state]
+(defn- put-effect-state! [effect-id effect-state]
   (if (nil? effect-state)
-    (update state :effect-states dissoc effect-id)
-    (assoc-in state [:effect-states effect-id] effect-state)))
+    (.remove hand-effect-states effect-id)
+    (.put hand-effect-states effect-id effect-state))
+  effect-state)
 
 (defn- assert-registry-open!
   []
-  (when (:frozen? (hand-effect-state-snapshot))
+  (when (aget ^booleans hand-effect-frozen 0)
     (throw (ex-info "Hand effect registry is frozen" {}))))
 
 (defn register-hand-effect!
@@ -154,51 +131,48 @@
                  (fn? (:tick-state-fn handler-map)))
     (throw (IllegalArgumentException. "register-hand-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
-  (update-hand-effect-state!
-    (fn [state]
-      (if (get-in state [:registry effect-id])
-        state
-        (-> state
-            (update :order conj effect-id)
-            (assoc-in [:registry effect-id] handler-map)
-            (assoc-effect-state effect-id
-                               (let [init (:initial-state handler-map)]
-                                 (if (fn? init) (init) init)))))))
+  (when-not (.containsKey hand-effect-registry effect-id)
+    (.add hand-effect-order effect-id)
+    (.put hand-effect-registry effect-id handler-map)
+    (let [init (:initial-state handler-map)]
+      (put-effect-state! effect-id (if (fn? init) (init) init))))
   (log/debug "Registered hand effect:" effect-id)
   nil)
 
 (defn freeze-hand-effect-registry!
   []
-  (update-hand-effect-state! assoc :frozen? true)
+  (aset-boolean ^booleans hand-effect-frozen 0 true)
   nil)
 
 (defn hand-effect-registry-snapshot
   []
-  (assoc (hand-effect-state-snapshot)
-         :camera-pitch-deltas (vec (.toArray (camera-pitch-deltas-queue)))))
+  {:registry (into {} hand-effect-registry)
+   :order (vec hand-effect-order)
+   :effect-states (into {} hand-effect-states)
+   :frozen? (aget ^booleans hand-effect-frozen 0)
+   :camera-pitch-deltas (vec (.toArray (camera-pitch-deltas-queue)))})
 
 (defn effect-state-snapshot
   [effect-id]
-  (get-in (hand-effect-state-snapshot) [:effect-states effect-id]))
+  (.get hand-effect-states effect-id))
 
 (defn reset-hand-effect-state-for-test!
   [effect-id state]
-  (update-hand-effect-state! assoc-effect-state effect-id state)
+  (put-effect-state! effect-id state)
   nil)
 
 (defn update-effect-state!
   [effect-id f & args]
-  (update-hand-effect-state!
-    (fn [state]
-      (let [current-state (get-in state [:effect-states effect-id])
-            next-state (apply f current-state args)]
-        (assoc-effect-state state effect-id next-state))))
+  (put-effect-state! effect-id (apply f (.get hand-effect-states effect-id) args))
   nil)
 
 (defn reset-hand-effect-registry-for-test!
   []
   (.clear (camera-pitch-deltas-queue))
-  (reset! (hand-effect-state-atom) (default-hand-effect-runtime-state))
+  (.clear hand-effect-registry)
+  (.clear hand-effect-order)
+  (.clear hand-effect-states)
+  (aset-boolean ^booleans hand-effect-frozen 0 false)
   nil)
 
 ;; ---------------------------------------------------------------------------
@@ -214,39 +188,30 @@
 (defn enqueue-hand-effect!
   "Dispatch an incoming FX payload to the registered hand-effect handler."
   [effect-id ctx-id channel payload & {:keys [owner-key]}]
-  (if-let [{:keys [enqueue-state-fn]} (get-in (hand-effect-state-snapshot) [:registry effect-id])]
+  (if-let [{:keys [enqueue-state-fn]} (.get hand-effect-registry effect-id)]
     (let [owner-key* (or owner-key (default-owner-key effect-id payload ctx-id channel))]
-      (update-hand-effect-state!
-        (fn [state]
-          (let [current-state (get-in state [:effect-states effect-id])
-                next-state (enqueue-state-fn current-state ctx-id channel owner-key* payload)]
-            (assoc-effect-state state effect-id next-state))))))
-    (log/warn "No hand effect registered for" effect-id))
+      (put-effect-state! effect-id
+                         (enqueue-state-fn (.get hand-effect-states effect-id)
+                                           ctx-id channel owner-key* payload)))
+    (log/warn "No hand effect registered for" effect-id)))
 
 (defn tick-hand-effects!
   "Tick all registered hand effects."
   []
-  (let [{:keys [order registry]} (hand-effect-state-snapshot)]
-    (doseq [eid order]
-      (when-let [{:keys [tick-state-fn]} (get registry eid)]
-        (update-hand-effect-state!
-          (fn [state]
-            (let [current-state (get-in state [:effect-states eid])
-                  next-state (tick-state-fn current-state)]
-              (assoc-effect-state state eid next-state))))))))
+  (doseq [eid hand-effect-order]
+    (when-let [{:keys [tick-state-fn]} (.get hand-effect-registry eid)]
+      (put-effect-state! eid (tick-state-fn (.get hand-effect-states eid))))))
 
 (defn current-hand-transform
   "Merge transforms from all registered hand effects.
   Returns the first non-nil transform (priority = registration order)."
   []
-  (let [{:keys [order registry]} (hand-effect-state-snapshot)]
-    (some (fn [eid]
-            (when-let [{:keys [transform-fn]} (get registry eid)]
-              (when transform-fn
-                (transform-fn))))
-          order)))
+  (some (fn [eid]
+          (when-let [{:keys [transform-fn]} (.get hand-effect-registry eid)]
+            (when transform-fn (transform-fn))))
+        hand-effect-order))
 
 (defn registered-effects
   "Return the set of currently-registered hand effect ids."
   []
-  (set (keys (:registry (hand-effect-state-snapshot)))))
+  (set (.keySet hand-effect-registry)))

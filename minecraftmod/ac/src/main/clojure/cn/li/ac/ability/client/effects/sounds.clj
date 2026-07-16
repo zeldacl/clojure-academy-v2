@@ -1,9 +1,8 @@
 (ns cn.li.ac.ability.client.effects.sounds
   "Sound effect commands for ability system (AC layer - no Minecraft imports)."
   (:require [cn.li.ac.ability.registry.event :as evt]
-            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra]
-            [cn.li.mcmod.framework :as fw])
-  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+            [cn.li.ac.ability.client.effects.queue-infra :as queue-infra])
+  (:import [java.util ArrayDeque]))
 
 ;; Sound effect command structure
 ;; {:type :sound
@@ -58,22 +57,13 @@
    :volume 0.8
    :pitch 1.2})
 
-;; Sound queue — Framework [:service :sound-queue]
-;; Uses ConcurrentLinkedQueue (not Atom) for lock-free, non-blocking
-;; queue between render thread and game logic / network threads.
+;; Client-thread-confined bounded sound queue.
 
-(def ^:private sq-path [:service :sound-queue])
+(defonce ^:private fallback-sound-queue (ArrayDeque. 1024))
 
-(defonce ^:private fallback-sound-queue (ConcurrentLinkedQueue.))
-
-(defn- sound-queue ^ConcurrentLinkedQueue
+(defn- sound-queue ^ArrayDeque
   []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom sq-path)
-        (let [q (ConcurrentLinkedQueue.)]
-          (swap! fw-atom assoc-in sq-path q)
-          q))
-    fallback-sound-queue))
+  fallback-sound-queue)
 
 ;; Backward-compatible factory
 (defn create-sound-queue-runtime []
@@ -113,7 +103,7 @@
    (clear-session-sound-effects! nil))
   ([owner-or-session]
    (let [session-id (normalize-session-id owner-or-session)
-         ^ConcurrentLinkedQueue q (sound-queue)]
+         ^ArrayDeque q (sound-queue)]
      (.removeIf q (reify java.util.function.Predicate
                     (test [_ entry]
                       (= session-id (first entry))))))
@@ -134,7 +124,7 @@
           (mapv second)))))
 
 (defn reset-sound-queue-for-test!
-  "Reset sound queue for testing. Clears the ConcurrentLinkedQueue."
+  "Reset the bounded sound queue for testing."
   ([]
    (reset-sound-queue-for-test! {}))
   ([queues]

@@ -16,6 +16,8 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.gui.network.packet :as packet-base]
+            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
+            [cn.li.mc1201.runtime.sync-codec :as sync-codec]
             [cn.li.mc1201.client.session :as mc-session])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
@@ -115,9 +117,14 @@
         resp-handler
         (fn [request-id response-bytes]
           (try
-            (let [payload (packet-base/decode-payload-bytes
-                            response-bytes
-                            #(log/error "Failed to deserialize Forge response payload:" (ex-message %)))]
+            (let [runtime-sync? (and (neg? (int request-id))
+                                     (sync-codec/runtime-sync-bytes? response-bytes))
+                  payload (if runtime-sync?
+                            {:msg-id runtime-payload/runtime-sync-message-id
+                             :payload (sync-codec/decode-bytes response-bytes)}
+                            (packet-base/decode-payload-bytes
+                              response-bytes
+                              #(log/error "Failed to deserialize Forge response payload:" (ex-message %))))]
               (with-client-response-owner payload
                 #(packet-base/dispatch-client-response!
                    (runtime-hooks/player-state-owner)

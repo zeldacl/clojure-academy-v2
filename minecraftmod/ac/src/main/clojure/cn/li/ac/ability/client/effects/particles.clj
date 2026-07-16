@@ -1,17 +1,11 @@
 (ns cn.li.ac.ability.client.effects.particles
   "Particle effect commands for ability system (AC layer - no Minecraft imports).
 
-  Queue uses java.util.concurrent.ConcurrentLinkedQueue — lock-free,
-  non-blocking, zero CAS spin contention between render thread (consumer)
-  and game logic threads (producers). Replaces atom + swap! which caused
-  CAS live-lock during particle-heavy frames.
-
-  No ^:dynamic, no binding — a lazy singleton ConcurrentLinkedQueue
-  provides backward compatibility. The queue is lock-free: .offer for
-  writes, .poll for reads, zero thread blocking."
+  Queue uses a client-thread-confined bounded ArrayDeque. It drops the oldest
+  entry at 8,192 commands and never performs an O(n) size scan."
   (:require [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.client.effects.queue-infra :as queue-infra])
-  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+  (:import [java.util ArrayDeque]))
 
 ;; ============================================================================
 ;; Particle effect command factories (pure data constructors)
@@ -51,16 +45,14 @@
 ;; ============================================================================
 ;; Lock-free queue singleton (lazy init via delay)
 ;;
-;; ConcurrentLinkedQueue is a lock-free queue backed by hardware-level CAS.
-;; .offer and .poll are non-blocking — zero spin-lock between render thread
-;; and game logic threads.
+;; Fixed-capacity client queue.
 ;; ============================================================================
 
 (def ^:private particle-queue-delay
-  (delay (ConcurrentLinkedQueue.)))
+  (delay (ArrayDeque. 8192)))
 
 (defn- particle-queue
-  "Lazy singleton ConcurrentLinkedQueue."
+  "Lazy singleton bounded deque."
   []
   @particle-queue-delay)
 
@@ -69,7 +61,7 @@
 ;; ============================================================================
 
 (defn queue-particle-effect!
-  "Enqueue a particle effect. Lock-free .offer — safe from any thread.
+  "Enqueue a particle effect on the client thread.
    (queue-particle-effect! cmd)           — singleton queue, current owner
    (queue-particle-effect! owner cmd)     — singleton queue, explicit owner"
   ([particle-cmd]
@@ -99,11 +91,11 @@
 (defn particle-queue-snapshot
   "Return a snapshot of the singleton queue for diagnostics."
   ([]
-   (vec (.toArray ^ConcurrentLinkedQueue (particle-queue))))
+   (vec (.toArray ^ArrayDeque (particle-queue))))
   ([owner-or-session]
    (let [session-id (queue-infra/normalize-session-id "particle" owner-or-session)
          results (java.util.ArrayList.)]
-     (doseq [^clojure.lang.PersistentVector entry (.toArray ^ConcurrentLinkedQueue (particle-queue))]
+     (doseq [^clojure.lang.PersistentVector entry (.toArray ^ArrayDeque (particle-queue))]
        (let [[entry-sid cmd] entry]
          (when (= session-id entry-sid)
            (.add results cmd))))
@@ -115,7 +107,7 @@
    (clear-session-particle-effects! nil))
   ([owner-or-session]
    (let [session-id (queue-infra/normalize-session-id "particle" owner-or-session)
-         ^ConcurrentLinkedQueue q (particle-queue)
+         ^ArrayDeque q (particle-queue)
          keep (java.util.ArrayList.)]
      (doseq [^clojure.lang.PersistentVector entry (.toArray q)]
        (let [[entry-sid _] entry]
@@ -123,7 +115,7 @@
            (.add keep entry))))
      (.clear q)
      (doseq [entry keep]
-       (.offer ^ConcurrentLinkedQueue q entry)))
+       (.addLast ^ArrayDeque q entry)))
    nil))
 
 (defn clear-owner-particle-effects!
@@ -132,7 +124,7 @@
 
 (defn reset-particle-queue-for-test!
   ([]
-   (.clear ^ConcurrentLinkedQueue (particle-queue))
+   (.clear ^ArrayDeque (particle-queue))
    nil)
   ([_queues]
    (reset-particle-queue-for-test!)))

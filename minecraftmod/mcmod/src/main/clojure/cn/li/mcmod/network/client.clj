@@ -15,11 +15,6 @@
    :pending-requests {}
    :push-handlers {}})
 
-(defn- initial-client-runtime-state
-  []
-  {:global-push-handlers {}
-   :installed-sessions {}})
-
 (defn- require-owner-value
   [owner label value]
   (if (some? value)
@@ -66,61 +61,61 @@
    (create-client-network-session {}))
   ([{:keys [now-ms-fn]
      :or {now-ms-fn now-ms}}]
-   (let [state* (atom (initial-client-network-session-state))]
+   (let [^HashMap request-counter (HashMap.)
+         ^HashMap pending-requests (HashMap.)
+         ^HashMap push-handlers (HashMap.)]
      (letfn [(snapshot []
-               @state*)
+               {:request-counter (into {} request-counter)
+                :pending-requests (into {} pending-requests)
+                :push-handlers (into {} push-handlers)})
              (dispose! []
-               (reset! state* (initial-client-network-session-state))
+               (.clear request-counter)
+               (.clear pending-requests)
+               (.clear push-handlers)
                nil)
              (next-request-id! [owner-key]
-               (get-in (swap! state* update-in [:request-counter owner-key] (fnil inc 0))
-                       [:request-counter owner-key]))
+               (let [next-id (unchecked-inc (long (or (.get request-counter owner-key) 0)))]
+                 (.put request-counter owner-key next-id)
+                 next-id))
              (register-callback! [owner-key request-id callback timeout-ms]
                (when callback
-                 (swap! state* assoc-in [:pending-requests (request-key owner-key request-id)]
-                        {:owner-key owner-key
-                         :request-id request-id
-                         :callback callback
-                         :created-at-ms (now-ms-fn)
-                         :timeout-ms (long (or timeout-ms DEFAULT-REQUEST-TIMEOUT-MS))}))
+                 (.put pending-requests (request-key owner-key request-id)
+                       {:owner-key owner-key
+                        :request-id request-id
+                        :callback callback
+                        :created-at-ms (now-ms-fn)
+                        :timeout-ms (long (or timeout-ms DEFAULT-REQUEST-TIMEOUT-MS))}))
                nil)
              (find-pending-request-entry [owner-key request-id]
                (let [key (request-key owner-key request-id)]
-                 (when-let [entry (get-in @state* [:pending-requests key])]
+                 (when-let [entry (.get pending-requests key)]
                    [key entry])))
              (clear-owner! [owner-key]
-               (swap! state*
-                      (fn [{:keys [pending-requests push-handlers] :as state}]
-                        (-> state
-                            (assoc :pending-requests
-                                   (into {}
-                                         (remove (fn [[[entry-owner _request-id] _entry]]
-                                                   (= owner-key entry-owner))
-                                                 pending-requests)))
-                            (assoc :push-handlers
-                                   (into {}
-                                         (remove (fn [[[handler-owner _msg-id] _handler]]
-                                                   (= owner-key handler-owner))
-                                                 push-handlers)))
-                            (update :request-counter dissoc owner-key))))
+               (let [pending-it (.iterator (.keySet pending-requests))]
+                 (while (.hasNext pending-it)
+                   (let [[entry-owner _request-id] (.next pending-it)]
+                     (when (= owner-key entry-owner) (.remove pending-it)))))
+               (let [push-it (.iterator (.keySet push-handlers))]
+                 (while (.hasNext push-it)
+                   (let [[handler-owner _msg-id] (.next push-it)]
+                     (when (= owner-key handler-owner) (.remove push-it)))))
+               (.remove request-counter owner-key)
                nil)
              (expire-pending! [current-ms]
-               (let [expired (atom [])]
-                 (swap! state* update :pending-requests
-                        (fn [entries]
-                          (into {}
-                                (remove (fn [[key {:keys [created-at-ms timeout-ms]}]]
-                                          (let [expired? (>= (- (long current-ms) (long created-at-ms))
-                                                             (long timeout-ms))]
-                                            (when expired?
-                                              (swap! expired conj key))
-                                            expired?))
-                                        entries))))
-                 @expired))
+               (let [expired (transient [])
+                     iterator (.iterator (.entrySet pending-requests))]
+                 (while (.hasNext iterator)
+                   (let [entry (.next iterator)
+                         key (.getKey ^java.util.Map$Entry entry)
+                         {:keys [created-at-ms timeout-ms]} (.getValue ^java.util.Map$Entry entry)]
+                     (when (>= (- (long current-ms) (long created-at-ms)) (long timeout-ms))
+                       (conj! expired key)
+                       (.remove iterator))))
+                 (persistent! expired)))
              (handle-response! [owner-key request-id response]
                (if-let [[pending-key {:keys [callback]}] (find-pending-request-entry owner-key request-id)]
                  (do
-                   (swap! state* update :pending-requests dissoc pending-key)
+                   (.remove pending-requests pending-key)
                    (try
                      (callback response)
                      (catch Exception e
@@ -129,18 +124,20 @@
                  (log/warn "No pending request for response" request-id))
                nil)
              (register-owner-push-handler! [owner-key msg-id handler-fn]
-               (swap! state* assoc-in [:push-handlers [owner-key msg-id]] handler-fn)
+               (.put push-handlers [owner-key msg-id] handler-fn)
                nil)
              (unregister-owner-push-handler! [owner-key msg-id]
-               (swap! state* update :push-handlers dissoc [owner-key msg-id])
+               (.remove push-handlers [owner-key msg-id])
                nil)
              (has-owner-push-handler-msg-id? [msg-id]
-               (boolean
-                (some (fn [[[ _owner-key entry-msg-id] _handler-fn]]
-                        (= msg-id entry-msg-id))
-                      (:push-handlers @state*))))
+               (let [iterator (.iterator (.keySet push-handlers))]
+                 (loop []
+                   (if (.hasNext iterator)
+                     (let [[_owner-key entry-msg-id] (.next iterator)]
+                       (if (= msg-id entry-msg-id) true (recur)))
+                     false))))
              (handle-owner-push! [owner-key msg-id payload]
-               (if-let [handler (get-in @state* [:push-handlers [owner-key msg-id]])]
+               (if-let [handler (.get push-handlers [owner-key msg-id])]
                  (try
                    (handler payload)
                    true
@@ -171,40 +168,40 @@
    (create-client-runtime {}))
   ([{:keys [create-session-fn]
      :or {create-session-fn create-client-network-session}}]
-   (let [state* (atom (initial-client-runtime-state))]
+   (let [^HashMap global-push-handlers (HashMap.)
+         ^HashMap installed-sessions (HashMap.)]
      (letfn [(snapshot []
-               @state*)
+               {:global-push-handlers (into {} global-push-handlers)
+                :installed-sessions (into {} installed-sessions)})
              (global-push-handler [msg-id]
-               (get-in @state* [:global-push-handlers msg-id]))
+               (.get global-push-handlers msg-id))
              (register-global-push-handler! [msg-id handler-fn]
-               (swap! state* assoc-in [:global-push-handlers msg-id] handler-fn)
+               (.put global-push-handlers msg-id handler-fn)
                nil)
              (unregister-global-push-handler! [msg-id]
-               (swap! state* update :global-push-handlers dissoc msg-id)
+               (.remove global-push-handlers msg-id)
                nil)
              (installed-client-network-session [session-id]
-               (get-in @state* [:installed-sessions session-id]))
+               (.get installed-sessions session-id))
              (ensure-installed-client-network-session! [session-id]
-               (let [created (create-session-fn)]
-                 (get-in (swap! state*
-                                (fn [runtime]
-                                  (if (get-in runtime [:installed-sessions session-id])
-                                    runtime
-                                    (assoc-in runtime [:installed-sessions session-id] created))))
-                         [:installed-sessions session-id])))
+               (or (.get installed-sessions session-id)
+                   (let [created (create-session-fn)]
+                     (.put installed-sessions session-id created)
+                     created)))
              (clear-client-session-state! [session-id]
                (when-let [session (installed-client-network-session session-id)]
                  ((:dispose! session)))
-               (swap! state* update :installed-sessions dissoc session-id)
+               (.remove installed-sessions session-id)
                nil)
              (dispose! []
-               (doseq [session (vals (:installed-sessions @state*))]
+               (doseq [session (.values installed-sessions)]
                  ((:dispose! session)))
-               (reset! state* (initial-client-runtime-state))
+               (.clear installed-sessions)
+               (.clear global-push-handlers)
                nil)]
        {:kind ::client-runtime
-        :state* state*
         :snapshot snapshot
+        :installed-sessions-values #(.values installed-sessions)
         :dispose! dispose!
         :global-push-handler global-push-handler
         :register-global-push-handler! register-global-push-handler!
@@ -236,10 +233,6 @@
 (defn current-client-runtime
   []
   (ensure-client-runtime))
-
-(defn client-runtime-state-atom
-  []
-  (:state* (current-client-runtime)))
 
 (defn client-runtime-state-snapshot
   []
@@ -295,7 +288,7 @@
    (expire-pending-requests! (now-ms)))
   ([current-ms]
    (vec (mapcat #((:expire-pending! %) current-ms)
-                (vals (:installed-sessions (client-runtime-state-snapshot))))))
+                ((:installed-sessions-values (current-client-runtime))))))
   ([session-or-owner current-ms]
    (let [session (if (client-network-session? session-or-owner)
                    session-or-owner

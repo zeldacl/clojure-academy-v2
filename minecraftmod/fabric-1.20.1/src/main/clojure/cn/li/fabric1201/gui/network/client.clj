@@ -3,6 +3,7 @@
   net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
+            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.install :as install]
@@ -67,6 +68,15 @@
                   (handle-client-response! request-id payload)))))
   nil)
 
+(defn- on-runtime-sync-receive
+  [^Minecraft client _handler buf _sender]
+  (let [payload (shared/read-runtime-sync-payload buf)]
+    (.execute client
+              (reify Runnable
+                (run [_]
+                  (net-client/handle-push runtime-payload/runtime-sync-message-id payload)))))
+  nil)
+
 (defn init-client!
   "Process-scoped guard: ClientPlayNetworking/registerGlobalReceiver throws
    if the channel already has a registered receiver, so this must not redo
@@ -76,7 +86,11 @@
     (fn []
       (let [receiver (reify ClientPlayNetworking$PlayChannelHandler
                        (receive [_ client _handler buf _sender]
-                         (on-client-play-receive client _handler buf _sender)))]
+                         (on-client-play-receive client _handler buf _sender)))
+            runtime-receiver (reify ClientPlayNetworking$PlayChannelHandler
+                               (receive [_ client _handler buf _sender]
+                                 (on-runtime-sync-receive client _handler buf _sender)))]
         (ClientPlayNetworking/registerGlobalReceiver shared/s2c-channel receiver)
+        (ClientPlayNetworking/registerGlobalReceiver shared/runtime-sync-s2c-channel runtime-receiver)
         (log/info "Fabric GUI network client transport initialized"))))
   nil)

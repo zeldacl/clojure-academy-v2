@@ -2,6 +2,7 @@
   "Fabric 1.20.1 GUI/RPC server transport."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mc1201.gui.network.packet :as packet-base]
+            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.runtime.install :as install]
@@ -27,7 +28,11 @@
 
 (defn send-push-to-client!
   [^ServerPlayer player msg-id payload]
-  (ServerPlayNetworking/send player shared/s2c-channel (shared/make-buf (packet-base/push-map msg-id payload))))
+  (if (= runtime-payload/runtime-sync-message-id msg-id)
+    (ServerPlayNetworking/send player shared/runtime-sync-s2c-channel
+                               (shared/make-runtime-sync-buf payload))
+    (ServerPlayNetworking/send player shared/s2c-channel
+                               (shared/make-buf (packet-base/push-map msg-id payload)))))
 
 (defn- handle-server-request!
   [^ServerPlayer player msg-id request-id payload]

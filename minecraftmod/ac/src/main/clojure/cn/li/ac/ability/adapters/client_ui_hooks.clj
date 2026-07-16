@@ -43,33 +43,15 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap]))
 
-(def ^:private default-client-ui-runtime-state
-  {:vm-wave-circles {}
-   :vm-wave-last-spawn-ms {}
-   :slot-context-ids {}
-   :slot-key-tick-ms {}
-  :charge-coin-state {}
-  :push-handlers-registered? false
-  ;; Overlay HUD reactive cache (see docs/dev plan "Overlay/HUD 响应式重构"):
-  ;; Cache A — skill-slot shape (icon/name/key-label/position), keyed on preset-data identity.
-  :overlay-skill-shape-cache {}
-  ;; Cache B — context-derived data (delegate-state + consumption-hint), keyed on a
-  ;; context-registry snapshot token, shared between the two consumers so the
-  ;; (allocating) context scan runs at most once per real context change, not per-frame.
-  :overlay-context-cache {}})
-
-;; Client UI runtime — Framework [:service :client-ui :runtime]
-;; NOTE: a LEAF under the :client-ui branch, not the branch node itself.
-;; toast/notification/debug-overlay each nest their own atom as a sibling leaf
-;; under [:service :client-ui] (treating it as a map), so the runtime atom must
-;; not occupy [:service :client-ui] directly — doing so made assoc-in on the
-;; sibling leaves throw ClassCastException (Atom cannot be cast to Associative).
-
-(defonce ^:private client-ui-state* (atom default-client-ui-runtime-state))
-
-(defn- client-ui-runtime-state-atom [] client-ui-state*)
+(defonce ^:private ^HashMap slot-context-ids (HashMap.))
+(defonce ^:private ^HashMap slot-key-tick-ms (HashMap.))
+(defonce ^:private ^HashMap charge-coin-state (HashMap.))
+(defonce ^:private ^HashMap overlay-skill-shape-cache (HashMap.))
+(defonce ^:private ^HashMap overlay-context-cache (HashMap.))
+(defonce ^:private push-handlers-registered (boolean-array 1))
 
 (defn- managed-screen-runtime []
   (managed-screens/create-managed-screen-runtime))
@@ -77,8 +59,7 @@
 (defn call-with-managed-screen-runtime [f] (f))
 
 (defn create-client-ui-runtime []
-  {::runtime ::client-ui
-   :state* (client-ui-runtime-state-atom)})
+  {::runtime ::client-ui})
 
 (defn call-with-client-ui-runtime
   [_runtime f]
@@ -94,33 +75,25 @@
       :ac/location-teleport location-teleport-reactive/screen-id
       nil)))
 
-(defn- client-ui-runtime-state-snapshot
-  []
-  @(client-ui-runtime-state-atom))
-
-(defn- update-client-ui-runtime!
-  [f & args]
-  (apply swap! (client-ui-runtime-state-atom) f args))
-
 (defn- slot-context-ids-snapshot
   []
-  (:slot-context-ids (client-ui-runtime-state-snapshot)))
+  slot-context-ids)
 
 (defn- slot-key-tick-ms-snapshot
   []
-  (:slot-key-tick-ms (client-ui-runtime-state-snapshot)))
+  slot-key-tick-ms)
 
 (defn- charge-coin-state-snapshot
   []
-  (:charge-coin-state (client-ui-runtime-state-snapshot)))
+  charge-coin-state)
 
 (defn- overlay-skill-shape-cache-snapshot
   []
-  (:overlay-skill-shape-cache (client-ui-runtime-state-snapshot)))
+  overlay-skill-shape-cache)
 
 (defn- overlay-context-cache-snapshot
   []
-  (:overlay-context-cache (client-ui-runtime-state-snapshot)))
+  overlay-context-cache)
 
 (defn- current-client-session-id
   []
@@ -319,51 +292,41 @@
 
 (defn client-ui-state-snapshot
   ([]
-   (let [{:keys [vm-wave-circles vm-wave-last-spawn-ms slot-context-ids slot-key-tick-ms charge-coin-state]}
-         (client-ui-runtime-state-snapshot)]
-     {:vm-wave-circles vm-wave-circles
-      :vm-wave-last-spawn-ms vm-wave-last-spawn-ms
-      :slot-context-ids slot-context-ids
-      :slot-key-tick-ms slot-key-tick-ms
-      :charge-coin-state charge-coin-state
-  :push-handlers-registered? (:push-handlers-registered? (client-ui-runtime-state-snapshot))}))
+   {:vm-wave-circles {}
+    :vm-wave-last-spawn-ms {}
+    :slot-context-ids (into {} slot-context-ids)
+    :slot-key-tick-ms (into {} slot-key-tick-ms)
+    :charge-coin-state (into {} charge-coin-state)
+    :push-handlers-registered? (aget ^booleans push-handlers-registered 0)})
   ([owner]
-   (let [owner-key (client-ui-owner-key owner)
-         {:keys [vm-wave-circles vm-wave-last-spawn-ms slot-context-ids slot-key-tick-ms charge-coin-state]}
-         (client-ui-runtime-state-snapshot)]
-     {:vm-wave-circles (get vm-wave-circles owner-key [])
-      :vm-wave-last-spawn-ms (get vm-wave-last-spawn-ms owner-key 0)
-      :slot-context-ids (into {}
-                              (filter (fn [[slot-key _ctx-id]]
-                                        (= owner-key (slot-key-owner slot-key))))
-                              slot-context-ids)
-      :slot-key-tick-ms (into {}
-                              (filter (fn [[slot-key _last-ms]]
-                                        (= owner-key (slot-key-owner slot-key))))
-                              slot-key-tick-ms)
-      :charge-coin-state (get charge-coin-state owner-key)})))
+   (let [owner-key (client-ui-owner-key owner)]
+     {:vm-wave-circles []
+      :vm-wave-last-spawn-ms 0
+      :slot-context-ids (reduce (fn [result entry]
+                                  (let [slot-key (.getKey ^java.util.Map$Entry entry)]
+                                    (if (= owner-key (slot-key-owner slot-key))
+                                      (assoc result slot-key (.getValue ^java.util.Map$Entry entry))
+                                      result)))
+                                {} (.entrySet slot-context-ids))
+      :slot-key-tick-ms (reduce (fn [result entry]
+                                  (let [slot-key (.getKey ^java.util.Map$Entry entry)]
+                                    (if (= owner-key (slot-key-owner slot-key))
+                                      (assoc result slot-key (.getValue ^java.util.Map$Entry entry))
+                                      result)))
+                                {} (.entrySet slot-key-tick-ms))
+      :charge-coin-state (.get charge-coin-state owner-key)})))
 
 (defn clear-client-ui-state!
   [owner]
   (let [owner-key (client-ui-owner-key owner)]
-    (update-client-ui-runtime!
-      (fn [runtime-state]
-        (-> runtime-state
-            (update :slot-context-ids
-                    (fn [m]
-                      (into {}
-                            (remove (fn [[slot-key _ctx-id]]
-                                      (= owner-key (slot-key-owner slot-key)))
-                                    m))))
-            (update :slot-key-tick-ms
-                    (fn [m]
-                      (into {}
-                            (remove (fn [[slot-key _last-ms]]
-                                      (= owner-key (slot-key-owner slot-key)))
-                                    m))))
-            (update :charge-coin-state dissoc owner-key)
-            (update :overlay-skill-shape-cache dissoc owner-key)
-            (update :overlay-context-cache dissoc owner-key))))
+    (doseq [^HashMap cache [slot-context-ids slot-key-tick-ms]]
+      (let [iterator (.iterator (.keySet cache))]
+        (while (.hasNext iterator)
+          (when (= owner-key (slot-key-owner (.next iterator)))
+            (.remove iterator)))))
+    (.remove charge-coin-state owner-key)
+    (.remove overlay-skill-shape-cache owner-key)
+    (.remove overlay-context-cache owner-key)
     (reactive-hud/clear-vm-wave-for-owner! (read-model/owner-key owner nil))
     nil))
 
@@ -398,7 +361,12 @@
 
 (defn reset-client-ui-state-for-test!
   []
-  (reset! (client-ui-runtime-state-atom) default-client-ui-runtime-state)
+  (.clear slot-context-ids)
+  (.clear slot-key-tick-ms)
+  (.clear charge-coin-state)
+  (.clear overlay-skill-shape-cache)
+  (.clear overlay-context-cache)
+  (aset-boolean ^booleans push-handlers-registered 0 false)
   (call-with-managed-screen-runtime
     #(managed-screens/reset-managed-screen-state-for-test!))
   nil)
@@ -409,17 +377,13 @@
   Pure swap function — no side effects inside swap! (swap-vals! guarantees the
   old/new comparison is drawn from the committed values, not a retried attempt)."
   []
-  (let [[old new] (swap-vals! (client-ui-runtime-state-atom)
-                    (fn [runtime-state]
-                      (if (:push-handlers-registered? runtime-state)
-                        runtime-state
-                        (assoc runtime-state :push-handlers-registered? true))))]
-    (not= (:push-handlers-registered? old)
-          (:push-handlers-registered? new))))
+  (if (aget ^booleans push-handlers-registered 0)
+    false
+    (do (aset-boolean ^booleans push-handlers-registered 0 true) true)))
 
 (defn set-slot-context-for-test!
   [player-uuid key-idx ctx-id]
-  (update-client-ui-runtime! assoc-in [:slot-context-ids (slot-context-key player-uuid key-idx)] ctx-id)
+  (.put slot-context-ids (slot-context-key player-uuid key-idx) ctx-id)
   nil)
 
 (defn seed-vm-wave-state-for-test!
@@ -444,11 +408,11 @@
 
 (defn- notify-charge-coin-throw!
   [player-uuid now-ms]
-  (update-client-ui-runtime!
-    assoc-in
-    [:charge-coin-state (client-ui-owner-key player-uuid)]
-    {:start-ms (long now-ms)
-     :window-ms (max 1 (long (railgun-coin-window-ms)))}))
+  (.put charge-coin-state
+        (client-ui-owner-key player-uuid)
+        {:start-ms (long now-ms)
+         :window-ms (max 1 (long (railgun-coin-window-ms)))})
+  nil)
 
 (defn- charge-coin-visual-state
   [player-uuid now-ms]
@@ -480,7 +444,7 @@
             ratio (max 0.0 (min 1.0 progress))
             coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
         (when (and has-window? (not active-window?))
-          (update-client-ui-runtime! update :charge-coin-state dissoc owner-key))
+          (.remove charge-coin-state owner-key))
         {:active? (boolean active-window?)
          :charge-ticks 0
          :charge-start-ms start-ms
@@ -620,13 +584,11 @@
   (client-keybinds/get-preset-switch-state player-uuid))
 
 (defn- remove-slot-context! [ctx-id]
-  (update-client-ui-runtime!
-    update :slot-context-ids
-    (fn [m]
-      (into {}
-            (remove (fn [[_slot-key active-ctx-id]]
-                      (= active-ctx-id ctx-id))
-                    m)))))
+  (let [iterator (.iterator (.entrySet slot-context-ids))]
+    (while (.hasNext iterator)
+      (when (= ctx-id (.getValue ^java.util.Map$Entry (.next iterator)))
+        (.remove iterator))))
+  nil)
 
 (defn- context-id-for-slot!
   [player-uuid key-idx skill-id]
@@ -637,7 +599,7 @@
                         (fn [owner]
                           (ctx-mgr/activate-context! owner player-uuid skill-id)))
               ctx-id (:id ctx-map)]
-          (update-client-ui-runtime! assoc-in [:slot-context-ids slot-key] ctx-id)
+          (.put slot-context-ids slot-key ctx-id)
           ctx-id))))
 
 (defn- send-with-client-owner!
@@ -669,17 +631,17 @@
     (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
       (send-with-client-owner! player-uuid catalog/MSG-SLOT-KEY-UP {:ctx-id ctx-id
                                                                    :key-idx key-idx})
-      (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
+      (.remove slot-context-ids slot-key)
       ctx-id)))
 
 (defn- abort-slot-context!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
-    (update-client-ui-runtime! update :slot-key-tick-ms dissoc slot-key)
+    (.remove slot-key-tick-ms slot-key)
     (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
       (send-with-client-owner! player-uuid catalog/MSG-SLOT-KEY-ABORT {:ctx-id ctx-id
                                                                        :key-idx key-idx})
-      (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
+      (.remove slot-context-ids slot-key)
       (with-client-context-owner player-uuid
         (fn [_owner]
           (ctx/with-context-owner (client-context-owner player-uuid)
@@ -688,13 +650,11 @@
 
 (defn- clear-slot-key-ticks!
   [slot-key-pred]
-  (update-client-ui-runtime!
-    update :slot-key-tick-ms
-    (fn [m]
-      (into {}
-            (remove (fn [[slot-key _last-ms]]
-                      (slot-key-pred slot-key))
-                    m)))))
+  (let [iterator (.iterator (.keySet slot-key-tick-ms))]
+    (while (.hasNext iterator)
+      (when (slot-key-pred (.next iterator))
+        (.remove iterator))))
+  nil)
 
 (defn- abort-slot-keys!
   [slot-keys]
@@ -705,21 +665,17 @@
 (defn- abort-all-slot-contexts-for-owner!
   [owner]
   (let [owner-key (client-ui-owner-key owner)
-  abort-slots (->> (slot-context-ids-snapshot)
-                         (filter (fn [[slot-key _ctx-id]]
-                                   (= owner-key (slot-key-owner slot-key))))
-                         (map first)
-                         vec)]
+        abort-slots (into []
+                          (filter #(= owner-key (slot-key-owner %)))
+                          (.keySet slot-context-ids))]
     (abort-slot-keys! abort-slots)
     (clear-slot-key-ticks! #(= owner-key (slot-key-owner %)))))
 
 (defn- abort-all-slot-contexts-for-session!
   [session-id]
-  (let [abort-slots (->> (slot-context-ids-snapshot)
-                         (filter (fn [[slot-key _ctx-id]]
-                                   (= session-id (first slot-key))))
-                         (map first)
-                         vec)]
+  (let [abort-slots (into []
+                          (filter #(= session-id (first %)))
+                          (.keySet slot-context-ids))]
     (abort-slot-keys! abort-slots)
     (clear-slot-key-ticks! #(= session-id (first %)))))
 
@@ -913,8 +869,8 @@
     (if (and cache (identical? preset-data (:last-preset-data cache)))
       (:shapes cache)
       (let [shapes (hud-renderer/build-skill-slot-shape hud-model screen-width screen-height)]
-        (update-client-ui-runtime! assoc-in [:overlay-skill-shape-cache owner-key]
-                                    {:last-preset-data preset-data :shapes shapes})
+        (.put overlay-skill-shape-cache owner-key
+              {:last-preset-data preset-data :shapes shapes})
         shapes))))
 
 (defn- cached-context-data
@@ -932,7 +888,7 @@
             entry {:last-contexts-token token
                    :active-contexts contexts
                    :consumption-hint hint}]
-        (update-client-ui-runtime! assoc-in [:overlay-context-cache owner-key] entry)
+        (.put overlay-context-cache owner-key entry)
         entry))))
 
 (defn reactive-overlay-snapshot
@@ -1163,7 +1119,7 @@
      :client-on-slot-key-down!
      (fn [player-uuid key-idx]
        ;; Reset keepalive throttle so the first hold refresh after key-down is never suppressed.
-       (update-client-ui-runtime! update :slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
+       (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
        (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
 
      :client-on-slot-key-tick!
@@ -1172,12 +1128,12 @@
              now-ms   (System/currentTimeMillis)
              last-ms  (get (slot-key-tick-ms-snapshot) slot-key 0)]
          (when (>= (- now-ms last-ms) 100)
-           (update-client-ui-runtime! assoc-in [:slot-key-tick-ms slot-key] now-ms)
+           (.put slot-key-tick-ms slot-key now-ms)
            (send-slot-keepalive! player-uuid key-idx))))
 
      :client-on-slot-key-up!
      (fn [player-uuid key-idx]
-       (update-client-ui-runtime! update :slot-key-tick-ms dissoc (slot-context-key player-uuid key-idx))
+       (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
        (send-slot-key-up-message! player-uuid key-idx))
 
      :client-on-slot-key-abort!

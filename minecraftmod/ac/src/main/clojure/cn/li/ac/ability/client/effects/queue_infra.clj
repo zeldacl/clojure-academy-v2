@@ -1,15 +1,11 @@
 (ns cn.li.ac.ability.client.effects.queue-infra
   "Shared queue helpers for client-side effect pipelines.
 
-  Uses java.util.concurrent.ConcurrentLinkedQueue — lock-free, non-blocking,
-  hardware-level CAS for zero spin-lock contention between render thread
-  (consumer) and game logic / network threads (producers).
-
-  Replaces the old atom + swap! pattern which caused CAS live-lock between
-  the render thread and multiple writer threads during particle-heavy frames."
+  Uses a client-thread-confined bounded ArrayDeque. Network callbacks enqueue
+  onto Minecraft's client executor before reaching this layer."
   (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner])
-  (:import [java.util.concurrent ConcurrentLinkedQueue]))
+  (:import [java.util ArrayDeque]))
 
 ;; ============================================================================
 ;; Session-id resolution
@@ -54,23 +50,23 @@
                       {:required ":client-session-id"}))))
 
 ;; ============================================================================
-;; Lock-free queue operations (ConcurrentLinkedQueue)
+;; Bounded O(1) queue operations
 ;; ============================================================================
 
 (defn queue-effect!
   "Enqueue an effect command tagged with session-id.
-   .offer is non-blocking, lock-free — safe from any thread at any frequency."
-  [^ConcurrentLinkedQueue q kind owner-or-session effect-cmd]
+   Oldest low-priority entries are discarded at the fixed capacity."
+  [^ArrayDeque q kind owner-or-session effect-cmd]
   (let [session-id (normalize-session-id kind owner-or-session)]
-    (when (>= (.size q) 8192)
-      (.poll q))
-    (.offer q [session-id effect-cmd]))
+    (when (>= (.size q) (if (= kind "particle") 8192 1024))
+      (.pollFirst q))
+    (.addLast q [session-id effect-cmd]))
   nil)
 
 (defn poll-effects!
   "Drain all queued effects for a session-id.
-   .poll is non-blocking, lock-free — safe from render thread at 60+ fps."
-  [^ConcurrentLinkedQueue q kind owner-or-session]
+   Called from the client thread."
+  [^ArrayDeque q kind owner-or-session]
   (let [session-id (normalize-session-id kind owner-or-session)
         results (java.util.ArrayList.)]
     ;; Drain the queue, collecting only entries for the requested session.
@@ -81,5 +77,5 @@
         (let [[entry-session-id cmd] entry]
           (if (= session-id entry-session-id)
             (.add results cmd)
-            (.offer q entry)))))
+            (.addLast q entry)))))
     (vec results)))
