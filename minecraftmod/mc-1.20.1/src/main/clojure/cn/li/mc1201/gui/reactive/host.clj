@@ -15,13 +15,15 @@
 
 (defn create-reactive-screen
   "Build a DelegatingScreen hosting a reactive UiRt.
-   Optional on-close runs before runtime dispose (screen removed / ESC)."
+   Optional on-close runs before runtime dispose (screen removed / ESC).
+   Supports :on-pre-render and :on-post-render hooks for custom rendering
+   (e.g. terminal 3D perspective + cursor overlay)."
   ([^UiRt rt title] (create-reactive-screen rt title nil))
-  ([^UiRt rt title on-close]
+  ([^UiRt rt title {:keys [on-close on-pre-render on-post-render] :as opts}]
   (doto (DelegatingScreen.
           (Component/literal ^String title)
           ;; render
-          (fn render-cb [^DelegatingScreen this ^GuiGraphics gg _mx _my pt]
+          (fn render-cb [^DelegatingScreen this ^GuiGraphics gg mx my pt]
             (perf/frame-start!)
             (.renderBackground this gg)
             (clock/tick! rt pt)
@@ -29,7 +31,9 @@
             (rt/flush! rt)
             (layout/ensure-layout! rt)
             (layout/ensure-tape! rt)
+            (when on-pre-render (on-pre-render gg rt mx my pt))
             (render/draw-tape! gg rt (.-leftOffset this) (.-topOffset this))
+            (when on-post-render (on-post-render gg rt mx my pt))
             (when-let [stats (perf/frame-end!)]
               (log/info stats)))
           ;; keyPressed
@@ -64,6 +68,6 @@
   ([^UiRt rt title] (open-reactive-screen! rt title nil))
   ([^UiRt rt title opts]
   (let [^Minecraft mc (Minecraft/getInstance)
-        screen (create-reactive-screen rt title (:on-close opts))]
+        screen (create-reactive-screen rt title opts)]
     (.setScreen mc screen)
     screen)))

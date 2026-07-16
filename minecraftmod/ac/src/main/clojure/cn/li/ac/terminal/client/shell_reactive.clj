@@ -1,9 +1,14 @@
 (ns cn.li.ac.terminal.client.shell-reactive
-  "Complete reactive replacement for terminal/client/shell.clj (deleted —
-   this file is now the sole implementation, including the network/state/
-   page-math functions previously delegated from shell.clj: query-terminal-
-   state!, install-app!, page-count, clamp-page, grid-position, player-owner)."
-  (:require [cn.li.ac.ability.util.uuid :as player-uuid]
+  "Complete reactive terminal UI aligned with upstream AcademyCraft TerminalUI.
+   Features: 3D perspective (PoseStack, via mc-1.20.1 bridge), mouse edge
+   scrolling, custom cursor with additive blend, selection highlight + audio,
+   stagger fade-in, game-time clock, and loading animation (sine-wave alpha).
+
+   MC-specific rendering (3D perspective + cursor) is delegated to
+   cn.li.mc1201.gui.reactive.terminal-render via platform bridge ops
+   :terminal-apply-perspective! and :terminal-render-cursor!."
+  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.util.uuid :as player-uuid]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as catalog]
             [cn.li.ac.terminal.client.apps :as client-apps]
@@ -22,34 +27,29 @@
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.xml :as ui-xml])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcmod.ui.node INode]
-           [cn.li.mcmod.uipojo.signal ISigO]))
+           [cn.li.mcmod.ui.node INode]))
+
+;; ============================================================================
+;; Constants — matching upstream AcademyCraft TerminalUI
+;; ============================================================================
 
 (def ^:private root-w 640.0)
 (def ^:private root-h 785.0)
+(def ^:private max-mx 605.0)     ;; MAX_MX
+(def ^:private max-my 740.0)     ;; MAX_MY
+(def ^:private balance-speed 3000.0)
+(def ^:private sensitivity 0.7)
 
-;; Grid config matching original AcademyCraft TerminalUI:
-;; START_X=65, START_Y=155, STEP_X=180, STEP_Y=180
-(def ^:private grid-config
-  {:columns 3 :rows 3 :col-x [65 245 425] :row-y [155 335 515]
-   :app-width 151 :app-height 151})
-
-(def ^:private apps-per-page (* (:columns grid-config) (:rows grid-config)))
-
-(defn- grid-position [index]
-  (let [row (quot index (:columns grid-config))
-        col (rem index (:columns grid-config))]
-    [(get (:col-x grid-config) col) (get (:row-y grid-config) row)]))
-
-(defn- page-count [apps]
-  (max 1 (int (Math/ceil (/ (double (count apps)) (double apps-per-page))))))
-
-(defn- clamp-page [apps page]
-  (let [max-page (dec (page-count apps))]
-    (-> (int (or page 0)) (max 0) (min max-page))))
+;; Grid positioning (upstream: START_X=65, START_Y=155, STEP_X=180, STEP_Y=180)
+(def ^:private start-x 65.0)
+(def ^:private start-y 155.0)
+(def ^:private step-x 180.0)
+(def ^:private step-y 180.0)
+(def ^:private app-w 151.0)
+(def ^:private app-h 151.0)
 
 ;; ============================================================================
-;; Network / RPC (reused verbatim from shell.clj)
+;; Network / RPC (reused verbatim from original shell.clj design)
 ;; ============================================================================
 
 (defn- query-terminal-state! [owner callback]
@@ -60,218 +60,264 @@
           (term-rt/dispatch-event! owner :terminal/query-response response)
           (when callback (callback response)))))))
 
-(defn- install-app! [owner app-id callback]
-  (let [generation (term-rt/ensure-owner! owner)]
-    (term-rt/dispatch-event! owner :terminal/install-app-start {:app-id app-id})
-    (net-client/send-to-server owner (terminal-messages/msg-id :install-app) {:app-id (name app-id)}
-      (fn [response]
-        (when (term-rt/owner-active? owner generation)
-          (term-rt/dispatch-event! owner :terminal/install-app-result (assoc response :app-id app-id))
-          (when callback (callback response)))))))
-
 (defn- player-owner [player]
   (term-rt/player-owner (or (player-uuid/player-uuid player) (str player))))
 
 ;; ============================================================================
-;; set-tick! — force a per-frame side-effecting computed-o to actually run.
-;; ComputedO/ComputedD are lazy-pull: without a real Binding reader, a bare
-;; put-user-signal! computed never executes (see developer panel-reactive.clj
-;; for the fuller writeup of this framework quirk).
-;; ============================================================================
-
-(defn- pull-o! [_node source] (.sGet ^ISigO source) nil)
-
-(defn- hover-alpha-step [idle-a hover-a ^UiRt rt idx _ms]
-  (if (= (long idx) (rt/hovered-idx rt)) (double hover-a) (double idle-a)))
-
-(defn- bind-hover-alpha! [^UiRt rt id idle-a hover-a]
-  (let [^INode n (rt/node-by-id rt id)
-        idx (.getIdx n)
-        clock (rt/clock-ms-sig rt)
-        sig-d (sig/computed-d [clock] (partial hover-alpha-step idle-a hover-a rt idx))]
-    (ui/bind! rt id :alpha sig-d)))
-
-(defn- set-tick! [^UiRt rt key computed-sig]
-  (when-let [old (rt/user-signal rt key)] (sig/unbind! old))
-  (if computed-sig
-    (let [^INode anchor (rt/node-by-id rt :back)
-          b (sig/bind! computed-sig anchor pull-o! (rt/get-dirty-bindings-q rt))]
-      (rt/register-binding! rt (.getIdx anchor) b)
-      (rt/put-user-signal! rt key b))
-    (rt/put-user-signal! rt key nil)))
-
-;; ============================================================================
-;; App grid — dynamic group rebuilt per page
-;; ============================================================================
-
-(defn- app-item-spec [id app x y]
-  {:kind :image
-   :props {:id id :x (double x) :y (double y) :w 151.0 :h 151.0
-           :src (modid/asset-path "textures" "guis/data_terminal/app_back.png")}
-   :children
-   [{:kind :image
-     :props {:id (keyword (str (name id) "-icon")) :x 9.0 :y 32.0 :w 110.0 :h 110.0
-             :src (or (catalog/app-icon app) (modid/asset-path "textures" "guis/apps/default/icon.png"))}}
-    {:kind :text
-     :props {:id (keyword (str (name id) "-text")) :x 0.0 :y 148.0 :w 151.0 :h 21.0
-             :text (:name app "?") :font-size 16.0 :color 0xFFFFFFFF}}]})
-
-(defn- handle-app-click! [_rt owner app installed? player rebuild!]
-  (if installed?
-    (client-apps/launch! (:id app) player)
-    (install-app! owner (:id app)
-      (fn [response]
-        (if (:success response)
-          (rebuild!)
-          (log/error "Failed to install app:" (:id app)))))))
-
-(defn- rebuild-grid!
-  [^UiRt rt owner player]
-  (let [grid ^INode (rt/node-by-id rt :app-grid)
-        _ (rt/clear-children! rt grid)
-        state (term-rt/state-snapshot owner)
-        all-apps (catalog/ordered-apps)
-        page (clamp-page all-apps (:page state))
-        _ (term-rt/dispatch-event! owner :terminal/set-page {:page page})
-        installed-apps (:installed-apps state)
-        offset (* page apps-per-page)
-        page-apps (->> all-apps (drop offset) (take apps-per-page))
-        total-pages (page-count all-apps)]
-    (doseq [[i app] (map-indexed vector page-apps)]
-      (let [[x y] (grid-position i)
-            id (keyword (str "app-" i))
-            installed? (contains? installed-apps (:id app))]
-        (rt/build-child! rt (app-item-spec id app x y) grid)
-        (bind-hover-alpha! rt id 0.85 1.0)
-        (events/on! rt id :left-click
-          (fn [_ _ _]
-            (handle-app-click! rt owner app installed? player
-              (fn [] (rebuild-grid! rt owner player)))))))
-    (ui/set-prop! rt :arrow_up :alpha (if (> page 0) 1.0 0.35))
-    (ui/set-prop! rt :arrow_down :alpha (if (< page (dec total-pages)) 1.0 0.35))))
-
-;; ============================================================================
-;; Page navigation
-;; ============================================================================
-
-(defn- change-page! [^UiRt rt owner player delta]
-  (let [apps (catalog/ordered-apps)
-        current (:page (term-rt/state-snapshot owner))
-        next-page (clamp-page apps (+ (int (or current 0)) (int delta)))]
-    (when (not= next-page current)
-      (term-rt/dispatch-event! owner :terminal/set-page {:page next-page})
-      (rebuild-grid! rt owner player))))
-
-;; ============================================================================
-;; Header display — username / time / app count / loading indicator
-;; ============================================================================
-
-(defn- attach-header-tick! [^UiRt rt owner player]
-  (ui/set-prop! rt :text_username :text (entity/player-get-name player))
-  (set-tick! rt :header-tick
-    (sig/computed-o [(rt/clock-ms-sig rt)]
-      (fn [ms]
-        (let [t (long (/ (long ms) 1000))
-              hour (mod (quot t 3600) 24) minutes (mod (quot t 60) 60)
-              time-text (format "%02d:%02d" hour minutes)
-              state (term-rt/state-snapshot owner)
-              all-apps (catalog/ordered-apps)
-              page (clamp-page all-apps (:page state))
-              total-pages (page-count all-apps)
-              installed-count (count (:installed-apps state))
-              total-count (count all-apps)
-              loading? (boolean (:loading? state))]
-          (ui/set-prop! rt :text_appcount
-            :text (str installed-count "/" total-count " Applications, " time-text
-                       "  P" (inc page) "/" total-pages))
-          (let [^INode li (rt/node-by-id rt :icon_loading)
-                ^INode lt (rt/node-by-id rt :text_loading)]
-            (when li (.setVisible li loading?) (.setFlag li node/FLAG-LAYOUT-DIRTY))
-            (when lt (.setVisible lt loading?) (.setFlag lt node/FLAG-LAYOUT-DIRTY))))
-        nil))))
-
-;; ============================================================================
-;; 3D-perspective approximation — real mouse-position signals via the
-;; framework's :on-pointer-move hook (fires on every mouse-move regardless
-;; of hit-test result), translating the "back" root a few px per axis.
-;; ============================================================================
-
-(defn- attach-perspective! [^UiRt rt]
-  (let [mouse-x (sig/signal-d (/ root-w 2.0))
-        mouse-y (sig/signal-d (/ root-h 2.0))
-        ^INode back (rt/node-by-id rt :back)]
-    (rt/put-user-signal! rt :on-pointer-move
-      (fn [mx my] (sig/sset-d! mouse-x mx) (sig/sset-d! mouse-y my)))
-    (set-tick! rt :perspective-tick
-      (sig/computed-o [(rt/clock-ms-sig rt)]
-        (fn [_]
-          (let [nx (- (/ (sig/sget-d mouse-x) root-w) 0.5)
-                ny (- (/ (sig/sget-d mouse-y) root-h) 0.5)]
-            (.setX back (* -8.0 nx))
-            (.setY back (* 6.0 ny))
-            (.setFlag back node/FLAG-LAYOUT-DIRTY))
-          nil)))))
-
-;; ============================================================================
-;; Entry point
+;; create-runtime — main constructor
 ;; ============================================================================
 
 (defn create-runtime [player]
   (let [r (rt/create-runtime)
+
+        ;; ===== Instance-local frame state (primitive arrays, zero allocation) =====
+        ;; fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y
+        ;;     [4]last-mx [5]last-my [6]last-frame-ms [7]create-time-ms [8]aspect
+        ^doubles fd (doto (double-array 9)
+                      (aset 0 150.0) (aset 1 150.0)    ;; mouse-x, mouse-y
+                      (aset 2 150.0) (aset 3 150.0)    ;; buff-x, buff-y
+                      (aset 6 (double (System/currentTimeMillis))))  ;; last-frame-ms
+        ;; fi: [0]scroll [1]selection [2]last-selection [3]last-installed-count
+        ^ints fi (doto (int-array 4)
+                   (aset 2 -1)    ;; last-selection = -1
+                   (aset 3 -1))   ;; last-installed-count = -1
+
+        ;; ===== Per-instance constants =====
+        owner (player-owner player)
+        create-time-ms (double (System/currentTimeMillis))
+
+        ;; forward decl (cyclic: update-grid! references create-time-ms)
+        update-grid!-fn (volatile! nil)
+
+        ;; ===== 1. Build XML UI =====
         spec (ui-xml/load-spec (modid/asset-path "guis" "new/terminal.xml"))
         _ (rt/build! r spec)
-        owner (player-owner player)]
-    (rt/build-child! r
-      {:kind :group :props {:id :app-grid :x 0.0 :y 0.0 :w root-w :h root-h}}
-      (rt/node-by-id r :back))
-    (let [^INode tmpl (rt/node-by-id r :app_template)]
-      (when tmpl (.setVisible tmpl false) (.setFlag tmpl node/FLAG-LAYOUT-DIRTY)))
-    (let [^INode li (rt/node-by-id r :icon_loading) ^INode lt (rt/node-by-id r :text_loading)]
-      (when li (.setVisible li false)) (when lt (.setVisible lt false)))
-    (attach-header-tick! r owner player)
-    (attach-perspective! r)
-    (events/on! r :arrow_up :left-click (fn [_ _ _] (change-page! r owner player -1)))
-    (events/on! r :arrow_down :left-click (fn [_ _ _] (change-page! r owner player 1)))
-    (query-terminal-state! owner
-      (fn [_] (rebuild-grid! r owner player)))
+
+        ;; ===== 2. Create app widget pool (9 slots, one-time allocation) =====
+        _ (do
+            (let [^INode grid (rt/node-by-id r :app-grid)
+                  ^INode tmpl (rt/node-by-id r :app_template)]
+              (.setVisible tmpl false)
+              (dotimes [i 9]
+                (let [id (keyword (str "app-" i))]
+                  (rt/build-child! r
+                    {:kind :image
+                     :props {:id id :x 0.0 :y 0.0 :w app-w :h app-h
+                             :src (modid/asset-path "textures" "guis/data_terminal/app_back.png")}
+                     :children
+                     [{:kind :image
+                       :props {:id (keyword (str "app-" i "-icon"))
+                               :x 9.0 :y 32.0 :w 110.0 :h 110.0
+                               :src ""}}
+                      {:kind :text
+                       :props {:id (keyword (str "app-" i "-text"))
+                               :x 0.0 :y 148.0 :w 151.0 :h 21.0
+                               :text "" :font-size 16.0 :color 0xFFFFFFFF}}]}
+                    grid)
+                  (.setVisible ^INode (rt/node-by-id r id) false)))))
+
+        ;; ===== 3. Hide loading indicators initially =====
+        _ (do (.setVisible ^INode (rt/node-by-id r :icon_loading) false)
+              (.setVisible ^INode (rt/node-by-id r :text_loading) false))
+
+        ;; ===== 4. pre-render hook — frame state update + MC 3D perspective =====
+        pre-render
+        (fn pre-render-fn [_gg ^UiRt rt* mx my _pt]
+          (let [now-ms (double (System/currentTimeMillis))
+                dt (max 0.001 (/ (- now-ms (aget fd 6)) 1000.0))
+                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY)
+                dx (* (- mx (aget fd 4)) sensitivity)
+                dy (* (- my (aget fd 5)) sensitivity)
+                new-mx (max 0.0 (min max-mx (+ (aget fd 0) dx)))
+                new-my (max 0.0 (min max-my (- (aget fd 1) dy)))
+                ;; Smooth balance
+                balance (fn bal [from to]
+                          (let [d (double (- (double to) (double from)))]
+                            (double (+ (double from)
+                                       (* (min (* balance-speed dt) (Math/abs d))
+                                          (Math/signum d))))))
+                new-bx (balance (aget fd 2) new-mx)
+                new-by (balance (aget fd 3) new-my)
+                ;; Selection (3x3 grid index)
+                new-sel (let [col (int (/ (max 0.0 (min (dec max-mx) new-bx))
+                                          (/ max-mx 3.0)))
+                              row (int (/ (max 0.0 (min (dec max-my) new-by))
+                                          (/ max-my 3.0)))]
+                          (min 8 (+ (* row 3) col)))
+                ;; Edge scrolling
+                installed-count (count (:installed-apps (term-rt/state-snapshot owner)))
+                max-scroll (max 0 (- (int (Math/ceil (/ (double installed-count) 3.0))) 3))
+                [new-scroll new-my]  ;; returns [scroll my] — adjusts my after edge trigger
+                (cond
+                  (<= new-my 0.0)
+                  [(max 0 (dec (aget fi 0))) 1.0]
+                  (>= new-my max-my)
+                  [(min max-scroll (inc (aget fi 0))) (dec max-my)]
+                  :else
+                  [(aget fi 0) new-my])
+                t-ms (double now-ms)]
+            ;; Write frame state to primitive arrays
+            (aset fd 0 (double new-mx)) (aset fd 1 (double new-my))
+            (aset fd 2 (double new-bx)) (aset fd 3 (double new-by))
+            (aset fd 4 (double mx)) (aset fd 5 (double my))
+            (aset fd 6 (double now-ms))
+            ;; Save old state before overwriting (for change detection below)
+            (let [old-scroll (aget fi 0)]
+              (aset fi 0 (int new-scroll)) (aset fi 1 new-sel)
+              ;; Delegate MC 3D perspective transform via platform bridge
+              (bridge/call-adapter :terminal-apply-perspective! _gg rt* mx my _pt)
+              ;; --- Selection change → grid update + audio ---
+              (when (not= new-sel (aget fi 2))
+                (aset fi 2 new-sel)
+                (let [installed (vec (:installed-apps (term-rt/state-snapshot owner)))
+                      app-idx (+ (* (int new-scroll) 3) new-sel)]
+                  (when (< app-idx (count installed))
+                    (client-sounds/queue-current-sound-effect!
+                      {:type :sound :sound-id (str (modid/MOD-ID) ":terminal.select")
+                       :volume 0.2 :pitch 1.0})))
+                (when-let [f @update-grid!-fn] (f)))
+              ;; --- Scroll change or installed-count change → grid update ---
+              (when (or (not= (int new-scroll) old-scroll)
+                        (not= installed-count (aget fi 3)))
+                (aset fi 3 installed-count)
+                (when-let [f @update-grid!-fn] (f))))
+            ;; --- Header display update ---
+            (let [game-ticks (long (or (sig/sget-l (rt/game-ticks-sig r)) 0))
+                  day-time (mod game-ticks 24000)
+                  hour (int (/ day-time 1000))
+                  minutes (int (/ (* (mod day-time 1000) 60) 1000))
+                  time-text (format "%02d:%02d" hour minutes)
+                  state (term-rt/state-snapshot owner)
+                  installed-count (count (:installed-apps state))
+                  loading? (boolean (:loading? state))
+                  loading-alpha (if loading?
+                                  (+ 0.1 (* 0.45 (inc (Math/sin (* t-ms 0.005)))))
+                                  0.0)]
+              (ui/set-prop! r :text_appcount :text
+                (str installed-count " Applications, " time-text))
+              (ui/set-prop! r :text_username :text (entity/player-get-name player))
+              (ui/set-prop! r :icon_loading :alpha loading-alpha)
+              (ui/set-prop! r :text_loading :alpha loading-alpha)
+              (let [^INode li (rt/node-by-id r :icon_loading)
+                    ^INode lt (rt/node-by-id r :text_loading)]
+                (.setVisible li loading?) (.setVisible lt loading?))
+              (ui/set-prop! r :arrow_up :alpha (if (> (aget fi 0) 0) 1.0 0.35))
+              (ui/set-prop! r :arrow_down :alpha
+                (if (< (aget fi 0) max-scroll) 1.0 0.35)))))
+
+        ;; ===== 5. post-render hook — MC cursor rendering =====
+        post-render
+        (fn post-render-fn [_gg ^UiRt rt* _mx _my _pt]
+          (bridge/call-adapter :terminal-render-cursor! _gg rt* _mx _my _pt))
+
+        ;; ===== 6. App grid update (batch, called on scroll/selection change) =====
+        update-grid!
+        (fn update-grid-fn []
+          (let [installed (vec (:installed-apps (term-rt/state-snapshot owner)))
+                scroll (aget fi 0) sel (aget fi 1)
+                start-idx (* scroll 3)
+                lifetime (/ (- (double (System/currentTimeMillis)) create-time-ms) 1000.0)]
+            (dotimes [i 9]
+              (let [id (keyword (str "app-" i))
+                    ^INode w (rt/node-by-id r id)
+                    app-idx (+ start-idx i)
+                    has-app (< app-idx (count installed))]
+                (if has-app
+                  (let [app (nth installed app-idx)
+                        col (rem i 3) row (quot i 3)
+                        x (+ start-x (* step-x (double col)))
+                        y (+ start-y (* step-y (double row)))
+                        selected? (= i sel)
+                        ;; Stagger fade-in: clamp((lifetime-(id+1)*0.1)/0.4, 0, 1)
+                        mAlpha (max 0.0 (min 1.0 (/ (- lifetime (* (+ app-idx 1) 0.1)) 0.4)))
+                        icon-id (keyword (str "app-" i "-icon"))
+                        text-id (keyword (str "app-" i "-text"))
+                        bg-alpha mAlpha
+                        icon-alpha (* (if selected? 0.8 0.6) mAlpha)
+                        text-alpha (float (+ 0.1 (* (if selected? 0.72 0.1) mAlpha)))]
+                    (.setVisible w true)
+                    (.setX w (double x)) (.setY w (double y))
+                    (.setFlag w node/FLAG-LAYOUT-DIRTY)
+                    ;; Background: highlight texture when selected (upstream APP_BACK / APP_BACK_HDR)
+                    (ui/set-prop! r id :src
+                      (if selected?
+                        (modid/asset-path "textures" "guis/data_terminal/app_back_highlight.png")
+                        (modid/asset-path "textures" "guis/data_terminal/app_back.png")))
+                    (ui/set-prop! r id :alpha bg-alpha)
+                    (ui/set-prop! r icon-id :alpha icon-alpha)
+                    (ui/set-prop! r text-id :alpha text-alpha)
+                    (ui/set-prop! r text-id :text (:name app "?"))
+                    (when-let [icon-src (catalog/app-icon app)]
+                      (ui/set-prop! r icon-id :src icon-src)))
+                  (.setVisible w false))))))
+
+        ;; Resolve forward decl
+        _ (vreset! update-grid!-fn update-grid!)
+
+        ;; ===== 7. Event handlers =====
+        _ (events/on! r :back :left-click
+            (fn [_ _ _]
+              (let [installed (vec (:installed-apps (term-rt/state-snapshot owner)))
+                    scroll (aget fi 0) sel (aget fi 1)
+                    app-idx (+ (* scroll 3) sel)]
+                (when (< app-idx (count installed))
+                  (let [app-id (:id (nth installed app-idx))]
+                    (client-apps/launch! app-id player))))))
+
+        ;; ===== 8. Initial query + first render =====
+        _ (query-terminal-state! owner
+            (fn [_]
+              (term-rt/dispatch-event! owner :terminal/set-page {:page 0})
+              (update-grid!)))
+
+        ;; ===== 9. Store hooks + frame state in user-signals =====
+        _ (rt/put-user-signal! r :terminal-fd fd)        ;; frame doubles (MC render reads this)
+        _ (rt/put-user-signal! r :terminal-fi fi)        ;; frame ints
+        _ (rt/put-user-signal! r :terminal-owner owner)
+        _ (rt/put-user-signal! r :terminal-pre-render pre-render)
+        _ (rt/put-user-signal! r :terminal-post-render post-render)
+        _ (rt/put-user-signal! r :terminal-on-close
+            #(term-rt/clear-state! owner))]
     r))
+
+;; ============================================================================
+;; Entry points
+;; ============================================================================
 
 (defn open! [player]
   (let [r (create-runtime player)]
-    (bridge/open-reactive-screen! r "Terminal")))
-
-;; ============================================================================
-;; Open/toggle entry points — reused verbatim from shell.clj's open-terminal/
-;; toggle-terminal!/poll-terminal-toggle-key!, except opening goes through
-;; open! (bridge/open-reactive-screen! directly) instead of the old
-;; client-bridge/open-screen! :ac/terminal path, which used a key
-;; (:ac/terminal) that was never actually registered anywhere (only
-;; :ac/terminal-gui was) — the Alt-key toggle silently no-op'd under the old
-;; code. This was a pre-existing bug, not something introduced by the
-;; reactive migration.
-;; ============================================================================
+    (bridge/open-reactive-screen! r "Terminal"
+      {:on-pre-render (rt/user-signal r :terminal-pre-render)
+       :on-post-render (rt/user-signal r :terminal-post-render)
+       :on-close (rt/user-signal r :terminal-on-close)})))
 
 (defn open-terminal!
-  "Query install state first (matching old shell.clj's open-terminal gate);
-   only open the screen if the terminal has been installed."
+  "Query install state first; only open if terminal is installed.
+   Shows chat message 'ac.terminal.notinstalled' if not installed."
   [player]
   (let [owner (player-owner player)]
     (query-terminal-state! owner
       (fn [response]
         (if (:terminal-installed? response)
           (open! player)
-          (log/info "Terminal not installed, use item to install first"))))))
+          (do
+            (bridge/send-system-message! player "ac.terminal.notinstalled")
+            (log/info "Terminal not installed, use item to install first")))))))
 
 (defn toggle! [player]
   (if (bridge/screen-active?)
     (bridge/close-screen!)
     (open-terminal! player)))
 
+;; ============================================================================
+;; GLFW Alt-key polling (matching upstream KEY_LMENU toggle)
+;; ============================================================================
+
 (def ^:private glfw-key-left-alt 342)
 (def ^:private terminal-key-was-pressed (atom false))
 
 (defn- poll-terminal-toggle-key!
-  "Called every client tick. Queries GLFW via platform bridge for Left Alt.
+  "Called every client tick. Queries GLFW for Left Alt state.
    Debounced: only triggers on release→press transition."
   []
   (try
@@ -283,16 +329,18 @@
     (catch Exception e
       (log/warn "[AC-Terminal] GLFW polling error:" (ex-message e)))))
 
+;; ============================================================================
+;; Widget factory + install (preserved for existing callers)
+;; ============================================================================
+
 (defn create-terminal-gui-reactive
-  "Widget-factory-compatible entry point: returns a {:type :reactive-screen}
-   map for the platform's open-screen dispatcher, matching the shape used by
-   skill-tree/preset-editor screens."
+  "Widget-factory-compatible entry point."
   [player]
   {:type :reactive-screen :runtime (create-runtime player)})
 
 (defn install-ui-hooks-reactive!
-  "Registers the reactive terminal screen under the same factory key used by
-   shell.clj's install-ui-hooks!, plus this file's own GLFW Alt-key polling."
+  "Registers the reactive terminal screen under :ac/terminal-gui factory key
+   and registers the GLFW Alt-key polling client tick hook."
   []
   (platform-ui/register-widget-factory!
     :ac/terminal-gui

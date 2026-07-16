@@ -22,6 +22,7 @@
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
+            [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
@@ -171,7 +172,10 @@
                                   ^Window win (.getWindow mc)
                                   handle (.getWindow win)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
-                            (catch Throwable _ false)))}))
+                            (catch Throwable _ false)))
+     ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
+     :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
+     :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
 
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."

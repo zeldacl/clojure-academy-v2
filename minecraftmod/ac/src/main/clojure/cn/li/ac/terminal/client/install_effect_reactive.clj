@@ -19,6 +19,7 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
+            [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.xml :as ui-xml])
@@ -28,6 +29,8 @@
 
 (def ^:private anim-length 4.0)
 (def ^:private wait-time 0.7)
+(def ^:private blend-in 0.2)   ;; upstream BLEND_IN
+(def ^:private blend-out 0.2)  ;; upstream BLEND_OUT
 
 (defn- now-secs [] (/ (double (System/nanoTime)) 1.0e9))
 
@@ -78,8 +81,21 @@
       (set-tick! r :install-tick
         (sig/computed-o [(rt/clock-ms-sig r)]
           (fn [_]
-            (let [dt (- (now-secs) start-time)]
-              (sig/sset-d! progress (min 1.0 (/ (max 0.0 dt) anim-length)))
+            (let [dt (- (now-secs) start-time)
+                  prog (min 1.0 (/ (max 0.0 dt) anim-length))]
+              (sig/sset-d! progress prog)
+              ;; Alpha fade-in/out matching upstream TerminalInstallEffect.initBlender:
+              ;;   dt < BLEND_IN      → alpha = dt / BLEND_IN
+              ;;   dt > ANIM_LENGTH   → alpha = max(0, 1 - (dt-ANIM_LENGTH)/BLEND_OUT)
+              ;;   otherwise          → alpha = 1.0
+              (let [alpha (cond
+                            (< dt blend-in) (/ dt blend-in)
+                            (> dt anim-length) (max 0.0 (- 1.0 (/ (- dt anim-length) blend-out)))
+                            :else 1.0)]
+                ;; Apply alpha to main/outline/cover/tag/progbar nodes
+                (doseq [node-id [:main :outline :cover :tag :progbar]]
+                  (when-let [^INode n (rt/node-by-id r node-id)]
+                    (ui/set-prop! r node-id :alpha (float alpha)))))
               (when (and (not @done?) (>= dt (+ anim-length wait-time)))
                 (reset! done? true)
                 (when-let [p (bridge/get-client-player)]

@@ -26,6 +26,7 @@
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
+            [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -256,7 +257,10 @@
                                     ^Window w (.getWindow mc)
                                     handle (.getWindow w)]
                                 (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
-                              (catch Throwable _ false)))}))
+                              (catch Throwable _ false)))
+       ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
+       :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
+       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
 
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
