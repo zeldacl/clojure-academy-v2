@@ -42,7 +42,7 @@
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]
   (let [r (int radius)
-        results (atom [])]
+        results (transient [])]
     (doseq [dx (range (- r) (inc r))
             dy (range (- r) (inc r))
             dz (range (- r) (inc r))]
@@ -56,8 +56,8 @@
                 block (.getBlock block-state)
                 block-id (block-id-fn block block-state)]
             (when (block-predicate block-id)
-              (swap! results conj {:x bx :y by :z bz :block-id block-id}))))))
-    @results))
+              (conj! results {:x bx :y by :z bz :block-id block-id}))))))
+    (persistent! results)))
 
 (def ^:private sound-source-map
   {:ambient SoundSource/AMBIENT

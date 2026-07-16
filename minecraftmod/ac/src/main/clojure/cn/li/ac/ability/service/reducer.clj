@@ -806,44 +806,6 @@
 ;; Sub-Reducer: player runtime (delayed projectiles, radiation marks, vecmanip)
 ;; ============================================================================
 
-(defn- pending-tasks-path
-  [player-uuid]
-  [:runtime :delayed-projectiles :pending-tasks (str player-uuid)])
-
-(defn- cmd-schedule-delayed-projectile-task
-  [player-state {:keys [player-uuid task delay-ticks]}]
-  (let [ticks (max 1 (int (or delay-ticks 1)))
-        task* (assoc task :ticks-left ticks)]
-    (ok (update-in player-state (pending-tasks-path player-uuid) (fnil conj []) task*))))
-
-(defn- cmd-tick-delayed-projectile-tasks
-  [player-state {:keys [player-uuid]}]
-  (let [path (pending-tasks-path player-uuid)
-        tasks (get-in player-state path [])
-        due (atom [])
-        remaining (atom [])]
-    (doseq [task tasks]
-      (if (<= (long (or (:ticks-left task) 0)) 1)
-        (swap! due conj task)
-        (swap! remaining conj (update task :ticks-left dec))))
-    (let [next-state (if (seq @remaining)
-                       (assoc-in player-state path @remaining)
-                       (update-in player-state [:runtime :delayed-projectiles :pending-tasks]
-                                   dissoc (str player-uuid)))
-          events (mapv (fn [t]
-                         {:event/type :delayed-projectile-due
-                          :player-uuid player-uuid
-                          :task t})
-                       @due)]
-      (ok next-state events))))
-
-(defn- cmd-clear-delayed-projectile-tasks
-  [player-state {:keys [player-uuid clear-all?]}]
-  (if clear-all?
-    (ok (assoc-in player-state [:runtime :delayed-projectiles :pending-tasks] {}))
-    (ok (update-in player-state [:runtime :delayed-projectiles :pending-tasks]
-                   dissoc (str player-uuid)))))
-
 (defn- cmd-mark-radiation-target
   [player-state {:keys [player-uuid target-id mark]}]
   (if (and target-id mark)
@@ -1044,9 +1006,6 @@
     :context-set-input-state (cmd-context-set-input-state player-state command)
     :set-railgun-coin-judged-uuid (cmd-set-railgun-coin-judged-uuid player-state command)
     :clear-railgun-coin-judged-uuid (cmd-clear-railgun-coin-judged-uuid player-state command)
-    :schedule-delayed-projectile-task (cmd-schedule-delayed-projectile-task player-state command)
-    :tick-delayed-projectile-tasks (cmd-tick-delayed-projectile-tasks player-state command)
-    :clear-delayed-projectile-tasks (cmd-clear-delayed-projectile-tasks player-state command)
     :mark-radiation-target (cmd-mark-radiation-target player-state command)
     :clear-radiation-marks (cmd-clear-radiation-marks player-state command)
     :tick-radiation-marks (cmd-tick-radiation-marks player-state command)

@@ -16,14 +16,14 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap HashSet IdentityHashMap Iterator Map$Entry]))
 
 (def ^:private interferer-rt
   (machine-runtime/schema-runtime interferer-schema/ability-interferer-schema :server-only? true))
@@ -133,51 +133,105 @@
 ;; later in the same client JVM session — see docs/dev/AGENT_AND_TOOLING.md P5.
 ;; ============================================================================
 
-(def ^:private interferers-path [:service :ability-interferer :by-session])
-(def ^:private tick-counter-path [:service :ability-interferer :tick-counter])
+(definterface IInterfererSession
+  (^java.util.HashMap activeInterferers [])
+  (^longs tickCell []))
 
-(defn- server-session-key
-  "Stable-for-this-world-lifetime, unique-across-world-loads key. A ServerLevel
-   instance is recreated on every world load, so its identity hash naturally
-   partitions state the same way client-session-id does on the client side."
-  [level]
-  (System/identityHashCode level))
+(deftype InterfererSession [^HashMap active ^longs tick]
+  IInterfererSession
+  (activeInterferers [_] active)
+  (tickCell [_] tick))
+
+(definterface IActiveInterferer
+  (^Object activeLevel [])
+  (^Object activePos [])
+  (^java.util.HashSet affectedPlayers []))
+
+(deftype ActiveInterferer [level pos ^HashSet affected]
+  IActiveInterferer
+  (activeLevel [_] level)
+  (activePos [_] pos)
+  (affectedPlayers [_] affected))
+
+(defonce ^:private ^IdentityHashMap interferer-sessions (IdentityHashMap.))
+
+(defn- session-runtime
+  ^InterfererSession [level create?]
+  (or (.get interferer-sessions level)
+      (when create?
+        (let [runtime (InterfererSession. (HashMap.) (long-array 1))]
+          (.put interferer-sessions level runtime)
+          runtime))))
+
+(defn- affected-set
+  ^HashSet [uuids]
+  (let [result (HashSet.)]
+    (.addAll result ^java.util.Collection uuids)
+    result))
 
 (defn- register-active-interferer! [src-id level pos uuids]
-  (swap! (fw/fw-atom) assoc-in
-    (conj interferers-path (server-session-key level) src-id)
-    {:level level :pos pos :affected-uuids (set uuids)}))
+  (let [^InterfererSession runtime (session-runtime level true)]
+    (.put (.activeInterferers runtime) src-id
+          (ActiveInterferer. level pos (affected-set uuids))))
+  nil)
 
 (defn- unregister-active-interferer! [level src-id]
-  (swap! (fw/fw-atom) update-in (conj interferers-path (server-session-key level)) dissoc src-id))
+  (when-let [^InterfererSession runtime (session-runtime level false)]
+    (.remove (.activeInterferers runtime) src-id))
+  nil)
 
 (defn- update-active-interferer-uuids! [level src-id uuids]
-  (swap! (fw/fw-atom) update-in (conj interferers-path (server-session-key level))
-    (fn [m] (if (contains? m src-id) (assoc-in m [src-id :affected-uuids] (set uuids)) m))))
+  (when-let [^InterfererSession runtime (session-runtime level false)]
+    (when-let [^ActiveInterferer active (.get (.activeInterferers runtime) src-id)]
+      (let [^HashSet affected (.affectedPlayers active)]
+        (.clear affected)
+        (.addAll affected ^java.util.Collection uuids))))
+  nil)
+
+(defn- active-interferer? [level src-id]
+  (if-let [^InterfererSession runtime (session-runtime level false)]
+    (.containsKey (.activeInterferers runtime) src-id)
+    false))
+
+(defn- dispose-world-interferers! [level]
+  (when-let [^InterfererSession runtime (.remove interferer-sessions level)]
+    (let [^Iterator it (.iterator (.values (.activeInterferers runtime)))]
+      (while (.hasNext it)
+        (let [^ActiveInterferer active (.next it)]
+          (clear-interference-by-uuids!
+            (.affectedPlayers active)
+            (source-id (.activeLevel active) (.activePos active)))))))
+  nil)
 
 (defn- cleanup-stale-interferers!
   "World-tick handler: check all registered interferers for chunk unload.
    Matching original AcademyCraft's !tile.isInvalid per-tick check."
   [world]
-  (let [fw-atom (fw/fw-atom)
-        session-key (server-session-key world)
-        session-tick-path (conj tick-counter-path session-key)
-        session-interferers-path (conj interferers-path session-key)
-        tick (get-in (swap! fw-atom update-in session-tick-path (fnil inc 0)) session-tick-path)]
-    (when (zero? (mod tick 40))
-      (let [stale (atom [])]
-        (doseq [[src-id {:keys [level pos affected-uuids]}] (get-in @fw-atom session-interferers-path)]
-          (when (and level pos)
-            (try
-              (when-not (world/world-is-chunk-loaded?* level (world/block-to-chunk-coord (pos/pos-x pos)) (world/block-to-chunk-coord (pos/pos-z pos)))
-                (swap! stale conj src-id)
-                (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (count affected-uuids) "players")
-                (doseq [u affected-uuids]
-                  (remove-interference-effect-by-uuid! u src-id)))
-              (catch Exception e
-                (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e))))))
-        (when (seq @stale)
-          (swap! fw-atom update-in session-interferers-path #(apply dissoc % @stale)))))))
+  (when-let [^InterfererSession runtime (session-runtime world false)]
+    (let [^longs tick-cell (.tickCell runtime)
+          tick (unchecked-inc (aget tick-cell 0))]
+      (aset-long tick-cell 0 tick)
+      (when (zero? (rem tick 40))
+        (let [^Iterator it (.iterator (.entrySet (.activeInterferers runtime)))]
+          (while (.hasNext it)
+            (let [^Map$Entry entry (.next it)
+                  src-id (.getKey entry)
+                  ^ActiveInterferer active (.getValue entry)
+                  level (.activeLevel active)
+                  block-pos (.activePos active)
+                  ^HashSet affected (.affectedPlayers active)]
+              (when (and level block-pos)
+                (try
+                  (when-not (world/world-is-chunk-loaded?*
+                              level
+                              (world/block-to-chunk-coord (pos/pos-x block-pos))
+                              (world/block-to-chunk-coord (pos/pos-z block-pos)))
+                    (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (.size affected) "players")
+                    (clear-interference-by-uuids! affected src-id)
+                    (.remove it))
+                  (catch Exception e
+                    (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e)))))))))))
+  nil)
 
 ;; ============================================================================
 ;; Scan and tick
@@ -260,7 +314,7 @@
             (apply-interference-effect! player src-id))))
       ;; Update the global registry for tile invalidation tracking
       (if (seq next)
-        (if (contains? (get-in @(fw/fw-atom) (conj interferers-path (server-session-key level))) src-id)
+        (if (active-interferer? level src-id)
           (update-active-interferer-uuids! level src-id next)
           (register-active-interferer! src-id level pos next))
         (unregister-active-interferer! level src-id)))))
@@ -363,7 +417,8 @@
   (install/process-once! ::world-tick-cleanup-registered
     (fn []
       (world-lifecycle/register-world-lifecycle-handler!
-        {:on-tick (fn [world]
-                    (cleanup-stale-interferers! world))})
+        {:id :ac/ability-interferer
+         :on-tick cleanup-stale-interferers!
+         :on-unload dispose-world-interferers!})
       (log/info "Ability Interferer world-tick cleanup handler registered")))
   nil)

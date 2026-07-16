@@ -38,7 +38,7 @@
   (let [damage-calls* (atom [])
         velocity-calls* (atom [])
         exp-calls* (atom [])
-        affected* (atom #{})]
+        affected* (java.util.HashSet.)]
     (with-redefs [entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage!* (fn [world-id entity-id damage _]
                                                        (swap! damage-calls* conj [world-id entity-id damage]))
@@ -57,7 +57,7 @@
         {:uuid "item-1" :living? false :x 0.5 :y 64.0 :z 0.5 :width 0.25 :height 0.25}
         {:uuid "player" :living? true :x 0.5 :y 64.0 :z 0.5 :width 0.6 :height 1.8}]
        affected*)
-      (is (= #{"living-1"} @affected*))
+      (is (= #{"living-1"} (set affected*)))
       (is (= [["w" "living-1" 5.0]] @damage-calls*))
       (is (= [["w" "living-1" 0.0 0.8 0.0]] @velocity-calls*))
       (is (= 1 (count @exp-calls*))))))

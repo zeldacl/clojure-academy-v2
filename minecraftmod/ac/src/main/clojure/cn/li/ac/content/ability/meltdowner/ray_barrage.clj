@@ -163,7 +163,7 @@
                                  (silbarn-type? (:type front-hit)))
               silbarn-ready? (and silbarn-hit?
                                   (not (true? (:is-hit front-hit))))
-              hit-count*    (atom 0)]
+              hit-count*    (long-array 1)]
           (if silbarn-ready?
             (do
               (send-preray-fx! ctx-id eye front-hit true)
@@ -179,7 +179,7 @@
                     (when (get-in result [:beam-result :performed?])
                       (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
                         (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
-                      (swap! hit-count* inc))))))
+                      (aset-long hit-count* 0 (unchecked-inc (aget hit-count* 0))))))))
             (let [result (run-beam! {:player-id player-id
                                      :ctx-id ctx-id
                                      :world-id world-id
@@ -190,11 +190,11 @@
               (when (get-in result [:beam-result :performed?])
                 (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
                   (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
-                (swap! hit-count* inc))))
-          (when (pos? @hit-count*)
+                (aset-long hit-count* 0 (unchecked-inc (aget hit-count* 0))))))
+          (when (pos? (aget hit-count* 0))
             (skill-effects/add-skill-exp! player-id ray-barrage-skill-id
                                           (cfg-double :progression.exp-hit))
-            (log/debug "RayBarrage: hit" @hit-count* "beams")))))
+            (log/debug "RayBarrage: hit" (aget hit-count* 0) "beams")))))
     (catch Exception e
       (log/warn "RayBarrage perform! failed:" (ex-message e)))))
 

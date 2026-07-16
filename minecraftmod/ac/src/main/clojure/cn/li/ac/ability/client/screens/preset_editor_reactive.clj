@@ -93,21 +93,53 @@
 ;; Carousel animation state
 ;; ============================================================================
 
+(definterface ICarouselAnim
+  (^long activeIndex [])
+  (setActiveIndex [^long value])
+  (^long fromIndex [])
+  (setFromIndex [^long value])
+  (^long toIndex [])
+  (setToIndex [^long value])
+  (^double transitStart [])
+  (setTransitStart [^double value])
+  (^boolean transiting [])
+  (setTransiting [^boolean value]))
+
+(deftype CarouselAnim
+  [^:unsynchronized-mutable ^long active
+   ^:unsynchronized-mutable ^long from
+   ^:unsynchronized-mutable ^long to
+   ^:unsynchronized-mutable ^double start
+   ^:unsynchronized-mutable ^boolean in-transit]
+  ICarouselAnim
+  (activeIndex [_] active)
+  (setActiveIndex [_ value] (set! active value))
+  (fromIndex [_] from)
+  (setFromIndex [_ value] (set! from value))
+  (toIndex [_] to)
+  (setToIndex [_ value] (set! to value))
+  (transitStart [_] start)
+  (setTransitStart [_ value] (set! start value))
+  (transiting [_] in-transit)
+  (setTransiting [_ value] (set! in-transit value)))
+
 (defn- carousel-anim [^UiRt r]
   (or (rt/user-signal r :carousel-anim)
-      (let [a (atom {:active 0 :from 0 :to 0 :start-time 0.0 :transiting? false})]
+      (let [a (CarouselAnim. 0 0 0 0.0 false)]
         (rt/put-user-signal! r :carousel-anim a)
         a)))
 
 (defn- start-transit! [^UiRt r from-idx to-idx]
-  (let [anim (carousel-anim r)]
-    (swap! anim assoc
-           :from from-idx :to to-idx
-           :start-time (now-sec) :transiting? true)))
+  (let [^CarouselAnim anim (carousel-anim r)]
+    (.setFromIndex anim (long from-idx))
+    (.setToIndex anim (long to-idx))
+    (.setTransitStart anim (now-sec))
+    (.setTransiting anim true)))
 
 (defn- finish-transit! [^UiRt r]
-  (let [anim (carousel-anim r)]
-    (swap! anim assoc :transiting? false :active (:to @anim))))
+  (let [^CarouselAnim anim (carousel-anim r)]
+    (.setTransiting anim false)
+    (.setActiveIndex anim (.toIndex anim))))
 
 ;; ============================================================================
 ;; Slot info update — skill icon + name from preset data
@@ -243,13 +275,13 @@
   (when-let [rd (logic/build-preset-editor-render-data owner)]
     (let [all-slots (:all-preset-slots rd)
           selected-preset (:selected-preset rd)
-          anim (carousel-anim r)]
+          ^CarouselAnim anim (carousel-anim r)]
       (doseq [page-idx (range 4)]
         (let [page-slots (get all-slots page-idx (vec (repeat 4 nil)))]
           (update-page-slots! r page-idx page-slots)
           (update-page-title! r page-idx)))
       ;; Update carousel target: center on selected-preset (upstream updatePosForeground)
-      (swap! anim assoc :active selected-preset))))
+      (.setActiveIndex anim (long selected-preset)))))
 
 ;; ============================================================================
 ;; Animated carousel tick — matching upstream updateTransit + updatePosForeground
@@ -266,10 +298,14 @@
 
 (defn- attach-carousel-tick! [^UiRt r]
   (let [clock (rt/clock-ms-sig r)
-        anim (carousel-anim r)
+        ^CarouselAnim anim (carousel-anim r)
         computed (sig/computed-o [clock]
                    (fn [_]
-                     (let [{:keys [active from to start-time transiting?]} @anim]
+                     (let [active (.activeIndex anim)
+                           from (.fromIndex anim)
+                           to (.toIndex anim)
+                           start-time (.transitStart anim)
+                           transiting? (.transiting anim)]
                        (if transiting?
                          ;; Upstream updateTransit: lerp x + scale between from and to
                          (let [elapsed (- (now-sec) (double start-time))
@@ -316,13 +352,13 @@
     (let [slot-id (keyword (str "preset-" page-idx "-" slot-idx))]
       (events/on! r slot-id :left-click
         (fn [_ _ evt]
-          (let [anim (carousel-anim r)]
-            (when-not (:transiting? @anim)
+          (let [^CarouselAnim anim (carousel-anim r)]
+            (when-not (.transiting anim)
               (if (selector-open? r)
                 ;; Upstream: if selector open, dispose it (click same slot = close)
                 (clear-selector! r)
                 ;; Upstream: if page is active, open selector at mouse position
-                (when (= page-idx (:active @anim))
+                (when (= page-idx (.activeIndex anim))
                   (let [mx (double (or (:x evt) 0))
                         my (double (or (:y evt) 0))]
                     (build-selector! r page-idx slot-idx mx my)))))))))))
@@ -336,11 +372,11 @@
     (let [page-id (keyword (str "preset-" page-idx))]
       (events/on! r page-id :left-click
         (fn [_ _ _]
-          (let [anim (carousel-anim r)]
-            (when-not (:transiting? @anim)
+          (let [^CarouselAnim anim (carousel-anim r)]
+            (when-not (.transiting anim)
               (clear-selector! r)
-              (when (not= page-idx (:active @anim))
-                (let [from-idx (:active @anim)]
+              (when (not= page-idx (.activeIndex anim))
+                (let [from-idx (.activeIndex anim)]
                   (start-transit! r from-idx page-idx)
                   ;; Update logic state so data reads use the new preset
                   (logic/on-preset-tab-click owner page-idx)
@@ -383,10 +419,10 @@
     ;; Carousel animation — matching upstream updateTransit + updatePosForeground
     (attach-carousel-tick! r)
     ;; Initial state
-    (let [anim (carousel-anim r)]
-      (swap! anim assoc :active (:selected-preset
-                                  (or (logic/build-preset-editor-render-data owner)
-                                      {:selected-preset 0}))))
+    (let [^CarouselAnim anim (carousel-anim r)]
+      (.setActiveIndex anim (long (:selected-preset
+                                    (or (logic/build-preset-editor-render-data owner)
+                                        {:selected-preset 0})))))
     (refresh-ui! r owner)
     r))
 

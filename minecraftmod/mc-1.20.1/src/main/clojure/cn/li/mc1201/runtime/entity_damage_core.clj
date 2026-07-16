@@ -85,7 +85,7 @@
    search-radius
    find-next-entity
    apply-damage!]
-  (let [hit-entities (atom [(str (.getUUID start-entity))])]
+  (let [hit-entities (transient [(str (.getUUID start-entity))])]
     (apply-damage! start-entity initial-damage)
     (loop [^LivingEntity current-entity start-entity
            current-damage initial-damage
@@ -94,6 +94,6 @@
         (when-let [^LivingEntity next-entity (find-next-entity current-entity search-radius)]
           (let [reflected-damage (compute-reflected-damage current-damage)]
             (apply-damage! next-entity reflected-damage)
-            (swap! hit-entities conj (str (.getUUID next-entity)))
+            (conj! hit-entities (str (.getUUID next-entity)))
             (recur next-entity reflected-damage (inc reflection-num))))))
-    @hit-entities))
+    (persistent! hit-entities)))

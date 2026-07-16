@@ -121,7 +121,7 @@
     (when-let [^ServerLevel level (get-level-by-id server world-id)]
       (let [step-size 0.5
             steps (int (/ max-distance step-size))
-            results (atom [])]
+            results (transient [])]
         (doseq [i (range steps)]
           (let [t (* i step-size)
                 x (+ x1 (* dx t))
@@ -131,13 +131,13 @@
                 state (.getBlockState level pos)
                 block (.getBlock state)]
             (when-not (.isAir state)
-              (swap! results conj
+              (conj! results
                      {:x (int x)
                       :y (int y)
                       :z (int z)
                       :block-id (block-key-str block)
                       :hardness (.getDestroySpeed state level pos)}))))
-        @results))
+        (persistent! results)))
     (catch Exception e
       (log/warn "Failed to find blocks in line:" (ex-message e))
       [])))

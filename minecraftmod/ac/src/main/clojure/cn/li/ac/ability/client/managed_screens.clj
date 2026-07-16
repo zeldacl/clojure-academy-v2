@@ -1,55 +1,76 @@
 (ns cn.li.ac.ability.client.managed-screens
-  "Shared runtime store for client-managed screens.
+  "Client-thread-confined owner/state registry for managed screens."
+  (:import [java.util HashMap Map$Entry]))
 
-  Screen modules no longer own private runtime singletons; they store owner-keyed
-  screen state in this shared runtime and require the caller to pass the owner
-  explicitly for all reads/writes.
+(definterface IManagedScreenRuntime
+  (^java.util.HashMap activeOwners [])
+  (^java.util.HashMap screenStates []))
 
-  State stored in Framework [:service :managed-screens]."
-  (:require [cn.li.mcmod.framework :as fw]))
+(deftype ManagedScreenRuntime [^HashMap active ^HashMap states]
+  IManagedScreenRuntime
+  (activeOwners [_] active)
+  (screenStates [_] states))
 
-(def ^:private default-managed-screen-runtime-state
-  {:active-owners {} :states {}})
-
-(def ^:private ms-path [:service :managed-screens])
-
-(defn- managed-screen-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom ms-path)
-        (let [a (atom default-managed-screen-runtime-state)]
-          (swap! fw-atom assoc-in ms-path a) a))
-    (atom default-managed-screen-runtime-state)))
-
-;; Backward-compatible factory (used by client_ui_hooks.clj)
 (defn create-managed-screen-runtime []
-  {::runtime ::managed-screen-runtime
-   :state* (managed-screen-state-atom)})
+  (ManagedScreenRuntime. (HashMap.) (HashMap.)))
 
-(defn call-with-managed-screen-runtime
-  [_runtime f]
-  (f))
+(defonce ^:private runtime-slot
+  (object-array [(create-managed-screen-runtime)]))
 
-(defn managed-screen-state-snapshot [] @(managed-screen-state-atom))
+(defn- current-runtime ^ManagedScreenRuntime []
+  (aget ^objects runtime-slot 0))
+
+(defn call-with-managed-screen-runtime [runtime f]
+  (let [previous (current-runtime)]
+    (aset ^objects runtime-slot 0 runtime)
+    (try (f) (finally (aset ^objects runtime-slot 0 previous)))))
+
+(defn managed-screen-state-snapshot []
+  (let [runtime (current-runtime)]
+    {:active-owners (into {} (.activeOwners runtime))
+     :states (into {}
+                   (map (fn [^Map$Entry entry]
+                          [(.getKey entry) (into {} ^HashMap (.getValue entry))]))
+                   (.entrySet (.screenStates runtime)))}))
 
 (defn reset-managed-screen-state-for-test! []
-  (reset! (managed-screen-state-atom) default-managed-screen-runtime-state) nil)
+  (.clear (.activeOwners (current-runtime)))
+  (.clear (.screenStates (current-runtime)))
+  nil)
 
 (defn set-active-owner! [screen-id owner-key]
-  (swap! (managed-screen-state-atom) assoc-in [:active-owners screen-id] owner-key) owner-key)
+  (.put (.activeOwners (current-runtime)) screen-id owner-key)
+  owner-key)
 
 (defn active-owner [screen-id]
-  (get-in (managed-screen-state-snapshot) [:active-owners screen-id]))
+  (.get (.activeOwners (current-runtime)) screen-id))
+
+(defn- owner-states
+  ^HashMap [screen-id create?]
+  (let [^HashMap screens (.screenStates (current-runtime))]
+    (or (.get screens screen-id)
+        (when create?
+          (let [created (HashMap.)]
+            (.put screens screen-id created)
+            created)))))
 
 (defn screen-state [screen-id owner-key default-state]
-  (get-in (managed-screen-state-snapshot) [:states screen-id owner-key] default-state))
+  (if-let [^HashMap states (owner-states screen-id false)]
+    (or (.get states owner-key) default-state)
+    default-state))
 
 (defn update-screen-state! [screen-id owner-key default-state f & args]
-  (swap! (managed-screen-state-atom)
-         (fn [store] (apply update-in store [:states screen-id owner-key] (fnil f default-state) args))))
+  (let [^HashMap states (owner-states screen-id true)
+        current (or (.get states owner-key) default-state)
+        next-state (apply f current args)]
+    (.put states owner-key next-state)
+    next-state))
 
 (defn clear-screen-state! [screen-id owner-key]
-  (swap! (managed-screen-state-atom)
-         (fn [store]
-           (let [store (update-in store [:states screen-id] dissoc owner-key)]
-             (if (= owner-key (get-in store [:active-owners screen-id]))
-               (update store :active-owners dissoc screen-id) store)))) nil)
+  (when-let [^HashMap states (owner-states screen-id false)]
+    (.remove states owner-key)
+    (when (.isEmpty states)
+      (.remove (.screenStates (current-runtime)) screen-id)))
+  (when (= owner-key (active-owner screen-id))
+    (.remove (.activeOwners (current-runtime)) screen-id))
+  nil)

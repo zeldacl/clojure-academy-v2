@@ -1,189 +1,164 @@
 (ns cn.li.mcmod.events.world-lifecycle
-  "Platform-neutral world lifecycle event handlers registry.
+  "Thread-confined world lifecycle dispatch. Registration is mutable during
+  bootstrap and frozen before gameplay; tick dispatch reads only ArrayLists."
+  (:import [java.util ArrayList HashMap HashSet Iterator]))
 
-  This allows content code to register world load/unload handlers without
-  forge/fabric code knowing about specific business logic.
+(definterface ILifecycleEntry
+  (^Object entryId [])
+  (^clojure.lang.IFn entryFn []))
 
-  Platform code (forge/fabric) calls dispatch-world-load/unload.
-  Content code registers handlers via register-world-lifecycle-handler!
+(deftype LifecycleEntry [id ^clojure.lang.IFn handler]
+  ILifecycleEntry
+  (entryId [_] id)
+  (entryFn [_] handler))
 
-  State stored in Framework [:service :world-lifecycle]."
-  (:require [cn.li.mcmod.framework :as fw]))
+(definterface IWorldLifecycleRuntime
+  (^java.util.ArrayList loadHandlers [])
+  (^java.util.ArrayList unloadHandlers [])
+  (^java.util.ArrayList saveHandlers [])
+  (^java.util.ArrayList tickHandlers [])
+  (^java.util.HashMap handlerIndexes [])
+  (^booleans frozenCell []))
 
-(defn- report-handler-error!
-  "Log a handler failure to `*err*` (wraps a bare `Writer` in `PrintWriter` for tests)."
-  [phase ^Throwable t]
+(deftype WorldLifecycleRuntime
+  [^ArrayList load ^ArrayList unload ^ArrayList save ^ArrayList tick
+   ^HashMap indexes ^booleans frozen]
+  IWorldLifecycleRuntime
+  (loadHandlers [_] load)
+  (unloadHandlers [_] unload)
+  (saveHandlers [_] save)
+  (tickHandlers [_] tick)
+  (handlerIndexes [_] indexes)
+  (frozenCell [_] frozen))
+
+(defn create-world-lifecycle-runtime
+  ^WorldLifecycleRuntime []
+  (WorldLifecycleRuntime. (ArrayList.) (ArrayList.) (ArrayList.) (ArrayList.)
+                          (HashMap.) (boolean-array 1)))
+
+(defonce ^:private current-runtime-cell
+  (object-array [(create-world-lifecycle-runtime)]))
+
+(defn- current-runtime ^WorldLifecycleRuntime []
+  (aget ^objects current-runtime-cell 0))
+
+(defn call-with-world-lifecycle-runtime
+  "Test/bootstrap scope helper. Gameplay owns one frozen runtime and never
+  switches it."
+  [runtime f]
+  (let [previous (current-runtime)]
+    (aset ^objects current-runtime-cell 0 runtime)
+    (try (f) (finally (aset ^objects current-runtime-cell 0 previous)))))
+
+(defn- report-handler-error! [phase ^Throwable t]
   (let [^java.io.Writer err *err*
         ^java.io.PrintWriter pw (if (instance? java.io.PrintWriter err)
-                                    ^java.io.PrintWriter err
-                                    (java.io.PrintWriter. err))]
+                                  ^java.io.PrintWriter err
+                                  (java.io.PrintWriter. err))]
     (.println pw (str "Error in world " (name phase) " handler: " (ex-message t)))
     (.printStackTrace t pw)))
 
-;; ============================================================================
-;; Handler Registry — stored in Framework [:service :world-lifecycle]
-;; ============================================================================
+(defn- phase-handlers
+  ^ArrayList [^WorldLifecycleRuntime runtime phase]
+  (case phase
+    :load (.loadHandlers runtime)
+    :unload (.unloadHandlers runtime)
+    :save (.saveHandlers runtime)
+    :tick (.tickHandlers runtime)))
 
-(defn- default-state []
-  {:load []
-   :unload []
-   :save []
-   :tick []
-   :frozen? false})
-
-(def ^:private lifecycle-path [:service :world-lifecycle])
-
-(defn- state-snapshot []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom lifecycle-path) (default-state))
-    (default-state)))
-
-(defn- update-state! [f & args]
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom update-in lifecycle-path
-           (fn [current]
-             (apply f (or current (default-state)) args))))
-  nil)
-
-(defn- assert-not-frozen!
-  []
-  (when (:frozen? (state-snapshot))
+(defn- assert-not-frozen! [^WorldLifecycleRuntime runtime]
+  (when (aget (.frozenCell runtime) 0)
     (throw (ex-info "World lifecycle handlers are frozen" {}))))
 
-(defn- handler-id
-  [handler-map]
-  (or (:id handler-map) handler-map))
-
 (defn- register-handler-entry!
-  [phase id handler-fn]
-  (update-state!
-    update phase
-    (fn [entries]
-      (if-let [existing (first (filter #(= id (:id %)) entries))]
-        (if (identical? handler-fn (:fn existing))
-          entries
-          (throw (ex-info "Conflicting world lifecycle handler id"
-                          {:id id})))
-        (conj entries {:id id :fn handler-fn})))))
-
-;; ============================================================================
-;; Registration API (called by content code)
-;; ============================================================================
+  [^WorldLifecycleRuntime runtime phase id ^clojure.lang.IFn handler]
+  (let [^HashMap indexes (.handlerIndexes runtime)
+        phase-key [phase id]
+        ^LifecycleEntry existing (.get indexes phase-key)]
+    (if existing
+      (when-not (identical? handler (.entryFn existing))
+        (throw (ex-info "Conflicting world lifecycle handler id" {:id id})))
+      (let [entry (LifecycleEntry. id handler)]
+        (.put indexes phase-key entry)
+        (.add (phase-handlers runtime phase) entry))))
+  nil)
 
 (defn register-world-lifecycle-handler!
-  "Register world lifecycle handlers.
-
-  Args:
-    handler-map: Map with optional keys:
-      :on-load   - (fn [world saved-data] ...) called when world loads
-      :on-unload - (fn [world] ...) called when world unloads
-      :on-save   - (fn [world] saved-data) called before world saves
-      :on-tick   - (fn [world] ...) called each world tick (server side)
-
-  Example:
-    (register-world-lifecycle-handler!
-      {:on-load   my.content.world-data/on-world-load
-       :on-unload my.content.world-data/on-world-unload
-       :on-save   my.content.world-data/on-world-save})"
   [handler-map]
-  (assert-not-frozen!)
-  (let [id (handler-id handler-map)]
-  (when-let [on-load (:on-load handler-map)]
-    (register-handler-entry! :load id on-load))
-  (when-let [on-unload (:on-unload handler-map)]
-    (register-handler-entry! :unload id on-unload))
-  (when-let [on-save (:on-save handler-map)]
-    (register-handler-entry! :save id on-save))
-  (when-let [on-tick (:on-tick handler-map)]
-    (register-handler-entry! :tick id on-tick)))
+  (let [runtime (current-runtime)
+        id (or (:id handler-map) handler-map)]
+    (assert-not-frozen! runtime)
+    (when-let [handler (:on-load handler-map)]
+      (register-handler-entry! runtime :load id handler))
+    (when-let [handler (:on-unload handler-map)]
+      (register-handler-entry! runtime :unload id handler))
+    (when-let [handler (:on-save handler-map)]
+      (register-handler-entry! runtime :save id handler))
+    (when-let [handler (:on-tick handler-map)]
+      (register-handler-entry! runtime :tick id handler)))
   nil)
 
-(defn freeze-world-lifecycle-handlers!
-  "Freeze static lifecycle handler registration after bootstrap."
-  []
-  (update-state! assoc :frozen? true)
+(defn freeze-world-lifecycle-handlers! []
+  (aset-boolean (.frozenCell (current-runtime)) 0 true)
   nil)
 
-(defn reset-world-lifecycle-handlers-for-test!
-  "Reset lifecycle handler registry. Intended for tests/reloads only."
-  []
-  (when-let [fw-atom (fw/fw-atom)]
-    (swap! fw-atom assoc-in lifecycle-path (default-state)))
+(defn reset-world-lifecycle-handlers-for-test! []
+  (aset ^objects current-runtime-cell 0 (create-world-lifecycle-runtime))
   nil)
 
-(defn lifecycle-handlers-snapshot
-  []
-  (state-snapshot))
+(defn- entries-snapshot [^ArrayList entries]
+  (mapv (fn [^LifecycleEntry entry]
+          {:id (.entryId entry) :fn (.entryFn entry)})
+        entries))
 
-;; ============================================================================
-;; Dispatch API (called by platform code)
-;; ============================================================================
+(defn lifecycle-handlers-snapshot []
+  (let [runtime (current-runtime)]
+    {:load (entries-snapshot (.loadHandlers runtime))
+     :unload (entries-snapshot (.unloadHandlers runtime))
+     :save (entries-snapshot (.saveHandlers runtime))
+     :tick (entries-snapshot (.tickHandlers runtime))
+     :frozen? (aget (.frozenCell runtime) 0)}))
 
-(defn dispatch-world-load
-  "Dispatch world load event to all registered handlers.
+(defn dispatch-world-load [world saved-data]
+  (let [^ArrayList handlers (.loadHandlers (current-runtime))
+        handler-ids (HashSet.)
+        ^Iterator id-it (.iterator handlers)]
+    (while (.hasNext id-it)
+      (.add handler-ids (.entryId ^LifecycleEntry (.next id-it))))
+    (let [by-id? (and (map? saved-data)
+                      (boolean (some #(.contains handler-ids %) (keys saved-data))))
+          ^Iterator it (.iterator handlers)]
+      (while (.hasNext it)
+        (let [^LifecycleEntry entry (.next it)
+              id (.entryId entry)]
+          (try
+            ((.entryFn entry) world (if by-id? (get saved-data id) saved-data))
+            (catch Throwable t (report-handler-error! :load t)))))))
+  nil)
 
-  Args:
-    world: World instance
-    saved-data: Saved data from previous session (may be nil)
-
-  Called by platform code (forge/fabric) when world loads."
-  [world saved-data]
-  (let [handlers (:load (state-snapshot))
-        handler-ids (into #{} (map #(get % :id) handlers))
-        by-id? (and (map? saved-data)
-                    (some #(contains? saved-data %) handler-ids))]
-    (doseq [{:keys [id] handler-fn :fn} handlers]
+(defn dispatch-world-unload [world]
+  (let [^Iterator it (.iterator (.unloadHandlers (current-runtime)))]
+    (while (.hasNext it)
       (try
-        (handler-fn world (if by-id? (get saved-data id) saved-data))
-        (catch Throwable t
-          (report-handler-error! :load t))))))
+        ((.entryFn ^LifecycleEntry (.next it)) world)
+        (catch Throwable t (report-handler-error! :unload t)))))
+  nil)
 
-(defn dispatch-world-unload
-  "Dispatch world unload event to all registered handlers.
+(defn dispatch-world-save [world]
+  (let [result (transient {})
+        ^Iterator it (.iterator (.saveHandlers (current-runtime)))]
+    (while (.hasNext it)
+      (let [^LifecycleEntry entry (.next it)]
+        (try
+          (when-let [data ((.entryFn entry) world)]
+            (assoc! result (.entryId entry) data))
+          (catch Throwable t (report-handler-error! :save t)))))
+    (persistent! result)))
 
-  Args:
-    world: World instance
-
-  Called by platform code (forge/fabric) when world unloads."
-  [world]
-  (doseq [{handler :fn} (:unload (state-snapshot))]
-    (try
-      (handler world)
-      (catch Throwable t
-        (report-handler-error! :unload t)))))
-
-(defn dispatch-world-save
-  "Dispatch world save event to all registered handlers.
-
-  Args:
-    world: World instance
-
-  Returns: Map of handler-id -> saved data payload (for persistence)
-
-  Called by platform code (forge/fabric) before world saves."
-  [world]
-  (reduce
-    (fn [acc {:keys [id] handler-fn :fn}]
+(defn dispatch-world-tick [world]
+  (let [^Iterator it (.iterator (.tickHandlers (current-runtime)))]
+    (while (.hasNext it)
       (try
-        (if-let [data (handler-fn world)]
-          (assoc acc id data)
-          acc)
-        (catch Throwable t
-          (report-handler-error! :save t)
-          acc)))
-    {}
-            (:save (state-snapshot))))
-
-(defn dispatch-world-tick
-  "Dispatch world tick event to all registered handlers.
-
-  Args:
-    world: World instance
-
-  Called by platform code (forge/fabric) each server world tick."
-  [world]
-  (doseq [{handler :fn} (:tick (state-snapshot))]
-    (try
-      (handler world)
-      (catch Throwable t
-        (report-handler-error! :tick t)))))
+        ((.entryFn ^LifecycleEntry (.next it)) world)
+        (catch Throwable t (report-handler-error! :tick t)))))
+  nil)

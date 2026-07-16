@@ -20,12 +20,6 @@
   [player-uuid]
   (skill-effects/get-player-state-in-session! (session-id) player-uuid))
 
-(defn pending-delayed-tasks
-  [player-uuid]
-  (get-in (player-state player-uuid)
-          [:runtime :delayed-projectiles :pending-tasks (str player-uuid)]
-          []))
-
 (defn radiation-marks-for-target
   "O(1) lookup via the derived radiation-mark index (see radiation-mark-index.clj)."
   [target-id]
@@ -66,7 +60,6 @@
 
 (defn reset-content-runtime-for-player!
   [player-uuid]
-  (run-for-player! player-uuid {:command :clear-delayed-projectile-tasks :clear-all? true})
   (run-for-player! player-uuid {:command :clear-radiation-marks :clear-all? true})
   (run-for-player! player-uuid {:command :clear-player-projectile-claims})
   (run-for-player! player-uuid {:command :reset-vec-reflection-runtime})

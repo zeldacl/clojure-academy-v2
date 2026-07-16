@@ -73,7 +73,7 @@
   "Process one L-system pass: subdivide segments and possibly create branches.
   Returns {:main-arcs (updated segment lists) :branches (new branch lists)}."
   [segment-lists offset width-shrink alpha-shrink length-shrink branch-factor]
-  (let [branches (atom [])
+  (let [branches (transient [])
         result
         (mapv (fn [segments]
                 (mapcat (fn [s]
@@ -92,11 +92,11 @@
                                     w2 (* (:width ave-pt) width-shrink)
                                     bp1 (point (:pos ave-pt) w2)
                                     bp2 (point (v+ (:pos ave-pt) rdir) w2)]
-                                (swap! branches conj [(segment bp1 bp2 (* (:alpha s) alpha-shrink))])))
+                                (conj! branches [(segment bp1 bp2 (* (:alpha s) alpha-shrink))])))
                             [s1 s2]))
                         segments))
               segment-lists)]
-    {:main-arcs (vec result) :branches (vec @branches)}))
+    {:main-arcs (vec result) :branches (persistent! branches)}))
 
 (defn- generate-arc-segments
   "Generate L-system arc segments for a single arc template.
@@ -135,12 +135,12 @@
 (def ^:private default-branch-factor 0.7)
 (def ^:private default-width-shrink 0.9)
 
-(def ^:private template-cache (atom nil))
+(def ^:private template-cache (object-array 1))
 
 (defn- ensure-templates
   "Generate arc templates on first call, cache and return."
   []
-  (or @template-cache
+  (or (aget ^objects template-cache 0)
       (let [templates
             (vec
              (for [_ (range default-num-templates)
@@ -148,13 +148,13 @@
                (generate-arc-segments length
                  default-arc-width default-max-offset
                  default-passes default-branch-factor default-width-shrink)))]
-        (reset! template-cache templates)
+        (aset ^objects template-cache 0 templates)
         templates)))
 
 (defn reset-arc-templates-for-test!
   "Clear cached templates (for testing)."
   []
-  (reset! template-cache nil)
+  (aset ^objects template-cache 0 nil)
   nil)
 
 ;; ---------------------------------------------------------------------------

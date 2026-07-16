@@ -1,134 +1,108 @@
 (ns cn.li.ac.ability.client.level-effects
-  "Registry-based level effect infrastructure for client-side ability visuals.
+  "Client-thread-confined level effect registry and state table."
+  (:require [cn.li.mcmod.util.log :as log])
+  (:import [java.util ArrayList HashMap]))
 
-  Skills register their effect handlers via `register-level-effect!` at load
-  time.  The infrastructure dispatches enqueue / tick / build-plan calls to
-  the registered handlers without any skill-specific knowledge.
-
-  State stored in Framework [:service :level-effects]."
-  (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
-
-;; ---------------------------------------------------------------------------
-;; Registry — Framework [:service :level-effects]
-;; ---------------------------------------------------------------------------
-
-(defn default-level-effect-runtime-state []
-  {:registry {} :order [] :effect-states {} :frozen? false})
-
-(def ^:private le-path [:service :level-effects])
-
-(defonce ^:private fallback-level-effect-state
-  (atom (default-level-effect-runtime-state)))
-
-(defn- level-effect-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom le-path)
-        (let [a (atom (default-level-effect-runtime-state))]
-          (swap! fw-atom assoc-in le-path a) a))
-    fallback-level-effect-state))
-
-(defn- level-effect-state-snapshot [] @(level-effect-state-atom))
-
-(defn- update-level-effect-state! [f & args]
-  (apply swap! (level-effect-state-atom) f args))
-
-(defn- assoc-effect-state [state effect-id effect-state]
-  (if (nil? effect-state)
-    (update state :effect-states dissoc effect-id)
-    (assoc-in state [:effect-states effect-id] effect-state)))
+(defonce ^:private ^HashMap registry (HashMap.))
+(defonce ^:private ^ArrayList effect-order (ArrayList.))
+(defonce ^:private ^HashMap effect-states (HashMap.))
+(defonce ^:private frozen (boolean-array 1))
 
 (defn- assert-registry-open! []
-  (when (:frozen? (level-effect-state-snapshot))
+  (when (aget ^booleans frozen 0)
     (throw (ex-info "Level effect registry is frozen" {}))))
+
+(defn- put-effect-state! [effect-id state]
+  (if (nil? state)
+    (.remove effect-states effect-id)
+    (.put effect-states effect-id state))
+  nil)
 
 (defn register-level-effect! [effect-id handler-map]
   (when-not (and (keyword? effect-id) (map? handler-map)
                  (fn? (:enqueue-state-fn handler-map))
                  (fn? (:tick-state-fn handler-map))
                  (fn? (:build-plan-fn handler-map)))
-    (throw (IllegalArgumentException. "register-level-effect!: invalid effect-id or handler-map")))
+    (throw (IllegalArgumentException.
+             "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
-  (update-level-effect-state!
-    (fn [state]
-      (if (get-in state [:registry effect-id]) state
-        (-> state (update :order conj effect-id)
-            (assoc-in [:registry effect-id] handler-map)
-            (assoc-effect-state effect-id
-                               (let [init (:initial-state handler-map)]
-                                 (if (fn? init) (init) init)))))))
-  (log/debug "Registered level effect:" effect-id) nil)
+  (when-not (.containsKey registry effect-id)
+    (.put registry effect-id handler-map)
+    (.add effect-order effect-id)
+    (let [init (:initial-state handler-map)]
+      (put-effect-state! effect-id (if (fn? init) (init) init))))
+  (log/debug "Registered level effect:" effect-id)
+  nil)
 
 (defn freeze-level-effect-registry! []
-  (update-level-effect-state! assoc :frozen? true) nil)
+  (aset-boolean ^booleans frozen 0 true)
+  nil)
 
-(defn level-effect-registry-snapshot [] (level-effect-state-snapshot))
+(defn level-effect-registry-snapshot []
+  {:registry (into {} registry)
+   :order (vec effect-order)
+   :effect-states (into {} effect-states)
+   :frozen? (aget ^booleans frozen 0)})
 
 (defn effect-state-snapshot [effect-id]
-  (get-in (level-effect-state-snapshot) [:effect-states effect-id]))
+  (.get effect-states effect-id))
 
 (defn reset-level-effect-state-for-test! [effect-id state]
-  (update-level-effect-state! assoc-effect-state effect-id state) nil)
+  (put-effect-state! effect-id state))
 
 (defn update-effect-state! [effect-id f & args]
-  (update-level-effect-state!
-    (fn [state] (let [current-state (get-in state [:effect-states effect-id])
-                      next-state (apply f current-state args)]
-                  (assoc-effect-state state effect-id next-state)))) nil)
+  (put-effect-state! effect-id (apply f (.get effect-states effect-id) args)))
 
 (defn reset-level-effect-registry-for-test! []
-  (reset! (level-effect-state-atom) (default-level-effect-runtime-state)) nil)
-
-;; ---------------------------------------------------------------------------
-;; Dispatch
-;; ---------------------------------------------------------------------------
+  (.clear registry)
+  (.clear effect-order)
+  (.clear effect-states)
+  (aset-boolean ^booleans frozen 0 false)
+  nil)
 
 (defn- default-owner-key [effect-id payload ctx-id _channel]
-  (cond (and (map? payload) (:effect-instance-id payload)) [:effect-instance (:effect-instance-id payload)]
-        ctx-id [:ctx ctx-id]
-        (and (map? payload) (:source-player-id payload)) [:source-player (:source-player-id payload)]
-        (and (map? payload) (:player-id payload)) [:player (:player-id payload)]
-        :else [:effect effect-id :global]))
+  (cond
+    (and (map? payload) (:effect-instance-id payload)) [:effect-instance (:effect-instance-id payload)]
+    ctx-id [:ctx ctx-id]
+    (and (map? payload) (:source-player-id payload)) [:source-player (:source-player-id payload)]
+    (and (map? payload) (:player-id payload)) [:player (:player-id payload)]
+    :else [:effect effect-id :global]))
 
 (defn enqueue-level-effect!
-  "Enqueue FX payload for a registered level effect.
-
-  `owner-key` may be supplied explicitly; otherwise computed internally."
   [effect-id ctx-id channel payload & {:keys [owner-key]}]
-  (if-let [{:keys [enqueue-state-fn]} (get-in (level-effect-state-snapshot) [:registry effect-id])]
-    (let [owner-key* (or owner-key (default-owner-key effect-id payload ctx-id channel))]
-      (update-level-effect-state!
-        (fn [state]
-          (let [current-state (get-in state [:effect-states effect-id])
-                next-state (enqueue-state-fn current-state ctx-id channel owner-key* payload)]
-            (assoc-effect-state state effect-id next-state))))))
-    (log/warn "No level effect registered for" effect-id))
+  (if-let [handler (.get registry effect-id)]
+    (let [owner-key* (or owner-key (default-owner-key effect-id payload ctx-id channel))
+          enqueue-state-fn (:enqueue-state-fn handler)]
+      (put-effect-state!
+        effect-id
+        (enqueue-state-fn (.get effect-states effect-id)
+                          ctx-id channel owner-key* payload)))
+    (log/warn "No level effect registered for" effect-id)))
 
 (defn tick-level-effects! []
-  (let [{:keys [order registry]} (level-effect-state-snapshot)]
-    (doseq [eid order]
-      (when-let [{:keys [tick-state-fn]} (get registry eid)]
-        (update-level-effect-state!
-          (fn [state]
-            (let [current-state (get-in state [:effect-states eid])
-                  next-state (tick-state-fn current-state)]
-              (assoc-effect-state state eid next-state))))))))
+  (dotimes [i (.size effect-order)]
+    (let [eid (.get effect-order i)
+          handler (.get registry eid)]
+      (when-let [tick-state-fn (:tick-state-fn handler)]
+        (put-effect-state! eid (tick-state-fn (.get effect-states eid))))))
+  nil)
 
 (defn build-level-effect-plan
   ([camera-pos hand-center-pos tick]
    (build-level-effect-plan camera-pos hand-center-pos tick nil))
   ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
-   (let [{:keys [order registry]} (level-effect-state-snapshot)
-         results (keep (fn [eid]
-                         (when-let [{:keys [build-plan-fn]} (get registry eid)]
-                           (if query-nearby-blocks-fn
-                             (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
-                             (build-plan-fn camera-pos hand-center-pos tick))))
-                       order)
+   (let [results
+         (keep (fn [eid]
+                 (when-let [build-plan-fn (:build-plan-fn (.get registry eid))]
+                   (if query-nearby-blocks-fn
+                     (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
+                     (build-plan-fn camera-pos hand-center-pos tick))))
+               effect-order)
          all-ops (vec (mapcat #(get % :ops) results))
          walk-speeds (keep #(get % :local-walk-speed) results)
          local-walk-speed (when (seq walk-speeds) (float (apply min walk-speeds)))]
-     (when (or (seq all-ops) local-walk-speed) {:ops all-ops :local-walk-speed local-walk-speed}))))
+     (when (or (seq all-ops) local-walk-speed)
+       {:ops all-ops :local-walk-speed local-walk-speed}))))
 
 (defn registered-effects []
-  (set (keys (:registry (level-effect-state-snapshot)))))
+  (set (.keySet registry)))

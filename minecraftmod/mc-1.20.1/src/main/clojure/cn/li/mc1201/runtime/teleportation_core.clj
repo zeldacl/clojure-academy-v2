@@ -69,19 +69,19 @@
                           (filter #(instance? LivingEntity %))
                           (filter #(not= ^Entity % player))
                           (filter entity-small-enough?))
-              teleported-count (atom 0)]
+              teleported-count (long-array 1)]
           (when (.isPassenger player)
             (.stopRiding player))
           (.teleportTo player target-level x y z (.getYRot player) (.getXRot player))
-          (swap! teleported-count inc)
+          (aset-long teleported-count 0 1)
           (doseq [^Entity entity nearby]
             (let [epos (.position entity)
                   dx (- (.x epos) px)
                   dy (- (.y epos) py)
                   dz (- (.z epos) pz)]
               (when (teleport-entity-relative! entity current-level target-level x y z dx dy dz)
-                (swap! teleported-count inc))))
-          {:success true :teleported-count @teleported-count})
+                (aset-long teleported-count 0 (unchecked-inc (aget teleported-count 0))))))
+          {:success true :teleported-count (aget teleported-count 0)})
         {:success false :teleported-count 0})
       {:success false :teleported-count 0})
     (catch Exception e

@@ -5,9 +5,7 @@
    with a shadow effect through the existing overlay :text element pipeline."
   (:require [cn.li.ac.ability.registry.category :as category-registry]
             [cn.li.ac.ability.queries.ability-queries :as ability-queries]
-            [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.framework :as fw])
-  (:import [java.util List]))
+            [cn.li.mcmod.i18n :as i18n]))
 
 ;; ============================================================================
 ;; State
@@ -15,22 +13,14 @@
 
 (def debug-states [:none :normal :show-exp])
 
-(defn- debug-state-atom
-  []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom [:service :client-ui :debug-overlay-state])
-        (let [a (atom :none)]
-          (swap! fw-atom assoc-in [:service :client-ui :debug-overlay-state] a)
-          a))
-    (atom :none)))
+(defonce ^:private debug-state-index (int-array 1))
 
 (defn toggle-debug-state!
   "Advance debug overlay state through the cycle: none -> normal -> show-exp -> none."
   []
-  (let [state* (debug-state-atom)
-        cur (.indexOf ^List debug-states @state*)
+  (let [cur (aget ^ints debug-state-index 0)
         nxt (rem (inc cur) (count debug-states))]
-    (reset! state* (nth debug-states nxt))
+    (aset-int ^ints debug-state-index 0 nxt)
     nil))
 
 ;; ============================================================================
@@ -158,13 +148,13 @@
     "Return current debug overlay state (:none, :normal, :show-exp).
      For lazy-check in overlay plan builder."
     []
-    @(debug-state-atom))
+    (nth debug-states (aget ^ints debug-state-index 0)))
 
   (defn build-debug-line-items
     "Reactive-friendly debug text lines (foreground only)."
     [player-state]
     (when player-state
-      (let [state @(debug-state-atom)
+      (let [state (current-state)
             ability-data (:ability-data player-state)
             resource-data (:resource-data player-state)
             lines (case state
@@ -186,7 +176,7 @@
      Returns [] when debug state is :none or player-state is nil."
     [player-state]
     (when player-state
-      (let [state @(debug-state-atom)
+      (let [state (current-state)
             ability-data (:ability-data player-state)
             resource-data (:resource-data player-state)]
         (case state

@@ -17,8 +17,8 @@
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashMap TreeMap Map$Entry]))
 
 ;; Dynamic var for getting player UUID (set by forge layer)
 (def ^:dynamic *get-player-uuid-fn* nil)
@@ -31,40 +31,30 @@
 ;; Each handler: {:id kw :priority int :handles-fn (fn [uuid]) :on-key-down-fn (fn [uuid]) :hint-fn (fn [uuid])}
 ;; Higher priority wins. First handler where handles-fn returns true is active.
 
-(defn default-keybind-registry-runtime-state
-  []
-  {:activate-handlers (sorted-map)
-   :key-groups {}
-   :frozen? false})
+(defonce ^:private ^TreeMap activate-handlers (TreeMap.))
+(defonce ^:private ^HashMap activate-handler-keys (HashMap.))
+(defonce ^:private ^HashMap key-groups (HashMap.))
+(defonce ^:private registry-frozen (boolean-array 1))
 
 ;; Keybind registry — Framework [:service :keybind-registry]
 
-(def ^:private kbr-path [:service :keybind-registry])
-
-(defn- keybind-registry-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom kbr-path)
-        (let [a (atom (default-keybind-registry-runtime-state))]
-          (swap! fw-atom assoc-in kbr-path a) a))
-    (atom (default-keybind-registry-runtime-state))))
-
-(defn- keybind-registry-state-snapshot
-  []
-  @(keybind-registry-state-atom))
-
-(defn- update-keybind-registry-state!
-  [f & args]
-  (apply swap! (keybind-registry-state-atom) f args))
+(defn- keybind-registry-state-snapshot []
+  {:activate-handlers (into (sorted-map) activate-handlers)
+   :key-groups (into {}
+                     (map (fn [^Map$Entry entry]
+                            [(.getKey entry) (into {} ^HashMap (.getValue entry))]))
+                     (.entrySet key-groups))
+   :frozen? (aget ^booleans registry-frozen 0)})
 
 (defn- assert-keybind-registries-open!
   []
-  (when (:frozen? (keybind-registry-state-snapshot))
+  (when (aget ^booleans registry-frozen 0)
     (throw (ex-info "Keybind registries are frozen" {}))))
 
 (defn- find-activate-handler-entry
   [id]
-  (first (filter (fn [[[_ handler-id] _handler]] (= id handler-id))
-                 (:activate-handlers (keybind-registry-state-snapshot)))))
+  (when-let [key (.get activate-handler-keys id)]
+    (clojure.lang.MapEntry/create key (.get activate-handlers key))))
 
 (defn add-activate-handler!
   "Register an activate handler. Higher priority = checked first."
@@ -79,24 +69,25 @@
                         {:id id
                          :existing-priority existing-priority
                          :new-priority priority})))
-      (update-keybind-registry-state! assoc-in [:activate-handlers [priority id]]
-                                    (assoc handler :priority priority)))))
+      (let [key [priority id]]
+        (.put activate-handler-keys id key)
+        (.put activate-handlers key (assoc handler :priority priority)))))
+  nil)
 
 (defn remove-activate-handler!
   "Remove an activate handler by id."
   [id]
   (assert-keybind-registries-open!)
-  (update-keybind-registry-state!
-    update :activate-handlers
-    (fn [m]
-      (into (sorted-map)
-            (remove (fn [[[_ hid] _]] (= hid id)) m)))))
+  (when-let [key (.remove activate-handler-keys id)]
+    (.remove activate-handlers key))
+  nil)
 
 (defn get-active-handler
   "Walk handlers from highest priority down. Return first where handles-fn returns true."
   [player-uuid]
-  (let [handlers (reverse (vals (:activate-handlers (keybind-registry-state-snapshot))))]
-    (first (filter #((:handles-fn %) player-uuid) handlers))))
+  (some (fn [handler]
+          (when ((:handles-fn handler) player-uuid) handler))
+        (.values (.descendingMap activate-handlers))))
 
 (defn get-activate-hint
   "Get the hint string from the active handler, or nil."
@@ -115,23 +106,30 @@
   "Register a delegate for a key index in a named group."
   [group key-idx delegate-map]
   (assert-keybind-registries-open!)
-  (update-keybind-registry-state! assoc-in [:key-groups group key-idx] delegate-map))
+  (let [^HashMap delegates (or (.get key-groups group)
+                               (let [created (HashMap.)]
+                                 (.put key-groups group created)
+                                 created))]
+    (.put delegates key-idx delegate-map))
+  nil)
 
 (defn clear-key-group!
   "Remove all delegates in a group."
   [group]
   (assert-keybind-registries-open!)
-  (update-keybind-registry-state! update :key-groups dissoc group))
+  (.remove key-groups group)
+  nil)
 
 (defn clear-all-key-groups!
   "Remove all delegates from all groups."
   []
   (assert-keybind-registries-open!)
-  (update-keybind-registry-state! assoc :key-groups {}))
+  (.clear key-groups)
+  nil)
 
 (defn freeze-keybind-registries!
   []
-  (update-keybind-registry-state! assoc :frozen? true)
+  (aset-boolean ^booleans registry-frozen 0 true)
   nil)
 
 (defn keybind-registries-snapshot
@@ -140,7 +138,10 @@
 
 (defn reset-keybind-registries-for-test!
   []
-  (reset! (keybind-registry-state-atom) (default-keybind-registry-runtime-state))
+  (.clear activate-handlers)
+  (.clear activate-handler-keys)
+  (.clear key-groups)
+  (aset-boolean ^booleans registry-frozen 0 false)
   nil)
 
 (declare get-client-player-state)
@@ -149,10 +150,12 @@
   "Get the effective delegate for a key index. Custom groups override :default."
   [key-idx]
   ;; Walk non-default groups first (any custom override), then default
-  (let [groups (:key-groups (keybind-registry-state-snapshot))
-        custom-groups (dissoc groups :default)]
-    (or (some #(get % key-idx) (vals custom-groups))
-        (get-in groups [:default key-idx]))))
+  (or (some (fn [^Map$Entry entry]
+              (when-not (= :default (.getKey entry))
+                (.get ^HashMap (.getValue entry) key-idx)))
+            (.entrySet key-groups))
+      (when-let [^HashMap defaults (.get key-groups :default)]
+        (.get defaults key-idx))))
 
 (defn- get-skill-id-for-slot
   "Get the skill-id bound to a slot from the current preset."
@@ -197,32 +200,32 @@
 
 ;; Client keybind runtime — Framework [:service :client-keybinds]
 
-(def ^:private cb-path [:service :client-keybinds])
+(definterface IClientKeybindRuntime
+  (^java.util.HashMap keyStates [])
+  (^java.util.HashMap presetSwitchStates []))
 
-(defn- client-keybind-atoms []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom cb-path)
-        (let [m {:key-states* (atom {}) :preset-switch-states* (atom {})}]
-          (swap! fw-atom assoc-in cb-path m) m))
-    {:key-states* (atom {}) :preset-switch-states* (atom {})}))
+(deftype ClientKeybindRuntime [^HashMap keys ^HashMap presets]
+  IClientKeybindRuntime
+  (keyStates [_] keys)
+  (presetSwitchStates [_] presets))
 
 (defn create-client-keybind-runtime []
-  (let [atoms (client-keybind-atoms)]
-    {::runtime ::client-keybind-runtime
-     :key-states* (:key-states* atoms)
-     :preset-switch-states* (:preset-switch-states* atoms)}))
+  (ClientKeybindRuntime. (HashMap.) (HashMap.)))
+
+(defonce ^:private client-keybind-runtime-slot
+  (object-array [(create-client-keybind-runtime)]))
+
+(defn- client-keybind-runtime ^ClientKeybindRuntime []
+  (aget ^objects client-keybind-runtime-slot 0))
 
 (defn call-with-client-keybind-runtime
-  [_runtime f]
-  (f))
-
-
-(defn- key-states-atom [] (:key-states* (client-keybind-atoms)))
+  [runtime f]
+  (let [previous (client-keybind-runtime)]
+    (aset ^objects client-keybind-runtime-slot 0 runtime)
+    (try (f) (finally (aset ^objects client-keybind-runtime-slot 0 previous)))))
 
 (def ^:private default-preset-switch-state
   {:current-preset 0 :previous-preset 0 :show-until-ms 0})
-
-(defn- preset-switch-states-atom [] (:preset-switch-states* (client-keybind-atoms)))
 
 (def ^:private PRESET-COUNT 4)
 (def ^:private PRESET-INDICATOR-DURATION-MS 2000)
@@ -268,43 +271,42 @@
 
 (defn key-state-snapshot
   ([]
-  @(key-states-atom))
+  (into {} (.keyStates (client-keybind-runtime))))
   ([owner]
-  (get @(key-states-atom) (client-owner-key owner) default-key-state)))
+  (or (.get (.keyStates (client-keybind-runtime)) (client-owner-key owner)) default-key-state)))
 
 (defn preset-switch-state-snapshot
   ([]
-  @(preset-switch-states-atom))
+  (into {} (.presetSwitchStates (client-keybind-runtime))))
   ([owner]
-  (get @(preset-switch-states-atom) (client-owner-key owner) default-preset-switch-state)))
+  (or (.get (.presetSwitchStates (client-keybind-runtime)) (client-owner-key owner))
+      default-preset-switch-state)))
 
 (defn- swap-key-state!
   [owner f & args]
-  (let [owner-key (client-owner-key owner)]
-		(swap! (key-states-atom)
-           (fn [states]
-             (assoc states owner-key
-                    (apply f (get states owner-key default-key-state) args))))))
+  (let [owner-key (client-owner-key owner)
+        ^HashMap states (.keyStates (client-keybind-runtime))]
+    (.put states owner-key
+          (apply f (or (.get states owner-key) default-key-state) args))))
 
 (defn- swap-preset-switch-state!
   [owner f & args]
-  (let [owner-key (client-owner-key owner)]
-		(swap! (preset-switch-states-atom)
-           (fn [states]
-             (assoc states owner-key
-                    (apply f (get states owner-key default-preset-switch-state) args))))))
+  (let [owner-key (client-owner-key owner)
+        ^HashMap states (.presetSwitchStates (client-keybind-runtime))]
+    (.put states owner-key
+          (apply f (or (.get states owner-key) default-preset-switch-state) args))))
 
 (defn clear-client-keybind-state!
   [owner]
   (let [owner-key (client-owner-key owner)]
-    (swap! (key-states-atom) dissoc owner-key)
-    (swap! (preset-switch-states-atom) dissoc owner-key))
+    (.remove (.keyStates (client-keybind-runtime)) owner-key)
+    (.remove (.presetSwitchStates (client-keybind-runtime)) owner-key))
   nil)
 
 (defn reset-client-keybind-state-for-test!
   []
-  (reset! (key-states-atom) {})
-  (reset! (preset-switch-states-atom) {})
+  (.clear (.keyStates (client-keybind-runtime)))
+  (.clear (.presetSwitchStates (client-keybind-runtime)))
   nil)
 
 (def ^:private movement-keys
@@ -363,7 +365,8 @@
           delegate     (get-delegate-for-key key-idx)
           event        (sm/compute-skill-key-event key-state player-state key-idx is-down delegate)]
       (processor/execute-skill-key-event! event player-uuid)
-      (swap-key-state! owner sm/next-skill-key-state key-idx is-down))))
+      (when (not= (boolean (get-in key-state [:skill-keys key-idx])) (boolean is-down))
+        (swap-key-state! owner sm/next-skill-key-state key-idx is-down)))))
 
 
 (defn on-gui-key-event
@@ -374,7 +377,8 @@
           key-state (key-state-snapshot owner)
           event     (sm/compute-gui-key-event key-state gui-type is-down)]
       (processor/execute-gui-key-event! event player-uuid)
-      (swap-key-state! owner sm/next-gui-key-state gui-type is-down))))
+      (when (not= (boolean (get-in key-state [:gui-keys gui-type])) (boolean is-down))
+        (swap-key-state! owner sm/next-gui-key-state gui-type is-down)))))
 
 (defn on-movement-key-event
   "Handle movement key state transitions and forward them to runtime bridge."
@@ -384,7 +388,8 @@
           key-state (key-state-snapshot owner)
           event     (sm/compute-movement-key-event key-state movement-key is-down)]
       (processor/execute-movement-key-event! event player-uuid)
-      (swap-key-state! owner sm/next-movement-key-state movement-key is-down))))
+      (when (not= (boolean (get-in key-state [:movement-keys movement-key])) (boolean is-down))
+        (swap-key-state! owner sm/next-movement-key-state movement-key is-down)))))
 
 (defn trigger-mode-switch!
   "V key short-press handler. Delegates to the active activate handler.
@@ -513,4 +518,3 @@
                        (runtime-hooks/client-abort-all!)
                        (log/info "[V-TRACE] Aborted all contexts for" uuid))
     :hint-fn         (fn [_uuid] "ac.activate.hint.abort")}))
-

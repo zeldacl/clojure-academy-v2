@@ -12,28 +12,27 @@
   (:import [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.signal ISigO]))
 
-(defonce ^:private mode-switch-key-down?* (atom false))
-(defonce ^:private showing-numbers?* (atom false))
-(defonce ^:private last-show-value-change-ms* (atom 0))
+(defonce ^:private mode-switch-flags (boolean-array 2))
+(defonce ^:private mode-switch-time (long-array 1))
 
 (defn on-mode-switch-key-state!
   "Track V-key hold for CP/OL numeric readout fade in/out."
   [is-down]
-  (let [was-down @mode-switch-key-down?*
+  (let [^booleans flags mode-switch-flags
+        ^longs time-cell mode-switch-time
+        was-down (aget flags 0)
         now (System/currentTimeMillis)]
     (cond
       (and (not was-down) is-down)
       (do
-        (reset! showing-numbers?* true)
-        (reset! last-show-value-change-ms* now))
+        (aset-boolean flags 1 true)
+        (aset-long time-cell 0 now))
 
       (and was-down (not is-down))
       (do
-        (reset! showing-numbers?* false)
-        (if (> (- now @last-show-value-change-ms*) 400)
-          (reset! last-show-value-change-ms* now)
-          (reset! last-show-value-change-ms* 0))))
-    (reset! mode-switch-key-down?* (boolean is-down)))
+        (aset-boolean flags 1 false)
+        (aset-long time-cell 0 (if (> (- now (aget time-cell 0)) 400) now 0))))
+    (aset-boolean flags 0 (boolean is-down)))
   nil)
 
 (defn- local-player-uuid [] (bridge/call-adapter :local-player-uuid))
@@ -208,15 +207,10 @@
     (rt/put-user-signal! r :hl-alpha hl-alpha)
     (rt/put-user-signal! r :jitter-x jitter-x)
     (rt/put-user-signal! r :jitter-y jitter-y)
-    (rt/put-user-signal! r :last-skill-slot-ids (atom []))
-    (rt/put-user-signal! r :last-vm-wave-count (atom -1))
-    (rt/put-user-signal! r :last-toast-count (atom -1))
-    (rt/put-user-signal! r :last-debug-line-count (atom -1))
-    (rt/put-user-signal! r :last-coin-dot-count (atom -1))
-    ;; Incremental update caches (avoid per-frame dirty flags)
-    (rt/put-user-signal! r :last-cp-icon    (atom ""))
-    (rt/put-user-signal! r :last-overloaded (atom false))
-    (rt/put-user-signal! r :ol-hl-visible   (atom false))
+    (let [counts (int-array [-1 -1 -1 -1])]
+      (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
+      (rt/put-user-signal! r :overlay-count-cache counts)
+      (rt/put-user-signal! r :overlay-flag-cache (boolean-array 2)))
     (let [b (sig/bind! bg-smooth bg-mask write-fill-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
     ;; CP bar: progress + hint line
@@ -238,8 +232,8 @@
 (defn- overlay-input-state [player-uuid now-ms]
   (let [owner {:player-uuid player-uuid}]
     {:activated-override (bridge/call-adapter :client-overlay-activated-override owner)
-     :showing-numbers? @showing-numbers?*
-     :last-show-value-change-ms @last-show-value-change-ms*
+     :showing-numbers? (aget ^booleans mode-switch-flags 1)
+     :last-show-value-change-ms (aget ^longs mode-switch-time 0)
      :active-overlay-app (bridge/call-adapter :client-active-overlay-app owner)
      :now-ms now-ms}))
 
@@ -335,12 +329,20 @@
             (ui/set-node-prop! r cd-text :text (format-tenths-seconds (:cooldown-seconds slot 0.0))))
         (.setVisible cd-text false)))))
 
+(defn- same-skill-ids? [cached slots]
+  (let [n (count slots)]
+    (and (= n (count cached))
+         (loop [i 0]
+           (or (= i n)
+               (and (= (nth cached i) (:skill-id (nth slots i)))
+                    (recur (unchecked-inc-int i))))))))
+
 (defn- update-skill-slots! [r snapshot]
   (let [slots (:skill-slots snapshot)
-        slot-ids (mapv :skill-id slots)
-        last-ids* (rt/user-signal r :last-skill-slot-ids)]
-    (when (not= @last-ids* slot-ids)
-      (reset! last-ids* slot-ids)
+        ^objects cache (rt/user-signal r :overlay-object-cache)
+        cached-ids (aget cache 0)]
+    (when-not (same-skill-ids? cached-ids slots)
+      (aset cache 0 (mapv :skill-id slots))
       (ui/list-set! r :skill-slots slots
                     (fn [rt item slot-data]
                       (update-skill-slot-item! rt item slot-data))))
@@ -387,9 +389,10 @@
 
 (defn- update-toasts! [r snapshot]
   (let [toasts (:toasts snapshot)
-        count* (rt/user-signal r :last-toast-count)]
-    (when (not= @count* (count toasts))
-      (reset! count* (count toasts))
+        ^ints counts (rt/user-signal r :overlay-count-cache)
+        n (count toasts)]
+    (when (not= (aget counts 1) n)
+      (aset-int counts 1 n)
       (ui/list-set! r :toasts toasts
                     (fn [rt item data] (update-toast-item! rt item data))))
     (when-let [^INode list-node (ui/node r :toasts)]
@@ -412,9 +415,10 @@
 
 (defn- update-vm-waves! [r snapshot]
   (let [waves (or (:vm-waves snapshot) [])
-        count* (rt/user-signal r :last-vm-wave-count)]
-    (when (not= @count* (count waves))
-      (reset! count* (count waves))
+        ^ints counts (rt/user-signal r :overlay-count-cache)
+        n (count waves)]
+    (when (not= (aget counts 0) n)
+      (aset-int counts 0 n)
       (ui/list-set! r :vm-waves waves
                     (fn [rt item data] (update-vm-wave-item! rt item data))))
     (when-let [^INode list-node (ui/node r :vm-waves)]
@@ -450,12 +454,13 @@
   (if-let [qte (:coin-qte snapshot)]
     (do
       (set-visible! r :coin-qte-layer true)
-      (let [{:keys [bg-disc dots marker pct-text]} qte
-            dot-count* (rt/user-signal r :last-coin-dot-count)]
+       (let [{:keys [bg-disc dots marker pct-text]} qte
+             ^ints counts (rt/user-signal r :overlay-count-cache)
+             n (count dots)]
         (set-box-node-at! r (ui/node r :coin-qte-bg)
                           (:x bg-disc) (:y bg-disc) (:w bg-disc) (:h bg-disc) (:color bg-disc))
-        (when (not= @dot-count* (count dots))
-          (reset! dot-count* (count dots))
+         (when (not= (aget counts 3) n)
+           (aset-int counts 3 n)
           (ui/list-set! r :coin-qte-dots dots
                         (fn [rt item dot] (update-coin-qte-dot! rt item dot))))
         (when-let [^INode list-node (ui/node r :coin-qte-dots)]
@@ -505,9 +510,10 @@
 
 (defn- update-debug-lines! [r snapshot]
   (let [lines (:debug-lines snapshot)
-        count* (rt/user-signal r :last-debug-line-count)]
-    (when (not= @count* (count lines))
-      (reset! count* (count lines))
+        ^ints counts (rt/user-signal r :overlay-count-cache)
+        n (count lines)]
+    (when (not= (aget counts 2) n)
+      (aset-int counts 2 n)
       (ui/list-set! r :debug-lines lines
                     (fn [rt item line]
                       (let [^INode n (ui/item-node item :line)]
@@ -606,29 +612,29 @@
           (when-let [ol-scroll (rt/user-signal r :ol-scroll)]
             (sig/sset-d! ol-scroll (double (or (:scroll-offset (:overload-bar snapshot)) 0.0))))
           ;; Category icon — only dirty when actually changed
-          (when-let [last* (rt/user-signal r :last-cp-icon)]
+          (when-let [^objects cache (rt/user-signal r :overlay-object-cache)]
             (let [icon-src (or (:category-icon (:cp-bar snapshot)) "")]
-              (when (not= @last* icon-src)
-                (reset! last* icon-src)
+              (when (not= (aget cache 1) icon-src)
+                (aset cache 1 icon-src)
                 (when-let [^INode n (ui/node r :cp-bar)]
                   (.setOSlot n 3 icon-src)
                   (.setFlag n node/FLAG-RENDER-DIRTY)))))
           ;; Bar background — only switch on overload state change
-          (when-let [last* (rt/user-signal r :last-overloaded)]
+          (when-let [^booleans flags (rt/user-signal r :overlay-flag-cache)]
             (let [overloaded? (boolean (:overloaded (:overload-bar snapshot)))]
-              (when (not= @last* overloaded?)
-                (reset! last* overloaded?)
+              (when (not= (aget flags 0) overloaded?)
+                (aset-boolean flags 0 overloaded?)
                 (ui/set-prop! r :cpbar-bg :src
                               (if overloaded?
                                 (modid/asset-path "textures" "guis/cpbar/back_overload.png")
                                 (modid/asset-path "textures" "guis/cpbar/back_normal.png"))))))
           ;; Overload highlight — only toggle visibility on state change
-          (when-let [last* (rt/user-signal r :ol-hl-visible)]
+          (when-let [^booleans flags (rt/user-signal r :overlay-flag-cache)]
             (let [ol-pct      (double (or (:percent (:overload-bar snapshot)) 0.0))
                   overloaded? (boolean (:overloaded (:overload-bar snapshot)))
                   should-show (or overloaded? (> ol-pct 0.8))]
-              (when (not= @last* should-show)
-                (reset! last* should-show)
+              (when (not= (aget flags 1) should-show)
+                (aset-boolean flags 1 should-show)
                 (set-visible! r :overload-highlight should-show))))
           (update-activation-indicator! r snapshot)
           (update-numbers! r snapshot)

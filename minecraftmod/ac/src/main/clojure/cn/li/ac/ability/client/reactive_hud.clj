@@ -14,86 +14,30 @@
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
-            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.i18n :as i18n]))
+            [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.i18n :as i18n])
+  (:import [java.util ArrayList HashMap]))
 
-(def ^:private rh-path [:service :reactive-hud])
-(def ^:private cui-path [:service :client-ui :runtime]) ; shared client-ui runtime atom leaf (see client-ui-hooks)
 (def ^:private vm-wave-glow (modid/asset-path "textures" "effects/glow_circle.png"))
 (def ^:private coin-dot-count 12)
 
 (defn- owner-key [player-uuid]
   (read-model/owner-key {:player-uuid player-uuid} nil))
 
-(defn- rh-state-atom []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom rh-path)
-        (let [a (atom {:vm-wave-circles {} :vm-wave-last-spawn-ms {}})]
-          (swap! fw-atom assoc-in rh-path a)
-          a))
-    (atom {:vm-wave-circles {} :vm-wave-last-spawn-ms {}})))
-
-(defn- update-rh-state! [f & args]
-  (apply swap! (rh-state-atom) f args))
-
-(defn- client-ui-runtime-atom []
-  (when-let [fw-atom (fw/fw-atom)]
-    (get-in @fw-atom cui-path)))
-
-(defn- charge-coin-state-snapshot []
-  (if-let [a (client-ui-runtime-atom)]
-    (:charge-coin-state @a {})
-    {}))
-
-(defn- dissoc-charge-coin-owner! [ok]
-  (when-let [a (client-ui-runtime-atom)]
-    (swap! a update :charge-coin-state (fn [m] (dissoc (or m {}) ok)))))
+(defonce ^:private ^HashMap vm-waves-by-owner (HashMap.))
+(defonce ^:private ^HashMap vm-wave-spawn-by-owner (HashMap.))
 
 (defn- ease-in-out [t]
   (let [t (max 0.0 (min 1.0 (double t)))]
   (* t t (- 3.0 (* 2.0 t)))))
 
-(defn- railgun-charge-item-max-ticks []
-  (skill-config/tunable-int :railgun :charge.item-charge-ticks))
-
 (defn- railgun-coin-active-threshold []
   (skill-config/tunable-double :railgun :qte.coin-active-threshold))
 
-(defn- railgun-coin-window-ms []
-  (skill-config/tunable-int :railgun :qte.coin-window-ms))
-
 (defn- coin-qte-visual-state [player-uuid now-ms]
-  (let [contexts (read-model/get-player-contexts-for-player player-uuid)
-        railgun-ctx (some (fn [ctx-data]
-                            (when (and (= :railgun (:skill-id ctx-data))
-                                       (ctx/active-context? ctx-data))
-                              ctx-data))
-                          contexts)
-        skill-state (:skill-state railgun-ctx)
-        mode (:mode skill-state)
-        charge-ticks (max 0 (int (or (:charge-ticks skill-state) 0)))
-        max-charge-ticks (max 1 (int (railgun-charge-item-max-ticks)))]
-    (if (= mode :item-charge)
-      {:active? true
-       :coin-active? false
-       :coin-progress 0.0
-       :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
-      (let [ok (owner-key player-uuid)
-            coin-state (or (get (charge-coin-state-snapshot) ok) {})
-            {:keys [start-ms window-ms]} coin-state
-            has-window? (and start-ms window-ms)
-            elapsed (if has-window? (- (long now-ms) (long start-ms)) 0)
-            progress (if has-window?
-                       (/ (double (max 0 elapsed)) (double (max 1 (long window-ms))))
-                       0.0)
-            active-window? (and has-window? (<= progress 1.0))
-            ratio (max 0.0 (min 1.0 progress))
-            coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
-        (when (and has-window? (not active-window?))
-          (dissoc-charge-coin-owner! ok))
-        {:active? (boolean active-window?)
-         :coin-active? (boolean coin-active?)
-         :coin-progress ratio}))))
+  (or (bridge/call-adapter :client-visual-state :ac/charge-coin
+                           {:player-uuid player-uuid :now-ms now-ms})
+      {:active? false :coin-active? false :coin-progress 0.0}))
 
 (defn- build-charging-layer [player-uuid screen-w screen-h]
   (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]}
@@ -182,26 +126,25 @@
 (defn tick-vm-wave!
   "Advance VM wave circle lifecycle (client tick hook)."
   [player-uuid active? screen-w screen-h now-ms]
-  (let [ok (owner-key player-uuid)]
-    (update-rh-state!
-      (fn [state]
-        (let [last-spawn-ms (long (get-in state [:vm-wave-last-spawn-ms ok] 0))
-              needs-spawn? (and active? (>= (- now-ms last-spawn-ms) 90))
-              circles (get-in state [:vm-wave-circles ok] [])
-              alive (->> circles
-                         (filter (fn [{:keys [born-ms life-ms]}]
-                                   (< (- now-ms (long born-ms)) (long life-ms))))
-                         vec)
-              spawned (if needs-spawn?
-                        (conj alive (spawn-vm-wave-circle screen-w screen-h now-ms))
-                        alive)
-              next-circles (if active? spawned (if (seq spawned) spawned []))
-              state (if needs-spawn?
-                      (assoc-in state [:vm-wave-last-spawn-ms ok] now-ms)
-                      state)]
-          (if (seq next-circles)
-            (assoc-in state [:vm-wave-circles ok] next-circles)
-            (update state :vm-wave-circles dissoc ok))))))
+  (let [ok (owner-key player-uuid)
+        ^ArrayList circles (or (.get vm-waves-by-owner ok)
+                               (when active?
+                                 (let [created (ArrayList.)]
+                                   (.put vm-waves-by-owner ok created)
+                                   created)))]
+    (when circles
+      (loop [i (dec (.size circles))]
+        (when (>= i 0)
+          (let [{:keys [born-ms life-ms]} (.get circles i)]
+            (when (>= (- now-ms (long born-ms)) (long life-ms))
+              (.remove circles (int i))))
+          (recur (dec i))))
+      (let [last-spawn-ms (long (or (.get vm-wave-spawn-by-owner ok) 0))]
+        (when (and active? (>= (- now-ms last-spawn-ms) 90))
+          (.add circles (spawn-vm-wave-circle screen-w screen-h now-ms))
+          (.put vm-wave-spawn-by-owner ok (long now-ms))))
+      (when (.isEmpty circles)
+        (.remove vm-waves-by-owner ok))))
   nil)
 
 (defn seed-vm-wave-state-for-test!
@@ -209,27 +152,21 @@
    (seed-vm-wave-state-for-test! owner circles 0))
   ([owner circles last-spawn-ms]
    (let [ok (read-model/owner-key owner nil)]
-     (update-rh-state!
-       (fn [state]
-         (-> state
-             (assoc-in [:vm-wave-circles ok] (vec circles))
-             (assoc-in [:vm-wave-last-spawn-ms ok] (long last-spawn-ms)))))
+     (.put vm-waves-by-owner ok (ArrayList. ^java.util.Collection circles))
+     (.put vm-wave-spawn-by-owner ok (long last-spawn-ms))
      nil)))
 
 (defn clear-vm-wave-for-owner!
   [owner-key]
-  (update-rh-state!
-    (fn [state]
-      (-> state
-          (update :vm-wave-circles dissoc owner-key)
-          (update :vm-wave-last-spawn-ms dissoc owner-key))))
+  (.remove vm-waves-by-owner owner-key)
+  (.remove vm-wave-spawn-by-owner owner-key)
   nil)
 
 (defn build-vm-wave-items
   "Reactive VM wave circle items for one frame."
   [player-uuid now-ms tint]
   (when tint
-    (->> (get-in @(rh-state-atom) [:vm-wave-circles (owner-key player-uuid)] [])
+    (->> (or (.get vm-waves-by-owner (owner-key player-uuid)) [])
          (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
                 (let [elapsed (double (max 0 (- now-ms (long born-ms))))
                       life (double (max 1 life-ms))
@@ -317,9 +254,8 @@
 
 (defn- scan-vm-state [player-uuid]
   (reduce
-    (fn [acc [_ctx-id ctx-data]]
-      (if (and (= (:player-uuid ctx-data) player-uuid)
-               (ctx/active-context? ctx-data))
+    (fn [acc ctx-data]
+      (if (ctx/active-context? ctx-data)
         (cond-> acc
           (toggle/is-toggle-active? ctx-data :vec-reflection)
           (-> (assoc :reflection-active? true)
@@ -330,7 +266,7 @@
           (assoc :deviation-active? true))
         acc))
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
-    (ctx/get-all-contexts)))
+    (read-model/get-player-contexts-for-player player-uuid)))
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.

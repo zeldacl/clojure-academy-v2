@@ -1,47 +1,77 @@
 (ns cn.li.ac.ability.service.delayed-projectiles
   "Server-side delayed projectile settlement for MdBall-based skills.
 
-  Pending tasks live in player-state [:runtime :delayed-projectiles :pending-tasks]."
+  Pending tasks live in a server-thread-confined deadline scheduler and are
+  never serialized into player state."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
-            [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util ArrayList HashMap]))
 
 (def ^:private mdball-default-life-ticks 20)
 (def ^:private mdball-settle-offset-ticks 5)
 (def ^:private electron-bomb-ray-distance 15.0)
 
+(definterface IScheduledProjectile
+  (^long dueTick [])
+  (^Object taskValue []))
+
+(deftype ScheduledProjectile [^long due task]
+  IScheduledProjectile
+  (dueTick [_] due)
+  (taskValue [_] task))
+
+(definterface IPlayerProjectileSchedule
+  (^java.util.ArrayList scheduledTasks [])
+  (^longs currentTick []))
+
+(deftype PlayerProjectileSchedule [^ArrayList tasks ^longs tick]
+  IPlayerProjectileSchedule
+  (scheduledTasks [_] tasks)
+  (currentTick [_] tick))
+
+(defonce ^:private ^HashMap schedules-by-player (HashMap.))
+
+(defn- player-schedule
+  ^PlayerProjectileSchedule [player-uuid create?]
+  (or (.get schedules-by-player player-uuid)
+      (when create?
+        (let [schedule (PlayerProjectileSchedule. (ArrayList.) (long-array 1))]
+          (.put schedules-by-player player-uuid schedule)
+          schedule))))
+
 (defn pending-tasks-snapshot
   [player-uuid]
-  (prt-cmd/pending-delayed-tasks player-uuid))
+  (if-let [^PlayerProjectileSchedule schedule (player-schedule player-uuid false)]
+    (let [^ArrayList tasks (.scheduledTasks schedule)
+          now (aget (.currentTick schedule) 0)]
+      (mapv (fn [^ScheduledProjectile scheduled]
+              (assoc (.taskValue scheduled)
+                     :ticks-left (max 0 (- (.dueTick scheduled) now))))
+            tasks))
+    []))
 
 (defn clear-player-tasks!
   [player-uuid]
-  (prt-cmd/run-for-player!
-   player-uuid
-   {:command :clear-delayed-projectile-tasks})
+  (.remove schedules-by-player player-uuid)
   nil)
 
 (defn clear-all-tasks!
   []
-  (let [session-id (prt-cmd/session-id)]
-    (doseq [player-uuid (store/list-players session-id)]
-      (clear-player-tasks! player-uuid)))
+  (.clear schedules-by-player)
   nil)
 
 (defn schedule-task!
   [player-uuid delay-ticks task]
-  (prt-cmd/run-for-player!
-   player-uuid
-   {:command :schedule-delayed-projectile-task
-    :delay-ticks delay-ticks
-    :task task})
+  (let [^PlayerProjectileSchedule schedule (player-schedule player-uuid true)
+        now (aget (.currentTick schedule) 0)
+        due (+ now (max 1 (long (or delay-ticks 1))))]
+    (.add (.scheduledTasks schedule) (ScheduledProjectile. due task)))
   nil)
 
 (defn reset-pending-tasks-for-test!
@@ -171,16 +201,23 @@
     nil))
 
 (defn tick-player!
-  "Drive delayed projectile tasks for one player once per server tick.
-   Optimized: skips the :tick-delayed-projectile-tasks command dispatch
-   entirely when the player has no pending tasks (the common idle case)."
+  "Advance one player's deadline queue. Idle players do one HashMap lookup;
+  active queues mutate in place and allocate no due/remaining collections."
   [player-uuid]
-  (when (seq (prt-cmd/pending-delayed-tasks player-uuid))
-    (let [result (prt-cmd/run-for-player!
-                  player-uuid
-                  {:command :tick-delayed-projectile-tasks})
-          events (:events result)]
-      (when (not-empty events)
-        (doseq [{:keys [task]} events]
-          (run-task! task)))))
+  (when-let [^PlayerProjectileSchedule schedule (player-schedule player-uuid false)]
+    (let [^longs tick-cell (.currentTick schedule)
+          now (unchecked-inc (aget tick-cell 0))
+          ^ArrayList tasks (.scheduledTasks schedule)]
+      (aset-long tick-cell 0 now)
+      (loop [i 0]
+        (when (< i (.size tasks))
+          (let [^ScheduledProjectile scheduled (.get tasks i)]
+            (if (<= (.dueTick scheduled) now)
+              (do
+                (.remove tasks (int i))
+                (run-task! (.taskValue scheduled))
+                (recur i))
+              (recur (unchecked-inc-int i))))))
+      (when (.isEmpty tasks)
+        (.remove schedules-by-player player-uuid))))
   nil)

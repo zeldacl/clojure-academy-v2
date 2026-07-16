@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.combat-notice
   "Transient client-side combat notices rendered through the shared ability HUD."
-  (:require [cn.li.mcmod.i18n :as i18n]))
+  (:require [cn.li.mcmod.i18n :as i18n])
+  (:import [java.util HashMap Map$Entry]))
 
 (def ^:private default-duration-ms 2000)
 
@@ -30,17 +31,6 @@
      :start-ms (long current-ms)
      :end-ms (+ (long current-ms) ttl)}))
 
-(defn- update-session-notices
-  [state session-id f]
-  (let [next-session-state (or (f (get state session-id {})) {})]
-    (if (seq next-session-state)
-      (assoc state session-id next-session-state)
-      (dissoc state session-id))))
-
-(defn- clear-notice-state
-  [state session-id notice-id]
-  (update-session-notices state session-id #(dissoc % notice-id)))
-
 (defn active-notice-data
   [notice current-ms]
   (when notice
@@ -56,35 +46,49 @@
    (create-combat-notice-component {}))
   ([{:keys [now-ms-fn]
      :or {now-ms-fn now-ms}}]
-   (let [state* (atom (initial-notices-state))]
+   (let [^HashMap state (HashMap.)]
      (letfn [(snapshot []
-               @state*)
+               (into {}
+                     (map (fn [^Map$Entry entry]
+                            [(.getKey entry) (into {} ^HashMap (.getValue entry))]))
+                     (.entrySet state)))
              (session-snapshot [session-id]
-               (get @state* session-id {}))
+               (if-let [^HashMap notices (.get state session-id)]
+                 (into {} notices)
+                 {}))
              (reset-state! [snapshot]
-               (reset! state* (or snapshot {}))
+               (.clear state)
+               (doseq [[session-id notices] (or snapshot {})]
+                 (.put state session-id (HashMap. ^java.util.Map notices)))
                nil)
              (dispose! []
-               (reset! state* (initial-notices-state))
+               (.clear state)
                nil)
              (clear-session! [session-id]
-               (swap! state* dissoc session-id)
+               (.remove state session-id)
                nil)
              (clear-notice! [session-id notice-id]
-               (swap! state* clear-notice-state session-id notice-id)
+               (when-let [^HashMap notices (.get state session-id)]
+                 (.remove notices notice-id)
+                 (when (.isEmpty notices) (.remove state session-id)))
                nil)
              (show-notice! [session-id notice-id notice]
-               (swap! state* assoc-in [session-id notice-id]
-                      (build-notice-entry notice (now-ms-fn)))
+               (let [^HashMap notices (or (.get state session-id)
+                                          (let [created (HashMap.)]
+                                            (.put state session-id created)
+                                            created))]
+                 (.put notices notice-id (build-notice-entry notice (now-ms-fn))))
                nil)
              (active-notice [session-id notice-id current-ms]
                (let [now (long (or current-ms (now-ms-fn)))
-                     notice (get-in @state* [session-id notice-id])]
+                     ^HashMap notices (.get state session-id)
+                     notice (when notices (.get notices notice-id))]
                  (if-let [active (active-notice-data notice now)]
                    active
                    (do
                      (when notice
-                       (swap! state* clear-notice-state session-id notice-id))
+                       (.remove notices notice-id)
+                       (when (.isEmpty notices) (.remove state session-id)))
                      nil))))]
        {:kind ::combat-notice-component
         :snapshot snapshot

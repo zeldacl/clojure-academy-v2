@@ -9,8 +9,8 @@
   Usage from any client-side code:
     (toast/show-toast! {:message-key \"app.my_mod.freq_transmitter.e1\"})"
   (:require [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.framework :as fw]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge])
+  (:import [java.util ArrayList]))
 
 
 ;; ============================================================================
@@ -19,16 +19,7 @@
 
 (def ^:private default-duration-ms 2000)
 (def ^:private fade-duration-ms 400)
-(def ^:private toasts-path [:service :client-ui :toasts])
-
-(defn- toasts-atom
-  []
-  (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom toasts-path)
-        (let [a (atom [])]
-          (swap! fw-atom assoc-in toasts-path a)
-          a))
-    (atom [])))
+(defonce ^:private ^ArrayList active-toasts (ArrayList.))
 
 (defn- now-ms []
   (client-bridge/game-time-ms))
@@ -45,7 +36,7 @@
                   :args (vec (or args []))
                   :start-ms (now-ms)
                   :end-ms (+ (now-ms) (long (or duration-ms default-duration-ms)))}]
-       (swap! (toasts-atom) conj entry)))))
+       (.add active-toasts entry)))))
 
 ;; ============================================================================
 ;; Rendering helpers
@@ -68,21 +59,23 @@
 (defn- renderable-toasts
   "Return active toast entries (pure read, no side effects)."
   [now]
-  (remove #(expired? % now) @(toasts-atom)))
+  (remove #(expired? % now) active-toasts))
 
 (defn cleanup-expired!
   "Remove expired toasts. Called from client tick hook, not render path."
   []
-  (let [now (now-ms)
-        ta (toasts-atom)
-        current @ta]
-    (when (some #(expired? % now) current)
-      (reset! ta (vec (remove #(expired? % now) current))))))
+  (let [now (now-ms)]
+    (loop [i (dec (.size active-toasts))]
+      (when (>= i 0)
+        (when (expired? (.get active-toasts i) now)
+          (.remove active-toasts (int i)))
+        (recur (dec i)))))
+  nil)
 
 (defn active-toasts-snapshot
   "Return current toast entries for lazy-check in overlay plan builder."
   []
-  @(toasts-atom))
+  (vec active-toasts))
 
 
 ;; ============================================================================
@@ -154,9 +147,9 @@
 
 (defn reset-toasts-for-test!
   []
-  (reset! (toasts-atom) [])
+  (.clear active-toasts)
   nil)
 
 (defn toasts-snapshot
   []
-  @(toasts-atom))
+  (vec active-toasts))

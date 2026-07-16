@@ -10,7 +10,8 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]))
+            [cn.li.mcmod.platform.block-manipulation :as block-manip])
+  (:import [java.util HashSet]))
 
 (defn- beam-remove-self
   "Remove the shooter from candidate list."
@@ -62,7 +63,7 @@
   [player-id world-id start-pos dir max-distance energy radius step]
   (when (and (block-manip/available?) (pos? (double energy)) (pos? (double max-distance)))
     (let [[right up]      (geom/orthonormal-basis dir)
-          processed       (atom #{})
+          processed       (HashSet.)
           sample-points   (transient [])]
       (doseq [s (range (- (double radius)) (+ (double radius) (double step)) (double step))
               t (range (- (double radius)) (+ (double radius) (double step)) (double step))]
@@ -73,8 +74,7 @@
                 key    [(geom/floor-int (:x origin))
                         (geom/floor-int (:y origin))
                         (geom/floor-int (:z origin))]]
-            (when-not (contains? @processed key)
-              (swap! processed conj key)
+            (when (.add processed key)
               (conj! sample-points origin)))))
       (let [origins         (persistent! sample-points)
             line-energy     (if (seq origins)
@@ -189,5 +189,4 @@
                                  :normal-hit-count (:normal-hit-count result)
                                  :hit-uuids        (:hit-uuids result)
                                  :visual-distance  visual-dist})))))
-
 

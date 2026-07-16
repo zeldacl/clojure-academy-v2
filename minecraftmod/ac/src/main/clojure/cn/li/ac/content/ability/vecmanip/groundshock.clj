@@ -29,7 +29,8 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [java.util HashSet]))
 
 (def-skill-config-ops :groundshock)
 (defn- horizontal-look [player-id]
@@ -130,16 +131,16 @@
       (when (and block-id
                  (number? hardness)
                  (>= (double hardness) 0.0)
-                 (>= @energy* (double hardness))
+                 (>= (aget ^doubles energy* 0) (double hardness))
                  (not (block-manip/farmland-block?* world-id x y z))
                  (not (block-manip/liquid-block?* world-id x y z)))
-        (swap! energy* - (double hardness))
+        (aset-double ^doubles energy* 0 (- (aget ^doubles energy* 0) (double hardness)))
         (when (block-manip/break-block!*
                                         player-id
                                         world-id
                                         x y z
                                         (and drop? (< (rand) block-drop-rate)))
-          (swap! broken-blocks* conj [x y z])
+          (.add ^HashSet broken-blocks* [x y z])
           (when (world-effects/available?)
             (world-effects/play-sound!*
                                        world-id
@@ -185,7 +186,7 @@
       (when (and entity-id
                  (not= entity-id player-id)
                  (true? (:living? entity))
-                 (not (contains? @affected-entities* entity-id))
+                 (not (.contains ^HashSet affected-entities* entity-id))
                  (entity-overlaps-shock-box? entity bx by bz))
         (when (entity-damage/available?)
           (entity-damage/apply-direct-damage!*
@@ -200,7 +201,7 @@
                                        0.0
                                        y-speed
                                        0.0))
-        (swap! affected-entities* conj entity-id)
+        (.add ^HashSet affected-entities* entity-id)
         (add-exp! player-id (cfg-double :progression.exp-entity))))))
 
 (defn- propagation-positions [perp]
@@ -230,23 +231,23 @@
 (defn- propagate-shockwave!
   "Propagate shockwave along ground in look direction."
   [player-id world-id start-x start-y start-z flat-dir exp]
-  (let [energy* (atom (init-energy exp))
+  (let [energy* (double-array [(init-energy exp)])
         damage (damage-value exp)
         y-speed (launch-y-speed exp)
         block-drop-rate (drop-rate exp)
         max-iter (max-iterations exp)
         entity-search-radius (cfg-double :combat.entity-search-radius)
-        affected-blocks* (atom #{})
-        affected-entities* (atom #{})
-        broken-blocks* (atom #{})
+        affected-blocks* (HashSet.)
+        affected-entities* (HashSet.)
+        broken-blocks* (HashSet.)
         perp (perpendicular flat-dir)]
     (loop [iter 0
            x (Math/floor (double start-x))
            z (Math/floor (double start-z))]
-      (if (or (<= @energy* 0.0) (>= iter max-iter))
-        {:affected-blocks (finalize-affected-blocks world-id @affected-blocks*)
-         :affected-entities @affected-entities*
-         :broken-blocks (finalize-broken-blocks @broken-blocks*)}
+      (if (or (<= (aget energy* 0) 0.0) (>= iter max-iter))
+        {:affected-blocks (finalize-affected-blocks world-id affected-blocks*)
+         :affected-entities (vec affected-entities*)
+         :broken-blocks (finalize-broken-blocks broken-blocks*)}
         (let [block-x (int (Math/floor x))
               block-y (int (Math/floor start-y))
               block-z (int (Math/floor z))
@@ -265,35 +266,36 @@
                     by block-y
                     bz (int (Math/floor (+ z (:z delta))))
                     pos-key [bx by bz]]
-                (when-not (contains? @affected-blocks* pos-key)
+                (when-not (.contains affected-blocks* pos-key)
                   (when-let [block-id (and (block-manip/available?)
                                            (block-manip/get-block*
                                                                   world-id bx by bz))]
-                    (swap! affected-blocks* conj pos-key)
+                    (.add affected-blocks* pos-key)
                     (case block-id
                       "minecraft:stone"
                       (do
                         (block-manip/set-block!*
                                                 world-id bx by bz "minecraft:cobblestone")
-                        (swap! energy* - (propagation-energy-cost block-id)))
+                        (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
                       "minecraft:grass_block"
                       (do
                         (block-manip/set-block!*
                                                 world-id bx by bz "minecraft:dirt")
-                        (swap! energy* - (propagation-energy-cost block-id)))
+                        (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
                       "minecraft:farmland"
-                      (swap! energy* - (propagation-energy-cost block-id))
+                      (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id)))
 
-                      (swap! energy* - (propagation-energy-cost block-id)))
+                      (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
                     (when (< (rand) (cfg-double :breaking.ground-break-probability))
                       (break-with-force! player-id world-id block-x block-y block-z false energy* block-drop-rate broken-blocks*))
 
-                    (let [before-entities (count @affected-entities*)]
+                    (let [before-entities (.size affected-entities*)]
                       (affect-entities! player-id world-id bx by bz damage y-speed candidate-entities affected-entities*)
-                      (swap! energy* - (double (- (count @affected-entities*) before-entities))))))))
+                      (aset-double energy* 0 (- (aget energy* 0)
+                                               (double (- (.size affected-entities*) before-entities)))))))))
 
             (doseq [dy (range 1 4)]
               (break-with-force! player-id world-id block-x (+ block-y dy) block-z false energy* block-drop-rate broken-blocks*)))
@@ -306,7 +308,7 @@
   [player-id world-id player-pos exp broken-blocks*]
   (when (and (>= (scaling/clamp-exp exp) (cfg-double :breaking.mastery-exp-threshold))
              (block-manip/available?))
-    (let [energy* (atom Double/MAX_VALUE)
+    (let [energy* (double-array [Double/MAX_VALUE])
           x0 (int (double (:x player-pos)))
           y0 (int (double (:y player-pos)))
           z0 (int (double (:z player-pos)))]
@@ -343,7 +345,11 @@
                       result (propagate-shockwave! player-id world-id
                                                    start-x start-y start-z
                                                    flat-dir exp)
-                      broken-blocks* (atom (into #{} (map #(vector (get % :x) (get % :y) (get % :z)) (:broken-blocks result))))
+                      broken-blocks* (HashSet.)
+                      _ (.addAll broken-blocks*
+                                 ^java.util.Collection
+                                 (mapv #(vector (get % :x) (get % :y) (get % :z))
+                                       (:broken-blocks result)))
                       affected-count (+ (count (:affected-blocks result))
                                         (count (:affected-entities result)))]
                   (break-mastery-ring! player-id world-id pos exp broken-blocks*)
@@ -352,7 +358,7 @@
                   (ctx-skill/replace-skill-state! ctx-id (assoc skill-state :performed? true))
                   (fx/send! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
                             {:affected-blocks (:affected-blocks result)
-                             :broken-blocks (finalize-broken-blocks @broken-blocks*)})
+                             :broken-blocks (finalize-broken-blocks broken-blocks*)})
                   (log/info "Groundshock: Affected" affected-count "blocks/entities"))
                 (do
                   (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
