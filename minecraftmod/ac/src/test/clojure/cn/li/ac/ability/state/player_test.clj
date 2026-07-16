@@ -1,9 +1,10 @@
 (ns cn.li.ac.ability.state.player-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.state-tick :as ps-tick]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.rules.cooldown-rules :as cooldown-rules]
             [clojure.edn :as edn]
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.player-state :as ps-fix]            [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -72,14 +73,21 @@
     (is (= :vecmanip
            (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))))
 
+(defn- ticking-player-state
+  "A player state with one live cooldown — server-tick-player! skips fully
+   idle players (noop optimization), so smoke tests must seed live state."
+  []
+  (assoc (store/fresh-player-state)
+         :cooldown-data (:data (cooldown-rules/set-cooldown {} :smoke 5))))
+
 (deftest server-tick-player-smoke-test
-  (store/get-or-create-player-state! ps-fix/test-session-id "u3")
+  (store/set-player-state!* ps-fix/test-session-id "u3" (ticking-player-state))
   (let [r (ps-tick/server-tick-player! "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
 
 (deftest server-tick-player-uses-bound-owner-session-test
-  (store/get-or-create-player-state! :tick-session "u3")
+  (store/set-player-state!* :tick-session "u3" (ticking-player-state))
   (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :tick-session}}
     (let [r (ps-tick/server-tick-player! "u3" nil)]
       (is (map? r))

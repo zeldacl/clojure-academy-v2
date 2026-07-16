@@ -46,13 +46,12 @@
 
 (defn- with-context-owner-binding
   [owner f]
-  (let [owner* (or owner ctx/context-owner
-                    (runtime-hooks/current-player-state-owner))]
+  (let [owner* (or owner (ctx/context-owner)
+                   (runtime-hooks/current-player-state-owner))]
     (when-not owner*
       (throw (ex-info "Skill callback requires bound context owner"
-                      {:context-owner ctx/context-owner})))
-    (binding [ctx/context-owner owner*]
-      (f))))
+                      {:context-owner (ctx/context-owner)})))
+    (ctx/with-context-owner-fn owner* f)))
 
 (defn- dispatch-skill-callback!
   ([ctx-map cb-key event-type payload]

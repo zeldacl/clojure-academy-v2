@@ -31,5 +31,5 @@
     (is (= 3 (:level d2)))
     (is (= 0.0 (:level-progress d2)))
     (is (= 0.0 (:level-progress d3)))
-    (is (thrown? AssertionError (ability/set-level d1 0)))
-    (is (thrown? AssertionError (ability/set-level d1 6)))))
+    (is (thrown? IllegalArgumentException (ability/set-level d1 0)))
+    (is (thrown? IllegalArgumentException (ability/set-level d1 6)))))

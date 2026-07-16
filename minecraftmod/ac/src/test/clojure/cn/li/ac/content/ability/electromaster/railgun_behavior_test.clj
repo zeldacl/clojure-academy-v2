@@ -68,7 +68,7 @@
 (deftest coin-throw-aborts-item-charge-and-opens-window-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (let [owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}]
-    (binding [ctx/context-owner owner]
+    (ctx/with-context-owner owner
       (ctx/register-context!
        (assoc (ctx/new-server-context "p1" :railgun "ctx-1" owner)
               :status ctx/STATUS-ALIVE))

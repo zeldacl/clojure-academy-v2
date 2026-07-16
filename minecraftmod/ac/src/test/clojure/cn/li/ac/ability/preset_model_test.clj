@@ -13,8 +13,8 @@
     (is (= [:cat :ctrl-a] (preset/get-slot d3 2 0)))
     (is (= nil (preset/get-slot d4 2 1)))
     (is (= [[:cat :ctrl-a] nil nil nil] (preset/get-active-slots d4)))
-    (is (thrown? AssertionError (preset/set-active-preset d0 -1)))
-    (is (thrown? AssertionError (preset/set-active-preset d0 4)))))
+    (is (thrown? IllegalArgumentException (preset/set-active-preset d0 -1)))
+    (is (thrown? IllegalArgumentException (preset/set-active-preset d0 4)))))
 
 (deftest preset-serialization-contract-test
   (let [d {:active-preset 3

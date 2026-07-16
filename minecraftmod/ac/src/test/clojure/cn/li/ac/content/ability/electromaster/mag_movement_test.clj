@@ -162,8 +162,8 @@
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
                     fx/send! send!
-                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                    state-op/execute-overload-floor! (fn [_evt _params] nil)
+                    motion-op/execute-reset-fall-damage! (fn [& _] nil)
+                    state-op/execute-overload-floor! (fn [& _] nil)
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
@@ -214,8 +214,8 @@
                     ctx-skill/assoc-skill-state! assoc-skill-state!
                     ctx-skill/clear-skill-state! clear-skill-state!
                     fx/send! send!
-                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                    state-op/execute-overload-floor! (fn [_evt _params] nil)
+                    motion-op/execute-reset-fall-damage! (fn [& _] nil)
+                    state-op/execute-overload-floor! (fn [& _] nil)
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                    (swap! exp* conj [player-id skill-id amount])
                                                    nil)]
@@ -293,24 +293,25 @@
         up! (get (skill-actions) :up!)
         abort! (get (skill-actions) :abort!)]
     (with-mag-env
-      #(with-redefs [mag-movement/player-pos (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                    mag-movement/cfg-double (fn [k]
-                                             (case k
-                                               :progression.exp-min 0.005
-                                               :progression.exp-distance-scale 0.0011
-                                               0.0))
-                    ctx/get-context get-context
-                    ctx/terminate-context! terminate-context!
-                    ctx-skill/update-skill-state-root! update-skill-state-root!
-                    ctx-skill/assoc-skill-state! assoc-skill-state!
-                    ctx-skill/clear-skill-state! clear-skill-state!
-                    fx/send! send!
-                    motion-op/execute-reset-fall-damage! (fn [_evt _params] nil)
-                    skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                   (swap! exp* conj [player-id skill-id amount])
-                                                   nil)]
-         (cb/apply-invoke up! :ctx-id ctx-id :player-id "p1")
-         (cb/apply-invoke abort! :ctx-id ctx-id :player-id "p1")))
+      #(with-redefs-fn {#'mag-movement/player-pos (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                        #'mag-movement/cfg-double (fn [k]
+                                                    (case k
+                                                      :progression.exp-min 0.005
+                                                      :progression.exp-distance-scale 0.0011
+                                                      0.0))
+                        #'ctx/get-context get-context
+                        #'ctx/terminate-context! terminate-context!
+                        #'ctx-skill/update-skill-state-root! update-skill-state-root!
+                        #'ctx-skill/assoc-skill-state! assoc-skill-state!
+                        #'ctx-skill/clear-skill-state! clear-skill-state!
+                        #'fx/send! send!
+                        #'motion-op/execute-reset-fall-damage! (fn [& _] nil)
+                        #'skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                         (swap! exp* conj [player-id skill-id amount])
+                                                         nil)}
+         (fn []
+           (cb/apply-invoke up! :ctx-id ctx-id :player-id "p1")
+           (cb/apply-invoke abort! :ctx-id ctx-id :player-id "p1"))))
     (is (= 1 (count @exp*)))
     (is (= 1 (count @calls*)))
     (is (= [ctx-id] @terminated*))))

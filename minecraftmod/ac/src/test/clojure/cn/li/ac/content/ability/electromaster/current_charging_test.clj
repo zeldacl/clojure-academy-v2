@@ -196,7 +196,7 @@
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
       (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id :player-ref {:uuid "p1"}))
-    (is (= [[{:uuid "p1"} "my_mod:entity_arc" 0.0]] @spawned*))
+    (is (= [[{:uuid "p1"} "my_mod:entity_charging_arc" 0.0]] @spawned*))
     (is (= [[ctx-id :current-charging/fx-update
              {:is-item false
               :good? true

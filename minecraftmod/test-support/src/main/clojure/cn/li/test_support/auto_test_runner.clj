@@ -2,7 +2,8 @@
   "Shared clojure.test auto-discovery runner for repository modules."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [clojure.test :as test]))
+            [clojure.test :as test]
+            [cn.li.mcmod.framework :as fw]))
 
 (defn- test-file?
   [^java.io.File file]
@@ -82,6 +83,22 @@
     (doseq [{:keys [ns elapsed-ms]} (take 10 (sort-by (comp - :elapsed-ms) timings))]
       (println " " ns (str elapsed-ms "ms")))))
 
+(defn- with-fresh-framework*
+  "Run `thunk` with a fresh Framework atom var-rooted in, restoring the
+   previous one after. Framework-backed state (config registry, hooks,
+   managed screens, context dispatcher, ...) reads through fw/framework;
+   without one, writes land in throwaway atoms and state silently vanishes.
+   Installing one per test NAMESPACE gives every suite a working, isolated
+   framework by default — namespace fixtures may still install their own."
+  [thunk]
+  (let [prev fw/framework]
+    (try
+      (when-let [fw-inst (fw/create-framework)]
+        (alter-var-root #'fw/framework (constantly fw-inst)))
+      (thunk)
+      (finally
+        (alter-var-root #'fw/framework (constantly prev))))))
+
 (defn run-tests!
   "Discover, require, and run clojure.test namespaces.
 
@@ -104,13 +121,16 @@
       (println "Required" (count selected) "test namespaces in" (str (elapsed-ms require-start) "ms")))
     (let [timings (mapv (fn [ns-sym]
                           (let [started-at (System/nanoTime)
-                                result (test/test-ns ns-sym)
+                                result (with-fresh-framework* #(test/test-ns ns-sym))
                                 elapsed (elapsed-ms started-at)]
                             (println "Finished" ns-sym "in" (str elapsed "ms"))
                             {:ns ns-sym
                              :elapsed-ms elapsed
                              :result result}))
                         selected)
+          ;; Fresh frameworks per namespace accumulate GC roots; 259
+          ;; namespaces without a collection cycle will OOM.
+          _ (System/gc)
           result (reduce merge-test-result
                          {:test 0 :pass 0 :fail 0 :error 0}
                          (map #(get % :result) timings))

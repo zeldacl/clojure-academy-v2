@@ -32,7 +32,7 @@
            (get-in translations [:en_us "ability.skill.generic.mind_course.desc"])))
     (is (= "Flesh Ripping"
            (get-in translations [:en_us "ability.skill.teleporter.flesh_ripping"])))
-    (is (= "Ability skill: Flesh Ripping"
+    (is (= "Rip apart your enemy's inside and inflict gory damage. The over-bloody effect may make you feel uncomfortable."
            (get-in translations [:en_us "ability.skill.teleporter.flesh_ripping.desc"])))
     (is (= "Dimension Folding Theorem"
            (get-in translations [:en_us "ability.skill.teleporter.dim_folding_theorem"])))
@@ -54,7 +54,7 @@
            (get-in translations [:zh_cn "ability.skill.generic.mind_course"])))
     (is (= "学习更高效地放松精神，使 CP 恢复速度提高 20%。"
            (get-in translations [:zh_cn "ability.skill.generic.mind_course.desc"])))
-    (is (= "Flesh Ripping"
+    (is (= "肌体撕裂"
            (get-in translations [:zh_cn "ability.skill.teleporter.flesh_ripping"])))
     (is (= "折叠空间概论"
            (get-in translations [:zh_cn "ability.skill.teleporter.dim_folding_theorem"])))

@@ -32,7 +32,11 @@
 (defn- player-configurable-content-skills
   []
   (ability-content/init-ability-content!)
-  (filter (comp nil? namespace :id) (skill-registry/list-skills)))
+  ;; Discovery also loads test-classpath external providers (fixture-*) —
+  ;; those are not content skills and have no per-skill config entry.
+  (filter #(and (nil? (namespace (:id %)))
+                (not (clojure.string/starts-with? (name (:id %)) "fixture-")))
+          (skill-registry/list-skills)))
 
 (defn- player-configurable-content-skill-ids
   []

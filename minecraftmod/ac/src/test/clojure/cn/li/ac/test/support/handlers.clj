@@ -13,10 +13,12 @@
 
 (defn with-server-player-owner
   [player-uuid f]
-  (binding [runtime-hooks/player-state-owner
-            {:server-session-id owner-support/default-server-session-id
-             :player-uuid (str player-uuid)}]
-    (f)))
+  ;; player-state-owner is a reader FN now — set the owner through the
+  ;; ThreadLocal HOF instead of (broken) binding on a non-dynamic var.
+  (runtime-hooks/with-player-state-owner-fn
+    {:server-session-id owner-support/default-server-session-id
+     :player-uuid (str player-uuid)}
+    f))
 
 (defn handler-fixture
   [f]

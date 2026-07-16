@@ -15,7 +15,7 @@
     (let [events (atom [])
           ctx-id "ctx-owned"]
       (handler-support/register-owned-server-context! "p1" ctx-id)
-      (binding [ctx/context-owner (handler-support/server-owner "p1")]
+      (ctx/with-context-owner (handler-support/server-owner "p1")
         (ctx/ctx-on! ctx-id :test/channel #(swap! events conj %)))
 
       (handler-support/with-server-player-owner "p2"
@@ -80,7 +80,7 @@
           ctx-id "ctx-not-alive"]
       (handler-support/register-owned-server-context!
        "p1" ctx-id :status ctx/STATUS-TERMINATED)
-      (binding [ctx/context-owner (handler-support/server-owner "p1")]
+      (ctx/with-context-owner (handler-support/server-owner "p1")
         (ctx/ctx-on! ctx-id :test/channel #(swap! events conj %)))
 
       (handler-support/with-server-player-owner "p1"
@@ -172,7 +172,7 @@
           establish-calls (atom [])]
       (with-redefs [ctx-mgr/establish-context! (fn [player-uuid ctx-id skill-id]
                                                  (swap! establish-calls conj [player-uuid ctx-id skill-id])
-                                                 (binding [ctx/context-owner (handler-support/server-owner player-uuid)]
+                                                 (ctx/with-context-owner (handler-support/server-owner player-uuid)
                                                    (handler-support/register-owned-server-context!
                                                     player-uuid ctx-id :skill-id skill-id :input-state :idle)))]
         (handler-support/with-server-player-owner "p1"

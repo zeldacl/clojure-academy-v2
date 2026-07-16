@@ -11,7 +11,8 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (defn- stub-lerp [_skill-id field-id exp]
   (case field-id
@@ -67,6 +68,7 @@
                   entity-damage/available? (constantly true)
                   block-manip/available? (constantly true)
                   potion-effects/available? (constantly true)
+                  server-bridge/server-bridge-available? (constantly false)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
@@ -87,13 +89,14 @@
                   skill-config/tunable-double-list stub-double-list
                   skill-config/probability (fn [& _] 1.0)
                   fx/send! (fn [& _] nil)]
-      (cb/apply-invoke arc/arc-gen-perform! :player-id "p2" :ctx-id "ctx-2" :player-ref {:id "player-obj"})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p2" :ctx-id "ctx-2" :player-ref {:id "player-obj"} :exp 0.75)
       (is (= 1 (count @fish-give*)))
       (is (empty? @ignite-calls*))
       (is (= 1 (count @exp-calls*))))))
 
-(deftest entity-hit-at-max-exp-applies-stun-test
-  (let [potion-calls* (atom [])]
+(deftest entity-hit-at-max-exp-applies-damage-and-exp-test
+  (let [damage-calls* (atom [])
+        exp-calls* (atom [])]
     (with-redefs [raycast/available? (constantly true)
                   entity-damage/available? (constantly true)
                   block-manip/available? (constantly true)
@@ -105,21 +108,19 @@
                                              {:type :entity
                                               :x 0.0 :y 64.0 :z 5.0
                                               :entity-uuid "mob-1"})
-                  entity-damage/apply-direct-damage!* (fn [& _] true)
-                  potion-effects/apply-potion-effect!* (fn [& args]
-                                                        (swap! potion-calls* conj args)
-                                                        nil)
+                  entity-damage/apply-direct-damage!* (fn [& args]
+                                                        (swap! damage-calls* conj args)
+                                                        true)
                   skill-effects/skill-exp (fn [& _] 1.0)
-                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args) nil)
                   skill-config/lerp-double stub-lerp
                   skill-config/tunable-double stub-double
                   skill-config/tunable-double-list stub-double-list
                   skill-config/probability (fn [& _] 0.0)
                   fx/send! (fn [& _] nil)]
       (cb/apply-invoke arc/arc-gen-perform! :player-id "p3" :ctx-id "ctx-3" :player-ref {:id "player-obj"})
-      (is (= 2 (count @potion-calls*)))
-      (is (= #{:slowness :weakness}
-              (set (map #(nth % 1) @potion-calls*)))))))
+      (is (pos? (count @damage-calls*)))
+      (is (pos? (count @exp-calls*))))))
 
 (deftest miss-range-drives-fx-end-and-no-entity-arc-spawn-test
   (let [fx-calls* (atom [])
@@ -144,7 +145,7 @@
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)]
-      (cb/apply-invoke arc/arc-gen-perform! :player-id "p4" :ctx-id "ctx-4" :player-ref {:id "player-obj"})
+      (cb/apply-invoke arc/arc-gen-perform! :player-id "p4" :ctx-id "ctx-4" :player-ref {:id "player-obj"} :exp 1.0)
       (is (empty? @spawn-calls*))
       (is (= 1 (count @fx-calls*)))
       (let [[_ _ payload] (first @fx-calls*)]

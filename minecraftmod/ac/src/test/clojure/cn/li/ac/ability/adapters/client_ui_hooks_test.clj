@@ -210,11 +210,11 @@
                        :player-uuid "p1"}
         screen-calls (atom [])
         keybind-clears (atom [])]
-    (binding [ctx/context-owner context-owner
-              runtime-hooks/player-state-owner owner]
-      (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
-                                    :id "ctx-cleanup"))
-                  (store/set-player-state!* :session-a "p1" {:resource-data {:activated true}}))
+    (ctx/with-context-owner context-owner
+      (runtime-hooks/with-player-state-owner owner
+        (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
+                                      :id "ctx-cleanup"))
+        (store/set-player-state!* :session-a "p1" {:resource-data {:activated true}})))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
     (particles/queue-particle-effect! owner {:type :particle :particle-type :spark})
@@ -249,7 +249,7 @@
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
     (runtime-hooks/with-client-ctx {:player-owner owner}
       (is (nil? (store/get-player-state* :session-a "p1"))))
-    (binding [ctx/context-owner context-owner]
+    (ctx/with-context-owner context-owner
       (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
 (deftest hud-render-data-hidden-when-not-activated-test
@@ -409,8 +409,8 @@
                                                                     [:railgun :qte.coin-active-threshold] 0.6
                                                                     0.0))
                   read-model/get-player-contexts-for-player (fn [& _] [])]
-      ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"})
-      (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"})]
+      ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1" :now-ms 1000})
+      (let [visual ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1" :now-ms 1000})]
         (is (true? (:active? visual)))
         (is (false? (:coin-active? visual)))
         (is (number? (:coin-progress visual)))
@@ -426,7 +426,7 @@
                   skill-config/tunable-double (fn [_ _] 0.6)
                   read-model/get-player-contexts-for-player (fn [& _] [])]
       (binding [client-keybinds/*client-session-id* :session-a]
-        ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1"}))
+        ((:client-notify-visual-event! hooks) :ac/charge-coin-throw {:player-uuid "p1" :now-ms 1000}))
       (is (some? (:charge-coin-state (client-ui-hooks/client-ui-state-snapshot
                                       {:client-session-id :session-a :player-uuid "p1"}))))
       (is (nil? (:charge-coin-state (client-ui-hooks/client-ui-state-snapshot
@@ -521,45 +521,47 @@
       (is (>= (count (filter #{:fill} kinds)) 3)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
-  (with-redefs [store/get-player-state* (fn [_ _]
-                                      {:resource-data {:activated true
-                                                       :cur-cp 80.0
-                                                       :max-cp 100.0
-                                                       :cur-overload 0.0
-                                                       :max-overload 100.0}
-                                       :cooldown-data {}
-                                       :preset-data {}})
-                client-keybinds/get-activate-hint (fn [_] nil)
-                client-keybinds/get-preset-switch-state (fn [_] nil)]
-    (let [plan (client-ui-hooks/build-client-overlay-plan
-                "p1" 320 180 {:activated-override nil :now-ms 1000})]
-      (is (seq (:elements plan))))))
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
+    (with-redefs [store/get-player-state* (fn [_ _]
+                                        {:resource-data {:activated true
+                                                         :cur-cp 80.0
+                                                         :max-cp 100.0
+                                                         :cur-overload 0.0
+                                                         :max-overload 100.0}
+                                         :cooldown-data {}
+                                         :preset-data {}})
+                  client-keybinds/get-activate-hint (fn [_] nil)
+                  client-keybinds/get-preset-switch-state (fn [_] nil)]
+      (let [plan (client-ui-hooks/build-client-overlay-plan
+                  "p1" 320 180 {:activated-override nil :now-ms 1000})]
+        (is (seq (:elements plan)))))))
 
 (deftest build-client-overlay-plan-renders-reflection-crosshair-and-vm-wave-test
-  (with-redefs [store/get-player-state* (fn [_ _]
-                                      {:resource-data {:activated true
-                                                       :cur-cp 80.0
-                                                       :max-cp 100.0
-                                                       :cur-overload 0.0
-                                                       :max-overload 100.0}
-                                       :cooldown-data {}
-                                       :preset-data {}})
-                ctx/get-all-contexts (fn []
-                                       {"ctx-reflection" {:player-uuid "p1"
-                                                           :skill-state {:toggle {:vec-reflection {:active true}
-                                                                                  :vec-deviation {:active true}}}}})
-                client-keybinds/get-activate-hint (fn [_] nil)
-                client-keybinds/get-preset-switch-state (fn [_] nil)]
-    ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
-    (client-ui-hooks/seed-vm-wave-state-for-test!
-     "p1"
-     [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
-       :start-size 10.0 :end-size 50.0 :seed 0.0}])
-    (let [plan (client-ui-hooks/build-client-overlay-plan
-                "p1" 320 180 {:now-ms 1000})
-          kinds (mapv :kind (:elements plan))]
-      (is (= 1 (count (filter #{:content-crosshair} kinds))))
-      (is (some #{:blit-texture} kinds)))))
+  (runtime-hooks/with-client-ctx {:session-id :test-session}
+    (with-redefs [store/get-player-state* (fn [_ _]
+                                        {:resource-data {:activated true
+                                                         :cur-cp 80.0
+                                                         :max-cp 100.0
+                                                         :cur-overload 0.0
+                                                         :max-overload 100.0}
+                                         :cooldown-data {}
+                                         :preset-data {}})
+                  ctx/get-all-contexts (fn []
+                                         {"ctx-reflection" {:player-uuid "p1"
+                                                             :skill-state {:toggle {:vec-reflection {:active true}
+                                                                                    :vec-deviation {:active true}}}}})
+                  client-keybinds/get-activate-hint (fn [_] nil)
+                  client-keybinds/get-preset-switch-state (fn [_] nil)]
+      ;; Pre-seed a wave circle born 100ms ago so alpha>0 at now-ms=1000
+      (client-ui-hooks/seed-vm-wave-state-for-test!
+       "p1"
+       [{:x 160.0 :y 90.0 :born-ms 900 :life-ms 600
+         :start-size 10.0 :end-size 50.0 :seed 0.0}])
+      (let [plan (client-ui-hooks/build-client-overlay-plan
+                  "p1" 320 180 {:now-ms 1000})
+            kinds (mapv :kind (:elements plan))]
+        (is (= 1 (count (filter #{:content-crosshair} kinds))))
+        (is (some #{:blit-texture} kinds))))))
 
 (deftest movement-key-hooks-route-to-flashing-channel-test
   (let [sent (atom [])

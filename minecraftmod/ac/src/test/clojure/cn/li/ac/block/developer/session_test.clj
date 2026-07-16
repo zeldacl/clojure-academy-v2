@@ -17,7 +17,11 @@
         state {:is-developing true
                :development-data dd
                :energy 100000.0
-               :tier "normal"}
+               :tier "normal"
+               ;; completion validation reads player state by these ids —
+               ;; nil ids NPE the runtime store's ConcurrentHashMap
+               :player-state-session-id :test-session
+               :user-uuid "p1"}
         completed (loop [s state n 0]
                       (cond
                         (:development-complete? s) s

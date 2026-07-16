@@ -73,7 +73,7 @@
                                          :actions {:perform! (fn [& _]
                                                                (reset! invoked? true))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (true? @invoked?) ":instant key-down must invoke :perform!")))))
 
@@ -82,8 +82,7 @@
         ctx-id "ctx-toggle"
         actions (atom [])
         _ (seed-player-state! uuid 100.0)
-        c (-> (ctx/new-server-context uuid :vec-deviation ctx-id (test-context-owner uuid))
-              (assoc :input-state :active))]
+        c (ctx/new-server-context uuid :vec-deviation ctx-id (test-context-owner uuid))]
     (ctx/register-context! c)
     (with-redefs [skill-reg/get-skill (fn [_]
                                         {:id :vec-deviation
@@ -93,7 +92,7 @@
                                          :actions {:activate! (fn [& _] (swap! actions conj :activate!))
                                                    :deactivate! (fn [& _] (swap! actions conj :deactivate!))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (true? (rt/handle-key-up! ctx-id {})))
         (is (= [:activate! :deactivate!] @actions))))))
@@ -110,9 +109,11 @@
                                          :pattern :instant
                                          :cost {:down {:cp 50.0 :overload 0.0}}
                                          :actions {:perform! (fn [& _] nil)
-                                                   :cost-fail! (fn [_ _ _ _ _ _ _ stage _]
+                                                   ;; unified 8-arg action arity:
+                                                   ;; [ctx-id player-id skill-id exp cost-ok? hold-ticks cost-stage player-ref]
+                                                   :cost-fail! (fn [_ _ _ _ _ _ stage _]
                                                                  (swap! stages conj stage))}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-down! ctx-id {})))
         (is (= [:down] @stages) "cost failure must invoke :cost-fail! with :down stage")))))

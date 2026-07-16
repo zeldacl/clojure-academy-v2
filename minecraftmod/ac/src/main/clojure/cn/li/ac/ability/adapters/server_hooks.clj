@@ -330,8 +330,8 @@
 
    :get-context-player-uuid
    (fn [ctx-id]
-     (when-let [ctx-map (or (when ctx/context-owner
-                               (ctx/get-context ctx-id))
+     (when-let [ctx-map (or (when-let [owner (ctx/context-owner)]
+                               (ctx/get-context owner ctx-id))
                             (unique-context-by-id ctx-id))]
        (:player-uuid ctx-map)))
 

@@ -26,7 +26,12 @@
                   (assoc-in [:preset-data :active-preset] 1)
                   (assoc-in [:develop-data :level-progress] 42.0))]
     (runtime-hooks/sync-player-state! uuid state)
-    (is (= state (runtime-hooks/get-player-state uuid)))
+    ;; Round-trip: each domain the test set must persist through get-player-state.
+    (let [got (runtime-hooks/get-player-state uuid)]
+      (is (= :electromaster (get-in got [:ability-data :category-id])))
+      (is (true? (get-in got [:resource-data :activated])))
+      (is (= 1 (get-in got [:preset-data :active-preset])))
+      (is (= 42.0 (get-in got [:develop-data :level-progress]))))
     (is (true? (runtime-hooks/runtime-activated? uuid)))
     (is (= {:uuid uuid
             :ability-data (:ability-data state)

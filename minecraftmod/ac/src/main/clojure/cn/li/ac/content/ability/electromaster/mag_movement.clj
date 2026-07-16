@@ -265,7 +265,7 @@
                   (fx/send! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                             {:target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
-                    (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds"))))))))))
+                    (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 
 (defn- on-up!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -274,7 +274,7 @@
           has-target  (:has-target skill-state)]
       (when has-target
         (finalize-and-terminate! ctx-id player-id {:grant-exp? true})
-        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state)))))))
+        (log/debug "MagMovement completed: ticks" (:movement-ticks skill-state))))))
 
 (defn- on-abort!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]

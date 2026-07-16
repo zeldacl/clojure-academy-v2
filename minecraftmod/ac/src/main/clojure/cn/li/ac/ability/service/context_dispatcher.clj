@@ -34,6 +34,28 @@
          (when (instance? clojure.lang.IAtom fw-inst)
            (get-in @fw-inst [:service :client-ctx :context-owner]))))))
 
+(defn with-context-owner-fn
+  "Run `thunk` with the Framework context-owner set to `ctx-owner`, restoring
+   the previous value afterwards. Replaces the deleted ^:dynamic context-owner
+   binding pattern — `(binding [context-owner ...])` throws on a plain fn var."
+  [ctx-owner thunk]
+  (let [fw-atom (fw/fw-atom)
+        prev (when fw-atom (get-in @fw-atom [:service :client-ctx :context-owner]))]
+    (try
+      (when fw-atom
+        (swap! fw-atom assoc-in [:service :client-ctx :context-owner] ctx-owner))
+      (thunk)
+      (finally
+        (when fw-atom
+          (if (some? prev)
+            (swap! fw-atom assoc-in [:service :client-ctx :context-owner] prev)
+            (swap! fw-atom update-in [:service :client-ctx] dissoc :context-owner)))))))
+
+(defmacro with-context-owner
+  "Macro wrapper over with-context-owner-fn."
+  [ctx-owner & body]
+  `(with-context-owner-fn ~ctx-owner (fn [] ~@body)))
+
 (def ^:private default-dispatcher-state
   {:transport-contexts {}
    :route-fns          {}
@@ -405,17 +427,8 @@
              (System/currentTimeMillis))
            (when send-terminated-fn
              (when-let [ctx-owner (owner/canonical-owner-from-transport transport)]
-               (let [fw-atom (fw/fw-atom)
-                     prev (when fw-atom (get-in @fw-atom [:service :client-ctx :context-owner]))]
-                 (try
-                   (when fw-atom
-                     (swap! fw-atom assoc-in [:service :client-ctx :context-owner] ctx-owner))
-                   (send-terminated-fn (:id merged))
-                   (finally
-                     (when fw-atom
-                       (if (some? prev)
-                         (swap! fw-atom assoc-in [:service :client-ctx :context-owner] prev)
-                         (swap! fw-atom update-in [:service :client-ctx] dissoc :context-owner))))))))
+               (with-context-owner-fn ctx-owner
+                 #(send-terminated-fn (:id merged)))))
            (log/debug "Context terminated:" (:id merged))))))))
 
 (defn abort-all-contexts-for-player!

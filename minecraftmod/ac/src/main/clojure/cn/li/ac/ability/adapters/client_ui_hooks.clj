@@ -645,7 +645,7 @@
       (update-client-ui-runtime! update :slot-context-ids dissoc slot-key)
       (with-client-context-owner player-uuid
         (fn [_owner]
-          (binding [ctx/context-owner (client-context-owner player-uuid)]
+          (ctx/with-context-owner (client-context-owner player-uuid)
             (ctx/terminate-context! ctx-id nil))))
       ctx-id)))
 
@@ -1091,7 +1091,7 @@
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (when-let [owner (runtime-hooks/current-player-state-owner)]
-          (binding [ctx/context-owner owner]
+          (ctx/with-context-owner owner
             (ctx/transition-to-alive! owner ctx-id server-id
                                       (fn [msg]
                                         (flush-buffered-context-message!

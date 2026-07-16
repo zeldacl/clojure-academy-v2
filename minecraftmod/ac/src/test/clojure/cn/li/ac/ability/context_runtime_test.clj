@@ -62,7 +62,7 @@
                  :sub-id :main})
         c (ctx/new-server-context uuid :arc-gen "ctx-cd" (test-context-owner uuid))]
     (ctx/register-context! c)
-  (binding [ctx/context-owner (test-context-owner uuid)]
+  (ctx/with-context-owner (test-context-owner uuid)
     (is (false? (rt/handle-key-down! "ctx-cd" {:ctx-id "ctx-cd" :skill-id :arc-gen}))
       "key-down should be rejected while main cooldown is active")
     (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context "ctx-cd")))
@@ -74,7 +74,7 @@
         c (-> (ctx/new-server-context uuid :arc-gen "ctx-res" (test-context-owner uuid))
               (assoc :input-state :active))]
     (ctx/register-context! c)
-  (binding [ctx/context-owner (test-context-owner uuid)]
+  (ctx/with-context-owner (test-context-owner uuid)
     (is (true? (rt/handle-key-tick! "ctx-res" {:ctx-id "ctx-res" :skill-id :arc-gen}))
       "active context should accept key-tick")
     (is (= ctx/STATUS-ALIVE (:status (ctx/get-context "ctx-res")))
@@ -116,7 +116,7 @@
                                          :ctrl-id :arc-gen
                                          :cooldown {:mode :manual}
                                          :input-policy {:terminate-on-key-up? false}})]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
       (is (true? (rt/handle-key-up! "ctx-sticky" {:ctx-id "ctx-sticky" :skill-id :arc-gen}))
         "key-up should be handled")
       (let [updated (ctx/get-context "ctx-sticky")]
@@ -137,7 +137,7 @@
                                          :cooldown {:mode :manual}
                                          :input-policy {:terminate-on-key-up? false
                                                         :keep-active-on-key-up? true}})]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-up! "ctx-keep-active" {:ctx-id "ctx-keep-active" :skill-id :arc-gen}))
             "key-up should be handled")
         (let [updated (ctx/get-context "ctx-keep-active")]
@@ -158,12 +158,12 @@
                                         {:id :arc-gen
                                          :ctrl-id :arc-gen
                                          :pattern :release-cast
-                                         :actions {:up! (fn [_] nil)}
+                                         :actions {:up! (fn [& _] nil)}
                                          :cooldown {:mode :default}
                                          :cooldown-ticks 9})
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
       (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
       (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main))
         "generic key-up should not apply cooldown when pattern runtime owns settlement")
@@ -182,14 +182,14 @@
     (with-redefs [skill-reg/get-skill (fn [_]
                                         {:id :arc-gen
                                          :pattern :hold-channel
-                         :actions {:down!  (fn [_] (swap! callback-keys conj :on-key-down))
-                               :tick!  (fn [_] (swap! callback-keys conj :on-key-tick))
-                               :up!    (fn [_] (swap! callback-keys conj :on-key-up))
-                               :abort! (fn [_] (swap! callback-keys conj :on-key-abort))}
+                         :actions {:down!  (fn [& _] (swap! callback-keys conj :on-key-down))
+                               :tick!  (fn [& _] (swap! callback-keys conj :on-key-tick))
+                               :up!    (fn [& _] (swap! callback-keys conj :on-key-up))
+                               :abort! (fn [& _] (swap! callback-keys conj :on-key-abort))}
                                          :cooldown {:mode :manual}
                                          :input-policy {:terminate-on-key-up? false}})
                   evt/fire-ability-event! (fn [_] nil)]
-      (binding [ctx/context-owner (test-context-owner uuid)]
+      (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
         (is (true? (rt/handle-key-tick! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen} #(swap! terminated conj %))))
@@ -213,21 +213,21 @@
                                :preset-data {:active-preset 0 :slots {}}
                                :dirty-domains #{}})
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
-    (binding [ctx/context-owner (test-context-owner uuid)
-              runtime-hooks/player-state-owner {:server-session-id alt-session
-                                                  :player-uuid uuid}]
-      (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-      (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
+    (ctx/with-context-owner (test-context-owner uuid)
+      (runtime-hooks/with-player-state-owner {:server-session-id alt-session
+                                              :player-uuid uuid}
+        (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
 (deftest context-state-session-resolution-still-fail-fast-test
   (let [uuid "test-player-implicit-fail"
         ctx-id "ctx-implicit-fail"]
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
-    (binding [ctx/context-owner (test-context-owner uuid)
-              runtime-hooks/player-state-owner nil]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires bound session-id"
-                            (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen}))))))
+    (ctx/with-context-owner (test-context-owner uuid)
+      (runtime-hooks/with-player-state-owner nil
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"requires bound session-id"
+                              (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))))))
 
 
 

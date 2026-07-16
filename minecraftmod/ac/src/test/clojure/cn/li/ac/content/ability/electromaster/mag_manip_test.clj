@@ -34,7 +34,9 @@
                   block-manip/available? (constantly true)
                   block-manip/can-break-block?* (fn [& _] true)
                   block-manip/break-block!* (fn [& _] false)
-                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx/get-context (fn
+                                    ([id] (get @contexts* id))
+                                    ([_owner id] (get @contexts* id)))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
                                                       (swap! contexts* update id
                                                              (fn [ctx]
@@ -67,7 +69,9 @@
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! give-calls* conj [player stack])
                                                    true)
-                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx/get-context (fn
+                                    ([id] (get @contexts* id))
+                                    ([_owner id] (get @contexts* id)))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
                                                         (swap! contexts* update id
                                                                (fn [ctx]
@@ -106,7 +110,9 @@
                   skill-effects/add-skill-exp! (fn [pid sid amount]
                                                  (swap! exp* conj [pid sid amount])
                                                  nil)
-                  ctx/get-context (fn [id] (get @contexts* id))
+                  ctx/get-context (fn
+                                    ([id] (get @contexts* id))
+                                    ([_owner id] (get @contexts* id)))
                   ctx-skill/update-skill-state-root! (fn [id f & args]
                                                         (swap! contexts* update id
                                                                (fn [ctx]

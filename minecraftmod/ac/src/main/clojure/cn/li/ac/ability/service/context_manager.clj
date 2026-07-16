@@ -109,7 +109,7 @@
                    (ctx/new-context player-uuid skill-id owner)
                    (ctx/new-context player-uuid skill-id))]
      (ctx/register-context! new-ctx)
-     (binding [ctx/context-owner owner]
+     (ctx/with-context-owner owner
        (transport/send-to-server! catalog/MSG-CTX-BEGIN-LINK
                                   {:ctx-id (:id new-ctx)
                                    :skill-id skill-id}))

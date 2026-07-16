@@ -75,7 +75,7 @@
                             :to-client nil})
     (let [c (runtime-hooks/with-client-ctx {:player-owner {:client-session-id :test-session
                                                              :player-uuid "player-1"}}
-              (binding [ctx/context-owner client-owner]
+              (ctx/with-context-owner client-owner
                 (cm/activate-context! "player-1" :arc-gen)))]
       (is (= 1 (count @out)))
       (is (= catalog/MSG-CTX-BEGIN-LINK (first (first @out))))
@@ -88,7 +88,7 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (let [res (binding [ctx/context-owner (test-context-owner "p2")]
+    (let [res (ctx/with-context-owner (test-context-owner "p2")
           (cm/establish-context! "p2" "cid-1" :arc-gen))]
       (is (some? res))
       (is (= 1 (count (filter #(= catalog/MSG-CTX-ESTABLISH (second %)) @out)))))))
@@ -99,7 +99,7 @@
     (cm/register-send-fns! {:to-client (fn [uuid msg-id payload]
                                          (swap! out conj [uuid msg-id payload]))
                             :to-server nil})
-    (binding [ctx/context-owner (test-context-owner "p3")]
+    (ctx/with-context-owner (test-context-owner "p3")
       (cm/establish-context! "p3" "cid-x" :other-skill))
     (is (some #(= catalog/MSG-CTX-TERMINATE (second %)) @out))))
 
@@ -143,7 +143,7 @@
                             :to-server nil})
     (cm/tick-context-manager!)
     (is (= [ctx-id] @terminated))
-    (binding [ctx/context-owner (test-context-owner "p-timeout")]
+    (ctx/with-context-owner (test-context-owner "p-timeout")
       (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))
 
 (deftest tick-player-contexts-drives-only-owned-active-server-contexts-test
@@ -185,7 +185,7 @@
       #(cm/abort-player-contexts! "p1"))
     (is (= ["server-ctx"] @terminated))
     (is (= ctx/STATUS-TERMINATED
-           (:status (binding [ctx/context-owner (server-owner "p1")]
+           (:status (ctx/with-context-owner (server-owner "p1")
                       (ctx/get-context "server-ctx")))))
     (is (= ctx/STATUS-ALIVE
            (:status (ctx/get-context {:logical-side :client
