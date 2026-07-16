@@ -59,46 +59,40 @@
       (log/warn "[pv] find-recipe-kind-for failed:" (ex-message e))
       nil)))
 
-(defn- expand-view-groups
-  "Process the full view-groups list.  For recipe/crafting-grid groups, query
-   the recipe manager and expand into one view-group per recipe variant so
-   each gets its own tag icon (matching upstream AcademyCraft).  Groups with
-   a single unchanged sub-view stay as-is (no recipe data → 3D item fallback)."
-  [vgs]
-  (mapcat (fn [vg]
-            (let [svs (:sub-views vg)
-                  sv (first svs)
-                  sv-type (:type sv)]
-              (if (and (= 1 (count svs))
-                       (or (= :recipe sv-type) (= :crafting-grid sv-type)))
-                (let [item-id (:item-id sv)
-                      hardcoded-kind (:recipe-kind sv)
-                      [actual-kind recipes] (find-recipe-kind-for item-id)]
-                  (log/info "[pv] expand-recipe" (str item-id)
-                            "type:" sv-type
-                            "hardcoded:" hardcoded-kind
-                            "actual:" actual-kind
-                            "count:" (count recipes))
-                  (if recipes
-                    (let [kind-changed? (not= hardcoded-kind actual-kind)
-                          base (assoc sv :recipe-kind (or actual-kind hardcoded-kind) :type :recipe)]
-                      (if (> (count recipes) 1)
-                        ;; Multiple recipes → one view-group per recipe, each with its own tag icon
-                        (mapv (fn [idx recipe]
-                                (assoc vg
-                                  :sub-views [(assoc base :recipe-input (:input recipe)
-                                                       :recipe-count (:count recipe))]
-                                  :display-text (str (:display-text vg) " #" (inc idx))))
-                              (range) recipes)
-                        ;; Single recipe → one view-group with input attached
-                        [(assoc vg :sub-views
-                                [(assoc base :recipe-input (:input (first recipes))
-                                          :recipe-count (:count (first recipes)))])]))
-                    ;; No recipe found → fall back to 3D item view
-                    [(assoc vg :sub-views [(assoc sv :type :item-3d)])]))
-                ;; Non-recipe groups pass through unchanged
-                [vg])))
-          vgs))
+(defn- expand-recipe-sub-views
+  "For a view group that has :recipe or :crafting-grid sub-views, query all
+   matching recipes and create one sub-view per recipe variant.  Multiple
+   recipes stay as sub-views within the same view group — the left/right
+   arrows switch between them (matching upstream AcademyCraft's
+   RecipeHandler.recipeOfStack() → ViewGroup.getSubViews() array)."
+  [vg]
+  (let [svs (:sub-views vg)
+        sv (first svs)
+        sv-type (:type sv)]
+    (if (and (= 1 (count svs))
+             (or (= :recipe sv-type) (= :crafting-grid sv-type)))
+      (let [item-id (:item-id sv)
+            hardcoded-kind (:recipe-kind sv)
+            [actual-kind recipes] (find-recipe-kind-for item-id)]
+        (log/info "[pv] expand-recipe" (str item-id)
+                  "type:" sv-type
+                  "hardcoded:" hardcoded-kind
+                  "actual:" actual-kind
+                  "count:" (count recipes))
+        (if recipes
+          (let [kind-changed? (not= hardcoded-kind actual-kind)
+                base (if kind-changed?
+                       (assoc sv :recipe-kind actual-kind :type :recipe)
+                       (assoc sv :type :recipe))]
+            (assoc vg :sub-views
+                   (mapv (fn [recipe]
+                           (assoc base :recipe-input (:input recipe)
+                                    :recipe-count (:count recipe)))
+                         recipes)))
+          ;; No recipe found → fall back to 3D item view
+          (assoc vg :sub-views [(assoc sv :type :item-3d)])))
+      ;; Non-recipe groups pass through unchanged
+      vg)))
 
 (defn build-view-groups
   "Build the ViewGroup list for a tutorial, matching original AcademyCraft
@@ -200,7 +194,7 @@
                   :item-id (modid/namespaced-path "developer_advanced")}]}]
 
     [])
-      expanded (expand-view-groups raw)]
+      expanded (mapv expand-recipe-sub-views raw)]
     expanded))
 
 ;; ============================================================================
