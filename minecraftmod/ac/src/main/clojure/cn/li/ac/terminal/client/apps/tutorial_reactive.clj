@@ -228,7 +228,7 @@
         cd @current-cd]
     (ui/set-prop! rt :title-text :text (or (:title cd) ""))
     (when-let [brief (:brief cd)]
-      (let [w 124.0
+      (let [w 140.0
             segs (mr/render-segments brief (client-state/get-misaka-id player-uuid) (int w))]
         (rebuild-segments! rt :brief-content segs w))))
   ;; Nav buttons visible only when >1 sub-view
@@ -331,12 +331,9 @@
 
 (defn- attach-first-open-animation! [^UiRt rt _anim-start]
   (doseq [[id _ _] logo-timings] (set-logo-alpha! rt id 0))
-  ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) sets y to 63 immediately
-  (when-let [^INode l3 (rt/node-by-id rt :logo3)]
-    (.setY l3 63.0)
-    (.setFlag l3 node/FLAG-LAYOUT-DIRTY))
-  ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) — slides from y=63 to y=-36
-  ;; over 0.4s starting at 0.7s. logo3 XML pos is at -36 (final position).
+  ;; logo3 blendY: upstream blendy(logo3, 0.7, 0.4, 63, -36) jumps to 63 at 0.7s
+  ;; then slides to -36 over 0.4s.  The animation loop handles the jump; do NOT
+  ;; pre-set y=63 here or logo3 sits at the bottom for the first 0.7s.
   (let [done? (atom false)
         logo3-final-y -36.0
         logo3-start-y 63.0

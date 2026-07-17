@@ -30,11 +30,13 @@
         <image id="btn-left" pos="5.0,41.75" size="30.0,130.0" scale="0.4" align="left,top" src="my_mod:textures/guis/button/button_left_2.png" tint="#CCFFFFFF"/>
         <image id="btn-right" pos="140.0,41.75" size="30.0,130.0" scale="0.4" align="left,top" src="my_mod:textures/guis/button/button_right_2.png" tint="#CCFFFFFF"/>
       </group>
-      <!-- Right text window — hidden until first entry click -->
+      <!-- Right text window — matches upstream rightWindow: 158.5×82,
+           text area 146×69 CENTER/CENTER aligned (y=-0.25 → 6.25 inset from top).
+           Split into title + brief but kept within the same logical area. -->
       <group id="right-window" pos="0.0,0.0" size="158.5,82.0" align="right,bottom" visible="false">
         <image id="right-window-bg" pos="0.0,0.0" size="158.5,82.0" align="left,top" src="my_mod:textures/guis/window_tutorial_left.png"/>
-        <text id="title-text" pos="0.0,9.0" size="146.0,14.0" align="center,top" text="" font-size="10.0" color="#FFFFFFFF"/>
-        <group id="brief-content" pos="0.0,21.0" size="146.0,54.0" align="center,top"/>
+        <text id="title-text" pos="0.0,6.25" size="146.0,12.0" align="center,top" text="" font-size="10.0" color="#FFFFFFFF"/>
+        <group id="brief-content" pos="0.0,18.25" size="146.0,50.0" align="center,top"/>
       </group>
     </group>
     <!-- Tag tooltip (rendered above everything) -->

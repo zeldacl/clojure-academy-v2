@@ -101,7 +101,7 @@
                    :tag :view}]}
      {:tag :craft :display-text "Crafting: Constraint Plate"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id (modid/namespaced-path "constrained_plate")}]}
+                  :item-id (modid/namespaced-path "constraint_plate")}]}
      {:tag :craft :display-text "Crafting: Imag Silicon Ingot"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "imag_silicon_ingot")}]}
@@ -159,13 +159,13 @@
                               {:tag (if has-recipe? :craft :view)
                                :display-text (str "App: " (:name app))
                                :sub-views [(if has-recipe?
-                                             {:type :crafting-grid
+                                             {:type :recipe
                                               :recipe-kind "Crafting"
                                               :item-id app-installer-id}
                                              {:type :icon
                                               :texture (:icon app)
                                               :item-id (name (:id app))})]}))
-                          (or apps []))]
+                          (remove :pre-installed? (or apps [])))]
       (into base app-groups))
 
     :ability_developer
@@ -319,7 +319,7 @@
     {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
                                 :render-type :block
                                 :block-id (str (:block-id view))
-                                :rotation-speed 1.0 :scale 0.8 :y-offset 0.0}}
+                                :rotation-speed 0.0 :scale 0.8 :y-offset 0.0}}
 
     :item-3d
     {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0

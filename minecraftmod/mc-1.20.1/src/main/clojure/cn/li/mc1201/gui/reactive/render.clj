@@ -843,19 +843,19 @@
             cx (+ x (/ w 2.0)) cy (+ y (/ h 2.0))
             item-size 16.0
             preview-scale (* uni-scale (/ (min w h) item-size))
-            ;; Auto-rotation: match upstream drawBlock's Y-axis spin at time/80°
-            angle (float (Math/toRadians (mod (/ (System/currentTimeMillis) 80.0) 360.0)))
-            rot (doto (Quaternionf.) (.rotateY (if (pos? rot-speed) angle 0.0)))
-            ;; Base tilt matching upstream: -20° around (1, 0, 0.1)
-            tilt (doto (Quaternionf.)
-                   (.rotateY (float (Math/toRadians 0.0)))
-                   (.rotateX (float (Math/toRadians -20.0))))
             ^PoseStack ps (.pose gg)]
         (.pushPose ps)
-        (.translate ps (double cx) (double cy) 200.0)
-        (.mulPose ps tilt)
-        (.mulPose ps rot)
-        (.scale ps (float preview-scale) (float (- preview-scale)) (float preview-scale))
+        (.translate ps (double cx) (double cy) 0.0)
+        ;; Slight X tilt prevents the model from going edge-on during Y rotation
+        ;; (orthographic has no perspective to keep the edges visible).
+        (.mulPose ps (doto (Quaternionf.)
+                       (.rotateX (float (Math/toRadians -15.0)))))
+        ;; Auto-rotation: Y-axis spin matching upstream drawBlock time/80°
+        (when (pos? rot-speed)
+          (.mulPose ps (doto (Quaternionf.)
+                         (.rotateY (float (Math/toRadians
+                                            (mod (/ (System/currentTimeMillis) 80.0) 360.0)))))))
+        (.scale ps (float preview-scale) (float preview-scale) 1.0)
         (.renderFakeItem gg stack -8 -8)
         (.popPose ps)))))
 

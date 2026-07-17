@@ -36,9 +36,11 @@
             (when on-post-render (on-post-render gg rt mx my pt))
             (when-let [stats (perf/frame-end!)]
               (log/info stats)))
-          ;; keyPressed
-          (fn key-cb [_this key-code scan-code modifiers]
-            (input/handle-key-pressed rt key-code scan-code modifiers))
+          ;; keyPressed — ESC always closes regardless of focus state
+          (fn key-cb [^net.minecraft.client.gui.screens.Screen this key-code scan-code modifiers]
+            (if (= (long key-code) 256)
+              (do (.onClose this) true)
+              (input/handle-key-pressed rt key-code scan-code modifiers)))
           ;; charTyped
           (fn char-cb [_this code-point modifiers]
             (input/handle-char-typed rt code-point modifiers))
