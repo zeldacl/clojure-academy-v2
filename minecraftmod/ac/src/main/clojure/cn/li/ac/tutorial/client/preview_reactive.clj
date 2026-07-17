@@ -319,7 +319,7 @@
     {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
                                 :render-type :block
                                 :block-id (str (:block-id view))
-                                :rotation-speed 0.0 :scale 0.8 :y-offset 0.0}}
+                                :rotation-speed 1.0 :scale 0.8 :y-offset 0.0}}
 
     :item-3d
     {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0

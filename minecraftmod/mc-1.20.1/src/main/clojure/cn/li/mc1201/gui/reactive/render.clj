@@ -838,26 +838,57 @@
     (when-let [^net.minecraft.world.item.ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
       (let [rot-speed (.getDSlot node SLOT-P3D-SPEED)
             uni-scale (let [s (.getDSlot node SLOT-P3D-SCALE)] (if (pos? s) s 1.0))
+            rtype (.getOSlot node SLOT-P3D-TYPE)
             x (node-abs-x node) y (node-abs-y node)
             w (scaled-w node) h (scaled-h node)
-            cx (+ x (/ w 2.0)) cy (+ y (/ h 2.0))
-            item-size 16.0
-            preview-scale (* uni-scale (/ (min w h) item-size))
-            ^PoseStack ps (.pose gg)]
-        (.pushPose ps)
-        (.translate ps (double cx) (double cy) 0.0)
-        ;; Slight X tilt prevents the model from going edge-on during Y rotation
-        ;; (orthographic has no perspective to keep the edges visible).
-        (.mulPose ps (doto (Quaternionf.)
-                       (.rotateX (float (Math/toRadians -15.0)))))
-        ;; Auto-rotation: Y-axis spin matching upstream drawBlock time/80°
+            cx (double (+ x (/ w 2.0)))
+            cy (double (+ y (/ h 2.0)))
+            ;; Build perspective projection matching upstream gluPerspective(50,1,1,100)
+            persp (doto (Matrix4f.)
+                    (.setPerspective (float (Math/toRadians 50.0)) 1.0 1.0 100.0))
+            ;; Use RenderSystem modelview stack (separate from GuiGraphics PoseStack)
+            ^PoseStack mv (RenderSystem/getModelViewStack)
+            saved (RenderSystem/getProjectionMatrix)]
+        ;; Switch to perspective projection
+        (RenderSystem/setProjectionMatrix persp VertexSorting/DISTANCE_TO_ORIGIN)
+        ;; Modelview: center on preview area, apply camera + auto-rotation
+        (.pushPose mv)
+        ;; Map to preview area center (convert from screen px to NDC-like coords)
+        (.translate mv cx cy -200.0)
+        (.scale mv 1.0 -1.0 1.0)   ;; flip Y for MC coordinate system
+        ;; Auto-rotation Y (matching upstream drawBlock time/80°)
         (when (pos? rot-speed)
-          (.mulPose ps (doto (Quaternionf.)
+          (.mulPose mv (doto (Quaternionf.)
                          (.rotateY (float (Math/toRadians
                                             (mod (/ (System/currentTimeMillis) 80.0) 360.0)))))))
-        (.scale ps (float preview-scale) (float preview-scale) 1.0)
-        (.renderFakeItem gg stack -8 -8)
-        (.popPose ps)))))
+        (.scale mv (float uni-scale) (float uni-scale) (float uni-scale))
+        (.translate mv -0.5 -0.5 0.0)  ;; center block item
+        (RenderSystem/applyModelViewMatrix)
+        ;; Flush GUI batch before 3D rendering
+        (.flush gg)
+        ;; Render the block/item with the 3D-aware renderer
+        (if (= rtype :block)
+          (let [^net.minecraft.client.renderer.block.BlockRenderDispatcher brd
+                (.getBlockRenderer (net.minecraft.client.Minecraft/getInstance))
+                block-id (.getOSlot node SLOT-P3D-BLOCK)]
+            (when (string? block-id)
+              (if-let [^net.minecraft.world.level.block.Block block
+                       (try (.get net.minecraft.core.registries.BuiltInRegistries/BLOCK
+                                  (ResourceLocation/tryParse ^String block-id))
+                            (catch Throwable _ nil))]
+                (let [state (.defaultBlockState block)
+                      buffer (.bufferSource gg)
+                      seed (int 0)]
+                  (RenderSystem/enableDepthTest)
+                  (.renderSingleBlock brd state (.pose gg) buffer 15728880
+                                     net.minecraft.client.renderer.texture.OverlayTexture/NO_OVERLAY)
+                  (RenderSystem/disableDepthTest)))))
+          ;; :item — renderFakeItem in the perspective modelview
+          (.renderFakeItem gg stack -8 -8))
+        ;; Restore
+        (.popPose mv)
+        (RenderSystem/applyModelViewMatrix)
+        (RenderSystem/setProjectionMatrix saved VertexSorting/DISTANCE_TO_ORIGIN)))))
 
 ;; ============================================================================
 ;; :crosshair
