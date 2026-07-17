@@ -1,17 +1,9 @@
 (ns cn.li.mcmod.block.dsl-test
   "Unit tests for Block DSL"
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]))
-
-(defn- reset-block-registry! [f]
-  ((:reset-state! (bdsl/block-registry)) {})
-  (f)
-  ((:reset-state! (bdsl/block-registry)) {}))
-
-(use-fixtures :each reset-block-registry!)
 
 (deftest create-block-spec-nested-only-test
   (testing "nested syntax maps into block records"
@@ -64,11 +56,18 @@
               {:x 1 :y 0 :z 1}]
              normalized)))))
 
-(defrecord BlockPosStub [x y z]
-  pos/IBlockPos
-  (pos-x [_] x)
-  (pos-y [_] y)
-  (pos-z [_] z))
+(defrecord BlockPosStub [x y z])
+
+(defn- install-test-position-ops! []
+  (pos/install-position-ops!
+    {:pos-x (fn [p] (:x p))
+     :pos-y (fn [p] (:y p))
+     :pos-z (fn [p] (:z p))
+     :pos-above (fn [p] (->BlockPosStub (:x p) (inc (:y p)) (:z p)))
+     :create-block-pos (fn [x y z] (->BlockPosStub x y z))
+     :position-get-block-pos (fn [_] nil)
+     :position-get-pos (fn [_] nil)}
+    "test"))
 
 (deftest get-multi-block-master-pos-test
   (is (= {:x 4 :y 8 :z 2}
@@ -76,43 +75,33 @@
                                           {:relative-x 1 :relative-y 2 :relative-z 1}))))
 
 (deftest all-multi-block-positions-with-factory-test
-  (pos/call-with-position-factory
-    (fn [x y z] (->BlockPosStub x y z))
-    (fn []
-      (let [spec (bdsl/create-block-spec "mb"
-                                         (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))
-            master (pos/create-block-pos 10 20 30)
-            ps (bdsl/all-multi-block-positions master spec)]
-        (is (= 2 (count ps)))
-        (is (every? #(satisfies? pos/IBlockPos %) ps))
-        (is (= #{[10 20 30] [11 20 30]}
-               (set (map (fn [p] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)]) ps))))))))
+  (install-test-position-ops!)
+  (let [spec (bdsl/create-block-spec "mb"
+                                     (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))
+        master (pos/create-block-pos 10 20 30)
+        ps (bdsl/all-multi-block-positions master spec)]
+    (is (= 2 (count ps)))
+    (is (= #{[10 20 30] [11 20 30]}
+           (set (map (fn [p] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)]) ps))))))
 
 (deftest can-place-multi-block-binding-test
   (testing "all footprint cells empty"
-    (pos/call-with-position-factory
-      (fn [x y z] (->BlockPosStub x y z))
-      (fn []
-        (world/call-with-world-ops
-          {:world-get-block-state (constantly nil)}
-          (fn []
-            (let [spec (bdsl/create-block-spec "empty-mb"
-                                               (bdsl/multi-block-template {:width 1 :height 1 :depth 1}))]
-              (is (true? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))))))
+    (install-test-position-ops!)
+    (world/install-world-ops! {:world-get-block-state (constantly nil)} "test")
+    (let [spec (bdsl/create-block-spec "empty-mb"
+                                       (bdsl/multi-block-template {:width 1 :height 1 :depth 1}))]
+      (is (true? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))
   (testing "blocked cell fails placement"
-    (pos/call-with-position-factory
-      (fn [x y z] (->BlockPosStub x y z))
-      (fn []
-        (world/call-with-world-ops
-          {:world-get-block-state
-           (fn [_w p]
-             (when (= [1 0 0] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)])
-               :blocked))}
-          (fn []
-            (let [spec (bdsl/create-block-spec "blocked-mb"
-                                               (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))]
-              (is (false? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec)))))))))
-  )
+    (install-test-position-ops!)
+    (world/install-world-ops!
+      {:world-get-block-state
+       (fn [_w p]
+         (when (= [1 0 0] [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)])
+           :blocked))}
+      "test")
+    (let [spec (bdsl/create-block-spec "blocked-mb"
+                                       (bdsl/multi-block-template {:width 2 :height 1 :depth 1}))]
+      (is (false? (bdsl/can-place-multi-block? :fake-world (pos/create-block-pos 0 0 0) spec))))))
 
 (deftest template-and-merge-helpers-test
 (is (= 2 (get-in (bdsl/ore-template 2) [:physical :harvest-level])))

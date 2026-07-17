@@ -89,5 +89,5 @@
      (let [match? (fn [[sid _uuid]] (= sid session-id))]
        (-> state
            (update :raw-v-state #(into {} (remove (comp match? key) %)))
-           (update :override-active? #(into {} (remove (comp match? key) %))))))
+           (update :override-active? #(into {} (remove (comp match? key) %)))))))
   nil)

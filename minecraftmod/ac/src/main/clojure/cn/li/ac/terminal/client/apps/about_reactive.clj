@@ -56,7 +56,7 @@
         credit-lines (build-credit-lines (:credits about-data))
         donate-lines (build-donate-lines (:donation about-data))
         ;; Content signal (changes with tab)
-        content-sig (sig/signal-o (str/join "\n" (map :text credit-lines)))
+        content-sig (sig/signal-o (str/join "\n" (map #(get % :text) credit-lines)))
         _ (rt/put-user-signal! r :content-text content-sig)
         ;; Scroll signal
         scroll (sig/signal-d 0.0)
@@ -66,11 +66,11 @@
     (events/on! r :btn_credits :left-click
       (fn [_rt _n _e]
         (sig/sset-o! active-tab :credits)
-        (sig/sset-o! content-sig (str/join "\n" (map :text credit-lines)))))
+        (sig/sset-o! content-sig (str/join "\n" (map #(get % :text) credit-lines)))))
     (events/on! r :btn_donate :left-click
       (fn [_rt _n _e]
         (sig/sset-o! active-tab :donate)
-        (sig/sset-o! content-sig (str/join "\n" (map :text donate-lines)))))
+        (sig/sset-o! content-sig (str/join "\n" (map #(get % :text) donate-lines)))))
 
     ;; Donation links — about.xml has no per-link elements (content gap predating
     ;; this reactive port, not a string/keyword id issue); guard so a non-empty

@@ -2112,7 +2112,11 @@ tasks.register('verifyAbilitySkillConfigCoverage') {
             exclude '**/build/**', '**/.gradle/**'
         }.files.each { File f ->
             def text = f.getText('UTF-8')
-            def matcher = (text =~ /:id\s+:([a-z0-9-]+)/)
+            // Only real defskill declarations have :id immediately followed by
+            // :category-id — GUI widget :props {:id :foo ...} maps embedded in
+            // the same content/ability files (e.g. reactive skill-detail specs)
+            // do not, so this must not use a bare `:id\s+:(...)` scan.
+            def matcher = (text =~ /:id\s+:([a-z0-9-]+)\s+:category-id/)
             matcher.each { match -> discovered << match[1] }
         }
 
@@ -2342,7 +2346,7 @@ tasks.register('verifyAcGuiMessageManifestSsoT') {
     doLast {
         def violations = []
         def manifestFile = file('ac/src/main/clojure/cn/li/ac/gui/manifest.clj')
-        def sharedRegistry = file('ac/src/main/clojure/cn/li/ac/wireless/shared/message_registry.clj')
+        def sharedRegistry = file('ac/src/main/clojure/cn/li/ac/wireless/gui/message/bootstrap.clj')
 
         if (!manifestFile.exists()) {
             violations << 'Missing centralized AC GUI manifest: ac/src/main/clojure/cn/li/ac/gui/manifest.clj'
@@ -2356,21 +2360,21 @@ tasks.register('verifyAcGuiMessageManifestSsoT') {
         }
 
         if (!sharedRegistry.exists()) {
-            violations << 'Missing shared wireless message registry.'
+            violations << 'Missing manifest-driven wireless message registration entry point.'
         } else {
             def sharedText = sharedRegistry.getText('UTF-8')
             if (!sharedText.contains('cn.li.ac.gui.manifest')) {
-                violations << 'wireless.shared.message-registry must consume cn.li.ac.gui.manifest'
+                violations << 'wireless.gui.message.bootstrap must consume cn.li.ac.gui.manifest'
             }
             if (!sharedText.contains('gui-manifest/message-domain-actions')) {
-                violations << 'wireless.shared.message-registry must iterate gui-manifest/message-domain-actions'
+                violations << 'wireless.gui.message.bootstrap must iterate gui-manifest/message-domain-actions'
             }
         }
 
         fileTree('ac/src/main/clojure/cn/li/ac') {
             include '**/*.clj'
             exclude 'wireless/gui/message/registry.clj'
-            exclude 'wireless/shared/message_registry.clj'
+            exclude 'wireless/gui/message/bootstrap.clj'
         }.files.each { File f ->
             def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
             f.readLines('UTF-8').eachWithIndex { String line, int idx ->
@@ -2598,11 +2602,15 @@ tasks.register('verifyGuiNamespaceLayout') {
     doLast {
         def violations = []
         def requiredFiles = [
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/assets.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/input.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/font.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/clock.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/host.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/host_container.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/input.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/overlay_host.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/perf.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/render.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/reactive/terminal_render.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/container.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/contract.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/menu/proxy.clj',
@@ -2620,6 +2628,11 @@ tasks.register('verifyGuiNamespaceLayout') {
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/slots/tabbed.clj'
         ]
         def deletedFiles = [
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/assets.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/input.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
+            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui_asset_loader.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui_input_core.clj',
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui_render_core.clj',
@@ -2648,6 +2661,11 @@ tasks.register('verifyGuiNamespaceLayout') {
             'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/tabbed_slots_core.clj'
         ]
         def legacyNsTokens = [
+            'cn.li.mc1201.gui.cgui.assets',
+            'cn.li.mc1201.gui.cgui.input',
+            'cn.li.mc1201.gui.cgui.renderer',
+            'cn.li.mc1201.gui.cgui.runtime',
+            'cn.li.mc1201.gui.cgui.traversal',
             'cn.li.mc1201.gui.cgui-asset-loader',
             'cn.li.mc1201.gui.cgui-input-core',
             'cn.li.mc1201.gui.cgui-render-core',
@@ -2906,16 +2924,16 @@ tasks.register('verifyAcBlockGuiSyncHelpers') {
             violations << 'AC block GUI registration helper must stay deleted; use cn.li.mcmod.gui.spec'
         }
         def schemaBackedGuis = [
-            'ac/src/main/clojure/cn/li/ac/block/developer/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/imag_fusor/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/metal_former/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/phase_gen/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/solar_gen/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/wind_gen/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/wireless_node/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui.clj',
-            'ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui.clj'
+            'ac/src/main/clojure/cn/li/ac/block/developer/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/imag_fusor/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/metal_former/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/phase_gen/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/solar_gen/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/wind_gen/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/wireless_node/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui_reactive.clj',
+            'ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui_reactive.clj'
         ]
         schemaBackedGuis.each { path ->
             def f = file(path)

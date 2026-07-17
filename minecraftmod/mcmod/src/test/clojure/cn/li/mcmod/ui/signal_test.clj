@@ -2,8 +2,12 @@
   "Signal 核心单元测试：传播/相等短路/glitch-free/unbind 无泄漏/dispose。"
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.signal :as sig]
+            [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.runtime :as rt])
   (:import [cn.li.mcmod.uipojo.signal ISigD ISigL ISigO Binding]))
+
+(defn- stub-node []
+  (node/create-node 0 :stub :box {} 0 0 {}))
 
 ;; ============================================================================
 ;; SigD — 创建/读写/相等短路
@@ -105,7 +109,7 @@
   (let [s (sig/signal-d 0.0)
         called? (atom false)
         ;; 模拟 node（只需满足 apply-fn 签名）
-        node (Object.)
+        node (stub-node)
         apply-fn (fn [_node source] (swap! called? (fn [_] true)) (sig/sget-d source))
         q (java.util.ArrayList.)
         b (sig/bind! s node apply-fn q)]
@@ -134,7 +138,7 @@
                       (swap! write-count inc)
                       (sig/sget-d source))  ;; 读值但不执行"相等比较→标脏"的 skip 逻辑
         q (java.util.ArrayList.)
-        _ (sig/bind! s (Object.) prop-writer q)]
+        _ (sig/bind! s (stub-node) prop-writer q)]
     ;; 首帧：source 值 42.0 → Binding 入队 → applyBinding 调 prop-writer
     ;; 注：这里验证的是 applyBinding 必定被调用，相等短路在真实 prop-writer 里
     (sig/sset-d! s 42.0)  ;; 同值，sSet 短路 → 不入队
@@ -153,7 +157,7 @@
         c3 (sig/computed-d [s c1 c2] (fn [a b c] (+ a b c)))]
     (is (== 15.0 (sig/sget-d c3)))  ;; 1 + 2 + 12
     (sig/sset-d! s 3.0)
-    (is (== 33.0 (sig/sget-d c3)))))  ;; 3 + 6 + 24
+    (is (== 25.0 (sig/sget-d c3)))))  ;; 3 + 6 + 16
 
 ;; ============================================================================
 ;; Clock signal 直接操作

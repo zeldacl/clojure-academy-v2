@@ -1,21 +1,12 @@
 (ns cn.li.mcmod.block.tile-dsl-logic-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-kind :as tile-kind]
-            [cn.li.mcmod.protocol.core :as registry-core]))
-
-(defn- reset-tile-dsl! []
-  ((:reset-state! tdsl/tile-registry) {:by-id {} :block->tile-id {}}))
-
-(defn- reset-tile-kind! []
-  ((:reset-state! tile-kind/tile-kind-registry) {}))
+            [cn.li.mcmod.block.tile-kind :as tile-kind]))
 
 (defn- reset-all! [f]
-  (reset-tile-dsl!)
-  (reset-tile-kind!)
+  (tile-kind/reset-tile-kinds-for-test!)
   (f)
-  (reset-tile-dsl!)
-  (reset-tile-kind!))
+  (tile-kind/reset-tile-kinds-for-test!))
 
 (use-fixtures :each reset-all!)
 

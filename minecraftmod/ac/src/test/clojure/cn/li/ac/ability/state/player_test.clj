@@ -44,7 +44,7 @@
     (is (map? (:resource-data s)))
     (is (map? (:preset-data s)))
     (is (map? (:context-registry s)))
-    (is (= #{} (:dirty-domains s)))
+    (is (false? (contains? s :dirty-domains)))
     (is (false? (contains? s :terminal-data)))))
 
 (deftest get-or-create-player-state-test
@@ -54,14 +54,14 @@
 
 (deftest update-ability-data-marks-dirty-test
   (store/get-or-create-player-state! ps-fix/test-session-id "u2")
-  (is (empty? (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2"))))
+  (is (zero? (store/dirty-mask ps-fix/test-session-id "u2")))
   (command-rt/run-command-in-session! ps-fix/test-session-id
                                       "u2"
                                       {:command :change-category
                                        :new-category :vecmanip})
-  (is (seq (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2"))))
-  (store/clear-dirty! (store/get-store) ps-fix/test-session-id "u2")
-  (is (empty? (:dirty-domains (store/get-player-state* ps-fix/test-session-id "u2")))))
+  (is (seq (store/mask->domains (store/dirty-mask ps-fix/test-session-id "u2"))))
+  (store/clear-dirty! ps-fix/test-session-id "u2")
+  (is (zero? (store/dirty-mask ps-fix/test-session-id "u2"))))
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
@@ -74,24 +74,24 @@
            (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))))
 
 (defn- ticking-player-state
-  "A player state with one live cooldown — server-tick-player! skips fully
-   idle players (noop optimization), so smoke tests must seed live state."
+  "A player state with one live cooldown — server-tick-player-in-session!
+   skips fully idle players (noop optimization), so smoke tests must seed
+   live state."
   []
   (assoc (store/fresh-player-state)
          :cooldown-data (:data (cooldown-rules/set-cooldown {} :smoke 5))))
 
 (deftest server-tick-player-smoke-test
   (store/set-player-state!* ps-fix/test-session-id "u3" (ticking-player-state))
-  (let [r (ps-tick/server-tick-player! "u3" nil)]
+  (let [r (ps-tick/server-tick-player-in-session! ps-fix/test-session-id "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
 
-(deftest server-tick-player-uses-bound-owner-session-test
+(deftest server-tick-player-uses-explicit-session-test
   (store/set-player-state!* :tick-session "u3" (ticking-player-state))
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :tick-session}}
-    (let [r (ps-tick/server-tick-player! "u3" nil)]
-      (is (map? r))
-      (is (vector? (:events r))))))
+  (let [r (ps-tick/server-tick-player-in-session! :tick-session "u3" nil)]
+    (is (map? r))
+    (is (vector? (:events r)))))
 
 (deftest remove-player-state-test
   (store/set-player-state!* ps-fix/test-session-id "u4" (store/fresh-player-state))
@@ -104,13 +104,13 @@
   (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
   (is (= :a (:marker (store/get-player-state* :session-a "same-uuid"))))
   (is (= :b (:marker (store/get-player-state* :session-b "same-uuid"))))
-  (is (= ["same-uuid"] (vec (store/list-players (store/get-store) :session-a)))))
+  (is (= ["same-uuid"] (vec (store/list-players :session-a)))))
 
 (deftest clear-session-player-states-removes-only-target-session-test
   (store/set-player-state!* :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
   (store/set-player-state!* :session-a "only-a" (assoc (store/fresh-player-state) :marker :only-a))
   (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
-  (store/remove-session! (store/get-store) :session-a)
+  (store/remove-session! :session-a)
   (is (nil? (store/get-player-state* :session-a "same-uuid")))
   (is (nil? (store/get-player-state* :session-a "only-a")))
   (is (= :b (:marker (store/get-player-state* :session-b "same-uuid")))))

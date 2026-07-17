@@ -1,15 +1,11 @@
 (ns cn.li.mcmod.block.tile-kind-merge-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.mcmod.block.tile-kind :as tile-kind]
-            [cn.li.mcmod.protocol.core :as registry-core]))
-
-(defn- reset-kind! []
-  ((:reset-state! tile-kind/tile-kind-registry) {}))
+            [cn.li.mcmod.block.tile-kind :as tile-kind]))
 
 (defn- around [f]
-  (reset-kind!)
+  (tile-kind/reset-tile-kinds-for-test!)
   (f)
-  (reset-kind!))
+  (tile-kind/reset-tile-kinds-for-test!))
 
 (use-fixtures :each around)
 
@@ -43,7 +39,7 @@
           again (tile-kind/merge-tile-kind-defaults merged)]
       (is (= merged again) (str "idempotent merge for " kind))
       (when (:tick-fn override)
-        (is (= :override-tick ((:tick-fn merged) nil nil nil nil))
+        (is (= ((:tick-fn override) nil nil nil nil) ((:tick-fn merged) nil nil nil nil))
             (str "override wins for tick " kind)))
       (when (and (:tick-fn defaults) (not (:tick-fn override)))
         (is (fn? (:tick-fn merged)) (str "kind tick preserved " kind))))))

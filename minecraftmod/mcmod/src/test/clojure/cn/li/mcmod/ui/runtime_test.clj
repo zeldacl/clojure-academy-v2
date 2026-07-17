@@ -77,14 +77,14 @@
         writer (fn [nd src]
                  (swap! apply-count inc)
                  (sig/sget-d src))
-        b (sig/bind! s n writer (.-dirty-bindings r))]
+        b (sig/bind! s n writer (rt/get-dirty-bindings-q r))]
     ;; sset 不同值 → Binding 入队
     (sig/sset-d! s 1.0)
-    (is (= 1 (.size (.-dirty-bindings r))))
+    (is (= 1 (.size (rt/get-dirty-bindings-q r))))
     ;; flush → 调 applyBinding
     (rt/flush! r)
     (is (= 1 @apply-count))
-    (is (= 0 (.size (.-dirty-bindings r))))))
+    (is (= 0 (.size (rt/get-dirty-bindings-q r))))))
 
 ;; ============================================================================
 ;; resize!
@@ -134,8 +134,8 @@
 (deftest list-set-clears-bindings-on-rebuild
   (let [r (rt/create-runtime)
         spec (dsl/group {:id :root}
-               (dsl/list {:id :entries :w 100 :h 40
-                          :template (dsl/box {:id :row :w 100 :h 16})}))
+               (dsl/list-node {:id :entries :w 100 :h 40
+                               :template (dsl/box {:id :row :w 100 :h 16})}))
         _ (rt/build! r spec)
         s (sig/signal-d 0.5)
         writer (slot-write/resolve-sig-writer (get node/kinds :box) :hover-tint)]

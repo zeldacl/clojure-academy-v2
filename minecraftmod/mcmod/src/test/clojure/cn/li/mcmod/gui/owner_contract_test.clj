@@ -29,7 +29,7 @@
                   (assoc valid-client-owner :logical-side :server)))))
   (testing "missing player-uuid fails require-client-owner"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"requires :player-uuid"
+                          #"client-owner contract violation"
                           (owner-contract/require-client-owner
                            {:logical-side :client :client-session-id :session-a})))))
 

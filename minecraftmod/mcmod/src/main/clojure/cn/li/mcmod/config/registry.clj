@@ -65,6 +65,8 @@
   "Register config descriptors for a domain, replacing any existing.
    Each descriptor must have :key, :default, and optionally :validate."
   [domain descriptors]
+  (when-not (keyword? domain)
+    (throw (ex-info "Config domain must be a keyword" {:domain domain})))
   (let [descriptors (normalize-descriptors descriptors)]
     (update-config! assoc-in [:descriptor-registry domain] descriptors)
     (log/info "Registered config descriptors for domain" domain
@@ -94,9 +96,12 @@
 (defn set-config-value! [domain key value]
   (update-config! assoc-in [:value-registry domain key] value))
 
-(defn set-config-values! [domain value-map]
-  (update-config! update-in [:value-registry domain]
-                  (fn [current] (merge (or current {}) value-map)))
+(defn set-config-values!
+  "Replace domain's runtime values with value-map, filling keys value-map
+   omits from descriptor defaults (not from whatever was previously set)."
+  [domain value-map]
+  (update-config! assoc-in [:value-registry domain]
+                  (merge (descriptor-default-values domain) value-map))
   nil)
 
 (defn reset-config-for-test! []

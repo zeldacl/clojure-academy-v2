@@ -367,14 +367,6 @@
   []
   (vals (transport-contexts-snapshot)))
 
-(defn- index-context-entry
-  [index registry-key ctx]
-  (update index (context-player-index-key ctx) (fnil conj #{}) registry-key))
-
-(defn- build-player-index
-  [registry]
-  (reduce-kv index-context-entry {} registry))
-
 (defn- remove-owner-context-entry
   [owner-key result registry-key ctx-map]
   (if (= owner-key [(context-logical-side ctx-map)

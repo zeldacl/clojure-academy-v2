@@ -78,7 +78,7 @@
       (mapcat (fn [[cat cat-props]]
                 (cons {:type :cathead :label cat}
                       (map #(assoc % :type :checkbox) cat-props)))
-              (group-by :category props))
+              (group-by #(get % :category) props))
       [{:type :key-binding} {:type :restore}])))
 
 (defn- wire-key-binding-item! [r item key-binding-text recording? current-key]

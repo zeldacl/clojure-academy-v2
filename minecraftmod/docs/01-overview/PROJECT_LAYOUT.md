@@ -92,7 +92,7 @@
 | `mc-1.20.1/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 系统字体探测 → `MsdfFontManager` 初始化 |
 | `mc-1.20.1/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 发光呼吸等动画 |
 | `mc-1.20.1/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 桥：`text-width` / `draw-text!`、分段 MSDF/vanilla、per-glyph 标志（顶点色蓝通道低 3 位）、`with-text-fx` |
-| `mc-1.20.1/.../gui/cgui/renderer.clj` | `cn.li.mc1201.gui.cgui.renderer` | `:textbox` 组件接线 |
+| `mc-1.20.1/.../gui/reactive/render.clj` | `cn.li.mc1201.gui.reactive.render` | `:text` 组件接线（`render-text!`/`bake-text!`，替代已删除的旧 `gui/cgui/renderer.clj`） |
 | `ac/.../client/font_init.clj` | `cn.li.ac.client.font-init` | 注册 `:ac-*` 字体关键字（flag-only） |
 | `ac/.../assets/my_mod/shaders/core/msdf_text.*` | — | MSDF 文本 shader（median + fwidth AA + 效果层） |
 | `forge-1.20.1/.../ForgeClientRenderRegistry` | — | `RegisterShadersEvent` 注册 `my_mod:msdf_text` |
@@ -101,6 +101,10 @@
 **Follow-up 能力（已实现）**：单字符串内 per-glyph bold/outline/glow（shader 解码顶点色标志）；`getGlyph` 触发的异步 MTSDF 预烘焙；atlas LRU（默认 4096 glyph）；`start-glow-breath!` ClientTick 呼吸发光。
 
 **字号契约**：`:font-size N` = 屏幕上 **N 像素高**（同 LambdaLib2 `FontOption.fontSize`）。STB 在 8px em 下烘焙；`scale = N / 8`。布局 quad 用 typographic bounds，不含 MSDF bake padding（AC 原版栅格 cell 24×1.4 仅作参考常量 `AC_CHAR_SIZE`）。
+
+## 反应式 UI 框架迁移（已完成）
+
+旧 CGUI 框架（`mcmod/gui/cgui_core.clj` 等 8 文件、`mc-1.20.1/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`）与其消费者已全部删除，替换为 `mc-1.20.1/gui/reactive/*`（signal 驱动、dirty-gated）+ `mcmod` signal core。保留：`mc-1.20.1/gui/cgui/font.clj`（MSDF 桥，仍在用）、`mcmod/gui/tabbed_gui.clj` + `spec.clj`（平台无关的 tab 同步/GUI spec 校验，被 `gui/menu/proxy.clj`、`gui/slots/sync.clj`、`gui/reactive/host_container.clj`、多个 `*_reactive.clj` 消费，非旧框架残留）。
 
 **平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
 

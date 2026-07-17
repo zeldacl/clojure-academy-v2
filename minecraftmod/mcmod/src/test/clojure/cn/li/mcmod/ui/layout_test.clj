@@ -219,12 +219,13 @@
       (is (some? hit))
       (is (= :panel (.getId ^INode hit))))
     (let [hit-outside (layout/hit-test r 10.0 10.0)]
-      ;; root(group) hit?=false → 不命中
-      (is (nil? hit-outside) "hit-test 只有 hit?=true 的 kind 节点命中"))
+      ;; 当前 hit-test 是纯边界包含判定（无 kind 级 hit? 过滤，见 layout.clj
+      ;; 文档字符串），root group 覆盖全屏，故落在 panel 外但 root 内的点命中 root。
+      (is (= :root (.getId ^INode hit-outside)) "落在 root 内、panel 外的点命中 root"))
     (let [hit-edge (layout/hit-test r 149.0 129.0)]  ;; 150 是边界外
       (is (= :panel (.getId ^INode hit-edge)) "右上角边界内"))
     (let [hit-outside2 (layout/hit-test r 150.0 130.0)]
-      (is (nil? hit-outside2) "超出边界应无命中"))))
+      (is (= :root (.getId ^INode hit-outside2)) "超出 panel 边界但仍在 root 内，命中 root"))))
 
 (deftest hit-test-deepest-overlap
   "重叠节点取最深层（painter 序最后）。"

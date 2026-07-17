@@ -111,10 +111,10 @@
           last-s  (last sorted)
           first-pct (double (:pct first-s 0.0))
           last-pct  (double (:pct last-s 1.0))
-          padded (cond-> sorted
-                   (> first-pct 0.0)
-                   (cons {:pct 0.0 :r (:r first-s 1.0) :g (:g first-s 1.0) :b (:b first-s 1.0)}))
-          padded (cond-> padded
+          front-padded (if (> first-pct 0.0)
+                         (cons {:pct 0.0 :r (:r first-s 1.0) :g (:g first-s 1.0) :b (:b first-s 1.0)} sorted)
+                         sorted)
+          padded (cond-> front-padded
                    (< last-pct 1.0)
                    (concat [{:pct 1.0 :r (:r last-s 1.0) :g (:g last-s 1.0) :b (:b last-s 1.0)}]))
           final (sort-by (fn [s] (double (:pct s 0.0))) padded)
@@ -131,34 +131,29 @@
       arr)))
 
 (defn sample-color-stops
+  "Find the segment [i-1,i] containing p and interpolate; clamp to the last
+   stop once i reaches n (covers n=1 and p past the last stop)."
   [^doubles baked ^double pct]
   (when baked
     (let [n (quot (alength baked) 4)
           p (max 0.0 (min 1.0 pct))]
-      (loop [i 0]
-        (let [stop-pct (aget baked (* i 4))]
-          (cond
-            (>= i (dec n))
-            (let [base (* i 4)]
-              (doto (double-array 3)
-                (aset 0 (aget baked (+ base 1)))
-                (aset 1 (aget baked (+ base 2)))
-                (aset 2 (aget baked (+ base 3)))))
-            (< p stop-pct)
-            (if (zero? i)
-              (doto (double-array 3)
-                (aset 0 (aget baked 1))
-                (aset 1 (aget baked 2))
-                (aset 2 (aget baked 3)))
-              (let [i1 (dec i)
-                    base0 (* i1 4)
+      (loop [i 1]
+        (if (>= i n)
+          (let [base (* (dec n) 4)]
+            (doto (double-array 3)
+              (aset 0 (aget baked (+ base 1)))
+              (aset 1 (aget baked (+ base 2)))
+              (aset 2 (aget baked (+ base 3)))))
+          (let [stop-pct (aget baked (* i 4))]
+            (if (<= p stop-pct)
+              (let [i0 (dec i)
+                    base0 (* i0 4)
                     base1 (* i 4)
                     p0 (aget baked base0)
                     p1 (aget baked base1)
-                    t  (/ (- p p0) (- p1 p0))]
+                    t  (if (== p1 p0) 0.0 (/ (- p p0) (- p1 p0)))]
                 (doto (double-array 3)
                   (aset 0 (+ (aget baked (+ base0 1)) (* t (- (aget baked (+ base1 1)) (aget baked (+ base0 1))))))
                   (aset 1 (+ (aget baked (+ base0 2)) (* t (- (aget baked (+ base1 2)) (aget baked (+ base0 2))))))
-                  (aset 2 (+ (aget baked (+ base0 3)) (* t (- (aget baked (+ base1 3)) (aget baked (+ base0 3)))))))))
-            :else
-            (recur (unchecked-inc-int i))))))))
+                  (aset 2 (+ (aget baked (+ base0 3)) (* t (- (aget baked (+ base1 3)) (aget baked (+ base0 3))))))))
+              (recur (unchecked-inc-int i)))))))))

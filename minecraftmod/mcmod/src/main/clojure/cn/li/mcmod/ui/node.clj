@@ -223,7 +223,7 @@
    :list
    {:dslots {:spacing 0 :scroll-offset 1}
     :oslots {:template 0}
-    :oslots-backend-base 0
+    :oslots-backend-base 1
     :prop-writers {:spacing       {:slot :dslot :idx 0 :sig :d :dirty :layout}
                    :scroll-offset {:slot :dslot :idx 1 :sig :d :dirty :layout}}
     :hit? true}

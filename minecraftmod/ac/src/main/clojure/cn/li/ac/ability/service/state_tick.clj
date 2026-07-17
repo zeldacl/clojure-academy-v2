@@ -6,8 +6,7 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.service.reducer :as reducer]
-            [cn.li.ac.ability.service.runtime-store :as store]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.ac.ability.service.runtime-store :as store]))
 
 (def ^:private fn-pull-portable-dev-energy :ability/pull-portable-dev-energy!)
 
@@ -63,9 +62,3 @@
           (doseq [e raw-events] (evt/fire-ability-event! e)))
         {:events (or raw-events [])
          :state (or (:state tick-result) state)}))))
-
-(defn server-tick-player!
-  [uuid-str sync-fn]
-  (server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "state-tick")
-                                  uuid-str
-                                  sync-fn))

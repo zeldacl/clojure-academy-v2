@@ -95,49 +95,11 @@
     (is (= [[:dirty test-owner "p-login"]]
            @called))))
 
-(deftest player-tick-passes-owner-to-sync-callbacks-test
-  (let [called (atom [])
-        owner {:server-session-id :test-session :server-tick-id 42}]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-tick")
-                     #'runtime-hooks/on-player-tick! (fn [_] nil)}
-      (fn []
-        (lifecycle-core/on-player-tick!
-          :player
-          {:server-session-id (:server-session-id owner)
-           :server-tick-id (:server-tick-id owner)
-           :mark-player-dirty! (fn [owner uuid]
-                                (swap! called conj [:dirty owner uuid]))
-           :tick-sync! (fn [_send-sync-fn owner]
-                         (swap! called conj [:tick owner]))
-           :send-sync-fn (fn [_uuid _payload] nil)})))
-    (is (= [[:dirty owner "p-tick"]
-            [:tick owner]]
-           @called))))
-
-(deftest player-tick-skips-mark-dirty-when-state-clean-test
-  (let [called (atom [])
-        owner {:server-session-id :test-session :server-tick-id 42}]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-clean")
-                     #'runtime-hooks/on-player-tick! (fn [_] nil)
-                     #'runtime-hooks/player-state-dirty? (fn [_uuid] false)}
-      (fn []
-        (lifecycle-core/on-player-tick!
-          :player
-          {:server-session-id (:server-session-id owner)
-           :server-tick-id (:server-tick-id owner)
-           :mark-player-dirty! (fn [owner uuid]
-                                (swap! called conj [:dirty owner uuid]))
-           :tick-sync! (fn [_send-sync-fn owner]
-                         (swap! called conj [:tick owner]))
-           :send-sync-fn (fn [_uuid _payload] nil)})))
-    (is (= [[:tick owner]]
-           @called))))
-
 (deftest lifecycle-binds-player-state-owner-test
   (let [seen (atom nil)]
     (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
                      #'runtime-hooks/on-player-login! (fn [_]
-                                                        (reset! seen runtime-hooks/player-state-owner))}
+                                                        (reset! seen (runtime-hooks/player-state-owner)))}
       (fn []
         (lifecycle-core/on-player-login! :player test-owner)))
     (is (= test-owner @seen))))
@@ -148,7 +110,7 @@
         seen-owner (atom nil)
         called (atom [])]
     (with-redefs-fn {#'runtime-hooks/on-server-stop! (fn [session-id]
-                                                       (reset! seen-owner runtime-hooks/player-state-owner)
+                                                       (reset! seen-owner (runtime-hooks/player-state-owner))
                                                        (swap! called conj [:hook session-id]))}
       (fn []
         (lifecycle-core/on-server-stop!

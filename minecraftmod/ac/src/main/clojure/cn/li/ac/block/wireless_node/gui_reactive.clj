@@ -164,6 +164,7 @@
       (merge (gui-manifest/gui-registration :wireless-node)
         {:container-predicate node-container? :container-fn create-container
          :screen-fn create-screen :validate-fn still-valid?
+         :server-menu-sync-fn gui-sync/server-menu-sync!
          :slot-count-fn get-slot-count :slot-get-fn get-slot-item
          :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item?
          :slot-changed-fn (fn [_ _] nil) :quick-move-fn quickly-move}))

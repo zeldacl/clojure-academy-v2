@@ -166,7 +166,7 @@
           (when-let [^ModConfig mod-cfg (:mod-config domain-info)]
             (.save mod-cfg))
           ;; Also update in-memory registry for immediate getter visibility
-          (config-reg/set-config-values! domain {key value})
+          (config-reg/set-config-value! domain key value)
           true)
         (do
           (log/warn "set-config-value!: unknown key" {:domain domain :key key :available (keys (:entries domain-info))})

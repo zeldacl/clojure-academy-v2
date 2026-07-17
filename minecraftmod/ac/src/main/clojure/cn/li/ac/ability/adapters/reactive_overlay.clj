@@ -342,7 +342,7 @@
         ^objects cache (rt/user-signal r :overlay-object-cache)
         cached-ids (aget cache 0)]
     (when-not (same-skill-ids? cached-ids slots)
-      (aset cache 0 (mapv :skill-id slots))
+      (aset cache 0 (mapv #(get % :skill-id) slots))
       (ui/list-set! r :skill-slots slots
                     (fn [rt item slot-data]
                       (update-skill-slot-item! rt item slot-data))))

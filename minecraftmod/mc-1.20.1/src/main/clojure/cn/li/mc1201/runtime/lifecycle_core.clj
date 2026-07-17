@@ -137,24 +137,6 @@
              (when tick-sync!
                (tick-sync! send-sync-fn owner))))))))
 
-(defn on-player-tick!
-  "Only marks the player dirty in the sync scheduler when the ability runtime
-  actually changed something this tick (player-hooks/player-state-dirty?) —
-  idle players stop paying for the periodic full-snapshot flush. tick-sync!
-  still runs every tick regardless, so its own low-frequency full-sync
-  fallback (see sync-core) keeps working."
-  [player {:keys [mark-player-dirty! tick-sync! send-sync-fn] :as opts}]
-  (when-let [uuid (player-uuid player)]
-    (let [owner (scheduler-owner opts)]
-      (with-player-state-owner owner
-        #(do
-           (player-hooks/on-player-tick! uuid)
-           (when (and mark-player-dirty!
-                      (player-hooks/player-state-dirty? uuid))
-             (mark-player-dirty! owner uuid))
-           (when tick-sync!
-             (tick-sync! send-sync-fn owner)))))))
-
 ;; ---------------------------------------------------------------------------
 ;; Server-owned four-phase runtime. Platform adapters call run-server-tick!
 ;; once, instead of invoking the global scheduler from every PlayerTickEvent.
@@ -190,14 +172,6 @@
         (let [value (str uuid)]
           (.put cache uuid value)
           value))))
-
-(defn server-tick-start!
-  [runtime ^long game-time]
-  (.beginTick ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime game-time)
-  ((get (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
-        :on-server-tick-start!)
-   game-time)
-  nil)
 
 (defn player-tick!
   [runtime ^ServerPlayer player owner]

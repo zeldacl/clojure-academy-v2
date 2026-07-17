@@ -45,10 +45,10 @@
    {:tunable vecmanip/skill-tunable-definitions :internal vecmanip/internal-tunable-definitions}])
 
 (def skill-tunable-definitions
-  (vec (mapcat :tunable category-modules)))
+  (vec (mapcat #(get % :tunable) category-modules)))
 
 (def ^:private internal-tunable-definitions
-  (vec (mapcat :internal category-modules)))
+  (vec (mapcat #(get % :internal) category-modules)))
 
 (def field-definitions-by-id
   (into {} (map #(vector (get % :id) %) field-definitions)))

@@ -17,7 +17,7 @@
     (let [c0 (anim/sample-color-stops baked 0.0)]
       (is (some? c0))
       (is (< 0.9 (aget c0 0)) "r ≈ 1.0")
-      (is (< 0.01 (aget c0 1)) "g ≈ 0.0"))
+      (is (< (aget c0 1) 0.01) "g ≈ 0.0"))
     ;; 采样 0.5 → 绿
     (let [c50 (anim/sample-color-stops baked 0.5)]
       (is (some? c50))

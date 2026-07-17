@@ -47,7 +47,7 @@
           (conj errors (str kind " :prop-writers/" prop-key " :idx must be int"))
 
           (or (< idx 0) (>= idx cap))
-          (conj errors (str kind " :prop-writers/" prop-key " :idx " idx " out of range [0," cap ")")
+          (conj errors (str kind " :prop-writers/" prop-key " :idx " idx " out of range [0," cap ")"))
 
           :else
           (let [dslot-idx (get-in kdef [:dslots prop-key])
@@ -59,7 +59,7 @@
               (and (= (:slot spec) :oslot) (some? oslot-idx) (not= idx oslot-idx))
               (conj errors (str kind " :prop-writers/" prop-key " oslot idx mismatch: spec=" idx " table=" oslot-idx))
 
-              :else errors))))))))
+              :else errors)))))))
 
 (defn- lint-kind
   [kind kdef]

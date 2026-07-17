@@ -4,9 +4,9 @@
 
 (use-fixtures :each
   (fn [f]
-    (save-cache/call-with-world-save-cache-runtime
-      (save-cache/create-world-save-cache-runtime)
-      f)))
+    (save-cache/reset-world-save-cache-for-test!)
+    (f)
+    (save-cache/reset-world-save-cache-for-test!)))
 
 (defn- test-world
   [session-id world-id]

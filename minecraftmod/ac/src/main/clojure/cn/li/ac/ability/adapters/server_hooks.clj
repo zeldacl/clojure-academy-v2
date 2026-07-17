@@ -92,8 +92,8 @@
 (defn- build-sync-payload-impl
   "Build the client sync payload for player-uuid.
 
-  full? true: every sync domain included (login/respawn/dimension-change and
-  the periodic full-sync safety net all request this).
+  full? true: every sync domain included (login/respawn/dimension-change
+  request this; there is no periodic full-sync fallback — see sync-core).
   full? false: only domains present in :dirty-domains are included — absent
   keys tell sync-message-payload (network-core) to skip that domain's wire
   message entirely rather than send a stale/nil value over it."
