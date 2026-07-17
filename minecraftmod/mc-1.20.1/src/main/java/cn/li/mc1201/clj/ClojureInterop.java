@@ -12,8 +12,16 @@ public final class ClojureInterop {
     }
 
     public static void requireNamespace(String namespace) {
-        IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read(namespace));
+        // Clojure 1.12's plain `require` takes no lock (only the private
+        // serialized-require/requiring-resolve path does). Forge/Fabric can
+        // dispatch mod lifecycle events on parallel workers, so concurrent
+        // requires of overlapping namespace graphs can observe a partially
+        // initialized namespace. Lock on the same monitor serialized-require
+        // uses so all Java entry points cooperate with it.
+        synchronized (clojure.lang.RT.REQUIRE_LOCK) {
+            IFn require = Clojure.var("clojure.core", "require");
+            require.invoke(Clojure.read(namespace));
+        }
     }
 
     public static Object invoke(String namespace, String functionName, Object... args) {

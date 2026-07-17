@@ -3,7 +3,8 @@
 
   Provides functions to detect whether code is running on physical client
   or dedicated server, and safely resolve client-only functions."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.runtime.require-lock :as require-lock]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.api.distmarker Dist]
            [net.minecraftforge.fml.loading FMLEnvironment]))
 
@@ -30,7 +31,7 @@
   [ns-sym]
   (when (client-side?)
     (try
-      (require ns-sym)
+      (require-lock/safe-require ns-sym)
       ns-sym
       (catch Exception e
         (log/error "Failed to load client namespace" ns-sym e)
@@ -51,7 +52,7 @@
   [var-sym]
   (when (client-side?)
     (try
-      (require (symbol (namespace var-sym)))
+      (require-lock/safe-require (symbol (namespace var-sym)))
       (when-let [v (find-var var-sym)]
         (when (bound? v) @v))
       (catch Exception e

@@ -7,6 +7,7 @@
   (:require [cn.li.ac.registry.discovery :as discovery]
             [cn.li.ac.registry.spi.content-phase :as content-phase-spi]
             [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.runtime.require-lock :as require-lock]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private default-phase-plugins
@@ -83,7 +84,7 @@
   (doseq [ns-sym namespaces]
     (try
       (log/warn "[CONTENT_TRACE] require begin" ns-sym)
-      (require ns-sym)
+      (require-lock/safe-require ns-sym)
       (log/warn "[CONTENT_TRACE] require ok" ns-sym)
       (catch Throwable t
         (log/error "[CONTENT_TRACE] require fail" ns-sym (ex-message t))

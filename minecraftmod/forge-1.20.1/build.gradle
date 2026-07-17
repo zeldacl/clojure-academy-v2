@@ -487,14 +487,45 @@ tasks.named('classes').configure {
     removeCheckClojureDependency(delegate as Task)
 }
 
+// The game classloader must never see Clojure sources alongside AOT classes:
+// mixed source/class content lets RT.load recompile a namespace from source at
+// runtime (whichever a Copy task last touched), and with Forge's parallel
+// mod-loading workers that races against another thread's in-flight `require`
+// of the same namespace — the concrete cause of intermittent "Unable to
+// resolve symbol" errors on vars defined late in a file. Fail fast instead.
+def verifyRuntimeClasspathPurity = tasks.register('verifyRuntimeClasspathPurity') {
+    group = 'verification'
+    description = 'Fail when Clojure sources (.clj/.cljc) are present in build/classes/java/main (runtime must be pure AOT).'
+    dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    dependsOn tasks.named('copyMcmodJavaClassesToPlatformOutput')
+    dependsOn tasks.named('copyAcJavaClassesToPlatformOutput')
+    doLast {
+        def outDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+        def offenders = []
+        if (outDir.isDirectory()) {
+            outDir.eachFileRecurse { f ->
+                if (f.isFile() && (f.name.endsWith('.clj') || f.name.endsWith('.cljc')) && offenders.size() < 20) {
+                    offenders << outDir.toPath().relativize(f.toPath()).toString()
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException("Runtime classpath is not AOT-pure; .clj/.cljc found in classes/java/main:\n  " + offenders.join('\n  '))
+        }
+        logger.lifecycle('[verifyRuntimeClasspathPurity] passed. classes/java/main contains no Clojure sources.')
+    }
+}
+
 tasks.matching { it.name in ['runClient', 'runServer', 'runData'] }.configureEach {
     removeCheckClojureDependency(delegate as Task)
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    dependsOn verifyRuntimeClasspathPurity
 }
 
 tasks.matching { it.name == 'runGametestServer' }.configureEach {
     removeCheckClojureDependency(delegate as Task)
     dependsOn tasks.named('copyClojureClassesToJavaOutput')
+    dependsOn verifyRuntimeClasspathPurity
     // Force DLI to read `gametestserverArgs` from launch.cfg instead of `serverArgs`.
     jvmArgs '-Dfabric.dli.env=gametestserver'
     doFirst {

@@ -134,6 +134,7 @@
  "cn.li.mcmod.runtime.deferred"
  "cn.li.mcmod.runtime.install"
  "cn.li.mcmod.runtime.owner"
+ "cn.li.mcmod.runtime.require-lock"
  "cn.li.mcmod.schema.core"
  "cn.li.mcmod.schema.recipe"
  "cn.li.mcmod.schema.resource-location"

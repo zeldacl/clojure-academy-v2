@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.integration.side
   "Runtime side detection for Fabric 1.20.1."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.runtime.require-lock :as require-lock]
+            [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.api EnvType]
            [net.fabricmc.loader.api FabricLoader]))
 
@@ -25,7 +26,7 @@
   [ns-sym]
   (when (client-side?)
     (try
-      (require ns-sym)
+      (require-lock/safe-require ns-sym)
       true
       (catch Throwable t
         (log/warn "Failed requiring client namespace" ns-sym (ex-message t))
