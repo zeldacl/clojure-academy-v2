@@ -22,7 +22,7 @@
     (let [ad (-> (ad/new-ability-data)
                  (ad/learn-skill :foo)
                  (ad/set-skill-exp :foo 0.42))]
-      (store/set-player-state!* ps-fix/test-session-id "p1" {:ability-data ad})
+      (store/set-player-state! ps-fix/test-session-id "p1" {:ability-data ad})
       (is (= 0.42 (skill-effects/skill-exp "p1" :foo)))
       (store/reset-store!))))
 
@@ -125,7 +125,7 @@
                         (ad/set-skill-exp :space-fluct 1.0))]
     (store/reset-store!)
     (try
-      (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
+      (store/set-player-state! ps-fix/test-session-id attacker {:ability-data attacker-ad})
       (with-crit-config 1.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
@@ -172,7 +172,7 @@
                         (ad/set-skill-exp :space-fluct 1.0))]
     (store/reset-store!)
     (try
-      (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
+      (store/set-player-state! ps-fix/test-session-id attacker {:ability-data attacker-ad})
       (with-crit-config 0.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
@@ -205,7 +205,7 @@
                         (ad/set-skill-exp :space-fluct 1.0))]
     (store/reset-store!)
     (try
-      (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
+      (store/set-player-state! ps-fix/test-session-id attacker {:ability-data attacker-ad})
       (with-crit-config 0.0 0.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
@@ -241,7 +241,7 @@
         attacker-ad (ad/new-ability-data)]
     (store/reset-store!)
     (try
-      (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
+      (store/set-player-state! ps-fix/test-session-id attacker {:ability-data attacker-ad})
       (with-crit-config 1.0 1.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
@@ -271,7 +271,7 @@
                         (ad/set-skill-exp :space-fluct 1.0))]
     (store/reset-store!)
     (try
-      (store/set-player-state!* ps-fix/test-session-id attacker {:ability-data attacker-ad})
+      (store/set-player-state! ps-fix/test-session-id attacker {:ability-data attacker-ad})
       (with-crit-config 1.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)

@@ -103,7 +103,7 @@
       (sig/computed-o [(rt/clock-ms-sig r)]
         (fn [_]
           (reset! (:energy container) (current-energy-from-held-item player))
-          (let [dd (:develop-data (store/get-player-state* session-id uuid-str))]
+          (let [dd (:develop-data (store/get-player-state session-id uuid-str))]
             (reset! (:is-developing container)
                     (boolean (some-> dd dev-model/developing?)))
             (reset! (:development-progress container)

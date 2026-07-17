@@ -48,7 +48,7 @@
         translate-map {"ability.category.generic" "Generic"
                        "ability.skill.generic.brain_course" "Brain Course"
                        "ability.skill.generic.brain_course.desc" "Undergo focused neural training to raise your maximum CP by 1000."}]
-    (with-redefs [store/get-player-state* (fn [_ _] player-state)
+    (with-redefs [store/get-player-state (fn [_ _] player-state)
                   store/get-or-create-player-state! (fn [_ _] player-state)
                   category/get-category (fn [_] category-spec)
                   category/get-prog-incr-rate (fn [_] 1.0)

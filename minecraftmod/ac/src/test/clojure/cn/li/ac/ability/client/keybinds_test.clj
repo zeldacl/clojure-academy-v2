@@ -77,8 +77,8 @@
 
 (deftest preset-switch-state-isolated-by-player-test
   (store/reset-store!)
-  (store/set-player-state!* :session-a "player-a" (activated-state))
-  (store/set-player-state!* :session-a "player-b" (activated-state))
+  (store/set-player-state! :session-a "player-a" (activated-state))
+  (store/set-player-state! :session-a "player-b" (activated-state))
   (let [requests (atom [])]
     (with-redefs [client-bridge/game-time-ms (constantly 0)   ;; no platform bridge in tests
                   client-api/req-switch-preset! (fn [_owner preset-idx callback]

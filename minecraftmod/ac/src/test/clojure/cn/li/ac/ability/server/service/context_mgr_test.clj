@@ -62,7 +62,7 @@
   (let [ability-data (-> (ad/new-ability-data)
                          (ad/learn-skill skill-kw))
         resource-data (assoc (rd/new-resource-data) :activated true)]
-    (store/set-player-state!* test-player/test-session-id
+    (store/set-player-state! test-player/test-session-id
                   uuid
                   {:ability-data ability-data
                    :resource-data resource-data})))
@@ -210,7 +210,7 @@
                                        :category-id :electromaster
                                        :level 1
                                        :pattern :passive}))
-    (store/set-player-state!* alt-session
+    (store/set-player-state! alt-session
                               player-id
                               {:ability-data ability-data
                                :resource-data resource-data})

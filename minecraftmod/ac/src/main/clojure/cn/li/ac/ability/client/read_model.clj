@@ -58,7 +58,7 @@
   [owner-key]
   (with-player-state-owner owner-key
     (fn [session-id player-uuid]
-      (store/get-player-state* session-id player-uuid))))
+      (store/get-player-state session-id player-uuid))))
 
 (defn ensure-player-state!
   [owner-key]

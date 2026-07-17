@@ -27,7 +27,7 @@
 
 (defn- seed-player!
   [player-uuid skill-id resource-data]
-  (store/set-player-state!* test-player/test-session-id
+  (store/set-player-state! test-player/test-session-id
                             player-uuid
                             {:ability-data (-> (ad/new-ability-data)
                                                (ad/learn-skill skill-id))

@@ -71,7 +71,7 @@
                                         {:command :change-category
                                          :new-category :vecmanip})
     (is (= :vecmanip
-           (get-in (store/get-player-state* :accessor-session "u2") [:ability-data :category-id])))))
+           (get-in (store/get-player-state :accessor-session "u2") [:ability-data :category-id])))))
 
 (defn- ticking-player-state
   "A player state with one live cooldown — server-tick-player-in-session!
@@ -82,38 +82,38 @@
          :cooldown-data (:data (cooldown-rules/set-cooldown {} :smoke 5))))
 
 (deftest server-tick-player-smoke-test
-  (store/set-player-state!* ps-fix/test-session-id "u3" (ticking-player-state))
+  (store/set-player-state! ps-fix/test-session-id "u3" (ticking-player-state))
   (let [r (ps-tick/server-tick-player-in-session! ps-fix/test-session-id "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
 
 (deftest server-tick-player-uses-explicit-session-test
-  (store/set-player-state!* :tick-session "u3" (ticking-player-state))
+  (store/set-player-state! :tick-session "u3" (ticking-player-state))
   (let [r (ps-tick/server-tick-player-in-session! :tick-session "u3" nil)]
     (is (map? r))
     (is (vector? (:events r)))))
 
 (deftest remove-player-state-test
-  (store/set-player-state!* ps-fix/test-session-id "u4" (store/fresh-player-state))
-  (is (some? (store/get-player-state* ps-fix/test-session-id "u4")))
-  (store/remove-player-state!* ps-fix/test-session-id "u4")
-  (is (nil? (store/get-player-state* ps-fix/test-session-id "u4"))))
+  (store/set-player-state! ps-fix/test-session-id "u4" (store/fresh-player-state))
+  (is (some? (store/get-player-state ps-fix/test-session-id "u4")))
+  (store/remove-player-state! ps-fix/test-session-id "u4")
+  (is (nil? (store/get-player-state ps-fix/test-session-id "u4"))))
 
 (deftest player-state-isolated-by-session-id-test
-  (store/set-player-state!* :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
-  (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
-  (is (= :a (:marker (store/get-player-state* :session-a "same-uuid"))))
-  (is (= :b (:marker (store/get-player-state* :session-b "same-uuid"))))
+  (store/set-player-state! :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
+  (store/set-player-state! :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
+  (is (= :a (:marker (store/get-player-state :session-a "same-uuid"))))
+  (is (= :b (:marker (store/get-player-state :session-b "same-uuid"))))
   (is (= ["same-uuid"] (vec (store/list-players :session-a)))))
 
 (deftest clear-session-player-states-removes-only-target-session-test
-  (store/set-player-state!* :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
-  (store/set-player-state!* :session-a "only-a" (assoc (store/fresh-player-state) :marker :only-a))
-  (store/set-player-state!* :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
+  (store/set-player-state! :session-a "same-uuid" (assoc (store/fresh-player-state) :marker :a))
+  (store/set-player-state! :session-a "only-a" (assoc (store/fresh-player-state) :marker :only-a))
+  (store/set-player-state! :session-b "same-uuid" (assoc (store/fresh-player-state) :marker :b))
   (store/remove-session! :session-a)
-  (is (nil? (store/get-player-state* :session-a "same-uuid")))
-  (is (nil? (store/get-player-state* :session-a "only-a")))
-  (is (= :b (:marker (store/get-player-state* :session-b "same-uuid")))))
+  (is (nil? (store/get-player-state :session-a "same-uuid")))
+  (is (nil? (store/get-player-state :session-a "only-a")))
+  (is (= :b (:marker (store/get-player-state :session-b "same-uuid")))))
 
 (deftest persisted-state-edn-roundtrip-keeps-core-data-test
   (let [state (-> (store/fresh-player-state)

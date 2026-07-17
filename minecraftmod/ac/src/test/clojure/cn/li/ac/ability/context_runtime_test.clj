@@ -43,7 +43,7 @@
                          (update :learned-skills conj :arc-gen))
         resource-data (assoc (rd/new-resource-data) :activated true :cur-cp 100.0 :cur-overload 0.0)
         cooldown-data (cd/new-cooldown-data)]
-      (store/set-player-state!* test-player/test-session-id
+      (store/set-player-state! test-player/test-session-id
                     uuid
                     {:ability-data ability-data
                      :resource-data resource-data
@@ -165,7 +165,7 @@
                                             (swap! events* conj event))]
       (ctx/with-context-owner (test-context-owner uuid)
       (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-      (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main))
+      (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state test-player/test-session-id uuid)) :arc-gen :main))
         "generic key-up should not apply cooldown when pattern runtime owns settlement")
       (is (some #(= evt/EVT-CONTEXT-KEY-UP %) (map :event/type @events*))
           "key-up should emit context key-up event")
@@ -202,7 +202,7 @@
   (let [uuid "test-player-implicit-session"
         ctx-id "ctx-implicit-session"
         alt-session :ctx-state-alt]
-    (store/set-player-state!* alt-session
+    (store/set-player-state! alt-session
                               uuid
                               {:ability-data (-> (ad/new-ability-data)
                                                  (assoc :category-id :electromaster)

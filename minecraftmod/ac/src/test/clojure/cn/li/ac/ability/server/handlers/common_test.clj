@@ -21,7 +21,7 @@
                                                  :player-uuid "p1"}}
     (let [state (handlers-common/get-state "p1")]
       (is (map? state))
-      (is (some? (store/get-player-state* :handler-session "p1"))))))
+      (is (some? (store/get-player-state :handler-session "p1"))))))
 
 (deftest get-state-session-resolution-still-fail-fast-test
   (runtime-hooks/with-client-ctx {:player-owner nil}

@@ -28,7 +28,7 @@
 
 (defn- seed-player!
   [player-uuid ability-data]
-  (store/set-player-state!*
+  (store/set-player-state!
    ps-fix/test-session-id
    player-uuid
    (assoc (store/fresh-player-state) :ability-data ability-data)))
@@ -48,7 +48,7 @@
               {:player player
                :item-id "my_mod:induction_factor_electromaster"
                :side :server}))))
-    (is (nil? (get-in (store/get-player-state* ps-fix/test-session-id player-uuid)
+    (is (nil? (get-in (store/get-player-state ps-fix/test-session-id player-uuid)
                       [:ability-data :category-id])))
     (is (zero? @consumed*))))
 

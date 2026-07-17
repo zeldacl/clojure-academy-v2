@@ -18,7 +18,7 @@
 
 (defn- player-category-in-session
   [session-id uuid]
-  (get-in (store/get-player-state* session-id uuid) [:ability-data :category-id]))
+  (get-in (store/get-player-state session-id uuid) [:ability-data :category-id]))
 
 (defn- fire-by-trigger!
   [kind payload uuid]

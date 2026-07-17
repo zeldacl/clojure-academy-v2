@@ -33,7 +33,7 @@
               evt/CALC-MAX-CP
               :passive-skill
               (fn [v _] (+ v 25.0)))))
-    (store/set-player-state!* ps-fix/test-session-id
+    (store/set-player-state! ps-fix/test-session-id
           "u1"
           (assoc (store/fresh-player-state)
             :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
@@ -66,7 +66,7 @@
 
 
 (deftest learned-skill-uses-bound-owner-session-test
-  (store/set-player-state!* :passive-session
+  (store/set-player-state! :passive-session
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))

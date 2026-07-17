@@ -41,13 +41,13 @@
   (let [spec (skill-registry/get-skill fixture-skill-id)
         perform! (get-in spec [:actions :perform!])
         player-uuid (str (java.util.UUID/randomUUID))]
-    (store/set-player-state!* test-player/test-session-id player-uuid (store/fresh-player-state))
+    (store/set-player-state! test-player/test-session-id player-uuid (store/fresh-player-state))
     (runtime-hooks/with-client-ctx {:player-owner {:server-session-id test-player/test-session-id
                                                    :player-uuid player-uuid}}
       (perform! "ctx-1" player-uuid fixture-skill-id 0.5 true 0 :down nil))
     (is (= 1 (.get FixtureAbilityProvider/PERFORM_COUNT))
         "the Java ActionHandler ran")
-    (let [state (store/get-player-state* test-player/test-session-id player-uuid)]
+    (let [state (store/get-player-state test-player/test-session-id player-uuid)]
       (is (= 20 (get-in state [:cooldown-data [:fixture-provider-test-strike :main]]))
           "setMainCooldown reached the reducer through the whitelisted context"))))
 

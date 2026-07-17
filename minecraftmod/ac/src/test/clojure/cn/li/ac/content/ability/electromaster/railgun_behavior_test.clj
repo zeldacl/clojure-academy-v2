@@ -99,7 +99,7 @@
 (deftest read-coin-qte-status-skips-already-judged-coin-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
-  (store/update-player-state!* ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
+  (store/update-player-state! ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/available? (constantly true)
                 world-effects/find-entities-in-radius* (fn [& _]
                                                          [{:type "entity_coin_throwing"

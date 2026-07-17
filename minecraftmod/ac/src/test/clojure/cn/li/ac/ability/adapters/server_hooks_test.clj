@@ -99,7 +99,7 @@
     (with-redefs [evt/fire-calc-event! (fn [event-key value extra]
                                          (swap! calc-calls conj [event-key value extra])
                                          value)
-        store/get-player-state* (fn [_session-id _uuid]
+        store/get-player-state (fn [_session-id _uuid]
               {:resource-data {:cur-cp 100.0
                      :cur-overload 10.0
                      :max-cp 200.0
@@ -150,7 +150,7 @@
                                                             nil)
                   md-damage/clear-target-mark! (fn [_uuid] nil)
                   md-damage/clear-source-marks! (fn [_uuid] nil)
-          store/remove-player-state!* (fn [session-id uuid]
+          store/remove-player-state! (fn [session-id uuid]
                      (swap! called conj [:remove-state session-id uuid])
                      nil)]
       (logout! "player-1"))
@@ -252,7 +252,7 @@
               (fn [uuid]
                 (swap! aborted conj uuid)
                 nil)
-              store/get-player-state* (fn [_session-id _]
+              store/get-player-state (fn [_session-id _]
                 {:ability-data {:level 4}
                  :resource-data {:activated true
                   :cur-cp 10.0

@@ -15,7 +15,7 @@
 (defn- store-context
   [session-id player-uuid ctx-id]
   (when (and session-id player-uuid ctx-id)
-    (get-in (store/get-player-state* (session-id->store-session session-id) player-uuid)
+    (get-in (store/get-player-state (session-id->store-session session-id) player-uuid)
             [:context-registry ctx-id])))
 
 (defn merge-store-projection
@@ -49,7 +49,7 @@
 
 (defn snapshot-store-contexts
   [session-id player-uuid]
-  (->> (or (get-in (store/get-player-state* (session-id->store-session session-id)
+  (->> (or (get-in (store/get-player-state (session-id->store-session session-id)
                                              player-uuid)
                    [:context-registry])
            {})

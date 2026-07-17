@@ -111,7 +111,7 @@
         (reset! last-radiation-tick-id* tick-id))
       (let [session-id (prt-cmd/session-id)]
         (doseq [holder (prt-cmd/radiation-mark-holders)]
-          (if (store/get-player-state* session-id holder)
+          (if (store/get-player-state session-id holder)
             (prt-cmd/run-for-player! holder tick-radiation-command)
             ;; Ghost index entry (backing player state already gone) — drop
             ;; it directly. Never use a get-or-create path here, or a

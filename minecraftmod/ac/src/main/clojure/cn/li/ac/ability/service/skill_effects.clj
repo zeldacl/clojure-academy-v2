@@ -19,12 +19,12 @@
 
 (defn- runtime-player-state
   [player-id]
-  (store/get-player-state* (resolve-session-id)
+  (store/get-player-state (resolve-session-id)
                            player-id))
 
 (defn- runtime-player-state-in-session
   [session-id player-id]
-  (store/get-player-state* session-id player-id))
+  (store/get-player-state session-id player-id))
 
 (declare perform-resource!
          perform-resource-in-session!

@@ -45,7 +45,7 @@
 
 (defn- runtime-get-player-state
   [player-uuid]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
+  (store/get-player-state (runtime-hooks/require-player-state-session-id "Server hooks runtime state access") player-uuid))
 
 (defn- runtime-sync-player-state!
   [player-uuid state]
@@ -227,7 +227,7 @@
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
-     (store/remove-player-state!* (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
+     (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
 
    :on-server-stop!

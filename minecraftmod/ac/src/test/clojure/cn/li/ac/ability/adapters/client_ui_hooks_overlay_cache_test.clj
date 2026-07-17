@@ -81,7 +81,7 @@
                :cooldown-data {}
                :preset-data preset-data}]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] state)
+      [store/get-player-state (fn [_ _] state)
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ _] (swap! shape-calls inc) :railgun)
        skill-registry/get-skill (fn [_] {:name "Railgun"})
@@ -97,7 +97,7 @@
   (let [shape-calls (atom 0)
         preset-a (atom (preset-data-with-slot :railgun))]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] (player-state-with @preset-a {}))
+      [store/get-player-state (fn [_ _] (player-state-with @preset-a {}))
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ ctrl-id] (swap! shape-calls inc) ctrl-id)
        skill-registry/get-skill (fn [_] {:name "Skill"})
@@ -114,7 +114,7 @@
   (let [context-calls (atom 0)
         preset-data (preset-data-with-slot :railgun)]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] (player-state-with preset-data {}))
+      [store/get-player-state (fn [_ _] (player-state-with preset-data {}))
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ _] :railgun)
        skill-registry/get-skill (fn [_] {:name "Railgun"})
@@ -133,7 +133,7 @@
         token (atom :token-a)
         preset-data (preset-data-with-slot :railgun)]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] (player-state-with preset-data {}))
+      [store/get-player-state (fn [_ _] (player-state-with preset-data {}))
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ _] :railgun)
        skill-registry/get-skill (fn [_] {:name "Railgun"})
@@ -153,7 +153,7 @@
         cooldown (atom {})
         preset-data (preset-data-with-slot :railgun)]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] (player-state-with preset-data @cooldown))
+      [store/get-player-state (fn [_ _] (player-state-with preset-data @cooldown))
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ _] (swap! shape-calls inc) :railgun)
        skill-registry/get-skill (fn [_] {:name "Railgun"})
@@ -176,7 +176,7 @@
   (let [shape-calls (atom 0)
         preset-data (preset-data-with-slot :railgun)]
     (with-overlay-stubs
-      [store/get-player-state* (fn [_ _] (player-state-with preset-data {}))
+      [store/get-player-state (fn [_ _] (player-state-with preset-data {}))
        category/get-category (fn [_] {:color [1.0 0.0 0.0] :icon "textures/x.png"})
        skill-query/get-skill-by-controllable (fn [_ _] (swap! shape-calls inc) :railgun)
        skill-registry/get-skill (fn [_] {:name "Railgun"})

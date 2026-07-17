@@ -13,7 +13,7 @@
 (deftest change-category-clears-presets-and-fires-event-test
   (let [uuid "category-runtime-player"
         events* (atom [])]
-    (store/set-player-state!*
+    (store/set-player-state!
       test-player/test-session-id
       uuid
       {:ability-data (assoc (adata/new-ability-data) :category-id :electromaster)
@@ -26,9 +26,9 @@
                                           uuid
                                           {:command :change-category
                                            :new-category :meltdowner})
-      (is (= :meltdowner (get-in (store/get-player-state* test-player/test-session-id uuid) [:ability-data :category-id])))
-      (is (= {} (get-in (store/get-player-state* test-player/test-session-id uuid) [:preset-data :slots])))
-      (is (= 2 (get-in (store/get-player-state* test-player/test-session-id uuid) [:preset-data :active-preset])))
+      (is (= :meltdowner (get-in (store/get-player-state test-player/test-session-id uuid) [:ability-data :category-id])))
+      (is (= {} (get-in (store/get-player-state test-player/test-session-id uuid) [:preset-data :slots])))
+      (is (= 2 (get-in (store/get-player-state test-player/test-session-id uuid) [:preset-data :active-preset])))
       (is (= [{:event/type evt/EVT-CATEGORY-CHANGE
                :event/side :both
                :uuid uuid

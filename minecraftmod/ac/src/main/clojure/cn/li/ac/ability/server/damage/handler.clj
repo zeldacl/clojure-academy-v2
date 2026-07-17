@@ -16,12 +16,12 @@
 
 (defn- runtime-player-state
   [player-id]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "damage.handler")
+  (store/get-player-state (runtime-hooks/require-player-state-session-id "damage.handler")
                            player-id))
 
 (defn- runtime-player-state-in-session
   [session-id player-id]
-  (store/get-player-state* session-id player-id))
+  (store/get-player-state session-id player-id))
 
 (defn register-toggle-damage-handler!
   "Register a damage handler for a toggle skill.

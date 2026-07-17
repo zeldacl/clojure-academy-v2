@@ -33,5 +33,5 @@
   (store/get-or-create-player-state! ps-fix/test-session-id "of-p")
   (ctx/with-context-owner test-context-owner
     (state/execute-overload-floor! "ctx-of" "of-p" :sk 0.0 {:floor 10.0}))
-  (is (<= 10.0 (get-in (store/get-player-state* ps-fix/test-session-id "of-p")
+  (is (<= 10.0 (get-in (store/get-player-state ps-fix/test-session-id "of-p")
                        [:resource-data :cur-overload]))))

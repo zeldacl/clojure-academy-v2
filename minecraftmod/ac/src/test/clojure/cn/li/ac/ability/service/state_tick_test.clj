@@ -35,7 +35,7 @@
     (ps-fix/seed-player-state! "p-recovering"
                                (update (store/fresh-player-state) :resource-data
                                        #(assoc % :cur-cp (- (:max-cp %) 50.0))))
-    (let [before (store/get-player-state* ps-fix/test-session-id "p-recovering")
+    (let [before (store/get-player-state ps-fix/test-session-id "p-recovering")
           result (state-tick/server-tick-player-in-session!
                   ps-fix/test-session-id "p-recovering" nil)]
       (is (some? result))

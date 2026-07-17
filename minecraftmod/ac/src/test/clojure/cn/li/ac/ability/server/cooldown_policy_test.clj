@@ -23,7 +23,7 @@
   ([uuid]
    (seed-player! uuid (cd/new-cooldown-data)))
   ([uuid cooldown-data]
-  (store/set-player-state!* test-player/test-session-id
+  (store/set-player-state! test-player/test-session-id
                             uuid
                             {:ability-data {:skill-exps {:arc-gen 0.0}}
                              :cooldown-data cooldown-data})))
@@ -48,7 +48,7 @@
                   evt/fire-ability-event! (fn [_] nil)]
       (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= 20 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main)))
+        (is (= 20 (cd/get-remaining (:cooldown-data (store/get-player-state test-player/test-session-id uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
 (deftest manual-key-up-does-not-apply-automatic-main-cooldown-test
@@ -64,6 +64,6 @@
                   evt/fire-ability-event! (fn [_] nil)]
       (ctx/with-context-owner (test-context-owner uuid)
         (is (true? (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state* test-player/test-session-id uuid)) :arc-gen :main)))
+        (is (= 0 (cd/get-remaining (:cooldown-data (store/get-player-state test-player/test-session-id uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 

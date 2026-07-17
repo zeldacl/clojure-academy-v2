@@ -19,7 +19,7 @@
   (testing "explicit session id is propagated into reducer command payload"
     (let [captured-command (atom nil)]
       (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                    store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                    store/set-player-state! (fn [_session-id _uuid _state] nil)
                     store/mark-player-dirty! (fn [_session-id _uuid] nil)
                     reducer/apply-command (fn [state command]
                                             (reset! captured-command command)
@@ -36,7 +36,7 @@
   (testing "existing command-id is preserved during normalization"
     (let [captured-command (atom nil)]
       (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                    store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                    store/set-player-state! (fn [_session-id _uuid _state] nil)
                     store/mark-player-dirty! (fn [_session-id _uuid] nil)
                     reducer/apply-command (fn [state command]
                                             (reset! captured-command command)
@@ -53,7 +53,7 @@
       (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "injected-session"
                                                   :player-uuid "player-A"}}
         (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/set-player-state! (fn [_session-id _uuid _state] nil)
                       store/mark-player-dirty! (fn [_session-id _uuid] nil)
                       reducer/apply-command (fn [state command]
                                               (reset! captured-command command)
@@ -73,7 +73,7 @@
                        :command-id "idempotent-command-1"}
               opts {:idempotent? true}]
           (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                        store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                        store/set-player-state! (fn [_session-id _uuid _state] nil)
                         store/mark-player-dirty! (fn [_session-id _uuid] nil)
                         reducer/apply-command (fn [state _normalized-command]
                                                 (swap! apply-count inc)
@@ -96,7 +96,7 @@
       (fn []
         (command-rt/reset-command-traces-for-test!)
         (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/set-player-state! (fn [_session-id _uuid _state] nil)
                       store/mark-player-dirty! (fn [_session-id _uuid] nil)
                       reducer/apply-command (fn [state _normalized-command]
                                               {:state state :events [] :effects []})
@@ -113,7 +113,7 @@
       (fn []
         (command-rt/reset-command-traces-for-test!)
         (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
-                      store/set-player-state!* (fn [_session-id _uuid _state] nil)
+                      store/set-player-state! (fn [_session-id _uuid _state] nil)
                       store/mark-player-dirty! (fn [_session-id _uuid] nil)
                       reducer/apply-command (fn [state _normalized-command]
                                               {:state state :events [] :effects []})
@@ -139,7 +139,7 @@
                                                         nil)]
                                           (command-rt/run-commands-in-session! nil uuid commands))]
                              {:result result
-                              :state (store/get-player-state* session-id uuid)
+                              :state (store/get-player-state session-id uuid)
                               :executed @executed})))]
       (store/reset-store!)
       (try

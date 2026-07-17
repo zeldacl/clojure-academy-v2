@@ -44,7 +44,7 @@
 
 (defn skill-exp-for
   [owner player-id skill-id]
-  (double (adata/get-skill-exp (get-in (store/get-player-state* (resolved-session-id owner) player-id)
+  (double (adata/get-skill-exp (get-in (store/get-player-state (resolved-session-id owner) player-id)
                                        [:ability-data])
                                skill-id)))
 

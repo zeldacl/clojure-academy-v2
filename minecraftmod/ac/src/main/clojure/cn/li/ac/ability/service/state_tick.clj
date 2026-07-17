@@ -41,7 +41,7 @@
    skip the :server-tick command dispatch entirely — zero commands, zero
    events, zero speed-calc allocations."
   [session-id uuid-str _sync-fn]
-  (when-let [state (store/get-player-state* session-id uuid-str)]
+  (when-let [state (store/get-player-state session-id uuid-str)]
     (when-not (reducer/server-tick-noop? state)
       (drain-portable-develop-energy! session-id uuid-str state)
       (let [cp-speed (fire-recover-speed-event! evt/CALC-CP-RECOVER-SPEED

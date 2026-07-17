@@ -65,7 +65,7 @@
   "When player has no category, right panel mode should be :console."
   (with-fresh-framework   ;; magnetic-coil check probes entity-ops availability
     (fn []
-      (with-redefs [store/get-player-state*
+      (with-redefs [store/get-player-state
                     (fn [_ _]{:ability-data {:category-id nil}})
                     uuid/player-uuid (fn [_] "player-uuid")]
         (with-player-state-owner
@@ -78,7 +78,7 @@
   "When player has a category, right panel mode should be :skill-tree."
   (with-fresh-framework
     (fn []
-      (with-redefs [store/get-player-state*
+      (with-redefs [store/get-player-state
                     (fn [_ _]{:ability-data {:category-id :electromaster}})
                     uuid/player-uuid (fn [_] "player-uuid")]
         (with-player-state-owner

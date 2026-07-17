@@ -42,7 +42,7 @@
   ([player-id]
    (runtime-player-state nil player-id))
   ([owner player-id]
-   (store/get-player-state* (resolved-session-id owner) player-id)))
+   (store/get-player-state (resolved-session-id owner) player-id)))
 
 (defn- with-context-owner-binding
   [owner f]

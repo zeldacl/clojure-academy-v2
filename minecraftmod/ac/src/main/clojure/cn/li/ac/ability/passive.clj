@@ -12,10 +12,10 @@
   (runtime-hooks/require-player-state-session-id "passive"))
 
 (defn- runtime-player-state [uuid]
-  (store/get-player-state* (resolve-session-id) uuid))
+  (store/get-player-state (resolve-session-id) uuid))
 
 (defn- runtime-player-state-in-session [session-id uuid]
-  (store/get-player-state* session-id uuid))
+  (store/get-player-state session-id uuid))
 
 ;; Registry — Framework [:registry :handlers :passive]
 

@@ -45,14 +45,14 @@
 (deftest register-passive-hooks-apply-only-for-learned-skills-test
   (courses/register-passive-hooks! :brain-course-advanced)
   (courses/register-passive-hooks! :mind-course)
-       (store/set-player-state!*
+       (store/set-player-state!
         ps-fix/test-session-id
    "u-learned"
         (assoc (store/fresh-player-state)
           :ability-data (-> (adata/new-ability-data)
                             (adata/learn-skill :electromaster/brain-course-advanced)
                             (adata/learn-skill :electromaster/mind-course))))
-       (store/set-player-state!*
+       (store/set-player-state!
         ps-fix/test-session-id
    "u-unlearned"
         (assoc (store/fresh-player-state)

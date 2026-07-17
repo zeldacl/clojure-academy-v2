@@ -56,7 +56,7 @@
             :status status
             :input-state input-state
             :last-keepalive-ms last-keepalive-ms))
-    (store/set-player-state!* owner-support/default-server-session-id
+    (store/set-player-state! owner-support/default-server-session-id
                               player-uuid
                               {:context-registry {ctx-id store-entry}})
     store-entry))
@@ -67,6 +67,6 @@
 
 (defn store-context
   [player-uuid ctx-id]
-  (get-in (store/get-player-state* owner-support/default-server-session-id
+  (get-in (store/get-player-state owner-support/default-server-session-id
                                     player-uuid)
           [:context-registry ctx-id]))

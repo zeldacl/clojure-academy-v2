@@ -62,7 +62,7 @@
                                                             :vec-deviation {:active true}}}}}]
     (with-redefs [read-model/get-player-contexts-for-player (fn [& _] terminated-player-contexts)
                   ctx/get-all-contexts (fn [] terminated-toggle-contexts)
-                  store/get-player-state* (fn [_ _]
+                  store/get-player-state (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0

@@ -16,7 +16,7 @@
 (deftest handle-learn-skill-request-delegates-to-command-runtime-test
   (let [calls* (atom [])
         player :stub-player]
-    (store/set-player-state!* test-player/test-session-id "p1" {:ability-data (assoc (adata/new-ability-data) :level 3)})
+    (store/set-player-state! test-player/test-session-id "p1" {:ability-data (assoc (adata/new-ability-data) :level 3)})
     ;; Payload carries no pos-x/y/z (portable path), so the station/tile branch
     ;; is skipped — the player handle is only read by uuid + player-get-level.
     (with-redefs [uuid/player-uuid (constantly "p1")
@@ -28,12 +28,12 @@
                                                         {:pass? true :failures []})
                   command-rt/run-command-in-session! (fn [session-id uuid {:keys [skill-id]}]
                                             (swap! calls* conj [:learn session-id uuid skill-id])
-                                            {:state {:ability-data (adata/learn-skill (get-in (store/get-player-state* session-id uuid) [:ability-data]) skill-id)}
+                                            {:state {:ability-data (adata/learn-skill (get-in (store/get-player-state session-id uuid) [:ability-data]) skill-id)}
                                              :events [{:event/type :ability/skill-learn
                                                        :uuid uuid
                                                        :skill-id skill-id}]
                                              :effects []})]
                                           (#'network/handle-learn-skill-request {:skill-id :arc-gen} player)
-      (is (= [[:conditions :arc-gen 3 :normal (get-in (store/get-player-state* test-player/test-session-id "p1") [:ability-data])]
+      (is (= [[:conditions :arc-gen 3 :normal (get-in (store/get-player-state test-player/test-session-id "p1") [:ability-data])]
               [:learn test-player/test-session-id "p1" :arc-gen]]
              @calls*)))))

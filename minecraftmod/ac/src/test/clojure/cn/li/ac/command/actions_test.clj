@@ -26,24 +26,24 @@
                     (assoc-in [:resource-data :cur-cp] 1.0)
                     (assoc-in [:resource-data :max-cp] 42.0)
                     (assoc :cooldown-data {[:railgun :main] 20}))]
-    (store/set-player-state!* ps-fix/test-session-id uuid initial)
+    (store/set-player-state! ps-fix/test-session-id uuid initial)
 
     (is (:success? (command-actions/execute {:action :set-level
                                              :level 3
                                              :player-uuid uuid}
                                             context)))
-    (is (= 3 (get-in (store/get-player-state* ps-fix/test-session-id uuid) [:ability-data :level])))
+    (is (= 3 (get-in (store/get-player-state ps-fix/test-session-id uuid) [:ability-data :level])))
 
     (is (:success? (command-actions/execute {:action :restore-cp
                                              :player-uuid uuid}
                                             context)))
-    (is (= 42.0 (get-in (store/get-player-state* ps-fix/test-session-id uuid) [:resource-data :cur-cp])))
+    (is (= 42.0 (get-in (store/get-player-state ps-fix/test-session-id uuid) [:resource-data :cur-cp])))
 
     (is (:success? (command-actions/execute {:action :clear-cooldowns
                                              :player-uuid uuid}
                                             context)))
-    (is (= {} (:cooldown-data (store/get-player-state* ps-fix/test-session-id uuid))))
-    (is (seq (:dirty-domains (store/get-player-state* ps-fix/test-session-id uuid))))
+    (is (= {} (:cooldown-data (store/get-player-state ps-fix/test-session-id uuid))))
+    (is (seq (:dirty-domains (store/get-player-state ps-fix/test-session-id uuid))))
     (is (some #(= "command.academy.aim.level.success" (first %)) @feedbacks))))
 
 (deftest registered-command-actions-delegate-stateful-mutations-to-service-test

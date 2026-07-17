@@ -92,7 +92,7 @@
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
 			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
-						state (store/get-player-state* session-id uuid)
+						state (store/get-player-state session-id uuid)
 						resource-data (some-> state :resource-data (rd/add-interference src-id))]
 				(when resource-data
 					(command-rt/run-command-in-session!
@@ -109,7 +109,7 @@
 	(when (and uuid src-id)
 		(try
 			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
-						state (store/get-player-state* session-id uuid)
+						state (store/get-player-state session-id uuid)
 						resource-data (some-> state :resource-data (rd/remove-interference src-id))]
 				(when resource-data
 					(command-rt/run-command-in-session!

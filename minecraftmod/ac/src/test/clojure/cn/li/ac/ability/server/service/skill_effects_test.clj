@@ -47,7 +47,7 @@
          (skill-effects/perform-resource! "missing" 1.0 1.0 false))))
 
 (deftest perform-resource-uses-bound-owner-session-test
-  (store/set-player-state!* :skill-effects-session "p1" (store/fresh-player-state))
+  (store/set-player-state! :skill-effects-session "p1" (store/fresh-player-state))
   (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :skill-effects-session
                                                  :player-uuid "p-effects"}}
     (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))

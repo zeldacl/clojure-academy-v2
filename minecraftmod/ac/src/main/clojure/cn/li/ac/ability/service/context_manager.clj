@@ -58,7 +58,7 @@
 (defn- server-player-state
   [player-uuid]
   (let [session-id (resolve-server-session-id "Server context state read")]
-    (store/get-player-state* session-id player-uuid)))
+    (store/get-player-state session-id player-uuid)))
 
 (defn- active-server-contexts-for-player
   [owner player-uuid]

@@ -6,11 +6,11 @@
 
 (defn- runtime-player-state
   [player-id]
-  (store/get-player-state* (runtime-hooks/require-player-state-session-id "geom") player-id))
+  (store/get-player-state (runtime-hooks/require-player-state-session-id "geom") player-id))
 
 (defn- runtime-player-state-in-session
   [session-id player-id]
-  (store/get-player-state* session-id player-id))
+  (store/get-player-state session-id player-id))
 
 (declare world-id-of-in-session
          eye-pos-in-session

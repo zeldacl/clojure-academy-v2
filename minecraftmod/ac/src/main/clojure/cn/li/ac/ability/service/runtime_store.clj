@@ -173,10 +173,6 @@
   [session-id player-uuid]
   (some-> (player-runtime session-id player-uuid) .state))
 
-(defn get-player-state*
-  [session-id player-uuid]
-  (get-player-state session-id player-uuid))
-
 (defn get-or-create-player-state!
   [session-id player-uuid]
   (some-> (ensure-player-runtime session-id player-uuid) .state))
@@ -189,22 +185,18 @@
     (.replaceState runtime (clean-state state) 0))
   nil)
 
-(defn set-player-state!*
-  [session-id player-uuid state]
-  (set-player-state! session-id player-uuid state))
-
-(defn update-player-state!
+(defn- update-player-state-core!
   [session-id player-uuid f]
   (let [^IPlayerRuntime runtime (ensure-player-runtime session-id player-uuid)
         next-state (clean-state (f (.state runtime)))]
     (.replaceState runtime next-state 0)))
 
-(defn update-player-state!*
+(defn update-player-state!
   [session-id player-uuid f & args]
   (if (seq args)
-    (update-player-state! session-id player-uuid
-                          (fn [state] (apply f state args)))
-    (update-player-state! session-id player-uuid f)))
+    (update-player-state-core! session-id player-uuid
+                               (fn [state] (apply f state args)))
+    (update-player-state-core! session-id player-uuid f)))
 
 (defn update-player-state-domain!
   [session-id player-uuid domain-key f]
@@ -302,10 +294,6 @@
     (.remove (.players session) player-uuid))
   nil)
 
-(defn remove-player-state!*
-  [session-id player-uuid]
-  (remove-player-state! session-id player-uuid))
-
 (defn remove-session!
   [session-id]
   (when-let [^IAbilityStore store (ensure-store)]
@@ -365,7 +353,7 @@
 
 (defn with-player-state
   [session-id player-uuid f]
-  (f (get-player-state* session-id player-uuid)))
+  (f (get-player-state session-id player-uuid)))
 
 (defn apply-reducer-result!
   [session-id player-uuid {:keys [state]}]

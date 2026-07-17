@@ -12,7 +12,7 @@
 
 (defn- seed-player!
   [player-uuid ability-data resource-data]
-  (store/set-player-state!* test-player/test-session-id
+  (store/set-player-state! test-player/test-session-id
                             player-uuid
                             {:ability-data ability-data
                              :resource-data resource-data}))
@@ -25,7 +25,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (false? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
+      (is (false? (get-in (store/get-player-state test-player/test-session-id uuid) [:resource-data :activated])))
       (is (empty? @events*)))))
 
 (deftest activation-request-with-category-activates-and-fires-event-test
@@ -38,7 +38,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (true? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
+      (is (true? (get-in (store/get-player-state test-player/test-session-id uuid) [:resource-data :activated])))
       (is (= [{:event/type evt/EVT-ABILITY-ACTIVATE
                :event/side :server
                :uuid uuid}]
@@ -54,7 +54,7 @@
                   evt/fire-ability-event! (fn [event]
                                             (swap! events* conj event))]
       (activation-handler/handle-set-activated-request {:activated false} uuid)
-      (is (false? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated])))
+      (is (false? (get-in (store/get-player-state test-player/test-session-id uuid) [:resource-data :activated])))
       (is (= [{:event/type evt/EVT-ABILITY-DEACTIVATE
                :event/side :server
                :uuid uuid}]
@@ -70,5 +70,5 @@
     (with-redefs [uuid/player-uuid identity
                   evt/fire-ability-event! (fn [_] nil)]
       (activation-handler/handle-set-activated-request {:activated true} uuid)
-      (is (true? (get-in (store/get-player-state* test-player/test-session-id uuid) [:resource-data :activated]))))))
+      (is (true? (get-in (store/get-player-state test-player/test-session-id uuid) [:resource-data :activated]))))))
 

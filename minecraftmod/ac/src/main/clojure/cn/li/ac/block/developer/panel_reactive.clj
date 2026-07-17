@@ -188,7 +188,7 @@
         max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))
         dev? (boolean (or @(:is-developing container) false))
         uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        pstate (when uuid-str (store/get-player-state session-id uuid-str))
         ad (:ability-data pstate)
         cat-id (:category-id ad)
         cat (when cat-id (acat/get-category cat-id))
@@ -219,7 +219,7 @@
 (defn skill-tree-render-context
   [session-id player container]
   (let [uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        pstate (when uuid-str (store/get-player-state session-id uuid-str))
         dev-type (current-developer-type container)]
     {:pstate pstate
      :dev-type dev-type
@@ -234,7 +234,7 @@
   "Pure: determine what to render in parent_right/area."
   [_player-state container player]
   (let [uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (store/get-player-state*
+        pstate (when uuid-str (store/get-player-state
                                 (panel-session-id container)
                                 uuid-str))
         ad (:ability-data pstate)
@@ -333,7 +333,7 @@
           ;; The whole model is a function of [ability-data energy max-energy
           ;; developer-type]. Compute a cheap version from those and skip the
           ;; recompute + prop writes on idle frames (the common case).
-          (let [pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+          (let [pstate (when uuid-str (store/get-player-state session-id uuid-str))
                 energy (double (or @(:energy container) 0.0))
                 max-energy (double (or @(:max-energy container) 1.0))
                 dev-type (current-developer-type container)
@@ -505,7 +505,7 @@
         est-consumption (long (* (:cps dev-spec 700.0) (progression/skill-learning-stims skill-level)))
         session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
-        get-ad #(-> (when uuid-str (store/get-player-state* session-id uuid-str)) :ability-data)
+        get-ad #(-> (when uuid-str (store/get-player-state session-id uuid-str)) :ability-data)
         ad0 (get-ad)
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
@@ -587,7 +587,7 @@
         dev-spec (developer/developer-spec dev-type)
         session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
-        pstate (when uuid-str (store/get-player-state* session-id uuid-str))
+        pstate (when uuid-str (store/get-player-state session-id uuid-str))
         ad (:ability-data pstate)
         current-level (int (or (:level ad) 1))
         target-level (inc current-level)
@@ -663,7 +663,7 @@
   (let [session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         dev-type (current-developer-type container)
-        get-pstate #(when uuid-str (store/get-player-state* session-id uuid-str))
+        get-pstate #(when uuid-str (store/get-player-state session-id uuid-str))
         clickable-of (fn [rd] (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %)))
                                        (:skill-nodes rd)))
         pstate0 (get-pstate)
@@ -758,7 +758,7 @@
     (let [dev-type (current-developer-type container)
           session-id (panel-session-id container)
           uuid-str (when player (uuid/player-uuid player))
-          ad (:ability-data (when uuid-str (store/get-player-state* session-id uuid-str)))
+          ad (:ability-data (when uuid-str (store/get-player-state session-id uuid-str)))
           level (int (or (:level ad) 1))
           factor (special-items/find-induction-factor player)]
       (cond

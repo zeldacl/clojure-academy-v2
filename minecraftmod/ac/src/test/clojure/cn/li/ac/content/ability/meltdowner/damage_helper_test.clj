@@ -186,13 +186,13 @@
     (dh/reset-marks-for-test!
       {"victim-a" {:source-player-id "atk-a" :target-id "victim-a" :ticks-left 2 :rate 1.5}})
     (is (= 2 (:ticks-left (prt-cmd/radiation-marks-for-target "victim-a"))))
-    (is (= 2 (:ticks-left (get-in (store/get-player-state* ps-fix/test-session-id "atk-a")
+    (is (= 2 (:ticks-left (get-in (store/get-player-state ps-fix/test-session-id "atk-a")
                                   [:runtime :meltdowner :radiation-marks "victim-a"]))))
     (dh/tick-marks!)
     (is (= 1 (:ticks-left (prt-cmd/radiation-marks-for-target "victim-a"))))
     (dh/tick-marks!)
     (is (nil? (prt-cmd/radiation-marks-for-target "victim-a")))
-    (is (empty? (get-in (store/get-player-state* ps-fix/test-session-id "atk-a")
+    (is (empty? (get-in (store/get-player-state ps-fix/test-session-id "atk-a")
                         [:runtime :meltdowner :radiation-marks])))))
 
 (deftest tick-marks-reaps-ghost-index-entries-without-resurrecting-state-test
@@ -203,9 +203,9 @@
                                               :target-id "victim-g"
                                               :ticks-left 50
                                               :rate 1.5}})
-    (is (nil? (store/get-player-state* ps-fix/test-session-id "ghost-atk")))
+    (is (nil? (store/get-player-state ps-fix/test-session-id "ghost-atk")))
     (dh/tick-marks!)
-    (is (nil? (store/get-player-state* ps-fix/test-session-id "ghost-atk")))
+    (is (nil? (store/get-player-state ps-fix/test-session-id "ghost-atk")))
     (is (nil? (prt-cmd/radiation-marks-for-target "victim-g")))))
 
 (deftest clear-mark-only-targets-actual-mark-sources-test

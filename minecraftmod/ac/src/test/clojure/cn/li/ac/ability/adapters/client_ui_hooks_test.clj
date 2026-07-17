@@ -214,7 +214,7 @@
       (runtime-hooks/with-player-state-owner owner
         (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
                                       :id "ctx-cleanup"))
-        (store/set-player-state!* :session-a "p1" {:resource-data {:activated true}})))
+        (store/set-player-state! :session-a "p1" {:resource-data {:activated true}})))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
     (particles/queue-particle-effect! owner {:type :particle :particle-type :spark})
@@ -248,7 +248,7 @@
     (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
     (runtime-hooks/with-client-ctx {:player-owner owner}
-      (is (nil? (store/get-player-state* :session-a "p1"))))
+      (is (nil? (store/get-player-state :session-a "p1"))))
     (ctx/with-context-owner context-owner
       (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
@@ -332,7 +332,7 @@
         cleared-groups (atom [])]
     (with-client-player-state-owner
       "p1"
-      #(store/set-player-state!* :test-session "p1" {:ability-data {:category-id :electromaster
+      #(store/set-player-state! :test-session "p1" {:ability-data {:category-id :electromaster
                                                                       :learned-skills [:railgun]}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-runtime-reset")
     (with-redefs [net-client/register-push-handler! (fn [msg-id handler-fn]
@@ -375,7 +375,7 @@
         cleared (atom [])]
     (with-client-player-state-owner
       "p1"
-      #(store/set-player-state!* :test-session "p1" {:resource-data {:activated true
+      #(store/set-player-state! :test-session "p1" {:resource-data {:activated true
                                                                        :overload-fine true
                                                                        :interferences #{}}}))
     (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-resource-reset")
@@ -534,7 +534,7 @@
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (with-redefs [store/get-player-state* (fn [_ _]
+    (with-redefs [store/get-player-state (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0
@@ -550,7 +550,7 @@
 
 (deftest build-client-overlay-plan-renders-reflection-crosshair-and-vm-wave-test
   (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (with-redefs [store/get-player-state* (fn [_ _]
+    (with-redefs [store/get-player-state (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0

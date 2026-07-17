@@ -35,7 +35,7 @@
 
 (deftest set-level-fires-recalc-with-reset-add-max-test
   (let [recalc-calls (atom [])]
-    (store/set-player-state!* ps-fix/test-session-id "p1"
+    (store/set-player-state! ps-fix/test-session-id "p1"
                           (-> (store/fresh-player-state)
                               (assoc-in [:ability-data :level] 2)
                               (assoc-in [:resource-data :add-max-cp] 5.0)
@@ -52,7 +52,7 @@
       (server-hooks/register-lifecycle-subscriptions!)
       (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
                   {:command :set-level :level 3})
-      (is (= 3 (get-in (store/get-player-state* ps-fix/test-session-id "p1") [:ability-data :level])))
+      (is (= 3 (get-in (store/get-player-state ps-fix/test-session-id "p1") [:ability-data :level])))
       (is (= [evt/CALC-MAX-CP evt/CALC-MAX-OVERLOAD]
              (->> @recalc-calls
                   (filter #(= :calc (first %)))
@@ -62,11 +62,11 @@
               :max-overload 55.0
               :add-max-cp 0.0
               :add-max-overload 0.0}
-             (select-keys (get-in (store/get-player-state* ps-fix/test-session-id "p1") [:resource-data])
+             (select-keys (get-in (store/get-player-state ps-fix/test-session-id "p1") [:resource-data])
                           [:cur-cp :max-cp :max-overload :add-max-cp :add-max-overload]))))))
 
 (deftest recover-all-restores-cp-overload-and-recovery-timers-test
-  (store/set-player-state!* ps-fix/test-session-id "p1"
+  (store/set-player-state! ps-fix/test-session-id "p1"
                         (-> (store/fresh-player-state)
                             (assoc :resource-data {:cur-cp 5.0
                                                    :max-cp 42.0
@@ -92,10 +92,10 @@
           :until-recover 0
           :until-overload-recover 0
           :interferences #{:jam}}
-         (:resource-data (store/get-player-state* ps-fix/test-session-id "p1")))))
+         (:resource-data (store/get-player-state ps-fix/test-session-id "p1")))))
 
 (deftest unlearn-skill-clears-skill-exp-and-preset-slot-test
-  (store/set-player-state!* ps-fix/test-session-id "p1"
+  (store/set-player-state! ps-fix/test-session-id "p1"
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :learned-skills] #{:railgun :arc-gen})
                             (assoc-in [:ability-data :skill-exps] {:railgun 0.8 :arc-gen 0.2})
@@ -108,7 +108,7 @@
                                                  nil))]
     (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
                                         {:command :unlearn-skill :skill-id :railgun}))
-  (let [state (store/get-player-state* ps-fix/test-session-id "p1")]
+  (let [state (store/get-player-state ps-fix/test-session-id "p1")]
     (is (= #{:arc-gen} (get-in state [:ability-data :learned-skills])))
     (is (= {:arc-gen 0.2} (get-in state [:ability-data :skill-exps])))
     (is (nil? (get-in state [:preset-data :slots [0 0]])))
@@ -116,7 +116,7 @@
 
 (deftest reset-abilities-resets-runtime-slices-and-fires-category-side-effects-test
   (let [aborted (atom [])]
-    (store/set-player-state!* ps-fix/test-session-id "p1"
+    (store/set-player-state! ps-fix/test-session-id "p1"
                           (-> (store/fresh-player-state)
                               (assoc :cheats-enabled? true)
                               (assoc-in [:ability-data :category-id] :electromaster)
@@ -131,7 +131,7 @@
       (server-hooks/register-lifecycle-subscriptions!)
       (command-rt/run-command-in-session! ps-fix/test-session-id "p1"
                   {:command :reset-abilities})
-      (let [state (store/get-player-state* ps-fix/test-session-id "p1")]
+      (let [state (store/get-player-state ps-fix/test-session-id "p1")]
         (is (= ["p1"] @aborted))
         (is (= (adata/new-ability-data) (:ability-data state)))
         (is (= (cdata/new-cooldown-data) (:cooldown-data state)))
@@ -141,13 +141,13 @@
         (is (= (rdata/new-resource-data) (:resource-data state)))))))
 
 (deftest state-actions-uses-bound-owner-session-test
-  (store/set-player-state!* :actions-session "p2"
+  (store/set-player-state! :actions-session "p2"
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :level] 1)))
   (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :actions-session}}
     (command-rt/run-command-in-session! nil "p2"
                                         {:command :set-level :level 4})
-    (is (= 4 (get-in (store/get-player-state* :actions-session "p2") [:ability-data :level])))))
+    (is (= 4 (get-in (store/get-player-state :actions-session "p2") [:ability-data :level])))))
 
 (deftest state-actions-session-resolution-still-fail-fast-test
   (runtime-hooks/with-client-ctx {:player-owner nil}

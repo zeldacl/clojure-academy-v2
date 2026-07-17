@@ -36,7 +36,7 @@
   {:logical-side :server :server-session-id :test-session :player-uuid (str uuid)})
 
 (defn- seed-player-state! [uuid cp]
-  (store/set-player-state!* test-player/test-session-id
+  (store/set-player-state! test-player/test-session-id
                             uuid
                             {:ability-data (-> (ad/new-ability-data)
                                                (assoc :category-id :electromaster)

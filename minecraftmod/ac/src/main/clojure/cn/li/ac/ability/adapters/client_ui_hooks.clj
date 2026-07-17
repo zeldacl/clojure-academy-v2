@@ -335,7 +335,7 @@
   (with-client-owner-bindings owner
     (fn []
       (let [[session-id player-uuid] (client-ui-owner-key owner)]
-        (store/remove-player-state!* session-id player-uuid))))
+        (store/remove-player-state! session-id player-uuid))))
   nil)
 
 (defn- clear-managed-screen-state!
