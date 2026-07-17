@@ -3117,9 +3117,9 @@ tasks.register('verifyWirelessGuiTabApi') {
 
     doLast {
         def violations = []
-        def tabApi = file('ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj')
+        def tabApi = file('ac/src/main/clojure/cn/li/ac/wireless/gui/tab_reactive.clj')
         if (!tabApi.exists()) {
-            violations << 'Required wireless tab API missing: cn.li.ac.wireless.gui.tab'
+            violations << 'Required wireless tab API missing: cn.li.ac.wireless.gui.tab-reactive'
         } else {
             def text = tabApi.getText('UTF-8')
             ['defn create-wireless-panel-by-role',
@@ -3131,11 +3131,11 @@ tasks.register('verifyWirelessGuiTabApi') {
              ':receiver-connected-logo-path',
              ':receiver-defer-initial-rebuild?'].each { token ->
                 if (text.contains(token)) {
-                    violations << "ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj: removed mode/wrapper API token returned: ${token}"
+                    violations << "ac/src/main/clojure/cn/li/ac/wireless/gui/tab_reactive.clj: removed mode/wrapper API token returned: ${token}"
                 }
             }
-            if (!text.contains(':role                  :node | :generator | :receiver')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/wireless/gui/tab.clj: create-wireless-panel must document the required :role option'
+            if (!text.contains(':role') || !text.contains('role-config/role-config')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/wireless/gui/tab_reactive.clj: attach-panel! must dispatch by :role via role-config'
             }
         }
 
@@ -3148,7 +3148,7 @@ tasks.register('verifyWirelessGuiTabApi') {
         ]
         fileTree('ac/src/main/clojure') {
             include '**/*.clj'
-            exclude '**/wireless/gui/tab.clj'
+            exclude '**/wireless/gui/tab_reactive.clj'
         }.files.each { File f ->
             def rel = project.rootDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
             def text = f.getText('UTF-8')
@@ -3334,16 +3334,24 @@ tasks.register('verifyCguiRuntimeShimBoundaries') {
         def violations = []
         def requiredFiles = [
             'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CMenuBridge.java',
-            'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CGuiContainerScreen.java',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/input.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
-            'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/assets.clj'
+            'mc-1.20.1/src/main/java/cn/li/mc1201/gui/CGuiContainerScreen.java'
         ]
         requiredFiles.each { path ->
             if (!file(path).exists()) {
                 violations << "Required CGui runtime/shim file missing: ${path}"
+            }
+        }
+        // The old Clojure CGui runtime (cgui/runtime.clj, renderer.clj, input.clj,
+        // traversal.clj, assets.clj) was deleted as part of the reactive UI migration
+        // (see PROJECT_LAYOUT.md "反应式 UI 框架迁移") and must stay deleted; only
+        // cgui/font.clj (MSDF bridge) remains and is not part of this boundary check.
+        ['mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/runtime.clj',
+         'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/renderer.clj',
+         'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/input.clj',
+         'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/traversal.clj',
+         'mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/cgui/assets.clj'].each { path ->
+            if (file(path).exists()) {
+                violations << "Legacy CGui runtime file must stay deleted (replaced by gui/reactive/*): ${path}"
             }
         }
 
