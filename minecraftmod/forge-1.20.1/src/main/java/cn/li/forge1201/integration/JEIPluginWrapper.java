@@ -3,6 +3,7 @@ package cn.li.forge1201.integration;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
+import cn.li.mc1201.clj.ClojureInterop;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;
@@ -25,8 +26,7 @@ public class JEIPluginWrapper implements IModPlugin {
     public JEIPluginWrapper() {
         try {
             // Load the Clojure namespace
-            IFn require = Clojure.var("clojure.core", "require");
-            require.invoke(Clojure.read("cn.li.forge1201.integration.jei-impl"));
+            ClojureInterop.requireNamespace("cn.li.forge1201.integration.jei-impl");
 
             // Get the plugin factory function
             IFn createPlugin = Clojure.var("cn.li.forge1201.integration.jei-impl", "create-jei-plugin");

@@ -106,8 +106,7 @@ public final class ForgeClientRenderRegistry {
             }
         }
 
-        IFn require = Clojure.var("clojure.core", "require");
-        require.invoke(Clojure.read("cn.li.forge1201.client.init"));
+        ClojureInterop.requireNamespace("cn.li.forge1201.client.init");
         IFn fn = Clojure.var("cn.li.forge1201.client.init", "register-scripted-block-entity-renderers!");
         fn.invoke(event);
     }

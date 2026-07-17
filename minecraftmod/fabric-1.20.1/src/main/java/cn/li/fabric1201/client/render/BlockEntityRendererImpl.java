@@ -2,6 +2,7 @@ package cn.li.fabric1201.client.render;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
+import cn.li.mc1201.clj.ClojureInterop;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
@@ -20,8 +21,7 @@ public final class BlockEntityRendererImpl implements BlockEntityRenderer<BlockE
             synchronized (BlockEntityRendererImpl.class) {
                 fn = renderTileEntityFn;
                 if (fn == null) {
-                    IFn require = Clojure.var("clojure.core", "require");
-                    require.invoke(Clojure.read("cn.li.mcmod.client.render.tesr-api"));
+                    ClojureInterop.requireNamespace("cn.li.mcmod.client.render.tesr-api");
                     fn = Clojure.var("cn.li.mcmod.client.render.tesr-api", "render-tile-entity");
                     renderTileEntityFn = fn;
                 }

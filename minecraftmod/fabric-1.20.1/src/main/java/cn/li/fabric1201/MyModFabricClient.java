@@ -3,6 +3,7 @@ package cn.li.fabric1201;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.fabric1201.client.FabricClientRenderSetup;
+import cn.li.mc1201.clj.ClojureInterop;
 import net.fabricmc.api.ClientModInitializer;
 
 /**
@@ -14,13 +15,11 @@ public class MyModFabricClient implements ClientModInitializer {
         FabricClientRenderSetup.registerClientHooks();
         FabricClientRenderSetup.registerParticleProviders();
         try {
-            IFn require = Clojure.var("clojure.core", "require");
-
-            require.invoke(Clojure.read("cn.li.fabric1201.gui.init"));
+            ClojureInterop.requireNamespace("cn.li.fabric1201.gui.init");
             IFn guiClientInit = Clojure.var("cn.li.fabric1201.gui.init", "init-client!");
             guiClientInit.invoke();
 
-            require.invoke(Clojure.read("cn.li.fabric1201.client.init"));
+            ClojureInterop.requireNamespace("cn.li.fabric1201.client.init");
             IFn clientInit = Clojure.var("cn.li.fabric1201.client.init", "init-client");
             clientInit.invoke();
         } catch (Throwable t) {

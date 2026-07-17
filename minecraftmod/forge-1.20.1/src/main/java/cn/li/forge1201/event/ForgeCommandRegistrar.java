@@ -3,6 +3,7 @@ package cn.li.forge1201.event;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Var;
+import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 
@@ -12,8 +13,7 @@ final class ForgeCommandRegistrar {
 
     static void registerAll(RegisterCommandsEvent event, Logger logger) {
         try {
-            IFn require = Clojure.var("clojure.core", "require");
-            require.invoke(Clojure.read("cn.li.forge1201.commands"));
+            ClojureInterop.requireNamespace("cn.li.forge1201.commands");
 
             Var handler = (Var) Clojure.var("cn.li.forge1201.commands", "register-all-commands");
             if (!handler.isBound()) {

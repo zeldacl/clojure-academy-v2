@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import clojure.lang.IFn;
 import clojure.java.api.Clojure;
+import cn.li.mc1201.clj.ClojureInterop;
 
 /** Universal Screen skeleton — replaces all Screen proxy sites.
  *  Takes IFn callbacks via constructor and chained with* setters.
@@ -37,8 +38,7 @@ public class DelegatingScreen extends Screen {
     static {
         IFn push = null, pop = null, clear = null;
         try {
-            IFn require = Clojure.var("clojure.core", "require");
-            require.invoke(Clojure.read("cn.li.mcmod.hooks.core"));
+            ClojureInterop.requireNamespace("cn.li.mcmod.hooks.core");
             push = Clojure.var("cn.li.mcmod.hooks.core", "push-session-context!");
             pop = Clojure.var("cn.li.mcmod.hooks.core", "pop-session-context!");
             clear = Clojure.var("cn.li.mcmod.hooks.core", "clear-session-context!");
