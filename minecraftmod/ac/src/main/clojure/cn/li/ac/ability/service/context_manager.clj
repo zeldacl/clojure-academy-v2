@@ -4,7 +4,8 @@
   Responsibilities:
   - activate-context!  : client requests to start a skill; creates and sends BEGIN-LINK
   - abort-player-contexts! : terminates all of a player's live contexts (death, category change)
-  - tick-context-manager! : keepalive timeout sweep
+  - tick-context-manager! : keepalive timeout / stale-terminated purge, driven
+    by context-dispatcher's deadline buckets (O(due entries), not a full scan)
 
   Transport in context-dispatcher; business fields in runtime-store [:context-registry].
   Network send-fns are injected, keeping this ns free of forge deps."
@@ -23,20 +24,17 @@
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private configured-terminated-context-grace-ms 1000)
-(def ^:private configured-keepalive-timeout-ms 1500)
-
 (defn keepalive-timeout-ms
   "Server-side keepalive timeout threshold in milliseconds.
-  Frozen at runtime bootstrap; hot sweeps never read system properties."
+  Frozen at runtime bootstrap; hot paths never read system properties."
   []
-  configured-keepalive-timeout-ms)
+  context-domain/keepalive-timeout-ms)
 
 (defn terminated-context-grace-ms
   "Grace window before terminated contexts are purged from registry.
   Frozen at runtime bootstrap."
   []
-  configured-terminated-context-grace-ms)
+  context-domain/terminated-context-grace-ms)
 
 (defn- resolve-server-session-id
   [reason]
@@ -169,21 +167,28 @@
        (:terminated-at-ms ctx-map)
        (>= (- now (:terminated-at-ms ctx-map)) grace-ms)))
 
-(defn- sweep-contexts!
-  "Single pass over the transport-context snapshot doing both the keepalive
-  timeout sweep and the stale-terminated purge (previously two independent
-  full snapshot+filter passes)."
-  []
-  (let [now (System/currentTimeMillis)
-        timeout-ms (keepalive-timeout-ms)
-        grace-ms (terminated-context-grace-ms)]
-    (doseq [ctx-map (ctx/snapshot-transport-contexts)]
-      (cond
-        (expired-server-context? now timeout-ms ctx-map)
-        (ctx/terminate-context! (context-owner-from-map ctx-map) (:id ctx-map) send-terminated!)
+(defn- process-due-context!
+  "Act on one context whose deadline bucket came due. Re-validates the
+  precise deadline before acting (bucket granularity only determines when an
+  entry is looked at, never whether it's actually expired/stale). When
+  neither check confirms the entry is due yet, reschedule it under its exact
+  deadline rather than dropping it from tracking."
+  [now timeout-ms grace-ms registry-key]
+  (when-let [ctx-map (ctx/get-raw-transport-context registry-key)]
+    (cond
+      (expired-server-context? now timeout-ms ctx-map)
+      (ctx/terminate-context! (context-owner-from-map ctx-map) (:id ctx-map) send-terminated!)
 
-        (stale-terminated-context? now grace-ms ctx-map)
-        (ctx/remove-context! (context-owner-from-map ctx-map) (:id ctx-map))))))
+      (stale-terminated-context? now grace-ms ctx-map)
+      (ctx/remove-context! (context-owner-from-map ctx-map) (:id ctx-map))
+
+      (and (= ctx/STATUS-ALIVE (:status ctx-map)) (:last-keepalive-ms ctx-map))
+      (ctx/reschedule-deadline-for-key! registry-key
+        (+ (long (:last-keepalive-ms ctx-map)) timeout-ms))
+
+      (and (= ctx/STATUS-TERMINATED (:status ctx-map)) (:terminated-at-ms ctx-map))
+      (ctx/reschedule-deadline-for-key! registry-key
+        (+ (long (:terminated-at-ms ctx-map)) grace-ms)))))
 
 (defn push-channel-to-player!
   "Push a context channel payload to a player's client.
@@ -234,6 +239,13 @@
          {:command :purge-terminated-contexts})))))
 
 (defn tick-context-manager!
-  "Run the global keepalive/purge sweep once from server-tick-start!."
+  "Process only deadline-bucket entries due as of this tick — O(due entries),
+  not O(all contexts). Buckets are populated by context-dispatcher's
+  register-context! (expire deadline) and terminate-context! (purge
+  deadline); this used to be a full scan over every live context."
   []
-  (sweep-contexts!))
+  (let [now (System/currentTimeMillis)
+        timeout-ms (keepalive-timeout-ms)
+        grace-ms (terminated-context-grace-ms)]
+    (doseq [registry-key (ctx/drain-due-deadline-keys! now)]
+      (process-due-context! now timeout-ms grace-ms registry-key))))

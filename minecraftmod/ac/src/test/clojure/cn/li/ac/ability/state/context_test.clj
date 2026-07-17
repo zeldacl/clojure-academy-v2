@@ -19,14 +19,18 @@
   {:logical-side :client :client-session-id :test-session :player-uuid "p"})
 
 (deftest context-creation-requires-explicit-owner-test
-  (testing "ownerless client contexts fail fast"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Opaque ctx-id resolution requires"
-                          (ctx/new-context "p" :skill))))
-  (testing "ownerless server contexts fail fast"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"Opaque ctx-id resolution requires"
-                          (ctx/new-server-context "p" :skill "ctx-ownerless")))))
+  ;; clean-player-states-fixture binds a fallback :player-owner (so ordinary
+  ;; tests don't need to thread an owner through every call) — override it to
+  ;; nil here so context-owner genuinely has nothing to fall back to.
+  (runtime-hooks/with-client-ctx {:context-owner nil :player-owner nil}
+    (testing "ownerless client contexts fail fast"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Opaque ctx-id resolution requires"
+                            (ctx/new-context "p" :skill))))
+    (testing "ownerless server contexts fail fast"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Opaque ctx-id resolution requires"
+                            (ctx/new-server-context "p" :skill "ctx-ownerless"))))))
 
 (deftest nested-update-context-test
   (let [c (ctx/new-server-context "p" :skill "ctx-nested" (server-context-owner "p"))]
@@ -95,9 +99,10 @@
   (is (empty? (ctx/get-all-contexts))))
 
 (deftest string-context-lookup-requires-owner-test
-  (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                        #"Opaque ctx-id resolution requires context-owner or an explicit owner"
-                        (ctx/get-context "ctx-ownerless"))))
+  (runtime-hooks/with-client-ctx {:context-owner nil :player-owner nil}
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Opaque ctx-id resolution requires context-owner or an explicit owner"
+                          (ctx/get-context "ctx-ownerless")))))
 
 (deftest active-contexts-filters-terminated-and-supports-player-query-test
   (let [alive (ctx/new-server-context "p1" :s1 "ctx-alive" (server-context-owner "p1"))

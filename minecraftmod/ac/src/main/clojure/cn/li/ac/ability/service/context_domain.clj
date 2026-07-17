@@ -6,6 +6,17 @@
 (def status-alive :alive)
 (def status-terminated :terminated)
 
+(def keepalive-timeout-ms
+  "Server-side keepalive timeout threshold in milliseconds. Frozen at runtime
+  bootstrap; shared by context-manager (policy) and context-dispatcher
+  (deadline-bucket scheduling) to avoid a manager->dispatcher dependency."
+  1500)
+
+(def terminated-context-grace-ms
+  "Grace window before terminated contexts are purged from the registry.
+  Frozen at runtime bootstrap."
+  1000)
+
 (defn status-valid-transition?
   [from to]
   (case [from to]

@@ -45,21 +45,23 @@
   (^Object playerIndex [])
   (^Object routeFns [])
   (^Object clientCounters [])
-  (^Object serverCounters []))
+  (^Object serverCounters [])
+  (^Object deadlineBuckets []))
 
 (deftype DispatcherRuntime
   [^HashMap transport-contexts ^HashMap player-index ^HashMap route-fns
-   ^HashMap client-counters ^HashMap server-counters]
+   ^HashMap client-counters ^HashMap server-counters ^HashMap deadline-buckets]
   IDispatcherRuntime
   (contexts [_] transport-contexts)
   (playerIndex [_] player-index)
   (routeFns [_] route-fns)
   (clientCounters [_] client-counters)
-  (serverCounters [_] server-counters))
+  (serverCounters [_] server-counters)
+  (deadlineBuckets [_] deadline-buckets))
 
 (defn create-dispatcher-runtime
   ^IDispatcherRuntime []
-  (DispatcherRuntime. (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.)))
+  (DispatcherRuntime. (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.)))
 
 (defonce ^:private default-runtime (create-dispatcher-runtime))
 (def ^:dynamic *dispatcher-runtime* nil)
@@ -105,7 +107,7 @@
   []
   (.routeFns (current-runtime)))
 
-(declare context-player-index-key)
+(declare context-player-index-key unschedule-deadline!)
 
 (defn- assoc-transport!
   [key ctx]
@@ -134,6 +136,7 @@
         ^HashMap registry (.contexts runtime)
         ^HashMap index (.playerIndex runtime)]
     (when-let [ctx (.remove registry key)]
+      (unschedule-deadline! ctx)
       (let [index-key (context-player-index-key ctx)
             ^HashSet keys (.get index index-key)]
         (when keys
@@ -169,6 +172,85 @@
   [(context-logical-side ctx)
    (owner/transport-route-key ctx)
    (some-> (:player-uuid ctx) str)])
+
+;; ============================================================================
+;; Deadline buckets — O(due entries) keepalive-timeout/purge scheduling.
+;;
+;; deadline-buckets maps a coarse time bucket (wall-clock ms / bucket-width,
+;; floored) to the set of registry-keys whose deadline falls in that window.
+;; Only buckets that were actually scheduled exist as HashMap entries, so
+;; draining checks a handful of near-term buckets, never the full context
+;; population. Bucket granularity only affects *when* an entry is looked at;
+;; the caller (context-manager) always re-validates the precise deadline
+;; before acting, so coarsening never causes an early or missed decision —
+;; a not-yet-due entry surfaced by bucket rounding is simply rescheduled.
+;; ============================================================================
+
+(def ^:private deadline-bucket-width-ms 250)
+
+(defn- deadline-bucket-key
+  ^long [^long ms]
+  (quot ms deadline-bucket-width-ms))
+
+(defn- unschedule-deadline!
+  [ctx]
+  (when-let [bucket (:deadline-bucket ctx)]
+    (let [^HashMap buckets (.deadlineBuckets (current-runtime))
+          ^HashSet keys (.get buckets (long bucket))]
+      (when keys
+        (.remove keys (context-registry-key ctx))
+        (when (.isEmpty keys)
+          (.remove buckets (long bucket))))))
+  nil)
+
+(defn- schedule-deadline!
+  "Schedule ctx's registry key into the deadline bucket for deadline-ms,
+   moving it out of any bucket it was previously scheduled in. Returns ctx
+   with :deadline-bucket updated; caller writes the result back into the
+   transport map."
+  [ctx deadline-ms]
+  (unschedule-deadline! ctx)
+  (let [bucket (deadline-bucket-key (long deadline-ms))
+        ^HashMap buckets (.deadlineBuckets (current-runtime))
+        ^HashSet keys (or (.get buckets bucket)
+                          (let [created (HashSet.)]
+                            (.put buckets bucket created)
+                            created))]
+    (.add keys (context-registry-key ctx))
+    (assoc ctx :deadline-bucket bucket)))
+
+(defn reschedule-deadline-for-key!
+  "Re-schedule the context stored at registry-key to deadline-ms. Used when a
+   drained bucket entry turns out not to be precisely due yet (bucket
+   rounding) — keeps it under deadline-bucket tracking instead of dropping it."
+  [registry-key deadline-ms]
+  (update-transport-if-present! registry-key
+    (fn [ctx] (schedule-deadline! ctx deadline-ms)))
+  nil)
+
+(defn get-raw-transport-context
+  "Look up a raw transport context map by its exact registry key (as
+   returned by drain-due-deadline-keys!). Intended for internal lifecycle
+   managers only — bypasses owner resolution and store projection."
+  [registry-key]
+  (get (transport-contexts-snapshot) registry-key))
+
+(defn drain-due-deadline-keys!
+  "Return registry keys whose scheduled deadline bucket is at or before
+   `now`, removing those buckets. O(number of currently populated buckets
+   at-or-before now), independent of total registered context count."
+  [now]
+  (let [^HashMap buckets (.deadlineBuckets (current-runtime))
+        current-bucket (deadline-bucket-key (long now))
+        due-buckets (java.util.ArrayList.)]
+    (doseq [b (.keySet buckets)]
+      (when (<= (long b) current-bucket)
+        (.add due-buckets b)))
+    (let [result (java.util.ArrayList.)]
+      (doseq [b due-buckets]
+        (when-let [^HashSet keys (.remove buckets b)]
+          (.addAll result keys)))
+      result)))
 
 (defn- route-owner-key
   [owner-map]
@@ -278,6 +360,26 @@
     (register-context! ctx)
     ctx))
 
+(defn- registration-deadline-ms
+  "Deadline to schedule at register-context! time, or nil when the incoming
+   ctx needs no deadline tracking. Covers both the normal case (server-owned
+   context created already-alive by establish-context!, bypassing
+   transition-to-alive!) and directly registering an already-terminated ctx
+   (used by test/replay paths, bypassing terminate-context!) — either way
+   register-context! is the single point where a freshly-stored ctx's
+   deadline is derived from whatever state it arrives with."
+  [ctx]
+  (cond
+    (and (= :server (context-logical-side ctx))
+         (= STATUS-ALIVE (:status ctx))
+         (:last-keepalive-ms ctx))
+    (+ (long (:last-keepalive-ms ctx)) (long context-domain/keepalive-timeout-ms))
+
+    (and (= STATUS-TERMINATED (:status ctx)) (:terminated-at-ms ctx))
+    (+ (long (:terminated-at-ms ctx)) (long context-domain/terminated-context-grace-ms))
+
+    :else nil))
+
 (defn register-context! [ctx]
   (let [session-id (context-store-session-id ctx)
         player-uuid (context-store-player-uuid ctx)]
@@ -289,8 +391,10 @@
          :ctx-id   (:id ctx)
          :skill-id (:skill-id ctx)
          :status   (or (:status ctx) STATUS-CONSTRUCTED)}))
-    (assoc-transport! (context-registry-key ctx) ctx)
-    ctx))
+    (let [deadline-ms (registration-deadline-ms ctx)
+          ctx* (if deadline-ms (schedule-deadline! ctx deadline-ms) ctx)]
+      (assoc-transport! (context-registry-key ctx*) ctx*)
+      ctx*)))
 
 (defn get-context
   ([ctx-id]
@@ -431,6 +535,7 @@
      (.clear ^HashMap (.playerIndex runtime))
      (.clear ^HashMap (.clientCounters runtime))
      (.clear ^HashMap (.serverCounters runtime))
+     (.clear ^HashMap (.deadlineBuckets runtime))
      (doseq [[registry-key ctx-map] contexts]
        (assoc-transport! registry-key ctx-map)))
    nil))
@@ -474,10 +579,13 @@
        (let [merged (ctx-proj/merge-store-projection transport)]
          (when (not= (:status merged) STATUS-TERMINATED)
            (run-context-status-command! merged STATUS-TERMINATED :dispatcher-terminated)
-           (update-transport-if-present!
-             _key
-             context-domain/transition-to-terminated
-             (System/currentTimeMillis))
+           (let [now (System/currentTimeMillis)]
+             (update-transport-if-present!
+               _key
+               (fn [c]
+                 (schedule-deadline!
+                   (context-domain/transition-to-terminated c now)
+                   (+ now (long context-domain/terminated-context-grace-ms))))))
            (when send-terminated-fn
              (when-let [ctx-owner (owner/canonical-owner-from-transport transport)]
                (with-context-owner-fn ctx-owner
