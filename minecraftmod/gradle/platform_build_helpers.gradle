@@ -20,7 +20,6 @@ ext.configureInjectedPlatformSources = { Map opts = [:] ->
 ext.configureMcmodContentRuntime = {
     evaluationDependsOn(':mcmod')
     def mcmodProject = project(':mcmod')
-    def mcmodClojureSources = mcmodProject.file('src/main/clojure')
     def mcmodJavaClasses = mcmodProject.layout.buildDirectory.dir('classes/java/main')
     def releaseAot = rootProject.hasProperty('releaseAot')
     def mcmodClojureAotClasses = mcmodProject.layout.buildDirectory.dir(
@@ -33,7 +32,6 @@ ext.configureMcmodContentRuntime = {
     dependencies {
         compileOnly mcmodProject.sourceSets.main.output
         runtimeOnly mcmodProject.sourceSets.main.output
-        runtimeOnly files(mcmodClojureSources)
     }
 
     tasks.named('compileJava').configure {
@@ -51,9 +49,6 @@ ext.configureMcmodContentRuntime = {
         from(mcmodClojureAotClasses) {
             exclude 'META-INF/MANIFEST.MF'
         }
-        from(mcmodClojureSources) {
-            include '**/*.clj'
-        }
     }
 
     tasks.matching { it.name == 'shadowJar' }.configureEach {
@@ -67,9 +62,6 @@ ext.configureMcmodContentRuntime = {
         from(mcmodClojureAotClasses) {
             exclude 'META-INF/MANIFEST.MF'
         }
-        from(mcmodClojureSources) {
-            include '**/*.clj'
-        }
     }
 
     tasks.named('processResources', Copy).configure {
@@ -82,7 +74,7 @@ ext.configureMcmodContentRuntime = {
     def copyMcmodJavaClassesToPlatformOutput = tasks.register('copyMcmodJavaClassesToPlatformOutput', Copy) {
         dependsOn mcmodPackagingDeps
         group = 'build'
-        description = 'Mirror mcmod Java/runtime classes and Clojure runtime sources into the platform Java output for dev launchers and GameTest.'
+        description = 'Mirror mcmod Java/runtime classes into the platform Java output for dev launchers and GameTest (AOT classes only — no Clojure sources; runtime classpath must stay pure AOT).'
         mustRunAfter tasks.named('compileJava')
         includeEmptyDirs = false
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -94,10 +86,6 @@ ext.configureMcmodContentRuntime = {
             include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
-        from(mcmodClojureSources) {
-            include '**/*.clj'
-            include '**/*.cljc'
-        }
         into layout.buildDirectory.dir('classes/java/main')
         inputs.files(mcmodJavaClasses)
             .withPropertyName('mcmodJavaClasses')
@@ -105,9 +93,20 @@ ext.configureMcmodContentRuntime = {
         inputs.files(mcmodClojureAotClasses)
             .withPropertyName('mcmodClojureAotClasses')
             .withPathSensitivity(PathSensitivity.RELATIVE)
-        inputs.files(mcmodClojureSources)
-            .withPropertyName('mcmodClojureSources')
-            .withPathSensitivity(PathSensitivity.RELATIVE)
+        doFirst {
+            def outDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+            if (outDir.isDirectory()) {
+                int purged = 0
+                outDir.eachFileRecurse { f ->
+                    if (f.isFile() && (f.name.endsWith('.clj') || f.name.endsWith('.cljc'))) {
+                        if (f.delete()) purged++
+                    }
+                }
+                if (purged > 0) {
+                    logger.lifecycle('[copyMcmodJavaClassesToPlatformOutput] purged {} stray Clojure source files from Java output', purged)
+                }
+            }
+        }
     }
 
     tasks.named('classes').configure {
@@ -149,7 +148,6 @@ ext.configureAcContentRuntime = {
         // ProjectDependency API. File outputs keep AC off platform sourceSets
         // while still making the ServiceLoader provider/resources available.
         runtimeOnly acProject.sourceSets.main.output
-        runtimeOnly files(acClojureSources)
     }
 
     tasks.named('jar', Jar).configure {
@@ -166,9 +164,6 @@ ext.configureAcContentRuntime = {
             include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
-        from(acClojureSources) {
-            include '**/*.clj'
-        }
     }
 
     tasks.matching { it.name == 'shadowJar' }.configureEach {
@@ -183,9 +178,6 @@ ext.configureAcContentRuntime = {
             include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
-        from(acClojureSources) {
-            include '**/*.clj'
-        }
     }
 
     // Forge/Fabric dev launchers do not necessarily expose runtimeOnly source-set
@@ -193,8 +185,9 @@ ext.configureAcContentRuntime = {
     // Mirror AC resources through processResources, but keep Clojure sources out of
     // build/resources/main: on Windows those copied .clj files are easy for Gradle,
     // JDT, or old Clojure processes to lock, which surfaces as opaque stale-output
-    // cleanup failures. Runtime Clojure sources are mirrored into classes/java/main
-    // below, which Loom already exposes on the transformed mod classpath.
+    // cleanup failures. AOT Clojure classes are mirrored into classes/java/main
+    // below (Loom already exposes that dir on the transformed mod classpath); the
+    // runtime classpath must stay AOT-only — see copyAcJavaClassesToPlatformOutput.
     tasks.named('processResources', Copy).configure {
         dependsOn acProject.tasks.named('processResources')
         from(acResources) {
@@ -205,7 +198,7 @@ ext.configureAcContentRuntime = {
     def copyAcJavaClassesToPlatformOutput = tasks.register('copyAcJavaClassesToPlatformOutput', Copy) {
         dependsOn acPackagingDeps
         group = 'build'
-        description = 'Mirror AC Java/runtime classes and Clojure runtime sources into the platform Java output for dev launchers and GameTest.'
+        description = 'Mirror AC Java/runtime classes into the platform Java output for dev launchers and GameTest (AOT classes only — no Clojure sources; runtime classpath must stay pure AOT).'
         mustRunAfter tasks.named('compileJava')
         includeEmptyDirs = false
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -219,11 +212,6 @@ ext.configureAcContentRuntime = {
             include '**/*.class'
             exclude 'META-INF/MANIFEST.MF'
         }
-        // AC Clojure runtime sources (for dev launchers that load .clj directly)
-        from(acClojureSources) {
-            include '**/*.clj'
-            include '**/*.cljc'
-        }
         into layout.buildDirectory.dir('classes/java/main')
         inputs.files(acJavaClasses)
             .withPropertyName('acJavaClasses')
@@ -231,9 +219,20 @@ ext.configureAcContentRuntime = {
         inputs.files(acClojureAotClasses)
             .withPropertyName('acClojureAotClasses')
             .withPathSensitivity(PathSensitivity.RELATIVE)
-        inputs.files(acClojureSources)
-            .withPropertyName('acClojureSources')
-            .withPathSensitivity(PathSensitivity.RELATIVE)
+        doFirst {
+            def outDir = layout.buildDirectory.dir('classes/java/main').get().asFile
+            if (outDir.isDirectory()) {
+                int purged = 0
+                outDir.eachFileRecurse { f ->
+                    if (f.isFile() && (f.name.endsWith('.clj') || f.name.endsWith('.cljc'))) {
+                        if (f.delete()) purged++
+                    }
+                }
+                if (purged > 0) {
+                    logger.lifecycle('[copyAcJavaClassesToPlatformOutput] purged {} stray Clojure source files from Java output', purged)
+                }
+            }
+        }
     }
 
     tasks.matching { it.name == 'checkClojure' }.configureEach {

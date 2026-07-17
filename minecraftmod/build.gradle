@@ -22,6 +22,86 @@ allprojects {
     }
 }
 
+// ============================================================================
+// AOT 运行时 namespace 清单（aot-manifest.edn）— 见 Phase 5 T5.2
+//
+// 每个 Clojure 模块（ac/mcmod/forge-1.20.1/fabric-1.20.1/mc-1.20.1）根目录下的
+// aot-manifest.edn 列出该模块 main sourceSet 的完整命名空间集合。
+//
+// 最初尝试按目录名排除 datagen/**（假设它只在 :runData/:runDatagen 构建期跑，
+// 从不被运行中的 mod require），实测被推翻：`cn.li.ac.core`（真正的运行时入口）
+// 静态 require 了 `cn.li.ac.datagen.bootstrap`，后者又静态 require 了
+// ability/block/energy/wireless 各 datagen registry 以及 mcmod 的
+// datagen.metadata —— 这条链在本代码库里在加载期就是运行时入口的强制依赖，
+// 目录名不能作为"是否运行时可达"的可靠信号（-PreleaseAot :ac:compileClojure
+// 在按目录排除时立刻因 FileNotFoundException 失败，验证了这一点）。
+//
+// 因此当前清单 = 全量命名空间，不做排除；-PreleaseAot 传给 compileClojure 的
+// namespaces 与不加该参数时编译的集合等价（无编译范围收缩）。清单目前只提供
+// verifyAotManifest 的双向漂移检测（新增/删除/改名命名空间会被立即捕获，强制
+// 显式确认），为未来基于真实 require 图可达性分析的收缩留下基础设施。
+// ============================================================================
+
+ext.readAotManifestNamespaces = { File manifestFile ->
+    if (!manifestFile.isFile()) {
+        throw new GradleException("AOT manifest not found: ${manifestFile}")
+    }
+    def result = new LinkedHashSet<String>()
+    manifestFile.eachLine('UTF-8') { line ->
+        def trimmed = line.trim()
+        def m = (trimmed =~ /^"([^"]+)"$/)
+        if (m.matches()) {
+            result << m.group(1)
+        }
+    }
+    result
+}
+
+ext.collectRuntimeClojureNamespaces = { File srcDir ->
+    def result = new TreeSet<String>()
+    if (srcDir.isDirectory()) {
+        fileTree(srcDir) { include '**/*.clj' }.files.each { File f ->
+            def rel = srcDir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            def nsPath = rel.replaceAll(/\.clj$/, '').replace('/', '.').replace('_', '-')
+            result << nsPath
+        }
+    }
+    result
+}
+
+tasks.register('verifyAotManifest') {
+    group = 'verification'
+    description = 'Verify each module aot-manifest.edn matches its actual main-sourceSet runtime namespace set.'
+    doLast {
+        def modules = [
+            [name: 'ac', dir: project(':ac').file('src/main/clojure')],
+            [name: 'mcmod', dir: project(':mcmod').file('src/main/clojure')],
+            [name: 'forge-1.20.1', dir: project(':forge-1.20.1').file('src/main/clojure')],
+            [name: 'fabric-1.20.1', dir: project(':fabric-1.20.1').file('src/main/clojure')],
+            [name: 'mc-1.20.1', dir: rootProject.file('mc-1.20.1/src/main/clojure')],
+        ]
+        def problems = []
+        modules.each { mod ->
+            def manifestFile = rootProject.file("${mod.name}/aot-manifest.edn")
+            def manifestNs = readAotManifestNamespaces(manifestFile) as Set
+            def sourceNs = collectRuntimeClojureNamespaces(mod.dir as File) as Set
+            def missingFromManifest = sourceNs - manifestNs
+            def staleInManifest = manifestNs - sourceNs
+            if (!missingFromManifest.isEmpty() || !staleInManifest.isEmpty()) {
+                def detail = new StringBuilder("[${mod.name}] missing-from-manifest=${missingFromManifest.size()} stale-in-manifest=${staleInManifest.size()}")
+                missingFromManifest.sort().each { detail << "\n    + ${it}" }
+                staleInManifest.sort().each { detail << "\n    - ${it}" }
+                problems << detail.toString()
+            } else {
+                logger.lifecycle('[verifyAotManifest] {} OK ({} namespaces)', mod.name, manifestNs.size())
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("aot-manifest.edn drift detected:\n" + problems.join('\n'))
+        }
+    }
+}
+
 // 汇总任务依然保留，但在各个子模块 build 完成后触发
 tasks.register('gatherJars', Copy) {
     into "$buildDir/distributions"
@@ -67,6 +147,27 @@ subprojects {
                     }
                 }
                 task.forkOptions.jvmArgs = releaseArgs
+
+                // Scope AOT compilation to this module's aot-manifest.edn (runtime
+                // namespaces only — datagen excluded, see manifest header). Forge/
+                // Fabric additionally union mc-1.20.1's manifest since its source is
+                // injected into their sourceSets (configureInjectedPlatformSources).
+                // No-op (full namespace set, current behavior) for any module without
+                // its own manifest yet, and for non-release builds entirely (this
+                // whole block is releaseAot-gated) — dev/test/CI compiles are
+                // unaffected either way.
+                def manifestFile = project.file('aot-manifest.edn')
+                if (manifestFile.isFile()) {
+                    def runtimeNamespaces = new LinkedHashSet<String>(rootProject.ext.readAotManifestNamespaces(manifestFile))
+                    if (project.name in ['forge-1.20.1', 'fabric-1.20.1']) {
+                        def mcManifest = rootProject.file('mc-1.20.1/aot-manifest.edn')
+                        if (mcManifest.isFile()) {
+                            runtimeNamespaces.addAll(rootProject.ext.readAotManifestNamespaces(mcManifest))
+                        }
+                    }
+                    task.namespaces.set(runtimeNamespaces)
+                    logger.lifecycle('[compileClojure] releaseAot manifest-scoped: {} namespaces={}', project.path, runtimeNamespaces.size())
+                }
             }
         }
 
@@ -91,11 +192,19 @@ subprojects {
     }
 }
 
+ext.namespaceToInitClassPath = { String ns ->
+    ns.replace('-', '_').replace('.', '/') + '__init.class'
+}
+
 tasks.register('verifyReleaseJarContents') {
     group = 'verification'
-    description = 'Verify Forge/Fabric release jars contain no Clojure source or duplicate entries.'
+    description = 'Verify Forge/Fabric release jars contain no Clojure source or duplicate entries, and every aot-manifest.edn runtime namespace made it into the jar as a compiled class.'
     dependsOn ':forge-1.20.1:remapJar', ':fabric-1.20.1:remapJar'
     doLast {
+        def platformManifestModules = [
+            'forge-1.20.1': ['forge-1.20.1', 'mc-1.20.1', 'ac', 'mcmod'],
+            'fabric-1.20.1': ['fabric-1.20.1', 'mc-1.20.1', 'ac', 'mcmod'],
+        ]
         [project(':forge-1.20.1'), project(':fabric-1.20.1')].each { platform ->
             def archive = platform.tasks.named('remapJar').get().archiveFile.get().asFile
             def seen = new HashSet<String>()
@@ -115,8 +224,22 @@ tasks.register('verifyReleaseJarContents') {
             if (!duplicates.isEmpty() || !clojureSources.isEmpty()) {
                 throw new GradleException("${platform.path} release jar invalid: duplicates=${duplicates.size()}, clojureSources=${clojureSources.size()}")
             }
-            logger.lifecycle('[verifyReleaseJarContents] {} entries={}, duplicate=0, clj=0',
-                             platform.name, seen.size())
+
+            def expectedNamespaces = new LinkedHashSet<String>()
+            platformManifestModules[platform.name].each { modName ->
+                def manifestFile = rootProject.file("${modName}/aot-manifest.edn")
+                if (manifestFile.isFile()) {
+                    expectedNamespaces.addAll(readAotManifestNamespaces(manifestFile))
+                }
+            }
+            def missingClasses = expectedNamespaces.findAll { ns -> !seen.contains(namespaceToInitClassPath(ns)) }
+            if (!missingClasses.isEmpty()) {
+                throw new GradleException("${platform.path} release jar missing compiled classes for ${missingClasses.size()} manifest namespace(s):\n" +
+                    missingClasses.sort().collect { "    ${it}" }.join('\n'))
+            }
+
+            logger.lifecycle('[verifyReleaseJarContents] {} entries={}, duplicate=0, clj=0, manifestNamespacesVerified={}',
+                             platform.name, seen.size(), expectedNamespaces.size())
         }
     }
 }
@@ -194,7 +317,8 @@ tasks.register('verifyLocalPrGate') {
     description = 'Run the recommended local PR gate: current platforms plus platform-neutral unit tests.'
     dependsOn 'verifyCurrentPlatforms', 'quickUnitTests',
               'verifyAotIronRules', 'verifyNoRogueThreads', 'verifyNoClientMcInShared',
-              'verifyPacketHandlerContext'
+              'verifyPacketHandlerContext', 'verifyAotManifest',
+              ':forge-1.20.1:verifyRuntimeClasspathPurity', ':fabric-1.20.1:verifyRuntimeClasspathPurity'
 }
 
 tasks.register('verifyForgeClojureUnitTests') {

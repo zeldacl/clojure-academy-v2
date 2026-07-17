@@ -499,6 +499,8 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 ```
 优点：零宏依赖、AOT 免疫、无缓存膨胀风险。与 `delay` 的区别：`lazy-validator` 是普通函数，返回的 thunk 也是普通 `fn`——AOT 生成的匿名函数类不携带宏符号，Malli eval 上下文安全。本项目全部 30 个 validator 均采用此模式。
 
+> `lazy-validator` 本身是普通顶层 `def`，其 var 解析发生在**命名空间加载时**——这要求运行时 classpath 必须是纯 AOT、且 `require` 全程串行化，否则并发/源码加载会在命名空间部分初始化的窗口期读到未 intern 的 var。见铁律十四。
+
 **方案 B — Schema 在运行时动态生成（如基于玩家输入/NBT 标签动态构造）**：使用 Guava Cache（Minecraft 原生自带）。
 ```clojure
 (:import [com.google.common.cache CacheBuilder CacheLoader])
@@ -753,6 +755,19 @@ Java 骨架类：`mc-1.20.1/src/main/java/cn/li/mc1201/shim/`
 - 实现：`ac/ability/service/skill_callback.clj` + `context_state.clj` dispatch
 - `:cost` / `:cooldown-ticks` 动态 fn 签名为 `(fn [player-id skill-id exp] ...)`
 - **禁止关闭 AOT**；修复闭包热点用 `defn-` + `partial`，不用运行时编译
+
+---
+
+#### 铁律十四：运行时 classpath 必须纯 AOT + require 一律串行化（强制）
+
+**根源**：曾出现"AOT 编译通过，运行时偶发 `schema/lazy-validator` 无法解析，重启即好"——根因链：①`gradle/platform_build_helpers.gradle` 曾把 `.clj` 源码连同 `__init.class` 一并复制进 `build/classes/java/main`；Clojure `RT.load` 按时间戳择新加载，增量构建后个别命名空间会在**运行时从源码重新编译**。②Clojure 1.12 的裸 `require` 不加锁（只有私有 `serialized-require`/`requiring-resolve` 锁 `RT/REQUIRE_LOCK`），而 Forge/Fabric 用并行 worker 派发生命周期事件；源码重编 + 并发 `require` 同一份命名空间图，会在其"部分初始化"的窗口期读到尚未 intern 的 var（尤其是定义在文件末尾的 var）。
+
+**安全实践**：
+1. 游戏运行时 classpath（`build/classes/java/main`）**禁止**出现 `.clj`/`.cljc`；只允许 `__init.class`。由 `verifyRuntimeClasspathPurity`（forge/fabric `build.gradle`）门禁，接入 `verifyLocalPrGate`。
+2. Java → Clojure 的 `require` 一律走已加锁的 `ClojureNamespaceBootstrapInvoker` / `ClojureInterop`（内部 `synchronized (clojure.lang.RT.REQUIRE_LOCK)`）；Clojure 内部批量/动态 `require` 一律走 `cn.li.mcmod.runtime.require-lock/safe-require`（内部 `(locking clojure.lang.RT/REQUIRE_LOCK ...)`），或直接用 `requiring-resolve`。**禁止**在并发触达的加载路径上裸调用 `(require ...)`。
+3. **禁止**在运行时用 `:reload`/`:reload-all` 重新 `require`（AOT 环境下会强制源码重编，主动触发上述竞态）。
+
+**判定**：新增 Java↔Clojure 引导入口必须复用上述两个已加锁的 helper；新增 Clojure 侧批量加载器必须复用 `require-lock/safe-require`，不得自行裸写 `(require ...)`。
 
 ---
 
