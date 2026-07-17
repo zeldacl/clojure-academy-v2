@@ -35,28 +35,19 @@
 
 (defn- find-recipe-kind-for
   "Look through ALL recipe types to find which one has recipes for this item.
-   The tutorial definition may hardcode a recipe kind that doesn't match the
-   actual registered recipes (e.g. says ImagFusor but recipe is actually
-   crafting).  Returns [kind-string recipes] or nil."
+   Returns [kind-string recipes] or nil."
   [item-id]
   (try
-    (if-let [result (platform-bridge/find-recipes item-id)]
-      (let [_ (log/info "[pv] find-recipes raw for" (str item-id)
-                        "crafting:" (count (:crafting result))
-                        "smelting:" (count (:smelting result))
-                        "imag-fusor:" (count (:imag-fusor result))
-                        "metal-former:" (count (:metal-former result)))
-            kinds [[:crafting "Crafting"]
+    (when-let [result (platform-bridge/find-recipes item-id)]
+      (let [kinds [[:crafting "Crafting"]
                    [:smelting "Smelting"]
                    [:imag-fusor "ImagFusor"]
                    [:metal-former "MetalFormer"]]]
         (some (fn [[qk kind-name]]
                 (when-let [recipes (seq (get result qk))]
                   [kind-name recipes]))
-              kinds))
-      (log/warn "[pv] find-recipes returned nil for" (str item-id)))
-    (catch Throwable e
-      (log/warn "[pv] find-recipe-kind-for failed:" (ex-message e))
+              kinds)))
+    (catch Throwable _
       nil)))
 
 (defn- expand-recipe-sub-views
@@ -74,11 +65,6 @@
       (let [item-id (:item-id sv)
             hardcoded-kind (:recipe-kind sv)
             [actual-kind recipes] (find-recipe-kind-for item-id)]
-        (log/info "[pv] expand-recipe" (str item-id)
-                  "type:" sv-type
-                  "hardcoded:" hardcoded-kind
-                  "actual:" actual-kind
-                  "count:" (count recipes))
         (if recipes
           (let [kind-changed? (not= hardcoded-kind actual-kind)
                 base (if kind-changed?
@@ -111,7 +97,7 @@
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "reso_ore")}]}
      {:tag :view :display-text "Phase Liquid"
       :sub-views [{:type :icon
-                   :texture (modid/asset-path "textures/items" "phase_liquid_mat.png")
+                   :texture (modid/asset-path "textures/item" "phase_liquid_mat.png")
                    :tag :view}]}
      {:tag :craft :display-text "Crafting: Constraint Plate"
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
@@ -140,9 +126,9 @@
 
     :wind_generator
     (vec (for [[item-id display-name]
-               [[(modid/namespaced-path "windgen_base") "Crafting: Windgen Base"]
-                [(modid/namespaced-path "windgen_pillar") "Crafting: Windgen Pillar"]
-                [(modid/namespaced-path "windgen_main") "Crafting: Windgen Main"]
+               [[(modid/namespaced-path "wind_gen_base") "Crafting: Windgen Base"]
+                [(modid/namespaced-path "wind_gen_pillar") "Crafting: Windgen Pillar"]
+                [(modid/namespaced-path "wind_gen_main") "Crafting: Windgen Main"]
                 [(modid/namespaced-path "windgen_fan") "Crafting: Windgen Fan"]]]
            {:tag :craft :display-text display-name
             :sub-views [{:type :recipe :recipe-kind "MetalFormer"
@@ -315,7 +301,13 @@
   [view id]
   (case (:type view)
     :icon
-    {:kind :image :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :src (:texture view)}}
+    ;; Original renders a 1×1 textured quad centered with scale=1 in a 0.75×
+    ;; perspective viewport — ~75% of preview area.  Reactive uses orthographic
+    ;; so render at 64×64 centered in the 134×134 area.
+    (let [icon-size 64.0
+          offset (/ (- 134.0 icon-size) 2.0)]
+      {:kind :image :props {:id id :x offset :y offset :w icon-size :h icon-size
+                             :src (:texture view)}})
 
     :recipe
     (recipe-preview-spec view id)
@@ -323,10 +315,17 @@
     :crafting-grid
     (recipe-preview-spec view id)
 
-    (:block-3d :item-3d)
-    (let [item-id (or (:item-id view) (:block-id view))]
-      {:kind :preview-item :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
-                                    :item-id (str item-id)}})
+    :block-3d
+    {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
+                                :render-type :block
+                                :block-id (str (:block-id view))
+                                :rotation-speed 1.0 :scale 0.8 :y-offset 0.0}}
+
+    :item-3d
+    {:kind :preview-3d :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0
+                                :render-type :item
+                                :item-id (str (:item-id view))
+                                :rotation-speed 0.0 :scale 1.0 :y-offset 0.0}}
 
     {:kind :box :props {:id id :x 0.0 :y 0.0 :w 134.0 :h 134.0 :fill 0x00000000}}))
 

@@ -16,7 +16,7 @@
     :pre-installed? true}
    {:id :tutorial
     :name "MisakaCloud"
-    :icon (modid/asset-path "textures/guis/apps" "tutorial/icon.png")
+    :icon (modid/asset-path "textures/guis/apps" "tutorial/icon_0.png")
     :icons [(modid/asset-path "textures/guis/apps" "tutorial/icon_0.png")
             (modid/asset-path "textures/guis/apps" "tutorial/icon_1.png")
             (modid/asset-path "textures/guis/apps" "tutorial/icon_2.png")]

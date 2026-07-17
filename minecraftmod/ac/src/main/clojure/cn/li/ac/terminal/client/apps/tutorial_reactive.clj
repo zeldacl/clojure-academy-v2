@@ -237,7 +237,6 @@
         cnt (count (or (:sub-views vg) []))
         ^INode bl (rt/node-by-id rt :btn-left)
         ^INode br (rt/node-by-id rt :btn-right)]
-    (cn.li.mcmod.util.log/info "[tut] nav-btns cnt:" cnt "visible:" (> cnt 1))
     (set-node-visible! rt bl (> cnt 1))
     (set-node-visible! rt br (> cnt 1))))
 

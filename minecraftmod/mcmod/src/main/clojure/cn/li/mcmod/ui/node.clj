@@ -249,4 +249,16 @@
     :oslots {:item-id 0}
     :oslots-backend-base 2
     :prop-writers {:item-id {:slot :oslot :idx 0 :sig :o}}
+    :hit? false}
+
+   :preview-3d
+   {:dslots {:rotation-speed 0 :scale 1 :y-offset 2}
+    :oslots {:render-type 0 :block-id 1 :item-id 2}
+    :oslots-backend-base 4
+    :prop-writers {:render-type {:slot :oslot :idx 0 :sig :o}
+                   :block-id   {:slot :oslot :idx 1 :sig :o}
+                   :item-id    {:slot :oslot :idx 2 :sig :o}
+                   :rotation-speed {:slot :dslot :idx 0 :sig :d}
+                   :scale          {:slot :dslot :idx 1 :sig :d}
+                   :y-offset       {:slot :dslot :idx 2 :sig :d}}
     :hit? false}})

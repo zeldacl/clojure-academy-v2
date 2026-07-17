@@ -18,8 +18,8 @@
            [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
             Tesselator BufferBuilder BufferUploader]
            [com.mojang.blaze3d.systems RenderSystem]
-           [org.joml Matrix4f Quaternionf]
-           [org.lwjgl.opengl GL11]))
+           [com.mojang.blaze3d.vertex VertexSorting]
+           [org.joml Matrix4f Quaternionf]))
 
 (declare draw-tape!)
 
@@ -800,6 +800,66 @@
       (.popPose ps))))
 
 ;; ============================================================================
+;; :preview-3d — perspective 3D preview matching upstream AcademyCraft
+;; Uses Minecraft's RenderSystem/PoseStack instead of raw GL.
+;; ============================================================================
+
+(def ^:private SLOT-P3D-TYPE  0)  ;; oslot: :block or :item
+(def ^:private SLOT-P3D-BLOCK 1)  ;; oslot: block id string
+(def ^:private SLOT-P3D-ITEM  2)  ;; oslot: item id string
+(def ^:private SLOT-P3D-BAKED 4)  ;; backend: resolved ItemStack
+(def ^:private SLOT-P3D-SPEED 0)  ;; dslot: rotation speed (1=blocks, 0=items)
+(def ^:private SLOT-P3D-SCALE 1)  ;; dslot: uniform scale
+(def ^:private SLOT-P3D-YOFF  2)  ;; dslot: Y offset
+
+(defn bake-preview-3d! [^INode node]
+  (when (nil? (.getOSlot node SLOT-P3D-BAKED))
+    (let [rtype (.getOSlot node SLOT-P3D-TYPE)
+          id-str (if (= rtype :block)
+                   (.getOSlot node SLOT-P3D-BLOCK)
+                   (.getOSlot node SLOT-P3D-ITEM))]
+      (when (string? id-str)
+        (try
+          (let [rl (ResourceLocation/tryParse ^String id-str)
+                ^net.minecraft.world.item.Item item
+                (.get net.minecraft.core.registries.BuiltInRegistries/ITEM rl)]
+            (if (and item (not= item net.minecraft.world.item.Items/AIR))
+              (.setOSlot node SLOT-P3D-BAKED (net.minecraft.world.item.ItemStack. item))
+              ;; Try block registry fallback
+              (let [^net.minecraft.world.level.block.Block block
+                    (.get net.minecraft.core.registries.BuiltInRegistries/BLOCK rl)]
+                (when (and block (not= block net.minecraft.world.level.block.Blocks/AIR))
+                  (.setOSlot node SLOT-P3D-BAKED
+                    (net.minecraft.world.item.ItemStack. (.asItem block)))))))
+          (catch Throwable _ nil))))))
+
+(defn render-preview-3d! [^GuiGraphics gg ^INode node]
+  (when (.isVisible node)
+    (when-let [^net.minecraft.world.item.ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
+      (let [rot-speed (.getDSlot node SLOT-P3D-SPEED)
+            uni-scale (let [s (.getDSlot node SLOT-P3D-SCALE)] (if (pos? s) s 1.0))
+            x (node-abs-x node) y (node-abs-y node)
+            w (scaled-w node) h (scaled-h node)
+            cx (+ x (/ w 2.0)) cy (+ y (/ h 2.0))
+            item-size 16.0
+            preview-scale (* uni-scale (/ (min w h) item-size))
+            ;; Auto-rotation: match upstream drawBlock's Y-axis spin at time/80°
+            angle (float (Math/toRadians (mod (/ (System/currentTimeMillis) 80.0) 360.0)))
+            rot (doto (Quaternionf.) (.rotateY (if (pos? rot-speed) angle 0.0)))
+            ;; Base tilt matching upstream: -20° around (1, 0, 0.1)
+            tilt (doto (Quaternionf.)
+                   (.rotateY (float (Math/toRadians 0.0)))
+                   (.rotateX (float (Math/toRadians -20.0))))
+            ^PoseStack ps (.pose gg)]
+        (.pushPose ps)
+        (.translate ps (double cx) (double cy) 200.0)
+        (.mulPose ps tilt)
+        (.mulPose ps rot)
+        (.scale ps (float preview-scale) (float (- preview-scale)) (float preview-scale))
+        (.renderFakeItem gg stack -8 -8)
+        (.popPose ps)))))
+
+;; ============================================================================
 ;; :crosshair
 ;; ============================================================================
 
@@ -868,6 +928,7 @@
    :nine-slice      {:render! render-nine-slice!      :bake! bake-nine-slice!}
    :glow-line       {:render! render-glow-line!       :bake! bake-glow-line!}
    :preview-item    {:render! render-preview-item!    :bake! bake-preview-item!}
+   :preview-3d      {:render! render-preview-3d!      :bake! bake-preview-3d!}
    :crosshair       {:render! render-crosshair!       :bake! bake-crosshair!}})
 
 ;; ============================================================================
