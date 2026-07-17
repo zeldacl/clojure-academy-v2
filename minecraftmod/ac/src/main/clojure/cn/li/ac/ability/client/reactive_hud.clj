@@ -252,7 +252,64 @@
                                   :a 0.35}
       :else {:r 0.0 :g 0.0 :b 0.0 :a 0.0})))
 
-(defn- scan-vm-state [player-uuid]
+(defonce ^:private ^HashMap snapshot-cache-by-owner (HashMap.))
+
+(defn- cached-frame-inputs
+  "Recompute contexts/hud-model/background-mask/skill-slot-shape only when
+  their pure inputs actually changed instead of every render frame.
+
+  Two independent sub-keys, matching the split already proven correct for
+  the (now-superseded) client-ui-hooks overlay-plan cache:
+  - contexts/hud-model/background-mask key off whole player-state identity —
+    resource-data (cp/overload) can legitimately change every server tick via
+    continuous regen, and hud-model must reflect that, so this cache mostly
+    saves the several render frames between two server ticks, not ticks
+    themselves.
+  - skill-slot-shape (registry/skill lookups) keys off preset-data identity
+    alone, per build-skill-slot-shape's own documented contract: it depends
+    only on active-slots (preset-data), not cooldown/context/resource data,
+    so it must not be invalidated by cp/overload ticking or cooldown countdown.
+
+  Server sync applies a whole-map replaceState on any player-state change
+  (see runtime-store/set-player-state!), so `identical?` on player-state (and
+  on the preset-data value nested within it) is a valid, zero-cost change
+  token: guaranteed stale exactly when the underlying value would differ.
+  Returns [contexts hud-model background-mask skill-slot-shape]."
+  [ok player-uuid player-state activated? screen-w screen-h]
+  (let [^objects prev (.get snapshot-cache-by-owner ok)
+        preset-data (:preset-data player-state)
+        state-fresh? (and prev (identical? (aget prev 0) player-state) (= (aget prev 1) activated?))
+        [contexts hud-model bg-mask]
+        (if state-fresh?
+          [(aget prev 2) (aget prev 3) (aget prev 4)]
+          (let [contexts (read-model/get-player-contexts-for-player player-uuid)
+                hint (consumption-hint contexts)
+                hud-model (cond-> (build-hud-model player-state activated?)
+                            hint (assoc :consumption-hint hint))]
+            [contexts hud-model
+             (background-mask (:resource-data player-state) (:ability-data player-state) activated?)]))
+        slots-fresh? (and prev (identical? (aget prev 5) preset-data)
+                         (= (aget prev 6) screen-w) (= (aget prev 7) screen-h)
+                         (= (boolean (:activated hud-model)) (boolean (aget prev 8))))
+        skill-slot-shape (if slots-fresh?
+                           (aget prev 9)
+                           (when (:activated hud-model)
+                             (hud/build-skill-slot-shape hud-model screen-w screen-h)))
+        entry (object-array [player-state activated? contexts hud-model bg-mask
+                             preset-data screen-w screen-h (boolean (:activated hud-model)) skill-slot-shape])]
+    (.put snapshot-cache-by-owner ok entry)
+    [contexts hud-model bg-mask skill-slot-shape]))
+
+(defn clear-snapshot-cache-for-owner!
+  [owner-key]
+  (.remove snapshot-cache-by-owner owner-key)
+  nil)
+
+(defn- scan-vm-state
+  "Reduce over an already-fetched contexts list (see cached-frame-inputs) —
+  callers must not re-fetch via read-model here, since build-snapshot's caller
+  already pays for that fetch once per underlying player-state change."
+  [contexts]
   (reduce
     (fn [acc ctx-data]
       (if (ctx/active-context? ctx-data)
@@ -266,7 +323,7 @@
           (assoc :deviation-active? true))
         acc))
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
-    (read-model/get-player-contexts-for-player player-uuid)))
+    contexts))
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.
@@ -276,14 +333,11 @@
         ok (owner-key player-uuid)
         player-state (read-model/get-player-state ok)
         resource-data (:resource-data player-state)
-        ability-data (:ability-data player-state)
         activated? (if (some? (:activated-override opts))
                      (boolean (:activated-override opts))
                      (boolean (:activated resource-data)))
-        hud-model (build-hud-model player-state activated?)
-        contexts (read-model/get-player-contexts-for-player player-uuid)
-        hint (consumption-hint contexts)
-        hud-model (if hint (assoc hud-model :consumption-hint hint) hud-model)
+        [contexts hud-model bg-mask skill-slot-shape]
+        (cached-frame-inputs ok player-uuid player-state activated? screen-w screen-h)
         cooldown-data (:cooldown-data player-state)
         showing-numbers? (boolean (:showing-numbers? opts false))
         last-show-ms (long (or (:last-show-value-change-ms opts) 0))
@@ -292,13 +346,13 @@
         cp-bar (when (:activated hud-model) (hud/build-cp-bar-render-data hud-model))
         overload-bar (when (:activated hud-model)
                        (hud/build-overload-bar-render-data hud-model now-ms))
-        skill-slots (when (:activated hud-model)
-                      (-> (hud/build-skill-slot-shape hud-model screen-w screen-h)
+        skill-slots (when skill-slot-shape
+                      (-> skill-slot-shape
                           (hud/patch-skill-slot-cooldown cooldown-data)
                           (hud/patch-skill-slot-visual contexts player-uuid)))
         preset-indicators (hud/build-preset-indicators-data preset-state now-ms)
         numbers-texts (hud/build-numbers-texts-data hud-model showing-numbers? last-show-ms now-ms)
-        vm (scan-vm-state player-uuid)
+        vm (scan-vm-state contexts)
         vm-tint (cond
                   (:reflection-active? vm) [70 179 255]
                   (:deviation-active? vm) [90 255 120]
@@ -308,7 +362,7 @@
         overlay-app (:active-overlay-app opts)]
     {:overlay-app overlay-app
      :overlay-app-ui (when overlay-app (build-overlay-app-ui overlay-app screen-w screen-h))
-     :background-mask (background-mask resource-data ability-data activated?)
+     :background-mask bg-mask
      :interfered? (boolean (seq (:interferences resource-data)))
      :activated? activated?
      :cp-bar cp-bar
