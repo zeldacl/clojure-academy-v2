@@ -13,3 +13,13 @@
   (if (<= interval 1)
     true
     (zero? (Math/floorMod (+ game-time (long (hash seed))) interval))))
+
+(defn next-due-tick
+  "Smallest tick >= game-time at which (due? tick interval seed) is true.
+  Pure function of the same inputs due? uses — lets a caller schedule an
+  entity's next occurrence once instead of polling due? every tick."
+  ^long [^long game-time ^long interval seed]
+  (if (<= interval 1)
+    game-time
+    (let [target (Math/floorMod (- (long (hash seed))) interval)]
+      (+ game-time (Math/floorMod (- target game-time) interval)))))

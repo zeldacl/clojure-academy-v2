@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.world-owner-key :as world-owner-key]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util HashMap]))
+  (:import [java.util HashMap HashSet]))
 
 (definterface IWorldRuntime
   (^Object runtimeState [])
@@ -164,6 +164,119 @@
     (let [^HashMap values (.transientValues runtime)]
       (.put values key (apply f (.get values key) args))))
   nil)
+
+;; ============================================================================
+;; Due-tick buckets — generic, keyed by an arbitrary bucket-key so a world can
+;; hold multiple independent schedules (e.g. one per entity kind). Backed by
+;; transient-values (never serialized); a fresh world-load naturally starts
+;; with no scheduled entries. O(due items) to drain, not O(all scheduled).
+;; ============================================================================
+
+(defn- ensure-due-buckets!
+  ^HashMap [world-data bucket-key]
+  (or (transient-value world-data bucket-key)
+      (let [m (HashMap.)]
+        (update-transient-value! world-data bucket-key (constantly m))
+        m)))
+
+(defn schedule-due!
+  "Schedule `item` to be returned by drain-due! once game-time reaches
+   `due-tick` under `bucket-key`."
+  [world-data bucket-key ^long due-tick item]
+  (let [^HashMap buckets (ensure-due-buckets! world-data bucket-key)
+        ^HashSet items (or (.get buckets due-tick)
+                          (let [created (HashSet.)]
+                            (.put buckets due-tick created)
+                            created))]
+    (.add items item))
+  nil)
+
+(defn unschedule-due!
+  "Remove a previously scheduled item so it won't fire. Safe to call even if
+   the item was never scheduled or already fired."
+  [world-data bucket-key ^long due-tick item]
+  (when-let [^HashMap buckets (transient-value world-data bucket-key)]
+    (when-let [^HashSet items (.get buckets due-tick)]
+      (.remove items item)
+      (when (.isEmpty items)
+        (.remove buckets due-tick))))
+  nil)
+
+(defn drain-due!
+  "Return items whose bucket is at-or-before game-time, removing those
+   buckets. O(number of currently populated buckets at-or-before game-time),
+   independent of total scheduled item count."
+  [world-data bucket-key ^long game-time]
+  (if-let [^HashMap buckets (transient-value world-data bucket-key)]
+    (let [due-keys (java.util.ArrayList.)]
+      (doseq [k (.keySet buckets)]
+        (when (<= (long k) game-time)
+          (.add due-keys k)))
+      (let [result (java.util.ArrayList.)]
+        (doseq [k due-keys]
+          (when-let [^HashSet items (.remove buckets k)]
+            (.addAll result items)))
+        result))
+    []))
+
+(def network-due-bucket-key
+  "Shared transient-values key for the network due-tick bucket schedule.
+   Lives here (not store.clj or world-runtime.clj) so both can reference the
+   same key without a circular require."
+  ::network-due-buckets)
+
+(def ^:private last-game-time-key ::last-game-time)
+
+(defn cache-game-time!
+  "Stash the current tick's game-time so registration paths without a live
+   world/game-time in scope (store.clj command call sites) can still compute
+   an initial due-tick. Written once per tick by tick-world-data!."
+  [world-data ^long game-time]
+  (update-transient-value! world-data last-game-time-key (constantly game-time))
+  nil)
+
+(defn cached-game-time
+  "Last game-time cached by cache-game-time!, or 0 before the world's first
+   tick (e.g. a network registered by NBT load before any tick has run —
+   self-corrects on that entity's first reschedule)."
+  ^long [world-data]
+  (or (transient-value world-data last-game-time-key) 0))
+
+;; ============================================================================
+;; Budgeted rebuild queues — world-load defers rebuild-*-indexes! commits
+;; here instead of running them all synchronously in one call; tick-world-data!
+;; drains a bounded batch per tick so loading a world with many networks or
+;; connections never stalls a single tick rebuilding the entire topology.
+;; ============================================================================
+
+(def network-rebuild-queue-key
+  "Shared transient-values key for pending network rebuild-from-NBT entries."
+  ::network-rebuild-queue)
+
+(def connection-rebuild-queue-key
+  "Shared transient-values key for pending connection rebuild-from-NBT entries."
+  ::connection-rebuild-queue)
+
+(defn enqueue-rebuild!
+  [world-data queue-key item]
+  (update-transient-value! world-data queue-key
+    (fnil conj clojure.lang.PersistentQueue/EMPTY) item)
+  nil)
+
+(defn drain-rebuild-queue!
+  "Pop up to `n` items (FIFO) from queue-key, leaving the rest queued for a
+   later call. Returns a vector of the popped items, oldest first."
+  [world-data queue-key ^long n]
+  (let [^clojure.lang.PersistentQueue q0 (or (transient-value world-data queue-key)
+                                             clojure.lang.PersistentQueue/EMPTY)]
+    (if (or (<= n 0) (.isEmpty q0))
+      []
+      (loop [q q0 taken 0 acc (transient [])]
+        (if (or (>= taken n) (.isEmpty q))
+          (do
+            (update-transient-value! world-data queue-key (constantly q))
+            (persistent! acc))
+          (recur (pop q) (unchecked-inc taken) (conj! acc (peek q))))))))
 
 (defn networks [world-data] (state-value world-data :networks))
 (defn connections [world-data] (state-value world-data :connections))

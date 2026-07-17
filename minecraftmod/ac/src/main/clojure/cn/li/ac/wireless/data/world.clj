@@ -80,9 +80,11 @@
   (if saved-data
     (if-let [wi-data (get-saved-data-world-data world saved-data)]
       (let [registered (register-world-data! world wi-data)
-            net-count (count (world-registry/networks registered))
-            conn-count (count (world-registry/connections registered))]
-        (log/info "[on-world-load] Restored WiWorldData from save:"
+            net-count (count (world-registry/transient-value
+                               registered world-registry/network-rebuild-queue-key))
+            conn-count (count (world-registry/transient-value
+                                 registered world-registry/connection-rebuild-queue-key))]
+        (log/info "[on-world-load] Queued from save for budgeted rebuild:"
                   net-count "networks," conn-count "connections")
         registered)
       (let [fresh (create-world-data world)]

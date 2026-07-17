@@ -195,7 +195,15 @@
     :default 600
     :min 20
     :max 24000
-    :comment "Ticks between periodic sweeps unregistering disposed networks/connections."}])
+    :comment "Ticks between periodic sweeps unregistering disposed networks/connections."}
+   {:key :world-load-rebuild-batch-size
+    :section :performance
+    :path "performance.world-load-rebuild-batch-size"
+    :type :int
+    :default 200
+    :min 1
+    :max 100000
+    :comment "Max networks/connections rebuilt from NBT per tick after world load; the rest queue across subsequent ticks instead of rebuilding the whole topology in one tick."}])
 
 (def default-values
   (into {} (map #(vector (get % :key) (get % :default)) descriptors)))
@@ -269,3 +277,6 @@
 
 (defn sweep-interval-ticks []
   (:sweep-interval-ticks (cfg)))
+
+(defn world-load-rebuild-batch-size []
+  (:world-load-rebuild-batch-size (cfg)))

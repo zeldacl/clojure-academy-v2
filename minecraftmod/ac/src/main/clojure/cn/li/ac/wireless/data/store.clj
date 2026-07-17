@@ -7,7 +7,9 @@
   `wireless.service.commands`. Data-layer callers (persistence, runtime
   sweeps, balance cleanup) use this namespace instead of reaching up into
   the service layer."
-  (:require [cn.li.ac.wireless.core.vblock :as vb]
+  (:require [cn.li.ac.wireless.config :as network-config]
+            [cn.li.ac.wireless.core.scheduling :as sched]
+            [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.data.entity-commit :as entity-commit]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
@@ -16,9 +18,22 @@
             [cn.li.ac.wireless.domain.topology :as topology]
             [cn.li.mcmod.util.log :as log]))
 
+(defn- schedule-network-due!
+  "Schedule net's first due-tick, staggered by its matrix position (same
+   phase-seed tick-wireless-net!'s own due? check uses) — the driver in
+   world-runtime only calls into a network once its bucket comes due."
+  [world-data net]
+  (let [game-time (world-registry/cached-game-time world-data)
+        interval (long (:network-update-interval-ticks (network-config/cfg)))
+        due-tick (sched/next-due-tick game-time interval (vb/pos-of (:matrix net)))]
+    (world-registry/schedule-due! world-data world-registry/network-due-bucket-key due-tick
+      (vb/pos-of (:matrix net))))
+  nil)
+
 (defn register-network!
   [world-data net]
   (world-registry/update-state! world-data topology/register-network net)
+  (schedule-network-due! world-data net)
   net)
 
 (defn unregister-network!
@@ -105,6 +120,7 @@
 (defn rebuild-network-indexes!
   [world-data net]
   (world-registry/update-state! world-data topology/rebuild-network-indexes net)
+  (schedule-network-due! world-data net)
   nil)
 
 (defn rebuild-connection-indexes!

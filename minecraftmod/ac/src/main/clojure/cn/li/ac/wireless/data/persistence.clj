@@ -9,7 +9,6 @@
             [cn.li.ac.wireless.data.vblock-codec :as vblock-codec]
             [cn.li.ac.wireless.data.network-state :as network-state]
             [cn.li.ac.wireless.data.node-conn :as node-conn]
-            [cn.li.ac.wireless.data.store :as store]
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
@@ -44,8 +43,9 @@
     compound))
 
 (defn network-from-nbt
-  "Deserialize a network. Pure — no world-state commits; callers register via
-  `store/rebuild-network-indexes!`."
+  "Deserialize a network. Pure — no world-state commits; world-data-from-nbt
+  queues the result via world-registry/enqueue-rebuild! for a budgeted
+  rebuild-network-indexes! commit across subsequent ticks."
   [world-data compound]
   (-> (network-state/create-wireless-net
         world-data
@@ -145,16 +145,16 @@
         (doseq [index (range networks-size)]
           (when-let [network-compound (nbt/nbt-list-get-compound networks-list index)]
             (try
-              (store/rebuild-network-indexes!
-                world-data
+              (world-registry/enqueue-rebuild!
+                world-data world-registry/network-rebuild-queue-key
                 (network-from-nbt world-data network-compound))
               (catch Exception e
                 (log/warn "Skipping invalid wireless network NBT entry" index ":" (ex-message e))))))
         (doseq [index (range connections-size)]
           (when-let [connection-compound (nbt/nbt-list-get-compound connections-list index)]
             (try
-              (store/rebuild-connection-indexes!
-                world-data
+              (world-registry/enqueue-rebuild!
+                world-data world-registry/connection-rebuild-queue-key
                 (connection-from-nbt world-data connection-compound))
               (catch Exception e
                 (log/warn "Skipping invalid wireless connection NBT entry" index ":" (ex-message e))))))

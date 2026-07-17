@@ -126,6 +126,10 @@
           (is (nil? (world/get-world-data-non-create world-id)))
           (let [restored (world/on-world-load world-id saved)]
             (is (not (identical? wd restored)))
+            ;; Networks/connections restored from NBT are queued for a budgeted
+            ;; rebuild (see world-registry/enqueue-rebuild!) and only become
+            ;; live once a tick drains the queue.
+            (world/on-world-tick world-id)
             (let [network (lookup/get-network-by-matrix restored matrix-vb)
                   conn (lookup/get-node-connection restored gen-vb)]
               (is (= "persist" (network-state/get-ssid network)))
