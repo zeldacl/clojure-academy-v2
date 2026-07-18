@@ -5,6 +5,7 @@
    that is shared across all platforms (Forge, Fabric, etc)."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.registry :as registry]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 (defn register-input-id!
@@ -41,6 +42,23 @@
   (when-let [fw-atom (fw/fw-atom)]
     (keys (get-in @fw-atom [:registry :input]))))
 
+(defn- call-with-input-ctx
+  "Rebuild the per-thread client ctx from the input context before dispatch.
+
+   Input dispatch is a context boundary (hooks.core 调用规范 #2/#3): platform
+   event threads carry no bound ctx, so handlers that resolve the session via
+   runtime-hooks/client-session-id would otherwise read nil even though the
+   context map itself carries :client-session-id."
+  [{:keys [client-session-id player-uuid]} thunk]
+  (if (some? client-session-id)
+    (runtime-hooks/with-client-ctx-fn
+      {:session-id client-session-id
+       :player-owner (cond-> {:logical-side :client
+                              :client-session-id client-session-id}
+                       player-uuid (assoc :player-uuid (str player-uuid)))}
+      thunk)
+    (thunk)))
+
 (defn emit-keyboard-input!
   "Dispatch a keyboard input event to its registered handler.
 
@@ -62,7 +80,7 @@
       ;; If handler is a symbol, resolve it to a function
       (let [handler-fn (if (symbol? handler) (resolve handler) handler)]
         (if (ifn? handler-fn)
-          (handler-fn context)
+          (call-with-input-ctx context #(handler-fn context))
           (log/warn "Resolved handler is not a function"
                    {:input-id input-id :handler handler})))
       (catch Exception e

@@ -54,7 +54,12 @@
   (System/currentTimeMillis))
 
 (defn- request-key [owner-key request-id]
-  [owner-key request-id])
+  ;; Normalize the id type: registration stores Long counters while platform
+  ;; response decoding hands back Integer. Pending entries live in a
+  ;; java.util.HashMap whose vector keys compare elements with .equals,
+  ;; and Long(2).equals(Integer(2)) is false — without (long ...) every
+  ;; response lookup misses ("No pending request for response N").
+  [owner-key (long request-id)])
 
 (defn create-client-network-session
   ([]

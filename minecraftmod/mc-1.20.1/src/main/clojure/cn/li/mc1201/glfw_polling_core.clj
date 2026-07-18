@@ -54,36 +54,46 @@
    Context provided to handlers:
    {:player-uuid 'current-player-uuid'
     :client-session-id 'session-id'
-    :logical-side :client}"
-  [_minecraft-client player-uuid client-session-id]
-  (try
-    ;; Cycle selection (R key)
-    (let [key-code GLFW_KEY_R
-          is-pressed (is-key-pressed? :original key-code)
-          was-pressed (get @last-poll-time :cycle-selection false)]
-      (when (should-trigger? :cycle-selection was-pressed is-pressed)
-        (kb-proto/emit-keyboard-input!
-          :content/cycle-selection
-          {:player-uuid player-uuid
-           :client-session-id client-session-id
-           :logical-side :client}))
-      (swap! last-poll-time assoc :cycle-selection is-pressed))
+    :logical-side :client}
 
-    ;; Toggle primary state (V key — mode switch)
-    (let [key-code GLFW_KEY_V
-          is-pressed (is-key-pressed? :original key-code)
-          was-pressed (get @last-poll-time :toggle-primary-state false)]
-      (when (should-trigger? :toggle-primary-state was-pressed is-pressed)
-        (kb-proto/emit-keyboard-input!
-          :content/toggle-primary-state
-          {:player-uuid player-uuid
-           :client-session-id client-session-id
-           :logical-side :client}))
-      (swap! last-poll-time assoc :toggle-primary-state is-pressed))
+   opts:
+   - :suppress-triggers? — true while a Screen (chat/GUI) is open. Physical key
+     state is still recorded into the debounce map (so closing a screen with a
+     key still held does NOT fire a stale released→pressed transition), but no
+     input events are emitted — matching vanilla KeyMapping screen suppression."
+  ([_minecraft-client player-uuid client-session-id]
+   (poll-all-inputs! _minecraft-client player-uuid client-session-id nil))
+  ([_minecraft-client player-uuid client-session-id {:keys [suppress-triggers?]}]
+   (try
+     ;; Cycle selection (R key)
+     (let [key-code GLFW_KEY_R
+           is-pressed (is-key-pressed? :original key-code)
+           was-pressed (get @last-poll-time :cycle-selection false)]
+       (when (and (not suppress-triggers?)
+                  (should-trigger? :cycle-selection was-pressed is-pressed))
+         (kb-proto/emit-keyboard-input!
+           :content/cycle-selection
+           {:player-uuid player-uuid
+            :client-session-id client-session-id
+            :logical-side :client}))
+       (swap! last-poll-time assoc :cycle-selection is-pressed))
 
-    nil
-    (catch Exception e
-      (log/warn e "Error polling GLFW inputs"))))
+     ;; Toggle primary state (V key — mode switch)
+     (let [key-code GLFW_KEY_V
+           is-pressed (is-key-pressed? :original key-code)
+           was-pressed (get @last-poll-time :toggle-primary-state false)]
+       (when (and (not suppress-triggers?)
+                  (should-trigger? :toggle-primary-state was-pressed is-pressed))
+         (kb-proto/emit-keyboard-input!
+           :content/toggle-primary-state
+           {:player-uuid player-uuid
+            :client-session-id client-session-id
+            :logical-side :client}))
+       (swap! last-poll-time assoc :toggle-primary-state is-pressed))
+
+     nil
+     (catch Exception e
+       (log/warn e "Error polling GLFW inputs")))))
 
 (defn reset-polling-state!
   "Reset debounce state (for testing or platform restart)"

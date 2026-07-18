@@ -5,7 +5,8 @@
   (:require [cn.li.mc1201.runtime.server-runtime :as server-runtime]
             [cn.li.mc1201.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as player-hooks]
-            [cn.li.mcmod.runtime.install :as install])
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
@@ -19,6 +20,12 @@
 (defn- send-sync-now-for-player!
   [send-sync-now! uuid]
   (let [payload (player-hooks/build-sync-payload uuid)]
+    (log/info "[SYNC-TRACE][SERVER] full sync send"
+              {:uuid uuid
+               :payload? (some? payload)
+               :revision (:revision payload)
+               :dirty-mask (:dirty-mask payload)
+               :category-id (get-in payload [:ability-data :category-id])})
     (send-sync-now! uuid payload)))
 
 (defn- scheduler-owner

@@ -55,6 +55,13 @@
         (key-provider/query-key-down? :original key-code)
         (catch Throwable _ false)))))
 
+(def ^:private no-key-down-fn
+  "key-state-fn used while a Screen (chat/inventory/GUI) is open: report every
+   key as released so typed characters never fire gameplay keybinds (e.g. 'm'
+   while typing '/aim' in chat opening the preset editor) and held keys get a
+   clean release transition instead of sticking."
+  (constantly false))
+
 (defn- get-player-uuid-str
   "Get current player UUID as string for keybinds context."
   []
@@ -65,18 +72,24 @@
     (catch Throwable _ nil)))
 
 (defn- on-client-tick-end
-  "Fabric ClientTickEvents$End handler - poll GLFW for all inputs."
+  "Fabric ClientTickEvents$End handler - poll GLFW for all inputs.
+   While any Screen is open, raw GLFW polling must not fire gameplay inputs —
+   vanilla KeyMappings are suppressed by the screen, and so must we be."
   [minecraft]
   (try
     (let [player-uuid (get-current-player-uuid)
           session-id (get-client-session-id)]
       (when (and player-uuid session-id)
-        ;; Poll one-shot inputs (R, V key presses) via glfw-polling-core
-        (glfw-polling/poll-all-inputs! minecraft player-uuid session-id)
-        ;; Poll per-frame held keys (skill slots + movement + GUI) via keybinds
-        ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
-        (client-session/with-current-client-session
-          #(power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str))))
+        (let [screen-open? (some? (.screen ^Minecraft minecraft))]
+          ;; Poll one-shot inputs (R, V key presses) via glfw-polling-core
+          (glfw-polling/poll-all-inputs! minecraft player-uuid session-id
+                                         {:suppress-triggers? screen-open?})
+          ;; Poll per-frame held keys (skill slots + movement + GUI) via keybinds
+          ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+          (client-session/with-current-client-session
+            #(power-runtime/client-tick-keys!
+               (if screen-open? no-key-down-fn glfw-key-state-fn)
+               get-player-uuid-str)))))
     (catch Exception e
       (log/warn e "Error polling Fabric keyboard inputs"))))
 

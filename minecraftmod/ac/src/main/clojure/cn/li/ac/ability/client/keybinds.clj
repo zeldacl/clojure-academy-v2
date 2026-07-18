@@ -404,7 +404,11 @@
   ([player-uuid]
    (when-let [player-uuid (or player-uuid (get-client-player-uuid))]
      ;; hasCategory check matching original: aData.hasCategory()
-     (when (has-category? player-uuid)
+     (if-not (has-category? player-uuid)
+       (log/info "[V-TRACE][AC][CLIENT][NO-CATEGORY]"
+                 {:uuid (str player-uuid)
+                  :session-id (current-client-session-id)
+                  :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
        ;; Determine whether abort handler will match BEFORE running the stack.
        ;; When has-active-contexts? is true, the priority-10 abort-delegates
        ;; handler will fire → aborts contexts WITHOUT toggling activation.

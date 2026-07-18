@@ -1,16 +1,47 @@
 (ns cn.li.ac.command.commands
-  (:require [cn.li.ac.command.dsl :as cmd]
+  (:require [cn.li.ac.ability.registry.category :as cat]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.ac.ability.service.runtime-store :as store]
+            [cn.li.ac.command.dsl :as cmd]
             [cn.li.ac.command.handlers :as handlers]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.install :as install]))
 
 (defn- resolve-handler [handler-name]
   (or (ns-resolve 'cn.li.ac.command.handlers (symbol handler-name))
       (throw (ex-info "Command handler not found" {:handler handler-name}))))
 
+(defn- category-id-suggestions
+  "Tab-completion values for category arguments. Reads the category registry
+  at completion time — categories registered later appear automatically."
+  [_ctx]
+  (map #(name (:id %)) (cat/get-all-categories)))
+
+(defn- skill-id-suggestions
+  "Tab-completion values for skill arguments. Prefers the requesting player's
+  current category (that is what learn/unlearn operate on); falls back to
+  every registered category when there is no player (console) or no category
+  yet. Registry + player state are read at completion time — nothing is
+  hardcoded."
+  [{:keys [player-uuid]}]
+  (let [session-id (runtime-hooks/player-state-session-id)
+        current-cat (when (and player-uuid session-id)
+                      (get-in (store/get-player-state session-id player-uuid)
+                              [:ability-data :category-id]))
+        cat-ids (if current-cat
+                  [current-cat]
+                  (map :id (cat/get-all-categories)))]
+    (->> cat-ids
+         (mapcat skill-query/get-skills-for-category)
+         (keep :id)
+         (map name)
+         sort)))
+
 (defn- build-common-aim-subcommands []
   {:cat {:arguments [{:name "category"
                       :type :string
-                      :description "Category ID to switch to"}]
+                      :description "Category ID to switch to"
+                      :suggestions category-id-suggestions}]
          :executor-fn (resolve-handler "handle-aim-cat")
          :description "Switch ability category"}
    :catlist {:arguments []
@@ -21,12 +52,14 @@
            :description "Reset all abilities"}
    :learn {:arguments [{:name "skill"
                         :type :string
-                        :description "Skill ID to learn"}]
+                        :description "Skill ID to learn"
+                        :suggestions skill-id-suggestions}]
            :executor-fn (resolve-handler "handle-aim-learn")
            :description "Learn a skill"}
    :unlearn {:arguments [{:name "skill"
                           :type :string
-                          :description "Skill ID to unlearn"}]
+                          :description "Skill ID to unlearn"
+                          :suggestions skill-id-suggestions}]
              :executor-fn (resolve-handler "handle-aim-unlearn")
              :description "Unlearn a skill"}
    :learn_all {:arguments []
@@ -45,7 +78,8 @@
            :description "Set ability level"}
    :exp {:arguments [{:name "skill"
                       :type :string
-                      :description "Skill ID"}
+                      :description "Skill ID"
+                      :suggestions skill-id-suggestions}
                      {:name "exp"
                       :type :float
                       :description "Experience value (0.0-1.0)"}]

@@ -204,11 +204,21 @@
 
 (defn- apply-client-runtime-v2!
   [{:keys [version opcode uuid revision dirty-mask] :as payload}]
+  (when (= 1 opcode)
+    (log/info "[SYNC-TRACE][CLIENT] full sync recv"
+              {:uuid uuid
+               :revision revision
+               :dirty-mask dirty-mask
+               :category-id (get-in payload [:ability-data :category-id])
+               :session-id (current-client-session-id)}))
   (when (and (= 2 version) (or (= 1 opcode) (= 2 opcode)) uuid
              (integer? revision) (integer? dirty-mask))
     (let [old-state (get-client-player-state uuid)
           old-revision (long (get old-state :sync-revision -1))
           mask (long dirty-mask)]
+      (when (<= (long revision) old-revision)
+        (log/info "[SYNC-TRACE][CLIENT] skip stale sync"
+                  {:opcode opcode :revision revision :old-revision old-revision}))
       (when (> (long revision) old-revision)
         (let [command (cond-> {:command :hydrate-player-state
                                :sync-revision (long revision)}

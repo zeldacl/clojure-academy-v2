@@ -94,6 +94,16 @@
         (key-provider/query-key-down? :original key-code)
         (catch Throwable _ false)))))
 
+(def ^:private no-key-down-fn
+  "key-state-fn used while a Screen (chat/inventory/GUI) is open: report every
+   key as released so typed characters never fire gameplay keybinds (e.g. 'm'
+   while typing '/aim' in chat opening the preset editor) and held keys get a
+   clean release transition instead of sticking."
+  (constantly false))
+
+(defn- screen-open? []
+  (some? (.screen (Minecraft/getInstance))))
+
 (defn- get-player-uuid-str
   "Get current player UUID as string for keybinds context."
   []
@@ -110,8 +120,12 @@
   (msdf-tick/client-tick!)
   ;; Per-frame key polling for skill slot keys (Z/X/C/V held) + movement keys + GUI keys
   ;; Needs client session ctx: keybinds owner resolution reads client-session-id.
+  ;; While any Screen is open, raw GLFW polling must read all keys as released —
+  ;; vanilla KeyMappings are suppressed by the screen, and so must we be.
   (client-session/with-current-client-session
-    #(power-runtime/client-tick-keys! glfw-key-state-fn get-player-uuid-str))
+    #(power-runtime/client-tick-keys!
+       (if (screen-open?) no-key-down-fn glfw-key-state-fn)
+       get-player-uuid-str))
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]

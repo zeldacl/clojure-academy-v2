@@ -8,13 +8,22 @@
 						[cn.li.mcmod.runtime.install :as install]
 						[cn.li.mcmod.util.log :as log]))
 
+(defn- init-commands-and-publish-metadata!
+	"Populate the DSL registry, then publish it to the platform metadata
+	registry. Publishing must happen AFTER commands/init-commands! — an eager
+	snapshot at hook-install time captures an empty DSL registry, so Brigadier
+	registration iterates zero commands (/aim etc. silently missing)."
+	[]
+	(commands/init-commands!)
+	(command-metadata/register-command-registry!
+		(:commands (command-dsl/command-registry-snapshot))))
+
 (defn install-command-hooks!
 	[]
 	(install/framework-once! ::hooks-installed?
   (fn []
     (command-actions/install-command-actions!)
 		(command-runtime/register-command-hooks!
-			{:init-commands! commands/init-commands!})
-		(command-metadata/register-command-registry! (:commands (command-dsl/command-registry-snapshot)))
+			{:init-commands! init-commands-and-publish-metadata!})
 		(log/info "AC command hooks installed")))
 	nil)

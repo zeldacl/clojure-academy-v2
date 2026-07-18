@@ -8,31 +8,32 @@
   (:require [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mc1201.command.brigadier-util :as brig-util]
-            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mc1201.command.feedback :as feedback]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier.builder ArgumentBuilder]
            [com.mojang.brigadier.builder LiteralArgumentBuilder RequiredArgumentBuilder]
            [com.mojang.brigadier.context CommandContext]
-           [net.minecraft.commands CommandSourceStack]
-           [net.minecraft.network.chat Component]
+           [com.mojang.brigadier.suggestion SuggestionProvider SuggestionsBuilder]
+           [net.minecraft.commands CommandSourceStack SharedSuggestionProvider]
            [net.minecraft.server.level ServerPlayer]))
-
-(defn- send-feedback!
-  "Shared MC feedback implementation exposed to content action executors via metadata."
-  [^CommandSourceStack source message translate? args _error?]
-  (try
-    (let [text (if translate?
-                 (i18n/translate message)
-                 message)
-          component (Component/literal text)]
-      (.sendSuccess source component false))
-    (catch Exception e
-      (log/error "Failed to send feedback:" (ex-message e)))))
 
 (defn- player-uuid
   [^ServerPlayer player]
   (when player
     (str (.getUUID player))))
+
+(defn- source-player
+  ^ServerPlayer [^CommandSourceStack source]
+  (try (.getPlayerOrException source)
+       (catch Exception _ nil)))
+
+(defn- command-source-owner
+  "Server player-state owner for a command dispatch/suggestion boundary."
+  [^CommandSourceStack source ^ServerPlayer player]
+  (cond-> {:logical-side :server
+           :server-session-id [:server (System/identityHashCode (.getServer source))]}
+    player (assoc :player-uuid (str (.getUUID player)))))
 
 ;; ============================================================================
 ;; Command Execution
@@ -52,10 +53,14 @@
   [executor-fn ^CommandContext brigadier-ctx arg-specs target-player]
   (try
     (let [^CommandSourceStack source (.getSource brigadier-ctx)
-          ^ServerPlayer player (try (.getPlayerOrException source)
-                   (catch Exception _ nil))
+          player (source-player source)
           world (when player (.level player))
           arguments (brig-util/extract-all-arguments brigadier-ctx arg-specs)
+          ;; Command execution is a server-side dispatch boundary (hooks.core
+          ;; 调用规范 #2): rebuild the player-state owner here — the Brigadier
+          ;; dispatcher runs outside the tick-loop owner binding, so action
+          ;; executors would otherwise see no bound session-id.
+          owner (command-source-owner source player)
           ctx (cmd-ctx/create-context
                 {:player player
                  :world world
@@ -63,13 +68,16 @@
                  :arguments arguments
                  :target-player target-player
                  :metadata {:player-uuid-fn player-uuid
+                    :player-state-owner owner
                     :send-feedback-fn (fn [message translate? args error?]
-                        (send-feedback! source message translate? args error?))}})
-          action-result (executor-fn ctx)]
+                        (feedback/send-feedback! source message translate? args error?))}})]
 
-      ;; Execute the action
-      (when action-result
-        (cmd-actions/execute action-result ctx))
+      (runtime-hooks/with-client-ctx-fn {:player-owner owner}
+        (fn []
+          (let [action-result (executor-fn ctx)]
+            ;; Execute the action
+            (when action-result
+              (cmd-actions/execute action-result ctx)))))
 
       ;; Return success
       1)
@@ -100,6 +108,34 @@
                               (catch Exception _ nil)))]
         (int (execute-command executor-fn ctx arg-specs target-player))))))
 
+(defn- suggestion-provider
+  "Wrap a DSL :suggestions fn as a Brigadier SuggestionProvider.
+
+  suggestions-fn: (fn [{:keys [player-uuid]}] -> seqable of suggestion values).
+  It is invoked with a normalized, platform-free context (player-uuid nil from
+  console) under a bound server player-state owner — the suggestion packet
+  path, like command execution, runs outside the tick-loop owner binding, so
+  content fns can read player state through the usual hooks. Values are read
+  dynamically at completion time; SharedSuggestionProvider/suggest applies the
+  prefix filter for the partially-typed input."
+  [suggestions-fn]
+  (reify SuggestionProvider
+    (getSuggestions [_ ctx suggestions-builder]
+      (let [^CommandSourceStack source (.getSource ^CommandContext ctx)
+            player (source-player source)
+            owner (command-source-owner source player)
+            values (try
+                     (runtime-hooks/with-client-ctx-fn {:player-owner owner}
+                       (fn []
+                         (into [] (map str)
+                               (suggestions-fn {:player-uuid (player-uuid player)}))))
+                     (catch Exception e
+                       (log/warn "Suggestion provider failed:" (ex-message e))
+                       []))]
+        (SharedSuggestionProvider/suggest
+          ^Iterable values
+          ^SuggestionsBuilder suggestions-builder)))))
+
 (defn build-argument-node
   "Build a Brigadier argument node.
 
@@ -115,6 +151,8 @@
   (let [arg-name (name (:name arg-spec))
         arg-type (brig-util/map-argument-type arg-spec)
         builder (RequiredArgumentBuilder/argument arg-name arg-type)]
+    (when-let [suggestions-fn (:suggestions-fn arg-spec)]
+      (.suggests builder (suggestion-provider suggestions-fn)))
     (when executor-fn
       (.executes builder (build-executor executor-fn all-arg-specs target-player-arg)))
     builder))
