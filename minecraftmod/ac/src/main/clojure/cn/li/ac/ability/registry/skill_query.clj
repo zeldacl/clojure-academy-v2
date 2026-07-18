@@ -1,7 +1,9 @@
 (ns cn.li.ac.ability.registry.skill-query
 	"Query helpers for effective AC skill specs."
 	(:require [cn.li.ac.ability.registry.skill :as skill]
-					[cn.li.ac.ability.skill-config :as skill-config]))
+					[cn.li.ac.ability.skill-config :as skill-config]
+					[cn.li.ac.config.modid :as modid]
+					[clojure.string :as str]))
 
 (defn list-skills
 	"Return all effective skill specs as a realized vector."
@@ -40,7 +42,14 @@
 
 (defn get-skill-icon-path
 	[skill-id]
-	(get-in (skill/raw-skill skill-id) [:icon] ""))
+	(let [icon (get-in (skill/raw-skill skill-id) [:icon] "")]
+		;; Content skill :icon values are bare paths ("textures/abilities/...");
+		;; a namespace-less ResourceLocation resolves against "minecraft:" and
+		;; 404s into the checkerboard texture. Normalize here — the single query
+		;; point every consumer (HUD slots, preset editor, selector) goes through.
+		(if (and (seq icon) (not (str/includes? icon ":")))
+			(str modid/MOD-ID ":" icon)
+			icon)))
 
 (defn controllable-key
 	[skill-id]

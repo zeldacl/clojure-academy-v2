@@ -310,8 +310,9 @@
       ;; above it at negative y.
       (.setX sel-node (double mx))
       (.setY sel-node (double my))
-      (ui/set-prop! r :selector :w sel-w)
-      (ui/set-prop! r :selector :h sel-h)
+      ;; Group kinds have no :w/:h prop-writers — size via INode setters.
+      (.setW sel-node (double sel-w))
+      (.setH sel-node (double sel-h))
       (.setVisible sel-node true)
       (.setFlag sel-node node/FLAG-LAYOUT-DIRTY)
       (rt/mark-tree-dirty! r)
@@ -556,6 +557,16 @@
 ;; Wire slot clicks → open Selector (matching upstream HintHandler)
 ;; ============================================================================
 
+(defn- switch-to-page! [^UiRt r owner page-idx]
+  (let [^CarouselAnim anim (carousel-anim r)]
+    (when (not= page-idx (.activeIndex anim))
+      (clear-selector! r)
+      (start-transit! r (.activeIndex anim) page-idx)
+      ;; View-local edit target only — upstream startTransit never touches the
+      ;; server-side active preset.
+      (logic/on-preset-tab-click owner page-idx)
+      (refresh-carousel! r owner))))
+
 (defn- wire-slot-clicks! [^UiRt r owner page-idx]
   (doseq [slot-idx (range 4)]
     (let [slot-id (keyword (str "preset-" page-idx "-" slot-idx))]
@@ -563,14 +574,23 @@
         (fn [_ _ evt]
           (let [^CarouselAnim anim (carousel-anim r)]
             (when-not (.transiting anim)
-              (if (selector-open? r)
+              (cond
                 ;; Upstream: if selector open, dispose it (click same slot = close)
+                (selector-open? r)
                 (clear-selector! r)
+
                 ;; Upstream: if page is active, open selector at mouse position
-                (when (= page-idx (.activeIndex anim))
-                  (let [mx (double (or (:x evt) 0))
-                        my (double (or (:y evt) 0))]
-                    (build-selector! r page-idx slot-idx mx my)))))))))))
+                (= page-idx (.activeIndex anim))
+                (let [mx (double (or (:x evt) 0))
+                      my (double (or (:y evt) 0))]
+                  (build-selector! r page-idx slot-idx mx my))
+
+                ;; Upstream HintHandler else-branch: a row click on an INACTIVE
+                ;; page transits to that page. Rows cover almost the whole page,
+                ;; and click bubbling stops at the first handler — without this
+                ;; branch side-page clicks land here and die silently.
+                :else
+                (switch-to-page! r owner page-idx)))))))))
 
 ;; ============================================================================
 ;; Wire page clicks → switch to that preset (matching upstream startTransit)
@@ -583,13 +603,9 @@
         (fn [_ _ _]
           (let [^CarouselAnim anim (carousel-anim r)]
             (when-not (.transiting anim)
-              (clear-selector! r)
-              (when (not= page-idx (.activeIndex anim))
-                (let [from-idx (.activeIndex anim)]
-                  (start-transit! r from-idx page-idx)
-                  ;; Update logic state so data reads use the new preset
-                  (logic/on-preset-tab-click owner page-idx)
-                  (refresh-carousel! r owner))))))))))
+              (if (= page-idx (.activeIndex anim))
+                (when (selector-open? r) (clear-selector! r))
+                (switch-to-page! r owner page-idx)))))))))
 
 ;; ============================================================================
 ;; Public API

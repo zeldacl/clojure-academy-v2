@@ -108,10 +108,10 @@
     ;; 先计算父
     (layout/compute-abs-pos! parent 0.0 0.0 1.0 300.0 200.0)
     (is (== 10.0 (.getAbsX ^INode parent)))
-    ;; 递归子节点
+    ;; 递归子节点（末参 ancestor-recomputed? — 父已重算 → 级联子树）
     (let [^INode p parent]
       (#'cn.li.mcmod.ui.layout/ensure-children-layout!
-       p (.getAbsX p) (.getAbsY p) (.getCumScale p) (.getW p) (.getH p)))
+       p (.getAbsX p) (.getAbsY p) (.getCumScale p) (.getW p) (.getH p) true))
     ;; child abs-x = parent-abs-x + (child-x)*parent-cum-scale
     ;; = 10 + (0+5-0)*1 = 15.0
     (is (== 15.0 (.getAbsX ^INode child)))

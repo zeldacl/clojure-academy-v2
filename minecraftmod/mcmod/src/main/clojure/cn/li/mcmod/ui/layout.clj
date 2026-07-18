@@ -79,20 +79,29 @@
   "Top-down layout recomputation: only dirty subtrees. Root anchored at (0,0)."
   [^UiRt rt]
   (let [root (rt/node-by-idx rt 0)]
-    (when (and root (.hasFlag ^INode root node/FLAG-LAYOUT-DIRTY))
-      (compute-abs-pos! root 0.0 0.0 1.0
-                        (rt/screen-w rt) (rt/screen-h rt)))
     (when root
-      (ensure-children-layout! root
-                               (.getAbsX ^INode root) (.getAbsY ^INode root)
-                               (.getCumScale ^INode root)
-                               (.getW ^INode root) (.getH ^INode root)))))
+      (let [root-recomputed? (.hasFlag ^INode root node/FLAG-LAYOUT-DIRTY)]
+        (when root-recomputed?
+          (compute-abs-pos! root 0.0 0.0 1.0
+                            (rt/screen-w rt) (rt/screen-h rt)))
+        (ensure-children-layout! root
+                                 (.getAbsX ^INode root) (.getAbsY ^INode root)
+                                 (.getCumScale ^INode root)
+                                 (.getW ^INode root) (.getH ^INode root)
+                                 root-recomputed?)))))
 
 (defn- ensure-children-layout!
-  "Recurse: re-layout dirty children and their dirty subtrees only."
+  "Recurse: re-layout dirty children and their subtrees.
+
+   ancestor-recomputed? cascades: a child's abs position derives from its
+   parent's, so once ANY ancestor recomputed, every descendant must too —
+   without this, moving/scaling a container (carousel pages, popups) left
+   all its visible content frozen at the old coordinates while non-layout
+   channels (alpha, fills) still responded."
   [^INode parent
    parent-abs-x parent-abs-y
-   parent-scale parent-w parent-h]
+   parent-scale parent-w parent-h
+   ancestor-recomputed?]
   (let [list-scroll (when (= (.getKind parent) :list)
                       (.getDSlot parent 1))
         n (.getChildCount parent)]
@@ -100,14 +109,17 @@
       (when (< i n)
         (let [^INode child (.getChild parent i)]
           (when (and child (.isVisible child))
-            (when (or (.hasFlag child node/FLAG-LAYOUT-DIRTY)
-                      (= (.getKind parent) :list))
-              (compute-abs-pos! child parent-abs-x parent-abs-y parent-scale parent-w parent-h
-                                {:local-y-offset (when list-scroll (- list-scroll))}))
-            (ensure-children-layout! child
-                                     (.getAbsX child) (.getAbsY child)
-                                     (.getCumScale child)
-                                     (.getW child) (.getH child)))
+            (let [recompute? (or ancestor-recomputed?
+                                 (.hasFlag child node/FLAG-LAYOUT-DIRTY)
+                                 (= (.getKind parent) :list))]
+              (when recompute?
+                (compute-abs-pos! child parent-abs-x parent-abs-y parent-scale parent-w parent-h
+                                  {:local-y-offset (when list-scroll (- list-scroll))}))
+              (ensure-children-layout! child
+                                       (.getAbsX child) (.getAbsY child)
+                                       (.getCumScale child)
+                                       (.getW child) (.getH child)
+                                       recompute?)))
           (recur (unchecked-inc-int i)))))))
 
 ;; ============================================================================
