@@ -172,7 +172,7 @@
                       app-idx (+ (* (int new-scroll) 3) new-sel)]
                   (when (< app-idx (count installed))
                     (client-sounds/queue-current-sound-effect!
-                      {:type :sound :sound-id (str (modid/MOD-ID) ":terminal.select")
+                      {:type :sound :sound-id (str modid/MOD-ID ":terminal.select")
                        :volume 0.2 :pitch 1.0})))
                 (when-let [f @update-grid!-fn] (f)))
               ;; --- Scroll change or installed-count change → grid update ---

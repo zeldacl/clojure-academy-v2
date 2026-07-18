@@ -69,11 +69,19 @@
               :else false)))))))
 
 (defn dispatch-click! [^UiRt rt mx my button event-key]
+  ;; Bubble up the parent chain from the deepest hit (same walk as
+  ;; dispatch-scroll!): handlers live on container groups (slot rows, carousel
+  ;; pages) while hit-test lands on their leaf children (icons, labels,
+  ;; background images) — without bubbling those handlers are unreachable.
+  ;; The walk stops at the FIRST node with handlers, so a child with its own
+  ;; handler still shadows its ancestors.
   (let [^INode hit (layout/hit-test rt (double mx) (double my))]
-    (when hit
-      (when-let [handlers (rt/get-event-handlers rt (.getIdx hit) event-key)]
-        (let [evt {:x mx :y my :button button :node-idx (.getIdx hit)}]
-          (doseq [f handlers] (f rt hit evt)))))))
+    (loop [node hit]
+      (when node
+        (if-let [handlers (rt/get-event-handlers rt (.getIdx ^INode node) event-key)]
+          (let [evt {:x mx :y my :button button :node-idx (.getIdx ^INode node)}]
+            (doseq [f handlers] (f rt node evt)))
+          (recur (.getParentNode ^INode node)))))))
 
 (defn dispatch-scroll! [^UiRt rt mx my scroll-delta]
   (let [^INode hit (layout/hit-test rt (double mx) (double my))]
