@@ -17,6 +17,7 @@
    build-fn: (fn [screen-w screen-h] -> UiRt) creates the tree + bindings."
   [client-session-id build-fn screen-w screen-h]
   (let [rt (build-fn screen-w screen-h)]
+    (rt/resize! rt (double screen-w) (double screen-h))
     (.put overlay-runtimes client-session-id
           {:runtime rt :build-fn build-fn :width screen-w :height screen-h})
     rt))
@@ -42,6 +43,13 @@
             (.remove overlay-runtimes client-session-id))
         ^UiRt runtime (when (and (or (nil? entry) resized?) build-fn)
                         (when-let [new-runtime (build-fn screen-w screen-h)]
+                          ;; Screens keep UiRt screen size fresh via per-frame
+                          ;; rt/resize!; the overlay bakes sizes at build time,
+                          ;; so initialize it here — otherwise rt/screen-w
+                          ;; reads 0 and every consumer (snapshot geometry,
+                          ;; apply-screen-size!) computes for a 0×0 screen and
+                          ;; the HUD stays invisible.
+                          (rt/resize! new-runtime (double screen-w) (double screen-h))
                           (.put overlay-runtimes client-session-id
                                 {:runtime new-runtime
                                  :width screen-w

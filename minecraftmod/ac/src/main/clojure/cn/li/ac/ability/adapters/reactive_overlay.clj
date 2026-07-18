@@ -39,21 +39,31 @@
 
 (defn- local-player-uuid [] (bridge/call-adapter :local-player-uuid))
 
-(defn- rgba-vec->argb [[r g b a]]
-  (bit-or (bit-shift-left (int (* 255.0 (double a))) 24)
-          (bit-shift-left (int (* 255.0 (double r))) 16)
-          (bit-shift-left (int (* 255.0 (double g))) 8)
-          (int (* 255.0 (double b)))))
-
 (defn- mask-vec [{:keys [r g b a]}]
   [(double (or r 0.0)) (double (or g 0.0)) (double (or b 0.0)) (double (or a 0.0))])
 
-(defn- write-fill-from-rgba-o! [^INode n source]
+(defn- write-vignette-from-rgba-o!
+  "Drive the :bg-mask vignette image from the smoothed [r g b a] color signal:
+   rgb (0..1) → image tint (0..255), a → image alpha. The texture
+   (effects/screen_mask.png, upstream AcademyCraft's screen mask) is a white
+   edge glow with a transparent center, so tint×alpha yields the original
+   'edge ring in category color' look instead of a full-screen solid fill."
+  [^INode n source]
   (let [rgba (sig/sget-o ^ISigO source)
-        v (double (rgba-vec->argb rgba))]
-    (when-not (== v (.getDSlot n 0))
-      (.setDSlot n 0 v)
-      (.setFlag n node/FLAG-RENDER-DIRTY))))
+        a (double (nth rgba 3))]
+    (when-not (== a (.getDSlot n 0))
+      (.setDSlot n 0 a)
+      (.setFlag n node/FLAG-RENDER-DIRTY))
+    (let [nr (* 255.0 (double (nth rgba 0)))
+          ng (* 255.0 (double (nth rgba 1)))
+          nb (* 255.0 (double (nth rgba 2)))
+          tint (.getOSlot n 1)]
+      (when-not (and (vector? tint)
+                     (== (double (nth tint 0)) nr)
+                     (== (double (nth tint 1)) ng)
+                     (== (double (nth tint 2)) nb))
+        (.setOSlot n 1 [nr ng nb 255.0])
+        (.setFlag n node/FLAG-RENDER-DIRTY)))))
 
 (defn- rgb-vec->argb [[r g b] alpha]
   (bit-or (bit-shift-left (int (* 255.0 (double alpha))) 24)
@@ -127,7 +137,11 @@
         bar-w 193           ;; 964 * 0.2
         bar-h 29]           ;; 147 * 0.2
     (dsl/group {:id :root :w sw :h sh}
-      (dsl/box {:id :bg-mask :x 0 :y 0 :w sw :h sh :fill 0x00000000})
+      ;; Vignette (upstream AC screen mask): edge glow tinted by category
+      ;; color; alpha/tint driven per-frame by the smoothed bg color signal.
+      (dsl/image {:id :bg-mask :x 0 :y 0 :w sw :h sh
+                  :src (modid/asset-path "textures" "effects/screen_mask.png")
+                  :alpha 0.0})
       (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
       (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
         (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x6E081220})
@@ -201,6 +215,10 @@
         jitter-x (anim/jitter-offset clock 0)
         jitter-y (anim/jitter-offset clock 1)
         ^INode bg-mask (ui/node r :bg-mask)]
+    ;; init-node-props! forces image alpha 0.0 → 1.0 (visibility default);
+    ;; the vignette must START invisible — zero it here, the color binding
+    ;; owns it from the first flush on.
+    (.setDSlot bg-mask 0 0.0)
     (rt/put-user-signal! r :bg-target bg-target)
     (rt/put-user-signal! r :cp-target cp-target)
     (rt/put-user-signal! r :ol-target ol-target)
@@ -213,7 +231,7 @@
       (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
       (rt/put-user-signal! r :overlay-count-cache counts)
       (rt/put-user-signal! r :overlay-flag-cache (boolean-array 2)))
-    (let [b (sig/bind! bg-smooth bg-mask write-fill-from-rgba-o! (rt/get-dirty-bindings-q r))]
+    (let [b (sig/bind! bg-smooth bg-mask write-vignette-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
     ;; CP bar: progress + hint line
     (ui/bind! r :cp-bar :progress cp-smooth)
@@ -239,11 +257,19 @@
      :active-overlay-app (bridge/call-adapter :client-active-overlay-app owner)
      :now-ms now-ms}))
 
+(defn- set-node-visible! [r ^INode n visible?]
+  (when (and n (not= (boolean visible?) (.isVisible n)))
+    (.setVisible n (boolean visible?))
+    (.setFlag n node/FLAG-RENDER-DIRTY)
+    ;; Visibility participates in tape flattening (layout/flatten-into! skips
+    ;; invisible subtrees at REBUILD time), so a toggle must mark the tree
+    ;; dirty or the change never reaches the render tape — the node keeps
+    ;; drawing (or stays absent) forever. Guarded above: rebuild cost is paid
+    ;; only on actual transition frames.
+    (rt/mark-tree-dirty! r)))
+
 (defn- set-visible! [r id visible?]
-  (when-let [^INode n (ui/node r id)]
-    (when-not (= visible? (.isVisible n))
-      (.setVisible n (boolean visible?))
-      (.setFlag n node/FLAG-RENDER-DIRTY))))
+  (set-node-visible! r (ui/node r id) visible?))
 
 (defn- update-activation-indicator! [r snapshot]
   (let [ind       (:activation-indicator snapshot)
@@ -324,12 +350,12 @@
     (when-let [icon (:skill-icon slot)]
       (ui/set-node-prop! r (ui/item-node item :icon) :src icon))
     (ui/set-node-prop! r (ui/item-node item :label) :text (str (:skill-name slot)))
-    (when cd-mask (.setVisible cd-mask (boolean in-cd?)))
+    (set-node-visible! r cd-mask (boolean in-cd?))
     (when cd-text
       (if in-cd?
-        (do (.setVisible cd-text true)
+        (do (set-node-visible! r cd-text true)
             (ui/set-node-prop! r cd-text :text (format-tenths-seconds (:cooldown-seconds slot 0.0))))
-        (.setVisible cd-text false)))))
+        (set-node-visible! r cd-text false)))))
 
 (defn- same-skill-ids? [cached slots]
   (let [n (count slots)]

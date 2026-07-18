@@ -6,7 +6,7 @@
             [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraftforge.client.event RenderGuiOverlayEvent$Post]
+  (:import [net.minecraftforge.client.event RenderGuiEvent$Post]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.client Minecraft]))
@@ -17,7 +17,7 @@
 (defn- bridge-update-fn [rt]
   (client-bridge/call-adapter :reactive-overlay-update rt))
 
-(defn- on-render-gui-overlay [^RenderGuiOverlayEvent$Post event]
+(defn- on-render-gui-overlay [^RenderGuiEvent$Post event]
   (let [^Minecraft mc (Minecraft/getInstance)
         w (.getGuiScaledWidth (.getWindow mc))
         h (.getGuiScaledHeight (.getWindow mc))
@@ -38,8 +38,12 @@
    (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down)))
 
 (defn init! []
+  ;; RenderGuiEvent$Post fires ONCE per frame after the whole vanilla GUI.
+  ;; RenderGuiOverlayEvent$Post (the previous hook) fires once PER vanilla
+  ;; overlay element (~10+/frame) — the HUD got drawn that many times per
+  ;; frame, compositing the 35%-alpha background mask to near-opaque.
   (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/NORMAL false RenderGuiOverlayEvent$Post
+                EventPriority/NORMAL false RenderGuiEvent$Post
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-render-gui-overlay evt))))
   (log/info "Reactive overlay renderer initialized"))

@@ -22,7 +22,7 @@
 (defcategory electromaster
   :id :electromaster
   :name-key "ability.category.electromaster"
-  :icon "textures/guis/icons/icon_electromaster.png"
+  :icon "my_mod:textures/guis/icons/icon_electromaster.png"
   :color [0.27 0.69 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -30,7 +30,7 @@
 (defcategory meltdowner-category
   :id :meltdowner
   :name-key "ability.category.meltdowner"
-  :icon "textures/guis/icons/icon_meltdowner.png"
+  :icon "my_mod:textures/guis/icons/icon_meltdowner.png"
   :color [0.1 1.0 0.3 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -38,7 +38,7 @@
 (defcategory teleporter
   :id :teleporter
   :name-key "ability.category.teleporter"
-  :icon "textures/guis/icons/icon_teleporter.png"
+  :icon "my_mod:textures/guis/icons/icon_teleporter.png"
   :color [1.0 1.0 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -46,7 +46,7 @@
 (defcategory vecmanip
   :id :vecmanip
   :name-key "ability.category.vecmanip"
-  :icon "textures/guis/icons/icon_vecmanip.png"
+  :icon "my_mod:textures/guis/icons/icon_vecmanip.png"
   :color [0.0 0.0 0.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
