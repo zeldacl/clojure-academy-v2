@@ -8,7 +8,12 @@
 ;; smooth-mask-channel
 ;; ============================================================================
 
-(defn- ^double smooth-mask-channel [^double from ^double to ^double dt]
+;; NOTE: primitive return hints MUST sit on the argvec (defn f ^double [...]),
+;; not on the name — a name-position ^double makes the compiler pick the
+;; Object-returning interface (IFn$DDDO) while emitting a double-returning
+;; invokePrim, an inconsistent class that throws AbstractMethodError when
+;; invoked through the interface.
+(defn- smooth-mask-channel ^double [^double from ^double to ^double dt]
   (let [delta (- to from)]
     (if (<= (Math/abs delta) 0.001)
       to
@@ -18,7 +23,7 @@
 ;; smoothed — ComputedD wrapper
 ;; ============================================================================
 
-(defn- ^double smoothed-step [^doubles cell ^double rate ^double target ^double now-ms]
+(defn- smoothed-step ^double [^doubles cell ^double rate ^double target ^double now-ms]
   ;; smooth-toward inlined: a 4-double-arg primitive helper invoked from another
   ;; primitive fn triggers an IFn$DDDDO/invokePrim dispatch mismatch (Clojure
   ;; primitive-return interfaces don't cover 4 double args), so keep the step
@@ -50,10 +55,10 @@
                     (fn smooth-color-step [target now-ms]
                       (let [^doubles c cell
                             dt (max 0.0 (/ (- (double now-ms) (aget c 4)) 1000.0))
-                            ^double r (smooth-mask-channel (aget c 0) (double (nth target 0 0.0)) dt)
-                            ^double g (smooth-mask-channel (aget c 1) (double (nth target 1 0.0)) dt)
-                            ^double b (smooth-mask-channel (aget c 2) (double (nth target 2 0.0)) dt)
-                            ^double a (smooth-mask-channel (aget c 3) (double (nth target 3 0.0)) dt)]
+                            r (smooth-mask-channel (aget c 0) (double (nth target 0 0.0)) dt)
+                            g (smooth-mask-channel (aget c 1) (double (nth target 1 0.0)) dt)
+                            b (smooth-mask-channel (aget c 2) (double (nth target 2 0.0)) dt)
+                            a (smooth-mask-channel (aget c 3) (double (nth target 3 0.0)) dt)]
                         (aset c 0 r)
                         (aset c 1 g)
                         (aset c 2 b)
@@ -65,7 +70,7 @@
 ;; breathe
 ;; ============================================================================
 
-(defn- ^double breathe-step [^double period ^double lo ^double hi ^double now-ms]
+(defn- breathe-step ^double [^double period ^double lo ^double hi ^double now-ms]
   (+ lo (* (- hi lo) 0.5 (+ 1.0 (Math/sin (/ (* (double now-ms) 2.0 Math/PI) period))))))
 
 (defn breathe
@@ -76,7 +81,7 @@
 ;; flicker-alpha
 ;; ============================================================================
 
-(defn- ^double flicker-alpha-step [^double now-ms]
+(defn- flicker-alpha-step ^double [^double now-ms]
   (+ 0.725 (* 0.275 (Math/sin (* (double now-ms) 0.003)))))
 
 (defn flicker-alpha
@@ -87,7 +92,7 @@
 ;; jitter-offset
 ;; ============================================================================
 
-(defn- ^double jitter-offset-step [^double now-ms ^double axis-seed]
+(defn- jitter-offset-step ^double [^double now-ms ^double axis-seed]
   (let [tick (quot (long now-ms) 100)
         seed (unchecked-add-int (unchecked-multiply-int
                                   (unchecked-add-int tick (int axis-seed)) 1103515245) 12345)

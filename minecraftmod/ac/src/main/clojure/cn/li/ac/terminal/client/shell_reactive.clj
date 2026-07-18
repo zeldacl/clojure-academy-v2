@@ -14,7 +14,6 @@
             [cn.li.ac.terminal.client.apps :as client-apps]
             [cn.li.ac.terminal.client.runtime :as term-rt]
             [cn.li.ac.terminal.messages :as terminal-messages]
-            [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
@@ -310,28 +309,13 @@
     (open-terminal! player)))
 
 ;; ============================================================================
-;; GLFW Alt-key polling (matching upstream KEY_LMENU toggle)
-;; ============================================================================
-
-(def ^:private glfw-key-left-alt 342)
-(def ^:private terminal-key-was-pressed (atom false))
-
-(defn- poll-terminal-toggle-key!
-  "Called every client tick. Queries GLFW for Left Alt state.
-   Debounced: only triggers on release→press transition."
-  []
-  (try
-    (let [now-pressed (boolean (bridge/is-glfw-key-down? glfw-key-left-alt))]
-      (when (and now-pressed (not @terminal-key-was-pressed))
-        (when-let [player (bridge/get-client-player)]
-          (toggle! player)))
-      (reset! terminal-key-was-pressed now-pressed))
-    (catch Exception e
-      (log/warn "[AC-Terminal] GLFW polling error:" (ex-message e)))))
-
-;; ============================================================================
 ;; Widget factory + install (preserved for existing callers)
 ;; ============================================================================
+;; NOTE: the Left Alt toggle key is dispatched through the universal keyboard
+;; protocol (:content/toggle-terminal in cn.li.ac.input-ids): Forge fires it
+;; via KeyMapping events, Fabric via glfw-polling-core. The former private
+;; GLFW poll here double-fired with the Forge path (one Alt press = open+close)
+;; and ignored open screens — do not reintroduce it.
 
 (defn create-terminal-gui-reactive
   "Widget-factory-compatible entry point."
@@ -339,11 +323,9 @@
   {:type :reactive-screen :runtime (create-runtime player)})
 
 (defn install-ui-hooks-reactive!
-  "Registers the reactive terminal screen under :ac/terminal-gui factory key
-   and registers the GLFW Alt-key polling client tick hook."
+  "Registers the reactive terminal screen under :ac/terminal-gui factory key."
   []
   (platform-ui/register-widget-factory!
     :ac/terminal-gui
     (fn [{:keys [player]}] (create-terminal-gui-reactive player)))
-  (content-actions/register-client-tick-hook! poll-terminal-toggle-key!)
   (log/info "AC terminal UI hooks installed (reactive)"))

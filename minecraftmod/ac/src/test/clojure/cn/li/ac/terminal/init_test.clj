@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.init-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.registry.hooks :as hooks]
+            [cn.li.ac.terminal.freq-network :as freq-network]
             [cn.li.ac.terminal.init :as terminal-init]
             [cn.li.ac.terminal.network :as network]))
 
@@ -8,5 +9,6 @@
   (let [registered (atom [])]
     (with-redefs [hooks/register-network-handler! (fn [f] (swap! registered conj f))]
       (terminal-init/init-terminal!)
-      (is (= 1 (count @registered)))
-      (is (= network/register-handlers! (first @registered))))))
+      ;; Terminal RPC handlers + freq-transmitter wireless handlers.
+      (is (= [network/register-handlers! freq-network/register-handlers!]
+             @registered)))))

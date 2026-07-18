@@ -3,6 +3,7 @@
    Build/update fns come from the client bridge (installed by ac via merge-client-bridge!,
    keys :reactive-overlay-build / :reactive-overlay-update). Zero static ac dependency."
   (:require [cn.li.mc1201.gui.reactive.overlay-host :as overlay-host]
+            [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
@@ -30,7 +31,12 @@
                     (let [^Minecraft mc (Minecraft/getInstance)
                           w (.getGuiScaledWidth (.getWindow mc))
                           h (.getGuiScaledHeight (.getWindow mc))]
-                      (overlay-host/update-overlay!
-                        graphics "default" w h (float tick-delta)
-                        bridge-build-fn bridge-update-fn))))))
+                      ;; Overlay render is a client dispatch boundary (hooks.core
+                      ;; 调用规范 #2): bind the CURRENT connection session so
+                      ;; reactive HUD state reads resolve the live store partition.
+                      (client-session/with-current-client-session
+                        (fn []
+                          (overlay-host/update-overlay!
+                            graphics "default" w h (float tick-delta)
+                            bridge-build-fn bridge-update-fn))))))))
   (log/info "Reactive overlay renderer initialized (Fabric)"))

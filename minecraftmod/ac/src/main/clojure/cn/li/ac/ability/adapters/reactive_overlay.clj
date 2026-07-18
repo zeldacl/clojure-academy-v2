@@ -3,12 +3,14 @@
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.dsl :as dsl]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.anim :as anim]
-            [cn.li.mcmod.ui.node :as node])
+            [cn.li.mcmod.ui.node :as node]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.signal ISigO]))
 
@@ -585,6 +587,8 @@
         (.setH n (double sh))
         (.setFlag n node/FLAG-LAYOUT-DIRTY)))))
 
+(defonce ^:private hud-trace-state (object-array [::none]))
+
 (defn update-overlay-signals!
   "Per-frame update. Called from overlay-host update-fn."
   [r]
@@ -593,6 +597,16 @@
           sw (int (rt/screen-w r))
           sh (int (rt/screen-h r))
           snapshot (reactive-hud/build-snapshot player-uuid sw sh (overlay-input-state player-uuid now-ms))]
+      ;; [HUD-TRACE] transition-only diagnostic: logs once at world entry and
+      ;; once per activated? flip, with the session the render thread resolves.
+      (let [act (boolean (:activated? snapshot))
+            prev (aget ^objects hud-trace-state 0)]
+        (when (not= act prev)
+          (aset ^objects hud-trace-state 0 (Boolean/valueOf act))
+          (log/info "[HUD-TRACE] activated?"
+                    {:to act
+                     :session-id (runtime-hooks/client-session-id)
+                     :uuid player-uuid})))
       (apply-screen-size! r sw sh)
       (when-let [bg-target (rt/user-signal r :bg-target)]
         (sig/sset-o! bg-target (mask-vec (:background-mask snapshot {:r 0.0 :g 0.0 :b 0.0 :a 0.0}))))

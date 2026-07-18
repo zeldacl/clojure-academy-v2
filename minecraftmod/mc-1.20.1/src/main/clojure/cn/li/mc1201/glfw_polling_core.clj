@@ -16,6 +16,7 @@
 (def GLFW_KEY_X 88)
 (def GLFW_KEY_R 82)
 (def GLFW_KEY_V 86)
+(def GLFW_KEY_LEFT_ALT 342)
 
 (defn ^:private is-key-pressed?
   "Query key state through installed KeySchemeProvider SPI."
@@ -90,6 +91,21 @@
             :client-session-id client-session-id
             :logical-side :client}))
        (swap! last-poll-time assoc :toggle-primary-state is-pressed))
+
+     ;; Toggle terminal (Left Alt) — Fabric's only dispatch path for this input
+     ;; (Forge covers it via the :alternative-scheme KeyMapping event and does
+     ;; not call poll-all-inputs!, so there is no double-fire).
+     (let [key-code GLFW_KEY_LEFT_ALT
+           is-pressed (is-key-pressed? :original key-code)
+           was-pressed (get @last-poll-time :toggle-terminal false)]
+       (when (and (not suppress-triggers?)
+                  (should-trigger? :toggle-terminal was-pressed is-pressed))
+         (kb-proto/emit-keyboard-input!
+           :content/toggle-terminal
+           {:player-uuid player-uuid
+            :client-session-id client-session-id
+            :logical-side :client}))
+       (swap! last-poll-time assoc :toggle-terminal is-pressed))
 
      nil
      (catch Exception e

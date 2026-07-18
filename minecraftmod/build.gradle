@@ -3359,11 +3359,12 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         def violations = []
         def acCore = file('ac/src/main/clojure/cn/li/ac/core.clj')
         def acActions = file('ac/src/main/clojure/cn/li/ac/terminal/client/actions.clj')
-        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj')
+        def terminalGui = file('ac/src/main/clojure/cn/li/ac/terminal/client/shell_reactive.clj')
         def deletedAcTerminalBridge = file('ac/src/main/clojure/cn/li/ac/terminal/client/bridge.clj')
         def deletedTerminalRegistry = file('ac/src/main/clojure/cn/li/ac/terminal/registry.clj')
         def mcmodUi = file('mcmod/src/main/clojure/cn/li/mcmod/platform/ui.clj')
         def forgeInit = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/init.clj')
+        def forgeCguiBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/cgui_screen_bridge.clj')
         def deletedForgeTerminalBridge = file('forge-1.20.1/src/main/clojure/cn/li/forge1201/client/terminal_screen_bridge.clj')
 
         [acCore, acActions, terminalGui, mcmodUi, forgeInit].each { f ->
@@ -3392,23 +3393,23 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         }
         if (acActions.exists()) {
             def text = acActions.getText('UTF-8')
-            if (!text.contains('shell/install-ui-hooks!')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/actions.clj: must delegate UI hook install to client shell'
+            if (!text.contains('shell-reactive/install-ui-hooks-reactive!')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/actions.clj: must delegate UI hook install to the reactive client shell'
             }
         }
         if (terminalGui.exists()) {
             def text = terminalGui.getText('UTF-8')
             if (!text.contains('platform-ui/register-widget-factory!') || !text.contains(':ac/terminal-gui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must register AC terminal widget through generic platform UI registry'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell_reactive.clj: must register AC terminal widget through generic platform UI registry'
             }
             if (!text.contains('create-terminal-gui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: widget factory must create the terminal shell GUI'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell_reactive.clj: widget factory must create the terminal shell GUI'
             }
-            if (!text.contains('client-bridge/open-screen!') || !text.contains(':ac/terminal')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must open terminal through generic mcmod client bridge'
+            if (!text.contains('bridge/open-reactive-screen!') || !text.contains(':ac/terminal')) {
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell_reactive.clj: must open terminal through the generic mcmod client bridge (open-reactive-screen!)'
             }
             if (text.contains('cn.li.mcmod.platform.terminal-ui')) {
-                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell.clj: must not depend on terminal-ui hook storage directly'
+                violations << 'ac/src/main/clojure/cn/li/ac/terminal/client/shell_reactive.clj: must not depend on terminal-ui hook storage directly'
             }
         }
         if (mcmodUi.exists()) {
@@ -3422,8 +3423,8 @@ tasks.register('verifyTerminalBridgeInitOrchestration') {
         }
         if (forgeInit.exists()) {
             def text = forgeInit.getText('UTF-8')
-            if (!text.contains('client-bridge/install-client-bridge!') || !text.contains(':open-screen open-screen-dispatcher')) {
-                violations << 'forge client init must expose generic CGui opening through the installed client bridge'
+            if (!text.contains('client-bridge/merge-client-bridge!') || !text.contains(':open-screen open-screen-dispatcher')) {
+                violations << 'forge client init must expose generic CGui opening through the merged client bridge'
             }
             if (text.contains(':ac/terminal')) {
                 violations << 'forge client init must not hardcode AC terminal screen keys'

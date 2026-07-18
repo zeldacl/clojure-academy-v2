@@ -220,6 +220,13 @@
         (log/info "[SYNC-TRACE][CLIENT] skip stale sync"
                   {:opcode opcode :revision revision :old-revision old-revision}))
       (when (> (long revision) old-revision)
+        (when (and (not (zero? (bit-and mask store/resource-data-mask)))
+                   (not= (boolean (get-in old-state [:resource-data :activated]))
+                         (boolean (get-in payload [:resource-data :activated]))))
+          (log/info "[SYNC-TRACE][CLIENT] activated sync"
+                    {:from (boolean (get-in old-state [:resource-data :activated]))
+                     :to (boolean (get-in payload [:resource-data :activated]))
+                     :revision revision}))
         (let [command (cond-> {:command :hydrate-player-state
                                :sync-revision (long revision)}
                         (not (zero? (bit-and mask store/ability-data-mask)))

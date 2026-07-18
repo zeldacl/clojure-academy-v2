@@ -116,7 +116,10 @@
 
 (defn- init-content-client-bridge!
   []
-  (client-bridge/install-client-bridge!
+  ;; MERGE, not install: install-client-bridge! REPLACES the whole map and
+  ;; wipes adapters content modules registered earlier during modloading
+  ;; (ac's :reactive-overlay-build/update — see forge init note).
+  (client-bridge/merge-client-bridge!
     {:open-screen open-screen-dispatcher
      :open-reactive-screen open-reactive-screen-handler
      :slot-key-down runtime-bridge/on-slot-key-down!
