@@ -48,8 +48,7 @@
 
 ;; Selector colors (matching upstream CRL_* constants)
 (def ^:private crl-back  0xC8313131)  ;; (49,49,49,200)
-(def ^:private crl-white 0x99FFFFFF)  ;; (1,1,1,0.6)
-(def ^:private crl-glow  0x33FFFFFF)  ;; (1,1,1,0.2)
+(def ^:private crl-glow  0x33FFFFFF)  ;; (1,1,1,0.2) — hover tint + tooltip glow
 
 ;; ============================================================================
 ;; State tracking per-session (Framework-backed for lifecycle safety)
@@ -149,18 +148,117 @@
   (when-let [^INode sel (rt/node-by-id r :selector)]
     (.setVisible sel false)
     (.setFlag sel node/FLAG-LAYOUT-DIRTY)
+    (rt/mark-tree-dirty! r)
     (rt/clear-children! r sel))
   (rt/put-user-signal! r :selector-open false)
-  (rt/put-user-signal! r :selector-slot nil))
+  (rt/put-user-signal! r :selector-slot nil)
+  (rt/put-user-signal! r :sel-tooltip-state nil))
 
 (defn- selector-open? [^UiRt r]
   (boolean (rt/user-signal r :selector-open)))
 
 (defn- slot-tex-path [skill-id]
+  ;; Upstream updateInfo: empty slot → Resources.TEX_EMPTY (transparent null
+  ;; texture), i.e. draw NOTHING. Empty :src makes render-image! skip the node.
   (if skill-id
     (or (skill-query/get-skill-icon-path skill-id)
         (modid/asset-path "textures" "missing.png"))
-    (modid/asset-path "textures" "missing.png")))
+    ""))
+
+;; ============================================================================
+;; Alignment helpers — visibility (tape-aware), master alpha, glow 8-patch
+;; ============================================================================
+
+(defn- set-node-visible! [^UiRt r ^INode n visible?]
+  ;; Visibility participates in tape flattening — a toggle must mark the tree
+  ;; dirty (change-guarded: rebuild cost only on transition frames).
+  (when (and n (not= (boolean visible?) (.isVisible n)))
+    (.setVisible n (boolean visible?))
+    (.setFlag n node/FLAG-RENDER-DIRTY)
+    (rt/mark-tree-dirty! r)))
+
+(defn- set-image-alpha! [^INode n ^double a]
+  (when (and n (not (== a (.getDSlot n 0))))
+    (.setDSlot n 0 a)
+    (.setFlag n node/FLAG-RENDER-DIRTY)))
+
+(defn- set-text-alpha! [^UiRt r ^INode n ^double a]
+  ;; Upstream AlphaAssign writes TextBox option.color.a — here: white RGB with
+  ;; the master alpha in the high byte.
+  (when n
+    (ui/set-node-prop! r n :color
+                       (bit-or 0x00FFFFFF
+                               (bit-shift-left (long (* 255.0 (max 0.0 (min 1.0 a)))) 24)))))
+
+(defn- glow-tex [suffix]
+  (modid/asset-path "textures" (str "guis/glow_" suffix ".png")))
+
+(defn- build-glow!
+  "8-patch glow ring around a rect — upstream ACRenderingHelper.drawGlow.
+   Returns {suffix INode} so callers can retarget widths later."
+  [^UiRt r ^INode parent id-prefix x y w h size alpha]
+  (into {}
+    (for [[suffix gx gy gw gh] [["lu"    (- x size) (- y size) size size]
+                                ["up"    x          (- y size) w    size]
+                                ["ru"    (+ x w)    (- y size) size size]
+                                ["left"  (- x size) y          size h]
+                                ["right" (+ x w)    y          size h]
+                                ["ld"    (- x size) (+ y h)    size size]
+                                ["down"  x          (+ y h)    w    size]
+                                ["rd"    (+ x w)    (+ y h)    size size]]]
+      [suffix (rt/build-child! r
+                {:kind :image
+                 :props {:id (keyword (str id-prefix suffix))
+                         :x gx :y gy :w gw :h gh
+                         :src (glow-tex suffix)
+                         :alpha alpha}}
+                parent)])))
+
+;; ============================================================================
+;; Per-page node cache — resolved once after build, drives alpha/hover updates
+;; ============================================================================
+
+(defn- collect-page-nodes! [^UiRt r]
+  (mapv
+    (fn [page-idx]
+      (let [nid (fn [suffix] (rt/node-by-id r (keyword (str "preset-" page-idx suffix))))
+            rows (mapv (fn [slot-idx]
+                         (let [^INode row (nid (str "-" slot-idx))]
+                           {:row row
+                            :bg (nid (str "-" slot-idx "-bg"))
+                            :icon (nid (str "-" slot-idx "-icon"))
+                            :text (nid (str "-" slot-idx "-text"))
+                            ;; Row subtree idx range for hover hit checks:
+                            ;; children (bg/icon/text) register right after
+                            ;; the row group in depth-first build order.
+                            :lo (.getIdx row)
+                            :hi (+ (.getIdx row) 3)}))
+                       (range 4))]
+        {:page (nid "")
+         :back (nid "-back")
+         :title (nid "-title")
+         :rows rows}))
+    (range 4)))
+
+(defn- page-nodes [^UiRt r]
+  (or (rt/user-signal r :page-nodes)
+      (let [pn (collect-page-nodes! r)]
+        (rt/put-user-signal! r :page-nodes pn)
+        (rt/put-user-signal! r :page-alpha (double-array [(- 1.0) (- 1.0) (- 1.0) (- 1.0)]))
+        pn)))
+
+(defn- apply-page-alpha! [^UiRt r page page-idx ^double alpha]
+  ;; Upstream AlphaAssign: master page alpha propagated to every child
+  ;; DrawTexture + TextBox. Change-guarded per page.
+  (let [^doubles last-alpha (rt/user-signal r :page-alpha)]
+    (when-not (== alpha (aget last-alpha page-idx))
+      (aset last-alpha page-idx alpha)
+      (set-image-alpha! (:back page) alpha)
+      (set-text-alpha! r (:title page) alpha)
+      (doseq [{:keys [bg icon text]} (:rows page)]
+        (set-image-alpha! bg alpha)
+        (set-image-alpha! icon alpha)
+        (set-text-alpha! r text alpha)))))
 
 (defn- update-page-slot! [^UiRt r page-idx slot-idx slot-info]
   "Update one slot's icon and text from slot-info map or nil."
@@ -202,66 +300,116 @@
         rows (int (Math/ceil (/ (double n) sel-max-per-row)))
         cols (min n sel-max-per-row)
         sel-w (+ (* 2 sel-margin) (* sel-step (dec cols)) sel-size)
-        sel-h (+ (* 2 sel-margin) (* sel-step (dec rows)) sel-size)
-        ;; Tooltip bar below selector (matching upstream)
-        tooltip-h 12.0
-        total-h (+ sel-h tooltip-h 3.0)]
+        sel-h (+ (* 2 sel-margin) (* sel-step (dec rows)) sel-size)]
     (when-let [^INode sel-node (rt/node-by-id r :selector)]
-      ;; Reposition and resize selector container
+      ;; Upstream: selector top-left AT the mouse position; tooltip floats
+      ;; above it at negative y.
       (.setX sel-node (double mx))
-      (.setY sel-node (double (- my total-h)))
-      (ui/set-node-prop! r :selector :w sel-w)
-      (ui/set-node-prop! r :selector :h total-h)
+      (.setY sel-node (double my))
+      (ui/set-prop! r :selector :w sel-w)
+      (ui/set-prop! r :selector :h sel-h)
       (.setVisible sel-node true)
       (.setFlag sel-node node/FLAG-LAYOUT-DIRTY)
-      ;; Selector background + glow (matching upstream CRL_BACK + CRL_GLOW)
+      (rt/mark-tree-dirty! r)
+      ;; Glow ring (upstream drawGlow CRL_WHITE, thickness 1) + background
+      (build-glow! r sel-node "sel-glow-" 0.0 0.0 sel-w sel-h 1.0 0.6)
       (rt/build-child! r
         {:kind :box :props {:id :sel-bg :x 0.0 :y 0.0 :w sel-w :h sel-h :fill crl-back}}
         sel-node)
-      ;; Tooltip bar (matching upstream font.draw hint text)
-      (rt/build-child! r
-        {:kind :group :props {:id :sel-tooltip :x 0.0 :y (+ sel-h 3.0) :w sel-w :h tooltip-h}
-         :children
-         [{:kind :box :props {:id :sel-tooltip-bg :x 0.0 :y 0.0 :w sel-w :h tooltip-h :fill crl-back}}
-          {:kind :text :props {:id :sel-tooltip-text :x 3.0 :y 1.5 :w (- sel-w 6.0) :h 10.0
-                               :text (local "skill_select") :font-size 9.0
-                               :color 0xFFBBBBBB}}]}
-        sel-node)
-      ;; Selector item grid
-      (doseq [[i item] (map-indexed vector items)]
-        (let [row (quot i sel-max-per-row)
-              col (rem i sel-max-per-row)
-              item-x (+ sel-margin (* col sel-step))
-              item-y (+ sel-margin (* row sel-step))
-              item-id (keyword (str "sel-" i))]
-          (rt/build-child! r
-            {:kind :group
-             :props {:id item-id :x item-x :y item-y :w sel-size :h sel-size}
-             :children
-             [{:kind :image
-               :props {:id (keyword (str (name item-id) "-icon"))
-                       :x 0.0 :y 0.0 :w sel-size :h sel-size :src (:icon item)}}
-              {:kind :box
-               :props {:id (keyword (str (name item-id) "-hit"))
-                       :x 0.0 :y 0.0 :w sel-size :h sel-size
-                       :fill 0x00000000 :hover-tint crl-white}}]}
-            sel-node)
-          ;; Click handler — immediate save + close (matching upstream SelHandler)
-          (events/on! r item-id :left-click
-            (fn [_ _ _]
-              (if (= -1 (:id item))
-                ;; Remove → clear slot (upstream cancel button)
-                (when owner
-                  (api/req-set-preset-slot! owner page-idx slot-idx nil nil nil))
-                ;; Assign skill → immediate save (upstream onEdit)
-                (when owner
-                  (api/req-set-preset-slot! owner page-idx slot-idx
-                                           (:cat-id item) (:ctrl-id item) nil)))
-              (clear-selector! r)
-              (refresh-ui! r owner)))))
+      ;; Tooltip ABOVE the selector (upstream: rect (0,-13.5,len+6,11.5),
+      ;; glow CRL_GLOW, text at (3,-12) 9pt #FFBBBBBB, content = hovered
+      ;; item's name — updated per frame by update-selector-tooltip!).
+      (let [default-text (local "skill_select")
+            len (double (or (bridge/font-width (str default-text)) 40.0))
+            tt-w (+ len 6.0)
+            ^INode tt-group (rt/build-child! r
+                              {:kind :group
+                               :props {:id :sel-tooltip :x 0.0 :y -13.5 :w tt-w :h 11.5}}
+                              sel-node)
+            glow (build-glow! r tt-group "sel-tt-glow-" 0.0 0.0 tt-w 11.5 1.0 0.2)
+            ^INode tt-bg (rt/build-child! r
+                           {:kind :box :props {:id :sel-tooltip-bg :x 0.0 :y 0.0
+                                               :w tt-w :h 11.5 :fill crl-back}}
+                           tt-group)
+            ^INode tt-text (rt/build-child! r
+                             {:kind :text :props {:id :sel-tooltip-text :x 3.0 :y 1.5
+                                                  :w 200.0 :h 9.0
+                                                  :text default-text :font-size 9.0
+                                                  :color 0xFFBBBBBB}}
+                             tt-group)
+            sel-items (volatile! [])]
+        ;; Selector item grid
+        (doseq [[i item] (map-indexed vector items)]
+          (let [row (quot i sel-max-per-row)
+                col (rem i sel-max-per-row)
+                item-x (+ sel-margin (* col sel-step))
+                item-y (+ sel-margin (* row sel-step))
+                item-id (keyword (str "sel-" i))
+                ^INode item-node
+                (rt/build-child! r
+                  {:kind :group
+                   :props {:id item-id :x item-x :y item-y :w sel-size :h sel-size}
+                   :children
+                   [{:kind :image
+                     :props {:id (keyword (str (name item-id) "-icon"))
+                             :x 0.0 :y 0.0 :w sel-size :h sel-size :src (:icon item)}}
+                    {:kind :box
+                     :props {:id (keyword (str (name item-id) "-hit"))
+                             :x 0.0 :y 0.0 :w sel-size :h sel-size
+                             ;; Upstream Tint: idle 0 → hover white 0.2
+                             :fill 0x00000000 :hover-tint crl-glow}}]}
+                  sel-node)]
+            ;; Hover→tooltip mapping: item subtree = group + icon + hit box.
+            (vswap! sel-items conj {:lo (.getIdx item-node)
+                                    :hi (+ (.getIdx item-node) 2)
+                                    :name (:name item)})
+            ;; Click handler — immediate save + close (matching upstream SelHandler)
+            (events/on! r item-id :left-click
+              (fn [_ _ _]
+                (if (= -1 (:id item))
+                  ;; Remove → clear slot (upstream cancel button)
+                  (when owner
+                    (api/req-set-preset-slot! owner page-idx slot-idx nil nil nil))
+                  ;; Assign skill → immediate save (upstream onEdit)
+                  (when owner
+                    (api/req-set-preset-slot! owner page-idx slot-idx
+                                             (:cat-id item) (:ctrl-id item) nil)))
+                (clear-selector! r)
+                (refresh-ui! r (cached-owner r))))))
+        (rt/put-user-signal! r :sel-tooltip-state
+          {:bg tt-bg :text tt-text :glow glow :items @sel-items
+           :last (object-array [nil])}))
       ;; Track which slot the selector is open for
       (rt/put-user-signal! r :selector-open true)
       (rt/put-user-signal! r :selector-slot [page-idx slot-idx]))))
+
+(defn- update-selector-tooltip!
+  "Per-frame: tooltip shows the hovered item's name (upstream Selector
+   FrameEvent), falling back to the generic hint. Width follows the text
+   (upstream: len + 6) — bg + glow ring retargeted on change only."
+  [^UiRt r]
+  (when (selector-open? r)
+    (when-let [{:keys [^INode bg ^INode text glow items ^objects last]}
+               (rt/user-signal r :sel-tooltip-state)]
+      (let [hovered (long (rt/hovered-idx r))
+            nm (or (some (fn [{:keys [lo hi name]}]
+                           (when (<= (long lo) hovered (long hi)) name))
+                         items)
+                   (local "skill_select"))]
+        (when-not (= nm (aget last 0))
+          (aset last 0 nm)
+          (ui/set-node-prop! r text :text (str nm))
+          (let [w (+ 6.0 (double (or (bridge/font-width (str nm)) 40.0)))]
+            (.setW bg w)
+            (.setFlag bg node/FLAG-LAYOUT-DIRTY)
+            (doseq [suffix ["up" "down"]]
+              (when-let [^INode gnode (get glow suffix)]
+                (.setW gnode w)
+                (.setFlag gnode node/FLAG-LAYOUT-DIRTY)))
+            (doseq [suffix ["ru" "right" "rd"]]
+              (when-let [^INode gnode (get glow suffix)]
+                (.setX gnode w)
+                (.setFlag gnode node/FLAG-LAYOUT-DIRTY)))))))))
 
 ;; ============================================================================
 ;; Page refresh — react to preset data changes
@@ -287,14 +435,33 @@
 ;; Animated carousel tick — matching upstream updateTransit + updatePosForeground
 ;; ============================================================================
 
-(defn- apply-page-transform! [^UiRt r page-idx x scale visible?]
-  "Position a carousel page. Uses INode.setX + .setScale (native interface methods).
-   INode has no setAlpha — dimming is achieved via scale reduction + visibility on inactive pages."
-  (when-let [^INode pn (rt/node-by-id r (keyword (str "preset-" page-idx)))]
-    (.setX pn (double x))
-    (.setScale pn (double scale))
-    (.setVisible pn (boolean visible?))
-    (.setFlag pn node/FLAG-LAYOUT-DIRTY)))
+(defn- apply-page-transform! [^UiRt r page-idx x scale alpha]
+  "Position one carousel page — upstream Page.updatePosition: x + scale +
+   master alpha (AlphaAssign). ALL pages stay visible (side pages dimmed to
+   MIN_ALPHA, never hidden)."
+  (let [pages (page-nodes r)
+        page (nth pages page-idx)
+        ^INode pn (:page page)]
+    (when pn
+      (when (or (not (== (double x) (.getX pn)))
+                (not (== (double scale) (.getScale pn))))
+        (.setX pn (double x))
+        (.setScale pn (double scale))
+        (.setFlag pn node/FLAG-LAYOUT-DIRTY))
+      (when-not (.isVisible pn)
+        (set-node-visible! r pn true))
+      (apply-page-alpha! r page page-idx (double alpha)))))
+
+(defn- update-hover-highlights! [^UiRt r active transiting?]
+  "Upstream HintHandler FrameEvent: slot highlight (selected.png) enabled only
+   when its page is active AND the mouse hovers the row."
+  (let [pages (page-nodes r)
+        hovered (long (rt/hovered-idx r))]
+    (doseq [page-idx (range 4)]
+      (let [active? (and (not transiting?) (= page-idx active))]
+        (doseq [{:keys [^INode bg lo hi]} (:rows (nth pages page-idx))]
+          (set-node-visible! r bg
+            (boolean (and active? (<= (long lo) hovered (long hi))))))))))
 
 (defn- attach-carousel-tick! [^UiRt r]
   (let [clock (rt/clock-ms-sig r)
@@ -307,7 +474,8 @@
                            start-time (.transitStart anim)
                            transiting? (.transiting anim)]
                        (if transiting?
-                         ;; Upstream updateTransit: lerp x + scale between from and to
+                         ;; Upstream TransitPage.updatePosition: lerp x/scale/alpha
+                         ;; for from/to pages; other pages stay at MIN — VISIBLE.
                          (let [elapsed (- (now-sec) (double start-time))
                                progress (min 1.0 (/ elapsed transit-time))]
                            (doseq [page-idx (range 4)]
@@ -320,8 +488,11 @@
                                            from? (lerp-d max-scale min-scale progress)
                                            to?   (lerp-d min-scale max-scale progress)
                                            :else min-scale)
-                                   visible? (or from? to?)]
-                               (apply-page-transform! r page-idx x scale visible?)))
+                                   alpha (cond
+                                           from? (lerp-d max-alpha min-alpha progress)
+                                           to?   (lerp-d min-alpha max-alpha progress)
+                                           :else min-alpha)]
+                               (apply-page-transform! r page-idx x scale alpha)))
                            (when (>= progress 1.0)
                              (finish-transit! r)
                              (doseq [page-idx (range 4)]
@@ -329,18 +500,29 @@
                                  (apply-page-transform! r page-idx
                                    (page-x-from-active page-idx to)
                                    (if active? max-scale min-scale)
-                                   true)))))
+                                   (if active? max-alpha min-alpha))))))
                          ;; Not transiting — upstream updatePosForeground
                          (doseq [page-idx (range 4)]
                            (let [active? (= page-idx active)]
                              (apply-page-transform! r page-idx
                                (page-x-from-active page-idx active)
                                (if active? max-scale min-scale)
-                               true)))))
+                               (if active? max-alpha min-alpha)))))
+                       ;; Per-frame hover feedback (highlight + selector tooltip)
+                       (update-hover-highlights! r (if transiting? to active) transiting?)
+                       (update-selector-tooltip! r))
                      nil))]
     (let [^INode anchor (rt/node-by-id r :preset-0)]
       (when anchor
-        (let [b (sig/bind! computed anchor (fn [_ _] nil) (rt/get-dirty-bindings-q r))]
+        (let [b (sig/bind! computed anchor
+                           (fn [_node source]
+                             ;; ComputedO is LAZY: the per-frame carousel side
+                             ;; effects live in recompute(), which only runs on
+                             ;; sGet. A no-op applyFn never pulls → the computed
+                             ;; stays dirty forever and NOTHING here ever
+                             ;; executes (x/scale/alpha/hover were all dead).
+                             (sig/sget-o source))
+                           (rt/get-dirty-bindings-q r))]
           (rt/register-binding! r (.getIdx anchor) b))))))
 
 ;; ============================================================================
