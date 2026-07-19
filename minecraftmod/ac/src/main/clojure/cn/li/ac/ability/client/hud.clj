@@ -27,8 +27,8 @@
     {:type :cp-bar
      :x 8 :y 8
      :width 100 :height 10
-     :percent (double percent)
-     :hint-percent (when hint-percent (max 0.0 (double hint-percent)))
+     :percent (clojure.core/double percent)
+     :hint-percent (when hint-percent (max 0.0 (clojure.core/double hint-percent)))
      :icon-cutout {:x-offset 84 :w 16}
      :bg-texture (modid/asset-path "textures" "guis/cpbar/back_normal.png")
      :fg-texture (modid/asset-path "textures" "guis/cpbar/cp.png")
@@ -40,7 +40,7 @@
    Depends only on now-ms — no player-state dependency, so callers refreshing
    a cached overload-bar element can recompute just this field every frame."
   [now-ms]
-  (double (mod (/ (double (or now-ms 0)) 2000.0) 1.0)))
+  (clojure.core/double (mod (/ (clojure.core/double (or now-ms 0)) 2000.0) 1.0)))
 
 (defn build-overload-bar-render-data
   "Build overload bar render data matching original AcademyCraft:
@@ -56,7 +56,7 @@
     {:type :overload-bar
      :x 8 :y 22
      :width 100 :height 10
-     :percent (double percent)
+     :percent (clojure.core/double percent)
      :overloaded (not fine)
      :scroll-offset scroll-offset
      :bg-texture (if fine
@@ -144,7 +144,7 @@
       {:type :combat-notice
        :y 26
        :text text
-       :color {:a (int (* 255.0 (double alpha)))
+       :color {:a (int (* 255.0 (clojure.core/double alpha)))
                :r (int (nth color 0 255))
                :g (int (nth color 1 255))
                :b (int (nth color 2 255))}})))
@@ -182,11 +182,11 @@
                   ;; Fade in: 200ms delay, then 400ms ramp to full
                   (cond (zero? last-change) 0.0
                         (< dt 200) 0.0
-                        (< dt 600) (/ (double (- dt 200)) 400.0)
+                        (< dt 600) (/ (clojure.core/double (- dt 200)) 400.0)
                         :else 1.0)
                   ;; Fade out: 600ms linear decay from full to transparent
                   (cond (zero? last-change) 0.0
-                        (< dt 600) (- 1.0 (/ (double dt) 600.0))
+                        (< dt 600) (- 1.0 (/ (clojure.core/double dt) 600.0))
                         :else 0.0))
           a (int (* 255.0 alpha))]
       (when (pos? alpha)

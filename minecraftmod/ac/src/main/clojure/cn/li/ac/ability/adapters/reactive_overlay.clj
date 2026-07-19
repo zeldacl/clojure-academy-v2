@@ -114,13 +114,15 @@
     (dsl/text {:id :msg :x 8 :y 9 :text "" :color 0xFFFFFFFF})))
 
 (defn- skill-slot-template []
-  (dsl/group {:id :slot :h 22 :w 120}
-    (dsl/box {:id :key-bg :x 0 :y 0 :w 20 :h 20 :fill 0x80000000})
-    (dsl/text {:id :key-label :x 2 :y 2 :text "" :color 0xFFFFFFFF})
-    (dsl/image {:id :icon :x 25 :y 3 :w 16 :h 16 :src ""})
-    (dsl/text {:id :label :x 45 :y 6 :text "" :color 0xFFFFFFFF})
-    (dsl/box {:id :cd-mask :x 0 :y 0 :w 20 :h 20 :fill 0x80000000 :visible? false})
-    (dsl/text {:id :cd-text :x 3 :y 10 :text "" :color 0xFFFFFFFF :visible? false})))
+  ;; Upstream KeyHintUI: child widget 128×193, container 140×210 @ scale 0.46.
+  ;; Each slot row ~35px tall matching the preset editor's 34.75px rows.
+  (dsl/group {:id :slot :h 35 :w 120}
+    (dsl/box {:id :key-bg :x 0 :y 2 :w 26 :h 26 :fill 0x80000000})
+    (dsl/text {:id :key-label :x 3 :y 4 :text "" :color 0xFFFFFFFF})
+    (dsl/image {:id :icon :x 30 :y 3 :w 27 :h 27 :src ""})
+    (dsl/text {:id :label :x 60 :y 8 :text "" :color 0xFFFFFFFF})
+    (dsl/box {:id :cd-mask :x 0 :y 2 :w 26 :h 26 :fill 0x80000000 :visible? false})
+    (dsl/text {:id :cd-text :x 3 :y 14 :text "" :color 0xFFFFFFFF :visible? false})))
 
 (defn- coin-dot-template []
   (dsl/box {:id :dot :w 6 :h 6 :fill 0x80FFD700}))
@@ -180,9 +182,13 @@
       (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
         (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
         (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
-      ;; ===== Skill Slots (right-aligned, center-vertical) =====
-      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210
-                      :x (- sw 150) :y (- (/ sh 2) 105)
+      ;; ===== Skill Slots (right-aligned, below CP/OL bars) =====
+      ;; Upstream KeyHintUI: container 140×210 @ scale 0.46 (= ~64×97 effective),
+      ;; right-aligned, vertically centred.  Our layout stacks it below the CP
+      ;; bar; upstream uses ACHud halign(CENTER) which is effectively the screen
+      ;; centre.  We follow the stack order but keep the upstream scale.
+      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210 :scale 0.46
+                      :x (- sw 150) :y (+ bar-y bar-h 12)
                       :template (skill-slot-template)})
       ;; ===== Preset indicators (within bar area) =====
       (dsl/group {:id :preset-row :x (- sw 89) :y 39 :w 212 :h 52}
