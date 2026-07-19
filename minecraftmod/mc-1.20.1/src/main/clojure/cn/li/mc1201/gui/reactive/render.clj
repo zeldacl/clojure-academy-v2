@@ -107,15 +107,20 @@
         (.fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
         (.fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
         (.fill gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
-    ;; Tint overlay (hover uses SLOT-BOX-HOVER when FLAG-HOVERED set)
+    ;; Tint overlay — both :tint and :hover-tint prop-writers store
+    ;; raw ARGB doubles; extract the alpha byte so (* 255.0 raw) does
+    ;; not overflow (0x33FFFFFF = 855M → alpha*255 overflows to garbage).
     (let [hovered? (.hasFlag node node/FLAG-HOVERED)
-          tint (if hovered?
-                 (let [ht (.getDSlot node SLOT-BOX-HOVER)]
-                   (if (> ht 0.0) ht (.getDSlot node SLOT-BOX-TINT)))
-                 (.getDSlot node SLOT-BOX-TINT))]
-      (when (> tint 0.0)
-        (let [alpha (unchecked-int (* 255.0 tint))]
-          (.fill gg ix iy iw ih (argb alpha 255 255 255)))))))
+          raw (if hovered?
+                        (let [ht (.getDSlot node SLOT-BOX-HOVER)]
+                          (if (> ht 0.0) ht (.getDSlot node SLOT-BOX-TINT)))
+                        (.getDSlot node SLOT-BOX-TINT))
+          alpha (if (> raw 1.0)
+                  ;; ARGB packed value → decode the alpha channel only
+                  (unchecked-int (bit-and (bit-shift-right (long raw) 24) 0xFF))
+                  (unchecked-int (* 255.0 raw)))]
+      (when (pos? alpha)
+        (.fill gg ix iy iw ih (argb alpha 255 255 255))))))
 
 (defn bake-box! [^INode _node] nil)
 
@@ -232,8 +237,17 @@
         font-size-raw (.getDSlot node 0)
         font-size (if (pos? font-size-raw) font-size-raw 14.0)
         color-raw (.getOSlot node 1)
-        color (cgui-font/normalize-color-int
-               (if (number? color-raw) (long color-raw) 0xFFFFFFFF))
+        raw-long (if (number? color-raw) (long color-raw) 0xFFFFFFFF)
+        ;; normalize-color-int forces argb-alpha-mask (0xFF) — extract the
+        ;; per-node alpha first, then splice it back into the normalized color
+        ;; so the MSDF shader (which reads the color param, not the global
+        ;; shader color) receives it.
+        text-alpha (/ (double (bit-and (bit-shift-right raw-long 24) 0xFF)) 255.0)
+        color (let [c (cgui-font/normalize-color-int raw-long)]
+                (if (< text-alpha 1.0)
+                  (unchecked-int (bit-or (bit-and (long c) 0x00FFFFFF)
+                                         (bit-shift-left (long (* 255.0 text-alpha)) 24)))
+                  c))
         font-raw (or (.getOSlot node 2) (get (.getStaticProps node) :font))
         align-raw (or (.getOSlot node 3) (get (.getStaticProps node) :align))]
     (.setOSlot node SLOT-TEXT-BAKED

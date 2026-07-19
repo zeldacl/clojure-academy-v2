@@ -6,6 +6,7 @@
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.platform.ui :as platform-ui]
             [cn.li.mcmod.util.log :as log]))
@@ -63,11 +64,16 @@
     (let [[cat-id ctrl-id] pair
           skill-obj (skill-query/get-skill-by-controllable cat-id ctrl-id)]
       (when skill-obj
-        {:skill-id skill-obj
-         :skill-name (:name (skill-registry/get-skill skill-obj))
-         :skill-icon (skill-query/get-skill-icon-path skill-obj)
-         :cat-id cat-id
-         :ctrl-id ctrl-id}))))
+        (let [spec (skill-registry/get-skill skill-obj)
+              name-key (:name-key spec)
+              skill-name (if name-key
+                           (or (i18n/translate name-key) (name skill-obj))
+                           (or (:name spec) (name skill-obj)))]
+          {:skill-id skill-obj
+           :skill-name skill-name
+           :skill-icon (skill-query/get-skill-icon-path skill-obj)
+           :cat-id cat-id
+           :ctrl-id ctrl-id})))))
 
 (defn- presets-all-slots
   "Build slot info for all 4 presets. Returns map {preset-idx [slot-0 slot-1 slot-2 slot-3]}."
@@ -120,7 +126,9 @@
            :available-skills (mapv
                                (fn [s]
                                  {:skill-id (spec-skill-id s)
-                                  :skill-name (:name s)
+                                  :skill-name (let [nk (:name-key s)]
+                                                (if nk (or (i18n/translate nk) (name (spec-skill-id s)))
+                                                    (or (:name s) (name (spec-skill-id s)))))
                                   :skill-icon (skill-query/get-skill-icon-path (spec-skill-id s))
                                   :cat-id (:category-id s)
                                   :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})

@@ -67,11 +67,14 @@
       (.remove active-by-session [session-id uuid]))))
 
 (defn- cached-owner [^UiRt r]
-  (or (:owner (rt/user-signal r :owner))
+  ;; :owner stores the owner map directly (create-runtime put-user-signal!),
+  ;; not a wrapper with an :owner key — reading it with (:owner ...) would
+  ;; always return nil (owner maps carry :client-session-id + :player-uuid).
+  (or (rt/user-signal r :owner)
       (when-let [session-id (runtime-hooks/client-session-id)]
-        (some (fn [entry]
-                (let [[sid _] (.getKey ^java.util.Map$Entry entry)]
-                  (when (= sid session-id) (:owner (.getValue ^java.util.Map$Entry entry)))))
+        (some (fn [^java.util.Map$Entry entry]
+                (let [[sid _] (.getKey entry)]
+                  (when (= sid session-id) (:owner (.getValue entry)))))
               (.entrySet active-by-session)))))
 
 ;; ============================================================================
@@ -187,12 +190,16 @@
     (.setFlag n node/FLAG-RENDER-DIRTY)))
 
 (defn- set-text-alpha! [^UiRt r ^INode n ^double a]
-  ;; Upstream AlphaAssign writes TextBox option.color.a — here: white RGB with
-  ;; the master alpha in the high byte.
+  ;; Like set-image-alpha! — direct oslot write, no prop-writer :sig :d
+  ;; double conversion. Text :color oslot 1 holds an ARGB integer; only the
+  ;; alpha byte changes here.
   (when n
-    (ui/set-node-prop! r n :color
-                       (bit-or 0x00FFFFFF
-                               (bit-shift-left (long (* 255.0 (max 0.0 (min 1.0 a)))) 24)))))
+    (let [alpha-byte (bit-shift-left (long (* 255.0 (max 0.0 (min 1.0 a)))) 24)
+          color (unchecked-int (bit-or 0x00FFFFFF alpha-byte))
+          prev (.getOSlot n 1)]
+      (when (and (number? prev) (not= (unchecked-int (long prev)) color))
+        (.setOSlot n 1 color)
+        (.setFlag n node/FLAG-RENDER-DIRTY)))))
 
 (defn- glow-tex [suffix]
   (modid/asset-path "textures" (str "guis/glow_" suffix ".png")))
@@ -272,8 +279,8 @@
         skill-name (:skill-name slot-info)]
     (when-let [^INode icon (rt/node-by-id r icon-node-id)]
       (ui/set-node-prop! r icon :src (slot-tex-path skill-id)))
-    (when-let [^INode text (rt/node-by-id r text-node-id)]
-      (ui/set-node-prop! r text :text (or skill-name "")))))
+    (when-let [^INode text-node (rt/node-by-id r text-node-id)]
+      (ui/set-node-prop! r text-node :text (or skill-name "")))))
 
 (defn- update-page-slots! [^UiRt r page-idx slots]
   (doseq [slot-idx (range 4)]
@@ -401,8 +408,8 @@
                            (when (<= (long lo) hovered (long hi)) name))
                          items)
                    (local "skill_select"))]
-        (when-not (= nm (aget last 0))
-          (aset last 0 nm)
+        (when-not (= nm (aget ^objects last 0))
+          (aset ^objects last 0 nm)
           (ui/set-node-prop! r text :text (str nm))
           (let [w (+ 6.0 (double (or (bridge/font-width (str nm)) 40.0)))]
             (.setW bg w)
