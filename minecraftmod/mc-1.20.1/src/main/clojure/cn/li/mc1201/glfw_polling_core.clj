@@ -35,6 +35,12 @@
    process — no multiplayer owner-key concern on this side)."
   (atom {}))
 
+(def ^:private key-down-time
+  "Timestamp (System/currentTimeMillis) when the V key was last pressed.
+   Upstream AcademyCraft ClientHandler: toggle fires on KEY RELEASE only if
+   held < 300ms — longer holds are skill-slot activations ($3=V)."
+  (atom 0))
+
 (defn poll-all-inputs!
   "Poll hardcoded key inputs and emit keyboard events.
 
@@ -80,11 +86,18 @@
        (swap! last-poll-time assoc :cycle-selection is-pressed))
 
      ;; Toggle primary state (V key — mode switch)
+     ;; Upstream AcademyCraft ClientHandler: toggle fires on KEY RELEASE
+     ;; only if held < 300ms.  Holding V longer activates slot-3 skill,
+     ;; reusing the same key without conflict.
      (let [key-code GLFW_KEY_V
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :toggle-primary-state false)]
+       (when is-pressed
+         (when-not was-pressed
+           (reset! key-down-time (System/currentTimeMillis))))
        (when (and (not suppress-triggers?)
-                  (should-trigger? :toggle-primary-state was-pressed is-pressed))
+                  was-pressed (not is-pressed)  ;; transition pressed→released
+                  (< (- (System/currentTimeMillis) @key-down-time) 300))
          (kb-proto/emit-keyboard-input!
            :content/toggle-primary-state
            {:player-uuid player-uuid
