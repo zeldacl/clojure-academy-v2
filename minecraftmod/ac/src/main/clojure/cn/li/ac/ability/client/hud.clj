@@ -28,7 +28,7 @@
      :x 8 :y 8
      :width 100 :height 10
      :percent (+ 0.0 percent)        ;; force primitive double without AOT-unsafe double()
-     :hint-percent (when hint-percent (+ 0.0 (max 0.0 hint-percent)))
+     :hint-percent (when hint-percent (+ 0.0 (clojure.core/max 0.0 hint-percent)))
      :icon-cutout {:x-offset 84 :w 16}
      :bg-texture (modid/asset-path "textures" "guis/cpbar/back_normal.png")
      :fg-texture (modid/asset-path "textures" "guis/cpbar/cp.png")
