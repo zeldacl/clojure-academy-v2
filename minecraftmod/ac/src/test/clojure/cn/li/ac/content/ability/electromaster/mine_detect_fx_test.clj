@@ -8,8 +8,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
       (level-effects/reset-level-effect-registry-for-test!)
       (mine-detect-fx/reset-fx-for-test!)
       (mine-detect-fx/init!)
@@ -18,7 +17,7 @@
       (finally
         (mine-detect-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
-        (level-effects/reset-level-effect-registry-for-test!)))))
+        (level-effects/reset-level-effect-registry-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload

@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.adapters.server-hooks-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.state-tick :as ps-tick]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.service.runtime-store :as store]
@@ -72,8 +72,7 @@
     (f)))
 (use-fixtures :each
   (fn [f]
-    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :test-session}}
-      (f))))
+    (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :test-session}} (fn [] (f)))))
 
 (deftest build-item-use-plan-order-test
   (testing "coin use plans consume, dispatch domain action, then spawn scripted effect"
@@ -291,5 +290,3 @@
                       (= :hydrate-player-state (:command cmd))
                       (map? (:resource-data cmd))))
                   @commands*)))))
-
-

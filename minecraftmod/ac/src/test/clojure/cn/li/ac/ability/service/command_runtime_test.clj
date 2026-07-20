@@ -50,9 +50,8 @@
 (deftest run-command-in-session-uses-installed-session-resolver-test
   (testing "bound owner session is used when explicit session id is nil"
     (let [captured-command (atom nil)]
-      (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "injected-session"
-                                                  :player-uuid "player-A"}}
-        (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
+      (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id "injected-session"
+                                                  :player-uuid "player-A"}} (fn [] (with-redefs [store/get-or-create-player-state! (fn [_session-id _uuid] baseline-state)
                       store/set-player-state! (fn [_session-id _uuid _state] nil)
                       store/mark-player-dirty! (fn [_session-id _uuid] nil)
                       reducer/apply-command (fn [state command]
@@ -60,7 +59,7 @@
                                               {:state state :events [] :effects []})
                       interpreter/execute-reducer-result! (fn [_result] nil)]
           (command-rt/run-command-in-session! nil "player-A" {:command :level-up})
-          (is (= "injected-session" (:session-id @captured-command))))))))
+          (is (= "injected-session" (:session-id @captured-command)))))))))
 
 (deftest run-command-in-session-idempotent-replay-test
   (testing "idempotent mode replays cached result and skips reducer/effects"
@@ -130,9 +129,8 @@
                     {:command :change-category-with-level :new-category :electromaster :new-level 4}
                     {:command :clear-all-cooldowns}]
           run-sequence (fn [session-id]
-                         (runtime-hooks/with-client-ctx {:player-owner {:server-session-id session-id
-                                                                         :player-uuid uuid}}
-                           (let [executed (atom [])
+                         (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id session-id
+                                                                         :player-uuid uuid}} (fn [] (let [executed (atom [])
                                  result (with-redefs [interpreter/execute-reducer-result!
                                                       (fn [reducer-result]
                                                         (swap! executed conj reducer-result)
@@ -140,7 +138,7 @@
                                           (command-rt/run-commands-in-session! nil uuid commands))]
                              {:result result
                               :state (store/get-player-state session-id uuid)
-                              :executed @executed})))]
+                              :executed @executed}))))]
       (store/reset-store!)
       (try
         (let [a (run-sequence "session-A")

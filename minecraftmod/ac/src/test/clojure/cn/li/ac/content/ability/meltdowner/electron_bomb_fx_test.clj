@@ -9,14 +9,13 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
           (level-effects/reset-level-effect-registry-for-test!)
           (electron-bomb-fx/reset-fx-for-test!)
           (f)
           (finally
             (electron-bomb-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))
+            (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -156,5 +155,3 @@
           nil))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
           "beam flash plan should disappear when ttl decays to zero"))))
-
-

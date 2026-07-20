@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.service.player-state-actions-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [clojure.test :refer [deftest is use-fixtures]]
@@ -144,15 +144,12 @@
   (store/set-player-state! :actions-session "p2"
                         (-> (store/fresh-player-state)
                             (assoc-in [:ability-data :level] 1)))
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :actions-session}}
-    (command-rt/run-command-in-session! nil "p2"
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :actions-session}} (fn [] (command-rt/run-command-in-session! nil "p2"
                                         {:command :set-level :level 4})
-    (is (= 4 (get-in (store/get-player-state :actions-session "p2") [:ability-data :level])))))
+    (is (= 4 (get-in (store/get-player-state :actions-session "p2") [:ability-data :level]))))))
 
 (deftest state-actions-session-resolution-still-fail-fast-test
-  (runtime-hooks/with-client-ctx {:player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"session-id"
                           (command-rt/run-command-in-session! nil "p3"
-                                                              {:command :recover-all})))))
-
+                                                              {:command :recover-all}))))))

@@ -42,9 +42,8 @@
         perform! (get-in spec [:actions :perform!])
         player-uuid (str (java.util.UUID/randomUUID))]
     (store/set-player-state! test-player/test-session-id player-uuid (store/fresh-player-state))
-    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id test-player/test-session-id
-                                                   :player-uuid player-uuid}}
-      (perform! "ctx-1" player-uuid fixture-skill-id 0.5 true 0 :down nil))
+    (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id test-player/test-session-id
+                                                   :player-uuid player-uuid}} (fn [] (perform! "ctx-1" player-uuid fixture-skill-id 0.5 true 0 :down nil)))
     (is (= 1 (.get FixtureAbilityProvider/PERFORM_COUNT))
         "the Java ActionHandler ran")
     (let [state (store/get-player-state test-player/test-session-id player-uuid)]

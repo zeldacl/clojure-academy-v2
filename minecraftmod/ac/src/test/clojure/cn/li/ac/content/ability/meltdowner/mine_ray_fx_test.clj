@@ -9,14 +9,13 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
           (level-effects/reset-level-effect-registry-for-test!)
           (mr-fx/reset-mine-ray-fx-for-test!)
           (f)
           (finally
             (mr-fx/reset-mine-ray-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))
+            (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -118,5 +117,3 @@
 
       (arc-beam/enqueue-for-test! :mine-ray "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
-
-

@@ -11,15 +11,14 @@
   (arc-beam/enqueue-for-test! :groundshock ctx-id channel payload))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (hand-effects/reset-hand-effect-registry-for-test!)
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (hand-effects/reset-hand-effect-registry-for-test!)
     (gfx/reset-fx-for-test!)
     (gfx/init!)
     (try
       (f)
       (finally
         (hand-effects/reset-hand-effect-registry-for-test!)
-        (gfx/reset-fx-for-test!)))))
+        (gfx/reset-fx-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 

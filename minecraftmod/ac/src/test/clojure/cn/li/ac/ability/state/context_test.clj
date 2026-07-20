@@ -22,15 +22,14 @@
   ;; clean-player-states-fixture binds a fallback :player-owner (so ordinary
   ;; tests don't need to thread an owner through every call) — override it to
   ;; nil here so context-owner genuinely has nothing to fall back to.
-  (runtime-hooks/with-client-ctx {:context-owner nil :player-owner nil}
-    (testing "ownerless client contexts fail fast"
+  (runtime-hooks/with-client-ctx-fn {:context-owner nil :player-owner nil} (fn [] (testing "ownerless client contexts fail fast"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"Opaque ctx-id resolution requires"
                             (ctx/new-context "p" :skill))))
     (testing "ownerless server contexts fail fast"
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"Opaque ctx-id resolution requires"
-                            (ctx/new-server-context "p" :skill "ctx-ownerless"))))))
+                            (ctx/new-server-context "p" :skill "ctx-ownerless")))))))
 
 (deftest nested-update-context-test
   (let [c (ctx/new-server-context "p" :skill "ctx-nested" (server-context-owner "p"))]
@@ -38,12 +37,11 @@
      "p"
      {:context-registry {"ctx-nested" {:id "ctx-nested" :skill-id :skill :status :constructed}}})
     (ctx/register-context! c)
-    (runtime-hooks/with-client-ctx {:player-owner test-player/test-player-state-owner}
-      (ctx/with-context-owner (server-context-owner "p")
+    (runtime-hooks/with-client-ctx-fn {:player-owner test-player/test-player-state-owner} (fn [] (ctx/with-context-owner (server-context-owner "p")
         (state/execute-assoc-state! "ctx-nested" "p" {:k [:a :b] :v 1})
         (is (= 1 (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))
         (state/execute-assoc-state! "ctx-nested" "p" {:k [] :v {:a {}}})
-        (is (nil? (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b])))))))
+        (is (nil? (get-in (ctx/get-context "ctx-nested") [:skill-state :a :b]))))))))
 
 (deftest buffer-message-while-constructed-test
   (let [c (ctx/new-context "p" :sk test-client-context-owner)]
@@ -99,10 +97,9 @@
   (is (empty? (ctx/get-all-contexts))))
 
 (deftest string-context-lookup-requires-owner-test
-  (runtime-hooks/with-client-ctx {:context-owner nil :player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:context-owner nil :player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Opaque ctx-id resolution requires context-owner or an explicit owner"
-                          (ctx/get-context "ctx-ownerless")))))
+                          (ctx/get-context "ctx-ownerless"))))))
 
 (deftest active-contexts-filters-terminated-and-supports-player-query-test
   (let [alive (ctx/new-server-context "p1" :s1 "ctx-alive" (server-context-owner "p1"))

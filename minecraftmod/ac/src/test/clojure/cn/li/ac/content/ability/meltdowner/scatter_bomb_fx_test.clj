@@ -9,14 +9,13 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
           (level-effects/reset-level-effect-registry-for-test!)
           (sb-fx/reset-scatter-bomb-fx-for-test!)
           (f)
           (finally
             (sb-fx/reset-scatter-bomb-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))
+            (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -98,5 +97,3 @@
 
       (arc-beam/enqueue-for-test! :scatter-bomb "ctx-cadence" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
-
-

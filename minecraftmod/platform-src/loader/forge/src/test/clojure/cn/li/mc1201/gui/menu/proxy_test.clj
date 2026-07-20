@@ -25,9 +25,8 @@
 
 (deftest owner-for-player-uses-bound-client-session-test
   (let [session-id [:client-session 9 9]]
-    (runtime-hooks/with-client-ctx {:session-id session-id}
-      (is (= session-id
+    (runtime-hooks/with-client-ctx-fn {:session-id session-id} (fn [] (is (= session-id
              (:client-session-id
               (#'menu-proxy/owner-map-for-player-context
                {:player-uuid "player-a"
-                :client-session-id (runtime-hooks/client-session-id)})))))))
+                :client-session-id (runtime-hooks/client-session-id)}))))))))

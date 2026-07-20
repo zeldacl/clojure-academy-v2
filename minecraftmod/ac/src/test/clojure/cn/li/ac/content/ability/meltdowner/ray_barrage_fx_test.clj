@@ -8,14 +8,13 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
           (level-effects/reset-level-effect-registry-for-test!)
           (rb-fx/reset-fx-for-test!)
           (f)
           (finally
             (rb-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!)))))
+            (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -150,5 +149,3 @@
 
       (is (nil? (arc-beam/effect-build-plan :ray-barrage nil nil 13)))
       (is (empty? (:beam-queue (rb-fx/fx-snapshot)))))))
-
-

@@ -17,14 +17,12 @@
 (use-fixtures :each reset-handler-common-runtime!)
 
 (deftest get-state-uses-bound-owner-session-test
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :handler-session
-                                                 :player-uuid "p1"}}
-    (let [state (handlers-common/get-state "p1")]
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :handler-session
+                                                 :player-uuid "p1"}} (fn [] (let [state (handlers-common/get-state "p1")]
       (is (map? state))
-      (is (some? (store/get-player-state :handler-session "p1"))))))
+      (is (some? (store/get-player-state :handler-session "p1")))))))
 
 (deftest get-state-session-resolution-still-fail-fast-test
-  (runtime-hooks/with-client-ctx {:player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound :server-session-id"
-                          (handlers-common/get-state "p2")))))
+                          (handlers-common/get-state "p2"))))))

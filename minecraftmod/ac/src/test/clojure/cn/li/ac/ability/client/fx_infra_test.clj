@@ -86,14 +86,12 @@
            @events*))))
 
 (deftest client-effect-queues-are-session-scoped-and-resettable-test
-  (runtime-hooks/with-client-ctx {:session-id :session-a}
-    (particles/queue-particle-effect! {:type :particle :particle-type :spark-a})
+  (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (particles/queue-particle-effect! {:type :particle :particle-type :spark-a})
     (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test-a"})
-    (hand-effects/add-camera-pitch-delta! 1.25))
-  (runtime-hooks/with-client-ctx {:session-id :session-b}
-    (particles/queue-particle-effect! {:type :particle :particle-type :spark-b})
+    (hand-effects/add-camera-pitch-delta! 1.25)))
+  (runtime-hooks/with-client-ctx-fn {:session-id :session-b} (fn [] (particles/queue-particle-effect! {:type :particle :particle-type :spark-b})
     (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test-b"})
-    (hand-effects/add-camera-pitch-delta! 2.5))
+    (hand-effects/add-camera-pitch-delta! 2.5)))
   (is (= [{:type :particle :particle-type :spark-a}]
          (particles/particle-queue-snapshot :session-a)))
   (is (= [{:type :sound :sound-id "minecraft:test-a"}]
@@ -118,8 +116,7 @@
   (is (empty? (:camera-pitch-deltas (hand-effects/hand-effect-registry-snapshot)))))
 
 (deftest client-effect-queues-require-client-session-test
-  (runtime-hooks/with-client-ctx {:session-id nil :player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:session-id nil :player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #":client-session-id"
                           (particles/queue-particle-effect! {:type :particle :particle-type :spark})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
@@ -127,4 +124,4 @@
                           (sounds/queue-sound-effect! {:type :sound :sound-id "minecraft:test"})))
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #":client-session-id"
-                          (hand-effects/add-camera-pitch-delta! 1.0)))))
+                          (hand-effects/add-camera-pitch-delta! 1.0))))))

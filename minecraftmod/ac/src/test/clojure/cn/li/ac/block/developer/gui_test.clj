@@ -15,9 +15,8 @@
 
 (defn- with-player-state-owner
   [player-uuid f]
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :test-session
-                                                  :player-uuid player-uuid}}
-    (f)))
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :test-session
+                                                  :player-uuid player-uuid}} (fn [] (f))))
 
 (deftest developer-open-gui-forwards-to-platform-gui-test
   (let [calls (atom [])]

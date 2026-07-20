@@ -18,41 +18,33 @@
   (let [calls (atom [])]
     (with-redefs [client/send-request (fn [msg payload request-id]
                                         (swap! calls conj [msg payload request-id]))]
-      (runtime-hooks/with-client-ctx {:session-id :session-a}
-        (client/send-to-server "one-way" {:a 1})
-        (client/send-to-server "req" {:b 2} identity))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "one-way" {:a 1})
+        (client/send-to-server "req" {:b 2} identity)))
       (is (= [["one-way" {:a 1} -1]
               ["req" {:b 2} 1]]
              @calls))
-      (is (= #{[(runtime-hooks/with-client-ctx {:session-id :session-a}
-                  (client/client-owner-key nil)) 1]}
+      (is (= #{[(runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/client-owner-key nil))) 1]}
              (set (keys (:pending-requests (client/client-state-snapshot {:client-session-id :session-a})))))))))
 
 (deftest ownerless-send-requires-client-session-test
   (with-redefs [client/send-request (fn [& _] nil)]
-    (runtime-hooks/with-client-ctx {:session-id nil}
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+    (runtime-hooks/with-client-ctx-fn {:session-id nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"Client network owner requires :client-session-id"
-                            (client/send-to-server "req" {} identity))))))
+                            (client/send-to-server "req" {} identity)))))))
 
 (deftest handle-response-lifecycle-test
   (let [responses (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
-      (runtime-hooks/with-client-ctx {:session-id :session-a}
-        (client/send-to-server "req" {} (fn [resp] (swap! responses conj resp)))))
-    (runtime-hooks/with-client-ctx {:session-id :session-a}
-      (client/handle-response 1 {:ok true}))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "req" {} (fn [resp] (swap! responses conj resp))))))
+    (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/handle-response 1 {:ok true})))
     (is (= [{:ok true}] @responses))
     (is (empty? (:pending-requests (client/client-state-snapshot {:client-session-id :session-a})))))
   (testing "unknown request-id is ignored without throw"
-    (runtime-hooks/with-client-ctx {:session-id :session-a}
-      (is (= nil (client/handle-response 999 {:ok false})))))
+    (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (is (= nil (client/handle-response 999 {:ok false}))))))
   (testing "callback exception is swallowed"
     (with-redefs [client/send-request (fn [& _] nil)]
-      (runtime-hooks/with-client-ctx {:session-id :session-a}
-        (client/send-to-server "req" {} (fn [_] (throw (ex-info "cb-fail" {}))))))
-    (runtime-hooks/with-client-ctx {:session-id :session-a}
-      (is (= nil (client/handle-response 2 {:x 1}))))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "req" {} (fn [_] (throw (ex-info "cb-fail" {})))))))
+    (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (is (= nil (client/handle-response 2 {:x 1})))))
     (is (empty? (:pending-requests (client/client-state-snapshot {:client-session-id :session-a}))))))
 
 (deftest owner-scoped-pending-requests-test
@@ -139,24 +131,20 @@
     (with-redefs [client/send-request (fn [& _] nil)]
       (client/call-with-client-runtime runtime-a
         (fn []
-          (runtime-hooks/with-client-ctx {:session-id :session-a}
-            (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:a-response resp])))
-            (client/register-push-handler! "push/runtime" (fn [payload] (swap! calls conj [:a-push payload]))))))
+          (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:a-response resp])))
+            (client/register-push-handler! "push/runtime" (fn [payload] (swap! calls conj [:a-push payload])))))))
       (client/call-with-client-runtime runtime-b
         (fn []
-          (runtime-hooks/with-client-ctx {:session-id :session-a}
-            (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:b-response resp]))))))
+          (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "req" {} (fn [resp] (swap! calls conj [:b-response resp])))))))
       (client/call-with-client-runtime runtime-b
         (fn []
-          (runtime-hooks/with-client-ctx {:session-id :session-a}
-            (client/handle-push "push/runtime" {:x :ignored})
-            (client/handle-response 1 {:ok :b}))))
+          (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/handle-push "push/runtime" {:x :ignored})
+            (client/handle-response 1 {:ok :b})))))
       (is (= [[:b-response {:ok :b}]] @calls))
       (client/call-with-client-runtime runtime-a
         (fn []
-          (runtime-hooks/with-client-ctx {:session-id :session-a}
-            (client/handle-push "push/runtime" {:x :a})
-            (client/handle-response 1 {:ok :a}))))
+          (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/handle-push "push/runtime" {:x :a})
+            (client/handle-response 1 {:ok :a})))))
       (is (= [[:b-response {:ok :b}]
               [:a-push {:x :a}]
               [:a-response {:ok :a}]]

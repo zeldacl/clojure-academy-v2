@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.server.service.skill-effects-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.config :as ability-config]
@@ -48,15 +48,10 @@
 
 (deftest perform-resource-uses-bound-owner-session-test
   (store/set-player-state! :skill-effects-session "p1" (store/fresh-player-state))
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :skill-effects-session
-                                                 :player-uuid "p-effects"}}
-    (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false)))
-    ))
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :skill-effects-session
+                                                 :player-uuid "p-effects"}} (fn [] (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false))))))
 
 (deftest skill-effects-session-resolution-still-fail-fast-test
-  (runtime-hooks/with-client-ctx {:player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
-                          (skill-effects/current-cp "p1")))))
-
-
+                          (skill-effects/current-cp "p1"))))))

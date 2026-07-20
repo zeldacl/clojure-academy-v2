@@ -24,8 +24,7 @@
               (evt/create-event-subscriber-runtime))))))))
 
 (deftest player-state-access-requires-explicit-owner-test
-  (runtime-hooks/with-client-ctx {:player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"session-id"
                           (command-rt/run-command-in-session! nil
                                                               "ownerless"
@@ -36,7 +35,7 @@
                           (command-rt/run-command-in-session! nil
                                                               "ownerless"
                                                               {:command :change-category
-                                                               :category-id :x})))))
+                                                               :category-id :x}))))))
 
 (deftest fresh-state-shape-test
   (let [s (store/fresh-player-state)]
@@ -65,13 +64,12 @@
 
 (deftest update-ability-data-uses-bound-owner-session-test
   (store/get-or-create-player-state! :accessor-session "u2")
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :accessor-session}}
-    (command-rt/run-command-in-session! nil
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :accessor-session}} (fn [] (command-rt/run-command-in-session! nil
                                         "u2"
                                         {:command :change-category
                                          :new-category :vecmanip})
     (is (= :vecmanip
-           (get-in (store/get-player-state :accessor-session "u2") [:ability-data :category-id])))))
+           (get-in (store/get-player-state :accessor-session "u2") [:ability-data :category-id]))))))
 
 (defn- ticking-player-state
   "A player state with one live cooldown — server-tick-player-in-session!
@@ -133,6 +131,3 @@
            (set (keys decoded))))
     (is (= [:electromaster :railgun]
            (get-in decoded [:preset-data :slots [0 0]])))))
-
-
-

@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
@@ -63,11 +63,10 @@
 
 (defn- with-client-player-state-owner
   [player-uuid f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session
                                   :player-owner {:client-session-id :test-session
-                                                  :player-uuid player-uuid}}
-    (binding [client-keybinds/*client-session-id* :test-session]
-      (f))))
+                                                  :player-uuid player-uuid}} (fn [] (binding [client-keybinds/*client-session-id* :test-session]
+      (f)))))
 
 (deftest client-slot-key-hooks-create-context-once-and-send-input-messages-test
   (let [sent (atom [])
@@ -179,11 +178,10 @@
                     :player-uuid "p1"})))))))
 
 (deftest client-ui-owner-requires-explicit-session-and-player-test
-  (runtime-hooks/with-client-ctx {:session-id nil}
-    (binding [client-keybinds/*client-session-id* nil]
+  (runtime-hooks/with-client-ctx-fn {:session-id nil} (fn [] (binding [client-keybinds/*client-session-id* nil]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"Client UI owner requires :client-session-id"
-                            (client-ui-hooks/client-ui-state-snapshot "p1")))))
+                            (client-ui-hooks/client-ui-state-snapshot "p1"))))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client UI owner requires :player-uuid"
                         (client-ui-hooks/client-ui-state-snapshot {:client-session-id :session-a}))))
@@ -249,8 +247,7 @@
     (is (empty? (particles/particle-queue-snapshot (:client-session-id owner))))
     (is (empty? (sounds/sound-queue-snapshot (:client-session-id owner))))
     (is (empty? (hand-effects/drain-camera-pitch-deltas! owner)))
-    (runtime-hooks/with-client-ctx {:player-owner owner}
-      (is (nil? (store/get-player-state :session-a "p1"))))
+    (runtime-hooks/with-client-ctx-fn {:player-owner owner} (fn [] (is (nil? (store/get-player-state :session-a "p1")))))
     (ctx/with-context-owner context-owner
       (is (nil? (ctx/get-context "ctx-cleanup"))))))
 
@@ -535,8 +532,7 @@
       (is (>= (count (filter #{:fill} kinds)) 3)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (with-redefs [store/get-player-state (fn [_ _]
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (with-redefs [store/get-player-state (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0
@@ -548,11 +544,10 @@
                   client-keybinds/get-preset-switch-state (fn [_] nil)]
       (let [plan (client-ui-hooks/build-client-overlay-plan
                   "p1" 320 180 {:activated-override nil :now-ms 1000})]
-        (is (seq (:elements plan)))))))
+        (is (seq (:elements plan))))))))
 
 (deftest build-client-overlay-plan-renders-reflection-crosshair-and-vm-wave-test
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (with-redefs [store/get-player-state (fn [_ _]
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (with-redefs [store/get-player-state (fn [_ _]
                                         {:resource-data {:activated true
                                                          :cur-cp 80.0
                                                          :max-cp 100.0
@@ -575,7 +570,7 @@
                   "p1" 320 180 {:now-ms 1000})
             kinds (mapv :kind (:elements plan))]
         (is (= 1 (count (filter #{:content-crosshair} kinds))))
-        (is (some #{:blit-texture} kinds))))))
+        (is (some #{:blit-texture} kinds)))))))
 
 (deftest movement-key-hooks-route-to-flashing-channel-test
   (let [sent (atom [])

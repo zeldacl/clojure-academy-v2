@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.adapters.client-ui-hooks
   "Client HUD/screen/context hook composition for AC ability platform bridge."
-  (:require 
+  (:require
             [cn.li.ac.ability.service.command-runtime :as command-rt]
 [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.client.api :as client-api]
@@ -127,12 +127,10 @@
 (defn- with-client-owner-bindings
   [owner f]
   (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (runtime-hooks/with-client-ctx
-      {:session-id session-id}
-      (runtime-hooks/with-player-state-owner-fn
+    (runtime-hooks/with-client-ctx-fn {:session-id session-id} (fn [] (runtime-hooks/with-player-state-owner-fn
         {:client-session-id session-id
          :player-uuid player-uuid}
-        f))))
+        f)))))
 
 (defn- with-client-player-state-owner
   [player-uuid f]
@@ -1246,8 +1244,7 @@
      :client-open-managed-screen!
      (fn [screen-key payload]
        (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
-         (runtime-hooks/with-client-ctx {:session-id client-session-id}
-           (call-with-managed-screen-runtime
+         (runtime-hooks/with-client-ctx-fn {:session-id client-session-id} (fn [] (call-with-managed-screen-runtime
              #(let [owner {:client-session-id client-session-id
                            :player-uuid player-uuid}]
                 (condp = screen-key
@@ -1259,7 +1256,7 @@
                   (assoc (preset-editor-screen/open-screen! owner)
                          :title "Preset Editor")
 
-                  nil))))))
+                  nil)))))))
 
      :client-build-managed-screen-render-data
      (fn [screen-key]
@@ -1330,5 +1327,3 @@
      :client-trigger-preset-switch!
      (fn [player-uuid]
        (client-keybinds/switch-preset! player-uuid))}))
-
-

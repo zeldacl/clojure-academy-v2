@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.adapters.runtime-bridge-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.runtime-bridge :as runtime-bridge]
@@ -11,9 +11,8 @@
 (defn- reset-runtime-bridge-fixture [f]
   (when-let [guard-var (ns-resolve 'cn.li.ac.ability.adapters.runtime-bridge 'runtime-hooks-installed?)]
     (reset! (var-get guard-var) false))
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :test-session}
-                                  :session-id :test-client-session}
-    (f)))
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :test-session}
+                                  :session-id :test-client-session} (fn [] (f))))
 
 (use-fixtures :each reset-runtime-bridge-fixture)
 
@@ -52,12 +51,9 @@
 
 (deftest runtime-client-charge-coin-visual-state-contract-test
   (runtime-bridge/install-runtime-hooks!)
-  (let [state (runtime-hooks/with-client-ctx {:session-id :test-client-session}
-                (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"}))]
+  (let [state (runtime-hooks/with-client-ctx-fn {:session-id :test-client-session} (fn [] (runtime-hooks/client-visual-state :ac/charge-coin {:player-uuid "client-player"})))]
     (is (contains? state :active?))
     (is (contains? state :coin-active?))
     (is (contains? state :charge-ratio))
     (is (contains? state :charge-ticks))
     (is (contains? state :coin-progress))))
-
-

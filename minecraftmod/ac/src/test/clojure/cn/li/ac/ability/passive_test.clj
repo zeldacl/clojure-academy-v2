@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.passive-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.model.ability :as ad]
@@ -70,15 +70,10 @@
                             "u3"
                             (assoc (store/fresh-player-state)
                                    :ability-data (ad/learn-skill (ad/new-ability-data) :passive-skill)))
-  (runtime-hooks/with-client-ctx {:player-owner {:server-session-id :passive-session
-                                                 :player-uuid "p-passive"}}
-    (is (true? (passive/learned-skill? "u3" :passive-skill)))
-    ))
+  (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :passive-session
+                                                 :player-uuid "p-passive"}} (fn [] (is (true? (passive/learned-skill? "u3" :passive-skill))))))
 
 (deftest passive-session-resolution-still-fail-fast-test
-  (runtime-hooks/with-client-ctx {:player-owner nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"
-                          (passive/learned-skill? "u3" :passive-skill)))))
-
-
+                          (passive/learned-skill? "u3" :passive-skill))))))

@@ -296,12 +296,6 @@
   [owner thunk]
   (with-client-ctx-fn {:player-owner owner} thunk))
 
-(defmacro with-client-ctx
-  "Macro wrapper: set client context keys in Framework for duration of body.
-  Usage: (with-client-ctx {:session-id sid :player-owner owner} ...body...)"
-  [ctx-map & body]
-  `(with-client-ctx-fn ~ctx-map (fn [] ~@body)))
-
 ;; ============================================================================
 ;; Session context push/pop/clear — 零分配 ThreadLocal 管理
 ;; 供 DelegatingScreen.java 调用，替代 per-frame with-client-ctx

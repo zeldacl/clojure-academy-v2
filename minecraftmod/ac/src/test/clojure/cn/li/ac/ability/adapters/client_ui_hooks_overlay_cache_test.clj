@@ -87,11 +87,10 @@
        skill-registry/get-skill (fn [_] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
         (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
         (is (= 1 @shape-calls)
-            "skill-slot shape registry lookups should run once, not once per frame")))))
+            "skill-slot shape registry lookups should run once, not once per frame"))))))
 
 (deftest skill-shape-cache-invalidates-on-preset-rebind-test
   (let [shape-calls (atom 0)
@@ -103,12 +102,11 @@
        skill-registry/get-skill (fn [_] {:name "Skill"})
        skill-query/get-skill-icon-path (fn [_] "textures/skills/x.png")
        read-model/get-player-contexts-for-player (fn [& _] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
         (reset! preset-a (preset-data-with-slot :body-intensify))
         (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
         (is (= 2 @shape-calls)
-            "rebinding a skill slot (new preset-data) must rebuild the cached shape")))))
+            "rebinding a skill slot (new preset-data) must rebuild the cached shape"))))))
 
 (deftest context-cache-hits-and-shared-between-consumption-hint-and-visual-test
   (let [context-calls (atom 0)
@@ -121,12 +119,11 @@
        skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
        ctx/contexts-version-token (fn [] ::stable-token)
        read-model/get-player-contexts-for-player (fn [& _] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
         (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
         (is (= 1 @context-calls)
             "context scan must run once per real context change, not once per frame,
-             and must be shared between delegate-state and consumption-hint")))))
+             and must be shared between delegate-state and consumption-hint"))))))
 
 (deftest context-cache-invalidates-on-context-change-test
   (let [context-calls (atom 0)
@@ -140,12 +137,11 @@
        skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
        ctx/contexts-version-token (fn [] @token)
        read-model/get-player-contexts-for-player (fn [& _] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
         (reset! token :token-b)
         (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
         (is (= 2 @context-calls)
-            "a context-registry change must invalidate the cached context data")))))
+            "a context-registry change must invalidate the cached context data"))))))
 
 (deftest cooldown-refreshes-every-frame-without-invalidating-either-cache-test
   (let [shape-calls (atom 0)
@@ -160,8 +156,7 @@
        skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
        ctx/contexts-version-token (fn [] ::stable-token)
        read-model/get-player-contexts-for-player (fn [& _] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (let [plan-1 (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (let [plan-1 (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
               slot-1 (first (filter #(= :content-slot (:kind %)) (:elements plan-1)))]
           (is (= 0 (:timer-remaining slot-1))))
         (reset! cooldown {[:railgun :main] 40})
@@ -170,7 +165,7 @@
           (is (= 40 (:timer-remaining slot-2))
               "cooldown numeric fields must refresh every frame"))
         (is (= 1 @shape-calls) "cooldown ticking must not invalidate Cache A")
-        (is (= 1 @context-calls) "cooldown ticking must not invalidate Cache B")))))
+        (is (= 1 @context-calls) "cooldown ticking must not invalidate Cache B"))))))
 
 (deftest overlay-caches-cleared-on-client-ui-state-reset-test
   (let [shape-calls (atom 0)
@@ -182,9 +177,8 @@
        skill-registry/get-skill (fn [_] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
         (client-ui-hooks/reset-client-ui-state-for-test!)
         (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
         (is (= 2 @shape-calls)
-            "resetting client-ui state must clear the cache, not leak across sessions")))))
+            "resetting client-ui state must clear the cache, not leak across sessions"))))))

@@ -30,9 +30,8 @@
 
 (deftest execute-reducer-result-translates-events-before-effects-test
   (let [calls (atom [])]
-    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "session-A"
-                                                   :player-uuid "p1"}}
-      (with-redefs [interpreter/execute-effects! (fn [_session-id effects]
+    (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id "session-A"
+                                                   :player-uuid "p1"}} (fn [] (with-redefs [interpreter/execute-effects! (fn [_session-id effects]
                                                    (swap! calls conj [:effects effects])
                                                    nil)]
         (interpreter/execute-reducer-result!
@@ -52,13 +51,12 @@
                             :ctx-id nil
                             :session-id "session-A"}
                            {:effect/type :network-send :player-uuid "p1"}]]]
-               @calls))))))
+               @calls)))))))
 
 (deftest execute-reducer-result-uses-bound-owner-session-test
   (let [captured-effects (atom nil)]
-    (runtime-hooks/with-client-ctx {:player-owner {:server-session-id "effect-session"
-                                                   :player-uuid "player-a"}}
-      (with-redefs [interpreter/execute-effects! (fn [session-id effects]
+    (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id "effect-session"
+                                                   :player-uuid "player-a"}} (fn [] (with-redefs [interpreter/execute-effects! (fn [session-id effects]
                                                    (reset! captured-effects [session-id effects])
                                                    nil)]
         (interpreter/execute-reducer-result!
@@ -71,4 +69,4 @@
                  :player-uuid "player-a"
                  :ctx-id nil
                  :session-id "effect-session"}]
-               (second @captured-effects)))))))
+               (second @captured-effects))))))))

@@ -23,11 +23,10 @@
         tech-ui {:current (atom "inv")}
         container {:tab-index (atom 0)}
         sent-calls (atom [])]
-    (runtime-hooks/with-client-ctx {:session-id nil}
-      (with-redefs [tabbed/send-set-tab! (fn [& args]
+    (runtime-hooks/with-client-ctx-fn {:session-id nil} (fn [] (with-redefs [tabbed/send-set-tab! (fn [& args]
                                            (swap! sent-calls conj args))]
         (tabbed/attach-tab-sync! pages tech-ui container 17)
-        (reset! (:current tech-ui) "wireless")))
+        (reset! (:current tech-ui) "wireless"))))
     (is (empty? @sent-calls))))
 
 (deftest attach-tab-sync-sends-scoped-owner-when-available-test
@@ -44,4 +43,3 @@
     (is (= [[owner 0 7]
             [owner 1 7]]
            @sent-calls))))
-

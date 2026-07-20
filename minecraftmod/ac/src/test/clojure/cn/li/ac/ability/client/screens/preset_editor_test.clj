@@ -8,8 +8,7 @@
   (managed-screens/call-with-managed-screen-runtime
     (managed-screens/create-managed-screen-runtime)
     (fn []
-      (runtime-hooks/with-client-ctx {:session-id :test-session}
-        (f)))))
+      (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (f))))))
 
 (use-fixtures :each reset-screen-fixture)
 
@@ -33,12 +32,9 @@
   (is (= "player-2" (:player-uuid (screen/editor-state-snapshot "player-2")))))
 
 (deftest editor-owner-requires-explicit-session-and-player-test
-  (runtime-hooks/with-client-ctx {:session-id nil}
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+  (runtime-hooks/with-client-ctx-fn {:session-id nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Client read model owner requires :client-session-id"
-                          (screen/editor-state-snapshot "player-1"))))
+                          (screen/editor-state-snapshot "player-1")))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Client read model owner requires :player-uuid"
                         (screen/editor-state-snapshot {:client-session-id :session-a}))))
-
-

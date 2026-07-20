@@ -15,8 +15,7 @@
     (fn [store] (arc-beam/effect-tick-state! :level :mag-movement store))))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx {:session-id :test-session}
-    (try
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
       (level-effects/reset-level-effect-registry-for-test!)
       (mag-movement-fx/reset-fx-for-test!)
       (mag-movement-fx/init!)
@@ -25,7 +24,7 @@
       (finally
         (mag-movement-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
-        (level-effects/reset-level-effect-registry-for-test!)))))
+        (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 

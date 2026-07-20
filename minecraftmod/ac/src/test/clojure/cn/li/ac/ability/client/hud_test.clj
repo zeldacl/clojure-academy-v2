@@ -20,8 +20,7 @@
      {:text "Critical Hit x1.6"
       :duration-ms 2000
       :color [255 226 120]})
-    (runtime-hooks/with-client-ctx {:session-id session-id}
-      (let [render-data (hud-rd/build-hud-render-data {:activated false
+    (runtime-hooks/with-client-ctx-fn {:session-id session-id} (fn [] (let [render-data (hud-rd/build-hud-render-data {:activated false
                                                     :cp {:cur 0.0 :max 1.0}
                                                     :overload {:cur 0.0 :max 1.0 :fine true}
                                                     :active-slots []}
@@ -29,7 +28,7 @@
                                                    :combat-notice-component component
                                                    :now-ms (System/currentTimeMillis))]
         (is (some? render-data))
-        (is (= "Critical Hit x1.6" (get-in render-data [:combat-notice :text])))))))
+        (is (= "Critical Hit x1.6" (get-in render-data [:combat-notice :text]))))))))
 
 (deftest cp-bar-render-data-uses-texture-without-solid-bar-color-test
   (let [data (hud/build-cp-bar-render-data

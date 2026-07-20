@@ -35,13 +35,10 @@
 (deftest response-dispatch-stays-bound-to-current-client-session-test
   (let [calls (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
-      (runtime-hooks/with-client-ctx {:session-id :session-a}
-        (client/send-to-server "req" {} (fn [resp] (swap! calls conj resp))))
-      (runtime-hooks/with-client-ctx {:session-id :session-b}
-        (packet/dispatch-client-response! 1 {:ok :stale}))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (client/send-to-server "req" {} (fn [resp] (swap! calls conj resp)))))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-b} (fn [] (packet/dispatch-client-response! 1 {:ok :stale})))
       (is (empty? @calls))
-      (runtime-hooks/with-client-ctx {:session-id :session-a}
-        (packet/dispatch-client-response! 1 {:ok :live})))
+      (runtime-hooks/with-client-ctx-fn {:session-id :session-a} (fn [] (packet/dispatch-client-response! 1 {:ok :live}))))
     (is (= [{:ok :live}] @calls))))
 
 (deftest dispatch-client-response-without-owner-uses-global-push-handlers-test

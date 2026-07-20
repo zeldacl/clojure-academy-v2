@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.adapters.client-overlay-lifecycle-test
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
 [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui-hooks]
@@ -23,8 +23,7 @@
 (deftest movement-keys-ignore-terminated-flashing-context-test
   (let [sent (atom [])
         hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (runtime-hooks/with-client-ctx {:session-id test-client-session}
-      (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-flashing-dead"))
+    (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (client-ui-hooks/set-slot-context-for-test! "p1" 0 "ctx-flashing-dead")))
     (with-redefs [ctx/get-context (fn [_owner _ctx-id]
                                     {:id "ctx-flashing-dead"
                                      :player-uuid "p1"
@@ -35,10 +34,9 @@
                                                                        [(nth args 1) (nth args 2)]
                                                                        [(first args) (second args)])]
                                                 (swap! sent conj [msg-id payload])))]
-      (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        ((:client-on-movement-key-down! hooks) "p1" :forward)
+      (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] ((:client-on-movement-key-down! hooks) "p1" :forward)
         ((:client-on-movement-key-tick! hooks) "p1" :forward)
-        ((:client-on-movement-key-up! hooks) "p1" :forward))
+        ((:client-on-movement-key-up! hooks) "p1" :forward)))
       (is (empty? @sent)))))
 
 (deftest terminated-contexts-do-not-drive-charge-or-crosshair-overlays-test
@@ -88,10 +86,9 @@
                                                 (case [skill-id field-id]
                                                   [:railgun :qte.coin-active-threshold] 0.6
                                                   0.0))]
-        (runtime-hooks/with-client-ctx {:session-id test-client-session}
-        (is (false? (:active? ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"}))))
+        (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (is (false? (:active? ((:client-visual-state hooks) :ac/charge-coin {:player-uuid "p1"}))))
         (is (false? (:active? ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"}))))
         (let [plan (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
             kinds (set (map :kind (:elements plan)))]
           (is (not (contains? kinds :content-crosshair)))
-          (is (not (contains? kinds :blit-texture))))))))
+          (is (not (contains? kinds :blit-texture)))))))))

@@ -43,9 +43,8 @@
      ~@body))
 
 (defn- fresh! []
-  (runtime-hooks/with-client-ctx {:session-id test-session}
-    (reactive-hud/clear-snapshot-cache-for-owner!
-      (read-model/owner-key {:player-uuid "p1"} nil))))
+  (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/clear-snapshot-cache-for-owner!
+      (read-model/owner-key {:player-uuid "p1"} nil)))))
 
 (deftest frame-inputs-cache-hit-when-player-state-identical-test
   (fresh!)
@@ -59,11 +58,10 @@
        skill-registry/get-skill (fn [_#] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _#] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 1 @context-calls)
-            "contexts must be fetched once per real player-state change, not once per frame")))))
+            "contexts must be fetched once per real player-state change, not once per frame"))))))
 
 (deftest frame-inputs-cache-invalidates-on-player-state-change-test
   (fresh!)
@@ -78,11 +76,10 @@
        skill-registry/get-skill (fn [_#] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _#] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 2 @context-calls)
-            "a genuinely new player-state value must invalidate the cached contexts")))))
+            "a genuinely new player-state value must invalidate the cached contexts"))))))
 
 (deftest skill-shape-cache-hits-across-resource-data-ticks-test
   (fresh!)
@@ -98,12 +95,11 @@
        skill-registry/get-skill (fn [_#] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _#] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
         (reset! cp 81.0)
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 1 @shape-calls)
-            "cp/overload regen ticking must not invalidate the skill-slot-shape cache")))))
+            "cp/overload regen ticking must not invalidate the skill-slot-shape cache"))))))
 
 (deftest skill-shape-cache-invalidates-on-preset-rebind-test
   (fresh!)
@@ -116,12 +112,11 @@
        skill-registry/get-skill (fn [_#] {:name "Skill"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/x.png")
        read-model/get-player-contexts-for-player (fn [& _#] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
         (reset! preset-a (preset-data-with-slot :body-intensify))
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 2 @shape-calls)
-            "rebinding a skill slot (new preset-data) must rebuild the cached shape")))))
+            "rebinding a skill slot (new preset-data) must rebuild the cached shape"))))))
 
 (deftest cooldown-refreshes-every-frame-without-invalidating-caches-test
   (fresh!)
@@ -136,8 +131,7 @@
        skill-registry/get-skill (fn [_#] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _#] (swap! context-calls inc) [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (let [snap-1 (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (let [snap-1 (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
               slot-1 (first (:skill-slots snap-1))]
           (is (= false (:in-cooldown slot-1))))
         ;; cooldown-data is nested inside player-state, so this still counts as
@@ -148,7 +142,7 @@
               slot-2 (first (:skill-slots snap-2))]
           (is (= true (:in-cooldown slot-2))
               "cooldown numeric fields must refresh every frame"))
-        (is (= 1 @shape-calls) "cooldown ticking must not invalidate the skill-slot-shape cache")))))
+        (is (= 1 @shape-calls) "cooldown ticking must not invalidate the skill-slot-shape cache"))))))
 
 (deftest clear-snapshot-cache-for-owner-clears-cache-test
   (fresh!)
@@ -161,9 +155,8 @@
        skill-registry/get-skill (fn [_#] {:name "Railgun"})
        skill-query/get-skill-icon-path (fn [_#] "textures/skills/railgun.png")
        read-model/get-player-contexts-for-player (fn [& _#] [])]
-      (runtime-hooks/with-client-ctx {:session-id test-session}
-        (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
+      (runtime-hooks/with-client-ctx-fn {:session-id test-session} (fn [] (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1000})
         (fresh!)
         (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
         (is (= 2 @shape-calls)
-            "clearing the cache must force a rebuild, not leak stale shapes")))))
+            "clearing the cache must force a rebuild, not leak stale shapes"))))))
