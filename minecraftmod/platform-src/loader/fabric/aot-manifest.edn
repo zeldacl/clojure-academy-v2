@@ -25,7 +25,6 @@
  "cn.li.fabric1201.client.keyboard-init"
  "cn.li.fabric1201.client.level-effect-renderer"
  "cn.li.fabric1201.client.overlay-renderer"
- "cn.li.fabric1201.client.runtime-bridge"
  "cn.li.fabric1201.commands"
  "cn.li.fabric1201.config.bridge"
  "cn.li.fabric1201.datagen.advancement-provider"

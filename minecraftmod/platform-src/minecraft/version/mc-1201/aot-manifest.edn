@@ -83,7 +83,6 @@
  "cn.li.mc1201.gui.init.checks"
  "cn.li.mc1201.gui.init.orchestrator"
  "cn.li.mc1201.gui.menu.container"
- "cn.li.mc1201.gui.menu.contract"
  "cn.li.mc1201.gui.menu.proxy"
  "cn.li.mc1201.gui.network.packet"
  "cn.li.mc1201.gui.provider.common"

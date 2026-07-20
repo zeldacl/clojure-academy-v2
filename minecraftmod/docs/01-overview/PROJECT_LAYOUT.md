@@ -106,7 +106,7 @@
 
 旧 CGUI 框架（`mcmod/gui/cgui_core.clj` 等 8 文件、`platform-src/minecraft/version/mc-1201/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`）与其消费者已全部删除，替换为 `platform-src/minecraft/version/mc-1201/gui/reactive/*`（signal 驱动、dirty-gated）+ `mcmod` signal core。保留：`platform-src/minecraft/version/mc-1201/gui/cgui/font.clj`（MSDF 桥，仍在用）、`mcmod/gui/tabbed_gui.clj` + `spec.clj`（平台无关的 tab 同步/GUI spec 校验，被 `gui/menu/proxy.clj`、`gui/slots/sync.clj`、`gui/reactive/host_container.clj`、多个 `*_reactive.clj` 消费，非旧框架残留）。
 
-**平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
+**平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；字体 tick 由各 loader 的 client lifecycle 接入。
 
 ## Scripted 逻辑分发（`mc-1.20.1` + 平台注册）
 

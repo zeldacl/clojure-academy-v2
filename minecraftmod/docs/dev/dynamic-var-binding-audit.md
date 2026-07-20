@@ -19,7 +19,6 @@ is pure decoration: safe to convert to a plain `def` + `install-root!`
 | var | file | bound at | binder |
 |---|---|---|---|
 | `*sync-scheduler-runtime*` | `platform-src/minecraft/version/mc-1201/.../runtime/sync_core.clj` | `sync_core.clj:42` | `with-sync-scheduler-runtime` macro |
-| `*input-runtime*` | `platform-src/loader/fabric/.../client/runtime_bridge.clj` | `runtime_bridge.clj:32,36` | `with-input-runtime` macro + `call-with-input-runtime` |
 | `*server-context-runtime*` | `platform-src/loader/fabric/.../adapter/server_context.clj` | `server_context.clj:27,32` | `with-server-context-runtime` macro + `call-with-server-context-runtime` |
 | `*session-cleanup-runtime*` | `platform-src/minecraft/version/mc-1201/.../client/session_cleanup.clj` | `session_cleanup.clj:37` | `with-session-cleanup-runtime` macro |
 | `*script-render-runtime*` | `platform-src/minecraft/version/mc-1201/.../client/render/script_render_runtime.clj` | `script_render_runtime.clj:37,42` | macro + `call-with-script-render-runtime` |

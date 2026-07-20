@@ -47,7 +47,6 @@ Forge:
 	install-item-protocols-only!
 	install-block-state-protocol-only!
 	install-resource-factory-only!
-	install-item-factories-only!
 	install-world-fns-only!
 	install-be-fns-only!
 

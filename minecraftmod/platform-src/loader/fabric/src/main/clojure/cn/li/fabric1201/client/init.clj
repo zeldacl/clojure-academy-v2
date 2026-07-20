@@ -17,7 +17,6 @@
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
-            [cn.li.fabric1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.client.session :as mc-session]
@@ -122,13 +121,6 @@
   (client-bridge/merge-client-bridge!
     {:open-screen open-screen-dispatcher
      :open-reactive-screen open-reactive-screen-handler
-     :slot-key-down runtime-bridge/on-slot-key-down!
-     :slot-key-tick runtime-bridge/on-slot-key-tick!
-     :slot-key-up runtime-bridge/on-slot-key-up!
-      :slot-key-abort runtime-bridge/on-slot-key-abort!
-     :movement-key-down runtime-bridge/on-movement-key-down!
-     :movement-key-tick runtime-bridge/on-movement-key-tick!
-     :movement-key-up runtime-bridge/on-movement-key-up!
      :client-overlay-activated-override
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
@@ -220,6 +212,5 @@
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
   (screen-host/init!)
-  (runtime-bridge/init!)
   (msdf-setup/init!)
   (log/info "Fabric client initialization complete"))

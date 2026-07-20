@@ -140,16 +140,6 @@
          :position-get-pos (fn [^BlockEntity be] (.getBlockPos be))}
         "mc1201"))))
 
-(defn- install-item! [adapter]
-  (install-item-protocols-only! adapter))
-
-(defn install-item-factories-only!
-  "Backward-compatible no-op. Item factories are now installed by install-item-protocols-only!."
-  [_item-stack-of-fn _create-item-stack-by-id-fn _item-stack-empty?-fn]
-  ;; Factories are already installed via install-item-protocols-only!
-  ;; which is called before this by install-platform-core! and platform-init.
-  nil)
-
 (defn install-item-protocols-only!
   "Install ItemStack/Item interop functions into Framework [:platform :item-ops]."
   [adapter]
@@ -338,7 +328,7 @@
   [adapter]
   (install-nbt!)
   (install-position! adapter)
-  (install-item! adapter)
+  (install-item-protocols-only! adapter)
   (install-world! adapter)
   (install-entity-protocols-only! adapter)
   (install-player-feedback!)
