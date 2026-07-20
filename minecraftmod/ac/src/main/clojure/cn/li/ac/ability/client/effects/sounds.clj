@@ -65,10 +65,6 @@
   []
   fallback-sound-queue)
 
-;; Backward-compatible factory
-(defn create-sound-queue-runtime []
-  {::runtime ::sound-queue-runtime :queue* (sound-queue)})
-
 (defn- normalize-session-id
   [owner-or-session]
   (queue-infra/normalize-session-id "sound" owner-or-session))

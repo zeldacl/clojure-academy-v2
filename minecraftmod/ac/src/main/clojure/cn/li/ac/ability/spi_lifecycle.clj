@@ -68,8 +68,7 @@
   (when (:frozen? (lifecycle-registry-state-snapshot))
     (throw (ex-info "Ability lifecycle registry is frozen" {}))))
 
-;; Backward-compatible install
-;; Backward-compatible factory
+;; Runtime container API.
 (defn create-lifecycle-registry-runtime
   ([]
    {::lifecycle-registry-runtime true

@@ -27,8 +27,7 @@
   (when (:frozen? (event-subscriber-state-snapshot))
     (throw (ex-info "Ability event subscriber registry is frozen" {}))))
 
-;; Backward-compatible install
-;; Backward-compatible factory
+;; Runtime container API.
 (defn create-event-subscriber-runtime
   ([]
    {::event-subscriber-runtime true
