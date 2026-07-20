@@ -184,9 +184,11 @@ if (target.loader != "none") {
         dependsOn mcmodProject.tasks.named("classes")
     }
 
+    def platformJavaClasses = tasks.named("compileJava").flatMap { it.destinationDirectory }
+
     tasks.named("compileClojure").configure { task ->
         dependsOn "compileJava"
-        classpath.from(files(layout.buildDirectory.dir("classes/java/main")))
+        classpath.from(files(platformJavaClasses))
         if (rootProject.hasProperty("releaseAot")) {
             def manifests = [
                 rootProject.file("platform-src/common/aot-manifest.edn"),
@@ -213,6 +215,7 @@ if (target.loader != "none") {
     ])
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
+    def platformRuntimeAotDir = layout.buildDirectory.dir("clojure/platform-aot/main")
     def platformAotManifests = [
         rootProject.file("platform-src/common/aot-manifest.edn"),
         rootProject.file("platform-src/minecraft/version/mc-1201/aot-manifest.edn"),
@@ -228,6 +231,39 @@ if (target.loader != "none") {
             }
         }
         runtimeNamespaces
+    }
+    def platformEntrypointNamespaces = {
+        def runtimeNamespaces = new LinkedHashSet<String>()
+        if (target.loader == "forge") {
+            runtimeNamespaces << "cn.li.forge1201.mod"
+        } else if (target.loader == "fabric") {
+            runtimeNamespaces << "cn.li.fabric1201.mod"
+        }
+        runtimeNamespaces
+    }
+    def platformRuntimeAotNamespaces = {
+        releaseAot ? platformAotNamespaces() : platformEntrypointNamespaces()
+    }
+    def deleteAotNamespaceClasses = { File outputRoot, Collection<String> namespaces ->
+        namespaces.each { namespaceName ->
+            def namespacePath = namespaceName.replace(".", "/")
+            def packagePath = namespacePath.contains("/")
+                ? namespacePath.substring(0, namespacePath.lastIndexOf("/"))
+                : ""
+            def classBaseName = namespacePath.substring(namespacePath.lastIndexOf("/") + 1).replace("-", "_")
+            def packageDir = packagePath ? new File(outputRoot, packagePath) : outputRoot
+            if (packageDir.isDirectory()) {
+                packageDir.listFiles(new FilenameFilter() {
+                    boolean accept(File dir, String fileName) {
+                        fileName == "${classBaseName}__init.class" ||
+                            fileName == "${classBaseName}.class" ||
+                            (fileName.startsWith("${classBaseName}\$") && fileName.endsWith(".class"))
+                    }
+                })?.each { File staleClass ->
+                    staleClass.delete()
+                }
+            }
+        }
     }
     def stripClassLocalVariableTables = { byte[] classBytes ->
         def reader = new org.objectweb.asm.ClassReader(classBytes)
@@ -260,13 +296,14 @@ if (target.loader != "none") {
     def generatePlatformAotScript = tasks.register("generatePlatformAotScript") {
         inputs.files platformAotManifests
         inputs.property "platformTarget", target.id
+        inputs.property "releaseAot", releaseAot
         outputs.file platformAotScript
         doLast {
-            def namespaces = platformAotNamespaces()
+            def namespaces = platformRuntimeAotNamespaces()
             if (namespaces.isEmpty()) {
                 throw new GradleException("No platform AOT namespaces for target '${target.id}'")
             }
-            def outputDir = clojureAotDir.get().asFile
+            def outputDir = platformRuntimeAotDir.get().asFile
             def script = platformAotScript.get().asFile
             def clojureStringLiteral = { String value ->
                 "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
@@ -274,9 +311,11 @@ if (target.loader != "none") {
             script.parentFile.mkdirs()
             script.text = """\
                 |(set! *warn-on-reflection* true)
-                |(binding [*compile-path* ${clojureStringLiteral(outputDir.absolutePath)}]
+                |(binding [*compile-files* true
+                |          *compile-path* ${clojureStringLiteral(outputDir.absolutePath)}]
                 |  (doseq [namespace-symbol '(${namespaces.join(" ")})]
                 |    (println "[platform-aot]" namespace-symbol)
+                |    (remove-ns namespace-symbol)
                 |    (compile namespace-symbol)))
                 |""".stripMargin()
         }
@@ -291,28 +330,46 @@ if (target.loader != "none") {
         dependsOn acProject.tasks.named("compileClojure")
         inputs.files platformAotManifests
         inputs.files sourceComponents.collect { component -> componentDir(component, "clojure") }
-        outputs.dir clojureAotDir
+        outputs.dir platformRuntimeAotDir
         classpath = configurations.compileClasspath +
             configurations.runtimeClasspath +
-            files(layout.buildDirectory.dir("classes/java/main")) +
+            files(platformJavaClasses) +
             files(sourceComponents.collect { component -> componentDir(component, "clojure") }) +
             files(mcmodProject.file("src/main/clojure"), acProject.file("src/main/clojure")) +
             files(mcmodProject.layout.buildDirectory.dir("clojure/main"), acProject.layout.buildDirectory.dir("clojure/main")) +
             files(mcmodProject.layout.buildDirectory.dir("classes/java/main"), acProject.layout.buildDirectory.dir("classes/java/main"))
         mainClass = "clojure.main"
         doFirst {
-            delete clojureAotDir
-            clojureAotDir.get().asFile.mkdirs()
+            delete platformRuntimeAotDir
+            platformRuntimeAotDir.get().asFile.mkdirs()
+            deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
             args platformAotScript.get().asFile.absolutePath
+        }
+        doLast {
+            def outputRoot = platformRuntimeAotDir.get().asFile
+            def missingEntrypoints = platformRuntimeAotNamespaces().findAll { namespaceName ->
+                namespaceName == "cn.li.forge1201.mod" ||
+                    namespaceName == "cn.li.fabric1201.mod"
+            }.collect { namespaceName ->
+                new File(outputRoot, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")
+            }.findAll { !it.isFile() }
+            if (!missingEntrypoints.isEmpty()) {
+                throw new GradleException("Platform AOT did not write required runtime classes: ${missingEntrypoints}")
+            }
         }
     }
 
     def copyClojureClassesToJavaOutput = tasks.register("copyClojureClassesToJavaOutput", Copy) {
         from clojureAotDir
+        from platformRuntimeAotDir
         into layout.buildDirectory.dir("classes/java/main")
         dependsOn tasks.named("compileClojure")
         dependsOn compilePlatformClojureAot
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
         include "**/*.class"
+        doFirst {
+            deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
+        }
     }
 
     tasks.named("classes").configure {
@@ -327,7 +384,7 @@ if (target.loader != "none") {
     tasks.named("compileTestClojure").configure {
         dependsOn tasks.named("classes")
         classpath.from(platformClojureSourceClasspath)
-        classpath.from(files(layout.buildDirectory.dir("classes/java/main")))
+        classpath.from(files(platformJavaClasses))
     }
 
     tasks.named("jar", Jar).configure {
@@ -439,8 +496,8 @@ if (target.loader != "none") {
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
     configurePackagedRuntimeProject(acProject, "Ac")
     compilePlatformClojureAot.configure {
-        dependsOn tasks.named("copyMcmodRuntimeClassesToPlatformOutput")
-        dependsOn tasks.named("copyAcRuntimeClassesToPlatformOutput")
+        mustRunAfter tasks.named("copyMcmodRuntimeClassesToPlatformOutput")
+        mustRunAfter tasks.named("copyAcRuntimeClassesToPlatformOutput")
     }
 
     def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {
