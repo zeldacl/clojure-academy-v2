@@ -8,14 +8,8 @@
   - :draw! (fn [render-ctx draw-plan entity partial-tick] -> nil)"
   (:require [cn.li.mcmod.runtime.deferred :as deferred]))
 
-;; Wrapper function
-
-(defn draw!
-  [executor render-ctx draw-plan entity partial-tick]
-  ((:draw! executor) render-ctx draw-plan entity partial-tick))
-
 (def noop-executor
-  {:draw! (fn [_ _ _ _ _] nil)})
+  {:draw! (fn [_ _ _ _] nil)})
 
 (defn create-script-render-executor-runtime
   ([]
@@ -83,4 +77,4 @@
   [render-ctx draw-plan entity partial-tick]
   (let [kind (:kind draw-plan)
         executor (executor-for-kind kind)]
-    (draw! executor render-ctx draw-plan entity partial-tick)))
+    ((:draw! executor) render-ctx draw-plan entity partial-tick)))

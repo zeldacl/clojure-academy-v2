@@ -4,7 +4,7 @@
 
 (defn recording-executor
   [calls]
-  {:draw! (fn [_ render-ctx draw-plan entity partial-tick]
+  {:draw! (fn [render-ctx draw-plan entity partial-tick]
             (swap! calls conj [render-ctx draw-plan entity partial-tick])
             nil)})
 

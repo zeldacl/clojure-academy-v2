@@ -5,6 +5,25 @@
   (:require [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]))
 
+(def ^:private lifecycle-manifest
+  {:label "fabric-1.20.1"
+   :phases [{:id :platform-init
+             :actions [:init-platform! :init-from-java!]}
+            {:id :runtime-activation
+             :desc "load platform config and activate runtime content"
+             :actions [:load-config! :activate-runtime-content!]}
+            {:id :resource-init
+             :desc "shared blockstate property init"
+             :actions [:init-blockstate-properties!]}
+            {:id :content-registration
+             :actions [:register-content!]}
+            {:id :common-setup
+             :desc "runtime adapter + gui setup"
+             :actions [:install-runtime!]}
+            {:id :mod-bus-setup
+             :desc "register fabric callbacks/events"
+             :actions [:register-events!]}]})
+
 (defn init-lifecycle!
   [{:keys [init-platform!
            init-from-java!
@@ -16,7 +35,7 @@
            register-events!]}]
   (lifecycle-orchestrator/run-lifecycle!
    (platform-manifest/build-lifecycle
-    :fabric-1.20.1
+    lifecycle-manifest
     {:init-platform! init-platform!
      :init-from-java! init-from-java!
      :load-config! load-config!

@@ -48,7 +48,7 @@
 
 ## 平台层（Forge 1.20.1）
 
-- **Bridge**：容器包装；quickMove 调用 `gui/execute-quick-move-forge` → Clojure 容器逻辑。Forge/Fabric provider 通过 `mc1201.gui.provider.dispatcher/create-menu-from-provider!` 共享菜单创建流程，loader 差异集中在 `mc1201.gui.menu.proxy/platform-menu-proxy-opts`。
+- **Bridge**：容器包装；quickMove 调用 `gui/execute-quick-move-forge` → Clojure 容器逻辑。Forge/Fabric provider 通过 `mc1201.gui.provider.dispatcher/create-menu-from-provider!` 共享菜单创建流程，loader 差异由各 loader component 以 opts 传入共享 `mc1201.gui.menu.proxy/menu-proxy-opts`。
 - **Registry**：MenuType 注册位于平台 adapter 自有缓存后，通过 `cn.li.mc1201.runtime.spi.gui-registry` 暴露给 shared GUI 打开与 screen 注册路径。
 - **Screen**：客户端注册；创建屏幕时调用 `ac` 侧 screen-factory。
 - **网络**：Forge 通道与包；业务分发在 `mcmod`/`ac` 协议与 handler 中完成。

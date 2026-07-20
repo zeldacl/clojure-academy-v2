@@ -5,10 +5,10 @@
 ## 快速入口
 
 - 架构门禁：`.\gradlew.bat verifyCurrentPlatforms`
-- Forge 编译：`.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge target"`
-- Fabric 编译：`.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric target"`
-- Forge 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=forge target"`
-- Fabric 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=fabric target"`
+- Forge 编译：`.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge-1.20.1"`
+- Fabric 编译：`.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1"`
+- Forge 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=forge-1.20.1"`
+- Fabric 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=fabric-1.20.1"`
 
 ## 验证顺序
 

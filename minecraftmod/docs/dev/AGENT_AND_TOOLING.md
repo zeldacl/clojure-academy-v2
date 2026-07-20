@@ -18,10 +18,10 @@
 ## 常用命令
 
 - 架构门禁：`cmd /c .\gradlew.bat verifyCurrentPlatforms --stacktrace`
-- Forge 编译：`cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge target" --stacktrace`
-- Fabric 编译：`cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric target" --stacktrace`
-- Forge 客户端：`cmd /c .\gradlew.bat :platform:runClient "-PplatformTarget=forge target"`
-- Fabric 客户端：`cmd /c .\gradlew.bat :platform:runClient "-PplatformTarget=fabric target"`
+- Forge 编译：`cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge-1.20.1" --stacktrace`
+- Fabric 编译：`cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1" --stacktrace`
+- Forge 客户端：`cmd /c .\gradlew.bat :platform:runClient "-PplatformTarget=forge-1.20.1"`
+- Fabric 客户端：`cmd /c .\gradlew.bat :platform:runClient "-PplatformTarget=fabric-1.20.1"`
 
 Windows 下 `-PplatformTarget=...` 建议整体加引号，避免 `cmd`/PowerShell 组合把带点号的值截断。
 
@@ -32,7 +32,7 @@ Windows 下 `-PplatformTarget=...` 建议整体加引号，避免 `cmd`/PowerShe
 - `ac` 与 `mcmod` 不依赖 Minecraft/Forge/Fabric API。
 - Loader Java entrypoint、client/datagen entrypoint、metadata 是允许存在的外部框架薄入口；内部薄封装、forwarding namespace 和兼容 wrapper 不保留。
 - DataGen 输出写入 `platform-target/build/generated/datagen/<target-id>/`，不写回源码目录。
-- 不创建真实 future loader 26.1 target、依赖、源码或发布产物；需要验证扩展性时使用 synthetic fixture 或 catalog/sourceSet/capability 测试。
+- 不创建真实 future loader target、依赖、源码或发布产物；需要验证扩展性时使用 synthetic fixture 或 catalog/sourceSet/capability 测试。
 
 ## 必跑门禁
 

@@ -13,8 +13,7 @@
   ([window-id menu-type clj-container]
   (create-menu-proxy window-id menu-type clj-container nil))
   ([window-id menu-type clj-container opts]
-  (menu-proxy/create-platform-menu-proxy
-    :forge-1.20.1
+  (menu-proxy/create-menu-proxy-with-defaults
     window-id
     menu-type
     clj-container

@@ -54,7 +54,10 @@
                :create-menu-proxy-fn (fn [window-id menu-type clj-container opts]
                                        (menu-proxy/create-menu-proxy window-id menu-type clj-container opts))
                :resolve-menu-type-fn get-handler-type
-               :bridge-opts (menu-proxy/platform-menu-proxy-opts :fabric-1.20.1)
+               :bridge-opts (menu-proxy/menu-proxy-opts
+                             {:call-super-removed? true
+                              :remove-log-message "Fabric menu closed for player"
+                              :quick-move-error-prefix "Error in Fabric quickMoveStack:"})
                :error-prefix "Failed to create container for GUI"
                :with-owner! #(client-session/with-current-client-owner %)})))))))
 

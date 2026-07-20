@@ -95,7 +95,7 @@
                                               (log/info "[CLIENT-MENU-FACTORY] Creating menu proxy wid=" wid "menu-type=" menu-type)
                                               (menu-proxy/create-menu-proxy wid menu-type clj-container opts))
                       :resolve-menu-type-fn get-menu-type
-                      :bridge-opts (menu-proxy/platform-menu-proxy-opts :forge-1.20.1)
+                      :bridge-opts (menu-proxy/menu-proxy-opts)
                       :error-prefix "Failed to create container for GUI"
                       :with-owner! #(client-session/with-current-client-owner %)})]
         (log/info "[CLIENT-MENU-FACTORY] Menu created successfully, returning to Forge. menu=" (type result))

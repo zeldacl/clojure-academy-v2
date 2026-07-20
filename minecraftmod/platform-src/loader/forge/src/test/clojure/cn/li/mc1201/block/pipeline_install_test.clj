@@ -8,7 +8,7 @@
 (defn- mock-scripted-block []
   (let [state (atom {:installed nil :tile-id "test-tile"})]
     (reify IScriptedBlock
-      (getTileLogic [_] (or @(:installed state) TileLogicBundle/EMPTY))
+      (getTileLogic [_] (or (:installed @state) TileLogicBundle/EMPTY))
       (getTileId [_] (:tile-id @state))
       (getBlockId [_] "test-block")
       (installTileLogic [_ bundle]

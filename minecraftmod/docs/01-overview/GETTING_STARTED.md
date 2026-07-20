@@ -14,10 +14,10 @@
 | 运行默认 Forge 客户端 | `.\gradlew.bat :platform:runClient` |
 | 运行默认 Forge 服务端 | `.\gradlew.bat :platform:runServer` |
 | 运行默认 Forge DataGen | `.\gradlew.bat :platform:runData` |
-| 运行 Fabric 客户端 | `.\gradlew.bat :platform:runClient "-PplatformTarget=fabric target"` |
+| 运行 Fabric 客户端 | `.\gradlew.bat :platform:runClient "-PplatformTarget=fabric-1.20.1"` |
 | 快速编译 core | `.\gradlew.bat :ac:compileClojure :mcmod:compileClojure` |
-| 快速编译 Forge target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge target"` |
-| 快速编译 Fabric target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric target"` |
+| 快速编译 Forge target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"` |
+| 快速编译 Fabric target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"` |
 | 架构门禁 | `.\gradlew.bat verifyCurrentPlatforms` |
 
 ## 推荐验证流程

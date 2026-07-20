@@ -65,7 +65,6 @@
  "cn.li.mc1201.datagen.lang-data"
  "cn.li.mc1201.datagen.lang-provider-core"
  "cn.li.mc1201.datagen.metadata-resolver"
- "cn.li.mc1201.datagen.provider-manifest"
  "cn.li.mc1201.datagen.provider-registration"
  "cn.li.mc1201.datagen.recipe-core"
  "cn.li.mc1201.datagen.recipe-patterns"

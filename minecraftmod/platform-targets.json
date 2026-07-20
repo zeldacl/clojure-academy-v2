@@ -1,0 +1,121 @@
+{
+  "defaultTarget": "forge-1.20.1",
+  "targets": {
+    "core": {
+      "id": "core",
+      "loader": "none",
+      "minecraftVersion": null,
+      "javaVersion": 17,
+      "sourceComponents": [],
+      "testComponents": [],
+      "capabilities": [],
+      "capabilityOwners": {},
+      "dependencies": {},
+      "artifact": {
+        "baseName": "academy-core",
+        "classifier": "core"
+      }
+    },
+    "forge-1.20.1": {
+      "id": "forge-1.20.1",
+      "loader": "forge",
+      "minecraftVersion": "1.20.1",
+      "javaVersion": 17,
+      "sourceComponents": [
+        "platform-src/common/src/main",
+        "platform-src/minecraft/version/mc-1201/src/main",
+        "platform-src/loader/forge/src/main"
+      ],
+      "testComponents": [
+        "platform-src/test-support/src/main",
+        "platform-src/loader/forge/src/test"
+      ],
+      "capabilities": [
+        "loader-entrypoint",
+        "client-entrypoint",
+        "datagen-entrypoint",
+        "minecraft-runtime",
+        "registry",
+        "network",
+        "gui",
+        "capability",
+        "jei"
+      ],
+      "capabilityOwners": {
+        "loader-entrypoint": ["platform-src/loader/forge"],
+        "client-entrypoint": ["platform-src/loader/forge"],
+        "datagen-entrypoint": ["platform-src/loader/forge"],
+        "minecraft-runtime": ["platform-src/minecraft/version/mc-1201"],
+        "registry": ["platform-src/loader/forge"],
+        "network": ["platform-src/loader/forge"],
+        "gui": ["platform-src/loader/forge"],
+        "capability": ["platform-src/loader/forge"],
+        "jei": ["platform-src/loader/forge"]
+      },
+      "dependencies": {
+        "minecraft": "com.mojang:minecraft:1.20.1",
+        "loader": "net.minecraftforge:forge:1.20.1-47.4.0",
+        "jeiCommonApi": "mezz.jei:jei-1.20.1-common-api:15.20.0.112",
+        "jeiForgeApi": "mezz.jei:jei-1.20.1-forge-api:15.20.0.112",
+        "jeiForgeRuntime": "mezz.jei:jei-1.20.1-forge:15.20.0.112",
+        "sparkRuntimeFile": "platform-src/loader/forge/libs/spark-1.10.53-forge.jar"
+      },
+      "datagenParityGroup": "mc-1201",
+      "entrypoint": {
+        "namespace": "cn.li.forge1201.platform.init",
+        "function": "init-platform!"
+      },
+      "artifact": {
+        "baseName": "academy-forge",
+        "classifier": "forge-1.20.1"
+      }
+    },
+    "fabric-1.20.1": {
+      "id": "fabric-1.20.1",
+      "loader": "fabric",
+      "minecraftVersion": "1.20.1",
+      "javaVersion": 17,
+      "sourceComponents": [
+        "platform-src/common/src/main",
+        "platform-src/minecraft/version/mc-1201/src/main",
+        "platform-src/loader/fabric/src/main"
+      ],
+      "testComponents": [
+        "platform-src/test-support/src/main",
+        "platform-src/loader/fabric/src/test"
+      ],
+      "capabilities": [
+        "loader-entrypoint",
+        "client-entrypoint",
+        "datagen-entrypoint",
+        "minecraft-runtime",
+        "registry",
+        "network",
+        "gui"
+      ],
+      "capabilityOwners": {
+        "loader-entrypoint": ["platform-src/loader/fabric"],
+        "client-entrypoint": ["platform-src/loader/fabric"],
+        "datagen-entrypoint": ["platform-src/loader/fabric"],
+        "minecraft-runtime": ["platform-src/minecraft/version/mc-1201"],
+        "registry": ["platform-src/loader/fabric"],
+        "network": ["platform-src/loader/fabric"],
+        "gui": ["platform-src/loader/fabric"]
+      },
+      "dependencies": {
+        "minecraft": "com.mojang:minecraft:1.20.1",
+        "fabricLoader": "net.fabricmc:fabric-loader:0.16.14",
+        "fabricApi": "net.fabricmc.fabric-api:fabric-api:0.92.6+1.20.1"
+      },
+      "datagenParityGroup": "mc-1201",
+      "entrypoint": {
+        "namespace": "cn.li.fabric1201.platform.init",
+        "function": "init-platform!"
+      },
+      "artifact": {
+        "baseName": "academy-fabric",
+        "classifier": "fabric-1.20.1"
+      }
+    }
+  }
+}

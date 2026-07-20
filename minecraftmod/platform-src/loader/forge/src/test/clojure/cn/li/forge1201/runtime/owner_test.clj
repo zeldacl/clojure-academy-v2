@@ -15,5 +15,5 @@
       (forge-owner/with-player-owner
         :player
         :server
-        #(reset! seen runtime-hooks/player-state-owner)))
+        #(reset! seen (runtime-hooks/player-state-owner))))
     (is (= owner @seen))))

@@ -95,6 +95,20 @@
 ;; Orchestration
 ;; =============================================================================
 
+(def ^:private lifecycle-manifest
+  {:label "forge-1.20.1"
+   :phases [{:id :platform-init
+             :actions [:init-platform!]}
+            {:id :runtime-activation
+             :desc "activate runtime content"
+             :actions [:activate-runtime-content!]}
+            {:id :resource-init
+             :actions [:init-resource-definitions!]}
+            {:id :content-registration
+             :actions [:register-content!]}
+            {:id :mod-bus-setup
+             :actions [:setup-mod-bus!]}]})
+
 (defn init-lifecycle!
   "Run complete Forge initialization lifecycle (constructor phases).
   
@@ -107,7 +121,7 @@
     (try
       (lifecycle-orchestrator/run-lifecycle!
        (platform-manifest/build-lifecycle
-        :forge-1.20.1
+        lifecycle-manifest
         {:init-platform! init-platform!
          :activate-runtime-content! activate-runtime-content!
          :init-resource-definitions! init-resource-definitions!

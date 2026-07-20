@@ -1,3 +1,12 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.ow2.asm:asm:9.7"
+    }
+}
+
 import groovy.json.JsonSlurper
 
 def catalog = new JsonSlurper().parse(rootProject.file("platform-targets.json"))
@@ -185,8 +194,33 @@ if (target.loader != "none") {
         }
     }
 
+    def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
+        componentDir(component, "clojure")
+    } + [
+        mcmodProject.file("src/main/clojure"),
+        acProject.file("src/main/clojure")
+    ])
+
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
-    sourceSets.main.output.dir(clojureAotDir, builtBy: tasks.named("compileClojure"))
+    def stripClassLocalVariableTables = { byte[] classBytes ->
+        def reader = new org.objectweb.asm.ClassReader(classBytes)
+        def writer = new org.objectweb.asm.ClassWriter(0)
+        int[] dropped = [0] as int[]
+        reader.accept(new org.objectweb.asm.ClassVisitor(org.objectweb.asm.Opcodes.ASM9, writer) {
+            @Override
+            org.objectweb.asm.MethodVisitor visitMethod(int access, String methodName, String descriptor, String signature, String[] exceptions) {
+                def methodVisitor = super.visitMethod(access, methodName, descriptor, signature, exceptions)
+                return new org.objectweb.asm.MethodVisitor(org.objectweb.asm.Opcodes.ASM9, methodVisitor) {
+                    @Override
+                    void visitLocalVariable(String localName, String localDescriptor, String localSignature, org.objectweb.asm.Label start, org.objectweb.asm.Label end, int index) {
+                        dropped[0]++
+                    }
+                }
+            }
+        }, 0)
+        return [bytes: dropped[0] > 0 ? writer.toByteArray() : classBytes, stripped: dropped[0] > 0]
+    }
+
     tasks.named("compileClojure").configure { task ->
         if (task.metaClass.hasProperty(task, "destinationDirectory")) {
             task.destinationDirectory = clojureAotDir
@@ -205,15 +239,25 @@ if (target.loader != "none") {
     tasks.named("classes").configure {
         dependsOn copyClojureClassesToJavaOutput
     }
+    tasks.matching { it.name == "checkClojure" }.configureEach {
+        dependsOn copyClojureClassesToJavaOutput
+    }
+    tasks.named("compileTestClojure").configure {
+        dependsOn tasks.named("classes")
+        classpath.from(platformClojureSourceClasspath)
+        classpath.from(files(layout.buildDirectory.dir("classes/java/main")))
+    }
 
     tasks.named("jar", Jar).configure {
         dependsOn copyClojureClassesToJavaOutput
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveBaseName = target.artifact.baseName
         archiveClassifier = target.artifact.classifier
     }
 
     shadowJar {
         configurations = [project.configurations.runtimeClasspath]
+        archiveBaseName = target.artifact.baseName
         archiveClassifier = "${target.artifact.classifier}-shadow"
         dependencies {
             include(dependency("org.clojure:clojure"))
@@ -302,6 +346,9 @@ if (target.loader != "none") {
         tasks.named("compileClojure").configure {
             dependsOn copyTask
         }
+        tasks.matching { it.name == "checkClojure" }.configureEach {
+            dependsOn copyTask
+        }
         tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
             dependsOn copyTask
         }
@@ -310,9 +357,126 @@ if (target.loader != "none") {
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
     configurePackagedRuntimeProject(acProject, "Ac")
 
-    remapJar {
-        inputFile = target.loader == "fabric" ? shadowJar.archiveFile : jar.archiveFile
-        dependsOn target.loader == "fabric" ? shadowJar : jar
+    def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {
+        group = "build"
+        description = "Strip local variable tables from packaged platform classes before loader remapping."
+        dependsOn tasks.named("classes")
+        def outputDir = layout.buildDirectory.dir("classes/java/main")
+        def marker = layout.buildDirectory.file("tmp/stripPlatformOutputLvt/stripped.marker")
+        inputs.dir(outputDir)
+        outputs.file(marker)
+        doLast {
+            def dir = outputDir.get().asFile
+            int stripped = 0
+            int unchanged = 0
+            if (dir.isDirectory()) {
+                dir.eachFileRecurse { File file ->
+                    if (!file.isFile() || !file.name.endsWith(".class")) {
+                        return
+                    }
+                    try {
+                        def strippedClass = stripClassLocalVariableTables(file.bytes)
+                        if (strippedClass.stripped) {
+                            file.bytes = strippedClass.bytes
+                            stripped++
+                        } else {
+                            unchanged++
+                        }
+                    } catch (Exception ex) {
+                        logger.warn("[stripPlatformOutputLvt] skipped {}: {}", file, ex.message)
+                    }
+                }
+            }
+            def markerFile = marker.get().asFile
+            markerFile.parentFile.mkdirs()
+            markerFile.text = "stripped=${stripped}, unchanged=${unchanged}${System.lineSeparator()}"
+            logger.lifecycle("[stripPlatformOutputLvt] stripped LVT from {} class files; left {} unchanged", stripped, unchanged)
+        }
+    }
+
+    tasks.named("jar", Jar).configure {
+        dependsOn stripPlatformOutputLvt
+    }
+    tasks.matching { it.name == "shadowJar" }.configureEach {
+        dependsOn stripPlatformOutputLvt
+    }
+
+    def remapInputArchive = tasks.named("jar", Jar).flatMap { it.archiveFile }
+    def remapInputTask = tasks.named("jar")
+    if (target.loader == "fabric") {
+        def shadowArchive = tasks.named("shadowJar", Jar).flatMap { it.archiveFile }
+        def strippedShadowArchive = layout.buildDirectory.file("libs/${target.artifact.baseName}-${project.version}-${target.artifact.classifier}-shadow-stripped.jar")
+        def stripShadowJarLvt = tasks.register("stripShadowJarLvt") {
+            group = "build"
+            description = "Strip local variable tables from the Fabric shadow jar before loader remapping."
+            dependsOn tasks.named("shadowJar")
+            inputs.file(shadowArchive)
+            outputs.file(strippedShadowArchive)
+            doLast {
+                def input = shadowArchive.get().asFile
+                def output = strippedShadowArchive.get().asFile
+                output.parentFile.mkdirs()
+                int stripped = 0
+                int unchanged = 0
+                def seen = new LinkedHashSet<String>()
+                new java.util.jar.JarInputStream(new FileInputStream(input)).withCloseable { jarInput ->
+                    new java.util.jar.JarOutputStream(new FileOutputStream(output)).withCloseable { jarOutput ->
+                        java.util.jar.JarEntry entry
+                        while ((entry = jarInput.nextJarEntry) != null) {
+                            if (!seen.add(entry.name)) {
+                                jarInput.closeEntry()
+                                continue
+                            }
+                            if (entry.name ==~ /^META-INF\/.*\.(SF|DSA|RSA)$/) {
+                                jarInput.closeEntry()
+                                continue
+                            }
+                            def outEntry = new java.util.jar.JarEntry(entry.name)
+                            outEntry.time = entry.time
+                            if (entry.extra != null) {
+                                outEntry.extra = entry.extra
+                            }
+                            jarOutput.putNextEntry(outEntry)
+                            if (!entry.isDirectory()) {
+                                def entryBuffer = new ByteArrayOutputStream()
+                                byte[] readBuffer = new byte[8192]
+                                int readCount
+                                while ((readCount = jarInput.read(readBuffer)) != -1) {
+                                    entryBuffer.write(readBuffer, 0, readCount)
+                                }
+                                byte[] bytes = entryBuffer.toByteArray()
+                                if (entry.name.endsWith(".class")) {
+                                    try {
+                                        def strippedClass = stripClassLocalVariableTables(bytes)
+                                        bytes = strippedClass.bytes
+                                        if (strippedClass.stripped) {
+                                            stripped++
+                                        } else {
+                                            unchanged++
+                                        }
+                                    } catch (Exception ex) {
+                                        logger.warn("[stripShadowJarLvt] copied {} without bytecode rewrite: {}", entry.name, ex.message)
+                                    }
+                                }
+                                jarOutput.write(bytes)
+                            }
+                            jarOutput.closeEntry()
+                            jarInput.closeEntry()
+                        }
+                    }
+                }
+                logger.lifecycle("[stripShadowJarLvt] stripped LVT from {} shadow classes; left {} unchanged", stripped, unchanged)
+            }
+        }
+        remapInputArchive = strippedShadowArchive
+        remapInputTask = stripShadowJarLvt
+    }
+
+    tasks.named("remapJar").configure {
+        inputFile.set(remapInputArchive)
+        archiveBaseName.set(target.artifact.baseName)
+        archiveClassifier.set(target.artifact.classifier)
+        dependsOn remapInputTask
     }
 
     loom {
@@ -376,9 +540,21 @@ if (target.loader != "none") {
         group = "verification"
         dependsOn tasks.named("compileTestClojure"), tasks.named("classes")
         workingDir = project.projectDir
-        classpath = sourceSets.test.runtimeClasspath
+        classpath = sourceSets.test.runtimeClasspath + platformClojureSourceClasspath + files(layout.buildDirectory.dir("classes/java/main"))
         mainClass = "clojure.main"
-        args "-m", target.loader == "forge" ? "cn.li.forge1201.test-runner" : "clojure.test"
+        def clojureTestRoots = testComponents.collect { component ->
+            componentDir(component, "clojure/cn/li")
+        }.findAll { File dir ->
+            dir.isDirectory()
+        }
+        def discoveredTestFiles = clojureTestRoots.collectMany { File dir ->
+            fileTree(dir) { include "**/*_test.clj" }.files
+        }
+        systemProperty "platform.test.roots", clojureTestRoots.collect { File dir ->
+            "${dir.absolutePath.replace("\\", "/")}=cn.li"
+        }.join(";")
+        systemProperty "platform.test.allow-empty", discoveredTestFiles.isEmpty().toString()
+        args "-m", "cn.li.test-support.auto-test-runner"
     }
 }
 

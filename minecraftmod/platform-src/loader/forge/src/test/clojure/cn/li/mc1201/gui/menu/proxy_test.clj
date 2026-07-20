@@ -30,4 +30,4 @@
              (:client-session-id
               (#'menu-proxy/owner-map-for-player-context
                {:player-uuid "player-a"
-                :client-session-id runtime-hooks/client-session-id})))))))
+                :client-session-id (runtime-hooks/client-session-id)})))))))

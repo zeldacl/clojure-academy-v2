@@ -16,8 +16,8 @@
 ## 常用命令
 
 - 默认 Forge 编译：`.\gradlew.bat :platform:compileClojure`
-- 指定 Forge：`.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge target"`
-- 指定 Fabric：`.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric target"`
+- 指定 Forge：`.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"`
+- 指定 Fabric：`.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"`
 - 架构验证：`.\gradlew.bat verifyCurrentPlatforms`
 
-本仓库不包含真实 future loader 26.1 target；新增 target 必须先扩展 catalog 与 source component，而不是复制旧平台工程。
+本仓库不包含真实 future loader target；新增 target 必须先扩展 catalog 与 source component，而不是复制旧平台工程。

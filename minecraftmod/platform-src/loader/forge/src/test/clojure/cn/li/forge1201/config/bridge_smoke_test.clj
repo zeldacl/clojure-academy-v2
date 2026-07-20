@@ -49,6 +49,6 @@
 
 (deftest config-storage-is-initialized
   (testing "private registered-config storage defaults to a map"
-    (let [registered-configs-var (ns-resolve 'cn.li.forge1201.config.bridge '*registered-configs*)]
+    (let [registered-configs-var (ns-resolve 'cn.li.forge1201.config.bridge 'registered-configs)]
       (is (some? registered-configs-var))
-      (is (map? (var-get registered-configs-var))))))
+      (is (map? @(var-get registered-configs-var))))))

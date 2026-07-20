@@ -11,8 +11,8 @@ DataGen 随 `:platform` target 运行。目标由 `-PplatformTarget=<target-id>`
 
 ## Commands
 
-- Forge：`cmd /c .\gradlew.bat :platform:runData "-PplatformTarget=forge target"`
-- Fabric：`cmd /c .\gradlew.bat :platform:runDatagen "-PplatformTarget=fabric target"`
+- Forge：`cmd /c .\gradlew.bat :platform:runData "-PplatformTarget=forge-1.20.1"`
+- Fabric：`cmd /c .\gradlew.bat :platform:runDatagen "-PplatformTarget=fabric-1.20.1"`
 
 ## Output
 
