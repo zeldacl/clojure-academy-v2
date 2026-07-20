@@ -16,7 +16,6 @@
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
-            [cn.li.mc1201.client.screen.host :as screen-host]
             [cn.li.mc1201.client.request.bridge :as request-bridge]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
@@ -153,15 +152,15 @@
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
 (defn- open-screen-dispatcher
-  "Dispatch open-screen to a registered reactive widget factory, falling back
-  to managed screen for keywords without a registered factory."
+  "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
     (if-let [widget (platform-ui/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
         (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
-      ;; Fall back to managed screen for legacy screen-keys
-      (screen-host/open-managed-screen! arg payload))))
+      (throw (ex-info "No reactive screen widget registered"
+                      {:screen-key arg
+                       :payload payload})))))
 
 (defn- open-reactive-screen-handler [& args]
   (apply reactive-host/open-reactive-screen! args))
@@ -300,7 +299,6 @@
   ;; Runtime client systems
   (runtime-bridge/init!)
   (overlay-renderer/init!)
-  (screen-host/init!)
   (msdf-setup/init!)
   (particle/init!)
   (sound/init!)

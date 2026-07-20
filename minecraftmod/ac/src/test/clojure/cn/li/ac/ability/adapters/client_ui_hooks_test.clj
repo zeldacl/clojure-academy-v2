@@ -188,17 +188,6 @@
 
 
 
-(deftest client-open-managed-screen-validates-payload-owner-test
-  (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (binding [client-keybinds/*client-session-id* :session-a]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"requires :player-uuid"
-                            ((:client-open-managed-screen! hooks) :ac/skill-tree {:learn-context :node-a})))
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"session does not match current client session"
-                            ((:client-open-managed-screen! hooks) :ac/skill-tree {:player-uuid "p1"
-                                                                                  :client-session-id :session-b}))))))
-
 (deftest client-clear-owner-state-clears-owned-runtime-state-test
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)
         owner {:client-session-id :session-a

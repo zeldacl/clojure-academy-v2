@@ -53,27 +53,12 @@
 (defonce ^:private ^HashMap overlay-context-cache (HashMap.))
 (defonce ^:private push-handlers-registered (boolean-array 1))
 
-(defn- managed-screen-runtime []
-  (managed-screens/create-managed-screen-runtime))
-
-(defn call-with-managed-screen-runtime [f] (f))
-
 (defn create-client-ui-runtime []
   {::runtime ::client-ui})
 
 (defn call-with-client-ui-runtime
   [_runtime f]
   (f))
-
-(defn- active-managed-screen-owner
-  [screen-key]
-  (managed-screens/active-owner
-    (case screen-key
-      :ac/skill-tree skill-tree-screen/screen-id
-      :ac/preset-editor preset-editor-screen/screen-id
-      :ac/saved-position location-teleport-reactive/screen-id
-      :ac/location-teleport location-teleport-reactive/screen-id
-      nil)))
 
 (defn- slot-context-ids-snapshot
   []
@@ -258,24 +243,6 @@
             (client-keybinds/update-default-group! uuid)
             (preset-editor-reactive/refresh-active-screen! uuid)))))))
 
-(defn- validate-managed-screen-payload
-  [screen-key payload]
-  (let [payload (or payload {})
-        player-uuid (require-client-owner-value payload ":player-uuid" (:player-uuid payload))
-        session-id (require-client-owner-value payload ":client-session-id"
-                                               (or (:client-session-id payload)
-                                                   (current-client-session-id)))]
-    (when (and (:client-session-id payload)
-               (current-client-session-id)
-               (not= (:client-session-id payload) (current-client-session-id)))
-      (throw (ex-info "Managed screen payload session does not match current client session"
-                      {:screen-key screen-key
-                       :payload payload
-                       :current-client-session-id (current-client-session-id)})))
-    {:player-uuid player-uuid
-     :client-session-id session-id
-     :payload payload}))
-
 (defn- client-context-owner
   [player-uuid]
   (let [[session-id player-uuid*] (client-ui-owner-key {:player-uuid player-uuid})]
@@ -357,11 +324,9 @@
 
 (defn- clear-managed-screen-state!
   [owner]
-  (call-with-managed-screen-runtime
-    #(do
-       (skill-tree-screen/close-screen! owner)
-       (preset-editor-screen/close-screen! owner)
-       (location-teleport-reactive/close-screen! owner)))
+  (skill-tree-screen/close-screen! owner)
+  (preset-editor-screen/close-screen! owner)
+  (location-teleport-reactive/close-screen! owner)
   nil)
 
 (defn- clear-client-owned-runtime-state!
@@ -384,8 +349,7 @@
   (.clear overlay-skill-shape-cache)
   (.clear overlay-context-cache)
   (aset-boolean ^booleans push-handlers-registered 0 false)
-  (call-with-managed-screen-runtime
-    #(managed-screens/reset-managed-screen-state-for-test!))
+  (managed-screens/reset-managed-screen-state-for-test!)
   nil)
 
 (defn- mark-client-push-handlers-registered!
@@ -1052,16 +1016,15 @@
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)
   (when (= channel :location-teleport/ui-open)
-    (call-with-managed-screen-runtime
-      #(when-let [owner (active-managed-screen-owner :ac/location-teleport)]
-         (location-teleport-reactive/apply-server-payload! owner payload)))
+    (when-let [owner (managed-screens/active-owner location-teleport-reactive/screen-id)]
+      (location-teleport-reactive/apply-server-payload! owner payload))
     (client-bridge/open-screen! :ac/saved-position payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
 (defn register-client-push-handlers!
   []
   (when (mark-client-push-handlers-registered!)
-    ;; Register reactive screen widget factories (replaces managed-screen dispatch)
+    ;; Register reactive screen widget factories.
     (skill-tree-screen/install-widget-factory!)
     (preset-editor-screen/install-widget-factory!)
     (location-teleport-reactive/init!)
@@ -1240,63 +1203,6 @@
      :client-req-switch-preset!
      (fn [player-uuid preset-idx callback]
        (client-api/req-switch-preset! (client-context-owner player-uuid) preset-idx callback))
-
-     :client-open-managed-screen!
-     (fn [screen-key payload]
-       (let [{:keys [player-uuid client-session-id payload]} (validate-managed-screen-payload screen-key payload)]
-         (runtime-hooks/with-client-ctx-fn {:session-id client-session-id} (fn [] (call-with-managed-screen-runtime
-             #(let [owner {:client-session-id client-session-id
-                           :player-uuid player-uuid}]
-                (condp = screen-key
-                  :ac/skill-tree
-                  (assoc (skill-tree-screen/open-screen! owner (:learn-context payload))
-                         :title "Node Tree")
-
-                  :ac/preset-editor
-                  (assoc (preset-editor-screen/open-screen! owner)
-                         :title "Preset Editor")
-
-                  nil)))))))
-
-     :client-build-managed-screen-render-data
-     (fn [screen-key]
-       (call-with-managed-screen-runtime
-         #(when-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/build-screen-render-data owner)
-              :ac/preset-editor (preset-editor-screen/build-preset-editor-render-data owner)
-              :ac/saved-position nil
-              :ac/location-teleport nil
-              nil))))
-
-     :client-handle-managed-screen-hover!
-     (fn [screen-key mouse-x mouse-y]
-       (call-with-managed-screen-runtime
-         #(when-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/on-mouse-move owner mouse-x mouse-y)
-              nil))))
-
-     :client-handle-managed-screen-click!
-     (fn [screen-key mouse-x mouse-y]
-       (call-with-managed-screen-runtime
-         #(if-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/handle-screen-click! owner mouse-x mouse-y)
-              false)
-            false)))
-
-     :client-handle-managed-screen-char-typed!
-     (fn [_ _] nil)
-
-     :client-close-managed-screen!
-     (fn [screen-key]
-       (call-with-managed-screen-runtime
-         #(when-let [owner (active-managed-screen-owner screen-key)]
-            (condp = screen-key
-              :ac/skill-tree (skill-tree-screen/close-screen! owner)
-              :ac/preset-editor (preset-editor-screen/close-screen! owner)
-              nil))))
 
      :client-register-push-handlers!
      (fn []

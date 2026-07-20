@@ -69,13 +69,6 @@
    :client-send-context-local! noop
    :client-build-overlay-plan (fn [_ _ _ _] nil)
    :set-client-overlay-activated! (fn [_ _] nil)
-   :client-open-managed-screen! (fn [_ _] nil)
-   :client-build-managed-screen-draw-ops (fn [_ _ _ _ _] [])
-   :client-build-managed-screen-render-data (fn [_] nil)
-   :client-handle-managed-screen-hover! noop
-   :client-handle-managed-screen-click! (fn [_ _ _] false)
-   :client-handle-managed-screen-char-typed! noop
-   :client-close-managed-screen! noop
    :client-poll-particle-effects (fn [_owner] [])
    :client-poll-sound-effects (fn [_owner] [])
    :client-tick-keys! noop
@@ -638,34 +631,6 @@
   player-uuid is a string, activated is a boolean."
   [player-uuid activated]
   ((:set-client-overlay-activated! (hooks-core-state-snapshot)) player-uuid activated))
-
-(defn client-open-managed-screen!
-  [screen-key payload]
-  ((:client-open-managed-screen! (hooks-core-state-snapshot)) screen-key payload))
-
-(defn client-build-managed-screen-draw-ops
-  [screen-key mouse-x mouse-y screen-w screen-h]
-  ((:client-build-managed-screen-draw-ops (hooks-core-state-snapshot)) screen-key mouse-x mouse-y screen-w screen-h))
-
-(defn client-build-managed-screen-render-data
-  [screen-key]
-  ((:client-build-managed-screen-render-data (hooks-core-state-snapshot)) screen-key))
-
-(defn client-handle-managed-screen-hover!
-  [screen-key mouse-x mouse-y]
-  ((:client-handle-managed-screen-hover! (hooks-core-state-snapshot)) screen-key mouse-x mouse-y))
-
-(defn client-handle-managed-screen-click!
-  [screen-key mouse-x mouse-y]
-  ((:client-handle-managed-screen-click! (hooks-core-state-snapshot)) screen-key mouse-x mouse-y))
-
-(defn client-handle-managed-screen-char-typed!
-  [screen-key ch]
-  ((:client-handle-managed-screen-char-typed! (hooks-core-state-snapshot)) screen-key ch))
-
-(defn client-close-managed-screen!
-  [screen-key]
-  ((:client-close-managed-screen! (hooks-core-state-snapshot)) screen-key))
 
 (defn client-poll-particle-effects
   ([]

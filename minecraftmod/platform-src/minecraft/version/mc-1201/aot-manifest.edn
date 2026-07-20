@@ -43,7 +43,6 @@
  "cn.li.mc1201.client.request.bridge"
  "cn.li.mc1201.client.runtime.hand-effect-renderer-core"
  "cn.li.mc1201.client.runtime.input-mode-core"
- "cn.li.mc1201.client.screen.host"
  "cn.li.mc1201.client.session"
  "cn.li.mc1201.client.session-cleanup"
  "cn.li.mc1201.client.texture-registry"

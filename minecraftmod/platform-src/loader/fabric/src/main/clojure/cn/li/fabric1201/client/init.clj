@@ -3,7 +3,6 @@
   (:require [cn.li.mc1201.client.i18n :as i18n]
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
-            [cn.li.mc1201.client.screen.host :as screen-host]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
@@ -101,14 +100,15 @@
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
 (defn- open-screen-dispatcher
-  "Dispatch open-screen to a registered reactive widget factory, falling back
-  to managed screen for keywords without a registered factory."
+  "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
     (if-let [widget (platform-ui/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
         (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
-      (screen-host/open-managed-screen! arg payload))))
+      (throw (ex-info "No reactive screen widget registered"
+                      {:screen-key arg
+                       :payload payload})))))
 
 (defn- open-reactive-screen-handler [& args]
   (apply reactive-host/open-reactive-screen! args))
@@ -211,6 +211,5 @@
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
-  (screen-host/init!)
   (msdf-setup/init!)
   (log/info "Fabric client initialization complete"))

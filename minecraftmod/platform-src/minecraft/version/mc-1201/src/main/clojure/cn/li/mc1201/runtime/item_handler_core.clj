@@ -2,6 +2,7 @@
   "Shared Minecraft-side item runtime helpers (no loader API imports)."
   (:require [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.hooks.core :as hooks-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
@@ -74,7 +75,7 @@
     (System/currentTimeMillis)))
 
 (defn- run-plan-actions!
-  [^Player player hand ^ItemStack stack side player-uuid plan {:keys [open-screen-fn]}]
+  [^Player player hand ^ItemStack stack side player-uuid plan _opts]
   (when plan
     (doseq [action (:client-actions plan)]
       (case (:kind action)
@@ -85,12 +86,10 @@
                  (or (:payload action) {})))
 
         :open-screen
-        (if open-screen-fn
-          (open-screen-fn player player-uuid)
-          (hooks-core/client-open-managed-screen!
-            (:screen-key action)
-            (merge {:player-uuid player-uuid}
-                   (or (:payload action) {}))))
+        (client-bridge/open-screen!
+          (:screen-key action)
+          (merge {:player-uuid player-uuid}
+                 (or (:payload action) {})))
 
         nil))
 

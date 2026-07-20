@@ -194,7 +194,7 @@
    (managed-screens/clear-screen-state! screen-id (editor-owner-key owner))))
 
 ;; ============================================================================
-;; CGui Widget Factory — replaces managed-screen dispatch for :ac/preset-editor
+;; CGui Widget Factory for :ac/preset-editor.
 ;; ============================================================================
 
 (defn create-preset-editor-widget

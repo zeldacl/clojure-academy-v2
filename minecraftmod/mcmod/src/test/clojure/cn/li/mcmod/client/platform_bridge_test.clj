@@ -11,7 +11,7 @@
 
 (use-fixtures :each reset-bridge-state!)
 
-(deftest install-client-bridge-wires-generic-screen-host-test
+(deftest install-client-bridge-wires-open-screen-test
   (let [calls (atom [])]
     (client-bridge/install-client-bridge!
       {:open-screen (fn [screen-key payload]
