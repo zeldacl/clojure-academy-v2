@@ -18,7 +18,7 @@
   (let [checks [{:k :resource :ok (platform-resource/factory-initialized?)}
                 {:k :position :ok (platform-position/factory-initialized?)}
                 {:k :nbt :ok (platform-nbt/factory-initialized?)}
-                {:k :item :ok (platform-item/factory-initialized?)}]
+                {:k :item :ok (platform-item/item-ops-available?)}]
         missing (->> checks (remove #(get % :ok)) (map #(get % :k)) vec)]
     (when (seq missing)
       (throw (ex-info "Platform bootstrap incomplete - init-platform! must run before init-from-java"

@@ -20,7 +20,7 @@
   [state]
   (or (nil? state)
       (try
-        (world/block-state-is-air? state)
+        (world/block-state-is-air state)
         (catch Throwable _
           false))))
 

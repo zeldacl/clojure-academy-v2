@@ -64,9 +64,6 @@
 (defn block-state-get-property         [bs sd pn] (bs-call :block-state-get-property bs sd pn))
 (defn block-state-set-property         [bs p v]   (bs-call :block-state-set-property bs p v))
 
-;; Backward-compatible alias
-(defn block-state-is-air? [bs] (block-state-is-air bs))
-
 (defn block-to-chunk-coord [block-coord] (bit-shift-right block-coord 4))
 (defn is-chunk-loaded-at-block? [world x z]
   (let [cx (block-to-chunk-coord x) cz (block-to-chunk-coord z)]

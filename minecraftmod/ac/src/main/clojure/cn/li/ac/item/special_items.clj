@@ -117,7 +117,7 @@
 
             (= kind :phase-liquid)
             (let [target-state (world/world-get-block-state* level place-block-pos)
-                  placeable? (or (nil? target-state) (world/block-state-is-air? target-state))]
+                  placeable? (or (nil? target-state) (world/block-state-is-air target-state))]
               (if (and placeable? (world/world-place-block-by-id* level imag-phase-block-id place-block-pos 3))
                 (do
                   (mutate-or-convert-main-hand! player item-stack :none)
@@ -212,5 +212,4 @@
                                        :label "phase-liquid"}}
          :on-right-click use-matter-unit!}))
     (log/info "Special items initialized: induction factors, mag_hook, matter_unit"))))
-
 

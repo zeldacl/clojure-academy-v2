@@ -14,7 +14,6 @@
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :item-ops] ops-map)) nil)
 
 (defn item-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :item-ops])))
-(defn factory-initialized? [] (item-ops-available?))  ;; backward-compatible alias
 (defn current-ops         [] (get-in @(fw/fw-atom) [:platform :item-ops]))
 
 (defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
@@ -46,7 +45,7 @@
   (if-let [f (get (current-ops) :create-item-stack-by-id)]
     (f item-id count)
     (throw (ex-info "Item ops not installed" {:key :create-item-stack-by-id}))))
-;; Backward-compatible aliases
+;; Tag helpers
 (defn item-is-in-tag? [stack tag-str]
   (if-let [f (get (current-ops) :item-tag-checker)]
     (f stack tag-str)

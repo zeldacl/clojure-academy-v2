@@ -50,7 +50,7 @@
 (defn player-raytrace-block          [p r f?](call :player-raytrace-block p r f?))
 (defn player-get-container-menu      [p]     (call :player-get-container-menu p))
 
-;; Backward-compatible aliases (used by mcmod/ac callers expecting old protocol names)
+;; Menu/inventory ops
 (defn inventory-get-player  [inv] (call :inventory-get-player inv))
 (defn menu-get-container-id [menu] (call :menu-get-container-id menu))
 

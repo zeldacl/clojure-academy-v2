@@ -86,7 +86,7 @@
                                                     (+ (pos/pos-y p) dy)
                                                     (+ (pos/pos-z p) dz))
                     st (world/world-get-block-state* level check-pos)]
-                (if (world/block-state-is-air? st) (recur (inc j)) j))))
+                (if (world/block-state-is-air st) (recur (inc j)) j))))
         false
         (recur (inc i))))))
 

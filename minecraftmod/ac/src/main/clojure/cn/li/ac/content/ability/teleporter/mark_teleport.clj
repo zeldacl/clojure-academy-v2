@@ -149,7 +149,7 @@
 
               block-state (world/world-get-block-state* level block-pos)]
 
-          (not (world/block-state-is-air? block-state)))))))
+          (not (world/block-state-is-air block-state)))))))
 
 
 
@@ -536,4 +536,3 @@
              :payload (fn [_] {})}}
 
   :prerequisites [{:skill-id :threatening-teleport :min-exp 0.4}])
-
