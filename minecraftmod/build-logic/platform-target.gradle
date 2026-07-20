@@ -132,14 +132,20 @@ if (target.loader != "none") {
         }
     }
 
+    def clojureRuntimeLibraries = [
+        "org.clojure:clojure:1.12.4",
+        "metosin:malli:0.16.4",
+        "org.clojure:spec.alpha:0.3.218",
+        "org.clojure:core.specs.alpha:0.2.62"
+    ]
+
     dependencies {
         compileOnly mcmodProject.sourceSets.main.output
         runtimeOnly mcmodProject.sourceSets.main.output
         runtimeOnly acProject.sourceSets.main.output
-        implementation "org.clojure:clojure:1.12.4"
-        implementation "metosin:malli:0.16.4"
-        implementation "org.clojure:spec.alpha:0.3.218"
-        implementation "org.clojure:core.specs.alpha:0.2.62"
+        clojureRuntimeLibraries.each { dependencyNotation ->
+            implementation dependencyNotation
+        }
         testImplementation "org.clojure:test.check:1.1.1"
 
         minecraft target.dependencies.minecraft
@@ -147,6 +153,9 @@ if (target.loader != "none") {
 
         if (target.loader == "forge") {
             add("forge", target.dependencies.loader)
+            clojureRuntimeLibraries.each { dependencyNotation ->
+                add("forgeRuntimeLibrary", dependencyNotation)
+            }
             compileOnly "com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60"
             add("modCompileOnlyApi", target.dependencies.jeiCommonApi)
             add("modCompileOnlyApi", target.dependencies.jeiForgeApi)
@@ -204,6 +213,22 @@ if (target.loader != "none") {
     ])
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
+    def platformAotManifests = [
+        rootProject.file("platform-src/common/aot-manifest.edn"),
+        rootProject.file("platform-src/minecraft/version/mc-1201/aot-manifest.edn"),
+        rootProject.file("platform-src/loader/${target.loader}/aot-manifest.edn")
+    ]
+    def platformAotNamespaces = {
+        def runtimeNamespaces = new LinkedHashSet<String>()
+        platformAotManifests.findAll { it.isFile() }.each { File manifest ->
+            manifest.readLines().collect { it.trim() }.findAll { line ->
+                line ==~ /^"[^"]+"$/
+            }.each { line ->
+                runtimeNamespaces << line.substring(1, line.length() - 1)
+            }
+        }
+        runtimeNamespaces
+    }
     def stripClassLocalVariableTables = { byte[] classBytes ->
         def reader = new org.objectweb.asm.ClassReader(classBytes)
         def writer = new org.objectweb.asm.ClassWriter(0)
@@ -231,10 +256,62 @@ if (target.loader != "none") {
         }
     }
 
+    def platformAotScript = layout.buildDirectory.file("generated/aot/compile-platform-aot.clj")
+    def generatePlatformAotScript = tasks.register("generatePlatformAotScript") {
+        inputs.files platformAotManifests
+        inputs.property "platformTarget", target.id
+        outputs.file platformAotScript
+        doLast {
+            def namespaces = platformAotNamespaces()
+            if (namespaces.isEmpty()) {
+                throw new GradleException("No platform AOT namespaces for target '${target.id}'")
+            }
+            def outputDir = clojureAotDir.get().asFile
+            def script = platformAotScript.get().asFile
+            def clojureStringLiteral = { String value ->
+                "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+            }
+            script.parentFile.mkdirs()
+            script.text = """\
+                |(set! *warn-on-reflection* true)
+                |(binding [*compile-path* ${clojureStringLiteral(outputDir.absolutePath)}]
+                |  (doseq [namespace-symbol '(${namespaces.join(" ")})]
+                |    (println "[platform-aot]" namespace-symbol)
+                |    (compile namespace-symbol)))
+                |""".stripMargin()
+        }
+    }
+
+    def compilePlatformClojureAot = tasks.register("compilePlatformClojureAot", JavaExec) {
+        group = "build"
+        description = "Compile selected platform Clojure namespaces to AOT classes for the active target."
+        dependsOn generatePlatformAotScript
+        dependsOn tasks.named("compileJava")
+        dependsOn mcmodProject.tasks.named("compileClojure")
+        dependsOn acProject.tasks.named("compileClojure")
+        inputs.files platformAotManifests
+        inputs.files sourceComponents.collect { component -> componentDir(component, "clojure") }
+        outputs.dir clojureAotDir
+        classpath = configurations.compileClasspath +
+            configurations.runtimeClasspath +
+            files(layout.buildDirectory.dir("classes/java/main")) +
+            files(sourceComponents.collect { component -> componentDir(component, "clojure") }) +
+            files(mcmodProject.file("src/main/clojure"), acProject.file("src/main/clojure")) +
+            files(mcmodProject.layout.buildDirectory.dir("clojure/main"), acProject.layout.buildDirectory.dir("clojure/main")) +
+            files(mcmodProject.layout.buildDirectory.dir("classes/java/main"), acProject.layout.buildDirectory.dir("classes/java/main"))
+        mainClass = "clojure.main"
+        doFirst {
+            delete clojureAotDir
+            clojureAotDir.get().asFile.mkdirs()
+            args platformAotScript.get().asFile.absolutePath
+        }
+    }
+
     def copyClojureClassesToJavaOutput = tasks.register("copyClojureClassesToJavaOutput", Copy) {
         from clojureAotDir
         into layout.buildDirectory.dir("classes/java/main")
         dependsOn tasks.named("compileClojure")
+        dependsOn compilePlatformClojureAot
         include "**/*.class"
     }
 
@@ -358,6 +435,10 @@ if (target.loader != "none") {
 
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
     configurePackagedRuntimeProject(acProject, "Ac")
+    compilePlatformClojureAot.configure {
+        dependsOn tasks.named("copyMcmodRuntimeClassesToPlatformOutput")
+        dependsOn tasks.named("copyAcRuntimeClassesToPlatformOutput")
+    }
 
     def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {
         group = "build"
