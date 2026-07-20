@@ -131,8 +131,9 @@
             (store/commit-player-state! session-id uuid next-state mask)))
         (if (= owner (runtime-hooks/current-player-state-owner))
           (interpreter/execute-reducer-result! result)
-          (runtime-hooks/with-player-state-owner owner
-            (interpreter/execute-reducer-result! result)))
+          (runtime-hooks/with-player-state-owner-fn
+            owner
+            (fn [] (interpreter/execute-reducer-result! result))))
         (when explicit-command-id
           (record-command-trace! session-id uuid explicit-command-id result))
         result))))
@@ -165,8 +166,9 @@
         (store/commit-player-state! session-id uuid next-state mask)))
     (if (= owner (runtime-hooks/current-player-state-owner))
       (interpreter/execute-reducer-result! result)
-      (runtime-hooks/with-player-state-owner owner
-        (interpreter/execute-reducer-result! result)))
+      (runtime-hooks/with-player-state-owner-fn
+        owner
+        (fn [] (interpreter/execute-reducer-result! result))))
     result))
 
 (defn run-commands-in-session!
@@ -175,6 +177,5 @@
    (run-commands-in-session! session-id uuid commands {}))
   ([session-id uuid commands opts]
    (run-commands* session-id uuid commands opts)))
-
 
 

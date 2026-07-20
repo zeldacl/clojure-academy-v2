@@ -211,10 +211,12 @@
         screen-calls (atom [])
         keybind-clears (atom [])]
     (ctx/with-context-owner context-owner
-      (runtime-hooks/with-player-state-owner owner
-        (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
-                                      :id "ctx-cleanup"))
-        (store/set-player-state! :session-a "p1" {:resource-data {:activated true}})))
+      (runtime-hooks/with-player-state-owner-fn
+        owner
+        (fn []
+          (ctx/register-context! (assoc (ctx/new-context "p1" :arc-gen context-owner)
+                                        :id "ctx-cleanup"))
+          (store/set-player-state! :session-a "p1" {:resource-data {:activated true}}))))
     (client-ui-hooks/set-slot-context-for-test! owner 0 "ctx-cleanup")
     (client-ui-hooks/seed-vm-wave-state-for-test! owner [{:radius 1.0}] 42)
     (particles/queue-particle-effect! owner {:type :particle :particle-type :spark})

@@ -50,9 +50,11 @@
         client-owner {:logical-side :client
                       :client-session-id session-id
                       :player-uuid player-uuid}]
-    (runtime-hooks/with-client-ctx {:session-id session-id}
-      (runtime-hooks/with-player-state-owner client-owner
-        (f session-id player-uuid)))))
+    (runtime-hooks/with-client-ctx
+      {:session-id session-id}
+      (runtime-hooks/with-player-state-owner-fn
+        client-owner
+        (fn [] (f session-id player-uuid))))))
 
 (defn get-player-state
   [owner-key]

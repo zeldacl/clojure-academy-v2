@@ -292,14 +292,9 @@
           (.set ^ThreadLocal client-ctx-thread-local old))))))
 
 (defn with-player-state-owner-fn
-  "使用 with-client-ctx-fn 设置 player-owner，保持原有调用签名兼容。"
+  "Use with-client-ctx-fn to bind player-owner for the duration of thunk."
   [owner thunk]
   (with-client-ctx-fn {:player-owner owner} thunk))
-
-;; 保留宏以兼容现有 (with-player-state-owner owner body...) 调用方
-(defmacro with-player-state-owner
-  [owner & body]
-  `(with-player-state-owner-fn ~owner (fn [] ~@body)))
 
 (defmacro with-client-ctx
   "Macro wrapper: set client context keys in Framework for duration of body.

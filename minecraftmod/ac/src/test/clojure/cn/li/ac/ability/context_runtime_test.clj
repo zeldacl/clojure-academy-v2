@@ -214,16 +214,19 @@
                                :dirty-domains #{}})
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
     (ctx/with-context-owner (test-context-owner uuid)
-      (runtime-hooks/with-player-state-owner {:server-session-id alt-session
-                                              :player-uuid uuid}
-        (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
-        (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
+      (runtime-hooks/with-player-state-owner-fn
+        {:server-session-id alt-session
+         :player-uuid uuid}
+        (fn []
+          (is (false? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))
+          (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id)))))))))
 
 (deftest context-state-uses-context-owned-session-without-thread-player-owner-test
   (let [uuid "test-player-context-owner"
         ctx-id "ctx-context-owner"]
     (ctx/register-context! (ctx/new-server-context uuid :arc-gen ctx-id (test-context-owner uuid)))
     (ctx/with-context-owner (test-context-owner uuid)
-      (runtime-hooks/with-player-state-owner nil
-        (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})))))))
-
+      (runtime-hooks/with-player-state-owner-fn
+        nil
+        (fn []
+          (is (true? (rt/handle-key-down! ctx-id {:ctx-id ctx-id :skill-id :arc-gen}))))))))

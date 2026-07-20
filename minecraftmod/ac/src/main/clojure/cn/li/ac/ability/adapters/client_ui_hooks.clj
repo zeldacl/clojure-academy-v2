@@ -127,10 +127,12 @@
 (defn- with-client-owner-bindings
   [owner f]
   (let [[session-id player-uuid] (client-ui-owner-key owner)]
-    (runtime-hooks/with-client-ctx {:session-id session-id}
-      (runtime-hooks/with-player-state-owner {:client-session-id session-id
-                                              :player-uuid player-uuid}
-        (f)))))
+    (runtime-hooks/with-client-ctx
+      {:session-id session-id}
+      (runtime-hooks/with-player-state-owner-fn
+        {:client-session-id session-id
+         :player-uuid player-uuid}
+        f))))
 
 (defn- with-client-player-state-owner
   [player-uuid f]
@@ -1328,6 +1330,5 @@
      :client-trigger-preset-switch!
      (fn [player-uuid]
        (client-keybinds/switch-preset! player-uuid))}))
-
 
 
