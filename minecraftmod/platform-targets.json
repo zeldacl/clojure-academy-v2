@@ -23,6 +23,7 @@
       "javaVersion": 17,
       "sourceComponents": [
         "platform-src/common/src/main",
+        "platform-src/minecraft/base/src/main",
         "platform-src/minecraft/version/mc-1201/src/main",
         "platform-src/loader/forge/src/main"
       ],
@@ -77,6 +78,7 @@
       "javaVersion": 17,
       "sourceComponents": [
         "platform-src/common/src/main",
+        "platform-src/minecraft/base/src/main",
         "platform-src/minecraft/version/mc-1201/src/main",
         "platform-src/loader/fabric/src/main"
       ],
