@@ -3,7 +3,7 @@
    injects them into UniversalEnergyStorage Java skeleton for Forge capability system.
 
    ac layer only provides {:energy-logic {:receive-fn ...}} in Framework.
-   forge-1.20.1 (this ns) is the 'customs bridge' that instantiates the Java skeleton."
+   This Forge loader namespace is the custom bridge that instantiates the Java skeleton."
   (:require [cn.li.mcmod.framework :as fw])
   (:import [cn.li.forge1201.shim UniversalEnergyStorage]
            [net.minecraftforge.energy IEnergyStorage]))

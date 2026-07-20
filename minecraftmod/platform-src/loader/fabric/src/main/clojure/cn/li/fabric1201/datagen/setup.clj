@@ -8,7 +8,8 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.fabric1201.datagen.provider-factory :as provider-factory]
             [cn.li.mc1201.datagen.provider-registration :as provider-registration]
-            [cn.li.mc1201.datagen.setup-common :as setup-common]))
+            [cn.li.mc1201.datagen.setup-common :as setup-common]
+            [cn.li.platform.target :as target]))
 
 (def ^:private language-codes
   ["en_us" "zh_cn" "zh_tw" "ja_jp" "ko_kr" "ru_ru"])
@@ -60,7 +61,7 @@
   (let [pack (.createPack ^net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator generator)]
     (provider-registration/register-providers!
       {:mod-id modid/mod-id
-       :target-label "fabric-1.20.1"
+       :target-label (:id (target/current-target!))
        :providers providers
        :register-provider! (fn [provider]
                              (provider-factory/add-provider! pack provider))})))

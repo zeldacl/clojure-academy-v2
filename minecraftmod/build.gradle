@@ -183,6 +183,30 @@ tasks.register("verifyNoTargetHardcoding") {
                 }
             }
         }
+        def sourceForbidden = [
+            ":forge-" + "1.20.1",
+            ":fabric-" + "1.20.1",
+            "\"forge-" + "1.20.1\"",
+            "\"fabric-" + "1.20.1\""
+        ]
+        def sourceFilesToScan = files(
+            fileTree("api") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("mcmod") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("ac") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("platform-src") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("platform-target") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("build-logic") { include "**/*.gradle" }
+        ).files.findAll { File f ->
+            !f.toPath().any { it.toString() in ["build", ".gradle"] }
+        }
+        sourceFilesToScan.each { File f ->
+            def text = f.text
+            sourceForbidden.each { token ->
+                if (text.contains(token)) {
+                    hits << "${rootDir.toPath().relativize(f.toPath())}: ${token}"
+                }
+            }
+        }
         if (!hits.isEmpty()) {
             throw new GradleException("Legacy target hardcoding remains:\n" + hits.join("\n"))
         }

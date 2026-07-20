@@ -3,11 +3,12 @@
    
    Registers all data generators for the mod.
    Triggered during setup phase when running:
-     ./gradlew :platform:runData -PplatformTarget=forge-1.20.1"
+     ./gradlew :platform:runData -PplatformTarget=<target-id>"
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.forge1201.datagen.provider-factory :as provider-factory]
             [cn.li.mc1201.datagen.provider-registration :as provider-registration]
-            [cn.li.mc1201.datagen.setup-common :as setup-common])
+            [cn.li.mc1201.datagen.setup-common :as setup-common]
+            [cn.li.platform.target :as target])
   (:import [net.minecraftforge.data.event GatherDataEvent]))
 
 (def ^:private providers
@@ -68,7 +69,7 @@
 
     (provider-registration/register-providers!
       {:mod-id modid/mod-id
-       :target-label "forge-1.20.1"
+       :target-label (:id (target/current-target!))
        :providers providers
        :register-provider! (fn [provider]
                              (provider-factory/add-provider! generator exfile-helper provider))})))

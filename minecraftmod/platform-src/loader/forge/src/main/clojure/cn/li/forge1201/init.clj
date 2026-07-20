@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.init
   "Forge 1.20.1 initialization and version-specific implementations"
   (:require [cn.li.mc1201.bootstrap.init-common :as init-common]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.platform.events :as platform-events]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
@@ -12,17 +13,17 @@
 (defn set-version!
   "Set the forge version for multimethod dispatch"
   []
-  (init-common/set-platform-version! :forge-1.20.1))
+  (init-common/set-platform-version! (target/current-target-key!)))
 
 (defn- assert-platform-ready!
   []
-  (init-common/assert-platform-ready! :forge-1.20.1))
+  (init-common/assert-platform-ready! (target/current-target-key!)))
 
 (defn init-from-java
   "Called from Java @Mod constructor - sets up version dispatch"
   []
   (init-common/init-from-java!
-    :forge-1.20.1
+    (target/current-target-key!)
     (fn []
       ;; Bind platform-neutral event bridge to Forge IMC dispatcher.
       (platform-events/install-fire-event-fn! imc-dispatch/dispatch-event! "Forge")

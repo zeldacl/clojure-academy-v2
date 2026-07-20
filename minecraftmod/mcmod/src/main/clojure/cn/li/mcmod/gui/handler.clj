@@ -78,17 +78,6 @@
           h))
     (make-registry-gui-handler (container-state/installed-runtime))))
 
-(defmulti register-gui-handler
-  (fn [platform-type] platform-type))
-
-(defmethod register-gui-handler :default [_platform-type]
-  nil)
-
 (defn get-gui-handler
   []
   (get-gui-handler-instance))
-
-(defn init-gui-handler!
-  [platform-type]
-  (register-gui-handler platform-type)
-  (get-gui-handler))

@@ -4,6 +4,7 @@
   Uses reify MenuProvider and delegates menu creation to shared provider dispatcher."
   (:require [cn.li.mc1201.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world MenuProvider]
@@ -40,7 +41,7 @@
           :tile-entity tile-entity
           :window-id window-id
           :player player
-          :platform-key :forge-1.20.1
+          :platform-key (target/current-target-key!)
           :create-container-fn (fn [handler gid p world pos]
                                  (gui-handler/get-server-container handler gid p world pos))
           :create-menu-proxy-fn create-menu-proxy

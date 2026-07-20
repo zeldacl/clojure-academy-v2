@@ -7,6 +7,7 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.install :as install]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.client.session :as mc-session])
   (:import [net.minecraft.client Minecraft]
@@ -45,11 +46,6 @@
   [msg-id request-id payload]
   (ClientPlayNetworking/send shared/c2s-channel (shared/make-buf (packet-base/request-map msg-id request-id payload))))
 
-(net-client/register-request-transport!
-  :fabric-1.20.1
-  (fn [msg-id payload request-id]
-    (send-to-server! msg-id request-id payload)))
-
 (defn- handle-client-response!
   [request-id payload]
   (with-client-response-owner payload
@@ -84,6 +80,10 @@
   []
   (install/process-once! ::client-initialized
     (fn []
+      (net-client/register-request-transport!
+        (target/current-target-key!)
+        (fn [msg-id payload request-id]
+          (send-to-server! msg-id request-id payload)))
       (let [receiver (reify ClientPlayNetworking$PlayChannelHandler
                        (receive [_ client _handler buf _sender]
                          (on-client-play-receive client _handler buf _sender)))

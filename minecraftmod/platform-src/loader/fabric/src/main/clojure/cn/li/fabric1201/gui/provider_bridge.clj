@@ -6,6 +6,7 @@
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.mc1201.gui.provider.common :as provider-common]
             [cn.li.mc1201.gui.registry.common :as registry-common]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.registry :as gui])
   (:import [net.minecraft.world MenuProvider]
@@ -32,7 +33,7 @@
      :tile-entity tile-entity
      :window-id sync-id
      :player player
-     :platform-key :fabric-1.20.1
+     :platform-key (target/current-target-key!)
      :create-container-fn (fn [handler gid p world pos]
                             (gui-handler/get-server-container handler gid p world pos))
      :create-menu-proxy-fn create-menu-proxy

@@ -9,12 +9,13 @@
   Payload/response are EDN-serialized Clojure maps so that arbitrary data
   (keywords, numbers, strings, vectors) is preserved round-trip.
 
-  Also extends the cn.li.mcmod.network.client/send-request multimethod for the
-  :forge-1.20.1 dispatch value so the GUI's send-to-server calls work."
+  Registers the current target's client request transport so GUI
+  send-to-server calls work."
   (:require [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]
+            [cn.li.platform.target :as target]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.runtime.network-payload :as runtime-payload]
             [cn.li.mc1201.runtime.sync-codec :as sync-codec]
@@ -79,11 +80,6 @@
     (throw (IllegalArgumentException.
              (str "Unknown ClojureNetwork method: " method-name)))))
 
-(net-client/register-request-transport!
-  :forge-1.20.1
-  (fn [msg-id payload request-id]
-    (invoke-network-static "sendToServer" msg-id (int request-id) (packet-base/encode-payload-bytes payload))))
-
 ;; ---------------------------------------------------------------------------
 ;; Initialization
 ;; ---------------------------------------------------------------------------
@@ -92,6 +88,10 @@
   "Initialize the Forge 1.20.1 SimpleChannel and register packet handlers.
   Called during common mod setup from forge1201.gui.init/init-common!."
   []
+  (net-client/register-request-transport!
+    (target/current-target-key!)
+    (fn [msg-id payload request-id]
+      (invoke-network-static "sendToServer" msg-id (int request-id) (packet-base/encode-payload-bytes payload))))
   (let [req-handler
         (fn [msg-id request-id payload-bytes player]
           (try

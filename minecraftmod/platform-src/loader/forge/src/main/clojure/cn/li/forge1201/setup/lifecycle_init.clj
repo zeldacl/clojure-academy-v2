@@ -21,7 +21,8 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.block.blockstate-properties :as blockstate-props]
-            [cn.li.platform.bootstrap :as platform-bootstrap])
+            [cn.li.platform.bootstrap :as platform-bootstrap]
+            [cn.li.platform.target :as target])
   (:import [cn.li.forge1201.bootstrap ForgeBootstrapGuard]))
 
 ;; =============================================================================
@@ -95,8 +96,8 @@
 ;; Orchestration
 ;; =============================================================================
 
-(def ^:private lifecycle-manifest
-  {:label "forge-1.20.1"
+(defn- lifecycle-manifest []
+  {:label (:id (target/current-target!))
    :phases [{:id :platform-init
              :actions [:init-platform!]}
             {:id :runtime-activation
@@ -121,7 +122,7 @@
     (try
       (lifecycle-orchestrator/run-lifecycle!
        (platform-manifest/build-lifecycle
-        lifecycle-manifest
+        (lifecycle-manifest)
         {:init-platform! init-platform!
          :activate-runtime-content! activate-runtime-content!
          :init-resource-definitions! init-resource-definitions!

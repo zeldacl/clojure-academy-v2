@@ -4,18 +4,7 @@
   The built artifact contains META-INF/academy-target.edn generated from
   platform-targets.json. Loader entrypoints call this namespace directly; there
   is no platform ServiceLoader indirection."
-  (:require [clojure.edn :as edn]
-            [clojure.java.io :as io]))
-
-(def ^:private target-resource "META-INF/academy-target.edn")
-
-(defn- read-target!
-  []
-  (if-let [resource (io/resource target-resource)]
-    (with-open [reader (io/reader resource)]
-      (edn/read {:readers *data-readers*} reader))
-    (throw (ex-info "Platform target metadata missing"
-                    {:resource target-resource}))))
+  (:require [cn.li.platform.target :as target]))
 
 (defn- require-resolve!
   [namespace-name symbol-name]
@@ -50,12 +39,12 @@
 (defn start!
   "Initialize the selected platform target exactly once."
   []
-  (let [target (read-target!)
-        {:keys [loader entrypoint]} target]
-    (verify-capability-owners! target)
+  (let [target-model (target/current-target!)
+        {:keys [loader entrypoint]} target-model]
+    (verify-capability-owners! target-model)
     (case loader
       "forge" ((require-resolve! (:namespace entrypoint) (:function entrypoint)))
       "fabric" ((require-resolve! (:namespace entrypoint) (:function entrypoint)))
       (throw (ex-info "Unsupported platform loader"
                       {:loader loader
-                       :target (:id target)})))))
+                       :target (:id target-model)})))))

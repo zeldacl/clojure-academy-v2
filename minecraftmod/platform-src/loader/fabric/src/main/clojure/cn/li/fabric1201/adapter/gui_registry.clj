@@ -7,6 +7,7 @@
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.client.session :as client-session])
@@ -82,7 +83,7 @@
 (defn- install-registry-contract!
   []
   (registry-api/register-registry-impl!
-    :fabric-1.20.1
+    (target/current-target-key!)
     {:register-menu-type! (fn [gui-id menu-type]
                             (assoc-gui-handler-type! gui-id menu-type)
                             nil)
@@ -90,7 +91,7 @@
      :list-menu-types (fn [] (gui-handler-types-snapshot))
      :invalidate-menu-registry! clear-gui-handler-types!}))
 
-(defmethod gui-handler/register-gui-handler :fabric-1.20.1 [_]
+(defn register-gui-handler! []
   (log/info "Registering GUI handler for Fabric 1.20.1")
   (install-registry-contract!)
   (register-screen-handler-types!)
@@ -98,5 +99,5 @@
 
 (defn init! []
   (log/info "Initializing Fabric 1.20.1 GUI system")
-  (gui-handler/register-gui-handler :fabric-1.20.1)
+  (register-gui-handler!)
   (log/info "Fabric 1.20.1 GUI system initialized"))

@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.datagen.recipe-provider-custom
   "Forge-specific custom recipe emission (ImagFusor, MetalFormer).
 
-  These custom RecipeTypes are registered via ModRecipeTypes (forge-1.20.1
+  These custom RecipeTypes are registered via ModRecipeTypes (Forge loader
   Java layer).  Their emission logic lives here — NOT in mc-1.20.1 — to
   avoid cross-layer imports that break the Fabric compilation profile."
   (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]

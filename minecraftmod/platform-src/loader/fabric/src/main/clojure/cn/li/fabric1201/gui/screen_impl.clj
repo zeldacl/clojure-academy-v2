@@ -6,6 +6,7 @@
 
   Uses shared CGUI runtime host path for :cgui-screen-container payloads."
   (:require [cn.li.mc1201.gui.screen.registry :as screen-registry]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens MenuScreens]))
 
@@ -23,7 +24,7 @@
   (log/info "Registering GUI screens for Fabric 1.20.1")
   (try
     (screen-registry/register-platform-screens!
-      :fabric-1.20.1
+      (target/current-target-key!)
       {:label "Fabric 1.20.1"
        :register-menu-screen! register-one-screen!})
     (log/info "Screen factories registered successfully (Fabric)")

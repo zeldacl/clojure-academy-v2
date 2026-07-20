@@ -4,6 +4,7 @@
   Uses MenuScreens/register directly (matching Fabric approach) to avoid
   the extra ForgeClientHelper$ScreenFactory wrapper."
   (:require [cn.li.mc1201.gui.screen.registry :as screen-registry]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen MenuScreens MenuScreens$ScreenConstructor]
            [net.minecraftforge.client.event ScreenEvent$BackgroundRendered]
@@ -27,7 +28,7 @@
   (log/info "Registering GUI screens for Forge 1.20.1")
   (try
     (screen-registry/register-platform-screens!
-     :forge-1.20.1
+     (target/current-target-key!)
      {:label "Forge 1.20.1"
       :screen-opts-fn (fn [_gui-id _menu-type _factory-fn-kw]
                         {:on-render-tail! (fn [^Screen screen gg _mx _my _pt]

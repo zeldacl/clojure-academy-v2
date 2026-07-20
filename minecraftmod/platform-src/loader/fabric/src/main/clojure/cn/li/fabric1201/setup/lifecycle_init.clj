@@ -3,10 +3,11 @@
 
   Keeps the loader entry thin and makes phase ordering explicit."
   (:require [cn.li.mc1201.lifecycle.orchestrator :as lifecycle-orchestrator]
-            [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]))
+            [cn.li.mc1201.lifecycle.platform-manifest :as platform-manifest]
+            [cn.li.platform.target :as target]))
 
-(def ^:private lifecycle-manifest
-  {:label "fabric-1.20.1"
+(defn- lifecycle-manifest []
+  {:label (:id (target/current-target!))
    :phases [{:id :platform-init
              :actions [:init-platform! :init-from-java!]}
             {:id :runtime-activation
@@ -35,7 +36,7 @@
            register-events!]}]
   (lifecycle-orchestrator/run-lifecycle!
    (platform-manifest/build-lifecycle
-    lifecycle-manifest
+    (lifecycle-manifest)
     {:init-platform! init-platform!
      :init-from-java! init-from-java!
      :load-config! load-config!

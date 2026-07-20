@@ -13,6 +13,7 @@
             [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
+            [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                   PlayerEvent$PlayerLoggedOutEvent
@@ -92,7 +93,7 @@
 (defn init-common!
   "Register all forge-side lifecycle listeners for runtime bridge."
   []
-  (adapter-registry/run-install-steps! "forge-1.20.1" runtime-adapters-registry/runtime-install-steps)
+  (adapter-registry/run-install-steps! (:id (target/current-target!)) runtime-adapters-registry/runtime-install-steps)
   (runtime-network/init!)
   (server-bridge/install-server-bridge!
    {:send-to-client! (fn [player-uuid msg-id payload]
