@@ -345,8 +345,16 @@
         ;; When diag-tan=0 draws a plain rectangle; when >0 the left edge tilts
         ;; inward such that the bottom-left corner is offset right by diag-tan*h.
         draw-trap!
-        (fn draw-trap! [seg-start seg-end]
+        (fn draw-trap! ([seg-start seg-end]
+                         (draw-trap! seg-start seg-end nil nil nil nil))
+                        ([seg-start seg-end r g b a]
           (when (< seg-start seg-end)
+            (let [apply-color! #(when r
+                                  (RenderSystem/setShaderColor
+                                    (float (/ (double r) 255.0))
+                                    (float (/ (double g) 255.0))
+                                    (float (/ (double b) 255.0))
+                                    (float (or a 1.0))))]
             (if (pos? diag-tan)
               (let [^PoseStack ps (.pose gg)
                     ^Matrix4f pose (.pose (.last ps))
@@ -360,6 +368,7 @@
                            (float (/ (- sx (double ix)) (double iw))))]
                 (RenderSystem/setShaderTexture 0 fg-rl)
                 (RenderSystem/setShader GameRenderer/getPositionTexShader)
+                (apply-color!)  ;; AFTER setShader
                 (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
                 (.vertex bb pose x0  y0 0.0)  (.uv bb (u-at x0)  0.0)  (.endVertex bb)
                 (.vertex bb pose x0b y1 0.0)  (.uv bb (u-at x0b) 1.0)  (.endVertex bb)
@@ -368,26 +377,32 @@
                 (BufferUploader/drawWithShader (.end bb)))
               ;; Rectangular fill: existing scissor+blit path
               (let [uoff (float (* scroll iw))]
+                (apply-color!)  ;; BEFORE blit
                 (.enableScissor gg seg-start iy seg-end ih)
                 (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
-                (.disableScissor gg)))))]
+                (.disableScissor gg)))))))]
     ;; ---- background ----
     (when bg-rl
       (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
-    ;; ---- hint bar (upstream: second CP bar at lower pulsing alpha) ----
-    (when (and (pos? hint) (< hint percent) fg-rl)
-      (let [hint-end (int (+ x (* hint w)))
-            pulse   (+ 0.2 (* 0.1 (+ 1.0 (Math/sin (/ (double (System/currentTimeMillis)) 80.0)))))]
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 (float pulse))
-        (.blit gg fg-rl ix iy 0 0 hint-end iy hint-end ih)
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))
-    ;; ---- foreground fill ----
+    ;; ---- upstream autoLerp: simple single-var lerp (avoid conditional AOT bug) ----
     (when (and fg-rl (pos? filled-w))
-      (let [bar-end (int (+ x filled-w))]
+      (let [t       (double (max 0.0 (min 1.0 percent)))
+            bar-end (int (+ x filled-w))
+            r       (int 255)
+            g       (int (+ 103.0 (* (- 174.0 103.0) t)))
+            b       (int (+ 67.0  (* (- 68.0  67.0)  t)))]
         (if (and cutout-x0 cutout-w (pos? cutout-w))
-          (do (draw-trap! ix       (min bar-end cutout-x0))
-              (draw-trap! cutout-x1 (min bar-end         iw)))
-          (draw-trap! ix (min bar-end iw)))))
+          (do (draw-trap! ix       (min bar-end cutout-x0) r g b 1.0)
+              (draw-trap! cutout-x1 (min bar-end         iw) r g b 1.0))
+          (draw-trap! ix (min bar-end iw) r g b 1.0))))
+    ;; hint — white fill at pulse (debug coords, same as proven)
+    (when (and (pos? hint) (< hint percent))
+      (let [hint-end (int (+ ix (* hint iw)))
+            bar-h    (int h)
+            pulse    (+ 0.2 (* 0.1 (+ 1.0 (Math/sin (/ (double (System/currentTimeMillis)) 80.0)))))
+            alpha    (int (* 255.0 pulse))
+            argb     (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FFFFFF))]
+        (.fill gg ix iy hint-end (+ iy bar-h) argb)))
     ;; ---- icon overlay ----
     (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
       (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))))

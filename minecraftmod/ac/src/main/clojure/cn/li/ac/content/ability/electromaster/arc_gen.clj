@@ -26,9 +26,9 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.potion-effects :as potion-effects]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (def-skill-config-ops :arc-gen)
@@ -103,6 +103,7 @@
           eye           (geom/eye-pos player-id)
           look-vec      (when (raycast/available?)
                           (raycast/get-player-look-vector* player-id))]
+      (log/info "[ARC-DIAG] raycast" {:available? (raycast/available?) :has-look? (some? look-vec)})
       (when look-vec
         (let [hit-result (when (raycast/available?)
                            (raycast/raycast-combined*
@@ -118,6 +119,7 @@
                             :y (:y hit-result)
                             :z (:z hit-result)})]
 
+          (log/info "[ARC-DIAG] hit" {:hit-type (:type hit-result) :entity? (= :entity (:type hit-result)) :block? (= :block (:type hit-result)) :range (double range)})
           (fx/send! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
                     {:start eye
                      :end   (or hit-pos
