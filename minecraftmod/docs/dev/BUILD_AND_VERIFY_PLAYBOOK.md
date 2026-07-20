@@ -9,7 +9,20 @@
 - Fabric 编译：`.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1"`
 - Forge 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=forge-1.20.1"`
 - Fabric 客户端：`.\gradlew.bat :platform:runClient "-PplatformTarget=fabric-1.20.1"`
+- Forge 发布 jar：`.\gradlew.bat :platform:remapJar "-PplatformTarget=forge-1.20.1" -PreleaseAot`
+- Fabric 发布 jar：`.\gradlew.bat :platform:remapJar "-PplatformTarget=fabric-1.20.1" -PreleaseAot`
 - DataGen parity：`.\gradlew.bat compareDatagenParityManifests`
+
+## 发布 jar
+
+最终发布 jar 使用 `:platform:remapJar` 生成。每次只构建一个 target，目标由 `-PplatformTarget=<target-id>` 显式选择；发布构建必须带 `-PreleaseAot`，以使用发布 AOT 输出并剥离本地变量表。
+
+```powershell
+.\gradlew.bat :platform:remapJar "-PplatformTarget=forge-1.20.1" -PreleaseAot
+.\gradlew.bat :platform:remapJar "-PplatformTarget=fabric-1.20.1" -PreleaseAot
+```
+
+生成结果位于 `platform-target/build/libs/`，文件名由 `platform-targets.json` 中当前 target 的 `artifact.baseName`、项目版本和 `artifact.classifier` 决定。
 
 ## 验证顺序
 
