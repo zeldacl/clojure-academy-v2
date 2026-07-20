@@ -6,7 +6,7 @@
 > 无线能源已完成函数式单路径重构。请以 [WIRELESS_REFACTOR_CONTRACTS.md](WIRELESS_REFACTOR_CONTRACTS.md) 与 [../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md) 为准；下文 Phase/Batch 叙述仅作追溯。
 
 > **与当前仓库对齐（2026-04）**  
-> - Gradle 子工程：`api`、`mcmod`、`ac`、`forge-1.20.1`；根 `settings.gradle` 中 **`fabric-1.20.1` 默认未 include**。  
+> - Gradle 子工程：`api`、`mcmod`、`ac`、`forge target`；根 `settings.gradle` 中 **`fabric target` 默认未 include**。  
 > - 下文历史段落中若出现 **Forge 1.16.5**、**「core」路径** 或三平台并列表述，均为迁移过程记录，**不代表当前默认构建矩阵**。  
 > - 能量命名空间：**`cn.li.ac.energy.operations`**。  
 > - Wireless 屏幕工厂等逻辑在 **`ac`**（如 `cn.li.ac.wireless.gui.screen-factory`），不在已删除的 `core/my_mod/...`。
@@ -46,7 +46,7 @@
 
 #### Phase 6: 门禁全通过 ✅
 - `:ac:checkClojure` + `:mcmod:checkClojure` — BUILD SUCCESSFUL
-- `:forge-1.20.1:runClient` — BUILD SUCCESSFUL
+- `:platform:runClient` — BUILD SUCCESSFUL
 - Architecture red line: ac/forge/fabric 无越界依赖
 
 ---
@@ -64,8 +64,8 @@
    - `create-node-screen` / `create-matrix-screen` 从平台包装器提取，统一错误处理。
 
 2. **重构文件**：
-   - `forge-1.20.1/.../gui/screen_impl.clj`：移除重复逻辑，调用 screen-factory。
-   - Fabric 侧若启用子工程，对应 `fabric-1.20.1/.../gui/screen_impl.clj` 同理。
+   - `platform-src/loader/forge/.../gui/screen_impl.clj`：移除重复逻辑，调用 screen-factory。
+   - Fabric 侧若启用子工程，对应 `platform-src/loader/fabric/.../gui/screen_impl.clj` 同理。
    - 平台文件仅保留注册机制。
 
 3. **效果**：
@@ -1416,7 +1416,7 @@ root (176×200)
 
 **总计**: ~1200 行代码，6 个文件
 
-#### Forge 1.20.1 (`forge-1.20.1/gui/`) - ✅ 完整实现
+#### Forge 1.20.1 (`platform-src/loader/forge/gui/`) - ✅ 完整实现
 
 **API 变化** (从 1.16.5):
 1. `Container` → `AbstractContainerMenu`
@@ -1450,7 +1450,7 @@ root (176×200)
 **完整度**: ✅ 生产就绪
 **总计**: ~290 行新代码 + ~600 行复用 = ~890 行
 
-#### Fabric 1.20.1 (`fabric-1.20.1/gui/`) - ✅ 完整实现
+#### Fabric 1.20.1 (`platform-src/loader/fabric/gui/`) - ✅ 完整实现
 
 **API 体系** (完全不同于 Forge):
 1. `ScreenHandler` (不是 Container/Menu)
@@ -1476,7 +1476,7 @@ root (176×200)
   - `create-screen-handler-type`: 使用 `ScreenHandlerRegistry.registerSimple()`
   - `create-extended-screen-handler-type`: 使用 `ScreenHandlerRegistry.registerExtended()`
   - `open-gui-for-player`: 使用 `openHandledScreen()`
-  - `defmethod register-gui-handler :fabric-1.20.1`
+  - `defmethod register-gui-handler :fabric target`
 
 **3. screen_impl.clj** (130 行)
   - `create-node-screen`, `create-matrix-screen`

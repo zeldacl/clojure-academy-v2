@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "C": {
+      "item": "my_mod:constraint_plate"
+    },
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "N": {
+      "item": "my_mod:crystal_normal"
+    }
+  },
+  "pattern": [
+    " C ",
+    "CNC",
+    " D "
+  ],
+  "result": {
+    "count": 2,
+    "item": "my_mod:energy_unit"
+  }
+}

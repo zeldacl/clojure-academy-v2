@@ -77,6 +77,6 @@ Client scripted effect/ray/marker hook **classes** remain (`register-all-scripte
 | `mcmod` | no | no |
 | `ac` | no | no |
 | `mc-1.20.1` | yes | no |
-| `forge-1.20.1` / `fabric-1.20.1` | yes | yes |
+| `forge target` / `fabric target` | yes | yes |
 
 See also [PROJECT_LAYOUT.md](../01-overview/PROJECT_LAYOUT.md), [TILE_DSL_GUIDE_CN.md](../03-dsl/TILE_DSL_GUIDE_CN.md).

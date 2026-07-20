@@ -19,7 +19,7 @@ Two independent reflection gates exist and cover different things:
 
 **Finding**: `checkClojure` was declared with `reflection = 'fail'` for every
 module, but was never actually invoked by any baseline/PR gate for
-`forge-1.20.1`/`fabric-1.20.1` (`verifyForgeBaseline`/`verifyFabricBaseline`
+`forge target`/`fabric target` (`verifyForgeBaseline`/`verifyFabricBaseline`
 only ran `compileClojure`, not `checkClojure`). Confirmed empirically: a probe
 file with an obviously-untyped `.length` call compiled cleanly through
 `:mcmod:compileClojure` with zero warnings, but was caught immediately by
@@ -32,7 +32,7 @@ watching for "Reflection warning" text on that task's output was dead code.
 
 **Fix**:
 - `verifyForgeBaseline`/`verifyFabricBaseline` (root `build.gradle`) now
-  depend on `:forge-1.20.1:checkClojure` / `:fabric-1.20.1:checkClojure`.
+  depend on `:platform:checkClojure` / `:platform:checkClojure`.
 - `gradle/platform_build_helpers.gradle`: `checkClojure`'s classpath reads
   `classes/java/main`, which `copyAcJavaClassesToPlatformOutput` /
   `copyMcmodJavaClassesToPlatformOutput` also write into without a declared
@@ -40,25 +40,25 @@ watching for "Reflection warning" text on that task's output was dead code.
   was pulled into the graph. Added explicit `dependsOn` for both mirror tasks.
 - Fixed the 6 warnings this surfaced (all pre-existing, none introduced this
   session):
-  - `mc-1.20.1/gui/reactive/render.clj`: `resolve-rl` had no `^ResourceLocation`
+  - `platform-src/minecraft/version/mc-1201/gui/reactive/render.clj`: `resolve-rl` had no `^ResourceLocation`
     return hint, so its one un-hinted call site (`RenderSystem/setShaderTexture`)
     reflected.
-  - `fabric-1.20.1/gui/network/shared.clj`: `c2s-channel`/`s2c-channel` defs had
+  - `platform-src/loader/fabric/gui/network/shared.clj`: `c2s-channel`/`s2c-channel` defs had
     no `^ResourceLocation` tag, so both `registerGlobalReceiver` call sites
     (client + server) reflected.
-  - `fabric-1.20.1/client/init.clj`: `:send-system-message!`'s `player` param
+  - `platform-src/loader/fabric/client/init.clj`: `:send-system-message!`'s `player` param
     untyped (`^Player` added); `is-glfw-key-down?` called `.getHandle` on
     `Window` — wrong method name entirely (the real accessor is `.getWindow`,
     confirmed against Forge's equivalent code), fixed by hinting `win` and
     correcting the call.
-  - `fabric-1.20.1/platform/bindings.clj`: `open-player-menu!` called
+  - `platform-src/loader/fabric/platform/bindings.clj`: `open-player-menu!` called
     `.openHandledScreen` — a Yarn-mapping method name that doesn't exist under
     the official Mojang mappings this codebase targets. Real bug, not just a
     missing hint: would throw `NoSuchMethodException` at runtime if ever
     exercised. Forge's equivalent binding already used the correct `.openMenu`;
     Fabric's was fixed to match.
 
-**Verified**: `:forge-1.20.1:checkClojure` and `:fabric-1.20.1:checkClojure`
+**Verified**: `:platform:checkClojure` and `:platform:checkClojure`
 both pass reflection-clean; `verifyForgeBaseline`/`verifyFabricBaseline` pass
 end to end with the new dependency wiring.
 
@@ -82,7 +82,7 @@ or OBJ baking, since none of that runs without Minecraft's client renderer.
 **That part was not run automatically; it needs a manual session.** To do it:
 
 ```
-cmd /c .\gradlew.bat :forge-1.20.1:runClient
+cmd /c .\gradlew.bat :platform:runClient
 ```
 
 then, with the scene set up in-game, attach JFR to the running JVM:

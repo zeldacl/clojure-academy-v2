@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "my_mod:block/machine_bottom",
+    "east": "my_mod:block/machine_side",
+    "north": "my_mod:block/machine_side",
+    "south": "my_mod:block/ief_working_2",
+    "up": "my_mod:block/machine_top",
+    "west": "my_mod:block/machine_side"
+  }
+}

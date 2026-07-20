@@ -1,0 +1,31 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "B": {
+      "item": "my_mod:brain_component"
+    },
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "G": {
+      "item": "minecraft:glass_pane"
+    },
+    "I": {
+      "item": "my_mod:info_component"
+    },
+    "P": {
+      "item": "my_mod:reinforced_iron_plate"
+    },
+    "R": {
+      "item": "minecraft:redstone_block"
+    }
+  },
+  "pattern": [
+    "DGD",
+    "PBP",
+    "IRI"
+  ],
+  "result": {
+    "item": "my_mod:terminal_installer"
+  }
+}

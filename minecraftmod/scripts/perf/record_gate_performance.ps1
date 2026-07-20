@@ -3,12 +3,11 @@ param(
     [string[]]$TaskSpecs = @(
         ':ac:compileClojure',
         ':mcmod:compileClojure',
-        ':forge-1.20.1:compileClojure',
-        ':fabric-1.20.1:compileClojure',
+        ':platform:compileClojure "-PplatformTarget=forge-1.20.1"',
+        ':platform:compileClojure "-PplatformTarget=fabric-1.20.1"',
         'verifyArchitectureBoundaries',
         'runAcUnitTests runMcmodUnitTests',
-        'verifyCurrentPlatforms',
-        'verifyForgeTesting'
+        'verifyCurrentPlatforms'
     ),
     [int]$Iterations = 1,
     [switch]$CleanBeforeEach,

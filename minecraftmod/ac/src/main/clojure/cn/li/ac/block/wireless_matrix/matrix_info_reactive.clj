@@ -71,7 +71,7 @@
 
 (defn- current-client-owner
   "Resolve a client owner for GUI-initiated server requests.
-  Uses the platform-registered hook (set by mc-1.20.1) to get the client owner,
+  Uses the platform-registered hook to get the client owner,
   which matches the source used by with-client-response-owner during response dispatch."
   []
   (runtime-hooks/default-client-owner))

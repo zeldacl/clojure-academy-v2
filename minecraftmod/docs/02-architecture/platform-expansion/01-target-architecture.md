@@ -2,7 +2,7 @@
 
 ## Purpose
 
-定义本仓库面向多 Loader / 多 Minecraft 版本的目标架构，作为后续新增 `NeoForge`、恢复 `Fabric`、或升级至新 Minecraft 版本时的统一设计基线。
+定义本仓库面向多 Loader / 多 Minecraft 版本的目标架构，作为后续新增 `future loader`、恢复 `Fabric`、或升级至新 Minecraft 版本时的统一设计基线。
 
 ## 目标分层
 
@@ -13,7 +13,7 @@ mcmod
   ↓
 ac
   ↓
-loader-version module (forge-1.20.1 / fabric-1.20.1 / neoforge-1.20.1 / ...)
+loader-version module (forge target / fabric target / future-loader target / ...)
 ```
 
 ### `api`
@@ -29,7 +29,7 @@ loader-version module (forge-1.20.1 / fabric-1.20.1 / neoforge-1.20.1 / ...)
 职责：
 
 - 平台无关协议、DSL、元数据、注册表、共享运行时。
-- 提供 `PlatformBootstrap` / `ContentInitBootstrap` 所依赖的共享机制。
+- 提供 `platform target bootstrap` / `ContentInitBootstrap` 所依赖的共享机制。
 - 承载跨平台共享的网络消息目录、生命周期、抽象数据模型。
 
 ### `ac`
@@ -74,7 +74,7 @@ loader-version module (forge-1.20.1 / fabric-1.20.1 / neoforge-1.20.1 / ...)
 
 ## 当前到目标状态的差距
 
-- `forge-1.20.1` 已形成主线实现。
-- `fabric-1.20.1` 存在代码，但默认不参与根构建，存在漂移风险。
-- `neoforge-*` 尚无正式模块模板。
-- 构建层的 AOT/remap/sourceSets 注入逻辑仍集中在 `forge-1.20.1/build.gradle`，尚未抽象为可复用 convention。
+- `forge target` 已形成主线实现。
+- `fabric target` 存在代码，但默认不参与根构建，存在漂移风险。
+- `future-loader target` 尚无正式模块模板。
+- 构建层的 AOT/remap/sourceSets 注入逻辑仍集中在 `platform-src/loader/forge/build.gradle`，尚未抽象为可复用 convention。

@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "minecraft:rail"
+  },
+  "mode": "incise",
+  "output": {
+    "count": 2,
+    "item": "my_mod:needle"
+  }
+}

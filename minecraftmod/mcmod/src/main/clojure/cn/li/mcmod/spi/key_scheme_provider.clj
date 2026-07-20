@@ -10,7 +10,7 @@
   - `reify`/`proxy` on **net.minecraft.*** / Forge / Fabric interfaces is forbidden:
     AOT **solidifies** dev-time (Mojmap) type/method names into bytecode; compilation may
     still succeed, but **runtime** fails after remapping/obfuscation
-    (`AbstractMethodError` / `NoClassDefFoundError`). Use Java skeletons (`mc-1.20.1/shim/`).
+    (`AbstractMethodError` / `NoClassDefFoundError`). Use Java skeletons from the Minecraft version component.
 
   Contract: {:is-key-down? (fn [scheme-name key-idx] -> boolean)}"
   (:require [cn.li.mcmod.runtime.install :as install]

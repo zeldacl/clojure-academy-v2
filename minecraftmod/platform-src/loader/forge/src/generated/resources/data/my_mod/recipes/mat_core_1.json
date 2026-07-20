@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "M": {
+      "item": "my_mod:mat_core_0"
+    },
+    "N": {
+      "item": "my_mod:crystal_normal"
+    },
+    "R": {
+      "item": "my_mod:reso_crystal"
+    }
+  },
+  "pattern": [
+    "R",
+    "N",
+    "M"
+  ],
+  "result": {
+    "item": "my_mod:mat_core_1"
+  },
+  "show_notification": true
+}

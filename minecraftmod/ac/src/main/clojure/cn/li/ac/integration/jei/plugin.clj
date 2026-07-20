@@ -7,8 +7,8 @@
   Architecture:
   - This namespace (ac/integration/jei/plugin.clj) - Platform-neutral API
   - ac/integration/jei/categories.clj - Recipe category metadata
-  - forge-1.20.1/integration/jei_impl.clj - Forge-specific implementation
-  - forge-1.20.1/integration/JEIPluginWrapper.java - @JEIPlugin annotation wrapper
+  - Forge loader JEI implementation
+  - Forge loader @JEIPlugin annotation wrapper
 
   The JEI plugin is automatically discovered by JEI via the @JEIPlugin annotation
   on JEIPluginWrapper.java, which delegates to the Clojure implementation."

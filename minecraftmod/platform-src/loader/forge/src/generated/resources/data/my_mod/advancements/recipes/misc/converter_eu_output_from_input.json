@@ -1,0 +1,35 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_converter_eu_input": {
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "my_mod:converter_eu_input"
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "my_mod:converter_eu_output_from_input"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_converter_eu_input",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "my_mod:converter_eu_output_from_input"
+    ]
+  },
+  "sends_telemetry_event": false
+}

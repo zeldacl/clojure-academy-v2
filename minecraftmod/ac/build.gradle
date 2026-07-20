@@ -63,7 +63,7 @@ tasks.named('compileClojure').configure { task ->
     }
 }
 
-// Strip LVT from AOT class files (same as forge-1.20.1).
+// Strip LVT from AOT class files (same as the platform target build).
 // Clojure 1.12 AOT can emit slot_index=-1 entries that crash TinyRemapper.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
@@ -145,7 +145,7 @@ dependencies {
     cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
-sourceSets.test.clojure.srcDir rootProject.file('test-support/src/main/clojure')
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     dependsOn tasks.named('compileClojure')
@@ -222,5 +222,3 @@ tasks.register('coverageAcClojureTests', JavaExec) {
             '--test-ns-regex', 'cn\\.li\\.ac\\..*-test',
             '--output', "${project.buildDir}/reports/coverage"
 }
-
-

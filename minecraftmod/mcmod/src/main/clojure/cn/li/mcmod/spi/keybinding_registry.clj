@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.spi.keybinding-registry
   "Neutral keybinding configuration registry.
 
-  Problem: forge-1.20.1/client/key_mapping_adapter.clj was directly
+  Problem: the Forge loader key mapping adapter was directly
   calling `cn.li.ac.input-ids/get-input-ids` — a static dependency on
   a business content module.
 

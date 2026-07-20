@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "cookingtime": 200,
+  "experience": 0.8,
+  "ingredient": {
+    "item": "my_mod:crystal_ore"
+  },
+  "result": "my_mod:crystal_low"
+}

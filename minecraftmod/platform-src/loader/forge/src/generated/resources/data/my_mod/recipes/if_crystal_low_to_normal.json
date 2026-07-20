@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:imag_fusor",
+  "consume_liquid": 3000,
+  "craft_time": 120,
+  "input": {
+    "item": "my_mod:crystal_low"
+  },
+  "output": {
+    "item": "my_mod:crystal_normal"
+  }
+}

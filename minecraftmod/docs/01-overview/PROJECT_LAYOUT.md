@@ -9,14 +9,14 @@
 | **`api`** | 对外 Java API（如互操作用的接口包），无 Clojure 游戏逻辑 |
 | **`mcmod`** | 平台无关：协议、DSL、`protocol.metadata`、事件/GUI/NBT 等元数据；**禁止** `net.minecraft.*` 与 Loader API |
 | **`ac`** | 游戏内容与域逻辑；**禁止**直接引用 Forge/Fabric/Minecraft API；通过 `mcmod` 与约定边界交互 |
-| **`forge-1.20.1`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；允许通过受控运行时桥接使用 `ac` 能力 |
-| **`fabric-1.20.1`** | 可选 Fabric 适配；默认可能未在 `settings.gradle` 中 `include` |
+| **`forge target`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；允许通过受控运行时桥接使用 `ac` 能力 |
+| **`fabric target`** | 可选 Fabric 适配；默认可能未在 `settings.gradle` 中 `include` |
 
 ## 依赖红线（以“静态耦合”约束为主）
 
-- **禁止** `ac` 对 `forge-1.20.1` 建立静态依赖（命名空间/类依赖）。
+- **禁止** `ac` 对 `forge target` 建立静态依赖（命名空间/类依赖）。
 - **禁止**在 `mcmod` 与 `ac` 中引入平台 API（`net.minecraft.*` / Forge/Fabric）。
-- **允许** `forge-1.20.1` 对 `ac` 进行受控运行时桥接（动态入口），用于装配与平台绑定。
+- **允许** `forge target` 对 `ac` 进行受控运行时桥接（动态入口），用于装配与平台绑定。
 - 运行时桥接必须：
   1. 有明确入口函数；
   2. 在文档中可追踪；
@@ -26,7 +26,7 @@
 
 - **`mcmod`**：`mcmod/src/main/clojure/cn/li/mcmod/...` → 命名空间前缀 **`cn.li.mcmod.*`**
 - **`ac`**：`ac/src/main/clojure/cn/li/ac/...` → **`cn.li.ac.*`**
-- **`forge-1.20.1`**：`forge-1.20.1/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`**
+- **`forge target`**：`platform-src/loader/forge/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`**
 
 ### `mcmod` 关键基础命名空间（AOT/运行时）
 
@@ -88,15 +88,15 @@
 
 | 路径 | 命名空间 / 类 | 说明 |
 |------|----------------|------|
-| `mc-1.20.1/.../font/msdf/*.java` | `cn.li.mc1201.client.font.msdf.*` | STB 加载、`MsdfEngine` MTSDF 生成、多页 atlas（LRU + 异步预烘焙）、`GlyphProvider` SPI、`MsdfRenderTypes`、shader uniform |
-| `mc-1.20.1/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 系统字体探测 → `MsdfFontManager` 初始化 |
-| `mc-1.20.1/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 发光呼吸等动画 |
-| `mc-1.20.1/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 桥：`text-width` / `draw-text!`、分段 MSDF/vanilla、per-glyph 标志（顶点色蓝通道低 3 位）、`with-text-fx` |
-| `mc-1.20.1/.../gui/reactive/render.clj` | `cn.li.mc1201.gui.reactive.render` | `:text` 组件接线（`render-text!`/`bake-text!`，替代已删除的旧 `gui/cgui/renderer.clj`） |
+| `platform-src/minecraft/version/mc-1201/.../font/msdf/*.java` | `cn.li.mc1201.client.font.msdf.*` | STB 加载、`MsdfEngine` MTSDF 生成、多页 atlas（LRU + 异步预烘焙）、`GlyphProvider` SPI、`MsdfRenderTypes`、shader uniform |
+| `platform-src/minecraft/version/mc-1201/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 系统字体探测 → `MsdfFontManager` 初始化 |
+| `platform-src/minecraft/version/mc-1201/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 发光呼吸等动画 |
+| `platform-src/minecraft/version/mc-1201/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 桥：`text-width` / `draw-text!`、分段 MSDF/vanilla、per-glyph 标志（顶点色蓝通道低 3 位）、`with-text-fx` |
+| `platform-src/minecraft/version/mc-1201/.../gui/reactive/render.clj` | `cn.li.mc1201.gui.reactive.render` | `:text` 组件接线（`render-text!`/`bake-text!`，替代已删除的旧 `gui/cgui/renderer.clj`） |
 | `ac/.../client/font_init.clj` | `cn.li.ac.client.font-init` | 注册 `:ac-*` 字体关键字（flag-only） |
 | `ac/.../assets/my_mod/shaders/core/msdf_text.*` | — | MSDF 文本 shader（median + fwidth AA + 效果层） |
-| `forge-1.20.1/.../ForgeClientRenderRegistry` | — | `RegisterShadersEvent` 注册 `my_mod:msdf_text` |
-| `fabric-1.20.1/.../FabricClientRenderSetup` | — | `CoreShaderRegistrationCallback` 同等注册 |
+| `platform-src/loader/forge/.../ForgeClientRenderRegistry` | — | `RegisterShadersEvent` 注册 `my_mod:msdf_text` |
+| `platform-src/loader/fabric/.../FabricClientRenderSetup` | — | `CoreShaderRegistrationCallback` 同等注册 |
 
 **Follow-up 能力（已实现）**：单字符串内 per-glyph bold/outline/glow（shader 解码顶点色标志）；`getGlyph` 触发的异步 MTSDF 预烘焙；atlas LRU（默认 4096 glyph）；`start-glow-breath!` ClientTick 呼吸发光。
 
@@ -104,7 +104,7 @@
 
 ## 反应式 UI 框架迁移（已完成）
 
-旧 CGUI 框架（`mcmod/gui/cgui_core.clj` 等 8 文件、`mc-1.20.1/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`）与其消费者已全部删除，替换为 `mc-1.20.1/gui/reactive/*`（signal 驱动、dirty-gated）+ `mcmod` signal core。保留：`mc-1.20.1/gui/cgui/font.clj`（MSDF 桥，仍在用）、`mcmod/gui/tabbed_gui.clj` + `spec.clj`（平台无关的 tab 同步/GUI spec 校验，被 `gui/menu/proxy.clj`、`gui/slots/sync.clj`、`gui/reactive/host_container.clj`、多个 `*_reactive.clj` 消费，非旧框架残留）。
+旧 CGUI 框架（`mcmod/gui/cgui_core.clj` 等 8 文件、`platform-src/minecraft/version/mc-1201/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`）与其消费者已全部删除，替换为 `platform-src/minecraft/version/mc-1201/gui/reactive/*`（signal 驱动、dirty-gated）+ `mcmod` signal core。保留：`platform-src/minecraft/version/mc-1201/gui/cgui/font.clj`（MSDF 桥，仍在用）、`mcmod/gui/tabbed_gui.clj` + `spec.clj`（平台无关的 tab 同步/GUI spec 校验，被 `gui/menu/proxy.clj`、`gui/slots/sync.clj`、`gui/reactive/host_container.clj`、多个 `*_reactive.clj` 消费，非旧框架残留）。
 
 **平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；`runtime_bridge` 每 tick 调用 `msdf-tick/client-tick!`。
 
@@ -114,16 +114,16 @@ BlockEntity 与 Mob 热路径经 Java 接口 + reify bundle，无运行期 `^:dy
 
 | 路径 | 说明 |
 |------|------|
-| `mc-1.20.1/.../block/logic/*.java` | `ITile*Logic`、`TileLogicBundle`、`IScriptedBlock` |
-| `mc-1.20.1/.../block/logic_compile.clj`、`logic_pipeline.clj` | tile bundle 编译与安装 |
-| `mc-1.20.1/.../entity/ScriptedMobEntity.java`、`entity/logic/*` | Mob bundle 与 `ScriptedEntityLogicRegistry` |
-| `mc-1.20.1/.../entity/mob_logic_compile.clj`、`mob_logic_pipeline.clj` | mob bundle 编译与安装 |
+| `platform-src/minecraft/version/mc-1201/.../block/logic/*.java` | `ITile*Logic`、`TileLogicBundle`、`IScriptedBlock` |
+| `platform-src/minecraft/version/mc-1201/.../block/logic_compile.clj`、`logic_pipeline.clj` | tile bundle 编译与安装 |
+| `platform-src/minecraft/version/mc-1201/.../entity/ScriptedMobEntity.java`、`entity/logic/*` | Mob bundle 与 `ScriptedEntityLogicRegistry` |
+| `platform-src/minecraft/version/mc-1201/.../entity/mob_logic_compile.clj`、`mob_logic_pipeline.clj` | mob bundle 编译与安装 |
 | `mcmod/.../block/tile_kind.clj` | 声明期 tile-kind 默认（合并于 compile） |
-| `forge-1.20.1/.../registry/content_registration.clj` | 注册期调用 pipeline |
+| `platform-src/loader/forge/.../registry/content_registration.clj` | 注册期调用 pipeline |
 
 ## 新增内容应落在何处
 
 1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。
 2. 在 **`ac`** 实现方块、物品、业务逻辑，使用 `defblock` / `defitem` 等写入 `mcmod` registry。
-3. 仅在需要 Loader 专用胶水时改 **`forge-1.20.1`**（或启用后的 Fabric 模块），并保持适配层薄。
+3. 仅在需要 Loader 专用胶水时改 **`forge target`**（或启用后的 Fabric 模块），并保持适配层薄。
 4. 新终端应用：改 `terminal/catalog.clj` + `terminal/client/apps/*` + `client/apps.clj` 的 `launchers`。

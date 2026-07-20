@@ -5,12 +5,12 @@
 ## 目标
 
 - 让 `mc-1.20.1` 承担 **Minecraft API 相关且 loader-agnostic** 的 GUI 核心。
-- 让 `forge-1.20.1` / `fabric-1.20.1` 只保留 loader 生命周期、注册、网络与平台桥接壳。
+- 让 `forge target` / `fabric target` 只保留 loader 生命周期、注册、网络与平台桥接壳。
 - 平台菜单桥接直接 require `cn.li.mcmod.gui.adapter.platform-registry`；AC 通过 `cn.li.ac.gui.platform-adapter/install-into-mcmod!` 注入回调。
 
 ## 分层职责
 
-### 1) Shared (`mc-1.20.1/src/main/{clojure,java}/cn/li/mc1201/gui`)
+### 1) Shared (`platform-src/minecraft/version/mc-1201/src/main/{clojure,java}/cn/li/mc1201/gui`)
 
 主要包含：
 
@@ -32,7 +32,7 @@
 - 不得引入 `net.minecraftforge.*` / `net.fabricmc.*`
 - client-only 代码通过调用路径控制（仅在 client 初始化/屏幕打开路径触发）
 
-### 2) Forge (`forge-1.20.1/src/main/clojure/cn/li/forge1201/gui`)
+### 2) Forge (`platform-src/loader/forge/src/main/clojure/cn/li/forge1201/gui`)
 
 保留职责：
 
@@ -42,7 +42,7 @@
 - `menu_bridge.clj` / `provider_bridge.clj` / `screen_impl.clj`：平台壳装配共享核心（调用 `mc1201.gui.*` domain namespace）
 - `bridge.clj`：Facade（对外桥接入口）
 
-### 3) Fabric (`fabric-1.20.1/src/main/clojure/cn/li/fabric1201/gui`)
+### 3) Fabric (`platform-src/loader/fabric/src/main/clojure/cn/li/fabric1201/gui`)
 
 保留职责：
 
@@ -74,8 +74,8 @@
 至少执行：
 
 - `cmd /c .\gradlew.bat :mcmod:compileJava :mcmod:compileClojure`
-- `cmd /c .\gradlew.bat :forge-1.20.1:compileJava :forge-1.20.1:compileClojure`
-- `cmd /c .\gradlew.bat :fabric-1.20.1:compileJava :fabric-1.20.1:compileClojure`
+- `cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure`
+- `cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure`
 - `cmd /c .\gradlew.bat verifyArchitectureBoundaries verifyCurrentPlatforms`
 
 并做代表性 GUI 烟测：

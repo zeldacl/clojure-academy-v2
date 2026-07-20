@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "E": {
+      "item": "minecraft:ender_pearl"
+    },
+    "G": {
+      "item": "minecraft:glowstone_dust"
+    },
+    "M": {
+      "item": "my_mod:mat_core_1"
+    },
+    "R": {
+      "item": "my_mod:reso_crystal"
+    }
+  },
+  "pattern": [
+    "GGG",
+    "RER",
+    " M "
+  ],
+  "result": {
+    "item": "my_mod:mat_core_2"
+  },
+  "show_notification": true
+}

@@ -1,0 +1,94 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_0"
+      },
+      "when": {
+        "connected": "false",
+        "energy": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_0_connected"
+      },
+      "when": {
+        "connected": "true",
+        "energy": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_1"
+      },
+      "when": {
+        "connected": "false",
+        "energy": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_1_connected"
+      },
+      "when": {
+        "connected": "true",
+        "energy": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_2"
+      },
+      "when": {
+        "connected": "false",
+        "energy": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_2_connected"
+      },
+      "when": {
+        "connected": "true",
+        "energy": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_3"
+      },
+      "when": {
+        "connected": "false",
+        "energy": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_3_connected"
+      },
+      "when": {
+        "connected": "true",
+        "energy": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_4"
+      },
+      "when": {
+        "connected": "false",
+        "energy": "4"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/node_advanced_energy_4_connected"
+      },
+      "when": {
+        "connected": "true",
+        "energy": "4"
+      }
+    }
+  ]
+}

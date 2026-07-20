@@ -4,9 +4,9 @@
 
 ## 当前状态
 
-- 默认根工程交付线：`forge-1.20.1`（主线）
-- `fabric-1.20.1`：已纳入根构建，当前维护级别为 **minimal maintenance**（至少 compile 级）
-- `neoforge-*`：尚未正式接入
+- 默认根工程交付线：`forge target`（主线）
+- `fabric target`：已纳入根构建，当前维护级别为 **minimal maintenance**（至少 compile 级）
+- `future-loader target`：尚未正式接入
 
 ## 验证层级
 
@@ -57,16 +57,16 @@
 当前推荐：
 
 - Forge：继续使用 GameTest / 日志校验链
-- NeoForge：若后续具备等价能力，应纳入同类验证
+- future loader：若后续具备等价能力，应纳入同类验证
 - Fabric：至少保留 datagen 与启动烟雾验证；若后续增加更强的集成验证，可单列补充
 
 ## 推荐矩阵
 
 | 平台模块 | Compile | runClient | runServer | Datagen | 集成验证 |
 |----------|---------|-----------|-----------|---------|----------|
-| `forge-1.20.1` | 必须 | 必须 | 必须 | 必须 | 推荐/现行 |
-| `fabric-1.20.1` | 必须（compile 基线） | 推荐 | 推荐 | 推荐 | 可选（minimal maintenance） |
-| `neoforge-*` | 必须 | 必须 | 必须 | 必须 | 推荐 |
+| `forge target` | 必须 | 必须 | 必须 | 必须 | 推荐/现行 |
+| `fabric target` | 必须（compile 基线） | 推荐 | 推荐 | 推荐 | 可选（minimal maintenance） |
+| `future-loader target` | 必须 | 必须 | 必须 | 必须 | 推荐 |
 
 ## 推荐执行顺序
 
@@ -90,34 +90,34 @@
 1. 边界扫描
 2. smoke 验证
 3. datagen 验证
-4. Forge/NeoForge 的 GameTest 或等价集成验证
+4. Forge/future loader 的 GameTest 或等价集成验证
 
 ## 命令落地建议
 
 ### Forge 主线
 
-- `:forge-1.20.1:compileJava`
-- `:forge-1.20.1:compileClojure`
-- `:forge-1.20.1:runData`
-- `:forge-1.20.1:runServer`
-- `:forge-1.20.1:runClient`
+- `:platform:compileJava`
+- `:platform:compileClojure`
+- `:platform:runData`
+- `:platform:runServer`
+- `:platform:runClient`
 - `runForgeGameTests`
 
 ### Fabric（当前已纳入根构建）
 
-- `:fabric-1.20.1:compileJava`
-- `:fabric-1.20.1:compileClojure`
-- `:fabric-1.20.1:runData` 或 Fabric datagen 等价任务
-- `:fabric-1.20.1:runServer`
-- `:fabric-1.20.1:runClient`
+- `:platform:compileJava`
+- `:platform:compileClojure`
+- `:platform:runData` 或 Fabric datagen 等价任务
+- `:platform:runServer`
+- `:platform:runClient`
 
-### NeoForge（模板目标）
+### future loader（模板目标）
 
-- `:neoforge-<mc-version>:compileJava`
-- `:neoforge-<mc-version>:compileClojure`
-- `:neoforge-<mc-version>:runData`
-- `:neoforge-<mc-version>:runServer`
-- `:neoforge-<mc-version>:runClient`
+- `:platform:compileJava`
+- `:platform:compileClojure`
+- `:platform:runData`
+- `:platform:runServer`
+- `:platform:runClient`
 
 ## 边界扫描建议
 
@@ -154,8 +154,8 @@
 
 ## 推荐后续动作
 
-1. 持续保持 `fabric-1.20.1` compile 基线可用（`verifyFabricBaseline` / `verifyCurrentPlatforms`）。
-2. 新增 `neoforge-*` 时，从第一天起就接入 compile 与 smoke 验证。
+1. 持续保持 `fabric target` compile 基线可用（`verifyFabricBaseline` / `verifyCurrentPlatforms`）。
+2. 新增 `future-loader target` 时，从第一天起就接入 compile 与 smoke 验证。
 3. 把边界扫描脚本或 Gradle 任务纳入统一 `check` / `verification` 体系。
 
 ## 进入“可直接执行”状态的标准

@@ -1,0 +1,184 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_north_frame_0"
+      },
+      "when": {
+        "facing": "north",
+        "frame": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_north_frame_1"
+      },
+      "when": {
+        "facing": "north",
+        "frame": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_north_frame_2"
+      },
+      "when": {
+        "facing": "north",
+        "frame": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_north_frame_3"
+      },
+      "when": {
+        "facing": "north",
+        "frame": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_north_frame_4"
+      },
+      "when": {
+        "facing": "north",
+        "frame": "4"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_east_frame_0"
+      },
+      "when": {
+        "facing": "east",
+        "frame": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_east_frame_1"
+      },
+      "when": {
+        "facing": "east",
+        "frame": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_east_frame_2"
+      },
+      "when": {
+        "facing": "east",
+        "frame": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_east_frame_3"
+      },
+      "when": {
+        "facing": "east",
+        "frame": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_east_frame_4"
+      },
+      "when": {
+        "facing": "east",
+        "frame": "4"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_south_frame_0"
+      },
+      "when": {
+        "facing": "south",
+        "frame": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_south_frame_1"
+      },
+      "when": {
+        "facing": "south",
+        "frame": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_south_frame_2"
+      },
+      "when": {
+        "facing": "south",
+        "frame": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_south_frame_3"
+      },
+      "when": {
+        "facing": "south",
+        "frame": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_south_frame_4"
+      },
+      "when": {
+        "facing": "south",
+        "frame": "4"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_west_frame_0"
+      },
+      "when": {
+        "facing": "west",
+        "frame": "0"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_west_frame_1"
+      },
+      "when": {
+        "facing": "west",
+        "frame": "1"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_west_frame_2"
+      },
+      "when": {
+        "facing": "west",
+        "frame": "2"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_west_frame_3"
+      },
+      "when": {
+        "facing": "west",
+        "frame": "3"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/imag_fusor_west_frame_4"
+      },
+      "when": {
+        "facing": "west",
+        "frame": "4"
+      }
+    }
+  ]
+}

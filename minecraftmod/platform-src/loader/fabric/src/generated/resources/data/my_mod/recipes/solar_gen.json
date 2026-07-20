@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "E": {
+      "item": "my_mod:energy_convert_component"
+    },
+    "G": {
+      "item": "minecraft:glass_pane"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "W": {
+      "item": "my_mod:wafer"
+    }
+  },
+  "pattern": [
+    "GGG",
+    " W ",
+    "EME"
+  ],
+  "result": {
+    "item": "my_mod:solar_gen"
+  }
+}

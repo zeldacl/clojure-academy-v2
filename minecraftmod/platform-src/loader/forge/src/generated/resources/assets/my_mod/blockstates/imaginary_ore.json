@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "my_mod:block/imaginary_ore"
+    }
+  }
+}

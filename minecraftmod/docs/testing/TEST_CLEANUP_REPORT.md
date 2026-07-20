@@ -5,7 +5,7 @@
 ## 删除的测试
 
 - 4 个 electromaster `*_config_test.clj`（shape 迁入 `skill_specs_test` 与技能行为测试）
-- `fabric-1.20.1` 下 2 个未接线 Clojure 测试
+- `fabric target` 下 2 个未接线 Clojure 测试
 - `storm_wing_test` 中 3 个 `(is true)` 占位 deftest
 - 35 个 `*_fx_test.clj` 中的 `init-registers-*` 占位 deftest（合并为 1 个契约测试）
 - `forge adapter/network_test` 中过时的 `sync-message-payloads` deftest（`network_core_test` 已覆盖）

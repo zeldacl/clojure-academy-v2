@@ -1,0 +1,10 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "minecraft:iron_ingot"
+  },
+  "mode": "plate",
+  "output": {
+    "item": "my_mod:reinforced_iron_plate"
+  }
+}

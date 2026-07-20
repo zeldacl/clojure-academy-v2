@@ -133,6 +133,6 @@
     (doseq [k ac-effect-kinds]
       (script-abi/register-scripted-effect-kind! k))
     ;; Map content-owned kind keywords to platform-neutral renderer keys
-    ;; so mc-1.20.1 can dispatch without hardcoding content-specific strings.
+    ;; so the Minecraft component can dispatch without hardcoding content-specific strings.
     (script-abi/register-kind-renderer-key! :intensify-arcs :tiered-zigzag)
     (script-registry/register-profiles! v1-effect-profiles))))

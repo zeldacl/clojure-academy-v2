@@ -9,9 +9,10 @@
 (def ^:private default-source-dirs
   ["ac/src/main/clojure"
    "mcmod/src/main/clojure"
-   "mc-1.20.1/src/main/clojure"
-   "forge-1.20.1/src/main/clojure"
-   "fabric-1.20.1/src/main/clojure"])
+   "platform-src/common/src/main/clojure"
+   "platform-src/minecraft/version/mc-1201/src/main/clojure"
+   "platform-src/loader/forge/src/main/clojure"
+   "platform-src/loader/fabric/src/main/clojure"])
 
 (def ^:private forbidden-symbols
   ["Blocks/" "Items/" "BuiltInRegistries/" "ForgeRegistries/"

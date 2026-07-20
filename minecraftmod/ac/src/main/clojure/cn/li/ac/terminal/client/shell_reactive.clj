@@ -1,6 +1,6 @@
 (ns cn.li.ac.terminal.client.shell-reactive
   "Complete reactive terminal UI aligned with upstream AcademyCraft TerminalUI.
-   Features: 3D perspective (PoseStack, via mc-1.20.1 bridge), mouse edge
+   Features: 3D perspective (PoseStack, via the Minecraft bridge), mouse edge
    scrolling, custom cursor with additive blend, selection highlight + audio,
    stagger fade-in, game-time clock, and loading animation (sine-wave alpha).
 

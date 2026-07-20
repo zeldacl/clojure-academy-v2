@@ -8,8 +8,8 @@
 |------|--------|--------|--------|
 | `ac` | 231 | 232 | +1（契约/发现/reducer 补测，删 4 config + 2 占位 deftest，+2 新契约文件） |
 | `mcmod` | 36 | 36 | 0（修 runner） |
-| `forge-1.20.1` | 22 | 22 | 0（删 1 过时 deftest，修 2 文件） |
-| `fabric-1.20.1` | 2 | 0 | -2（未接线，删除） |
+| `forge target` | 22 | 22 | 0（删 1 过时 deftest，修 2 文件） |
+| `fabric target` | 2 | 0 | -2（未接线，删除） |
 
 ## `ac` — 删除
 
@@ -51,17 +51,17 @@
 | `test_runner.clj` | 删除重复 `ns` / `-main` |
 | 其余 35 个 `*_test.clj` | **保留** |
 
-## `forge-1.20.1`
+## `forge target`
 
 | 处置 | 文件/任务 |
 |------|-----------|
 | **保留** | 22 个 Clojure 测试 namespace |
 | **修复** | `config/bridge_smoke_test.clj`（私有 `*registered-configs*`） |
 | **修复** | `adapter/network_test.clj`（对齐 4 参 except-local API；删过时 sync-payloads 重复） |
-| **接入门禁（手动）** | `verifyForgeClojureUnitTests` → `:forge-1.20.1:runForgeClojureTests` |
+| **接入门禁（手动）** | `verifyForgeClojureUnitTests` → `:platform:runForgeClojureTests` |
 | **未接入** | `verifyForgeTesting`（避免与 GameTest 同批扩大失败面） |
 
-## `fabric-1.20.1`
+## `fabric target`
 
 | 处置 | 说明 |
 |------|------|

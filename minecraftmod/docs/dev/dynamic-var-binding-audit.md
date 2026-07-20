@@ -4,7 +4,7 @@ Produced for the top-level-state refactor (see
 [TOP_LEVEL_STATE_GOVERNANCE.md](TOP_LEVEL_STATE_GOVERNANCE.md)). Cross-references
 every `^:dynamic` top-level def found by `auditTopLevelMutableState`'s
 report-only "dynamic" category (130 findings across
-`mc-1.20.1`/`forge-1.20.1`/`fabric-1.20.1`/`mcmod`/`ac`, `main` sources only)
+`mc-1.20.1`/`forge target`/`fabric target`/`mcmod`/`ac`, `main` sources only)
 against every real `(binding [...])` call site in the same source trees
 (`rg -n "\(binding\s*\["`, 19 call sites found).
 
@@ -18,12 +18,12 @@ is pure decoration: safe to convert to a plain `def` + `install-root!`
 
 | var | file | bound at | binder |
 |---|---|---|---|
-| `*sync-scheduler-runtime*` | `mc-1.20.1/.../runtime/sync_core.clj` | `sync_core.clj:42` | `with-sync-scheduler-runtime` macro |
-| `*input-runtime*` | `fabric-1.20.1/.../client/runtime_bridge.clj` | `runtime_bridge.clj:32,36` | `with-input-runtime` macro + `call-with-input-runtime` |
-| `*server-context-runtime*` | `fabric-1.20.1/.../adapter/server_context.clj` | `server_context.clj:27,32` | `with-server-context-runtime` macro + `call-with-server-context-runtime` |
-| `*session-cleanup-runtime*` | `mc-1.20.1/.../client/session_cleanup.clj` | `session_cleanup.clj:37` | `with-session-cleanup-runtime` macro |
-| `*script-render-runtime*` | `mc-1.20.1/.../client/render/script_render_runtime.clj` | `script_render_runtime.clj:37,42` | macro + `call-with-script-render-runtime` |
-| `*script-render-executor-runtime*` | `mc-1.20.1/.../client/render/script_render_executor.clj` | `script_render_executor.clj:36,41` | macro + `call-with-script-render-executor-runtime` |
+| `*sync-scheduler-runtime*` | `platform-src/minecraft/version/mc-1201/.../runtime/sync_core.clj` | `sync_core.clj:42` | `with-sync-scheduler-runtime` macro |
+| `*input-runtime*` | `platform-src/loader/fabric/.../client/runtime_bridge.clj` | `runtime_bridge.clj:32,36` | `with-input-runtime` macro + `call-with-input-runtime` |
+| `*server-context-runtime*` | `platform-src/loader/fabric/.../adapter/server_context.clj` | `server_context.clj:27,32` | `with-server-context-runtime` macro + `call-with-server-context-runtime` |
+| `*session-cleanup-runtime*` | `platform-src/minecraft/version/mc-1201/.../client/session_cleanup.clj` | `session_cleanup.clj:37` | `with-session-cleanup-runtime` macro |
+| `*script-render-runtime*` | `platform-src/minecraft/version/mc-1201/.../client/render/script_render_runtime.clj` | `script_render_runtime.clj:37,42` | macro + `call-with-script-render-runtime` |
+| `*script-render-executor-runtime*` | `platform-src/minecraft/version/mc-1201/.../client/render/script_render_executor.clj` | `script_render_executor.clj:36,41` | macro + `call-with-script-render-executor-runtime` |
 | `*owner*` | `ac/.../terminal/client/runtime.clj` | `runtime.clj:103` | `with-owner` macro |
 | `*reflection-chain-id*` | `ac/.../content/ability/vecmanip/vec_reflection.clj` | `vec_reflection.clj:409` | inline `binding` around chain dispatch |
 | `*get-player-uuid-fn*` | `ac/.../ability/client/keybinds.clj` | `client_effect_hooks.clj:36` | inline `binding` (cross-namespace) |

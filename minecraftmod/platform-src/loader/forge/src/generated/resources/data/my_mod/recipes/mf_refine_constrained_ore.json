@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "my_mod:constrained_ore"
+  },
+  "mode": "refine",
+  "output": {
+    "count": 2,
+    "item": "my_mod:constraint_ingot"
+  }
+}

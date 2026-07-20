@@ -14,7 +14,7 @@
   "Register datagen metadata from all AC business domains.
 
   Each domain registry populates shared mcmod.datagen.metadata atoms used by
-  mc-1.20.1 datagen providers."
+  selected Minecraft datagen providers."
   []
   ;; Blockstate/model providers consult mcmod blockstate hooks at generation time.
   ;; Install AC overrides here so node multipart and texture rules are applied.

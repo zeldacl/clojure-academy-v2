@@ -1,0 +1,36 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": {
+      "tag": "minecraft:beds"
+    },
+    "C": {
+      "item": "my_mod:crystal_normal"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "P": {
+      "item": "my_mod:developer_portable"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    },
+    "S": {
+      "item": "minecraft:piston"
+    },
+    "U": {
+      "item": "my_mod:mat_core_0"
+    }
+  },
+  "pattern": [
+    " P ",
+    "UBS",
+    "CMR"
+  ],
+  "result": {
+    "item": "my_mod:developer_normal"
+  },
+  "show_notification": true
+}

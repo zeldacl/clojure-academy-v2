@@ -4,8 +4,8 @@
 
 ## 当前构建（以仓库为准）
 
-- **根 `settings.gradle` 包含**：`api`、`mcmod`、`ac`、`forge-1.20.1`、`fabric-1.20.1`。
-- **`fabric-1.20.1` 维护策略**：当前为 **minimal maintenance**（最小维护）。
+- **根 `settings.gradle` 包含**：`api`、`mcmod`、`ac`、`forge target`、`fabric target`。
+- **`fabric target` 维护策略**：当前为 **minimal maintenance**（最小维护）。
 	- 必须保持 compile 级可用与边界门禁通过。
 	- 不承诺与 Forge 的完全功能对齐；差异以平台文档和代码现状为准。
 - **命名空间**：Clojure 以 `cn.li.mcmod.*`（协议与 DSL）、`cn.li.ac.*`（内容与无线等业务）、`cn.li.forge1201.*`（Forge 适配）为主；资源与 mod id 仍以 `gradle.properties` 的 `mod_id`（如 `my_mod`）、`assets/my_mod/` 为准。

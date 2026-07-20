@@ -24,12 +24,12 @@
 
 #### 对应文件顺序
 
-1. `forge-1.20.1/src/main/java/cn/li/forge1201/MyMod1201.java`
-2. `forge-1.20.1/src/main/clojure/cn/li/forge1201/mod.clj`
-3. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform/bootstrap_entry.clj`
-4. `forge-1.20.1/src/main/java/cn/li/forge1201/platform/spi/Forge1201PlatformBootstrap.java`
-5. `forge-1.20.1/src/main/clojure/cn/li/forge1201/platform/spi_bootstrap.clj`
-6. `forge-1.20.1/src/main/clojure/cn/li/forge1201/registry.clj` / `events.clj` / `gui/*` / `config/*`
+1. `platform-src/loader/forge/src/main/java/cn/li/forge1201/MyMod1201.java`
+2. `platform-src/loader/forge/src/main/clojure/cn/li/forge1201/mod.clj`
+3. `platform-src/loader/forge/src/main/clojure/cn/li/forge1201/platform/platform/init.clj`
+4. `platform-src/loader/forge/src/main/java/cn/li/forge1201/platform/spi/Forge1201platform target bootstrap.java`
+5. `platform-src/loader/forge/src/main/clojure/cn/li/forge1201/platform/platform/init.clj`
+6. `platform-src/loader/forge/src/main/clojure/cn/li/forge1201/registry.clj` / `events.clj` / `gui/*` / `config/*`
 
 ### Client
 
@@ -51,30 +51,30 @@
 - datagen 运行前，确保平台 bridge 与共享 metadata 已可用。
 - datagen 不应依赖 client-only 初始化副作用。
 
-## NeoForge（目标模板）
+## future loader（目标模板）
 
 ### Main/Common
 
 建议与 Forge 对称：
 
-1. NeoForge 发现 `MyModNeoForge`。
-2. Java 入口 `require` `cn.li.neoforge1201.mod`。
-3. `start-neoforge-mod!` 首先调用 `platform-bootstrap/init-platform!`。
+1. future loader 发现 `MyModfuture loader`。
+2. Java 入口 `require` `cn.li.future-loader1201.mod`。
+3. `start-future-loader-mod!` 首先调用 `platform-bootstrap/init-platform!`。
 4. 通过 SPI 安装平台桥接实现。
 5. 再启动共享内容初始化、registry、config、events。
 
 #### 推荐文件落点
 
-1. `src/main/java/cn/li/neoforge1201/MyModNeoForge.java`
-2. `src/main/clojure/cn/li/neoforge1201/mod.clj`
-3. `src/main/clojure/cn/li/neoforge1201/platform/bootstrap_entry.clj`
-4. `src/main/java/cn/li/neoforge1201/platform/spi/NeoForge1201PlatformBootstrap.java`
-5. `src/main/clojure/cn/li/neoforge1201/platform/spi_bootstrap.clj`
-6. `src/main/clojure/cn/li/neoforge1201/registry.clj`
-7. `src/main/clojure/cn/li/neoforge1201/events.clj`
-8. `src/main/clojure/cn/li/neoforge1201/gui/init.clj`
-9. `src/main/clojure/cn/li/neoforge1201/client/init.clj`
-10. `src/main/clojure/cn/li/neoforge1201/datagen/setup.clj`
+1. `src/main/java/cn/li/future-loader1201/MyModfuture loader.java`
+2. `src/main/clojure/cn/li/future-loader1201/mod.clj`
+3. `src/main/clojure/cn/li/future-loader1201/platform/platform/init.clj`
+4. `src/main/java/cn/li/future-loader1201/platform/spi/future loader1201platform target bootstrap.java`
+5. `src/main/clojure/cn/li/future-loader1201/platform/platform/init.clj`
+6. `src/main/clojure/cn/li/future-loader1201/registry.clj`
+7. `src/main/clojure/cn/li/future-loader1201/events.clj`
+8. `src/main/clojure/cn/li/future-loader1201/gui/init.clj`
+9. `src/main/clojure/cn/li/future-loader1201/client/init.clj`
+10. `src/main/clojure/cn/li/future-loader1201/datagen/setup.clj`
 
 ### Client
 
@@ -111,7 +111,7 @@
 1. `fabric.mod.json`
 2. `src/main/java/cn/li/fabric1201/MyModFabric.java`（目标规范）
 3. `src/main/clojure/cn/li/fabric1201/mod.clj`
-4. `src/main/clojure/cn/li/fabric1201/platform/bootstrap_entry.clj`
+4. `src/main/clojure/cn/li/fabric1201/platform/platform/init.clj`
 5. `src/main/clojure/cn/li/fabric1201/registry.clj` / `events.clj` / `gui/init.clj`
 
 ### Client

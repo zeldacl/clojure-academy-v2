@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.spi.entity-render-registry
   "Neutral entity render namespace registry.
 
-  Problem: SilbarnObjRenderer.java (in mc-1.20.1) hardcoded
+  Problem: SilbarnObjRenderer.java in the Minecraft component hardcoded
   \"cn.li.ac.content.entities.silbarn-render\" — a static dependency
   on a business content module.
 

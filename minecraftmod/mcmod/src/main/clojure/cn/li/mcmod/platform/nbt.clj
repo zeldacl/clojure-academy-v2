@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.platform.nbt
   "NBT operations via Framework function map — pure relay layer, no MC dependencies.
 
-   All MC interop (CompoundTag/ListTag) is installed by mc-1.20.1/installer_core.clj.
+   All MC interop (CompoundTag/ListTag) is installed by the selected Minecraft component.
    Content code calls wrapper functions; they lookup from [:platform :nbt-ops]."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))

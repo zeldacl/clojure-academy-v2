@@ -11,9 +11,9 @@
 | **`api`** | 对外 Java 接口（如无线/能量的 `acapi` 包），供 Java 与可选互操作 | 不含游戏逻辑 |
 | **`mcmod`** | 协议与 DSL：`defblock`/`defitem`/`deftile`、`protocol.metadata`、GUI/NBT/事件元数据、`platform.*` 抽象 | **不得**引用 `net.minecraft.*` 或 Loader API |
 | **`ac`** | 内容与域逻辑：无线、能量、`content/*` 入口、方块/物品具体实现、网络与 GUI 业务 | **不得**引用 Forge/Fabric/Minecraft 类；通过 `mcmod` 协议与 `acapi` 边界交互 |
-| **`forge-1.20.1`** | `@Mod`、注册表、`DeferredRegister`、事件桥、Java 桥（BlockEntity、Menu 等） | **不得**依赖 `cn.li.ac.*` 命名空间（通过 `mcmod.content` + `lifecycle` 间接拉起 `ac`） |
+| **`forge target`** | `@Mod`、注册表、`DeferredRegister`、事件桥、Java 桥（BlockEntity、Menu 等） | **不得**依赖 `cn.li.ac.*` 命名空间（通过 `mcmod.content` + `lifecycle` 间接拉起 `ac`） |
 
-**依赖红线**：`ac` ↔ `forge-1.20.1` 无直接依赖；二者只共同依赖 `mcmod`（及 `api`）。
+**依赖红线**：`ac` ↔ `forge target` 无直接依赖；二者只共同依赖 `mcmod`（及 `api`）。
 
 ---
 
@@ -53,7 +53,7 @@
 ## 4. 启动顺序（Forge）
 
 1. Java **`@Mod`** 构造 / 早期入口调用 Clojure **`cn.li.forge1201.init/init-from-java`**。
-2. **`init-from-java`**：`platform.dispatch/*platform-version*` → `:forge-1.20.1`，**`cn.li.mcmod.content/ensure-content-init-registered!`**（内部 `requiring-resolve` **`cn.li.ac.core/init`**，使 **`lifecycle/register-content-init!`** 已执行），再 **`lifecycle/run-content-init!`**。
+2. **`init-from-java`**：`platform.dispatch/*platform-version*` → `:forge target`，**`cn.li.mcmod.content/ensure-content-init-registered!`**（内部 `requiring-resolve` **`cn.li.ac.core/init`**，使 **`lifecycle/register-content-init!`** 已执行），再 **`lifecycle/run-content-init!`**。
 3. **`cn.li.ac.core/init`**（内容初始化）大致顺序：
    - 注入 mod-id、GUI 平台实现、slot validators、resource 解析等；
    - **`wd/init-world-data!`**、能量/无线 Java API bridge；
@@ -78,13 +78,13 @@
 ## 6. 与 DataGenerator 的关系
 
 - **定义**在 **`mcmod`**（`blockstate_definition`、`blockstate_properties`）。
-- **生成**在 **`forge-1.20.1`** 的 **`cn.li.forge1201.datagen.*`**，由 **`DataGeneratorSetup`** 把 `GatherDataEvent` 交给 Clojure。
+- **生成**在 **`forge target`** 的 **`cn.li.forge1201.datagen.*`**，由 **`DataGeneratorSetup`** 把 `GatherDataEvent` 交给 Clojure。
 
 ---
 
 ## 7. Fabric
 
-`fabric-1.20.1` 目录可保留对等适配；**根 `settings.gradle` 默认不 include**。启用后应复用同一套 **`mcmod` registry + `ac` 内容**，仅替换平台入口与桥接实现。
+`fabric target` 目录可保留对等适配；**根 `settings.gradle` 默认不 include**。启用后应复用同一套 **`mcmod` registry + `ac` 内容**，仅替换平台入口与桥接实现。
 
 ---
 

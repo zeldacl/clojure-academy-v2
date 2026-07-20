@@ -1,0 +1,9 @@
+{
+  "type": "minecraft:smelting",
+  "cookingtime": 200,
+  "experience": 0.7,
+  "ingredient": {
+    "item": "my_mod:constrained_ore"
+  },
+  "result": "my_mod:constraint_ingot"
+}

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "my_mod:converter_rf_output"
+    }
+  ],
+  "result": {
+    "item": "my_mod:converter_rf_input"
+  }
+}

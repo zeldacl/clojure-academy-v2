@@ -8,10 +8,10 @@
 ## Architecture Red Lines For Tests
 - `ac` owns gameplay/domain rules and gameplay contract assertions.
 - `mcmod` only tests platform-neutral foundation contracts (DSL/metadata/parsing/network shapes), no gameplay semantics.
-- `forge-1.20.1` keeps `GameTest` as a thin runtime adapter check (registration, datapack loading, minimal world-level execution), no duplicated gameplay logic.
+- `forge target` keeps `GameTest` as a thin runtime adapter check (registration, datapack loading, minimal world-level execution), no duplicated gameplay logic.
 
 ## Out of Scope (This Iteration)
-- Fabric Clojure unit test runner / `fabric-1.20.1` `*_test.clj` 自动发现执行（模块已 include，仅 compile/datagen 烟雾维护）。
+- Fabric Clojure unit test runner / `fabric target` `*_test.clj` 自动发现执行（模块已 include，仅 compile/datagen 烟雾维护）。
 - Fabric GameTest execution.
 
 ## Fabric Extension Hooks (Reserved)
@@ -61,8 +61,8 @@ Refactors are allowed when existing structure blocks reliable tests, but each re
     - `-PcheckNsOnly=ns.a,ns.b`
     - `-PcheckNsFile=<path>`
   - Then use:
-    - `:forge-1.20.1:bisectCompileClojure`
-    - `:forge-1.20.1:bisectCheckClojure`
+    - `:platform:bisectCompileClojure`
+    - `:platform:bisectCheckClojure`
 - **GameTest startup failure (before any tests execute)**
   - Treat as runtime bootstrap/data issue, not gameplay contract issue.
   - Prioritize datapack/registry consistency checks.

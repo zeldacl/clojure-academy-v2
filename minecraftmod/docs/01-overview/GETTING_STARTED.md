@@ -1,52 +1,33 @@
 # 构建、验证与排障速查
 
-在包含根目录 `settings.gradle` 的 `minecraftmod` 目录执行命令。默认子工程为 `api`、`mcmod`、`ac`、`forge-1.20.1`（Fabric 默认未启用）。
+在包含根目录 `settings.gradle` 的 `minecraftmod` 目录执行命令。当前根工程为 `api`、`mcmod`、`ac`、`:platform`；平台目标由 `-PplatformTarget=<target-id>` 选择，默认目标来自 `platform-targets.json`。
 
 ## 环境
 
 - Java 17
-- Gradle Wrapper（`gradlew.bat` / `gradlew`）
+- Gradle Wrapper：`gradlew.bat` / `gradlew`
 
 ## 常用任务（Windows）
 
 | 目标 | 命令 |
 |------|------|
-| 运行 Forge 客户端 | `.\gradlew.bat :forge-1.20.1:runClient` |
-| 运行 Forge 服务端 | `.\gradlew.bat :forge-1.20.1:runServer` |
-| 运行 DataGen | `.\gradlew.bat :forge-1.20.1:runData` |
-| 快速编译（ac） | `.\gradlew.bat :ac:compileClojure` |
-| 快速编译（mcmod） | `.\gradlew.bat :mcmod:compileClojure` |
-| 快速编译（forge） | `.\gradlew.bat :forge-1.20.1:compileClojure` |
-| 刷新 Java/LSP | `.\gradlew.bat :forge-1.20.1:classes` |
-| 全量构建 | `.\gradlew.bat build` |
+| 运行默认 Forge 客户端 | `.\gradlew.bat :platform:runClient` |
+| 运行默认 Forge 服务端 | `.\gradlew.bat :platform:runServer` |
+| 运行默认 Forge DataGen | `.\gradlew.bat :platform:runData` |
+| 运行 Fabric 客户端 | `.\gradlew.bat :platform:runClient "-PplatformTarget=fabric target"` |
+| 快速编译 core | `.\gradlew.bat :ac:compileClojure :mcmod:compileClojure` |
+| 快速编译 Forge target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge target"` |
+| 快速编译 Fabric target | `.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric target"` |
+| 架构门禁 | `.\gradlew.bat verifyCurrentPlatforms` |
 
 ## 推荐验证流程
 
-1. 改动后先做快速编译：`.\gradlew.bat :forge-1.20.1:compileClojure`
-2. 跑基线验证：`.\gradlew.bat verifyForgeBaseline`
-3. 跑测试管线：`.\gradlew.bat verifyForgeTesting`
-4. GameTest 需要单独观察时：`.\gradlew.bat runForgeGameTests` + `.\gradlew.bat validateForgeGameTestLog`
+1. 先跑 `verifyCurrentPlatforms`，确认旧目录、旧 SPI、manifest drift、target 硬编码和生成残留没有回归。
+2. 对当前修改涉及的 loader 跑 `:platform:compileJava` / `:platform:compileClojure`，并显式传入对应 `-PplatformTarget=...`。
+3. 需要跨 loader 对照时，用两次独立 Gradle invocation 或 CI matrix 分别跑 Forge/Fabric target。
 
-## 故障定位入口
+## 输出
 
-- 编译问题二分定位：`.\gradlew.bat :forge-1.20.1:bisectCompileClojure`
-- check 问题二分定位：`.\gradlew.bat :forge-1.20.1:bisectCheckClojure`
-- 指定命名空间最小复现：
-  - `-PcompileNsOnly=ns.a,ns.b`
-  - `-PcheckNsOnly=ns.a,ns.b`
-  - `-PcheckNsFile=build/bisect-check-subset.txt`
-
-## 产物与输出
-
-- 打包产物通常位于各子工程 `build/libs/`。
-- DataGen 输出目录由 `forge-1.20.1/build.gradle` 的 data run 配置决定，默认 `forge-1.20.1/src/generated/resources/`。
-
-## Fabric（可选）
-
-若在 [`settings.gradle`](../../settings.gradle) 取消注释 `include 'fabric-1.20.1'`，再执行 Fabric 对应任务。Fabric 不在默认构建与验证基线中。
-
-## 延伸阅读
-
-- 项目布局：[PROJECT_LAYOUT.md](PROJECT_LAYOUT.md)
-- 架构总览：[Runtime_And_DSL_CN.md](../02-architecture/Runtime_And_DSL_CN.md)
-- 验证范围：[../testing/IMPLEMENTATION_SCOPE.md](../testing/IMPLEMENTATION_SCOPE.md)
+- 平台产物位于 `platform-target/build/libs/`。
+- target metadata 生成到 `platform-target/build/generated/target-metadata/META-INF/academy-target.edn`。
+- DataGen 输出位于 `platform-target/build/generated/datagen/<target-id>/`，不写回源码目录。

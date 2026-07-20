@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "P": {
+      "item": "my_mod:reinforced_iron_plate"
+    },
+    "R": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "pattern": [
+    " P ",
+    "PRP",
+    " P "
+  ],
+  "result": {
+    "item": "my_mod:machine_frame"
+  },
+  "show_notification": true
+}

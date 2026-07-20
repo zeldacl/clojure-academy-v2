@@ -1,0 +1,403 @@
+import groovy.json.JsonSlurper
+
+def catalog = new JsonSlurper().parse(rootProject.file("platform-targets.json"))
+def targetId = (findProperty("platformTarget") ?: catalog.defaultTarget).toString()
+def target = catalog.targets[targetId]
+
+if (target == null) {
+    throw new GradleException("Unknown platformTarget '${targetId}'. Known targets: ${catalog.targets.keySet().sort()}")
+}
+if (target.loader == "none") {
+    apply plugin: "java-library"
+} else {
+    extensions.extraProperties.set("loom.platform", target.loader)
+    System.setProperty("loom.platform", target.loader)
+    apply plugin: "dev.architectury.loom"
+    apply plugin: "dev.clojurephant.clojure"
+    apply plugin: "com.github.johnrengelman.shadow"
+}
+
+def componentDir = { String component, String child ->
+    rootProject.file("${component}/${child}")
+}
+
+def cljNamespaceFromFile = { File root, File file ->
+    root.toPath()
+        .relativize(file.toPath())
+        .toString()
+        .replace("\\", "/")
+        .replaceAll(/\.clj$/, "")
+        .replace("/", ".")
+        .replace("_", "-")
+}
+
+def collectClojureNamespaces = { Collection<File> dirs ->
+    def result = new TreeSet<String>()
+    dirs.each { File dir ->
+        if (dir.isDirectory()) {
+            fileTree(dir) { include "**/*.clj" }.files.each { File file ->
+                result << cljNamespaceFromFile(dir, file)
+            }
+        }
+    }
+    result
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of((target.javaVersion ?: 17) as int)
+    }
+}
+
+if (target.loader != "none") {
+    evaluationDependsOn(":mcmod")
+    evaluationDependsOn(":ac")
+
+    def mcmodProject = project(":mcmod")
+    def acProject = project(":ac")
+    def releaseAot = rootProject.hasProperty("releaseAot")
+    def sourceComponents = target.sourceComponents.collect { it.toString() }
+    def testComponents = (target.testComponents ?: []).collect { it.toString() }
+    def generatedTargetResources = layout.buildDirectory.dir("generated/target-metadata")
+    def generatedDatagenResources = layout.buildDirectory.dir("generated/datagen/${target.id}")
+
+    sourceSets {
+        main {
+            java.srcDir rootProject.file("api/src/main/java")
+            sourceComponents.each { component ->
+                java.srcDir componentDir(component, "java")
+                clojure.srcDir componentDir(component, "clojure")
+                resources.srcDir componentDir(component, "resources")
+            }
+            resources.srcDir generatedTargetResources
+            resources.srcDir generatedDatagenResources
+        }
+        test {
+            testComponents.each { component ->
+                java.srcDir componentDir(component, "java")
+                clojure.srcDir componentDir(component, "clojure")
+                resources.srcDir componentDir(component, "resources")
+            }
+        }
+    }
+
+    def targetEdn = generatedTargetResources.map { it.file("META-INF/academy-target.edn") }
+    tasks.register("generatePlatformTargetMetadata") {
+        inputs.file rootProject.file("platform-targets.json")
+        inputs.property "platformTarget", target.id
+        outputs.file targetEdn
+        doLast {
+            def file = targetEdn.get().asFile
+            file.parentFile.mkdirs()
+            file.text = toEdn(target) + System.lineSeparator()
+        }
+    }
+
+    if (target.loader == "forge") {
+        loom {
+            forge {}
+        }
+    }
+
+    processResources {
+        dependsOn tasks.named("generatePlatformTargetMetadata")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        exclude "**/*.clj", "**/*.cljc"
+        def replaceProperties = [
+            mod_id: rootProject.findProperty("mod_id"),
+            mod_name: rootProject.findProperty("mod_name"),
+            mod_version: rootProject.findProperty("mod_version"),
+            mod_authors: rootProject.findProperty("mod_authors"),
+            mod_description: rootProject.findProperty("mod_description")
+        ]
+        inputs.properties replaceProperties
+        filesMatching(["META-INF/mods.toml", "fabric.mod.json"]) {
+            expand replaceProperties + [project: project]
+        }
+        rename "^mixins\\.my_mod\\.json\$", "mixins.${rootProject.findProperty("mod_id")}.json"
+        rename "^my_mod\\.mixins\\.json\$", "${rootProject.findProperty("mod_id")}.mixins.json"
+        filesMatching(["**/*.xml", "**/*.json"]) {
+            filter { String line -> line.replace("my_mod:", rootProject.findProperty("mod_id") + ":") }
+        }
+    }
+
+    dependencies {
+        compileOnly mcmodProject.sourceSets.main.output
+        runtimeOnly mcmodProject.sourceSets.main.output
+        runtimeOnly acProject.sourceSets.main.output
+        implementation "org.clojure:clojure:1.12.4"
+        implementation "metosin:malli:0.16.4"
+        implementation "org.clojure:spec.alpha:0.3.218"
+        implementation "org.clojure:core.specs.alpha:0.2.62"
+        testImplementation "org.clojure:test.check:1.1.1"
+
+        minecraft target.dependencies.minecraft
+        mappings loom.officialMojangMappings()
+
+        if (target.loader == "forge") {
+            add("forge", target.dependencies.loader)
+            compileOnly "com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60"
+            add("modCompileOnlyApi", target.dependencies.jeiCommonApi)
+            add("modCompileOnlyApi", target.dependencies.jeiForgeApi)
+            add("modRuntimeOnly", target.dependencies.jeiForgeRuntime)
+            add("modRuntimeOnly", files(rootProject.file(target.dependencies.sparkRuntimeFile)))
+        } else if (target.loader == "fabric") {
+            add("modImplementation", target.dependencies.fabricLoader)
+            add("modImplementation", target.dependencies.fabricApi)
+            compileOnly "com.google.code.findbugs:jsr305:3.0.2"
+        } else {
+            throw new GradleException("Unsupported loader '${target.loader}' for target '${target.id}'")
+        }
+    }
+
+    clojure {
+        builds {
+            main {
+                aotAll()
+                reflection = "fail"
+            }
+        }
+    }
+
+    tasks.named("compileJava").configure {
+        dependsOn acProject.tasks.named("classes")
+        dependsOn mcmodProject.tasks.named("classes")
+    }
+
+    tasks.named("compileClojure").configure { task ->
+        dependsOn "compileJava"
+        classpath.from(files(layout.buildDirectory.dir("classes/java/main")))
+        if (rootProject.hasProperty("releaseAot")) {
+            def manifests = [
+                rootProject.file("platform-src/common/aot-manifest.edn"),
+                rootProject.file("platform-src/minecraft/version/mc-1201/aot-manifest.edn"),
+                rootProject.file("platform-src/loader/${target.loader}/aot-manifest.edn")
+            ]
+            def runtimeNamespaces = new LinkedHashSet<String>()
+            manifests.findAll { it.isFile() }.each { File manifest ->
+                manifest.readLines().collect { it.trim() }.findAll { line ->
+                    line ==~ /^"[^"]+"$/
+                }.each { line ->
+                    runtimeNamespaces << line.substring(1, line.length() - 1)
+                }
+            }
+            task.namespaces.set(runtimeNamespaces)
+        }
+    }
+
+    def clojureAotDir = layout.buildDirectory.dir("clojure/main")
+    sourceSets.main.output.dir(clojureAotDir, builtBy: tasks.named("compileClojure"))
+    tasks.named("compileClojure").configure { task ->
+        if (task.metaClass.hasProperty(task, "destinationDirectory")) {
+            task.destinationDirectory = clojureAotDir
+        } else if (task.metaClass.hasProperty(task, "destinationDir")) {
+            task.destinationDir = clojureAotDir.get().asFile
+        }
+    }
+
+    def copyClojureClassesToJavaOutput = tasks.register("copyClojureClassesToJavaOutput", Copy) {
+        from clojureAotDir
+        into layout.buildDirectory.dir("classes/java/main")
+        dependsOn tasks.named("compileClojure")
+        include "**/*.class"
+    }
+
+    tasks.named("classes").configure {
+        dependsOn copyClojureClassesToJavaOutput
+    }
+
+    tasks.named("jar", Jar).configure {
+        dependsOn copyClojureClassesToJavaOutput
+        archiveBaseName = target.artifact.baseName
+        archiveClassifier = target.artifact.classifier
+    }
+
+    shadowJar {
+        configurations = [project.configurations.runtimeClasspath]
+        archiveClassifier = "${target.artifact.classifier}-shadow"
+        dependencies {
+            include(dependency("org.clojure:clojure"))
+            include(dependency("metosin:malli"))
+            include(dependency("org.clojure:spec.alpha"))
+            include(dependency("org.clojure:core.specs.alpha"))
+        }
+    }
+
+    def configurePackagedRuntimeProject = { Project contentProject, String label ->
+        def javaClasses = contentProject.layout.buildDirectory.dir("classes/java/main")
+        def clojureClasses = contentProject.layout.buildDirectory.dir(releaseAot ? "clojure/main-stripped" : "clojure/main")
+        def resources = contentProject.layout.buildDirectory.dir("resources/main")
+        def packagingDeps = releaseAot
+            ? [contentProject.tasks.named("classes"), contentProject.tasks.named("stripAotLvt")]
+            : [contentProject.tasks.named("classes")]
+
+        tasks.named("jar", Jar).configure {
+            dependsOn packagingDeps
+            from(javaClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            from(clojureClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            from(resources) {
+                exclude "META-INF/MANIFEST.MF"
+            }
+        }
+
+        tasks.matching { it.name == "shadowJar" }.configureEach {
+            dependsOn packagingDeps
+            from(javaClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            from(clojureClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            from(resources) {
+                exclude "META-INF/MANIFEST.MF"
+            }
+        }
+
+        tasks.named("processResources", Copy).configure {
+            dependsOn contentProject.tasks.named("processResources")
+            from(resources) {
+                exclude "META-INF/MANIFEST.MF"
+            }
+        }
+
+        def copyTask = tasks.register("copy${label}RuntimeClassesToPlatformOutput", Copy) {
+            dependsOn packagingDeps
+            group = "build"
+            description = "Mirror ${label} runtime classes into the selected platform target output."
+            mustRunAfter tasks.named("compileJava")
+            includeEmptyDirs = false
+            duplicatesStrategy = DuplicatesStrategy.INCLUDE
+            from(javaClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            from(clojureClasses) {
+                include "**/*.class"
+                exclude "META-INF/MANIFEST.MF"
+            }
+            into layout.buildDirectory.dir("classes/java/main")
+            doFirst {
+                def outDir = layout.buildDirectory.dir("classes/java/main").get().asFile
+                if (outDir.isDirectory()) {
+                    outDir.eachFileRecurse { File file ->
+                        if (file.isFile() && (file.name.endsWith(".clj") || file.name.endsWith(".cljc"))) {
+                            file.delete()
+                        }
+                    }
+                }
+            }
+        }
+
+        tasks.named("classes").configure {
+            dependsOn copyTask
+        }
+        tasks.named("compileClojure").configure {
+            dependsOn copyTask
+        }
+        tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
+            dependsOn copyTask
+        }
+    }
+
+    configurePackagedRuntimeProject(mcmodProject, "Mcmod")
+    configurePackagedRuntimeProject(acProject, "Ac")
+
+    remapJar {
+        inputFile = target.loader == "fabric" ? shadowJar.archiveFile : jar.archiveFile
+        dependsOn target.loader == "fabric" ? shadowJar : jar
+    }
+
+    loom {
+        runs {
+            client {
+                client()
+                configName = "${target.id} Client"
+                runDir = "run/${target.id}/client"
+            }
+            server {
+                server()
+                configName = "${target.id} Server"
+                runDir = "run/${target.id}/server"
+                if (target.loader == "forge") {
+                    property "forge.enabledGameTestNamespaces", "${rootProject.findProperty("mod_id")},minecraft"
+                }
+            }
+            if (target.loader == "forge") {
+                data {
+                    data()
+                    configName = "${target.id} Data"
+                    runDir = "run/${target.id}/data"
+                    programArgs "--mod", rootProject.findProperty("mod_id"), "--all",
+                        "--output", generatedDatagenResources.get().asFile.absolutePath,
+                        "--existing", rootProject.file("platform-src/loader/forge/src/main/resources").absolutePath,
+                        "--existing", project(":ac").file("src/main/resources").absolutePath
+                }
+            } else if (target.loader == "fabric") {
+                datagen {
+                    server()
+                    configName = "${target.id} DataGen"
+                    runDir = "run/${target.id}/data"
+                    vmArg "-Dfabric-api.datagen"
+                    vmArg "-Dfabric-api.datagen.output-dir=${generatedDatagenResources.get().asFile.absolutePath}"
+                    vmArg "-Dfabric-api.datagen.modid=${rootProject.findProperty("mod_id")}"
+                }
+            }
+        }
+    }
+
+    tasks.register("verifyRuntimeClasspathPurity") {
+        group = "verification"
+        dependsOn copyClojureClassesToJavaOutput
+        doLast {
+            def outDir = layout.buildDirectory.dir("classes/java/main").get().asFile
+            def offenders = []
+            if (outDir.isDirectory()) {
+                outDir.eachFileRecurse { File file ->
+                    if (file.isFile() && (file.name.endsWith(".clj") || file.name.endsWith(".cljc"))) {
+                        offenders << file
+                    }
+                }
+            }
+            if (!offenders.isEmpty()) {
+                throw new GradleException("Runtime classpath is not AOT-pure: " + offenders.take(20))
+            }
+        }
+    }
+
+    tasks.register("runPlatformClojureTests", JavaExec) {
+        group = "verification"
+        dependsOn tasks.named("compileTestClojure"), tasks.named("classes")
+        workingDir = project.projectDir
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = "clojure.main"
+        args "-m", target.loader == "forge" ? "cn.li.forge1201.test-runner" : "clojure.test"
+    }
+}
+
+static String toEdn(Object value) {
+    if (value == null) {
+        return "nil"
+    }
+    if (value instanceof Map) {
+        return "{" + value.collect { k, v -> "${toEdnKeyword(k.toString())} ${toEdn(v)}" }.join(" ") + "}"
+    }
+    if (value instanceof Collection) {
+        return "[" + value.collect { toEdn(it) }.join(" ") + "]"
+    }
+    if (value instanceof Number || value instanceof Boolean) {
+        return value.toString()
+    }
+    return '"' + value.toString().replace("\\", "\\\\").replace("\"", "\\\"") + '"'
+}
+
+static String toEdnKeyword(String key) {
+    return ":" + key.replaceAll(/([a-z])([A-Z])/, "\$1-\$2").toLowerCase()
+}

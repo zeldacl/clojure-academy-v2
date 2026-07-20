@@ -1,0 +1,10 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "my_mod:wafer"
+  },
+  "mode": "etch",
+  "output": {
+    "item": "my_mod:silbarn"
+  }
+}

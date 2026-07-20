@@ -1,0 +1,20 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "my_mod:block/ability_interferer"
+      },
+      "when": {
+        "on": "true"
+      }
+    },
+    {
+      "apply": {
+        "model": "my_mod:block/ability_interf_off"
+      },
+      "when": {
+        "on": "false"
+      }
+    }
+  ]
+}

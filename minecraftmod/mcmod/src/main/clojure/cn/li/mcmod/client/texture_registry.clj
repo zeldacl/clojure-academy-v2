@@ -2,7 +2,7 @@
   "Platform-neutral registry for named texture paths.
 
   Content modules register keyword → path-string mappings during client init.
-  Platform layers (mc-1.20.1, forge, fabric) resolve path strings to
+  Platform components resolve path strings to
   platform-specific texture handles at render time."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.registry :as registry]))

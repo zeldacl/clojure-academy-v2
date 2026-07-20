@@ -1,0 +1,35 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_crystal_pure": {
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "my_mod:crystal_pure"
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "my_mod:node_advanced"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_crystal_pure",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "my_mod:node_advanced"
+    ]
+  },
+  "sends_telemetry_event": false
+}

@@ -6,17 +6,17 @@
 
 ## 核心契约对象
 
-### `PlatformBootstrap`
+### `platform target bootstrap`
 
 职责：
 
 - 提供稳定 `platformId()`。
 - 在 `initialize()` 中安装该平台所需的一次性桥接逻辑。
-- 由 `PlatformBootstraps.initialize(platformId)` 通过 Java `ServiceLoader` 发现并调用。
+- 由 `platform target bootstrap.initialize(platformId)` 通过 Java `ServiceLoader` 发现并调用。
 
 当前现状：
 
-- `api` 和 `mcmod` 下各有一份 `PlatformBootstrap` / `PlatformBootstraps` 定义。
+- `api` 和 `mcmod` 下各有一份 `platform target bootstrap` / `platform target bootstrap` 定义。
 - 后续如要扩字段，必须同步维护两处，避免契约漂移。
 
 ### `ContentInitBootstrap`
@@ -70,8 +70,8 @@
 
 ## 命名规则
 
-- 平台 ID：`forge-1.20.1`、`fabric-1.20.1`、`neoforge-1.20.1`
-- Java 包：`cn.li.forge1201`、`cn.li.fabric1201`、`cn.li.neoforge1201`
+- 平台 ID：`forge target`、`fabric target`、`future-loader target`
+- Java 包：`cn.li.forge1201`、`cn.li.fabric1201`、`cn.li.future-loader1201`
 - Clojure namespace：与 Java 包保持一一映射风格
 
 禁止：

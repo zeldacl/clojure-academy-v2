@@ -1,0 +1,20 @@
+{
+  "parent": "item/generated",
+  "overrides": [
+    {
+      "model": "my_mod:item/energy_unit_full",
+      "predicate": {
+        "my_mod:energy": 1.0
+      }
+    },
+    {
+      "model": "my_mod:item/energy_unit_half",
+      "predicate": {
+        "my_mod:energy": 0.5
+      }
+    }
+  ],
+  "textures": {
+    "layer0": "my_mod:item/energy_unit_empty"
+  }
+}

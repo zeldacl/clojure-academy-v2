@@ -2,17 +2,17 @@
 
 ## Purpose
 
-规划如何把当前散落在平台模块（尤其 `forge-1.20.1`）中的构建魔法提取为统一 convention，从而降低新增 Loader / 新版本模块的复制成本。
+规划如何把当前散落在平台模块（尤其 `forge target`）中的构建魔法提取为统一 convention，从而降低新增 Loader / 新版本模块的复制成本。
 
 ## 当前痛点
 
-- `forge-1.20.1/build.gradle` 承担了大量 AOT、remap、sourceSets 注入、字节码修正、运行任务前置依赖逻辑。
-- `fabric-1.20.1/build.gradle` 也存在与其相似的共享源码注入模式。
+- `platform-src/loader/forge/build.gradle` 承担了大量 AOT、remap、sourceSets 注入、字节码修正、运行任务前置依赖逻辑。
+- `platform-src/loader/fabric/build.gradle` 也存在与其相似的共享源码注入模式。
 - 新增平台或版本时，容易复制 build 文件并手工修改，导致逻辑漂移。
 
 ## 当前仓库重复项映射（Forge/Fabric）
 
-| 重复主题 | Forge (`forge-1.20.1/build.gradle`) | Fabric (`fabric-1.20.1/build.gradle`) | 处理决策 |
+| 重复主题 | Forge (`platform-src/loader/forge/build.gradle`) | Fabric (`platform-src/loader/fabric/build.gradle`) | 处理决策 |
 |---|---|---|---|
 | 注入共享源码 sourceSets | `sourceSets.main.{clojure,java,resources}` 注入 `ac/mcmod/api` | 同结构注入 `ac/mcmod/api` | **已抽取**到 `gradle/platform_build_helpers.gradle` 的 `configureInjectedPlatformSources` |
 | Clojure 核心依赖（implementation） | `org.clojure:*` 三件套 | `org.clojure:*` 三件套 | **已抽取**到 `addSharedClojureRuntimeDeps` |
@@ -48,7 +48,7 @@
 
 目标：
 
-- 通过 `buildSrc` 或本地 convention plugin 为 `forge-*` / `neoforge-*` / `fabric-*` 提供公共构建骨架。
+- 通过 `buildSrc` 或本地 convention plugin 为 `forge-*` / `future-loader target` / `fabric-*` 提供公共构建骨架。
 - 平台模块只声明差异项：依赖、入口、映射、Loader API 与少量任务差异。
 
 ## 预期收益
@@ -69,4 +69,4 @@
 
 1. 新建一个 `loader-version` 模块时，不再需要复制大段现有 build 脚本。
 2. AOT / remap / class copy 的关键逻辑只维护一份主实现。
-3. `Forge`、`NeoForge`、`Fabric` 平台模块的差异大部分收敛为依赖与入口差异。
+3. `Forge`、`future loader`、`Fabric` 平台模块的差异大部分收敛为依赖与入口差异。

@@ -48,7 +48,7 @@
   Called by mcmod during client initialization."
   []
   ;; Register entity render namespaces into the neutral mcmod registry
-  ;; so that mc-1.20.1 Java renderer classes can resolve them without
+  ;; so that Minecraft-version Java renderer classes can resolve them without
   ;; hardcoding AC namespace strings.
   (entity-render-registry/register-entity-render-ns!
     "silbarn" "cn.li.ac.content.entities.silbarn-render")

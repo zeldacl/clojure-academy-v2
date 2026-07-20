@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "tag": "minecraft:copper_ores"
+  },
+  "mode": "refine",
+  "output": {
+    "count": 2,
+    "item": "minecraft:copper_ingot"
+  }
+}

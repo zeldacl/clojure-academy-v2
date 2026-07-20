@@ -1,35 +1,22 @@
 pluginManagement {
-  repositories {
+    repositories {
         maven { url "https://maven.architectury.dev" }
-        maven { url "https://maven.fabricmc.net" }    // 必须：Loom 底层依赖在此
+        maven { url "https://maven.fabricmc.net" }
         maven { url "https://maven.minecraftforge.net" }
         gradlePluginPortal()
         mavenCentral()
-        maven { 
-            url = 'https://maven.blamejared.com'
-            name = 'BlameJared Maven'
+        maven {
+            url = "https://maven.blamejared.com"
+            name = "BlameJared Maven"
         }
-  }
+    }
 }
 
-// 第一步：先应用foojay插件（Settings级别必须在这里配置）
-// plugins {
-//     id "org.gradle.toolchains.foojay-resolver-convention" version "0.8.0"
-// }
+rootProject.name = "clojure-minecraft-mod"
 
-rootProject.name = 'clojure-minecraft-mod'
+include "api"
+include "mcmod"
+include "ac"
+include "platform-target"
 
-include 'api'
-include 'mcmod'
-include 'ac'
-include 'forge-1.20.1'
-include 'fabric-1.20.1'
-
-// 可选：全局配置foojay插件（指定JDK下载源等）
-// foojay {
-//     javaRuntime {
-//         vendor = "azul" // 指定JDK厂商（azul/adoptium等）
-//         operatingSystem = "windows" // 自动识别可省略
-//         architecture = "x86-64" // 自动识别可省略
-//     }
-// }
+project(":platform-target").name = "platform"

@@ -8,11 +8,11 @@
 
 推荐按 `loader-mcVersion` 命名：
 
-- `forge-1.20.1`
+- `forge target`
 - `forge-1.21.x`
-- `neoforge-1.20.1`
-- `neoforge-1.21.x`
-- `fabric-1.20.1`
+- `future-loader target`
+- `future-loader target`
+- `fabric target`
 - `fabric-1.21.x`
 
 ## 差异放置规则
@@ -36,7 +36,7 @@
 建议按“平台族”看待版本升级：
 
 - Forge 家族：保留一组相对对称的 `forge-*` 模块。
-- NeoForge 家族：以 Forge 平台模板为主要参照。
+- future loader 家族：以 Forge 平台模板为主要参照。
 - Fabric 家族：保持自身三入口（main/client/datagen）结构，但命名规范与共享契约保持一致。
 
 ## 升级路径建议
@@ -49,7 +49,7 @@
 - 复制上一个版本的平台模块骨架。
 - 只修改平台 API 适配、依赖版本、构建参数。
 
-### 切换 Loader（例如 Forge → NeoForge）
+### 切换 Loader（例如 Forge → future loader）
 
 - 共享层不动。
 - 以最近的 Forge 模块为模板，替换 Loader API 接线。

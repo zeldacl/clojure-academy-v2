@@ -10,8 +10,8 @@ During the AC structural refactor, two cross-module Java contract duplications w
 
 - `api/src/main/java/cn/li/acapi/energy/IEnergyCapable.java`
 - `mcmod/src/main/java/cn/li/mcmod/energy/IEnergyCapable.java`
-- `api/src/main/java/cn/li/acapi/platform/spi/PlatformBootstrap.java`
-- `mcmod/src/main/java/cn/li/mcmod/platform/spi/PlatformBootstrap.java`
+- `api/src/main/java/cn/li/acapi/platform/spi/platform target bootstrap.java`
+- `mcmod/src/main/java/cn/li/mcmod/platform/spi/platform target bootstrap.java`
 
 The active runtime wiring currently depends on the `mcmod` contracts in several places, while `api` is intended to be the stable public contract surface. Moving or deleting these interfaces without a migration path would risk binary/source churn across Forge/Fabric glue, Clojure `deftype` implementations, and any external consumers.
 
@@ -50,7 +50,7 @@ Positive:
 Trade-offs:
 
 - Duplicate Java contract names remain temporarily.
-- New developers must check this ADR before moving `IEnergyCapable` or `PlatformBootstrap`.
+- New developers must check this ADR before moving `IEnergyCapable` or `platform target bootstrap`.
 
 ## Current validation expectation
 

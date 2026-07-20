@@ -33,7 +33,7 @@
 
 ;; --- kind → native renderer key mapping ---
 ;; Content modules map their kind keywords to platform-neutral renderer keys.
-;; The mc-1.20.1 renderer dispatcher uses these keys (not raw kind names) in
+;; The Minecraft renderer dispatcher uses these keys (not raw kind names) in
 ;; switch statements, keeping content-owned kind strings out of the platform layer.
 
 (defn register-kind-renderer-key!

@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "C": {
+      "item": "my_mod:constraint_ingot"
+    },
+    "E": {
+      "item": "my_mod:energy_convert_component"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    }
+  },
+  "pattern": [
+    "C",
+    "M",
+    "E"
+  ],
+  "result": {
+    "item": "my_mod:wind_gen_base"
+  }
+}

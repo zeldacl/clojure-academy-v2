@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "a": {
+      "item": "my_mod:energy_unit"
+    },
+    "b": {
+      "item": "my_mod:machine_frame"
+    },
+    "c": {
+      "item": "my_mod:constraint_plate"
+    },
+    "d": {
+      "item": "my_mod:energy_convert_component"
+    }
+  },
+  "pattern": [
+    "abc",
+    " d "
+  ],
+  "result": {
+    "item": "my_mod:converter_rf_input"
+  },
+  "show_notification": true
+}

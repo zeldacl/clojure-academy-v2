@@ -2,7 +2,7 @@
 
 > 状态标签：**现行**（架构文档）
 
-本文档合并自 GUI 架构重构报告、实现总结、平台 GUI 实现说明与槽位管理重构。**当前默认目标为 Forge 1.20.1**；Fabric 适配代码在 `fabric-1.20.1/` 中，维护级别为 minimal maintenance，至少保证 compile 与边界门禁。
+本文档合并自 GUI 架构重构报告、实现总结、平台 GUI 实现说明与槽位管理重构。**当前默认目标为 Forge 1.20.1**；Fabric 适配代码在 `platform-src/loader/fabric/` 中，维护级别为 minimal maintenance，至少保证 compile 与边界门禁。
 
 ---
 
@@ -40,7 +40,7 @@
 - **`cn.li.ac.core`**：`init` 中注册 slot validators、注入 GUI 平台回调；client init 通过 `requiring-resolve` 安装 Terminal UI hook（`terminal.client.actions`）并加载 client renderer。
 - **`cn.li.ac.terminal.*`**（服务端）与 **`cn.li.ac.terminal.client.*`**（客户端）：数据终端 catalog、会话状态、网络 handler、shell 与 app launcher；见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)。
 
-### forge-1.20.1（适配）
+### forge target（适配）
 
 - **`cn.li.forge1201.gui.*`**：菜单桥接、网络、注册。
 

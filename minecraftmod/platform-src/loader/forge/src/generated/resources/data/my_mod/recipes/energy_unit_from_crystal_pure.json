@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "my_mod:constraint_plate"
+    },
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "P": {
+      "item": "my_mod:crystal_pure"
+    }
+  },
+  "pattern": [
+    " C ",
+    "CPC",
+    " D "
+  ],
+  "result": {
+    "count": 4,
+    "item": "my_mod:energy_unit"
+  },
+  "show_notification": true
+}

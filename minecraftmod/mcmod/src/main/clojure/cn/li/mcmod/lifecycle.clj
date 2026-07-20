@@ -103,7 +103,7 @@
 
 (defn register-datagen-metadata-init!
   "Register content-owned datagen metadata initialization (fn [] ...).
-   Platform datagen entrypoints execute these hooks through mc-1.20.1
+   Platform datagen entrypoints execute these hooks through the selected Minecraft component
    shared setup utilities instead of referencing concrete content namespaces."
   [init-fn]
   (update-lifecycle! update :datagen-metadata-init-fns conj init-fn)

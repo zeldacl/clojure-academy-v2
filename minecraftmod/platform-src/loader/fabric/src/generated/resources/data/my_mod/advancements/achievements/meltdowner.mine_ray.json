@@ -1,0 +1,37 @@
+{
+  "parent": "my_mod:achievements/meltdowner.meltdowner",
+  "criteria": {
+    "c0": {
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "minecraft:book"
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "description": {
+      "translate": "advancement.my_mod.meltdowner.mine_ray.description"
+    },
+    "frame": "task",
+    "hidden": false,
+    "icon": {
+      "item": "minecraft:book"
+    },
+    "show_toast": true,
+    "title": {
+      "translate": "advancement.my_mod.meltdowner.mine_ray"
+    }
+  },
+  "requirements": [
+    [
+      "c0"
+    ]
+  ]
+}

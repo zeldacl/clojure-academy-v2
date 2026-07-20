@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "my_mod:crystal_ore"
+  },
+  "mode": "refine",
+  "output": {
+    "count": 4,
+    "item": "my_mod:crystal_low"
+  }
+}

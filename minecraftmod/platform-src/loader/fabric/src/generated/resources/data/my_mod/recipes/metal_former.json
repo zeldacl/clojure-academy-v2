@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "C": {
+      "item": "my_mod:constraint_plate"
+    },
+    "D": {
+      "item": "my_mod:calc_chip"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "S": {
+      "item": "minecraft:shears"
+    },
+    "U": {
+      "item": "my_mod:matter_unit"
+    }
+  },
+  "pattern": [
+    " S ",
+    "DMD",
+    "CUC"
+  ],
+  "result": {
+    "item": "my_mod:metal_former"
+  }
+}

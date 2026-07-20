@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "G": {
+      "item": "minecraft:glowstone_dust"
+    }
+  },
+  "pattern": [
+    "G",
+    "D"
+  ],
+  "result": {
+    "item": "my_mod:info_component"
+  }
+}

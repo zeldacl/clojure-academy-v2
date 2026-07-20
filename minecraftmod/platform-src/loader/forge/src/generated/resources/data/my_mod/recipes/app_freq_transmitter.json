@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "I": {
+      "item": "my_mod:info_component"
+    },
+    "R": {
+      "item": "my_mod:resonance_component"
+    }
+  },
+  "pattern": [
+    "R",
+    "D",
+    "I"
+  ],
+  "result": {
+    "item": "my_mod:app_freq_transmitter"
+  },
+  "show_notification": true
+}

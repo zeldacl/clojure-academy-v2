@@ -1,0 +1,31 @@
+{
+  "parent": "my_mod:achievements/vecmanip/storm_wing",
+  "criteria": {
+    "c0": {
+      "conditions": {
+        "criterion_id": "vecmanip.blood_retro"
+      },
+      "trigger": "my_mod:custom"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "description": {
+      "translate": "advancement.my_mod.vecmanip.blood_retro.description"
+    },
+    "frame": "task",
+    "hidden": false,
+    "icon": {
+      "item": "minecraft:book"
+    },
+    "show_toast": true,
+    "title": {
+      "translate": "advancement.my_mod.vecmanip.blood_retro"
+    }
+  },
+  "requirements": [
+    [
+      "c0"
+    ]
+  ]
+}

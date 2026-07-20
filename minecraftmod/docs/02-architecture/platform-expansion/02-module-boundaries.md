@@ -15,7 +15,7 @@
 
 禁止的反向依赖：
 
-- `ac` → 任意 `forge*` / `fabric*` / `neoforge*`
+- `ac` → 任意 `forge*` / `fabric*` / `future-loader*`
 - `mcmod` → 任意 Loader / Minecraft API
 - `api` → `mcmod` / `ac` / 平台模块
 
@@ -29,8 +29,8 @@
 
 ### `mcmod`
 
-- 不引入 `net.minecraft.*`、`net.minecraftforge.*`、`net.fabricmc.*`、`net.neoforged.*`。
-- 不静态依赖 `cn.li.forge1201.*`、`cn.li.fabric1201.*`、`cn.li.neoforge*.*`。
+- 不引入 `net.minecraft.*`、`net.minecraftforge.*`、`net.fabricmc.*`、`net.future-loaderd.*`。
+- 不静态依赖 `cn.li.forge1201.*`、`cn.li.fabric1201.*`、`cn.li.future-loader*.*`。
 - 允许持有平台抽象入口、协议、multimethod 分发点和共享生命周期。
 
 ### `ac`
@@ -50,7 +50,7 @@
 ### 允许
 
 - 平台模块通过受控入口调用 `ac` / `mcmod` 的初始化函数。
-- 平台模块通过 ServiceLoader 或桥接类触发 `PlatformBootstrap` / `ContentInitBootstrap`。
+- 平台模块通过 ServiceLoader 或桥接类触发 `platform target bootstrap` / `ContentInitBootstrap`。
 - `mcmod` 通过动态分发或平台注册点调用平台实现。
 
 ### 不允许

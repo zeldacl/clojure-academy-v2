@@ -1,0 +1,30 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "D": {
+      "item": "my_mod:calc_chip"
+    },
+    "E": {
+      "item": "my_mod:energy_convert_component"
+    },
+    "L": {
+      "item": "my_mod:crystal_low"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "U": {
+      "item": "my_mod:matter_unit"
+    }
+  },
+  "pattern": [
+    " L ",
+    "EMD",
+    " U "
+  ],
+  "result": {
+    "item": "my_mod:imag_fusor"
+  },
+  "show_notification": true
+}

@@ -800,7 +800,7 @@
 
 ;; ============================================================================
 ;; Default Client Owner Hook
-;; Platform layer (mc-1.20.1) registers a function that returns a complete client
+;; Platform Minecraft component registers a function that returns a complete client
 ;; owner map. This allows platform-agnostic modules (ac) to resolve a client owner
 ;; without importing Minecraft classes directly.
 ;; ============================================================================

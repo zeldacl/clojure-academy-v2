@@ -19,7 +19,7 @@ Windows 本地优先使用：
 配置缓存实验不要全局打开，使用额外参数单独采样：
 
 ```powershell
-.\scripts\perf\record_gate_performance.ps1 -TaskSpecs verifyArchitectureBoundaries,quickUnitTests,":forge-1.20.1:compileClojure" -ExtraGradleArgs --configuration-cache -Iterations 2
+.\scripts\perf\record_gate_performance.ps1 -TaskSpecs verifyArchitectureBoundaries,quickUnitTests,":platform:compileClojure" -ExtraGradleArgs --configuration-cache -Iterations 2
 ```
 
 2026-05-19 实测：`verifyArchitectureBoundaries --configuration-cache` 首次运行通过，第二次显示 `Reusing configuration cache` 且任务 `UP-TO-DATE`。其它任务仍需按本页脚本逐项实验，不默认全局开启。
@@ -52,7 +52,7 @@ Windows 本地优先使用：
 
 谨慎缓存或先不缓存：
 
-- Forge AOT bootstrap 相关目录：`forge-1.20.1/build/clojure/main` 与镜像到 `classes/java/main` 的 Clojure class。当前已通过 isolated stripped output 与编译前镜像清理降低污染风险，但 CI cache 仍建议先白名单再扩大。
+- Forge AOT bootstrap 相关目录：`platform-src/loader/forge/build/clojure/main` 与镜像到 `classes/java/main` 的 Clojure class。当前已通过 isolated stripped output 与编译前镜像清理降低污染风险，但 CI cache 仍建议先白名单再扩大。
 - GameTest run 目录、`run/`、`run-data/`、`run-gametest/`。
 - coverage HTML 全量报告；coverage 属于 nightly/显式门禁。
 

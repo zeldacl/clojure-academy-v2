@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "my_mod:block/node_top_0",
+    "east": "my_mod:block/node_advanced_side_0",
+    "north": "my_mod:block/node_advanced_side_0",
+    "south": "my_mod:block/node_advanced_side_0",
+    "up": "my_mod:block/node_top_0",
+    "west": "my_mod:block/node_advanced_side_0"
+  }
+}

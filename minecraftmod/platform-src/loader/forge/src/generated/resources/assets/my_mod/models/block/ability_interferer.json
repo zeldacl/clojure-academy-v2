@@ -1,0 +1,11 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "down": "my_mod:block/ability_interf_on",
+    "east": "my_mod:block/ability_interf_on",
+    "north": "my_mod:block/ability_interf_on",
+    "south": "my_mod:block/ability_interf_on",
+    "up": "my_mod:block/ability_interf_on",
+    "west": "my_mod:block/ability_interf_on"
+  }
+}

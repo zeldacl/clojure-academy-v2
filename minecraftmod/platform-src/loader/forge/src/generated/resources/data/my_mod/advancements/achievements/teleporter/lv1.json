@@ -1,0 +1,31 @@
+{
+  "parent": "my_mod:achievements/teleporter/root",
+  "criteria": {
+    "c0": {
+      "conditions": {
+        "criterion_id": "teleporter.lv1"
+      },
+      "trigger": "my_mod:custom"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "description": {
+      "translate": "advancement.my_mod.teleporter.lv1.description"
+    },
+    "frame": "task",
+    "hidden": false,
+    "icon": {
+      "item": "minecraft:book"
+    },
+    "show_toast": true,
+    "title": {
+      "translate": "advancement.my_mod.teleporter.lv1"
+    }
+  },
+  "requirements": [
+    [
+      "c0"
+    ]
+  ]
+}

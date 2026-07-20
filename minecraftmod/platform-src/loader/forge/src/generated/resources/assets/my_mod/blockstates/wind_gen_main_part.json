@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "my_mod:block/wind_gen_main_part"
+    }
+  }
+}

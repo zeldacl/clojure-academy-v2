@@ -37,5 +37,5 @@
 - Phase 3 service-test coverage is substantially complete for the meltdowner skill family.
 - FX timing/cadence assertions now cover the full meltdowner-family FX suite.
 - Phase 5 fallback validation has a full-suite green evidence run (`runAcUnitTests`: 230 tests, 0 failures).
-- Forge datagen now reaches provider completion and hash-cache write end-to-end in the normal `:forge-1.20.1:runData` path.
+- Forge datagen now reaches provider completion and hash-cache write end-to-end in the normal `:platform:runData` path.
 - The overall Phase 0 meltdowner plan is fully complete.

@@ -104,7 +104,7 @@ tasks.named('compileClojure').configure { task ->
     }
 }
 
-// Strip LVT from AOT class files (same as forge-1.20.1).
+// Strip LVT from AOT class files (same as the platform target build).
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
     def classesDir = layout.buildDirectory.dir('clojure/main')
@@ -187,7 +187,7 @@ dependencies {
     cloverageRuntime "cloverage:cloverage:1.2.4"
 }
 
-sourceSets.test.clojure.srcDir rootProject.file('test-support/src/main/clojure')
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
 
 def mcmodTestOnlyNamespaces = (System.getProperty('mcmod.test.only') ?: '')
     .split(',')

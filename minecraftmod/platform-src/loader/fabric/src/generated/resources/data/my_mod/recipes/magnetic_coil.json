@@ -1,0 +1,25 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "C": {
+      "item": "my_mod:constraint_plate"
+    },
+    "D": {
+      "item": "minecraft:diamond"
+    },
+    "P": {
+      "item": "my_mod:reinforced_iron_plate"
+    },
+    "R": {
+      "item": "my_mod:reso_crystal"
+    }
+  },
+  "pattern": [
+    "CRC",
+    "CRC",
+    "PDP"
+  ],
+  "result": {
+    "item": "my_mod:magnetic_coil"
+  }
+}

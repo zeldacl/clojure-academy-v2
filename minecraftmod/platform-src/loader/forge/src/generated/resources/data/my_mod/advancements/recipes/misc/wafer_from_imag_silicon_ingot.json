@@ -1,0 +1,35 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_imag_silicon_ingot": {
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "my_mod:imag_silicon_ingot"
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    },
+    "has_the_recipe": {
+      "conditions": {
+        "recipe": "my_mod:wafer_from_imag_silicon_ingot"
+      },
+      "trigger": "minecraft:recipe_unlocked"
+    }
+  },
+  "requirements": [
+    [
+      "has_imag_silicon_ingot",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "my_mod:wafer_from_imag_silicon_ingot"
+    ]
+  },
+  "sends_telemetry_event": false
+}

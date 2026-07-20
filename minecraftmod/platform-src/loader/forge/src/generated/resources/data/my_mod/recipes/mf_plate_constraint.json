@@ -1,0 +1,10 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "my_mod:constraint_ingot"
+  },
+  "mode": "plate",
+  "output": {
+    "item": "my_mod:constraint_plate"
+  }
+}

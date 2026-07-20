@@ -148,7 +148,7 @@ Do not delete files just because their name contains `bridge`, `adapter`, or
 `shim`. The following categories are expected architecture boundaries:
 
 - `mcmod/platform/*` protocols and platform dispatch seams.
-- `mc-1.20.1/runtime/*_spi.clj` and shared runtime core modules.
+- `platform-src/minecraft/version/mc-1201/runtime/*_spi.clj` and shared runtime core modules.
 - Forge/Fabric event registration glue and loader lifecycle entrypoints.
 - Forge capability wiring via `ForgeCapabilities` tokens (`ForgeProvidedCapabilitySupport`); no string-based MC/Forge class-name reflection in Clojure.
 - Forge missing-mapping/world-save compatibility handlers.

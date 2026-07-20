@@ -4,7 +4,7 @@
 
 ## 适用范围
 
-- 新增 `NeoForge` 平台
+- 新增 `future loader` 平台
 - 恢复/规范化 `Fabric` 平台
 - 为现有 Loader 增加新 Minecraft 版本模块
 
@@ -22,7 +22,7 @@
 
 推荐命名：
 
-- `neoforge-1.20.1`
+- `future-loader target`
 - `fabric-1.21.x`
 - `forge-1.21.x`
 
@@ -34,11 +34,11 @@
 
 ## Step 2. 复制平台骨架
 
-### 新增 NeoForge
+### 新增 future loader
 
 优先复制：
 
-- `forge-1.20.1/`
+- `platform-src/loader/forge/`
 
 保留结构，替换：
 
@@ -51,23 +51,23 @@
 
 优先参考：
 
-- `fabric-1.20.1/`
+- `platform-src/loader/fabric/`
 - 但需要统一命名，不再保留 `com.example.*` 作为正式模板。
 
 ## 分平台执行清单
 
-### NeoForge 接入清单
+### future loader 接入清单
 
-- [ ] 新建模块目录：`neoforge-<mc-version>`。
-- [ ] 在根 `settings.gradle` 中增加 `include 'neoforge-<mc-version>'`。
-- [ ] 复制 `forge-1.20.1/build.gradle` 作为初始模板，并替换为 NeoForge 依赖与运行配置。
-- [ ] 创建 Java 入口：`src/main/java/cn/li/neoforge<version>/MyModNeoForge.java`。
-- [ ] 创建 SPI 实现：`platform/spi/NeoForge<version>PlatformBootstrap.java`。
-- [ ] 创建资源文件：`META-INF/neoforge.mods.toml`。
-- [ ] 创建 ServiceLoader 文件：`META-INF/services/cn.li.mcmod.platform.spi.PlatformBootstrap`。
-- [ ] 创建 Clojure 主入口：`cn.li.neoforge<version>.mod`。
-- [ ] 创建平台门面：`cn.li.neoforge<version>.platform.bootstrap-entry`。
-- [ ] 创建真实平台安装层：`cn.li.neoforge<version>.platform.spi-bootstrap`。
+- [ ] 新建模块目录：`future-loader-<mc-version>`。
+- [ ] 在根 `settings.gradle` 中增加 `include 'future-loader-<mc-version>'`。
+- [ ] 复制 `platform-src/loader/forge/build.gradle` 作为初始模板，并替换为 future loader 依赖与运行配置。
+- [ ] 创建 Java 入口：`src/main/java/cn/li/future-loader<version>/MyModfuture loader.java`。
+- [ ] 创建 SPI 实现：`platform/spi/future loader<version>platform target bootstrap.java`。
+- [ ] 创建资源文件：`META-INF/future-loader.mods.toml`。
+- [ ] 创建 ServiceLoader 文件：`META-INF/services/cn.li.mcmod.platform.spi.platform target bootstrap`。
+- [ ] 创建 Clojure 主入口：`cn.li.future-loader<version>.mod`。
+- [ ] 创建平台门面：`cn.li.future-loader<version>.platform.bootstrap-entry`。
+- [ ] 创建真实平台安装层：`cn.li.future-loader<version>.platform.spi-bootstrap`。
 - [ ] 实现 `registry.clj`、`events.clj`、`gui/init.clj`、`gui/network.clj`、`client/init.clj`、`config/bridge.clj`、`datagen/setup.clj`。
 - [ ] 接入 `runClient` / `runServer` / `runData`。
 - [ ] 至少通过 compile + smoke + datagen 验证。
@@ -86,7 +86,7 @@
 
 ### 新 Minecraft 版本升级清单
 
-- [ ] 复制最近的同 Loader 模块，例如 `forge-1.20.1` → `forge-1.21.x`。
+- [ ] 复制最近的同 Loader 模块，例如 `forge target` → `forge-1.21.x`。
 - [ ] 更新版本号、mappings、Loader 依赖。
 - [ ] 校正平台 ID、Java 包、Clojure namespace。
 - [ ] 优先修复 registry / network / GUI / datagen 的 API 漂移。
@@ -101,14 +101,14 @@
 - `platformId`
 - Java 包名
 - Clojure namespace
-- 资源入口声明（如 `fabric.mod.json` / `mods.toml` / `neoforge.mods.toml`）
+- 资源入口声明（如 `fabric.mod.json` / `mods.toml` / `future-loader.mods.toml`）
 
 示例：
 
-- 模块：`neoforge-1.20.1`
-- `platformId`：`neoforge-1.20.1`
-- Java 包：`cn.li.neoforge1201`
-- Clojure namespace：`cn.li.neoforge1201.*`
+- 模块：`future-loader target`
+- `platformId`：`future-loader target`
+- Java 包：`cn.li.future-loader1201`
+- Clojure namespace：`cn.li.future-loader1201.*`
 
 ## Step 4. 补齐最小文件集合
 
@@ -118,8 +118,8 @@
 - Loader 入口 Java 类
 - 平台 bootstrap SPI 实现（若沿用 ServiceLoader）
 - `mod.clj`
-- `platform/bootstrap_entry.clj`
-- `platform/spi_bootstrap.clj`
+- `platform/platform/init.clj`
+- `platform/platform/init.clj`
 - `registry.clj`
 - `events.clj`
 - `gui/init.clj`
@@ -127,9 +127,9 @@
 - `config/bridge.clj`
 - `datagen/setup.clj`
 
-### Forge / NeoForge 额外关注
+### Forge / future loader 额外关注
 
-- `META-INF/mods.toml` / `neoforge.mods.toml`
+- `META-INF/mods.toml` / `future-loader.mods.toml`
 - 运行任务：`runClient` / `runServer` / `runData`
 - GameTest 挂点（若计划纳入正式验证）
 
@@ -151,8 +151,8 @@
 ### 建议按文件落地
 
 1. 先写 Java 入口，只保留 `require` + 调用主函数。
-2. 再写 `platform/bootstrap_entry.clj`，先确保 `platformId` 可以触发平台 bootstrap。
-3. 再写 `platform/spi_bootstrap.clj`，先安装最基础的 NBT / position / item / world 桥接。
+2. 再写 `platform/platform/init.clj`，先确保 `platformId` 可以触发平台 bootstrap。
+3. 再写 `platform/platform/init.clj`，先安装最基础的 NBT / position / item / world 桥接。
 4. 然后写 `mod.clj`，把初始化顺序串起来。
 5. 再补 `registry.clj`、`events.clj`、`gui/*`、`client/init.clj`、`datagen/setup.clj`。
 6. 最后才接入配置、集成、优化与额外平台特性。
@@ -166,7 +166,7 @@
 - datagen 级：`runData` 或等价 datagen 入口
 - 边界级：共享层静态引用扫描、client/server 边界检查
 
-Forge / NeoForge 推荐额外纳入：
+Forge / future loader 推荐额外纳入：
 
 - GameTest 或等价集成验证
 

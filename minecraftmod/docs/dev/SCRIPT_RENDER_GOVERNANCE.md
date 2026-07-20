@@ -37,7 +37,7 @@ Canonical implementation: `cn.li.mcmod.entity.dsl/resolve-render-profile-key`.
 
 For every ScriptRender change:
 
-- Compile gates: `ac`, `mcmod`, `forge-1.20.1`, `fabric-1.20.1`
+- Compile gates: `ac`, `mcmod`, `forge target`, `fabric target`
 - Boundary gates: `verifyArchitectureBoundaries`, `verifyCurrentPlatforms`
 - Hook/platform gates: `verifyForgeHookCoverage`, `verifyPlatformHookCoverage`, `verifyPlatformNoBusinessHookIds`
 

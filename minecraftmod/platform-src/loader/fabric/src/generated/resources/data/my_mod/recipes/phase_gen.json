@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "C": {
+      "item": "my_mod:crystal_low"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "U": {
+      "item": "my_mod:matter_unit"
+    }
+  },
+  "pattern": [
+    "CMC",
+    "U U"
+  ],
+  "result": {
+    "item": "my_mod:phase_gen"
+  }
+}

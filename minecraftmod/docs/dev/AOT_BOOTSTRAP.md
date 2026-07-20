@@ -34,11 +34,11 @@ The linter script lives in `tools/aot-linter/aot_safety.clj` and the allowlist i
 4. **改完先跑静态门禁，再跑平台编译**
 	- 最小建议顺序：
 	  - `verifyAotBootstrapSafety`
-	  - `:forge-1.20.1:compileClojure -x test`
-	  - `:fabric-1.20.1:compileClojure -x test`
+	  - `:platform:compileClojure -x test`
+	  - `:platform:compileClojure -x test`
 
 5. **禁止通过绕过 compileJava“修复” compileClojure**
-	- `:fabric-1.20.1:compileClojure -x compileJava` 只用于诊断。
+	- `:platform:compileClojure -x compileJava` 只用于诊断。
 	- 正常构建必须让 `compileJava` 先产出 bridge/accessor classes。
 
 ## 出问题时怎么查（SOP）
@@ -53,10 +53,10 @@ The linter script lives in `tools/aot-linter/aot_safety.clj` and the allowlist i
 
 1. `cmd /c .\gradlew.bat verifyAotBootstrapSafety`
 	- 若失败：先按输出中的 `file:line` 改顶层初始化。
-2. `cmd /c .\gradlew.bat :forge-1.20.1:compileClojure -x test`
-3. `cmd /c .\gradlew.bat :fabric-1.20.1:compileClojure -x test`
+2. `cmd /c .\gradlew.bat :platform:compileClojure -x test`
+3. `cmd /c .\gradlew.bat :platform:compileClojure -x test`
 4. 若 Fabric 报类缺失，再看：
-	- `cmd /c .\gradlew.bat :fabric-1.20.1:compileJava`
+	- `cmd /c .\gradlew.bat :platform:compileJava`
 
 ### 3) 典型现象 -> 根因 -> 处理
 

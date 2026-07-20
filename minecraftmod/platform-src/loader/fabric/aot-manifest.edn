@@ -1,0 +1,68 @@
+;; Runtime Clojure namespace manifest for -PreleaseAot builds.
+;;
+;; Generated baseline (2026-07-17): full main-sourceSet namespace set, no
+;; exclusions. An initial attempt to exclude datagen/** was reverted after
+;; discovering cn.li.ac.core (a genuine runtime entry point) statically
+;; requires cn.li.ac.datagen.bootstrap, which transitively requires the
+;; ability/block/energy/wireless datagen registries and mcmod's
+;; datagen.metadata -- datagen is not cleanly separable from the runtime
+;; require graph in this codebase without a source-level bootstrap split
+;; (out of scope here). This manifest currently exists for drift detection
+;; only (verifyAotManifest) -- it does not yet reduce -PreleaseAot's compiled
+;; namespace set below "everything". A future pass could shrink it by
+;; computing genuine require-graph reachability from real entry points
+;; instead of a directory-name heuristic.
+;;
+;; verifyAotManifest fails the build when source and this file drift apart in
+;; either direction (namespace added to source but not here, or vice versa).
+
+[
+ "cn.li.fabric1201.adapter.gui-registry"
+ "cn.li.fabric1201.adapter.network"
+ "cn.li.fabric1201.adapter.server-context"
+ "cn.li.fabric1201.client.hand-effect-renderer"
+ "cn.li.fabric1201.client.init"
+ "cn.li.fabric1201.client.keyboard-init"
+ "cn.li.fabric1201.client.level-effect-renderer"
+ "cn.li.fabric1201.client.overlay-renderer"
+ "cn.li.fabric1201.client.runtime-bridge"
+ "cn.li.fabric1201.commands"
+ "cn.li.fabric1201.config.bridge"
+ "cn.li.fabric1201.datagen.advancement-provider"
+ "cn.li.fabric1201.datagen.item-model-provider"
+ "cn.li.fabric1201.datagen.lang-provider"
+ "cn.li.fabric1201.datagen.provider-factory"
+ "cn.li.fabric1201.datagen.recipe-provider"
+ "cn.li.fabric1201.datagen.setup"
+ "cn.li.fabric1201.datagen.worldgen-provider"
+ "cn.li.fabric1201.gui.init"
+ "cn.li.fabric1201.gui.network.client"
+ "cn.li.fabric1201.gui.network.server"
+ "cn.li.fabric1201.gui.network.shared"
+ "cn.li.fabric1201.gui.provider-bridge"
+ "cn.li.fabric1201.gui.screen-impl"
+ "cn.li.fabric1201.init"
+ "cn.li.fabric1201.integration.events"
+ "cn.li.fabric1201.integration.events.block"
+ "cn.li.fabric1201.integration.events.interact"
+ "cn.li.fabric1201.integration.events.lifecycle"
+ "cn.li.fabric1201.integration.events.loot"
+ "cn.li.fabric1201.integration.side"
+ "cn.li.fabric1201.mod"
+ "cn.li.fabric1201.platform.bindings"
+ "cn.li.fabric1201.platform.init"
+ "cn.li.fabric1201.registry.fabric-dispatch"
+ "cn.li.fabric1201.runtime.adapters.registry"
+ "cn.li.fabric1201.runtime.block-manipulation"
+ "cn.li.fabric1201.runtime.damage-interception"
+ "cn.li.fabric1201.runtime.entity-damage"
+ "cn.li.fabric1201.runtime.entity-motion"
+ "cn.li.fabric1201.runtime.entity-query"
+ "cn.li.fabric1201.runtime.item-handler"
+ "cn.li.fabric1201.runtime.player-motion"
+ "cn.li.fabric1201.runtime.world-effects"
+ "cn.li.fabric1201.setup.content-registration"
+ "cn.li.fabric1201.setup.event-wiring"
+ "cn.li.fabric1201.setup.lifecycle-init"
+ "cn.li.fabric1201.setup.runtime-setup"
+]

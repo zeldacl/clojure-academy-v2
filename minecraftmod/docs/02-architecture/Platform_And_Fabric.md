@@ -1,6 +1,6 @@
 # 平台实现与 Fabric 说明
 
-本文档合并自平台实现指南与 Fabric 相关说明。**日常开发与默认构建以 Forge 1.20.1 为主**；`fabric-1.20.1` 已纳入根 `settings.gradle`，并以 **minimal maintenance** 级别参与 compile 基线验证。
+本文档合并自平台实现指南与 Fabric 相关说明。**日常开发与默认构建以 Forge 1.20.1 为主**；`fabric target` 已纳入根 `settings.gradle`，并以 **minimal maintenance** 级别参与 compile 基线验证。
 
 > **架构已完成 DRY 共享安装器迁移（Batches A-F）。**  
 > 公共安装逻辑集中于 `mc-1.20.1`；Forge 与 Fabric 各自仅保留平台私有部分。
@@ -18,7 +18,7 @@
 
 ## 平台结构（当前状态）
 ```
-mc-1.20.1/src/main/clojure/cn/li/mc1201/
+platform-src/minecraft/version/mc-1201/src/main/clojure/cn/li/mc1201/
 ├── installer.clj                   # 薄门面，转发至 bootstrap/installer_core.clj
 ├── bootstrap/installer_core.clj    # 全量共享安装逻辑
 ├── platform_adapter.clj            # PlatformAdapter 协议（Forge/Fabric 各自实现）
@@ -26,15 +26,15 @@ mc-1.20.1/src/main/clojure/cn/li/mc1201/
 ├── block/, registry/, runtime/, gui/  # 共享业务工具
 └── ...
 
-forge-1.20.1/src/main/clojure/cn/li/forge1201/
-├── platform/bootstrap_entry.clj    # SPI 触发门面（主初始化链调用）
-├── platform/spi_bootstrap.clj      # Forge PlatformAdapter 实现 + 私有协议 extend
+platform-src/loader/forge/src/main/clojure/cn/li/forge1201/
+├── platform/platform/init.clj    # SPI 触发门面（主初始化链调用）
+├── platform/platform/init.clj      # Forge PlatformAdapter 实现 + 私有协议 extend
 ├── integration/imc_dispatch.clj    # Forge IMC 事件分发桥接
 └── ...（全为 Forge 私有：entity, gui, events, runtime 等）
 
-fabric-1.20.1/src/main/clojure/cn/li/fabric1201/
-├── platform/bootstrap_entry.clj    # SPI 触发门面（主初始化链调用）
-├── platform/spi_bootstrap.clj      # Fabric PlatformAdapter 实现 + 私有协议 extend
+platform-src/loader/fabric/src/main/clojure/cn/li/fabric1201/
+├── platform/platform/init.clj    # SPI 触发门面（主初始化链调用）
+├── platform/platform/init.clj      # Fabric PlatformAdapter 实现 + 私有协议 extend
 └── ...（全为 Fabric 私有：block, gui, client, datagen 等）
 ```
 
@@ -56,13 +56,13 @@ Fabric:
 	install-be-fns-only!(fns-map)    # 由 install-be-ops! 包装调用
 ```
 
-`platform/spi_bootstrap.clj` 调用 `installer/install-be-fns-only!` 并传入平台私有 BE 类的 lambda；`extend` 调用保留在各平台本地（类型私有，无法共享）。`platform/bootstrap_entry.clj` 仅负责通过 SPI 触发平台安装。
+`platform/platform/init.clj` 调用 `installer/install-be-fns-only!` 并传入平台私有 BE 类的 lambda；`extend` 调用保留在各平台本地（类型私有，无法共享）。`platform/platform/init.clj` 仅负责通过 SPI 触发平台安装。
 
-- **资源**：`forge-1.20.1/src/main/resources/META-INF/mods.toml` 等；游戏资源也可在 `ac/src/main/resources/assets/<mod_id>/` 维护。
+- **资源**：`platform-src/loader/forge/src/main/resources/META-INF/mods.toml` 等；游戏资源也可在 `ac/src/main/resources/assets/<mod_id>/` 维护。
 
 ### Fabric 子工程（当前已纳入根构建）
 
-仓库中 `fabric-1.20.1/` 内含 `fabric.mod.json`、Java 入口与 Clojure 适配。**已移除历史占位符 stub（`platform/nbt.clj` 等 5 个文件）**，Fabric 平台安装现全量委托共享安装器。当前策略：
+仓库中 `platform-src/loader/fabric/` 内含 `fabric.mod.json`、Java 入口与 Clojure 适配。**已移除历史占位符 stub（`platform/nbt.clj` 等 5 个文件）**，Fabric 平台安装现全量委托共享安装器。当前策略：
 
 - 至少保持 compile 级可用（`verifyFabricBaseline`）。
 - 与 Forge 不承诺完全功能对齐；能力差异按当前实现与测试矩阵维护。

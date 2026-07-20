@@ -25,7 +25,7 @@
 ;; i18n key prefix — matching upstream ac.skill_tree.console.*
 (def ^:private console-i18n-prefix "skill_tree.my_mod.console.")
 
-;; Key codes matching mc-1.20.1 gui/cgui/input.clj enter-keys/backspace-keys
+;; Key codes matching the Minecraft GUI input enter-keys/backspace-keys
 (def ^:private enter-keys #{257 335 28})
 (def ^:private backspace-keys #{259 14})
 

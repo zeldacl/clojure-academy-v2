@@ -1,0 +1,37 @@
+{
+  "parent": "my_mod:achievements/electromaster.lv4",
+  "criteria": {
+    "c0": {
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "minecraft:book"
+            ]
+          }
+        ]
+      },
+      "trigger": "minecraft:inventory_changed"
+    }
+  },
+  "display": {
+    "announce_to_chat": false,
+    "description": {
+      "translate": "advancement.my_mod.electromaster.lv5.description"
+    },
+    "frame": "task",
+    "hidden": false,
+    "icon": {
+      "item": "minecraft:book"
+    },
+    "show_toast": true,
+    "title": {
+      "translate": "advancement.my_mod.electromaster.lv5"
+    }
+  },
+  "requirements": [
+    [
+      "c0"
+    ]
+  ]
+}

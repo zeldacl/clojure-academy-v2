@@ -5,13 +5,13 @@ Scope: planned gap category **metadata resources + ServiceLoader SPI parity**
 
 ## 1) Metadata files in scope
 
-- Fabric: `fabric-1.20.1/src/main/resources/fabric.mod.json`
-- Forge: `forge-1.20.1/src/main/resources/META-INF/mods.toml`
+- Fabric: `platform-src/loader/fabric/src/main/resources/fabric.mod.json`
+- Forge: `platform-src/loader/forge/src/main/resources/META-INF/mods.toml`
 - SPI service descriptors:
-  - `fabric-1.20.1/src/main/resources/META-INF/services/cn.li.mcmod.platform.spi.PlatformBootstrap`
-  - `forge-1.20.1/src/main/resources/META-INF/services/cn.li.mcmod.platform.spi.PlatformBootstrap`
+  - `platform-src/loader/fabric/src/main/resources/META-INF/services/cn.li.mcmod.platform.spi.platform target bootstrap`
+  - `platform-src/loader/forge/src/main/resources/META-INF/services/cn.li.mcmod.platform.spi.platform target bootstrap`
 - Pack metadata:
-  - `forge-1.20.1/src/main/resources/pack.mcmeta`
+  - `platform-src/loader/forge/src/main/resources/pack.mcmeta`
   - `ac/src/main/resources/data/my_mod/pack.mcmeta` (data pack metadata)
 
 ## 2) Parity matrix
@@ -20,7 +20,7 @@ Scope: planned gap category **metadata resources + ServiceLoader SPI parity**
 |---|---|---|---|---|
 | Mod ID | `my_mod` | `my_mod` | ✅ aligned | core identity matches |
 | Entry bootstrap | Forge Mod class + SPI | Fabric main/client/datagen + SPI | ✅ semantic parity | loader mechanism differs by design |
-| SPI bootstrap descriptor | `cn.li.forge1201.platform.spi.Forge1201PlatformBootstrap` | `cn.li.fabric1201.platform.spi.Fabric1201PlatformBootstrap` | ✅ aligned | both expose same SPI contract |
+| SPI bootstrap descriptor | `cn.li.forge1201.platform.spi.Forge1201platform target bootstrap` | `cn.li.fabric1201.platform.spi.Fabric1201platform target bootstrap` | ✅ aligned | both expose same SPI contract |
 | Java requirement | implicit via Forge toolchain (17+) | explicit `java >=17` | ✅ acceptable | no functional mismatch observed |
 | Version source | `mods.toml` hardcoded `1.0.0` | `fabric.mod.json` now expands `${mod_version}` during `processResources` | 🟨 partial | Fabric side now deterministic; Forge side still static literal |
 | License | `All rights reserved` | `MIT` | ❌ mismatch | legal metadata inconsistency; must reconcile |
@@ -34,7 +34,7 @@ Scope: planned gap category **metadata resources + ServiceLoader SPI parity**
    - Decide authoritative values for license/authors/contact and apply to both `mods.toml` and `fabric.mod.json`.
 
 2. **Unify version strategy**
-   - ✅ Fabric side done: `fabric.mod.json` uses `${mod_version}` and `fabric-1.20.1/build.gradle` expands it.
+   - ✅ Fabric side done: `fabric.mod.json` uses `${mod_version}` and `platform-src/loader/fabric/build.gradle` expands it.
    - TODO: either keep Forge hardcoded by policy, or add active Forge `processResources` expansion and then use placeholders in `mods.toml`.
 
 3. **Document pack metadata policy**
@@ -51,8 +51,8 @@ Scope: planned gap category **metadata resources + ServiceLoader SPI parity**
 ## 5) Verification hooks for this checklist
 
 After metadata normalization:
-- `:forge-1.20.1:processResources :forge-1.20.1:jar`
-- `:fabric-1.20.1:processResources :fabric-1.20.1:jar`
+- `:platform:processResources :platform:jar`
+- `:platform:processResources :platform:jar`
 - `verifyCurrentPlatforms`
 
 Optional follow-up:
@@ -60,9 +60,9 @@ Optional follow-up:
 
 ## 6) Execution evidence (2026-05-09)
 
-- ✅ `:forge-1.20.1:processResources :fabric-1.20.1:processResources` passed.
+- ✅ `:platform:processResources :platform:processResources` passed.
 - ✅ `verifyCurrentPlatforms` passed after metadata updates.
-- ✅ Verified generated Fabric metadata now has concrete values in `fabric-1.20.1/build/resources/main/fabric.mod.json`:
+- ✅ Verified generated Fabric metadata now has concrete values in `platform-src/loader/fabric/build/resources/main/fabric.mod.json`:
    - `"version": "1.0.0"`
    - `"name": "my_mod (Fabric)"`
    - `"authors": ["Clojure Academy"]`

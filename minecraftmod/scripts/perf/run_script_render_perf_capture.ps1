@@ -21,10 +21,11 @@ New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 $jfrFile = Join-Path $outDir "capture-$timestamp.jfr"
 $logFile = Join-Path $outDir "run-$timestamp.log"
 
-$task = if ($Loader -eq 'forge') { ':forge-1.20.1:runClient' } else { ':fabric-1.20.1:runClient' }
-$checkTask = if ($Loader -eq 'forge') { ':forge-1.20.1:checkClojure' } else { ':fabric-1.20.1:checkClojure' }
+$platformTarget = "$Loader-1.20.1"
+$task = ':platform:runClient'
+$checkTask = ':platform:checkClojure'
 
-$gradleArgs = @($task, '--no-daemon', '--console=plain')
+$gradleArgs = @($task, "`"-PplatformTarget=$platformTarget`"", '--no-daemon', '--console=plain')
 if ($SkipCheckClojure.IsPresent) {
   $gradleArgs += @('-x', $checkTask)
 }

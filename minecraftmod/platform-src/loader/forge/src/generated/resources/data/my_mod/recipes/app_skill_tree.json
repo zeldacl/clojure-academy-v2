@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "minecraft:compass"
+    },
+    "D": {
+      "item": "my_mod:data_chip"
+    },
+    "I": {
+      "item": "my_mod:info_component"
+    }
+  },
+  "pattern": [
+    "C",
+    "D",
+    "I"
+  ],
+  "result": {
+    "item": "my_mod:app_skill_tree"
+  },
+  "show_notification": true
+}

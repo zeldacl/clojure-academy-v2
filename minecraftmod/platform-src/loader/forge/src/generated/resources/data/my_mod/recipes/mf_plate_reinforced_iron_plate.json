@@ -1,0 +1,11 @@
+{
+  "type": "my_mod:metal_former",
+  "input": {
+    "item": "my_mod:reinforced_iron_plate"
+  },
+  "mode": "plate",
+  "output": {
+    "count": 3,
+    "item": "my_mod:coin"
+  }
+}

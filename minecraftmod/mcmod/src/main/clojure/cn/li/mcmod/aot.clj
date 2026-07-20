@@ -2,7 +2,7 @@
   "Single-source-of-truth compile-phase guard.
   
   Unifies all compile-time detection (AOT, checkClojure, datagen) into one
-  namespace, preventing duplicate predicates scattered across mc-1.20.1,
+  namespace, preventing duplicate predicates scattered across Minecraft components,
   Forge, and Fabric. Zero Minecraft imports to ensure this ns always loads
   safely during AOT.
   

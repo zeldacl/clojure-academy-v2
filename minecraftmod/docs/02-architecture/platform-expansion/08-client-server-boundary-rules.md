@@ -19,7 +19,7 @@
 
 ## 入口规则
 
-### Forge / NeoForge
+### Forge / future loader
 
 - 主 mod 初始化不应直接硬依赖 client 类。
 - client 生命周期中再通过 side-checked 路径装载 client-only 逻辑。

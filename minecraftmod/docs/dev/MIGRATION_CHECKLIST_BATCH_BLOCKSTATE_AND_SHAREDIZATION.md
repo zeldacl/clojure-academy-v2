@@ -2,16 +2,16 @@
 
 ## Scope
 - Goal: achieve Forge/Fabric functional parity for Fabric datagen blockstates/models/items while moving duplicated logic to `mc-1.20.1`.
-- Validation baseline used in this batch: `:fabric-1.20.1:compileClojure`, `:fabric-1.20.1:runDatagen`, `verifyArchitectureBoundaries`, `verifyCurrentPlatforms`.
+- Validation baseline used in this batch: `:platform:compileClojure`, `:platform:runDatagen`, `verifyArchitectureBoundaries`, `verifyCurrentPlatforms`.
 
 ## Migrated to `mc-1.20.1` (shared now)
 
 ### New shared helpers introduced
-1. `mc-1.20.1/src/main/clojure/cn/li/mc1201/datagen/blockstate_support.clj`
+1. `platform-src/minecraft/version/mc-1201/src/main/clojure/cn/li/mc1201/datagen/blockstate_support.clj`
    - Reason: blockstate/model JSON assembly logic is loader-agnostic and should not be duplicated in Forge/Fabric providers.
    - Risk: low (pure data-shaping helpers).
 
-2. `mc-1.20.1/src/main/clojure/cn/li/mc1201/gui/network/packet.clj`
+2. `platform-src/minecraft/version/mc-1201/src/main/clojure/cn/li/mc1201/gui/network/packet.clj`
    - Reason: EDN payload encode/decode behavior was duplicated between Forge/Fabric network bridges.
    - Change: shared `encode-payload*`/`decode-payload*` APIs for string+bytes.
    - Risk: medium (packet compatibility); covered by platform verification.
@@ -57,11 +57,11 @@
 Reason for all above: logic is either pure algorithm/data-conversion or shared lifecycle/adapter glue that should remain single-source across loaders.
 
 ## Fabric parity completion in this batch
-1. `fabric-1.20.1/src/main/clojure/cn/li/fabric1201/datagen/provider_factory.clj`
+1. `platform-src/loader/fabric/src/main/clojure/cn/li/fabric1201/datagen/provider_factory.clj`
    - Provides Fabric provider factory glue for blockstate + block model + block-item model generation from shared blockstate definitions.
-2. `fabric-1.20.1/src/main/clojure/cn/li/fabric1201/datagen/setup.clj`
+2. `platform-src/loader/fabric/src/main/clojure/cn/li/fabric1201/datagen/setup.clj`
    - Registers blockstate provider with existing lang/item/advancement/recipe providers.
-3. `fabric-1.20.1/src/generated/resources/assets/my_mod/{blockstates,models}`
+3. `platform-src/loader/fabric/src/generated/resources/assets/my_mod/{blockstates,models}`
    - Datagen output now contains Fabric blockstate/model artifacts for AC blocks (including multipart/stateful models).
 
 Reason: this was a parity gap; Forge already generated these assets.
@@ -75,15 +75,15 @@ Reason: this was a parity gap; Forge already generated these assets.
    - Reason: launcher/toolchain API differs.
 
 ## Verification status
-- ✅ `:fabric-1.20.1:compileClojure` passed.
-- ✅ `:fabric-1.20.1:runDatagen` passed (blockstate provider executed).
+- ✅ `:platform:compileClojure` passed.
+- ✅ `:platform:runDatagen` passed (blockstate provider executed).
 - ✅ `verifyArchitectureBoundaries` passed.
 - ✅ `verifyCurrentPlatforms` passed.
 - ✅ Hook checks in combined run passed (`verifyFabricHookManifest`, `verifyForgeHookCoverage`, `verifyPlatformNoBusinessHookIds`).
 
 ## Additional diagnostics (2026-05-09)
-- ✅ `:forge-1.20.1:compileJava --stacktrace` passed (no reproducible Java blocker).
-- ✅ `:fabric-1.20.1:compileJava --stacktrace --info` passed on rerun.
+- ✅ `:platform:compileJava --stacktrace` passed (no reproducible Java blocker).
+- ✅ `:platform:compileJava --stacktrace --info` passed on rerun.
 - Note: earlier isolated `compileJava --info` non-zero report was transient and is not reproducible after rerun.
 - ✅ Gate bundle rerun passed: `verifyForgeHookCoverage verifyPlatformHookCoverage verifyPlatformNoBusinessHookIds verifyCurrentPlatforms`.
 
@@ -95,9 +95,9 @@ Reason: this was a parity gap; Forge already generated these assets.
 - Added `docs/dev/PLATFORM_METADATA_AND_SPI_PARITY_CHECKLIST.md` to close the explicit audit gap for metadata/SPI file coverage.
 - Implemented Fabric metadata normalization in this batch:
    - `fabric.mod.json` now uses `${mod_version}` / `${mod_name}` / `${mod_authors}` placeholders.
-   - `fabric-1.20.1/build.gradle` now expands `fabric.mod.json` placeholders during `processResources`.
+   - `platform-src/loader/fabric/build.gradle` now expands `fabric.mod.json` placeholders during `processResources`.
 - Verified with gates:
-   - `:forge-1.20.1:processResources :fabric-1.20.1:processResources` ✅
+   - `:platform:processResources :platform:processResources` ✅
    - `verifyCurrentPlatforms` ✅
 - Important constraint captured: active Forge build currently does not expand `mods.toml` placeholders, so Forge metadata remains static literals for now (tracked in the new checklist as TODO).
 

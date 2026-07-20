@@ -14,13 +14,13 @@
 
 ## What was executed in this session
 1. Compile validation after single-path renderer cleanup:
-   - `:forge-1.20.1:compileJava :fabric-1.20.1:compileJava`
+   - `:platform:compileJava :platform:compileJava`
    - Result: **BUILD SUCCESSFUL**
 2. Forge client launch feasibility (perf capture prerequisite):
-   - `:forge-1.20.1:runClient`
-   - Blocked by `:forge-1.20.1:checkClojure` reflection-fail gate.
+   - `:platform:runClient`
+   - Blocked by `:platform:checkClojure` reflection-fail gate.
 3. Forge client launch retry with check bypass:
-   - `:forge-1.20.1:runClient -x :forge-1.20.1:checkClojure`
+   - `:platform:runClient -x :platform:checkClojure`
    - Client process started, but world load path hit runtime blockers:
      - lifecycle ClassCastException (`AtomRegistry` cast to `Future`)
      - configured feature datapack failure (`my_mod:phase_liquid_pool` unbound/parse error)
@@ -30,7 +30,7 @@
      - `forge1201.entity.ModEntities#getEntityType`
      - `forge1201.registry.state/*get-registered-*`
    - follow-up compiles succeeded:
-     - `:mcmod:compileClojure :forge-1.20.1:compileClojure :forge-1.20.1:compileJava`
+     - `:mcmod:compileClojure :platform:compileClojure :platform:compileJava`
 
 ## Current status against certification checklist
 - Frame-time delta (mean/p95): **NOT COLLECTED** (blocked)
@@ -40,7 +40,7 @@
   - global/per-id toggles: **NOT COLLECTED**
 
 ## Blocking issues (must clear before final perf numbers)
-1. Forge pre-run check gate failure in `checkClojure` (reflection warnings treated as failure), so perf runs currently require `-x :forge-1.20.1:checkClojure`.
+1. Forge pre-run check gate failure in `checkClojure` (reflection warnings treated as failure), so perf runs currently require `-x :platform:checkClojure`.
 2. Full low/medium/stress scenario metrics are still pending manual in-world execution (JFR capture path already prepared).
 
 ## Evidence artifacts from this session

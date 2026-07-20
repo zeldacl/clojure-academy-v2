@@ -1,0 +1,28 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "key": {
+    "B": {
+      "item": "my_mod:brain_component"
+    },
+    "C": {
+      "item": "my_mod:calc_chip"
+    },
+    "E": {
+      "item": "my_mod:energy_convert_component"
+    },
+    "M": {
+      "item": "my_mod:machine_frame"
+    },
+    "N": {
+      "item": "minecraft:note_block"
+    }
+  },
+  "pattern": [
+    " E ",
+    "BMN",
+    " C "
+  ],
+  "result": {
+    "item": "my_mod:ability_interferer"
+  }
+}
