@@ -43,7 +43,7 @@ factory → `(factory tile nil)` 返回 `IWireless*` 实例。
 | 新 `block-type` 角色 | `foundation.vblock` 与 `core.vblock` 的类型注释、`core.vblock-resolver/vblock-get` 的 case、`core.capability-resolver/resolve-capability` 的 case |
 | 新拓扑操作 | `domain.topology` 纯变换 + `data.store` 原语 + `service.commands` 准入 + `api` 暴露 |
 | 新配置项 | `wireless.config/descriptors` |
-| 新 NBT 字段 | `data.persistence`（升 `schema-version`，无旧档迁移义务） |
+| NBT 字段 | `data.persistence`（必要时提升 `schema-version` 并声明版本边界） |
 
 ## 二、第三方 mod 接入
 

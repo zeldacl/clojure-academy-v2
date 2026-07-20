@@ -68,7 +68,7 @@ The linter script lives in `tools/aot-linter/aot_safety.clj` and the allowlist i
   - 根因：Java 输出目录未就绪（跳过了 `compileJava` 或 Java 本身编译失败）。
   - 处理：不要跳过 `compileJava`；先修 Java 错误再跑 `compileClojure`。
 
-- **现象**：`No matching ctor found for ... Pack$Info`（历史 TTF virtual-pack 问题，已移除）
+- **现象**：`No matching ctor found for ... Pack$Info`
   - 处理：字体现由 MSDF shadow `FontSet` + STB 在 `MsdfFontManager` 初始化；勿恢复 Clojure 反射构造 `Pack$Info`。
 
 ### 4) 如何验证“防呆机制”确实生效

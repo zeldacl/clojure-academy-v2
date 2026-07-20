@@ -1,6 +1,6 @@
 # Add a Loader or Minecraft Version
 
-This guide describes the current target-catalog architecture. It is intentionally not a recipe for copying old Gradle subprojects.
+This guide describes the current target-catalog architecture.
 
 Adding a real supported target is a product decision. If the goal is only to prove that the architecture can expand, add a synthetic fixture in tests instead of adding real loader dependencies, source trees, docs promises, or release artifacts.
 
@@ -12,7 +12,7 @@ Adding a real supported target is a product decision. If the goal is only to pro
 - Put Minecraft API differences under `platform-src/minecraft/*`.
 - Put loader lifecycle, metadata, and event bindings under `platform-src/loader/*`.
 - Keep `api`, `mcmod`, and `ac` free of Minecraft/loader APIs.
-- Do not reintroduce `PlatformBootstrap`, `PlatformBootstraps`, ServiceLoader platform bootstrap files, forwarding namespaces, or task aliases.
+- Do not add platform SPI, ServiceLoader platform bootstrap files, pass-through namespaces, or task aliases.
 
 ## Adding a Minecraft version component
 

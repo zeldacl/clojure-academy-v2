@@ -1,19 +1,27 @@
-# GUI DSL（现行）
+# GUI DSL
 
-> **历史说明**：旧 `cn.li.mcmod.gui.dsl` / `defgui` / XML→DSL 转换路径已删除。现行架构见 [GUI_Architecture_Refactoring.md](GUI_Architecture_Refactoring.md)。
+当前 GUI 声明以 `mcmod` 的纯数据 spec 为中心，业务 GUI 由 `ac` 注册，Loader 组件只负责 Minecraft 菜单、screen 与网络 glue。
 
-**架构**：块 GUI 在 **`ac`** 各 `gui.clj` 中通过 **`cn.li.mcmod.gui.spec/register-block-gui!`** 注册；**`cn.li.ac.core/content-loader`** 在 `content-ns/load-all!` 之后向 **`cn.li.mcmod.gui.registry`** 注册 screen factory。模块边界见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
+## mcmod entrypoints
 
-## mcmod 入口
+| Namespace | Responsibility |
+|-----------|----------------|
+| `cn.li.mcmod.gui.spec` | GUI spec 构造与 `register-block-gui!`。 |
+| `cn.li.mcmod.gui.registry` | GUI metadata、screen factory 与 handler registry。 |
+| `cn.li.mcmod.gui.handler` | 平台 GUI handler 协议。 |
+| `cn.li.mcmod.gui.slot-schema` | Slot layout、quick move 与 validator 描述。 |
+| `cn.li.mcmod.gui.xml-parser` | Runtime XML widget 读取。 |
 
-| 命名空间 | 职责 |
-|----------|------|
-| `cn.li.mcmod.gui.spec` | 纯 map GUI 规格、`register-block-gui!` |
-| `cn.li.mcmod.gui.registry` | 注册表、metadata 查询、screen factory |
-| `cn.li.mcmod.gui.handler` | 平台 `register-gui-handler` multimethod |
-| `cn.li.mcmod.gui.components` / `events` | CGui 组件与事件 |
-| `cn.li.mcmod.gui.xml-parser` | `read-xml` / `get-widget` runtime |
+`mcmod` 不引用 Minecraft / Loader API。
 
-## ac 内容
+## ac ownership
 
-Wireless / TechUI 等业务 GUI 定义在 `ac` 对应 `gui.clj`；平台仅通过 `cn.li.ac.gui.platform-adapter/install-into-mcmod!` 注入回调，不直接依赖 `cn.li.ac.*` 实现细节。
+Wireless、TechUI、Terminal 等业务 GUI 定义在 `ac` 对应 namespace 中。`ac` 通过 `cn.li.ac.gui.platform-adapter/install-into-mcmod!` 向 `mcmod` 注入容器回调与 screen factory。
+
+## Platform ownership
+
+- Minecraft API 适配：`platform-src/minecraft/version/mc-1201/gui/`
+- Forge glue：`platform-src/loader/forge/`
+- Fabric glue：`platform-src/loader/fabric/`
+
+Loader 组件不得复制业务 GUI 规则。

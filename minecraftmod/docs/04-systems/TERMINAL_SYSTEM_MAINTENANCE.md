@@ -99,7 +99,7 @@
 
 ## 变更风险
 
-- 修改 `catalog` 中 `:id` 会破坏已存 `:installed-apps` 与安装器物品语义（当前重构不保证旧存档兼容）。
+- 修改 `catalog` 中 `:id` 会改变 `:installed-apps` 与安装器物品语义；这类变更必须声明版本边界。
 - 在服务端 `require` `client.apps` 会导致 classpath / 侧分离违规。
 - 恢复 `registry` 或 `client.bridge` 会与 Gradle 门禁冲突。
 

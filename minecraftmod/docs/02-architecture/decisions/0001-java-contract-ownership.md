@@ -1,65 +1,32 @@
-# ADR 0001: Java contract ownership for energy and platform bootstrap
+# ADR 0001: Java contract ownership
 
 ## Status
 
-Accepted as documentation-only guidance for the current refactor. No Java source movement is performed by this ADR.
-
-## Context
-
-During the AC structural refactor, two cross-module Java contract duplications were identified:
-
-- `api/src/main/java/cn/li/acapi/energy/IEnergyCapable.java`
-- `mcmod/src/main/java/cn/li/mcmod/energy/IEnergyCapable.java`
-- `api/src/main/java/cn/li/acapi/platform/spi/platform target bootstrap.java`
-- `mcmod/src/main/java/cn/li/mcmod/platform/spi/platform target bootstrap.java`
-
-The active runtime wiring currently depends on the `mcmod` contracts in several places, while `api` is intended to be the stable public contract surface. Moving or deleting these interfaces without a migration path would risk binary/source churn across Forge/Fabric glue, Clojure `deftype` implementations, and any external consumers.
+Accepted.
 
 ## Decision
 
-1. Keep both contract locations for now.
-2. Treat `api` as the intended long-term published contract surface.
-3. Treat `mcmod` as the active runtime contract surface until all current call sites are inventoried and a compatibility bridge is available.
-4. Do not change Java package ownership opportunistically inside unrelated AC Clojure refactors.
-5. Any future consolidation must be done as its own migration with explicit compatibility tests.
+Java contracts have one canonical owner:
 
-## Migration rule for future cleanup
+- Public external API belongs in `api`.
+- Runtime framework contracts belong in `mcmod`.
+- Minecraft-version Java adapters belong in `platform-src/minecraft/version/<version>`.
+- Loader Java entrypoints and metadata-required classes belong in `platform-src/loader/<loader>`.
 
-A future Java contract consolidation may proceed only after all of the following are true:
+Do not duplicate the same contract in multiple packages. If a contract moves, update all callers in the same change and remove the previous package path.
 
-- All `IEnergyCapable` implementors and callers are inventoried across `ac`, `mcmod`, `platform-src/minecraft/version/mc-1201`, Forge, and Fabric modules.
-- A chosen canonical package is documented.
-- Existing public-ish packages get deprecated bridge interfaces/classes for at least one transition window.
-- Compile checks pass for every module that consumes the interface.
-- `verifyArchitectureBoundaries` still passes.
+## Rules
 
-Recommended final direction:
+- `ac` implements business behavior and may consume `api` / `mcmod` contracts.
+- `mcmod` must not depend on `ac` or Loader APIs.
+- Loader components must not depend directly on `ac`; they reach content through metadata, lifecycle and platform contracts.
+- Java entrypoints required by Forge/Fabric are allowed, but must stay limited to framework handoff.
 
-- `api` owns stable externally visible interfaces/SPI.
-- `mcmod` owns Clojure/runtime adapters and may depend on `api`, not duplicate external-facing contract names indefinitely.
-- Platform modules depend on the stable API or the smallest platform-specific adapter, not AC implementation details.
-
-## Consequences
-
-Positive:
-
-- Avoids high-risk cross-module Java churn during AC internal refactoring.
-- Makes the current duplication explicit instead of accidental.
-- Provides a clear gate for future cleanup.
-
-Trade-offs:
-
-- Duplicate Java contract names remain temporarily.
-- New developers must check this ADR before moving `IEnergyCapable` or `platform target bootstrap`.
-
-## Current validation expectation
-
-For AC-only structural refactors, run:
+## Validation
 
 ```powershell
-cmd.exe /c "gradlew.bat :ac:compileClojure"
-cmd.exe /c "gradlew.bat runAcUnitTests"
-cmd.exe /c "gradlew.bat verifyArchitectureBoundaries"
+.\gradlew.bat verifyCurrentPlatforms
+.\gradlew.bat :ac:compileClojure :mcmod:compileClojure
+.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge-1.20.1"
+.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
 ```
-
-For future Java contract consolidation, also run module Java/Clojure compile tasks for affected modules and both platform baselines.

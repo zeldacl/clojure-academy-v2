@@ -37,4 +37,4 @@ This precedence is implemented in shared helper:
 ## Planned v2 direction
 
 - Optional per-entry entity-type split for scripted kinds, or
-- standardized payload profile-key routing with compatibility bridge for v1 content.
+- standardized payload profile-key routing for the current content model.

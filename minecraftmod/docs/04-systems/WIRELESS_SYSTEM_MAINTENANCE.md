@@ -55,7 +55,7 @@
 | `data.network-validation` / `data.node-conn-validation` | capability 校验与 dispose |
 | `data.network-runtime` / `data.world-runtime` | tick 编排（ctx、due?、清扫） |
 | `data.network-energy-balance` | 均衡编排（计划 + effects） |
-| `data.persistence` | NBT schema **v2**（列表序列化，载入重建各 map；v1 读到即告警重建，无迁移） |
+| `data.persistence` | 当前 NBT schema（列表序列化，载入后重建各 map） |
 | `runtime.node-transfer` | 连接 tick 入口 + generator/receiver 传输循环 |
 | `runtime.effects` | `.setEnergy` / generator pull / receiver inject |
 | `core.vblock`(+resolver/codec 拆分) | 位置引用；`pos-of` 为所有 map key 来源 |

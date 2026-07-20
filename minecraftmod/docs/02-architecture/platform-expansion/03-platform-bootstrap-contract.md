@@ -4,7 +4,7 @@ The old platform bootstrap SPI is removed.
 
 Loader-required Java entrypoints are allowed only as framework entrypoints. They should require the loader Clojure entry namespace and call an explicit `start-<loader>-mod!`, `start-<loader>-client!`, or datagen function.
 
-The loader entry function then calls the shared platform bootstrap in `cn.li.platform.bootstrap`. There is no `PlatformBootstrap`, `PlatformBootstraps`, or ServiceLoader platform bootstrap file.
+The loader entry function then calls the shared platform bootstrap in `cn.li.platform.bootstrap`. There is no platform SPI or ServiceLoader platform bootstrap file.
 
 ## Invariants
 

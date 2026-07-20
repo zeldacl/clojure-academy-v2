@@ -15,8 +15,8 @@ platform-src/loader/<loader>/
 
 Rules:
 
-- Keep Java entrypoints thin because the loader requires Java classes.
-- Do not create internal forwarding namespaces.
+- Keep Java entrypoints limited to framework-required calls.
+- Do not create internal pass-through namespaces.
 - Do not create platform bootstrap SPI classes or ServiceLoader files.
 - Call the shared bootstrap directly from the loader entry namespace.
 

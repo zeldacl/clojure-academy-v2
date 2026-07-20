@@ -1,101 +1,55 @@
 # 运行时架构与 DSL 总览
 
-本文描述重构后的 **模块边界、启动顺序、DSL 数据如何流到 Forge**。阅读 `03-dsl/*` 各指南前，建议先浏览本节。
+本文描述当前模块边界、启动顺序，以及 DSL 数据如何进入具体平台目标。
 
----
+## 模块分工
 
-## 1. 模块分工
+| 模块 / 组件 | 职责 | 边界 |
+|-------------|------|------|
+| `api` | 对外 Java API 与互操作接口。 | 不放业务实现。 |
+| `mcmod` | DSL、协议、metadata、生命周期、平台抽象。 | 不引用 Minecraft / Loader API。 |
+| `ac` | AcademyCraft 内容、无线、能量、能力、GUI 业务。 | 不引用 Minecraft / Loader API。 |
+| `platform-src/minecraft/*` | Minecraft API 适配与版本差异。 | 不枚举 Loader。 |
+| `platform-src/loader/<loader>/` | Loader entrypoint、注册、事件、client/datagen glue。 | 不复制业务逻辑。 |
+| `:platform` | 按 `platform-targets.json` 组合上述 source components。 | 不按 Gradle 子工程表达版本。 |
 
-| 模块 | 职责 | 禁止事项 |
-|------|------|----------|
-| **`api`** | 对外 Java 接口（如无线/能量的 `acapi` 包），供 Java 与可选互操作 | 不含游戏逻辑 |
-| **`mcmod`** | 协议与 DSL：`defblock`/`defitem`/`deftile`、`protocol.metadata`、GUI/NBT/事件元数据、`platform.*` 抽象 | **不得**引用 `net.minecraft.*` 或 Loader API |
-| **`ac`** | 内容与域逻辑：无线、能量、`content/*` 入口、方块/物品具体实现、网络与 GUI 业务 | **不得**引用 Forge/Fabric/Minecraft 类；通过 `mcmod` 协议与 `acapi` 边界交互 |
-| **`forge target`** | `@Mod`、注册表、`DeferredRegister`、事件桥、Java 桥（BlockEntity、Menu 等） | **不得**依赖 `cn.li.ac.*` 命名空间（通过 `mcmod.content` + `lifecycle` 间接拉起 `ac`） |
+## DSL 与 metadata
 
-**依赖红线**：`ac` ↔ `forge target` 无直接依赖；二者只共同依赖 `mcmod`（及 `api`）。
+- `cn.li.mcmod.block.dsl`：`defblock` / `defmultiblock`，写入 block registry。
+- `cn.li.mcmod.item.dsl`：`defitem`，写入 item registry。
+- `cn.li.mcmod.block.tile-dsl`：`deftile` / `deftile-kind`，声明 tile 与 BlockEntityType 需求。
+- `cn.li.mcmod.protocol.metadata`：平台侧唯一聚合查询入口。
 
----
+Loader 组件只消费 metadata，不扫描 `ac` 源码，也不硬编码内容 id。
 
-## 2. Block / Item / Tile DSL 在 mcmod 中的位置
+## 内容加载
 
-### 2.1 数据结构与注册表
+`ac` 通过 `cn.li.ac.core/init` 安装内容与业务 hook：
 
-- **`cn.li.mcmod.block.dsl`**
-  - `defblock`、`defmultiblock`：宏展开为 `register-block!`，写入 **`block-registry`**（atom）。
-  - `create-block-spec` 将选项归并为 **`BlockSpec`**，含嵌套记录：`PhysicalProperties`、`RenderingProperties`、`BlockStateConfig`、`EventHandlers`、`MultiBlockConfig`。
-  - 仅支持 **嵌套写法**（`:physical {...}`、`:rendering {...}`、`:events {...}`、`:multi-block {...}`）。
-- **`cn.li.mcmod.item.dsl`**
-  - `defitem` → **`item-registry`**（atom），`ItemSpec` 记录。
-- **`cn.li.mcmod.block.tile-dsl`**
-  - `deftile` / `deftile-kind` → **tile-registry**，描述哪些 block-id 绑定哪个 tile-id、BlockEntityType 注册名和生命周期钩子。
-- **`cn.li.mcmod.protocol.metadata`**
-  - **唯一面向平台的聚合查询层**：从上述 registry 读取，提供 `get-all-block-ids`、`get-block-spec`、`has-block-entity?`、`get-all-tile-ids`、GUI/item 等查询，**避免 Forge 直接扫 `ac`**。
+1. 设置 mod id、GUI 平台实现、slot validator、resource resolver 等运行依赖。
+2. 初始化世界数据、无线/能量 Java API bridge。
+3. 加载 `cn.li.ac.registry.content-namespaces` 中声明的内容命名空间，触发 `defblock` / `defitem` / `deftile`。
+4. 注册 GUI factory、network handler、client renderer hook。
 
-### 2.2 事件与方块 DSL 的关系
+## 平台启动
 
-- 方块 spec 的 **`:events`** 在 `create-block-spec` 中写入 `EventHandlers`。
-- **`cn.li.mcmod.block.query`** 提供 `identify-block-from-full-name`、`get-block-event-handler`、`has-block-event-handler?` 等统一查询。
-- Forge/Fabric 侧通过 **`cn.li.mcmod.events.dispatcher`** 按 block-id 分发，不硬编码方块名，也不依赖额外事件同步表。
+Loader Java entrypoint 是外部框架要求保留的入口。它只进入对应 Loader Clojure entry namespace，然后调用 `cn.li.platform.bootstrap` 的统一启动流程。
 
----
+启动流程读取 `META-INF/academy-target.edn`，校验当前 target 的 capabilities，并确保每个 capability 只有一个实现 owner。
 
-## 3. 内容入口（ac）：谁在 `require` 方块定义
+## 注册与事件
 
-- **`cn.li.ac.registry.content-namespaces`** 维护 **`block-namespaces`**、**`item-namespaces`**（如 `cn.li.ac.content.blocks.wireless`、`cn.li.ac.content.items.all`）。
-- **`load-all!`** 对上述命名空间做 **`require`**，触发各文件中的 **`defblock`** / **`defitem`** 及子模块的 **`require`**（例如 wireless 再拉取 `wireless-node.block`、`wireless-matrix.gui` 等）。
-- **`cn.li.ac.registry.hooks`**：`register-network-handler!`、`register-client-renderer!`；在 **`cn.li.ac.core/init`** 末尾 **`call-all-network-handlers!`**、客户端再跑注册的 renderer。
+- Loader 组件按 metadata 注册 block、item、menu、entity、network、client renderer、datagen provider。
+- Minecraft 版本组件承载 blockstate、datagen shell、Minecraft API 差异。
+- 业务事件分发通过 `mcmod` 协议和 `ac` hook 完成，不通过 Loader 层复制业务逻辑。
 
-典型无线入口 **`cn.li.ac.content.blocks.wireless`**：`(msg-reg/register-all!)` 在加载期注册消息 ID。
+## DataGen
 
----
+DataGen 由目标显式选择：
 
-## 4. 启动顺序（Forge）
+```powershell
+.\gradlew.bat :platform:runData "-PplatformTarget=forge-1.20.1"
+.\gradlew.bat :platform:runDatagen "-PplatformTarget=fabric-1.20.1"
+```
 
-1. Java **`@Mod`** 构造 / 早期入口调用 Clojure **`cn.li.forge1201.init/init-from-java`**。
-2. **`init-from-java`**：`platform.dispatch/*platform-version*` → `:forge target`，**`cn.li.mcmod.content/ensure-content-init-registered!`**（内部 `requiring-resolve` **`cn.li.ac.core/init`**，使 **`lifecycle/register-content-init!`** 已执行），再 **`lifecycle/run-content-init!`**。
-3. **`cn.li.ac.core/init`**（内容初始化）大致顺序：
-   - 注入 mod-id、GUI 平台实现、slot validators、resource 解析等；
-   - **`wd/init-world-data!`**、能量/无线 Java API bridge；
-   - **`content-ns/load-all!`** → 所有 **`defblock`/`defitem`** 进入 registry；
-   - 按 GUI id 注册 screen factory（依赖上一步 DSL 已加载）；
-   - 事件分发在运行时通过 `block.query` 直接查询 `BlockSpec :events`；
-   - **`hooks/call-all-network-handlers!`** 等。
-4. Forge **注册阶段**（由 **`cn.li.forge1201.registry.content-registration/register-core-content!`** 统一驱动）：只对 **`protocol.metadata`** 暴露的 id 循环，按 metadata 选择 `DynamicStateBlock`、`ScriptedBlock`、多方块等 Java 工厂；**`register-block-entities!`** 按 **tile-id** 聚合 BlockEntityType；**`register-all-items!`** 同理。
-
----
-
-## 5. 复杂方块实现模式（ac 侧）
-
-以无线节点为例（**`cn.li.ac.block.wireless-node.block`**）：
-
-- 仍用 **`bdsl/defblock`** / **`tdsl/deftile`** 声明；额外使用 **`cn.li.mcmod.block.state-schema`** 从 schema 生成 **NBT 读写、网络 handler、blockstate 属性**。
-- 状态进 **`ScriptedBlockEntity`** 的 Clojure map；能力通过 **`platform.capability`** 与 **`acapi`** 接口暴露。
-- 网络：消息 ID 在域内注册，**`hooks/register-network-handler!`** 在适当时机注册服务端逻辑。
-
----
-
-## 6. 与 DataGenerator 的关系
-
-- **定义**在 **`mcmod`**（`blockstate_definition`、`blockstate_properties`）。
-- **生成**在 **`forge target`** 的 **`cn.li.forge1201.datagen.*`**，由 **`DataGeneratorSetup`** 把 `GatherDataEvent` 交给 Clojure。
-
----
-
-## 7. Fabric
-
-`fabric target` 目录可保留对等适配；**根 `settings.gradle` 默认不 include**。启用后应复用同一套 **`mcmod` registry + `ac` 内容**，仅替换平台入口与桥接实现。
-
----
-
-## 参考代码入口
-
-| 主题 | 命名空间 / 路径 |
-|------|-----------------|
-| Block 宏与 BlockSpec | `cn.li.mcmod.block.dsl` |
-| 平台查询 | `cn.li.mcmod.protocol.metadata` |
-| Forge 注册 | `cn.li.forge1201.mod` |
-| 内容加载 | `cn.li.ac.registry.content-namespaces`, `cn.li.ac.core` |
-| 生命周期 | `cn.li.mcmod.lifecycle`, `cn.li.mcmod.content` |
-| 事件分发 | `cn.li.mcmod.block.query`, `cn.li.mcmod.events.dispatcher` |
-| Forge 初始化 | `cn.li.forge1201.init` |
+输出进入 `platform-target/build/generated/datagen/<target-id>/`。hash manifest 与 parity 比较见 [../04-datagen/DataGenerator.md](../04-datagen/DataGenerator.md)。

@@ -22,7 +22,7 @@
 
 ## 推荐验证流程
 
-1. 先跑 `verifyCurrentPlatforms`，确认旧目录、旧 SPI、manifest drift、target 硬编码和生成残留没有回归。
+1. 先跑 `verifyCurrentPlatforms`，确认架构门禁、manifest drift、target 硬编码和生成残留没有回归。
 2. 对当前修改涉及的 loader 跑 `:platform:compileJava` / `:platform:compileClojure`，并显式传入对应 `-PplatformTarget=...`。
 3. 需要跨 loader 对照时，用两次独立 Gradle invocation 或 CI matrix 分别跑 Forge/Fabric target。
 

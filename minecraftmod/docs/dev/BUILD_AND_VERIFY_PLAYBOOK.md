@@ -1,6 +1,6 @@
 # Build and Verify Playbook
 
-当前平台构建只有一个 Gradle 工程：`:platform`。具体目标由 `platform-targets.json` 声明，并通过 `-PplatformTarget=<target-id>` 选择；默认目标为 `forge target`。
+当前平台构建只有一个 Gradle 工程：`:platform`。具体目标由 `platform-targets.json` 声明，并通过 `-PplatformTarget=<target-id>` 选择；默认目标为 catalog 中声明的 `forge-1.20.1`。
 
 ## 快速入口
 
@@ -13,7 +13,7 @@
 
 ## 验证顺序
 
-1. `verifyCurrentPlatforms`：确认旧目录、旧 SPI、重复 capability owner、AOT manifest drift、旧 target 硬编码和 platform-src 生成残留没有回归。
+1. `verifyCurrentPlatforms`：确认架构门禁、重复 capability owner、AOT manifest drift、target 硬编码和 platform-src 生成残留没有回归。
 2. 按修改范围运行单 target 编译；不要在 Gradle 子工程名里表达 loader/version。
 3. 跨 loader 对照由 CI matrix 分别调用 `:platform` 完成；DataGen 对照使用各 target 生成的 hash manifest。
 

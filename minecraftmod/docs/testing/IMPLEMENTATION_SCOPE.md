@@ -1,78 +1,41 @@
-# Testing Implementation Scope (Current Iteration)
+# Testing Scope
 
-## In Scope
-- Platform-neutral unit testing in `ac`, `mcmod`, and optional `api`.
-- Forge `GameTest` integration and verification pipeline.
-- Testability refactors that preserve behavior.
+本文描述当前测试边界与推荐执行方式。
 
-## Architecture Red Lines For Tests
-- `ac` owns gameplay/domain rules and gameplay contract assertions.
-- `mcmod` only tests platform-neutral foundation contracts (DSL/metadata/parsing/network shapes), no gameplay semantics.
-- `forge target` keeps `GameTest` as a thin runtime adapter check (registration, datapack loading, minimal world-level execution), no duplicated gameplay logic.
+## Scope
 
-## Out of Scope (This Iteration)
-- Fabric Clojure unit test runner / `fabric target` `*_test.clj` 自动发现执行（模块已 include，仅 compile/datagen 烟雾维护）。
-- Fabric GameTest execution.
+- `ac`：业务与领域规则测试，包括无线、能量、能力、GUI presenter 等平台无关逻辑。
+- `mcmod`：DSL、metadata、协议、NBT、GUI spec、事件分发等平台无关基础契约。
+- `api`：公开 Java API 与互操作接口的编译/契约检查。
+- `:platform`：按 `platform-targets.json` 选择单个 target，验证 Loader glue、metadata、AOT、client/datagen entrypoint 与 Minecraft API 适配。
 
-## Fabric Extension Hooks (Reserved)
-- Keep shared behavior contracts platform-neutral (inputs, expected outputs, invariants).
-- Keep platform binding logic isolated in platform adapters.
-- Mirror Forge test names when Fabric implementation is added later.
+## Boundaries
 
-## Testability Refactor Rule
-Refactors are allowed when existing structure blocks reliable tests, but each refactor must satisfy all checks below:
-1. Business behavior stays unchanged for existing scenarios.
-2. New/updated tests prove the same outcomes before and after refactor.
-3. No architecture boundary break: `ac` and `mcmod` remain free of `net.minecraft.*`.
+- `ac` / `mcmod` 测试不得直接依赖 Minecraft、Forge、Fabric 类。
+- Loader 目标测试只验证平台接线与 runtime bootstrap，不复制业务规则。
+- 跨 Loader 对照通过多次单 target Gradle invocation 或 CI matrix 完成。
 
-## Cleanup Notes (2026-06)
+## Current verification commands
 
-- Inventory: [TEST_CLEANUP_INVENTORY.md](TEST_CLEANUP_INVENTORY.md)
-- Report: [TEST_CLEANUP_REPORT.md](TEST_CLEANUP_REPORT.md)
+```powershell
+.\gradlew.bat verifyCurrentPlatforms
+.\gradlew.bat :ac:test
+.\gradlew.bat :mcmod:test
+.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge-1.20.1"
+.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+```
 
-## Verification Entry Points
-- `gradlew unitTestCompile`
-- `gradlew quickUnitTests`（`ac` + `mcmod`）
-- `gradlew verifyLocalPrGate`（平台矩阵 + `quickUnitTests`）
-- `gradlew verifyForgeBaseline`
-- `gradlew verifyForgeClojureUnitTests`（Forge/shared Clojure 单测，手动）
-- `gradlew runForgeGameTests`
-- `gradlew validateForgeGameTestLog`
-- `gradlew verifyForgeTesting`
+DataGen parity:
 
-## Recommended Execution Order
-1. `gradlew unitTestCompile`
-2. `gradlew verifyForgeBaseline`
-3. `gradlew verifyForgeTesting`
-4. Split run when debugging:
-   - `gradlew runForgeGameTests`
-   - `gradlew validateForgeGameTestLog`
+```powershell
+.\gradlew.bat :platform:runData "-PplatformTarget=forge-1.20.1"
+.\gradlew.bat :platform:runDatagen "-PplatformTarget=fabric-1.20.1"
+.\gradlew.bat compareDatagenParityManifests
+```
 
-## Failure Triage
-- **`ac` unit test failure**
-  - Treat as gameplay/domain regression first.
-  - Fix `ac` contracts before looking at Forge `GameTest` logs.
-- **`mcmod` unit test failure**
-  - Treat as platform-neutral foundation regression.
-  - Keep fixes gameplay-agnostic; do not move gameplay rules into `mcmod`.
-- **Compile failure (`compileClojure` / `checkClojure`)**
-  - First narrow with namespace flags:
-    - `-PcompileNsOnly=ns.a,ns.b`
-    - `-PcheckNsOnly=ns.a,ns.b`
-    - `-PcheckNsFile=<path>`
-  - Then use:
-    - `:platform:bisectCompileClojure`
-    - `:platform:bisectCheckClojure`
-- **GameTest startup failure (before any tests execute)**
-  - Treat as runtime bootstrap/data issue, not gameplay contract issue.
-  - Prioritize datapack/registry consistency checks.
-- **GameTest log validation failure**
-  - Use `validateForgeGameTestLog` output to classify startup/runtime fatal errors vs thin adapter assertions.
-  - Fix environment/bootstrap errors first, then test-level failures.
+## Failure triage
 
-## Current Runtime Blocker
-- Forge GameTest task is wired and executable, but runtime world bootstrap currently fails before tests run because datapack registry contains an invalid configured feature reference:
-	- `my_mod:worldgen/configured_feature/phase_liquid_pool.json`
-	- Error: unknown feature key `my_mod:phase_liquid_pool`
-- `--safeMode` is already enabled for the GameTest run config, but this still loads the mod's built-in datapack (`pack main`), so the registry error must be fixed at data/feature registration level.
-- This is an existing content/data issue, not a test harness issue. Unit compile and Forge compile verification remain green.
+- `ac` failure：优先按业务规则回归处理。
+- `mcmod` failure：优先检查 DSL / metadata / protocol 契约。
+- `:platform` compile failure：先确认 selected target 的 source components 与 dependencies，再定位 Loader 或 Minecraft 版本层。
+- `verifyCurrentPlatforms` failure：按任务名修复架构残留、重复 capability owner、AOT manifest drift、target 硬编码或生成残留。

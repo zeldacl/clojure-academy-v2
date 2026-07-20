@@ -1,54 +1,38 @@
-# Client/Server Code Separation - Implementation Summary
+# Client / Server 分离规则
 
-## Completed Changes
+本文描述当前代码的 side 边界。
 
-### 1. Side Detection System
-- **Created**: `platform-src/loader/forge/src/main/clojure/cn/li/forge1201/side.clj`
-- Functions: `client-side?`, `server-side?`, `resolve-client-fn`
-- Provides runtime detection of physical client vs dedicated server
+## 规则
 
-### 2. Client-Only Modules
-- **Created**: `platform-src/loader/forge/client/i18n_impl.clj` - Wraps `net.minecraft.client.resources.language.I18n`
-- **Created**: `platform-src/loader/forge/client/render_buffer_impl.clj` - Wraps `RenderType` and `MultiBufferSource`
+- `ac`、`mcmod`、`api` 不直接引用 `net.minecraft.client.*`、Forge client API 或 Fabric client API。
+- Minecraft client API 只允许出现在平台组件中：
+  - `platform-src/minecraft/*` 的 client 专属代码；
+  - `platform-src/loader/<loader>/` 的 client entrypoint、renderer、screen glue。
+- Dedicated server 启动路径不能静态加载 client-only namespace 或 Java class。
+- Client-only Clojure namespace 通过 side check 后 `requiring-resolve`。
+- Java client entrypoint 或 screen/helper class 必须使用对应 Loader 支持的 client-only 注解或入口约束。
 
-### 3. Platform Layer Updates
-- **Modified**: `platform-src/loader/forge/platform/platform/init.clj` / `platform/platform/init.clj` - platform bootstrap responsibilities are now split into SPI entry facade + real installer layer
-- **Modified**: `platform-src/loader/forge/mod.clj` - Added side detection, removed direct client class usage
+## 依赖链
 
-### 4. Java Annotations
-- **Modified**: `ForgeClientHelper.java` - Added `@OnlyIn(Dist.CLIENT)`
-- **Modified**: `CGuiContainerScreen.java` - Added `@OnlyIn(Dist.CLIENT)`
+`ac` 与 Loader 组件不互相直接依赖。两者通过 `mcmod` 的生命周期、metadata、协议和 platform abstraction 连接。
 
-### 5. Documentation
-- Added CLIENT-ONLY docstrings to all `*/client/*` namespaces
-- Documents that these must be loaded via side-checked `requiring-resolve`
-
-## Architecture Compliance ✅
-
-- ✅ ac/ module: No Minecraft imports
-- ✅ ac/ module: No platform imports
-- ✅ mcmod/ module: No Minecraft imports
-- ✅ mcmod/ module: No platform imports
-- ✅ platform-src/loader/forge/: No direct ac imports
-- ✅ mcmod/: No direct ac imports
-- ✅ All Java client classes have @OnlyIn annotation
-- ✅ Build successful: forge target-1.0.0.jar (16MB)
-
-## Key Principles
-
-1. **Dependency chain**: **`ac`** 与 **`forge target`** 互不直接依赖；二者均依赖 **`mcmod`**（及需要时的 **`api`**）。Forge 适配层通过 `mcmod` 生命周期与元数据拉起 `ac`，而非在命名空间上 `require` `cn.li.ac.*`。详见 [Runtime_And_DSL_CN.md](Runtime_And_DSL_CN.md)。
-2. **Client isolation**: `net.minecraft.client.*` only in platform (`forge target`) CLIENT sublayer
-3. **Side detection**: All client code loaded via `side/resolve-client-fn`
-4. **Runtime separation**: Single JAR works on both client and dedicated server
-
-## Next Steps
-
-To test on dedicated server:
-```bash
-./gradlew :platform:runServer
+```text
+api   mcmod
+ \     /  \
+  ac  /    platform-src/minecraft/*
+        \  platform-src/loader/<loader>
+             -> :platform target
 ```
 
-Verify:
-- Server starts without ClassNotFoundException
-- No "Client setup phase" in logs
-- Blocks/items register correctly
+## 验证
+
+```powershell
+.\gradlew.bat verifyCurrentPlatforms
+.\gradlew.bat :platform:runServer "-PplatformTarget=forge-1.20.1"
+```
+
+服务器验证重点：
+
+- dedicated server 不出现 client class loading error；
+- block/item/menu/network 注册正常；
+- client setup 只在 client target lifecycle 执行。

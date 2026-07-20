@@ -1,109 +1,28 @@
-# AC 模块分层约定
+# AC Module Layering
 
-## 背景
+`ac` owns AcademyCraft business logic and content. It must stay independent from Minecraft and Loader APIs.
 
-`ac` 是业务/content 层，承载能力、无线、电力、GUI 业务逻辑等内容。它必须保持平台无关：不静态依赖 `net.minecraft.*`、Forge/Fabric Loader API，也不依赖 `cn.li.forge1201.*` / `cn.li.fabric1201.*`。
+## Layers
 
-本轮结构性重构采用 **stable public boundary + internal extraction**：对外保留当前正式入口，把实现拆进更小的 domain/data/service/client/block 组件，并删除过渡性旧结构。
+| Layer | Typical namespace | Responsibility |
+|-------|-------------------|----------------|
+| Content | `cn.li.ac.content.*` | Block/item/ability declarations and metadata registration. |
+| Domain | `cn.li.ac.<system>.domain.*` | Pure rules and transformations. |
+| Service | `cn.li.ac.<system>.service.*` | Application orchestration and transactions. |
+| Data | `cn.li.ac.<system>.data.*` | Records, persistence codecs, world/runtime storage boundaries. |
+| Runtime effects | `cn.li.ac.<system>.runtime.*` or `effects.*` | Explicit side-effect boundary behind protocols/API. |
+| GUI presenter | `cn.li.ac.<system>.gui.*` | Business GUI state, presenters, factory wiring through `mcmod`. |
 
-## 目标依赖方向
+## Rules
 
-推荐的单向调用流：
+- No `net.minecraft.*`, Forge or Fabric imports in `ac`.
+- Cross-system access goes through documented public APIs, such as `cn.li.ac.wireless.api` and `cn.li.ac.energy.operations`.
+- Public APIs should be direct and meaningful; do not add pass-through namespaces.
+- Platform behavior is injected through `mcmod` contracts or explicit platform adapters.
 
-```text
-foundation → domain/model → data/repository/persistence → service/application → api/facade → block/gui/content adapters
-```
-
-约束：
-
-- `domain/model`：纯数据、规则和计算，不依赖 runtime tile/world/capability。
-- `data/*`：持久化、索引、存储结构；不编排业务命令。
-- `service/*`：应用级 orchestration；可以组合 data/domain，但应避免平台静态依赖。
-- `api`：兼容公开入口与事件发射，尽量委托到 service。
-- `block/*` / `content/*` / `client/*`：内容适配、GUI、客户端表现和运行时 glue。
-
-## 稳定公开入口
-
-下列 namespace 是对外或跨模块的稳定边界；**新增实现**应落在右侧列出的内部职责 namespace，而不是在入口层堆积逻辑：
-
-| 公开入口 | 内部职责 | 说明 |
-|----------|----------|------|
-| `cn.li.ac.wireless.api` | `service.commands`、`service.queries`、事件发射 | 无线对外**唯一**入口；已删除 `topology-service` / `query-service` 等第二套路径。 |
-| `cn.li.ac.wireless.data.world` | `data.persistence`、生命周期钩子 | **仅** SavedData 与 `on-world-load/save/tick`；不代理 lookup，也不 re-export 拓扑命令。可变状态提交在 `data.world-registry`。 |
-| `cn.li.ac.wireless.core.vblock` | `data.vblock-codec`、`core.vblock-resolver` | runtime record 兼容保留，NBT codec 与 world resolver 分离。 |
-| `cn.li.ac.block.wireless-node.logic` | `state`、`inventory`、`tick`、`capability` | 方块放置/破坏/GUI 打开等事件 glue；tick 在 `tick` namespace。 |
-| `cn.li.ac.energy.api.impl` | `service.provider-registry`、`service.subscription`、`service.transfer-executor` | 协议实现瘦身为适配层。 |
-| `cn.li.ac.ability.registry.developer-type` / developer block callers | `ability.domain.developer` | developer 类型、等级门槛、能量 pacing 单一事实源。 |
-
-## 新增代码放置规则
-
-### Wireless
-
-- VBlock NBT 编解码：`cn.li.ac.wireless.data.vblock-codec`。
-- VBlock → world/tile/capability runtime lookup：`cn.li.ac.wireless.core.vblock-resolver`。
-- 查询：`cn.li.ac.wireless.service.queries`（只读，tile → vblock → lookup）。
-- 拓扑命令：`cn.li.ac.wireless.service.commands`（`transact!` + `entity-commit`）。
-- 纯拓扑状态变换：`cn.li.ac.wireless.domain.topology`。
-- 能量计划与副作用：`domain.transfer`、`runtime.effects`。
-
-### Wireless Node Block
-
-- 状态 schema、默认值、tier、blockstate 投影、slot schema、container 操作、server tick、所有权验证、方块事件：`cn.li.ac.block.wireless-node.logic`。
-- Java/capability implementation：`cn.li.ac.block.wireless-node.capability`。
-- 邻近客户端状态广播（无 client GUI 依赖）：`cn.li.ac.block.machine.sync`（channel `"node"`）。
-
-### Wireless Matrix Block
-
-- 状态、controller 解析、slot schema、plate/core 计数、stats 公式、tick、容器、方块事件：`cn.li.ac.block.wireless-matrix.logic`。
-- Capability / Java proxy：`cn.li.ac.block.wireless-matrix.capability`。
-- 邻近客户端状态广播：`cn.li.ac.block.machine.sync`（channel `"matrix"`）。
-
-### Block machines (shared)
-
-所有 scripted 机器方块经 `init-machine!` 注册，状态写入唯一走 `machine.runtime/commit-state!`（或 `commit-transform!` / `commit-from-tile!`）。
-
-| 模块 | 职责 |
-|------|------|
-| `cn.li.ac.block.machine.registration` | `init-machine!`：tile、capability、container、block、hooks |
-| `cn.li.ac.block.machine.runtime` | `schema-runtime`、`make-tick-fn`、`commit-state!`、GUI 打开 |
-
-**`machine.runtime` 回调（扁平）**：`:tick-state [state level pos block-state be]`、`:initial-state [be level pos block-state]`、`:after-commit! [be level pos old new]`；`make-open-gui-handler*` 的 `can-open?` 等为 `[player world pos sneaking item-stack]`。内部 `resolve-tile-level-pos` 返回 `[level pos]`（已删除 `resolve-tile-context` map）。
-| `cn.li.ac.block.machine.container` | 声明式 hopper 容器（经 commit 写 inventory） |
-| `cn.li.ac.block.machine.sync` | 服务端 world broadcast（node/matrix 等） |
-| `cn.li.ac.block.machine.render-runtime` | 客户端 TESR init、资源懒加载、动画 cache |
-| `cn.li.ac.block.gui.sync` | schema GUI 容器与 `schema-sync-fns` |
-| `cn.li.ac.block.machine.wireless-handlers` | 发电机/开发者无线链路 handler 共享 |
-| `cn.li.ac.wireless.link-helpers` | 发电机/接收器 ↔ 节点链路 GUI 纯函数 DTO（handler 注册留在 wireless-handlers） |
-
-目录约定：`<machine>/block.clj`（仅 init）、`schema.clj`、`logic.clj`、`gui.clj`（CLIENT）、`handlers.clj`、`render.clj`（CLIENT）。多方块结构在 `ac/block` 内统一用 `bdsl/defmultiblock`。
-
-### Energy
-
-- Provider 推断、注册表、admin dump：`cn.li.ac.energy.service.provider-registry`。
-- 订阅/通知：`cn.li.ac.energy.service.subscription`。
-- transfer/drain 执行：`cn.li.ac.energy.service.transfer-executor`。
-- 旧 `cn.li.ac.energy.operations` 继续作为业务兼容 facade。
-
-### Client FX
-
-- 通用 beam/ray render op 构建：`cn.li.ac.ability.client.effects.beam-render`。
-- 技能专属状态、音效、charge ring、payload channel glue 留在各技能 FX namespace。
-
-## 测试策略
-
-- 每次拆分保留 facade 行为测试，优先断言公开函数和业务不变量。
-- 对新内部纯逻辑添加 focused tests：例如 VBlock codec、`service.commands` / `service.queries`、`domain.topology`、beam render builder、energy API facade。
-- `get_errors` 中 Clojure reload 的 `redefined var` 可视为噪声；最终以 Gradle 编译/单测/边界门禁为准。
-
-## 验证命令
-
-在仓库根目录使用：
+## Verification
 
 ```powershell
-cmd.exe /c "gradlew.bat :ac:compileClojure"
-cmd.exe /c "gradlew.bat runAcUnitTests"
-cmd.exe /c "gradlew.bat verifyArchitectureBoundaries"
+.\gradlew.bat :ac:test
+.\gradlew.bat verifyCurrentPlatforms
 ```
-
-> 在 Windows PowerShell 中，若直接执行 `.\gradlew.bat` 得到 generic `NativeCommandFailed`，使用上面的 `cmd.exe /c` 形式。
-gradlew.bat` 得到 generic `NativeCommandFailed`，使用上面的 `cmd.exe /c` 形式。

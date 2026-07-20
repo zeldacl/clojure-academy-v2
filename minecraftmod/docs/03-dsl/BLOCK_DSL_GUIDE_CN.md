@@ -850,9 +850,9 @@ Block DSL 提供了多个辅助函数来生成常见的不规则形状：
 - 按是否需要 **动态 BlockState**、**Scripted BlockEntity**、**多方块** 等，调用 Java 侧 **`invoke-bootstrap-helper`** 工厂（如 `createDynamicStateBlock`、`createCarrierScriptedBlock`）；
 - BlockItem、BlockEntityType 等同理走 metadata。
 
-因此：**内容作者只负责在 `ac` 里 `defblock`（并确保命名空间被 `content-namespaces/load-all!` 加载）**；**注册表代码集中在 `forge1201.registry.content-registration`**，与旧版「在 mod 里手写 demo 注册」不同。
+因此：**内容作者只负责在 `ac` 里 `defblock`（并确保命名空间被 `content-namespaces/load-all!` 加载）**；注册表代码由 selected target 的 Loader component 通过 `mcmod` metadata 驱动。
 
-Fabric 若重新启用子工程，应对齐同一 **`protocol.metadata`** 查询模式，而不是复制旧文档中的 `Registry/register` 片段。
+Fabric target 同样应对齐 **`protocol.metadata`** 查询模式，不复制注册逻辑。
 
 ## API 参考
 

@@ -14,7 +14,7 @@ This repository uses a single `:platform` Gradle project. Loader/version behavio
 - `platform-src/loader/fabric`: Fabric loader entrypoints, metadata, events, and loader bindings.
 - `platform-target`: the single Gradle platform project.
 
-Do not restore old root platform modules, old platform SPI, old task aliases, namespace forwarding, or dual-track implementations.
+Use only the current target catalog architecture. Do not add root platform modules, platform SPI, task aliases, pass-through namespaces, or dual-track implementations.
 
 ## Common commands
 
@@ -32,7 +32,7 @@ On Windows, keep the `-PplatformTarget=...` argument quoted.
 - Do not auto-generate a loader/version cartesian product. Every supported target must be explicitly declared.
 - Minecraft components must not enumerate Forge/Fabric. Loader lifecycle belongs only to loader components.
 - `ac` and `mcmod` must not depend on Minecraft, Forge, Fabric, or other loader APIs.
-- Java entrypoints, client/datagen entrypoints, and loader metadata are allowed only because external frameworks require them. Internal thin wrappers and forwarding namespaces are not allowed.
+- Java entrypoints, client/datagen entrypoints, and loader metadata are allowed only because external frameworks require them. Internal pass-through namespaces are not allowed.
 - Datagen output belongs under `platform-target/build/generated/datagen/<target-id>/`; do not write generated output back to source directories.
 - Do not add a real new-loader target, dependency, source tree, documentation promise, or release artifact unless the project explicitly decides to support it. Use synthetic catalog/sourceSet/capability fixtures to validate extensibility.
 

@@ -1,6 +1,6 @@
 # Player-facing config layout
 
-AcademyCraft config is organized by player/admin-facing domains. We intentionally do **not** keep compatibility aliases for old experimental keys.
+AcademyCraft config is organized by player/admin-facing domains. Each key has one canonical descriptor; alternate aliases are not kept.
 
 ## Domains and generated files
 

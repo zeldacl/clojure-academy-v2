@@ -149,11 +149,11 @@ wireless_<domain>_<action-token>
 > **警告：无线消息 ID 是客户端-服务端协议的一部分，修改后需要同步部署客户端和服务端。**
 
 1. 在声明文件修改 action key（如从 `:get-status` 改为 `:query-status`）。
-2. 全局搜索旧 key 字面量 `(node-msgs/msg :get-status)` 并替换为新 key。
+2. 全局搜索既有 key 字面量 `(node-msgs/msg :get-status)` 并替换为新 key。
 3. 更新测试里的 `expected-node-actions` / `expected-matrix-actions`。
 4. 运行测试验证映射正确。
 
-如需迁移期兼容，服务端可临时注册旧旧 ID 指向相同 handler，待客户端更新完毕后移除。
+消息 ID 是联机协议的一部分；变更时要同步更新客户端与服务端，并在同一次变更中删除不再使用的 ID。
 
 ---
 

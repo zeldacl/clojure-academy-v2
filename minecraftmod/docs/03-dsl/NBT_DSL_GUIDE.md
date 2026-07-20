@@ -2,7 +2,7 @@
 
 ## 概述
 
-NBT DSL 是一个声明式的 NBT 序列化系统，使用 Clojure 宏自动生成读写函数，用于 TileEntity、容器状态等持久化。实现位于 **`cn.li.mcmod.nbt.dsl`**（不是历史命名空间 `cn.li.nbt.dsl`）。与方块 schema 生成、无线节点等结合时，见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
+NBT DSL 是一个声明式的 NBT 序列化系统，使用 Clojure 宏自动生成读写函数，用于 TileEntity、容器状态等持久化。实现位于 **`cn.li.mcmod.nbt.dsl`**。与方块 schema 生成、无线节点等结合时，见 **`docs/02-architecture/Runtime_And_DSL_CN.md`**。
 
 ## 核心优势
 
@@ -471,15 +471,9 @@ A: 使用 :custom-write 和 :custom-read：
                     )))]
 ```
 
-### Q: 如何迁移现有代码？
+### Q: 如何新增或调整持久化字段？
 
-A: 逐步迁移：
-
-1. 保留旧函数
-2. 添加 `defnbt` 定义
-3. 测试新生成的函数
-4. 替换调用点
-5. 删除旧函数
+A: 在权威 `defnbt` 定义中修改字段，并同步更新调用方、测试和存档风险说明。不要保留第二套读写函数。
 
 ### Q: 性能如何？
 
