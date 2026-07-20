@@ -1,4 +1,5 @@
 import groovy.json.JsonSlurper
+import groovy.json.JsonOutput
 
 plugins {
     id "dev.architectury.loom" version "1.13.467" apply false
@@ -228,6 +229,50 @@ tasks.register("verifyRepositoryHygiene") {
         }.files
         if (!residues.isEmpty()) {
             throw new GradleException("Generated residues remain under platform-src; remove explicit paths first. Count=${residues.size()}")
+        }
+    }
+}
+
+tasks.register("compareDatagenParityManifests") {
+    group = "verification"
+    description = "Compare generated datagen hash manifests for targets in the same parity group."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def targetsByGroup = catalog.targets.findAll { id, target ->
+            target.datagenParityGroup
+        }.groupBy { id, target ->
+            target.datagenParityGroup.toString()
+        }
+        def problems = []
+        targetsByGroup.each { group, entries ->
+            def manifests = entries.collectEntries { id, target ->
+                def manifest = file("platform-target/build/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
+                manifest.isFile() ? [(id): new JsonSlurper().parse(manifest)] : [:]
+            }
+            if (manifests.size() < 2) {
+                logger.lifecycle("[datagen-parity] group ${group}: need at least two manifests, found ${manifests.keySet().sort()}")
+                return
+            }
+            def baselineId = manifests.keySet().sort().first()
+            def baselineFiles = manifests[baselineId].files ?: [:]
+            manifests.keySet().sort().findAll { it != baselineId }.each { id ->
+                def files = manifests[id].files ?: [:]
+                if (files != baselineFiles) {
+                    def baselineKeys = baselineFiles.keySet() as Set
+                    def keys = files.keySet() as Set
+                    problems << [
+                        group: group,
+                        baseline: baselineId,
+                        target: id,
+                        missing: (baselineKeys - keys).sort(),
+                        extra: (keys - baselineKeys).sort(),
+                        changed: (baselineKeys.intersect(keys).findAll { k -> baselineFiles[k] != files[k] }).sort()
+                    ]
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("Datagen parity mismatch:\n" + JsonOutput.prettyPrint(JsonOutput.toJson(problems)))
         }
     }
 }

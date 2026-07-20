@@ -10,4 +10,4 @@ Examples:
 
 AOT manifests are owned by source components. When files move between components, update the manifest in the same change.
 
-Datagen output goes under `platform-target/build/generated/datagen/<target-id>/` with a hash manifest. Parity comparisons belong in matrix/CI, not in duplicated source directories.
+Datagen output goes under `platform-target/build/generated/datagen/<target-id>/` with `META-INF/academy-datagen-hashes.json`. `runData` / `runDatagen` finalize by writing the manifest, and `compareDatagenParityManifests` compares targets in the same `datagenParityGroup` after matrix jobs collect or preserve those outputs. Parity never belongs in duplicated source directories.

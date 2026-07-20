@@ -13,7 +13,11 @@ DataGen 随 `:platform` target 运行。目标由 `-PplatformTarget=<target-id>`
 
 - Forge：`cmd /c .\gradlew.bat :platform:runData "-PplatformTarget=forge-1.20.1"`
 - Fabric：`cmd /c .\gradlew.bat :platform:runDatagen "-PplatformTarget=fabric-1.20.1"`
+- Hash manifest only：`cmd /c .\gradlew.bat :platform:generateDatagenHashManifest "-PplatformTarget=<target-id>"`
+- Parity compare：`cmd /c .\gradlew.bat compareDatagenParityManifests`
 
 ## Output
 
-生成内容写入 `platform-target/build/generated/datagen/<target-id>/`。同一 parity group 的比较由 CI matrix 或外部脚本读取 build 输出完成，不把 DataGen 结果写回 `platform-src`。
+生成内容写入 `platform-target/build/generated/datagen/<target-id>/`。每个 target 的 hash manifest 位于 `platform-target/build/generated/datagen/<target-id>/META-INF/academy-datagen-hashes.json`。
+
+同一 `datagenParityGroup` 的比较由 CI matrix 先分别生成各 target 输出，再运行 `compareDatagenParityManifests` 读取 manifest。DataGen 结果不写回 `platform-src`，也不提交生成残留。
