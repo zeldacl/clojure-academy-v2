@@ -2,8 +2,7 @@
   "Reactive info-area for Wireless Matrix — SSID/password editing + INIT form.
    Network-info policy/messaging (ported verbatim from the deleted
    wireless_matrix/gui.clj) lives here since it's this namespace's only
-   consumer; gui-reactive.clj re-exports it for callers that historically
-   reached it through that namespace."
+   consumer."
   (:require [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.gui.info-area-reactive :as info-area]
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
@@ -155,8 +154,16 @@
           is-owner? (matrix-logic/owner-authorized? state player)
           policy (matrix-info-area-policy
                    (boolean (network-initialized? data)) is-owner?)
-          ctx (info-area/clear-area! rt)]
-      (info-area/add-histogram-capacity! ctx (fn [] (double (:load data))) (double (:max-capacity data)))
+          ctx (info-area/clear-area! rt)
+          load-fn (fn [] (double (:load data)))
+          max-capacity (max 1.0 (double (:max-capacity data)))]
+      (info-area/add-histogram!
+        ctx
+        [{:label "Load"
+          :color 0xFFFF6C00
+          :value-fn load-fn
+          :max max-capacity
+          :desc-fn (fn [] (str (long (load-fn)) "/" (long max-capacity)))}])
       (info-area/add-sepline! ctx "info")
       (info-area/add-property! ctx "owner" placer)
       (info-area/add-property! ctx "range" (format "%.0f" (double (:range data))))

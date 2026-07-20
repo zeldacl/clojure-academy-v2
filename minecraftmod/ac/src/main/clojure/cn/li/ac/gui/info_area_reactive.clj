@@ -226,16 +226,3 @@
             b (sig/bind! live val-n writer (rt/get-dirty-bindings-q rt))]
         (rt/register-binding! rt (.getIdx val-n) b)
         (advance! ctx 10.0)))))
-
-;; Single-bar back-compat shims (auto-info-area callers). Colors/desc match
-;; AcademyCraft TechUI.histEnergy / histCapacity.
-(defn add-histogram-energy!
-  [ctx value-fn max-fn]
-  (add-histogram! ctx [{:label "Energy" :color 0xFF25C4FF :value-fn value-fn :max (max-fn)
-                        :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}]))
-
-(defn add-histogram-capacity!
-  [ctx load-fn max-capacity]
-  (let [mx (max 1.0 (double max-capacity))]
-    (add-histogram! ctx [{:label "Load" :color 0xFFFF6C00 :value-fn load-fn :max mx
-                          :desc-fn (fn [] (str (long (load-fn)) "/" (long mx)))}])))

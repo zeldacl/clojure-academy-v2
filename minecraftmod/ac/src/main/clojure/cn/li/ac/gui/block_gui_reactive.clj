@@ -114,13 +114,31 @@
 
 (defn- attach-histogram! [ctx container h]
   (case (:type h)
-    :buffer (info-area/add-histogram-energy! ctx (:value-fn h) (:max-fn h))
-    :energy (info-area/add-histogram-energy! ctx
-              (fn [] (double (or @(:energy container) 0.0)))
-              (fn [] (max 1.0 (double (or @(:max-energy container) 1.0)))))
-    :capacity (info-area/add-histogram-capacity! ctx
-                (fn [] (double (or @(:load container) 0.0)))
-                (max 1.0 (double (or @(:max-capacity container) 1.0))))
+    :buffer (info-area/add-histogram!
+              ctx
+              [{:label "Energy"
+                :color 0xFF25C4FF
+                :value-fn (:value-fn h)
+                :max ((:max-fn h))
+                :desc-fn (fn [] (format "%.0f IF" (double ((:value-fn h)))))}])
+    :energy (let [value-fn (fn [] (double (or @(:energy container) 0.0)))
+                  max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))]
+              (info-area/add-histogram!
+                ctx
+                [{:label "Energy"
+                  :color 0xFF25C4FF
+                  :value-fn value-fn
+                  :max max-energy
+                  :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}]))
+    :capacity (let [load-fn (fn [] (double (or @(:load container) 0.0)))
+                    max-capacity (max 1.0 (double (or @(:max-capacity container) 1.0)))]
+                (info-area/add-histogram!
+                  ctx
+                  [{:label "Load"
+                    :color 0xFFFF6C00
+                    :value-fn load-fn
+                    :max max-capacity
+                    :desc-fn (fn [] (str (long (load-fn)) "/" (long max-capacity)))}]))
     nil))
 
 (defn- attach-histograms-and-properties!

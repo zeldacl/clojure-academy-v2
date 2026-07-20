@@ -177,10 +177,6 @@ Enforces:
   []
   (:by-id (tile-state)))
 
-(def snapshot-tile-registry
-  "Alias for plan/docs compatibility."
-  snapshot-tiles-by-id)
-
 (defn register-tile-capability-keys!
   "Associate capability keywords with a tile spec (declaration phase only)."
   [tile-id & cap-keys]
@@ -218,4 +214,3 @@ Enforces:
   [tile-kind & options]
   (let [options-map (apply hash-map options)]
     `(tile-kind/register-tile-kind! ~tile-kind ~options-map)))
-
