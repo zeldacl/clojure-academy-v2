@@ -321,6 +321,9 @@ if (target.loader != "none") {
     tasks.matching { it.name == "checkClojure" }.configureEach {
         dependsOn copyClojureClassesToJavaOutput
     }
+    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
+        dependsOn copyClojureClassesToJavaOutput
+    }
     tasks.named("compileTestClojure").configure {
         dependsOn tasks.named("classes")
         classpath.from(platformClojureSourceClasspath)

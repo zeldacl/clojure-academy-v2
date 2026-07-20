@@ -13,6 +13,7 @@
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.fabric1201.adapter.gui-registry :as gui-registry]
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
@@ -169,8 +170,12 @@
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))
      ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
-     :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
-     :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
+       :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
+       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
+
+(defn- install-client-owner-hooks!
+  []
+  (gui-registry/install-client-owner-wrapper! mc-session/with-current-client-owner))
 
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."
@@ -178,6 +183,7 @@
   (log/info "Initializing Fabric 1.20.1 client-side systems")
 
   (mc-session/init-default-owner-resolver!)
+  (install-client-owner-hooks!)
 
   ;; ===== Platform SPI Installation (before AC bootstrap) =====
   ;; Install Fabric-specific SPI implementations that AC will use

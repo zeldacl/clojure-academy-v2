@@ -9,8 +9,7 @@
             [cn.li.mc1201.gui.registry.open :as open-core]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.client.session :as client-session])
+            [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]
            [net.fabricmc.fabric.api.screenhandler.v1 ScreenHandlerRegistry]))
 
@@ -18,6 +17,19 @@
   "Map from GUI ID to registered MenuType instances. Lock-free CAS updates
    replace the prior ^:dynamic var + Object lock."
   (atom {}))
+
+(def ^:private client-owner-wrapper
+  "Client-only owner wrapper installed by cn.li.fabric1201.client.init.
+  This adapter may be loaded by common setup and must not require client session
+  namespaces at load time."
+  (atom (fn [_]
+          (throw (ex-info "Fabric client owner wrapper is not installed"
+                          {:namespace 'cn.li.fabric1201.adapter.gui-registry})))))
+
+(defn install-client-owner-wrapper!
+  [wrapper-fn]
+  (reset! client-owner-wrapper wrapper-fn)
+  nil)
 
 (defn- gui-handler-types-snapshot
   []
@@ -60,7 +72,7 @@
                               :remove-log-message "Fabric menu closed for player"
                               :quick-move-error-prefix "Error in Fabric quickMoveStack:"})
                :error-prefix "Failed to create container for GUI"
-               :with-owner! #(client-session/with-current-client-owner %)})))))))
+               :with-owner! #(@client-owner-wrapper %)})))))))
 
 (defn register-screen-handler-types! []
   (log/info "Registering GUI screen handler types for Fabric 1.20.1")

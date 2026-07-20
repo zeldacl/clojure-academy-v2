@@ -18,11 +18,32 @@
             [cn.li.platform.target :as target]
             [cn.li.mc1201.gui.network.packet :as packet-base]
             [cn.li.mc1201.runtime.network-payload :as runtime-payload]
-            [cn.li.mc1201.runtime.sync-codec :as sync-codec]
-            [cn.li.mc1201.client.session :as mc-session])
+            [cn.li.mc1201.runtime.sync-codec :as sync-codec])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]
            [clojure.lang IFn]))
+
+(def ^:private client-session-id-fn
+  (atom (fn []
+          (throw (ex-info "Forge GUI network client session id function is not installed"
+                          {:namespace 'cn.li.forge1201.gui.network})))))
+
+(def ^:private local-player-uuid-fn
+  (atom (fn []
+          (throw (ex-info "Forge GUI network local player UUID function is not installed"
+                          {:namespace 'cn.li.forge1201.gui.network})))))
+
+(def ^:private with-bound-client-owner-fn
+  (atom (fn [_ _]
+          (throw (ex-info "Forge GUI network client owner binding function is not installed"
+                          {:namespace 'cn.li.forge1201.gui.network})))))
+
+(defn install-client-owner-functions!
+  [{:keys [client-session-id local-player-uuid with-bound-client-owner]}]
+  (reset! client-session-id-fn client-session-id)
+  (reset! local-player-uuid-fn local-player-uuid)
+  (reset! with-bound-client-owner-fn with-bound-client-owner)
+  nil)
 
 (defn- payload-player-uuid
   [payload]
@@ -34,15 +55,15 @@
 
 (defn- with-client-response-owner
   [payload f]
-  (let [session-id (mc-session/client-session-id)
+  (let [session-id (@client-session-id-fn)
         ;; Response payloads rarely carry :player-uuid; fall back to the local
         ;; Minecraft player so require-client-owner validation passes during dispatch.
         player-uuid (or (payload-player-uuid payload)
-                        (try (mc-session/local-player-uuid) (catch Exception _ nil)))]
+                        (try (@local-player-uuid-fn) (catch Exception _ nil)))]
     (when-not session-id
       (throw (ex-info "Client GUI network response requires bound client session"
                       {:payload payload})))
-    (mc-session/with-bound-client-owner
+    (@with-bound-client-owner-fn
      (cond-> {:logical-side :client :client-session-id session-id}
        player-uuid (assoc :player-uuid player-uuid))
      f)))

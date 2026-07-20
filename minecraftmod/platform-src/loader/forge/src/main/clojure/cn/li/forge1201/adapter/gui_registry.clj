@@ -12,8 +12,7 @@
             [cn.li.platform.target :as target]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.runtime.deferred :as deferred]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.client.session :as client-session])
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim ForgeBootstrapHelper ForgeContainerFactory]
            [net.minecraftforge.network NetworkHooks]
            [net.minecraftforge.common.extensions IForgeMenuType]
@@ -39,6 +38,18 @@
   "Map from GUI ID to RegistryObject<MenuType>.
   Call (.get ro) to get the actual MenuType after registration fires."
   (atom {}))
+
+(def ^:private client-owner-wrapper
+  "Client-only owner wrapper installed by cn.li.forge1201.client.init.
+  This common namespace must not require client session namespaces at load time."
+  (atom (fn [_]
+          (throw (ex-info "Forge client owner wrapper is not installed"
+                          {:namespace 'cn.li.forge1201.adapter.gui-registry})))))
+
+(defn install-client-owner-wrapper!
+  [wrapper-fn]
+  (reset! client-owner-wrapper wrapper-fn)
+  nil)
 
 (defn menu-register
   []
@@ -98,7 +109,7 @@
                       :resolve-menu-type-fn get-menu-type
                       :bridge-opts (menu-proxy/menu-proxy-opts)
                       :error-prefix "Failed to create container for GUI"
-                      :with-owner! #(client-session/with-current-client-owner %)})]
+                      :with-owner! #(@client-owner-wrapper %)})]
         (log/info "[CLIENT-MENU-FACTORY] Menu created successfully, returning to Forge. menu=" (type result))
         result))
     (catch Throwable e

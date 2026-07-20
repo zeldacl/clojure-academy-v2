@@ -1,14 +1,18 @@
 (ns cn.li.forge1201.client.init
   "CLIENT-ONLY: Client-side initialization for Forge 1.20.1.
 
-  This namespace must be loaded via side-checked requiring-resolve from the
+  This namespace must be loaded via the side-checked client resolver from the
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
+            [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.render :as render]
+            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
@@ -18,14 +22,22 @@
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.request.bridge :as request-bridge]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
+            [cn.li.mc1201.client.i18n :as i18n]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
+            [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
+            [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
             [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
+            [cn.li.forge1201.adapter.gui-registry :as gui-registry]
+            [cn.li.forge1201.gui.network :as gui-network]
+            [cn.li.forge1201.gui.screen-impl :as gui-screen-impl]
+            [cn.li.forge1201.runtime.owner :as runtime-owner]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
@@ -38,7 +50,9 @@
            [cn.li.forge1201.mixin GuiGraphicsInvoker]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
+           [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.network.chat Component]
+           [net.minecraft.world.entity.player Player]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.client.event EntityRenderersEvent$RegisterRenderers]
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
@@ -271,6 +285,65 @@
        :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
        :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
 
+(defn- install-client-owner-hooks!
+  []
+  (gui-registry/install-client-owner-wrapper! mc-session/with-current-client-owner)
+  (runtime-owner/install-client-owner-functions!
+    {:client-session-id mc-session/client-session-id
+     :with-bound-client-owner mc-session/with-bound-client-owner})
+  (gui-network/install-client-owner-functions!
+    {:client-session-id mc-session/client-session-id
+     :local-player-uuid mc-session/local-player-uuid
+     :with-bound-client-owner mc-session/with-bound-client-owner}))
+
+(defn- install-tutorial-activated-bridge!
+  []
+  (tutorial-platform/register-tutorial-activated-hook!
+    (fn [player-uuid tut-id]
+      (try
+        (let [uuid (java.util.UUID/fromString player-uuid)
+              mc (Minecraft/getInstance)
+              player (if (and mc (.hasSingleplayerServer mc))
+                       (some-> mc .getSingleplayerServer .getPlayerList (.getPlayer uuid))
+                       (when-let [^ClientLevel level (some-> mc .level)]
+                         (some (fn [^Player p]
+                                 (when (= (str (.getUUID p)) (str uuid)) p))
+                               (.players level))))]
+          (when player
+            (.post MinecraftForge/EVENT_BUS
+                   (cn.li.forge1201.event.TutorialActivatedEvent. player (name tut-id)))))
+        (catch Throwable e
+          (log/stacktrace "install-tutorial-activated-bridge!: hook callback failed" e))))))
+
+(defn- init-client-input-systems!
+  []
+  ;; Platform SPI installation must happen before AC post-SPI callbacks register
+  ;; their keybinding content.
+  (try
+    (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
+    (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
+    (catch Exception e
+      (log/warn e "Failed to install keyboard input SPI providers")
+      (log/stacktrace "Failed to install keyboard input SPI providers" e)))
+
+  (try
+    (lifecycle/run-post-spi-client-init!)
+    (catch Exception e
+      (log/error e "Failed to run post-SPI content keybinding init")
+      (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
+
+  (try
+    (key-mapping-adapter/register-all-keybindings-from-ac!)
+    (catch Exception e
+      (log/error e "Failed to register Forge KeyMappings")
+      (log/stacktrace "Failed to register Forge KeyMappings" e)))
+
+  (try
+    (keyboard-event-handler/install-forge-event-handler!)
+    (catch Exception e
+      (log/error e "Failed to install Forge keyboard event handler")
+      (log/stacktrace "Failed to install Forge keyboard event handler" e))))
+
 (defn register-key-mappings!
   "Register all runtime KeyMapping instances to Forge input system."
   [^RegisterKeyMappingsEvent event]
@@ -287,10 +360,15 @@
   (log/info "Initializing Forge 1.20.1 client-side systems")
 
   (mc-session/init-default-owner-resolver!)
+  (install-client-owner-hooks!)
+  (install-tutorial-activated-bridge!)
+  (init-client-input-systems!)
 
   ;; Bind client-side rendering implementations first
   (init-render-bindings!)
   (init-content-client-bridge!)
+  (gui-screen-impl/init-client!)
+  (i18n/install-client-i18n!)
 
   ;; Then register renderers
   (register-renderers)

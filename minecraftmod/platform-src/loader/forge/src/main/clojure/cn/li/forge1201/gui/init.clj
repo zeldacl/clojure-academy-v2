@@ -5,7 +5,6 @@
             [cn.li.mcmod.gui.registry :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.forge1201.gui.network :as gui-network]
-            [cn.li.forge1201.gui.screen-impl :as gui-screen-impl]
             [cn.li.forge1201.adapter.gui-registry :as gui-registry]))
 
 (def ^:private platform-label "Forge 1.20.1")
@@ -25,8 +24,7 @@
 (def ^:private client-phase
   {:platform-label platform-label
    :phase-label "Client"
-   :steps [{:run #(optional-init! gui-screen-impl/init-client!
-                                  "Forge GUI screen impl not available on current side")}]})
+   :steps []})
 
 (def ^:private server-phase
   {:platform-label platform-label

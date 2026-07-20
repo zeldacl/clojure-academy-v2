@@ -17,7 +17,6 @@
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]
            [net.minecraft.server.level ServerPlayer]
-           [net.minecraft.client Minecraft]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]))
 
@@ -96,25 +95,6 @@
             (catch Throwable e
               (log/stacktrace "on-player-tick: process-pending-activations! failed" e))))))))
 
-(defn- install-forge-tutorial-activated-bridge!
-  []
-  (tutorial-platform/register-tutorial-activated-hook!
-   (fn [player-uuid tut-id]
-     (try
-       (let [uuid (java.util.UUID/fromString player-uuid)
-             mc (Minecraft/getInstance)
-             player (if (and mc (.hasSingleplayerServer mc))
-                      (some-> mc .getSingleplayerServer .getPlayerList (.getPlayer uuid))
-                      (when-let [level (some-> mc .level)]
-                        (some (fn [^Player p]
-                                (when (= (str (.getUUID p)) (str uuid)) p))
-                              (.players level))))]
-         (when player
-           (.post MinecraftForge/EVENT_BUS
-                (cn.li.forge1201.event.TutorialActivatedEvent. player (name tut-id)))))
-       (catch Throwable e
-         (log/stacktrace "install-forge-tutorial-activated-bridge!: hook callback failed" e))))))
-
 ;; ============================================================================
 ;; Registration
 ;; ============================================================================
@@ -147,9 +127,5 @@
                      TickEvent$PlayerTickEvent
                      (reify java.util.function.Consumer
                        (accept [_ evt] (on-player-tick evt))))
-       (try
-         (install-forge-tutorial-activated-bridge!)
-         (catch Throwable e
-           (log/stacktrace "init!: install-forge-tutorial-activated-bridge! failed" e)))
        (log/info "Tutorial item event listeners registered")))
   nil)

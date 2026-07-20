@@ -7,15 +7,7 @@
     [cn.li.forge1201.setup.lifecycle-init :as lifecycle-init]
     [cn.li.forge1201.integration.side :as side]
     [cn.li.forge1201.registry.state :as registry-state]
-    [cn.li.forge1201.gui.init :as gui-init]
     [cn.li.forge1201.adapter.gui-registry :as gui-registry-impl]
-    [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
-    [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
-    [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
-    [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
-    [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
-    [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
-    [cn.li.mcmod.lifecycle :as lifecycle]
     [cn.li.mcmod.aot :as aot]
     [cn.li.mcmod.config :as modid]
     [cn.li.mcmod.runtime.deferred :as deferred]
@@ -160,43 +152,6 @@
     (.enqueueWork event
       (reify Runnable
         (run [_]
-          ;; ===== Platform SPI Installation (before AC bootstrap) =====
-          ;; Install Forge-specific SPI implementations that AC will use
-          (try
-            (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
-            (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
-            (catch Exception e
-              (log/warn e "Failed to install keyboard input SPI providers")
-              (log/stacktrace "Failed to install keyboard input SPI providers" e)))
-          
-          ;; ===== Content Keybinding Initialization (post-SPI) =====
-          ;; Run content-registered post-SPI init callbacks (e.g. AC keybindings)
-          (try
-            (lifecycle/run-post-spi-client-init!)
-            (catch Exception e
-              (log/error e "Failed to run post-SPI content keybinding init")
-              (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
-          
-          ;; ===== Forge KeyMapping Registration =====
-          ;; Register all :alternative scheme inputs as Forge KeyMappings
-          (try
-            (key-mapping-adapter/register-all-keybindings-from-ac!)
-            (catch Exception e
-              (log/error e "Failed to register Forge KeyMappings")
-              (log/stacktrace "Failed to register Forge KeyMappings" e)))
-          
-          ;; ===== Forge Event Handler Installation =====
-          ;; Install InputEvent$Key listener to route Forge events
-          (try
-            (keyboard-event-handler/install-forge-event-handler!)
-            (catch Exception e
-              (log/error e "Failed to install Forge keyboard event handler")
-              (log/stacktrace "Failed to install Forge keyboard event handler" e)))
-          
-          ;; ===== Standard Client Initialization =====
-          (gui-init/init-client!)
-          (when-let [install-i18n! (side/resolve-client-fn 'cn.li.mc1201.client.i18n/install-client-i18n!)]
-            (install-i18n!))
           (if-let [init-client! (side/resolve-client-fn 'cn.li.forge1201.client.init/init-client)]
             (init-client!)
             (log/error "Client-side detected but client init failed to load")))))))
