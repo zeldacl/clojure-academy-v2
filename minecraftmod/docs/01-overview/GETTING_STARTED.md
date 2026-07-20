@@ -31,6 +31,7 @@
 ## 输出
 
 - 平台产物位于 `platform-target/build/libs/`。
-- 发布 jar 由 `:platform:remapJar` 生成；每次只构建一个 target，必须显式传入对应的 `-PplatformTarget=<target-id>`。发布构建使用 `-PreleaseAot`。
+- 发布 jar 由 Loom 的 `:platform:remapJar` 生成；每次只构建一个 target，必须显式传入对应的 `-PplatformTarget=<target-id>`。发布构建使用 `-PreleaseAot`。
+- 最终可分发文件只取 `platform-target/build/libs/` 中的非 `shadow` jar；不要发布 `platform-target/build/devlibs/*.jar`、`*-shadow.jar`、`*-shadow-stripped.jar` 或 `:platform:jar` 的直接输出。
 - target metadata 生成到 `platform-target/build/generated/target-metadata/META-INF/academy-target.edn`。
 - DataGen 输出位于 `platform-target/build/generated/datagen/<target-id>/`，不写回源码目录。

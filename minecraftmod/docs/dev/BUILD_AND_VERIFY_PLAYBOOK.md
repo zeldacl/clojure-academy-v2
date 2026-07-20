@@ -15,14 +15,20 @@
 
 ## 发布 jar
 
-最终发布 jar 使用 `:platform:remapJar` 生成。每次只构建一个 target，目标由 `-PplatformTarget=<target-id>` 显式选择；发布构建必须带 `-PreleaseAot`，以使用发布 AOT 输出并剥离本地变量表。
+最终发布 jar 使用 Loom 的 `:platform:remapJar` 生成。这个任务会把开发命名空间下的编译输出 remap/reobfuscate 成 Loader 可运行的发布 jar。每次只构建一个 target，目标由 `-PplatformTarget=<target-id>` 显式选择；发布构建必须带 `-PreleaseAot`，以使用发布 AOT 输出并剥离本地变量表。
 
 ```powershell
 .\gradlew.bat :platform:remapJar "-PplatformTarget=forge-1.20.1" -PreleaseAot
 .\gradlew.bat :platform:remapJar "-PplatformTarget=fabric-1.20.1" -PreleaseAot
 ```
 
-生成结果位于 `platform-target/build/libs/`，文件名由 `platform-targets.json` 中当前 target 的 `artifact.baseName`、项目版本和 `artifact.classifier` 决定。
+发布件只取 `platform-target/build/libs/` 中由 `remapJar` 生成的非 `shadow` jar，文件名由 `platform-targets.json` 中当前 target 的 `artifact.baseName`、项目版本和 `artifact.classifier` 决定。
+
+不要发布这些中间产物：
+
+- `platform-target/build/devlibs/*.jar`：开发命名 jar，未作为最终 remap 输出。
+- `platform-target/build/libs/*-shadow.jar` / `*-shadow-stripped.jar`：Fabric remap 输入或中间产物，不是最终发布 jar。
+- `:platform:jar` 或 `:platform:shadowJar` 的直接输出。
 
 ## 验证顺序
 
