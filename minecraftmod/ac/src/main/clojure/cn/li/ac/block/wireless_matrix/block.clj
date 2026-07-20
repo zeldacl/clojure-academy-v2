@@ -4,6 +4,7 @@
             [cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -38,8 +39,8 @@
      :before matrix-logic/ensure-matrix-slot-schema!
      :tile-kind {:tile-kind :wireless-matrix
                  :tick-fn matrix-logic/matrix-scripted-tick-fn
-                 :read-nbt-fn matrix-logic/matrix-scripted-load-fn
-                 :write-nbt-fn matrix-logic/matrix-scripted-save-fn}
+                 :read-nbt-fn matrix-stats/matrix-scripted-load-fn
+                 :write-nbt-fn matrix-stats/matrix-scripted-save-fn}
      :tiles [{:id "wireless-matrix"
               :registry-name "matrix"
               :blocks ["wireless-matrix" "wireless-matrix-part"]

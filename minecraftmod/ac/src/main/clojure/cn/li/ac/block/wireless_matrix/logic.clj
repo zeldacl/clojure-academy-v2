@@ -19,18 +19,6 @@
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.util.log :as log]))
 
-;; ============================================================================
-;; State lifecycle (delegates to cn.li.ac.block.wireless-matrix.stats)
-;; ============================================================================
-
-;; Forwarding defs for backward compatibility -- callers throughout the codebase
-;; reference matrix-logic/ for these symbols. The canonical implementations live
-;; in cn.li.ac.block.wireless-matrix.stats to break the circular dependency.
-
-(def matrix-default-state stats/matrix-default-state)
-(def matrix-scripted-load-fn stats/matrix-scripted-load-fn)
-(def matrix-scripted-save-fn stats/matrix-scripted-save-fn)
-
 (defn safe-state
   [be]
   (stats/safe-state be))
@@ -89,11 +77,6 @@
   []
   (slot-schema/tile-slot-count matrix-slot-schema-id))
 
-(defn required-plate-count
-  "Delegates to stats/required-plate-count for backward compatibility."
-  []
-  (stats/required-plate-count))
-
 (defn- slot-has-stack?
   [stk]
   (and stk (try (pos? (long (pitem/item-get-count stk))) (catch Exception _ true))))
@@ -113,7 +96,7 @@
 (defn is-working?
   [state]
   (and (> (:core-level state 0) 0)
-       (= (:plate-count state 0) (required-plate-count))))
+       (= (:plate-count state 0) (stats/required-plate-count))))
 
 ;; (stats formulas moved to cn.li.ac.block.wireless-matrix.stats)
 

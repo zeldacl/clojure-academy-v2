@@ -13,6 +13,7 @@
             [cn.li.ac.block.wireless-matrix.matrix-info-reactive :as matrix-info]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
+            [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
             [cn.li.ac.block.wireless-matrix.schema :as matrix-schema]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.item.constraint-plate :as plate]
@@ -53,30 +54,13 @@
               (alter-var-root #'*wireless-matrix-quick-move-config* (constantly cfg))
               cfg)))))
 
-;; ============================================================================
-;; Network info policy/messages — live in matrix-info-reactive (which this ns
-;; already depends on for rendering); re-exported here since callers/tests
-;; historically reach them via this namespace.
-;; ============================================================================
-
-(def network-initialized? matrix-info/network-initialized?)
-(def matrix-info-area-policy matrix-info/matrix-info-area-policy)
-(def send-gather-info matrix-info/send-gather-info)
-(def send-init-network matrix-info/send-init-network)
-(def send-change-ssid matrix-info/send-change-ssid)
-(def send-change-password matrix-info/send-change-password)
-
-;; ============================================================================
-;; Container Creation
-;; ============================================================================
-
 (defn- resolve-state
   "Resolve the state map from either a ScriptedBlockEntity or an existing map."
   [tile]
   (if (map? tile)
     [nil tile]
     (try
-      (let [state (or (platform-be/get-custom-state tile) matrix-logic/matrix-default-state)]
+      (let [state (or (platform-be/get-custom-state tile) matrix-stats/matrix-default-state)]
         [tile state])
       (catch Exception e
         (log/warn "Could not resolve customState from BE:"(ex-message e))
@@ -120,7 +104,7 @@
   (let [tile (:tile-entity container)]
     (log/debug "set-slot-item! - tile=" tile " slot=" slot-index " item=" item-stack)
     (common/set-slot-item-be! container slot-index item-stack
-                              matrix-logic/matrix-default-state
+                              matrix-stats/matrix-default-state
                               matrix-logic/recalculate-counts)
     (when tile
       (log/debug "set-slot-item! after-write - plate=" (matrix-logic/get-plate-count tile)
