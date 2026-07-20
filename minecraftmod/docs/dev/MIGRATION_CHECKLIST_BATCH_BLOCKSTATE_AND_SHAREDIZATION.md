@@ -1,10 +1,10 @@
 # Migration Checklist (Batch: Fabric blockstate parity + sharedization)
 
 ## Scope
-- Goal: achieve Forge/Fabric functional parity for Fabric datagen blockstates/models/items while moving duplicated logic to `mc-1.20.1`.
+- Goal: achieve Forge/Fabric functional parity for Fabric datagen blockstates/models/items while moving duplicated logic to `platform-src/minecraft/version/mc-1201`.
 - Validation baseline used in this batch: `:platform:compileClojure`, `:platform:runDatagen`, `verifyArchitectureBoundaries`, `verifyCurrentPlatforms`.
 
-## Migrated to `mc-1.20.1` (shared now)
+## Migrated to `platform-src/minecraft/version/mc-1201` (shared now)
 
 ### New shared helpers introduced
 1. `platform-src/minecraft/version/mc-1201/src/main/clojure/cn/li/mc1201/datagen/blockstate_support.clj`
@@ -75,31 +75,29 @@ Reason: this was a parity gap; Forge already generated these assets.
    - Reason: launcher/toolchain API differs.
 
 ## Verification status
-- ✅ `:platform:compileClojure` passed.
-- ✅ `:platform:runDatagen` passed (blockstate provider executed).
-- ✅ `verifyArchitectureBoundaries` passed.
-- ✅ `verifyCurrentPlatforms` passed.
-- ✅ Hook checks in combined run passed (`verifyFabricHookManifest`, `verifyForgeHookCoverage`, `verifyPlatformNoBusinessHookIds`).
+- 鉁?`:platform:compileClojure` passed.
+- 鉁?`:platform:runDatagen` passed (blockstate provider executed).
+- 鉁?`verifyArchitectureBoundaries` passed.
+- 鉁?`verifyCurrentPlatforms` passed.
+- 鉁?Hook checks in combined run passed (`verifyFabricHookManifest`, `verifyForgeHookCoverage`, `verifyPlatformNoBusinessHookIds`).
 
 ## Additional diagnostics (2026-05-09)
-- ✅ `:platform:compileJava --stacktrace` passed (no reproducible Java blocker).
-- ✅ `:platform:compileJava --stacktrace --info` passed on rerun.
+- 鉁?`:platform:compileJava` passed (no reproducible Java blocker).
+- 鉁?`:platform:compileJava --info` passed on rerun.
 - Note: earlier isolated `compileJava --info` non-zero report was transient and is not reproducible after rerun.
-- ✅ Gate bundle rerun passed: `verifyForgeHookCoverage verifyPlatformHookCoverage verifyPlatformNoBusinessHookIds verifyCurrentPlatforms`.
+- 鉁?Gate bundle rerun passed: `verifyForgeHookCoverage verifyPlatformHookCoverage verifyPlatformNoBusinessHookIds verifyCurrentPlatforms`.
 
 ## Follow-up candidates
-1. Add automated Forge↔Fabric datagen artifact diff task for blockstates/models to make parity drift visible in CI.
+1. Add automated Forge鈫擣abric datagen artifact diff task for blockstates/models to make parity drift visible in CI.
 2. Continue remaining file-by-file matrix batches from session plan until full repository checklist is complete.
 
 ## Next-batch progress (metadata + SPI, 2026-05-09)
-- Added `docs/dev/PLATFORM_METADATA_AND_SPI_PARITY_CHECKLIST.md` to close the explicit audit gap for metadata/SPI file coverage.
+- Metadata coverage is now verified by the target catalog and architecture gates.
 - Implemented Fabric metadata normalization in this batch:
    - `fabric.mod.json` now uses `${mod_version}` / `${mod_name}` / `${mod_authors}` placeholders.
    - `platform-src/loader/fabric/build.gradle` now expands `fabric.mod.json` placeholders during `processResources`.
 - Verified with gates:
-   - `:platform:processResources :platform:processResources` ✅
-   - `verifyCurrentPlatforms` ✅
-- Important constraint captured: active Forge build currently does not expand `mods.toml` placeholders, so Forge metadata remains static literals for now (tracked in the new checklist as TODO).
+   - `:platform:processResources :platform:processResources` 鉁?   - `verifyCurrentPlatforms` 鉁?- Important constraint captured: active Forge build currently does not expand `mods.toml` placeholders, so Forge metadata remains static literals for now (tracked in the new checklist as TODO).
 
 ## Datagen parity batch (2026-05-09)
 - Added root task `verifyForgeFabricDatagenParity` for the stable shared generated-resource subsets.

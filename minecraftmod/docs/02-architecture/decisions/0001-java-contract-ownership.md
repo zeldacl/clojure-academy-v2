@@ -27,7 +27,7 @@ The active runtime wiring currently depends on the `mcmod` contracts in several 
 
 A future Java contract consolidation may proceed only after all of the following are true:
 
-- All `IEnergyCapable` implementors and callers are inventoried across `ac`, `mcmod`, `mc-1.20.1`, Forge, and Fabric modules.
+- All `IEnergyCapable` implementors and callers are inventoried across `ac`, `mcmod`, `platform-src/minecraft/version/mc-1201`, Forge, and Fabric modules.
 - A chosen canonical package is documented.
 - Existing public-ish packages get deprecated bridge interfaces/classes for at least one transition window.
 - Compile checks pass for every module that consumes the interface.

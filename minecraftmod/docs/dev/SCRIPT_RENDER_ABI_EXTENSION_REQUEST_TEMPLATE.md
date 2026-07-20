@@ -21,7 +21,7 @@ Use this when a feature cannot be delivered as AC-only profile/content changes.
 - Backward compatibility behavior for v1/v2 profiles:
 - Failure behavior (must degrade safely to native path):
 
-## 4) Runtime impact (`mc-1.20.1`)
+## 4) Runtime impact (`platform-src/minecraft/version/mc-1201`)
 
 - Compiler changes:
 - Runtime/executor changes:

@@ -1,129 +1,101 @@
-# 工程布局与命名空间（人类可读）
+# 宸ョ▼甯冨眬涓庡懡鍚嶇┖闂达紙浜虹被鍙锛?
+涓?Cursor 瑙勫垯 [`.cursor/rules/project-structure.mdc`](../../.cursor/rules/project-structure.mdc) 鎻忚堪涓€鑷达紱**浠ユ湰鏂囦笌 `settings.gradle` 涓哄噯** 淇敼甯冨眬鏃讹紝璇峰悓姝ユ洿鏂拌瑙勫垯鏂囦欢锛岄伩鍏嶅垎鍙夈€?
+## 椤跺眰 Gradle 妯″潡
 
-与 Cursor 规则 [`.cursor/rules/project-structure.mdc`](../../.cursor/rules/project-structure.mdc) 描述一致；**以本文与 `settings.gradle` 为准** 修改布局时，请同步更新该规则文件，避免分叉。
-
-## 顶层 Gradle 模块
-
-| 模块 | 职责 |
+| 妯″潡 | 鑱岃矗 |
 |------|------|
-| **`api`** | 对外 Java API（如互操作用的接口包），无 Clojure 游戏逻辑 |
-| **`mcmod`** | 平台无关：协议、DSL、`protocol.metadata`、事件/GUI/NBT 等元数据；**禁止** `net.minecraft.*` 与 Loader API |
-| **`ac`** | 游戏内容与域逻辑；**禁止**直接引用 Forge/Fabric/Minecraft API；通过 `mcmod` 与约定边界交互 |
-| **`forge target`** | Forge 入口、注册、桥接 Java、实现 `mcmod` 协议；允许通过受控运行时桥接使用 `ac` 能力 |
-| **`fabric target`** | 可选 Fabric 适配；默认可能未在 `settings.gradle` 中 `include` |
+| **`api`** | 瀵瑰 Java API锛堝浜掓搷浣滅敤鐨勬帴鍙ｅ寘锛夛紝鏃?Clojure 娓告垙閫昏緫 |
+| **`mcmod`** | 骞冲彴鏃犲叧锛氬崗璁€丏SL銆乣protocol.metadata`銆佷簨浠?GUI/NBT 绛夊厓鏁版嵁锛?*绂佹** `net.minecraft.*` 涓?Loader API |
+| **`ac`** | 娓告垙鍐呭涓庡煙閫昏緫锛?*绂佹**鐩存帴寮曠敤 Forge/Fabric/Minecraft API锛涢€氳繃 `mcmod` 涓庣害瀹氳竟鐣屼氦浜?|
+| **`forge target`** | Forge 鍏ュ彛銆佹敞鍐屻€佹ˉ鎺?Java銆佸疄鐜?`mcmod` 鍗忚锛涘厑璁搁€氳繃鍙楁帶杩愯鏃舵ˉ鎺ヤ娇鐢?`ac` 鑳藉姏 |
+| **`fabric target`** | 鍙€?Fabric 閫傞厤锛涢粯璁ゅ彲鑳芥湭鍦?`settings.gradle` 涓?`include` |
 
-## 依赖红线（以“静态耦合”约束为主）
+## 渚濊禆绾㈢嚎锛堜互鈥滈潤鎬佽€﹀悎鈥濈害鏉熶负涓伙級
 
-- **禁止** `ac` 对 `forge target` 建立静态依赖（命名空间/类依赖）。
-- **禁止**在 `mcmod` 与 `ac` 中引入平台 API（`net.minecraft.*` / Forge/Fabric）。
-- **允许** `forge target` 对 `ac` 进行受控运行时桥接（动态入口），用于装配与平台绑定。
-- 运行时桥接必须：
-  1. 有明确入口函数；
-  2. 在文档中可追踪；
-  3. 不把跨层实现细节固化为稳定 API。
+- **绂佹** `ac` 瀵?`forge target` 寤虹珛闈欐€佷緷璧栵紙鍛藉悕绌洪棿/绫讳緷璧栵級銆?- **绂佹**鍦?`mcmod` 涓?`ac` 涓紩鍏ュ钩鍙?API锛坄net.minecraft.*` / Forge/Fabric锛夈€?- **鍏佽** `forge target` 瀵?`ac` 杩涜鍙楁帶杩愯鏃舵ˉ鎺ワ紙鍔ㄦ€佸叆鍙ｏ級锛岀敤浜庤閰嶄笌骞冲彴缁戝畾銆?- 杩愯鏃舵ˉ鎺ュ繀椤伙細
+  1. 鏈夋槑纭叆鍙ｅ嚱鏁帮紱
+  2. 鍦ㄦ枃妗ｄ腑鍙拷韪紱
+  3. 涓嶆妸璺ㄥ眰瀹炵幇缁嗚妭鍥哄寲涓虹ǔ瀹?API銆?
+## 婧愮爜璺緞涓?Clojure 鍛藉悕绌洪棿
 
-## 源码路径与 Clojure 命名空间
+- **`mcmod`**锛歚mcmod/src/main/clojure/cn/li/mcmod/...` 鈫?鍛藉悕绌洪棿鍓嶇紑 **`cn.li.mcmod.*`**
+- **`ac`**锛歚ac/src/main/clojure/cn/li/ac/...` 鈫?**`cn.li.ac.*`**
+- **`forge target`**锛歚platform-src/loader/forge/src/main/clojure/cn/li/forge1201/...` 鈫?**`cn.li.forge1201.*`**
 
-- **`mcmod`**：`mcmod/src/main/clojure/cn/li/mcmod/...` → 命名空间前缀 **`cn.li.mcmod.*`**
-- **`ac`**：`ac/src/main/clojure/cn/li/ac/...` → **`cn.li.ac.*`**
-- **`forge target`**：`platform-src/loader/forge/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`**
+### `mcmod` 鍏抽敭鍩虹鍛藉悕绌洪棿锛圓OT/杩愯鏃讹級
 
-### `mcmod` 关键基础命名空间（AOT/运行时）
+- `mcmod/src/main/clojure/cn/li/mcmod/aot.clj` 鈫?`cn.li.mcmod.aot`
+  - 缂栬瘧鏈熸娴嬩笌杩愯鏈熸姢鏍忥細`compiling?` / `compile-context` / `ensure-runtime!`
+- `mcmod/src/main/clojure/cn/li/mcmod/runtime/deferred.clj` 鈫?`cn.li.mcmod.runtime.deferred`
+  - 缁熶竴鎯版€у垵濮嬪寲鎸佹湁鍣紙鏇夸唬骞冲彴鍚勮嚜瀹炵幇锛夛紝闃叉 AOT 鏈熼棿璇Е鍙?registry/bootstrap 璺緞
 
-- `mcmod/src/main/clojure/cn/li/mcmod/aot.clj` → `cn.li.mcmod.aot`
-  - 编译期检测与运行期护栏：`compiling?` / `compile-context` / `ensure-runtime!`
-- `mcmod/src/main/clojure/cn/li/mcmod/runtime/deferred.clj` → `cn.li.mcmod.runtime.deferred`
-  - 统一惰性初始化持有器（替代平台各自实现），防止 AOT 期间误触发 registry/bootstrap 路径
+璧勬簮涓庢敞鍐岀敤 id 浠嶄互鏍圭洰褰?**`gradle.properties`** 鐨?`mod_id`锛堝 `my_mod`锛夈€?*`assets/my_mod/`**銆乣data/my_mod/` 涓哄噯銆?
+## 鏁版嵁缁堢锛坄ac/terminal`锛?
+鍑芥暟寮忔媶鍒嗭紝鏈嶅姟绔笌瀹㈡埛绔懡鍚嶇┖闂村垎绂伙細
 
-资源与注册用 id 仍以根目录 **`gradle.properties`** 的 `mod_id`（如 `my_mod`）、**`assets/my_mod/`**、`data/my_mod/` 为准。
-
-## 数据终端（`ac/terminal`）
-
-函数式拆分，服务端与客户端命名空间分离：
-
-| 路径 | 命名空间前缀 | 说明 |
+| 璺緞 | 鍛藉悕绌洪棿鍓嶇紑 | 璇存槑 |
 |------|----------------|------|
-| `ac/.../terminal/model.clj` 等 | `cn.li.ac.terminal.*` | 会话状态、`catalog`、网络、`messages` |
-| `ac/.../terminal/client/` | `cn.li.ac.terminal.client.*` | Shell、runtime、app launcher、`client.actions` 侧载入口 |
+| `ac/.../terminal/model.clj` 绛?| `cn.li.ac.terminal.*` | 浼氳瘽鐘舵€併€乣catalog`銆佺綉缁溿€乣messages` |
+| `ac/.../terminal/client/` | `cn.li.ac.terminal.client.*` | Shell銆乺untime銆乤pp launcher銆乣client.actions` 渚ц浇鍏ュ彛 |
 
-维护说明见 [TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)。勿再引入 `registry` 包装层、`client/bridge` 或 manifest/SPI 式应用注册。
-
-## 无线能源（`ac/wireless`）
-
-单一函数式运行时，对外经 `cn.li.ac.wireless.api`：
-
-| 路径 | 命名空间 | 说明 |
+缁存姢璇存槑瑙?[TERMINAL_SYSTEM_MAINTENANCE.md](../04-systems/TERMINAL_SYSTEM_MAINTENANCE.md)銆傚嬁鍐嶅紩鍏?`registry` 鍖呰灞傘€乣client/bridge` 鎴?manifest/SPI 寮忓簲鐢ㄦ敞鍐屻€?
+## 鏃犵嚎鑳芥簮锛坄ac/wireless`锛?
+鍗曚竴鍑芥暟寮忚繍琛屾椂锛屽澶栫粡 `cn.li.ac.wireless.api`锛?
+| 璺緞 | 鍛藉悕绌洪棿 | 璇存槑 |
 |------|----------|------|
-| `wireless/api.clj` | `cn.li.ac.wireless.api` | 查询与拓扑命令的唯一对外入口 |
-| `wireless/service/commands.clj`、`queries.clj` | `service.*` | 写/读编排（模块内） |
-| `wireless/domain/` | `domain.topology`、`domain.transfer` | 纯 world-state 与能量计划 |
-| `wireless/data/world.clj` | `data.world` | **仅**生命周期与 SavedData |
-| `wireless/data/world_registry.clj` | `data.world-registry` | `transact!` 可变提交 |
-| `wireless/runtime/effects.clj` | `runtime.effects` | capability 能量 IO |
-| `ac/block/wireless_*` | `cn.li.ac.block.wireless-*` | 方块 tick/事件；经 `wireless.api` 改拓扑 |
+| `wireless/api.clj` | `cn.li.ac.wireless.api` | 鏌ヨ涓庢嫇鎵戝懡浠ょ殑鍞竴瀵瑰鍏ュ彛 |
+| `wireless/service/commands.clj`銆乣queries.clj` | `service.*` | 鍐?璇荤紪鎺掞紙妯″潡鍐咃級 |
+| `wireless/domain/` | `domain.topology`銆乣domain.transfer` | 绾?world-state 涓庤兘閲忚鍒?|
+| `wireless/data/world.clj` | `data.world` | **浠?*鐢熷懡鍛ㄦ湡涓?SavedData |
+| `wireless/data/world_registry.clj` | `data.world-registry` | `transact!` 鍙彉鎻愪氦 |
+| `wireless/runtime/effects.clj` | `runtime.effects` | capability 鑳介噺 IO |
+| `ac/block/wireless_*` | `cn.li.ac.block.wireless-*` | 鏂瑰潡 tick/浜嬩欢锛涚粡 `wireless.api` 鏀规嫇鎵?|
 
-契约与排障：[WIRELESS_REFACTOR_CONTRACTS.md](../05-wireless/WIRELESS_REFACTOR_CONTRACTS.md)、[WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md)。已删除 `topology-service`、`query-service`、`topology-index` 等并行层。
-
-## 能力系统（`ac/ability` + `ac/content/ability`）
-
-**Reducer-only（强制）**：玩家状态唯一写路径为 `command-runtime` → `reducer` → `runtime-store`；副作用走 `effects.interpreter`。无 `context-registry` 门面、无 `:sync-*-data` reducer 命令、无 `update-context!` 旁路。
-
-| 路径 | 命名空间 | 说明 |
+濂戠害涓庢帓闅滐細[WIRELESS_REFACTOR_CONTRACTS.md](../05-wireless/WIRELESS_REFACTOR_CONTRACTS.md)銆乕WIRELESS_SYSTEM_MAINTENANCE.md](../04-systems/WIRELESS_SYSTEM_MAINTENANCE.md)銆傚凡鍒犻櫎 `topology-service`銆乣query-service`銆乣topology-index` 绛夊苟琛屽眰銆?
+## 鑳藉姏绯荤粺锛坄ac/ability` + `ac/content/ability`锛?
+**Reducer-only锛堝己鍒讹級**锛氱帺瀹剁姸鎬佸敮涓€鍐欒矾寰勪负 `command-runtime` 鈫?`reducer` 鈫?`runtime-store`锛涘壇浣滅敤璧?`effects.interpreter`銆傛棤 `context-registry` 闂ㄩ潰銆佹棤 `:sync-*-data` reducer 鍛戒护銆佹棤 `update-context!` 鏃佽矾銆?
+| 璺緞 | 鍛藉悕绌洪棿 | 璇存槑 |
 |------|----------|------|
-| `ability/service/command_runtime.clj` | `service.command-runtime` | 命令执行壳 |
-| `ability/service/reducer.clj` | `service.reducer` | 玩家状态归约 |
-| `ability/service/context_dispatcher.clj` | `service.context-dispatcher` | Context transport + lifecycle + 合并读（`:as ctx`） |
-| `ability/service/context_manager.clj` | `service.context-manager` | 服务端 activate / keepalive / abort |
-| `ability/service/context_skill_state.clj` | `service.context-skill-state` | 技能侧读写入口（`:as ctx-skill`） |
-| `ability/service/context_projection.clj` | `service.context-projection` | 仅 store 投影读 |
-| `ability/effects/*` | `effects.*` | 服务端效果（勿恢复 `ability/server/effect/*`） |
-| `ability/adapters/runtime_bridge.clj` | `adapters.runtime-bridge` | 安装 mcmod hooks |
-| `content/ability/*` | `cn.li.ac.content.ability.*` | 各技能 `defskill` 实现 |
+| `ability/service/command_runtime.clj` | `service.command-runtime` | 鍛戒护鎵ц澹?|
+| `ability/service/reducer.clj` | `service.reducer` | 鐜╁鐘舵€佸綊绾?|
+| `ability/service/context_dispatcher.clj` | `service.context-dispatcher` | Context transport + lifecycle + 鍚堝苟璇伙紙`:as ctx`锛?|
+| `ability/service/context_manager.clj` | `service.context-manager` | 鏈嶅姟绔?activate / keepalive / abort |
+| `ability/service/context_skill_state.clj` | `service.context-skill-state` | 鎶€鑳戒晶璇诲啓鍏ュ彛锛坄:as ctx-skill`锛?|
+| `ability/service/context_projection.clj` | `service.context-projection` | 浠?store 鎶曞奖璇?|
+| `ability/effects/*` | `effects.*` | 鏈嶅姟绔晥鏋滐紙鍕挎仮澶?`ability/server/effect/*`锛?|
+| `ability/adapters/runtime_bridge.clj` | `adapters.runtime-bridge` | 瀹夎 mcmod hooks |
+| `content/ability/*` | `cn.li.ac.content.ability.*` | 鍚勬妧鑳?`defskill` 瀹炵幇 |
 
-维护说明：[ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)。
-
-## CGUI MSDF 字体（`mc-1.20.1` + `ac` 注册）
-
-零资源 MTSDF 阴影字体，替代已删除的 TTF virtual-pack 栈。CGUI 作用域（`:ac-normal` / `:ac-bold` / `:ac-italic`）；HUD 与其它 vanilla 文本不在此路径。
-
-| 路径 | 命名空间 / 类 | 说明 |
+缁存姢璇存槑锛歔ABILITY_SYSTEM_MAINTENANCE.md](../04-systems/ABILITY_SYSTEM_MAINTENANCE.md)銆?
+## CGUI MSDF 瀛椾綋锛坄platform-src/minecraft/version/mc-1201` + `ac` 娉ㄥ唽锛?
+闆惰祫婧?MTSDF 闃村奖瀛椾綋锛屾浛浠ｅ凡鍒犻櫎鐨?TTF virtual-pack 鏍堛€侰GUI 浣滅敤鍩燂紙`:ac-normal` / `:ac-bold` / `:ac-italic`锛夛紱HUD 涓庡叾瀹?vanilla 鏂囨湰涓嶅湪姝よ矾寰勩€?
+| 璺緞 | 鍛藉悕绌洪棿 / 绫?| 璇存槑 |
 |------|----------------|------|
-| `platform-src/minecraft/version/mc-1201/.../font/msdf/*.java` | `cn.li.mc1201.client.font.msdf.*` | STB 加载、`MsdfEngine` MTSDF 生成、多页 atlas（LRU + 异步预烘焙）、`GlyphProvider` SPI、`MsdfRenderTypes`、shader uniform |
-| `platform-src/minecraft/version/mc-1201/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 系统字体探测 → `MsdfFontManager` 初始化 |
-| `platform-src/minecraft/version/mc-1201/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 发光呼吸等动画 |
-| `platform-src/minecraft/version/mc-1201/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 桥：`text-width` / `draw-text!`、分段 MSDF/vanilla、per-glyph 标志（顶点色蓝通道低 3 位）、`with-text-fx` |
-| `platform-src/minecraft/version/mc-1201/.../gui/reactive/render.clj` | `cn.li.mc1201.gui.reactive.render` | `:text` 组件接线（`render-text!`/`bake-text!`，替代已删除的旧 `gui/cgui/renderer.clj`） |
-| `ac/.../client/font_init.clj` | `cn.li.ac.client.font-init` | 注册 `:ac-*` 字体关键字（flag-only） |
-| `ac/.../assets/my_mod/shaders/core/msdf_text.*` | — | MSDF 文本 shader（median + fwidth AA + 效果层） |
-| `platform-src/loader/forge/.../ForgeClientRenderRegistry` | — | `RegisterShadersEvent` 注册 `my_mod:msdf_text` |
-| `platform-src/loader/fabric/.../FabricClientRenderSetup` | — | `CoreShaderRegistrationCallback` 同等注册 |
+| `platform-src/minecraft/version/mc-1201/.../font/msdf/*.java` | `cn.li.mc1201.client.font.msdf.*` | STB 鍔犺浇銆乣MsdfEngine` MTSDF 鐢熸垚銆佸椤?atlas锛圠RU + 寮傛棰勭儤鐒欙級銆乣GlyphProvider` SPI銆乣MsdfRenderTypes`銆乻hader uniform |
+| `platform-src/minecraft/version/mc-1201/.../font/msdf_setup.clj` | `cn.li.mc1201.client.font.msdf-setup` | 绯荤粺瀛椾綋鎺㈡祴 鈫?`MsdfFontManager` 鍒濆鍖?|
+| `platform-src/minecraft/version/mc-1201/.../font/msdf_tick.clj` | `cn.li.mc1201.client.font.msdf-tick` | ClientTick 鍙戝厜鍛煎惛绛夊姩鐢?|
+| `platform-src/minecraft/version/mc-1201/.../gui/cgui/font.clj` | `cn.li.mc1201.gui.cgui.font` | CGUI 妗ワ細`text-width` / `draw-text!`銆佸垎娈?MSDF/vanilla銆乸er-glyph 鏍囧織锛堥《鐐硅壊钃濋€氶亾浣?3 浣嶏級銆乣with-text-fx` |
+| `platform-src/minecraft/version/mc-1201/.../gui/reactive/render.clj` | `cn.li.mc1201.gui.reactive.render` | `:text` 缁勪欢鎺ョ嚎锛坄render-text!`/`bake-text!`锛屾浛浠ｅ凡鍒犻櫎鐨勬棫 `gui/cgui/renderer.clj`锛?|
+| `ac/.../client/font_init.clj` | `cn.li.ac.client.font-init` | 娉ㄥ唽 `:ac-*` 瀛椾綋鍏抽敭瀛楋紙flag-only锛?|
+| `ac/.../assets/my_mod/shaders/core/msdf_text.*` | 鈥?| MSDF 鏂囨湰 shader锛坢edian + fwidth AA + 鏁堟灉灞傦級 |
+| `platform-src/loader/forge/.../ForgeClientRenderRegistry` | 鈥?| `RegisterShadersEvent` 娉ㄥ唽 `my_mod:msdf_text` |
+| `platform-src/loader/fabric/.../FabricClientRenderSetup` | 鈥?| `CoreShaderRegistrationCallback` 鍚岀瓑娉ㄥ唽 |
 
-**Follow-up 能力（已实现）**：单字符串内 per-glyph bold/outline/glow（shader 解码顶点色标志）；`getGlyph` 触发的异步 MTSDF 预烘焙；atlas LRU（默认 4096 glyph）；`start-glow-breath!` ClientTick 呼吸发光。
-
-**字号契约**：`:font-size N` = 屏幕上 **N 像素高**（同 LambdaLib2 `FontOption.fontSize`）。STB 在 8px em 下烘焙；`scale = N / 8`。布局 quad 用 typographic bounds，不含 MSDF bake padding（AC 原版栅格 cell 24×1.4 仅作参考常量 `AC_CHAR_SIZE`）。
-
-## 反应式 UI 框架迁移（已完成）
-
-旧 CGUI 框架（`mcmod/gui/cgui_core.clj` 等 8 文件、`platform-src/minecraft/version/mc-1201/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`）与其消费者已全部删除，替换为 `platform-src/minecraft/version/mc-1201/gui/reactive/*`（signal 驱动、dirty-gated）+ `mcmod` signal core。保留：`platform-src/minecraft/version/mc-1201/gui/cgui/font.clj`（MSDF 桥，仍在用）、`mcmod/gui/tabbed_gui.clj` + `spec.clj`（平台无关的 tab 同步/GUI spec 校验，被 `gui/menu/proxy.clj`、`gui/slots/sync.clj`、`gui/reactive/host_container.clj`、多个 `*_reactive.clj` 消费，非旧框架残留）。
-
-**平台初始化**：Forge / Fabric `client/init` 调用 `msdf-setup/init!`；字体 tick 由各 loader 的 client lifecycle 接入。
-
-## Scripted 逻辑分发（`mc-1.20.1` + 平台注册）
-
-BlockEntity 与 Mob 热路径经 Java 接口 + reify bundle，无运行期 `^:dynamic` 查表。详见 [SCRIPTED_LOGIC_DISPATCH.md](../04-systems/SCRIPTED_LOGIC_DISPATCH.md)。
-
-| 路径 | 说明 |
+**Follow-up 鑳藉姏锛堝凡瀹炵幇锛?*锛氬崟瀛楃涓插唴 per-glyph bold/outline/glow锛坰hader 瑙ｇ爜椤剁偣鑹叉爣蹇楋級锛沗getGlyph` 瑙﹀彂鐨勫紓姝?MTSDF 棰勭儤鐒欙紱atlas LRU锛堥粯璁?4096 glyph锛夛紱`start-glow-breath!` ClientTick 鍛煎惛鍙戝厜銆?
+**瀛楀彿濂戠害**锛歚:font-size N` = 灞忓箷涓?**N 鍍忕礌楂?*锛堝悓 LambdaLib2 `FontOption.fontSize`锛夈€係TB 鍦?8px em 涓嬬儤鐒欙紱`scale = N / 8`銆傚竷灞€ quad 鐢?typographic bounds锛屼笉鍚?MSDF bake padding锛圓C 鍘熺増鏍呮牸 cell 24脳1.4 浠呬綔鍙傝€冨父閲?`AC_CHAR_SIZE`锛夈€?
+## 鍙嶅簲寮?UI 妗嗘灦杩佺Щ锛堝凡瀹屾垚锛?
+鏃?CGUI 妗嗘灦锛坄mcmod/gui/cgui_core.clj` 绛?8 鏂囦欢銆乣platform-src/minecraft/version/mc-1201/gui/cgui/{renderer,traversal,input,runtime,assets}.clj`锛変笌鍏舵秷璐硅€呭凡鍏ㄩ儴鍒犻櫎锛屾浛鎹负 `platform-src/minecraft/version/mc-1201/gui/reactive/*`锛坰ignal 椹卞姩銆乨irty-gated锛? `mcmod` signal core銆備繚鐣欙細`platform-src/minecraft/version/mc-1201/gui/cgui/font.clj`锛圡SDF 妗ワ紝浠嶅湪鐢級銆乣mcmod/gui/tabbed_gui.clj` + `spec.clj`锛堝钩鍙版棤鍏崇殑 tab 鍚屾/GUI spec 鏍￠獙锛岃 `gui/menu/proxy.clj`銆乣gui/slots/sync.clj`銆乣gui/reactive/host_container.clj`銆佸涓?`*_reactive.clj` 娑堣垂锛岄潪鏃ф鏋舵畫鐣欙級銆?
+**骞冲彴鍒濆鍖?*锛欶orge / Fabric `client/init` 璋冪敤 `msdf-setup/init!`锛涘瓧浣?tick 鐢卞悇 loader 鐨?client lifecycle 鎺ュ叆銆?
+## Scripted 閫昏緫鍒嗗彂锛坄platform-src/minecraft/version/mc-1201` + 骞冲彴娉ㄥ唽锛?
+BlockEntity 涓?Mob 鐑矾寰勭粡 Java 鎺ュ彛 + reify bundle锛屾棤杩愯鏈?`^:dynamic` 鏌ヨ〃銆傝瑙?[SCRIPTED_LOGIC_DISPATCH.md](../04-systems/SCRIPTED_LOGIC_DISPATCH.md)銆?
+| 璺緞 | 璇存槑 |
 |------|------|
-| `platform-src/minecraft/version/mc-1201/.../block/logic/*.java` | `ITile*Logic`、`TileLogicBundle`、`IScriptedBlock` |
-| `platform-src/minecraft/version/mc-1201/.../block/logic_compile.clj`、`logic_pipeline.clj` | tile bundle 编译与安装 |
-| `platform-src/minecraft/version/mc-1201/.../entity/ScriptedMobEntity.java`、`entity/logic/*` | Mob bundle 与 `ScriptedEntityLogicRegistry` |
-| `platform-src/minecraft/version/mc-1201/.../entity/mob_logic_compile.clj`、`mob_logic_pipeline.clj` | mob bundle 编译与安装 |
-| `mcmod/.../block/tile_kind.clj` | 声明期 tile-kind 默认（合并于 compile） |
-| `platform-src/loader/forge/.../registry/content_registration.clj` | 注册期调用 pipeline |
+| `platform-src/minecraft/version/mc-1201/.../block/logic/*.java` | `ITile*Logic`銆乣TileLogicBundle`銆乣IScriptedBlock` |
+| `platform-src/minecraft/version/mc-1201/.../block/logic_compile.clj`銆乣logic_pipeline.clj` | tile bundle 缂栬瘧涓庡畨瑁?|
+| `platform-src/minecraft/version/mc-1201/.../entity/ScriptedMobEntity.java`銆乣entity/logic/*` | Mob bundle 涓?`ScriptedEntityLogicRegistry` |
+| `platform-src/minecraft/version/mc-1201/.../entity/mob_logic_compile.clj`銆乣mob_logic_pipeline.clj` | mob bundle 缂栬瘧涓庡畨瑁?|
+| `mcmod/.../block/tile_kind.clj` | 澹版槑鏈?tile-kind 榛樿锛堝悎骞朵簬 compile锛?|
+| `platform-src/loader/forge/.../registry/content_registration.clj` | 娉ㄥ唽鏈熻皟鐢?pipeline |
 
-## 新增内容应落在何处
-
-1. 在 **`mcmod`** 扩展 DSL / 元数据 / 协议（若涉及新抽象）。
-2. 在 **`ac`** 实现方块、物品、业务逻辑，使用 `defblock` / `defitem` 等写入 `mcmod` registry。
-3. 仅在需要 Loader 专用胶水时改 **`forge target`**（或启用后的 Fabric 模块），并保持适配层薄。
-4. 新终端应用：改 `terminal/catalog.clj` + `terminal/client/apps/*` + `client/apps.clj` 的 `launchers`。
+## 鏂板鍐呭搴旇惤鍦ㄤ綍澶?
+1. 鍦?**`mcmod`** 鎵╁睍 DSL / 鍏冩暟鎹?/ 鍗忚锛堣嫢娑夊強鏂版娊璞★級銆?2. 鍦?**`ac`** 瀹炵幇鏂瑰潡銆佺墿鍝併€佷笟鍔￠€昏緫锛屼娇鐢?`defblock` / `defitem` 绛夊啓鍏?`mcmod` registry銆?3. 浠呭湪闇€瑕?Loader 涓撶敤鑳舵按鏃舵敼 **`forge target`**锛堟垨鍚敤鍚庣殑 Fabric 妯″潡锛夛紝骞朵繚鎸侀€傞厤灞傝杽銆?4. 鏂扮粓绔簲鐢細鏀?`terminal/catalog.clj` + `terminal/client/apps/*` + `client/apps.clj` 鐨?`launchers`銆?
