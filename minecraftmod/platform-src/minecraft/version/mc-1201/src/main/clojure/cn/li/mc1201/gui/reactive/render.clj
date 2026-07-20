@@ -374,10 +374,13 @@
     ;; ---- background ----
     (when bg-rl
       (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
-    ;; ---- hint line ----
-    (when (and (pos? hint) (< hint percent))
-      (let [hint-x (int (+ x (* hint w)))]
-        (.fill gg hint-x iy (+ hint-x 1) ih (unchecked-int 0x80FF4444))))
+    ;; ---- hint bar (upstream: second CP bar at lower pulsing alpha) ----
+    (when (and (pos? hint) (< hint percent) fg-rl)
+      (let [hint-end (int (+ x (* hint w)))
+            pulse   (+ 0.2 (* 0.1 (+ 1.0 (Math/sin (/ (double (System/currentTimeMillis)) 80.0)))))]
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 (float pulse))
+        (.blit gg fg-rl ix iy 0 0 hint-end iy hint-end ih)
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))
     ;; ---- foreground fill ----
     (when (and fg-rl (pos? filled-w))
       (let [bar-end (int (+ x filled-w))]

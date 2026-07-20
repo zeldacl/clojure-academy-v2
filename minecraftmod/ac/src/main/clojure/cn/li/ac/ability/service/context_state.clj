@@ -74,6 +74,7 @@
                invoke-args (skill-cb/extract-invoke-args
                             owner ctx-map payload
                             {:cost-ok? cost-ok? :cost-stage stage})]
+       (log/info "[CALLBACK-DIAG]" {:skill-id skill-id :cb-key cb-key :pattern pattern :action-key action-key :has-cb? (some? callback-fn)})
            (when (fn? callback-fn)
              (try
                (apply skill-cb/invoke-action! callback-fn invoke-args)
