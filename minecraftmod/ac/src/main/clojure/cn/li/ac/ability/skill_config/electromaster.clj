@@ -7,7 +7,7 @@
    {:skill-id :railgun :id :qte.coin-perform-threshold :path "qte.coin-perform-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.7 :comment "Railgun coin QTE progress threshold required to fire immediately."}
    {:skill-id :railgun :id :charge.item-charge-ticks :path "charge.item-charge-ticks" :section-suffix "charge" :type :int :min 1 :default 20 :comment "Ticks required for the iron-item charge fallback path."}
    {:skill-id :railgun :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 2.0 :comment "Railgun beam collision radius."}
-   {:skill-id :railgun :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 30.0 :comment "Entity query radius used by the railgun beam operation."}
+   {:skill-id :railgun :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 50.0 :comment "Entity query radius used by the railgun beam operation. Must be >= beam.max-distance or straight-line-distant entities on-axis are never fetched, silently truncating the beam's effective range."}
    {:skill-id :railgun :id :beam.step :path "beam.step" :section-suffix "beam" :type :double :min 0.001 :default 0.9 :comment "Step size used while tracing the railgun beam."}
    {:skill-id :railgun :id :beam.max-distance :path "beam.max-distance" :section-suffix "beam" :type :double :min 0.0 :default 50.0 :comment "Maximum railgun beam hit distance."}
    {:skill-id :railgun :id :beam.damage :path "beam.damage" :section-suffix "beam" :type :double-list :min 0.0 :list-count 2 :default [60.0 110.0] :comment "Railgun beam damage lerp endpoints for skill exp 0.0 and 1.0."}

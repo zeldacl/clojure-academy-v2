@@ -82,6 +82,18 @@
     (skill-effects/clear-railgun-coin-judged! player-id)
     true))
 
+(def ^:private coin-entity-registry-id (modid/namespaced-path "entity_coin_throwing"))
+
+(defn- coin-entity?
+  "Whether ent (a find-entities-in-radius* result map) is the coin-throwing
+  entity. Resolved via entity-get-type-id* (registry-key format, e.g.
+  \"modid:entity_coin_throwing\") rather than the ad-hoc :type/:entity-id
+  fields on the entity map, whose format differs across Forge (registry key)
+  and Fabric (description id) and never equals the bare registry name either
+  way."
+  [world-id ent]
+  (= coin-entity-registry-id (entity/entity-get-type-id* world-id (:uuid ent))))
+
 (defn- discard-coin-entity!
   "Kills a specific coin entity by UUID. Falls back to nearby cleanup when UUID is nil."
   [player-id coin-uuid]
@@ -91,7 +103,7 @@
       (when (and pos world-id)
         (doseq [ent (world-effects/find-entities-in-radius*
                       world-id (:x pos) (:y pos) (:z pos) 4.0)]
-          (when (and (= "entity_coin_throwing" (:type ent))
+          (when (and (coin-entity? world-id ent)
                      (or (nil? coin-uuid)
                          (= coin-uuid (:uuid ent))))
             (entity-motion/discard-entity!*
@@ -104,9 +116,9 @@
      :active?     (>= progress (coin-active-threshold))
      :perform?    (> progress (coin-perform-threshold))}))
 
-(defn- coin-candidates [entities]
+(defn- coin-candidates [world-id entities]
   (->> entities
-       (filter #(= "entity_coin_throwing" (:type %)))
+       (filter (partial coin-entity? world-id))
       (sort-by (fn [ent] (double (or (:motion-progress ent) 0.0))) >)))
 
 (defn- coin-judged-uuid [player-id]
@@ -125,7 +137,7 @@
                      (world-effects/find-entities-in-radius*
                       world-id (:x pos) (:y pos) (:z pos) 4.0))
           judged-uuid (coin-judged-uuid player-id)
-          candidates (coin-candidates entities)
+          candidates (coin-candidates world-id entities)
           coin (some (fn [ent]
                        (when (not= judged-uuid (:uuid ent)) ent))
                      candidates)]
@@ -150,22 +162,31 @@
                     (raycast/get-player-look-vector* reflector-player-id))]
     (when look-vec
       (let [max-distance (reflection-distance)
+            ;; get-player-look-vector* only ever returns {:x :y :z} — there is
+            ;; no :dx/:dy/:dz key on this bridge's result.
+            look-x (double (or (:x look-vec) 0.0))
+            look-y (double (or (:y look-vec) 0.0))
+            look-z (double (or (:z look-vec) 1.0))
             hit (raycast/raycast-entities*
                                           world-id
                                           (:x start-pos) (:y start-pos) (:z start-pos)
-                                          (:dx look-vec) (:dy look-vec) (:dz look-vec)
+                                          look-x look-y look-z
                                           max-distance)
-            actual-dist (if (= (:hit-type hit) :entity)
+            ;; raycast-entities* never sets :hit-type (that key only appears
+            ;; on raycast-combined* results) — a real hit is just non-nil,
+            ;; identified by :uuid.
+            hit-uuid    (:uuid hit)
+            actual-dist (if hit-uuid
                           (double (or (:distance hit) max-distance))
                           max-distance)
-            dir         {:x (:dx look-vec) :y (:dy look-vec) :z (:dz look-vec)}
+            dir         {:x look-x :y look-y :z look-z}
             end-pos     (geom/v+ start-pos (geom/v* dir actual-dist))]
         (fx/send! ctx-id {:topic :railgun/fx-reflect :mode :reflect} nil {:start        start-pos
                                   :end          end-pos
                                   :hit-distance actual-dist})
-        (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
+        (when (and hit-uuid (entity-damage/available?))
           (entity-damage/apply-direct-damage!*
-                                              world-id (:uuid hit)
+                                              world-id hit-uuid
                                               (reflection-damage) :generic)
           true)))))
 

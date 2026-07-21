@@ -102,12 +102,10 @@
   (store/update-player-state! ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/available? (constantly true)
                 world-effects/find-entities-in-radius* (fn [& _]
-                                                         [{:type "entity_coin_throwing"
-                                                           :uuid "coin-1"
+                                                         [{:uuid "coin-1"
                                                            :motion-progress 0.95}])
-                railgun/coin-candidates (fn [_]
-                                          [{:type "entity_coin_throwing"
-                                            :uuid "coin-1"
+                railgun/coin-candidates (fn [_world-id _entities]
+                                          [{:uuid "coin-1"
                                             :motion-progress 0.95}])]
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))

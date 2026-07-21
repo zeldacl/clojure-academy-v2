@@ -103,7 +103,6 @@
           eye           (geom/eye-pos player-id)
           look-vec      (when (raycast/available?)
                           (raycast/get-player-look-vector* player-id))]
-      (log/info "[ARC-DIAG] raycast" {:available? (raycast/available?) :has-look? (some? look-vec)})
       (when look-vec
         (let [hit-result (when (raycast/available?)
                            (raycast/raycast-combined*
@@ -113,13 +112,12 @@
                                                      (double (:y look-vec))
                                                      (double (:z look-vec))
                                                      (double range)))
-              hit-type   (:type hit-result)
+              hit-type   (:hit-type hit-result)
               hit-pos    (when hit-result
                            {:x (:x hit-result)
                             :y (:y hit-result)
                             :z (:z hit-result)})]
 
-          (log/info "[ARC-DIAG] hit" {:hit-type (:type hit-result) :entity? (= :entity (:type hit-result)) :block? (= :block (:type hit-result)) :range (double range)})
           (fx/send! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
                     {:start eye
                      :end   (or hit-pos
@@ -128,7 +126,7 @@
 
           (cond
             (= hit-type :entity)
-            (let [entity-uuid (:entity-uuid hit-result)]
+            (let [entity-uuid (:uuid hit-result)]
               (when (and (entity-damage/available?) entity-uuid)
                 (entity-damage/apply-direct-damage!*
                                                     world-id
@@ -139,9 +137,9 @@
                                               (cfg-progression :progression.exp-entity exp))))
 
             (= hit-type :block)
-            (let [block-x (int (:block-x hit-result))
-                  block-y (int (:block-y hit-result))
-                  block-z (int (:block-z hit-result))]
+            (let [block-x (int (:x hit-result))
+                  block-y (int (:y hit-result))
+                  block-z (int (:z hit-result))]
               (if (and (block-manip/available?)
                    (block-manip/liquid-block?*
                                 world-id block-x block-y block-z))

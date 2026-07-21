@@ -4,8 +4,11 @@
   The :beam op fires a wide cylindrical beam from the player's eye position.
   Reflection callbacks are passed via the event map (not params) to avoid
   resolve-params calling them prematurely:
-    :reflect-can-fn  (fn [uuid] -> bool)   called to check each candidate
-    :reflect-shot-fn (fn [uuid] -> bool?)  called when reflection triggers, returns hit?"
+    :reflect-can-fn  (fn [uuid incoming-damage] -> bool)  called to check each candidate
+    :reflect-shot-fn (fn [uuid incoming-damage] -> bool?) called when reflection triggers, returns hit?
+  incoming-damage is the (falloff-scaled) damage that candidate would have
+  taken had it not reflected — matches cn.li.ac.content.ability.shared.vec-reflection-interaction's
+  2-arg (fn [target-player-uuid incoming-damage] ...) contract."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -147,29 +150,30 @@
                  {:keys [uuid x y z radial-dist]}]
               (if stop?
                 (reduced acc)
-                (if (and reflect-can? (reflect-can? uuid))
-                  (let [dist (geom/vdist trace {:x x :y y :z z})]
-                    ;; Always flag reflection-hit? = true when a reflector is found
-                    ;; (mirrors original: hitEntity = true unconditionally in the callback).
-                    (when reflect-shot! (reflect-shot! uuid))
-                    (reduced {:stop?               true
-                              :reflection-distance dist
-                              :reflection-hit?     true
-                              :normal-hit-count    normal-hit-count
-                              :hit-uuids           hit-uuids}))
-                  (do
-                    (when (and (pos? dmg) (entity-damage/available?))
-                      (let [radial (double radial-dist)
-                            factor (+ 0.2 (* 0.8 (- 1.0 (/ (min md (max 0.0 radial)) md))))]
+                (let [radial     (double radial-dist)
+                      factor     (+ 0.2 (* 0.8 (- 1.0 (/ (min md (max 0.0 radial)) md))))
+                      scaled-dmg (* dmg factor)]
+                  (if (and reflect-can? (reflect-can? uuid scaled-dmg))
+                    (let [dist (geom/vdist trace {:x x :y y :z z})]
+                      ;; Always flag reflection-hit? = true when a reflector is found
+                      ;; (mirrors original: hitEntity = true unconditionally in the callback).
+                      (when reflect-shot! (reflect-shot! uuid scaled-dmg))
+                      (reduced {:stop?               true
+                                :reflection-distance dist
+                                :reflection-hit?     true
+                                :normal-hit-count    normal-hit-count
+                                :hit-uuids           hit-uuids}))
+                    (do
+                      (when (and (pos? dmg) (entity-damage/available?))
                         (entity-damage/apply-direct-damage!*
                                                             world-id uuid
-                                                            (* dmg factor)
-                                                            (or damage-type :magic))))
-                    {:stop?               false
-                     :reflection-distance reflection-distance
-                     :reflection-hit?     reflection-hit?
-                     :normal-hit-count    (inc (long (or normal-hit-count 0)))
-                     :hit-uuids           (conj (vec (or hit-uuids [])) (str uuid))}))))
+                                                            scaled-dmg
+                                                            (or damage-type :magic)))
+                      {:stop?               false
+                       :reflection-distance reflection-distance
+                       :reflection-hit?     reflection-hit?
+                       :normal-hit-count    (inc (long (or normal-hit-count 0)))
+                       :hit-uuids           (conj (vec (or hit-uuids [])) (str uuid))})))))
             result       (reduce step-result
                                  {:stop? false :reflection-distance nil
                                   :reflection-hit? false :normal-hit-count 0 :hit-uuids []}

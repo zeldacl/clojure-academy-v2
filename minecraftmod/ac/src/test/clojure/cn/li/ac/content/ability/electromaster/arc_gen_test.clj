@@ -73,9 +73,9 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
-                                             {:type :block
-                                              :x 1.0 :y 64.0 :z 6.0
-                                              :block-x 1 :block-y 64 :block-z 6})
+                                             {:hit-type :block
+                                              :x 1 :y 64 :z 6
+                                              :hit-x 1.0 :hit-y 64.0 :hit-z 6.0})
                   block-manip/liquid-block?* (fn [& _] true)
                   block-manip/set-block!* (fn [& args] (swap! ignite-calls* conj args) nil)
                   pitem/create-item-stack-by-id (fn [_ _] {:item-id "minecraft:cooked_cod" :count 1})
@@ -105,9 +105,9 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-combined* (fn [& _]
-                                             {:type :entity
+                                             {:hit-type :entity
                                               :x 0.0 :y 64.0 :z 5.0
-                                              :entity-uuid "mob-1"})
+                                              :uuid "mob-1"})
                   entity-damage/apply-direct-damage!* (fn [& args]
                                                         (swap! damage-calls* conj args)
                                                         true)
