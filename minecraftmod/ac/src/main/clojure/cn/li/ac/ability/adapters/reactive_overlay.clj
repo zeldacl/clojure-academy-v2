@@ -553,7 +553,7 @@
         (.setFlag icon-glow node/FLAG-RENDER-DIRTY))
       (set-node-visible! r icon-glow false))))
 
-(defn- update-skill-slot-item! [r item slot now-ms]
+(defn- update-skill-slot-item! [r item slot now-ms cant-use-ability?]
   (let [visual (:visual-state slot :idle)
         state-alpha (double (or (:alpha slot) 1.0))
         glow (:glow-color slot)
@@ -569,14 +569,19 @@
         key-cap (ui/item-node item :key-cap)
         key-label-node (ui/item-node item :key-label)
         cd-mask (ui/item-node item :cd-mask)
-        cd-text (ui/item-node item :cd-text)]
+        cd-text (ui/item-node item :cd-text)
+        ;; Upstream: !canUseAbility || tickLeft>0 → color4d(0.7,0.7,0.7,1) dims
+        ;; the key-cap plate + key character only (icon dimming is handled
+        ;; separately above via icon-alpha). canUseAbility = activated &&
+        ;; overloadFine && !interfering; activated is already implied (slots
+        ;; are only shown while activated), so cant-use-ability? here is
+        ;; overloaded? || interfered? — passed down from update-skill-slots!,
+        ;; a per-player condition identical for every slot this frame.
+        dim? (or in-cd? cant-use-ability?)]
     (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
     (ui/set-node-prop! r key-label-node :text key-label)
-    ;; Upstream: !canUseAbility || tickLeft>0 → color4d(0.7,0.7,0.7,1) dims the
-    ;; key-cap plate + key character only (icon dimming is handled separately
-    ;; above via icon-alpha). We only have the cooldown half of that condition.
-    (ui/set-node-prop! r key-cap :tint (when in-cd? [178 178 178 255]))
-    (ui/set-node-prop! r key-label-node :color (if in-cd? 0xFFB2B2B2 0xFFFFFFFF))
+    (ui/set-node-prop! r key-cap :tint (when dim? [178 178 178 255]))
+    (ui/set-node-prop! r key-label-node :color (if dim? 0xFFB2B2B2 0xFFFFFFFF))
     (when-let [icon-src (:skill-icon slot)]
       (ui/set-node-prop! r icon :src icon-src))
     (ui/set-node-prop! r icon :alpha icon-alpha)
@@ -607,7 +612,14 @@
 (defn- update-skill-slots! [r snapshot now-ms sw sh]
   (let [slots (:skill-slots snapshot)
         ^objects cache (rt/user-signal r :overlay-object-cache)
-        cached-ids (aget cache 0)]
+        cached-ids (aget cache 0)
+        ;; Upstream CPData.canUseAbility() = activated && overloadFine &&
+        ;; !interfering; activated is already implied here (slots are only
+        ;; populated while activated), so the remaining condition is just
+        ;; overloaded? || interfered? — one player-wide value for the frame,
+        ;; not per-slot.
+        cant-use-ability? (boolean (or (:overloaded (:overload-bar snapshot))
+                                       (:interfered? snapshot)))]
     ;; Re-anchor every frame: upstream KeyHintUI is vertically centred on the
     ;; right screen edge (halign CENTER), so its position tracks window resize.
     (when-let [^INode list-node (ui/node r :skill-slots)]
@@ -620,13 +632,13 @@
       (aset cache 0 (mapv #(get % :skill-id) slots))
       (ui/list-set! r :skill-slots slots
                     (fn [rt item slot-data]
-                      (update-skill-slot-item! rt item slot-data now-ms))))
+                      (update-skill-slot-item! rt item slot-data now-ms cant-use-ability?))))
     (when-let [^INode list-node (ui/node r :skill-slots)]
       (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [slot (nth slots i nil)]
             (when-let [^INode item (.getChild list-node i)]
-              (update-skill-slot-item! r item slot now-ms)))))))
+              (update-skill-slot-item! r item slot now-ms cant-use-ability?)))))))
     (set-visible! r :skill-slots (seq (:skill-slots snapshot))))
 
 (defn- update-crosshair! [r snapshot]
