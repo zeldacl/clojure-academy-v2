@@ -98,7 +98,17 @@
    :props {:w (double w) :h (double h) :align-w :center :align-h :middle}
    :children
    [{:kind :image :id :bg :props {:x 0.0 :y 0.0 :w (double w) :h (double h)
-                                  :src (tex-src :bg-area) :alpha 1.0}}
+                                  :src (tex-src :bg-area) :alpha 1.0
+                                  ;; Upstream HudUtils.rawRect(...,back_scale_inv,back_scale_inv):
+                                  ;; the background is sampled at a 99%-of-texture UV span mapped
+                                  ;; to 100% of the display area (a slight zoom-in), giving exactly
+                                  ;; enough headroom for the ±0.005 UV parallax offset (apply-bg-uv!)
+                                  ;; to shift without exceeding the [0,1] texture range. Without
+                                  ;; this the UV span defaulted to the full 1.0, so any nonzero
+                                  ;; offset pushed u+tex-w past 1.0 into clamped/edge-repeated
+                                  ;; territory — rendering as mostly a flat, near-solid colour
+                                  ;; instead of the actual background art.
+                                  :tex-w back-scale-inv :tex-h back-scale-inv}}
     {:kind :group :id :tree-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h)}}
     {:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w (double w) :h (double h)}}]})
 
