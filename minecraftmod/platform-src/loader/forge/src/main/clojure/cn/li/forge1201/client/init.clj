@@ -283,7 +283,9 @@
                               (catch Throwable _ false)))
        ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
        :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
-       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!}))
+       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
+       :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
+       :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!}))
 
 (defn- install-client-owner-hooks!
   []

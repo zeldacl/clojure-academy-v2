@@ -94,7 +94,11 @@
 
         ;; ===== 2. Create app widget pool (9 slots, one-time allocation) =====
         _ (do
-            (let [^INode grid (rt/node-by-id r :app-grid)
+            (let [;; terminal.xml has no separate grid container — app-N
+                  ;; widgets are positioned in :back's own local space (same
+                  ;; space start-x/start-y are defined in), so :back is their
+                  ;; parent, same as app_template/text_appcount/etc.
+                  ^INode grid (rt/node-by-id r :back)
                   ^INode tmpl (rt/node-by-id r :app_template)]
               (.setVisible tmpl false)
               (dotimes [i 9]
@@ -137,12 +141,14 @@
                                           (Math/signum d))))))
                 new-bx (balance (aget fd 2) new-mx)
                 new-by (balance (aget fd 3) new-my)
-                ;; Selection (3x3 grid index)
-                new-sel (let [col (int (/ (max 0.0 (min (dec max-mx) new-bx))
-                                          (/ max-mx 3.0)))
-                              row (int (/ (max 0.0 (min (dec max-my) new-by))
-                                          (/ max-my 3.0)))]
-                          (min 8 (+ (* row 3) col)))
+                ;; Selection (3x3 grid index) — upstream computes this from the
+                ;; raw/instant mouseX/mouseY, NOT the smoothed buffX/buffY
+                ;; (buff is only used for camera tilt + cursor dot rendering).
+                ;; Using the smoothed value here would make grid selection lag
+                ;; behind the actual cursor instead of tracking it instantly.
+                new-sel (let [col (int (/ (- new-mx 0.01) (/ max-mx 3.0)))
+                              row (int (/ (- new-my 0.01) (/ max-my 3.0)))]
+                          (min 8 (max 0 (+ (* row 3) col))))
                 ;; Edge scrolling
                 installed-count (count (:installed-apps (term-rt/state-snapshot owner)))
                 max-scroll (max 0 (- (int (Math/ceil (/ (double installed-count) 3.0))) 3))
@@ -276,7 +282,10 @@
         _ (rt/put-user-signal! r :terminal-pre-render pre-render)
         _ (rt/put-user-signal! r :terminal-post-render post-render)
         _ (rt/put-user-signal! r :terminal-on-close
-            #(term-rt/clear-state! owner))]
+            #(do (term-rt/clear-state! owner)
+                 ;; Restore the OS cursor hidden in open! below (upstream
+                 ;; shows only its custom reticle while the terminal is open).
+                 (bridge/call-adapter :terminal-cursor-show!)))]
     r))
 
 ;; ============================================================================
@@ -285,6 +294,9 @@
 
 (defn open! [player]
   (let [r (create-runtime player)]
+    ;; Upstream TerminalUI hides the OS cursor and draws only its own glowing
+    ;; reticle; without this the normal system pointer would show alongside it.
+    (bridge/call-adapter :terminal-cursor-hide!)
     (bridge/open-reactive-screen! r "Terminal"
       {:on-pre-render (rt/user-signal r :terminal-pre-render)
        :on-post-render (rt/user-signal r :terminal-post-render)

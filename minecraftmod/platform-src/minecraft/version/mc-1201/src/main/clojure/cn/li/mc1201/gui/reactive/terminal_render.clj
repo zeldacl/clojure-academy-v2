@@ -10,9 +10,10 @@
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.vertex PoseStack]
            [com.mojang.blaze3d.systems RenderSystem]
-           [com.mojang.blaze3d.platform GlStateManager$SourceFactor
+           [com.mojang.blaze3d.platform Window GlStateManager$SourceFactor
             GlStateManager$DestFactor]
-           [org.joml Quaternionf]))
+           [org.joml Quaternionf]
+           [org.lwjgl.glfw GLFW]))
 
 ;; ============================================================================
 ;; 3D Perspective transform (matches upstream TerminalUI.draw() GL sequence)
@@ -95,6 +96,28 @@
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
 
 ;; ============================================================================
+;; Cursor visibility (upstream hides the OS cursor and shows only the custom
+;; reticle while the terminal is open; vanilla Screen otherwise leaves the
+;; real system cursor visible, which would show both at once)
+;; ============================================================================
+
+(defn hide-cursor!
+  "Called when the terminal screen opens. Hides the OS cursor icon (does not
+   grab/capture it — position tracking is unaffected) so only the custom
+   glowing reticle is visible, matching upstream."
+  []
+  (let [^Minecraft mc (Minecraft/getInstance)
+        ^Window w (.getWindow mc)]
+    (GLFW/glfwSetInputMode (.getWindow w) GLFW/GLFW_CURSOR GLFW/GLFW_CURSOR_HIDDEN)))
+
+(defn show-cursor!
+  "Called when the terminal screen closes. Restores the normal OS cursor."
+  []
+  (let [^Minecraft mc (Minecraft/getInstance)
+        ^Window w (.getWindow mc)]
+    (GLFW/glfwSetInputMode (.getWindow w) GLFW/GLFW_CURSOR GLFW/GLFW_CURSOR_NORMAL)))
+
+;; ============================================================================
 ;; Platform bridge registration (called by forge/fabric client init)
 ;; ============================================================================
 
@@ -104,4 +127,6 @@
   []
   (bridge/merge-client-bridge!
     {:terminal-apply-perspective! apply-perspective!
-     :terminal-render-cursor!    render-cursor!}))
+     :terminal-render-cursor!    render-cursor!
+     :terminal-cursor-hide!      hide-cursor!
+     :terminal-cursor-show!      show-cursor!}))
