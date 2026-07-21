@@ -42,7 +42,7 @@
 (def ^:private SLOT-TEXT-BAKED  8)  ;; backend slot: baked text runs
 
 (def ^:private SLOT-PROG-PROGRESS 0)
-(def ^:private SLOT-PROG-BANDS   8)  ;; backend: baked gradient int array
+(def ^:private SLOT-PROG-BANDS   11)  ;; backend: baked :color-stops vector
 
 (def ^:private SLOT-LINE-X1 0)
 (def ^:private SLOT-LINE-Y1 1)
@@ -311,29 +311,58 @@
 ;; ============================================================================
 
 (defn bake-progress! [^INode node]
-  (let [bg   (.getOSlot node 1)
-        fg   (.getOSlot node 2)
-        icon (.getOSlot node 3)]
+  (let [bg    (.getOSlot node 1)
+        fg    (.getOSlot node 2)
+        icon  (.getOSlot node 3)
+        stops (.getOSlot node 0)]
     (when (string? bg)   (.setOSlot node 8  (resolve-rl bg)))
     (when (string? fg)   (.setOSlot node 9  (resolve-rl fg)))
-    (when (string? icon) (.setOSlot node 10 (resolve-rl icon)))))
+    (when (string? icon) (.setOSlot node 10 (resolve-rl icon)))
+    (when (vector? stops) (.setOSlot node SLOT-PROG-BANDS stops))))
 
 (defn- icon-cutout [^INode node]
   (get (.getStaticProps node) :icon-cutout))
+
+(defn- sample-progress-color
+  "Multi-stop [pos r g b] color lerp — matches upstream CPBar.autoLerp. nil
+   bands (no :color-stops set, e.g. the overload bar) means \"no tint\":
+   passthrough white, so the fg texture's own baked colors show through."
+  [bands ^double t]
+  (if (nil? bands)
+    [255 255 255]
+    (let [n (count bands)]
+      (loop [i 0]
+        (if (>= i n)
+          (let [[_ r g b] (nth bands (dec n))] [(int r) (int g) (int b)])
+          (let [[pos r g b] (nth bands i)
+                pos (double pos)]
+            (if (>= pos t)
+              (if (zero? i)
+                [(int r) (int g) (int b)]
+                (let [[pos0 r0 g0 b0] (nth bands (dec i))
+                      pos0 (double pos0)
+                      span (- pos pos0)
+                      f (if (zero? span) 0.0 (/ (- t pos0) span))]
+                  [(int (+ (double r0) (* (- (double r) (double r0)) f)))
+                   (int (+ (double g0) (* (- (double g) (double g0)) f)))
+                   (int (+ (double b0) (* (- (double b) (double b0)) f)))]))
+              (recur (inc i)))))))))
 
 (defn render-progress! [^GuiGraphics gg ^INode node]
   (let [x        (node-abs-x node)   y        (node-abs-y node)
         w        (scaled-w node)     h        (scaled-h node)
         percent  (double (.getDSlot node SLOT-PROG-PROGRESS))
         diag-tan (double (.getDSlot node 1))            ;; :corner dslot (0=rect, 0.695=44deg)
-        hint     (.getDSlot node 2)                      ;; :hint-percent
         scroll   (.getDSlot node 3)                      ;; :scroll-offset
+        raw-alpha (.getDSlot node 4)                     ;; :alpha (0.0 = unset → default 1.0)
+        fill-alpha (if (pos? raw-alpha) raw-alpha 1.0)
         filled-w (int (* percent w))
         ix (unchecked-int x) iy (unchecked-int y)
         iw (unchecked-int w) ih (unchecked-int (+ y h))
         ^ResourceLocation bg-rl    (.getOSlot node 8)
         ^ResourceLocation fg-rl    (.getOSlot node 9)
         ^ResourceLocation icon-rl  (.getOSlot node 10)   ;; baked icon
+        bands      (.getOSlot node SLOT-PROG-BANDS)
         cutout     (icon-cutout node)
         cutout-x0  (when cutout (+ ix (int (:x-offset cutout 0))))
         cutout-w   (when cutout (int (:w cutout 0)))
@@ -346,15 +375,14 @@
         ;; inward such that the bottom-left corner is offset right by diag-tan*h.
         draw-trap!
         (fn draw-trap! ([seg-start seg-end]
-                         (draw-trap! seg-start seg-end nil nil nil nil))
+                         (draw-trap! seg-start seg-end 255 255 255 1.0))
                         ([seg-start seg-end r g b a]
           (when (< seg-start seg-end)
-            (let [apply-color! #(when r
-                                  (RenderSystem/setShaderColor
-                                    (float (/ (double r) 255.0))
-                                    (float (/ (double g) 255.0))
-                                    (float (/ (double b) 255.0))
-                                    (float (or a 1.0))))]
+            (let [apply-color! #(RenderSystem/setShaderColor
+                                   (float (/ (double r) 255.0))
+                                   (float (/ (double g) 255.0))
+                                   (float (/ (double b) 255.0))
+                                   (float (or a 1.0)))]
             (if (pos? diag-tan)
               (let [^PoseStack ps (.pose gg)
                     ^Matrix4f pose (.pose (.last ps))
@@ -384,28 +412,22 @@
     ;; ---- background ----
     (when bg-rl
       (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
-    ;; ---- upstream autoLerp: simple single-var lerp (avoid conditional AOT bug) ----
+    ;; ---- upstream autoLerp: multi-stop color lerp (bands nil → white/no tint) ----
     (when (and fg-rl (pos? filled-w))
       (let [t       (double (max 0.0 (min 1.0 percent)))
             bar-end (int (+ x filled-w))
-            r       (int 255)
-            g       (int (+ 103.0 (* (- 174.0 103.0) t)))
-            b       (int (+ 67.0  (* (- 68.0  67.0)  t)))]
+            [r g b] (sample-progress-color bands t)]
         (if (and cutout-x0 cutout-w (pos? cutout-w))
-          (do (draw-trap! ix       (min bar-end cutout-x0) r g b 1.0)
-              (draw-trap! cutout-x1 (min bar-end         iw) r g b 1.0))
-          (draw-trap! ix (min bar-end iw) r g b 1.0))))
-    ;; hint — white fill at pulse (debug coords, same as proven)
-    (when (and (pos? hint) (< hint percent))
-      (let [hint-end (int (+ ix (* hint iw)))
-            bar-h    (int h)
-            pulse    (+ 0.2 (* 0.1 (+ 1.0 (Math/sin (/ (double (System/currentTimeMillis)) 80.0)))))
-            alpha    (int (* 255.0 pulse))
-            argb     (unchecked-int (bit-or (bit-shift-left alpha 24) 0x00FFFFFF))]
-        (.fill gg ix iy hint-end (+ iy bar-h) argb)))
+          (do (draw-trap! ix       (min bar-end cutout-x0) r g b fill-alpha)
+              (draw-trap! cutout-x1 (min bar-end         iw) r g b fill-alpha))
+          (draw-trap! ix (min bar-end iw) r g b fill-alpha))))
     ;; ---- icon overlay ----
     (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
-      (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))))
+      (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))
+    ;; fill-alpha can be <1.0 (e.g. the CP-bar consumption-hint ghost bar) —
+    ;; reset so a subsequent tape node never inherits a translucent tint.
+    (when (< fill-alpha 1.0)
+      (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))
 
 ;; ============================================================================
 ;; :shader-quad / :shader-ring / :shader-progress

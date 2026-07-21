@@ -171,7 +171,8 @@
                    :bg-src        {:slot :oslot :idx 1 :sig :o}
                    :fg-src        {:slot :oslot :idx 2 :sig :o}
                    :icon-src      {:slot :oslot :idx 3 :sig :o}
-                   :scroll-offset {:slot :dslot :idx 3 :sig :d}}
+                   :scroll-offset {:slot :dslot :idx 3 :sig :d}
+                   :alpha         {:slot :dslot :idx 4 :sig :d}}
     :hit? false}
 
    :crosshair
