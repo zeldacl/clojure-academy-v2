@@ -228,7 +228,9 @@
         cd @current-cd]
     (ui/set-prop! rt :title-text :text (or (:title cd) ""))
     (when-let [brief (:brief cd)]
-      (let [w 140.0
+      ;; Upstream GuiTutorial: rightWindow's brief GLMarkdownRenderer uses
+      ;; widthLimit=130 (fontSize 8), not the container's full 146px width.
+      (let [w 130.0
             segs (mr/render-segments brief (client-state/get-misaka-id player-uuid) (int w))]
         (rebuild-segments! rt :brief-content segs w))))
   ;; Nav buttons visible only when >1 sub-view

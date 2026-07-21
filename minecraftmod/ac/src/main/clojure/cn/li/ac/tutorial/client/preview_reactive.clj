@@ -335,7 +335,7 @@
 
 (defn create-preview-state [tut-id]
   (let [groups (build-view-groups tut-id)]
-    {:view-groups groups :group-index 0 :sub-index 0}))
+    {:view-groups groups :group-index 0 :sub-indices {}}))
 
 (defn current-view-group [state*]
   (let [{:keys [view-groups group-index]} @state*
@@ -344,27 +344,40 @@
     (when (seq view-groups)
       (nth view-groups i nil))))
 
+(defn- current-group-index [state*]
+  (or (:group-index @state*) 0))
+
 (defn current-sub-view [state*]
   (when-let [vg (current-view-group state*)]
     (let [svs (or (:sub-views vg) [])
-          sub-index (:sub-index @state* 0)
-          idx (or sub-index 0)
+          idx (get (:sub-indices @state*) (current-group-index state*) 0)
           i (max 0 (min (dec (max 1 (count svs))) idx))]
       (when (seq svs)
         (nth svs i nil)))))
 
-(defn cycle-sub-view! [state* direction]
+(defn cycle-sub-view!
+  "Advance the CURRENT view-group's own remembered sub-view index (wrapping).
+   Upstream GuiTutorial: each ViewGroup's PreviewInfo.viewIndex is independent
+   and persists across tag switches for the life of the open tutorial entry —
+   only a fresh tutorial entry resets it. Tracked per group-index here so
+   switch-view-group! (a tag click) never disturbs another group's position."
+  [state* direction]
   (when-let [vg (current-view-group state*)]
     (let [cnt (count (or (:sub-views vg) []))]
       (if (zero? cnt)
         0
-        (let [delta (if (= direction :next) 1 -1)
-              new-idx (mod (+ (:sub-index @state*) delta) cnt)]
-          (swap! state* assoc :sub-index new-idx)
+        (let [gi (current-group-index state*)
+              cur (get (:sub-indices @state*) gi 0)
+              delta (if (= direction :next) 1 -1)
+              new-idx (mod (+ cur delta) cnt)]
+          (swap! state* assoc-in [:sub-indices gi] new-idx)
           new-idx)))))
 
-(defn switch-view-group! [state* group-index]
-  (swap! state* assoc :group-index group-index :sub-index 0)
+(defn switch-view-group!
+  "Change which view-group (tag) is active. Does NOT reset :sub-indices —
+   each group keeps its own remembered sub-view position (see cycle-sub-view!)."
+  [state* group-index]
+  (swap! state* assoc :group-index group-index)
   group-index)
 
 (def tag-textures

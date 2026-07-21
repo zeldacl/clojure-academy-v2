@@ -3,9 +3,21 @@
   (:require [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mcmod.ui.node :as node]
-            [cn.li.mcmod.ui.slot-write :as slot-write])
+            [cn.li.mcmod.ui.slot-write :as slot-write]
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
+
+(defn- invoke-handlers!
+  "Run each handler, logging (not silently swallowing) any exception a
+   handler throws — without this, a broken click/scroll/key handler just
+   looks like the input had no effect at all, with no trace of why."
+  [event-key handlers rt node evt]
+  (doseq [f handlers]
+    (try
+      (f rt node evt)
+      (catch Throwable e
+        (log/stacktrace (str "UI event handler threw (" event-key ")") e)))))
 
 (defn on! [^UiRt rt id event-key f]
   (if-let [^INode node (rt/node-by-id rt id)]
@@ -37,7 +49,7 @@
 (defn- emit-text-event! [^UiRt rt ^INode n event-key]
   (when-let [handlers (rt/get-event-handlers rt (.getIdx n) event-key)]
     (let [evt {:value (text-value n) :node-idx (.getIdx n)}]
-      (doseq [f handlers] (f rt n evt)))))
+      (invoke-handlers! event-key handlers rt n evt))))
 
 (defn dispatch-editable-key!
   "Handle backspace / enter / char for focused editable :text nodes.
@@ -80,7 +92,7 @@
       (when node
         (if-let [handlers (rt/get-event-handlers rt (.getIdx ^INode node) event-key)]
           (let [evt {:x mx :y my :button button :node-idx (.getIdx ^INode node)}]
-            (doseq [f handlers] (f rt node evt)))
+            (invoke-handlers! event-key handlers rt node evt))
           (recur (.getParentNode ^INode node)))))))
 
 (defn dispatch-scroll! [^UiRt rt mx my scroll-delta]
@@ -89,7 +101,7 @@
       (when node
         (if-let [handlers (rt/get-event-handlers rt (.getIdx ^INode node) :mouse-scroll)]
           (let [evt {:x mx :y my :delta scroll-delta :node-idx (.getIdx ^INode node)}]
-            (doseq [f handlers] (f rt node evt)))
+            (invoke-handlers! :mouse-scroll handlers rt node evt))
           (recur (.getParentNode ^INode node)))))))
 
 (defn dispatch-key! [^UiRt rt key-code scan-code modifiers action]
@@ -99,7 +111,7 @@
         (when-let [^INode node (rt/node-by-idx rt focus-idx)]
           (let [evt {:key-code key-code :scan-code scan-code :modifiers modifiers
                      :action action :node-idx focus-idx}]
-            (doseq [f handlers] (f rt node evt))))))))
+            (invoke-handlers! :key handlers rt node evt)))))))
 
 (defn dispatch-char! [^UiRt rt code-point]
   (let [focus-idx (rt/focus-idx rt)]
@@ -108,7 +120,7 @@
         (when-let [^INode node (rt/node-by-idx rt focus-idx)]
           (let [evt {:char (.toString (Character/toChars (int code-point)))
                      :code-point (int code-point) :node-idx focus-idx}]
-            (doseq [f handlers] (f rt node evt))))))))
+            (invoke-handlers! :change-content handlers rt node evt)))))))
 
 (defn gain-focus! [^UiRt rt node-idx]
   (let [old-idx (rt/focus-idx rt)]
@@ -119,7 +131,7 @@
       (when-let [handlers (rt/get-event-handlers rt old-idx :lost-focus)]
         (when-let [^INode old-node (rt/node-by-idx rt old-idx)]
           (let [evt {:node-idx old-idx :new-focus-idx node-idx}]
-            (doseq [f handlers] (f rt old-node evt))))))
+            (invoke-handlers! :lost-focus handlers rt old-node evt)))))
     (rt/set-focus-idx! rt node-idx)
     (when (>= node-idx 0)
       (when-let [^INode node (rt/node-by-idx rt node-idx)]
@@ -128,7 +140,7 @@
       (when-let [handlers (rt/get-event-handlers rt node-idx :gain-focus)]
         (when-let [^INode node (rt/node-by-idx rt node-idx)]
           (let [evt {:node-idx node-idx}]
-            (doseq [f handlers] (f rt node evt))))))))
+            (invoke-handlers! :gain-focus handlers rt node evt)))))))
 
 (defn remove-focus! [^UiRt rt]
   (let [old-idx (rt/focus-idx rt)]
@@ -152,7 +164,7 @@
         (when-let [^INode node (rt/node-by-idx rt (rt/drag-node-idx rt))]
           (let [evt {:x mx :y my :button button :node-idx (rt/drag-node-idx rt)
                      :start-mx (rt/drag-start-mx rt) :start-my (rt/drag-start-my rt)}]
-            (doseq [f handlers] (f rt node evt))))))
+            (invoke-handlers! :drag-stop handlers rt node evt)))))
     (rt/set-dragging?! rt false)
     (rt/set-drag-node-idx! rt -1)))
 
@@ -166,7 +178,7 @@
                        :dx (- (double mx) (rt/drag-start-mx rt))
                        :dy (- (double my) (rt/drag-start-my rt))
                        :start-mx (rt/drag-start-mx rt) :start-my (rt/drag-start-my rt)}]
-              (doseq [f handlers] (f rt node evt)))))
+              (invoke-handlers! :drag handlers rt node evt))))
         (let [dx (Math/abs (- (double mx) (rt/drag-start-mx rt)))
               dy (Math/abs (- (double my) (rt/drag-start-my rt)))]
           (when (or (> dx 4.0) (> dy 4.0))
@@ -175,7 +187,7 @@
               (when-let [^INode node (rt/node-by-idx rt node-idx)]
                 (let [evt {:x mx :y my :button button :node-idx node-idx
                            :start-mx (rt/drag-start-mx rt) :start-my (rt/drag-start-my rt)}]
-                  (doseq [f handlers] (f rt node evt)))))))))))
+                  (invoke-handlers! :drag-start handlers rt node evt))))))))))
 
 (defn unbind-subtree! [^UiRt rt ^INode node]
   (rt/unbind-subtree! rt node))
