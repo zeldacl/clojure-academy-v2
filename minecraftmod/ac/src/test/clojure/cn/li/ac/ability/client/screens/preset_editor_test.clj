@@ -15,18 +15,10 @@
 (deftest editor-state-isolated-by-player-owner-test
   (screen/open-screen! "player-1")
   (screen/on-preset-tab-click "player-1" 2)
-  (screen/on-skill-select "player-1" :railgun)
-  (screen/on-slot-click "player-1" 1)
   (screen/open-screen! "player-2")
   (screen/on-preset-tab-click "player-2" 3)
-  (screen/on-skill-select "player-2" :meltdowner)
-  (screen/on-slot-click "player-2" 0)
   (is (= 2 (:selected-preset (screen/editor-state-snapshot "player-1"))))
-  (is (= {2 {1 :railgun}}
-         (:pending-changes (screen/editor-state-snapshot "player-1"))))
   (is (= 3 (:selected-preset (screen/editor-state-snapshot "player-2"))))
-  (is (= {3 {0 :meltdowner}}
-         (:pending-changes (screen/editor-state-snapshot "player-2"))))
   (screen/close-screen! "player-1")
   (is (nil? (:player-uuid (screen/editor-state-snapshot "player-1"))))
   (is (= "player-2" (:player-uuid (screen/editor-state-snapshot "player-2")))))

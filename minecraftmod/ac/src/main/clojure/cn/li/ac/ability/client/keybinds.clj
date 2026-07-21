@@ -447,9 +447,14 @@
   (doseq [movement-key movement-keys]
     (on-movement-key-event movement-key (key-state-fn [:movement movement-key])))
 
-  ;; Poll GUI keys
-  (on-gui-key-event :skill-tree (key-state-fn [:screen :primary]))
-  (on-gui-key-event :preset-editor (key-state-fn [:screen :secondary])))
+  ;; Poll GUI keys. :primary = N, :secondary = M (see screen-glfw-keys in the
+  ;; platform key-state-fn). Upstream AcademyCraft: KEY_EDIT_PRESET = N
+  ;; (ClientHandler.java) — preset-editor must be on :primary/N to match.
+  ;; skill-tree has no upstream key at all (upstream only reaches it via the
+  ;; terminal app); it lives on :secondary/M as a rewrite-only convenience
+  ;; that doesn't collide with any upstream binding.
+  (on-gui-key-event :preset-editor (key-state-fn [:screen :primary]))
+  (on-gui-key-event :skill-tree (key-state-fn [:screen :secondary])))
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."

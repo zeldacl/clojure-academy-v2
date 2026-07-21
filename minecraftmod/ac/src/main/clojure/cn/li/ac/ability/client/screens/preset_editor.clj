@@ -1,7 +1,6 @@
 (ns cn.li.ac.ability.client.screens.preset-editor
   "Preset editor screen logic (AC layer - no Minecraft imports)."
-  (:require [cn.li.ac.ability.client.api :as api]
-            [cn.li.ac.ability.client.read-model :as read-model]
+  (:require [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
@@ -17,8 +16,6 @@
 ;; Editor state
 (def ^:private default-editor-state
   {:selected-preset 0
-   :selected-skill nil
-   :pending-changes {}
    :player-uuid nil})
 
 (def screen-id :preset-editor)
@@ -132,9 +129,7 @@
                                   :skill-icon (skill-query/get-skill-icon-path (spec-skill-id s))
                                   :cat-id (:category-id s)
                                   :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
-                               available-for-preset)
-           :selected-skill (:selected-skill state)
-           :has-changes (not (empty? (:pending-changes state)))})))))
+                               available-for-preset)})))))
 
 ;; ============================================================================
 ;; Event Handlers
@@ -144,39 +139,6 @@
   "Handle preset tab click."
   [owner preset-idx]
   (swap-editor-state! owner assoc :selected-preset preset-idx))
-
-(defn on-skill-select
-  "Handle skill selection from available skills list."
-  [owner skill-id]
-  (swap-editor-state! owner assoc :selected-skill skill-id))
-
-(defn on-slot-click
-  "Handle slot click. Assigns selected skill to slot."
-  [owner slot-idx]
-  (let [state (editor-state-snapshot owner)]
-    (when-let [skill-id (:selected-skill state)]
-      (let [preset-idx (:selected-preset state)]
-        (swap-editor-state! owner assoc-in [:pending-changes preset-idx slot-idx] skill-id)))))
-
-(defn on-save-click
-  "Handle save button click. Sends all pending changes to server."
-  [owner]
-  (let [state (editor-state-snapshot owner)
-        render-data (build-preset-editor-render-data owner)
-        available-skills (:available-skills render-data)]
-    (doseq [[preset-idx slots] (:pending-changes state)]
-      (doseq [[slot-idx skill-id] slots]
-        (when-let [skill-info (first (filter #(= (:skill-id %) skill-id) available-skills))]
-          (api/req-set-preset-slot! owner preset-idx slot-idx
-                                   (:cat-id skill-info)
-                                   (:ctrl-id skill-info)
-                                   nil)))))
-  (swap-editor-state! owner assoc :pending-changes {}))
-
-(defn on-set-active-click
-  "Handle set active button click."
-  [owner]
-  (api/req-switch-preset! owner (:selected-preset (editor-state-snapshot owner)) nil))
 
 (defn open-screen!
   "Open preset editor screen."
