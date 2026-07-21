@@ -918,35 +918,63 @@
             rtype (.getOSlot node SLOT-P3D-TYPE)
             x (node-abs-x node) y (node-abs-y node)
             w (scaled-w node) h (scaled-h node)
-            cx (double (+ x (/ w 2.0)))
-            cy (double (+ y (/ h 2.0)))
+            ^net.minecraft.client.Minecraft mc (net.minecraft.client.Minecraft/getInstance)
+            ^com.mojang.blaze3d.platform.Window win (.getWindow mc)
+            gui-scale (.getGuiScale win)
+            fb-w (.getWidth win)
+            fb-h (.getHeight win)
+            ;; Real GL viewport scoped to this node's screen rect (in physical
+            ;; framebuffer pixels — GL viewport Y is bottom-up, GUI Y is top-down)
+            ;; instead of trying to fold the node's absolute screen-pixel
+            ;; position into the modelview translate: that mixed pixel-scale
+            ;; XY with a near=1/far=100 perspective frustum, and — combined
+            ;; with a -200 Z translate that sits *beyond* the far plane — made
+            ;; the block get clipped away entirely (this is why it rendered as
+            ;; nothing). A real viewport lets the camera use upstream's own
+            ;; small eye-space distances and puts the near/far clip range back
+            ;; where the object actually is.
+            vp-x (int (Math/round (* x gui-scale)))
+            vp-w (int (max 1 (Math/round (* w gui-scale))))
+            vp-h (int (max 1 (Math/round (* h gui-scale))))
+            vp-y (int (Math/round (- fb-h (* (+ y h) gui-scale))))
+            aspect (float (if (pos? h) (/ w h) 1.0))
             ;; Build perspective projection matching upstream gluPerspective(50,1,1,100)
             persp (doto (Matrix4f.)
-                    (.setPerspective (float (Math/toRadians 50.0)) 1.0 1.0 100.0))
+                    (.setPerspective (float (Math/toRadians 50.0)) aspect 1.0 100.0))
             ;; Use RenderSystem modelview stack (separate from GuiGraphics PoseStack)
             ^PoseStack mv (RenderSystem/getModelViewStack)
-            saved (RenderSystem/getProjectionMatrix)]
-        ;; Switch to perspective projection
+            saved-proj (RenderSystem/getProjectionMatrix)]
+        ;; Flush any pending 2D GUI geometry queued under the normal ortho
+        ;; projection before switching state for this 3D preview.
+        (.flush gg)
+        (RenderSystem/viewport vp-x vp-y vp-w vp-h)
         (RenderSystem/setProjectionMatrix persp VertexSorting/DISTANCE_TO_ORIGIN)
-        ;; Modelview: center on preview area, apply camera + auto-rotation
+        ;; Modelview: upstream's TWO-stage transform. GuiTutorial.showArea's
+        ;; outer camera (shared by every preview widget): translate(0,0,-4),
+        ;; translate(.55,.55,.5), scale(.75,-.75,.75), fixed glRotated(-20,1,0,0.1)
+        ;; tilt — wraps ViewGroups.drawsBlockImpl's own inner transform: local
+        ;; offset (0.15,0.1,-1), Y-spin, scale .8, recenter (-.5,-.5,-.5). The
+        ;; viewport above now stands in for the NDC remap upstream builds into
+        ;; its projection matrix, so the camera chain below is otherwise 1:1.
         (.pushPose mv)
-        ;; Map to preview area center (convert from screen px to NDC-like coords)
-        (.translate mv cx cy -200.0)
-        (.scale mv 1.0 -1.0 1.0)   ;; flip Y for MC coordinate system
+        (.translate mv 0.0 0.0 -4.0)
+        (.translate mv 0.55 0.55 0.5)
+        (.scale mv 0.75 -0.75 0.75)
+        (.mulPose mv (doto (Quaternionf.)
+                       (.rotateAxis (float (Math/toRadians -20.0)) 1.0 0.0 0.1)))
+        (.translate mv 0.15 0.1 -1.0)  ;; upstream inner glTranslated(0.15,0.1,-1) pre-rotation offset
         ;; Auto-rotation Y (matching upstream drawBlock time/80°)
         (when (pos? rot-speed)
           (.mulPose mv (doto (Quaternionf.)
                          (.rotateY (float (Math/toRadians
                                             (mod (/ (System/currentTimeMillis) 80.0) 360.0)))))))
         (.scale mv (float uni-scale) (float uni-scale) (float uni-scale))
-        (.translate mv -0.5 -0.5 0.0)  ;; center block item
+        (.translate mv -0.5 -0.5 -0.5)  ;; center block/item on all three axes
         (RenderSystem/applyModelViewMatrix)
-        ;; Flush GUI batch before 3D rendering
-        (.flush gg)
         ;; Render the block/item with the 3D-aware renderer
         (if (= rtype :block)
           (let [^net.minecraft.client.renderer.block.BlockRenderDispatcher brd
-                (.getBlockRenderer (net.minecraft.client.Minecraft/getInstance))
+                (.getBlockRenderer mc)
                 block-id (.getOSlot node SLOT-P3D-BLOCK)]
             (when (string? block-id)
               (if-let [^net.minecraft.world.level.block.Block block
@@ -954,18 +982,27 @@
                                   (ResourceLocation/tryParse ^String block-id))
                             (catch Throwable _ nil))]
                 (let [state (.defaultBlockState block)
-                      buffer (.bufferSource gg)
-                      seed (int 0)]
+                      buffer (.bufferSource gg)]
                   (RenderSystem/enableDepthTest)
                   (.renderSingleBlock brd state (.pose gg) buffer 15728880
                                      net.minecraft.client.renderer.texture.OverlayTexture/NO_OVERLAY)
+                  ;; renderSingleBlock only QUEUES vertices into gg's buffered
+                  ;; MultiBufferSource — without flushing here, they'd draw
+                  ;; later under whatever projection/viewport is active by
+                  ;; then (already restored to the normal 2D GUI ortho), i.e.
+                  ;; never under the perspective camera set up above. This
+                  ;; missing flush was the actual reason the block never
+                  ;; appeared at all.
+                  (.flush gg)
                   (RenderSystem/disableDepthTest)))))
           ;; :item — renderFakeItem in the perspective modelview
-          (.renderFakeItem gg stack -8 -8))
+          (do (.renderFakeItem gg stack -8 -8)
+              (.flush gg)))
         ;; Restore
         (.popPose mv)
         (RenderSystem/applyModelViewMatrix)
-        (RenderSystem/setProjectionMatrix saved VertexSorting/DISTANCE_TO_ORIGIN)))))
+        (RenderSystem/setProjectionMatrix saved-proj VertexSorting/DISTANCE_TO_ORIGIN)
+        (RenderSystem/viewport 0 0 fb-w fb-h)))))
 
 ;; ============================================================================
 ;; :crosshair
