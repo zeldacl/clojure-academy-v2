@@ -259,67 +259,73 @@
         (dsl/box {:id :coin-qte-marker :w 4 :h 4 :fill 0xF0FFDC50})
         (dsl/text {:id :coin-qte-pct :text "" :color 0xFFFFD700}))
       ;; ===== CP Bar Area (right-aligned, matching upstream CPBar layout) =====
-      ;; Bar frame background (full bar, switches on overload)
-      (dsl/image {:id :cpbar-bg :x bar-x :y bar-y :w bar-w :h bar-h
-                  :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")})
-      ;; Overload fill (behind CP fill, scroll-animated)
-      ;; Overload bar: upstream draws two DIFFERENT visuals depending on state
-      ;; (only one visible at a time, toggled per-frame in update-overload-lane!):
-      ;; - not overloaded (drawNormal, the common case): mask.png tinted by a
-      ;;   3-stop gradient, growing from the RIGHT edge, no scroll/animation —
-      ;;   :overload-preview below (plain box; mask.png is itself a flat white
-      ;;   rect, so a tinted box is pixel-equivalent without a texture sample).
-      ;; - overloaded (drawOverload): animated scrolling front_overload.png —
-      ;;   :overload-bar, NO color-stops (its own texture already carries the
-      ;;   cyan→green→pink gradient; tinting it would double-color it).
-      (dsl/box {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 0 :h 21 :fill 0x00DFDFDF :visible? false})
-      (dsl/progress {:id :overload-bar :x bar-x :y (+ bar-y 4) :w (- bar-w 4) :h 21
-                     :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")
-                     :scroll-offset 0.0 :visible? false})
-      ;; CP fill (diagonal cut + icon overlay). Consumption-hint "release" cue
-      ;; (upstream CPBar: mAlpha*=0.2+0.1*(1+sin(t/80)) ghost of the CURRENT
-      ;; level drawn first, then the PREDICTED post-cost level drawn solid on
-      ;; top) — :cp-bar-ghost is the pulsing current-level bar (hidden unless a
-      ;; skill's CP cost is being previewed), :cp-bar is the solid bar showing
-      ;; either the predicted level (hint active) or the plain current level.
-      (dsl/progress {:id :cp-bar-ghost :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
-                     :corner 0.852
-                     :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
-                     :color-stops cp-color-stops
-                     :visible? false})
-      (dsl/progress {:id :cp-bar :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
-                     :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
-                     :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
-                     :color-stops cp-color-stops
-                     :icon-src ""     ;; set per-frame to category icon
-                     :icon-cutout {:x-offset 161 :w 16 :y-offset 0 :h 17}})
-      ;; Overload highlight (pulsing overlay when overloaded)
-      (dsl/image {:id :overload-highlight :x bar-x :y bar-y :w bar-w :h bar-h
-                  :src (modid/asset-path "textures" "guis/cpbar/highlight_overload.png")
-                  :visible? false :alpha 0.0})
-      ;; ===== CP/OL Numbers (within bar area) =====
-      (dsl/text {:id :cp-numbers :x (- sw 183) :y 23 :text "" :color 0xFFFFFFFF :visible? false})
-      (dsl/text {:id :ol-numbers :x (- sw 183) :y 29 :text "" :color 0xFFFFFFFF :visible? false})
-      ;; ===== Activation hint (within bar area, with background box) =====
-      (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
-        (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
-        ;; Glow border (ACRenderingHelper.drawGlow, upstream CRL_KH_GLOW =
-        ;; white @ alpha 40/255) — static geometry, set once in
-        ;; attach-overlay-bindings!; visibility follows the parent group.
-        (dsl/glow-line {:id :activation-hint-glow :x -8 :y -4})
-        (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
+      ;; Upstream CPBar.initEvents applies its interference jitter
+      ;; (GL11.glTranslated inside CPBar's own FrameEvent) to ONLY this
+      ;; widget's own draw — not the whole HUD. Wrapped in one group so
+      ;; apply-jitter! can offset just this subtree (see update-overlay-signals!).
+      (dsl/group {:id :cpbar-jitter-group :x 0 :y 0 :w sw :h sh}
+        ;; Bar frame background (full bar, switches on overload)
+        (dsl/image {:id :cpbar-bg :x bar-x :y bar-y :w bar-w :h bar-h
+                    :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")})
+        ;; Overload fill (behind CP fill, scroll-animated)
+        ;; Overload bar: upstream draws two DIFFERENT visuals depending on state
+        ;; (only one visible at a time, toggled per-frame in update-overload-lane!):
+        ;; - not overloaded (drawNormal, the common case): mask.png tinted by a
+        ;;   3-stop gradient, growing from the RIGHT edge, no scroll/animation —
+        ;;   :overload-preview below (plain box; mask.png is itself a flat white
+        ;;   rect, so a tinted box is pixel-equivalent without a texture sample).
+        ;; - overloaded (drawOverload): animated scrolling front_overload.png —
+        ;;   :overload-bar, NO color-stops (its own texture already carries the
+        ;;   cyan→green→pink gradient; tinting it would double-color it).
+        (dsl/box {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 0 :h 21 :fill 0x00DFDFDF :visible? false})
+        (dsl/progress {:id :overload-bar :x bar-x :y (+ bar-y 4) :w (- bar-w 4) :h 21
+                       :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")
+                       :scroll-offset 0.0 :visible? false})
+        ;; CP fill (diagonal cut + icon overlay). Consumption-hint "release" cue
+        ;; (upstream CPBar: mAlpha*=0.2+0.1*(1+sin(t/80)) ghost of the CURRENT
+        ;; level drawn first, then the PREDICTED post-cost level drawn solid on
+        ;; top) — :cp-bar-ghost is the pulsing current-level bar (hidden unless a
+        ;; skill's CP cost is being previewed), :cp-bar is the solid bar showing
+        ;; either the predicted level (hint active) or the plain current level.
+        (dsl/progress {:id :cp-bar-ghost :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
+                       :corner 0.852
+                       :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
+                       :color-stops cp-color-stops
+                       :visible? false})
+        (dsl/progress {:id :cp-bar :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
+                       :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
+                       :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
+                       :color-stops cp-color-stops
+                       :icon-src ""     ;; set per-frame to category icon
+                       :icon-cutout {:x-offset 161 :w 16 :y-offset 0 :h 17}})
+        ;; Overload highlight (pulsing overlay when overloaded)
+        (dsl/image {:id :overload-highlight :x bar-x :y bar-y :w bar-w :h bar-h
+                    :src (modid/asset-path "textures" "guis/cpbar/highlight_overload.png")
+                    :visible? false :alpha 0.0})
+        ;; ===== CP/OL Numbers (within bar area) =====
+        (dsl/text {:id :cp-numbers :x (- sw 183) :y 23 :text "" :color 0xFFFFFFFF :visible? false})
+        (dsl/text {:id :ol-numbers :x (- sw 183) :y 29 :text "" :color 0xFFFFFFFF :visible? false})
+        ;; ===== Activation hint (within bar area, with background box) =====
+        (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
+          (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
+          ;; Glow border (ACRenderingHelper.drawGlow, upstream CRL_KH_GLOW =
+          ;; white @ alpha 40/255) — static geometry, set once in
+          ;; attach-overlay-bindings!; visibility follows the parent group.
+          (dsl/glow-line {:id :activation-hint-glow :x -8 :y -4})
+          (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
+        ;; ===== Preset indicators — upstream drawPresetHint is also a CPBar
+        ;; method, called from the same jittered FrameEvent block. =====
+        (dsl/group {:id :preset-row :x (- sw 89) :y 39
+                    :w (+ preset-box-size (* 3.0 preset-box-step)) :h preset-box-size
+                    :visible? false}
+          (preset-box-template 0) (preset-box-template 1)
+          (preset-box-template 2) (preset-box-template 3)))
       ;; ===== Skill Slots (upstream KeyHintUI: independent widget, vertically
       ;; centred on the right screen edge — see skill-slot-anchor) =====
       (let [[ax ay] (skill-slot-anchor sw sh)]
         (dsl/list-node {:id :skill-slots :spacing 0 :w 320 :h 400 :scale skill-slot-scale
                         :x ax :y ay
                         :template (skill-slot-template)}))
-      ;; ===== Preset indicators (within bar area) =====
-      (dsl/group {:id :preset-row :x (- sw 89) :y 39
-                  :w (+ preset-box-size (* 3.0 preset-box-step)) :h preset-box-size
-                  :visible? false}
-        (preset-box-template 0) (preset-box-template 1)
-        (preset-box-template 2) (preset-box-template 3))
       (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
       (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
       (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
@@ -871,18 +877,22 @@
     (set-visible! r :overlay-app-layer false)))
 
 (defn- apply-jitter! [r interfered?]
-  (when-let [^INode root (ui/node r :root)]
+  ;; Upstream CPBar.initEvents: the interference jitter is a GL11.glTranslated
+  ;; inside CPBar's OWN FrameEvent only — it shakes just the CP bar (+ preset
+  ;; hint, activate hint, CP/OL numbers, all part of the same widget), not the
+  ;; whole HUD (skill slots, toasts, crosshair etc. stay put upstream too).
+  (when-let [^INode jitter-root (ui/node r :cpbar-jitter-group)]
     (if interfered?
       (let [jx (sig/sget-d (rt/user-signal r :jitter-x))
             jy (sig/sget-d (rt/user-signal r :jitter-y))]
-        (when (or (not= jx (.getX root)) (not= jy (.getY root)))
-          (.setX root jx)
-          (.setY root jy)
-          (.setFlag root node/FLAG-LAYOUT-DIRTY)))
-      (when (or (not= 0.0 (.getX root)) (not= 0.0 (.getY root)))
-        (.setX root 0.0)
-        (.setY root 0.0)
-        (.setFlag root node/FLAG-LAYOUT-DIRTY)))))
+        (when (or (not= jx (.getX jitter-root)) (not= jy (.getY jitter-root)))
+          (.setX jitter-root jx)
+          (.setY jitter-root jy)
+          (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY)))
+      (when (or (not= 0.0 (.getX jitter-root)) (not= 0.0 (.getY jitter-root)))
+        (.setX jitter-root 0.0)
+        (.setY jitter-root 0.0)
+        (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY)))))
 
 (defn- apply-screen-size! [r sw sh]
   (doseq [id [:root :bg-mask]]
