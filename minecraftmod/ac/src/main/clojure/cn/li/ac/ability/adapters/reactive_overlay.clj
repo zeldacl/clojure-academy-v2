@@ -143,10 +143,24 @@
     (dsl/box {:id :border-r :x 199 :y 0 :w 1 :h 32 :fill 0xAAFFFFFF})
     (dsl/text {:id :msg :x 8 :y 9 :text "" :color 0xFFFFFFFF})))
 
-;; Upstream KeyHintUI: child widget 128×193, container 140×210 @ SCALE*2=0.46.
-;; Shared by the list-node's own :scale prop and the glow-line dslot math below
-;; (glow-line offsets are raw screen pixels, not auto-scaled — see update fn).
-(def ^:private skill-slot-scale 0.46)
+;; Upstream KeyHintUI: the LIVE hud instance (not the editor-preview widget,
+;; which is a separate 140×210@SCALE*2=0.46 object only used by the preset
+;; editor) renders at scale(SCALE)=0.23. Shared by the list-node's own :scale
+;; prop and the glow-line/cooldown-wipe dslot math below (those write already-
+;; scaled screen pixels, not auto-scaled — see update fns).
+(def ^:private skill-slot-scale 0.23)
+
+;; Upstream KeyHintUI is an independent top-level widget — walign(RIGHT),
+;; halign(CENTER), pos(0,30) on a declared 140×210 box — vertically centered
+;; on the right screen edge, NOT anchored to the CP bar. drawSingle further
+;; GL-translates each key-group by (-200 - availIdx*200, 0) before drawing;
+;; the preset/preset-data model here only ever has one group (availIdx=0).
+(defn- skill-slot-anchor [sw sh]
+  (let [w (* 140.0 skill-slot-scale)
+        h (* 210.0 skill-slot-scale)
+        group-dx (* -200.0 skill-slot-scale)]
+    [(+ (- sw w) group-dx)
+     (+ (- (/ sh 2.0) (/ h 2.0)) 30.0)]))
 
 (defn- key-cap-texture [key-label]
   ;; Upstream KeyHintUI.drawSingle: Keyboard.getKeyName length <= 2 → key_short,
@@ -158,25 +172,32 @@
                       "guis/key_hint/key_long.png")))
 
 (defn- skill-slot-template []
-  ;; Upstream KeyHintUI: child widget 128×193, container 140×210 @ scale 0.46.
-  ;; Each slot row ~35px tall matching the preset editor's 34.75px rows.
-  (dsl/group {:id :slot :h 35 :w 120}
-    (dsl/image {:id :slot-back :x -6 :y 1 :w 118 :h 32
+  ;; Upstream KeyHintUI.drawSingle raw local-unit offsets (auto-scaled via the
+  ;; list's :scale 0.23, matching upstream's own pre-scale GL coordinate
+  ;; space) — :h 92 matches the y+=92 per-key row step. drawSingle draws no
+  ;; skill-name text at all, so there is no :label node here (upstream
+  ;; element set: back plate, key-cap + key character, icon-back, icon,
+  ;; cooldown wipe — nothing else).
+  (dsl/group {:id :slot :h 92 :w 320}
+    (dsl/image {:id :slot-back :x 122 :y 0 :w 185 :h 83
                 :src (modid/asset-path "textures" "guis/key_hint/back.png")})
-    (dsl/image {:id :key-cap :x -1 :y 3 :w 28 :h 27
+    (dsl/image {:id :key-cap :x 146 :y 10 :w 70 :h 70
                 :src (key-cap-texture "")})
-    (dsl/text {:id :key-label :x 3 :y 4 :text "" :color 0xFFFFFFFF})
-    (dsl/image {:id :icon-back :x 29 :y 2 :w 29 :h 29
+    ;; font-size does NOT auto-scale with the node's inherited cum-scale in
+    ;; this engine (only x/y/w/h do) — pre-multiplied here: upstream
+    ;; FontOption(32, CENTER) × 0.23 ≈ 7.
+    (dsl/text {:id :key-label :x 180 :y 20 :text "" :color 0xFFFFFFFF
+               :align :center :font-size 7})
+    (dsl/image {:id :icon-back :x 216 :y 5 :w 72 :h 72
                 :src (modid/asset-path "textures" "guis/key_hint/icon_back.png")})
-    (dsl/image {:id :icon :x 30 :y 3 :w 27 :h 27 :src ""})
+    (dsl/image {:id :icon :x 221 :y 10 :w 62 :h 62 :src ""})
     ;; Charge/active glow border (ACRenderingHelper.drawGlow port, no center
     ;; line) — geometry + color/sine-pulse set per-frame in update fn.
-    (dsl/glow-line {:id :icon-glow :x 30 :y 3 :visible? false})
-    (dsl/text {:id :label :x 60 :y 8 :text "" :color 0xFFFFFFFF})
-    ;; Cooldown wipe: aligned with the icon box (upstream colorRect covers the
-    ;; icon, not the key cap), proportional height set per-frame in update fn.
-    (dsl/box {:id :cd-mask :x 30 :y 3 :w 27 :h 27 :fill 0x4D999999 :visible? false})
-    (dsl/text {:id :cd-text :x 3 :y 14 :text "" :color 0xFFFFFFFF :visible? false})))
+    (dsl/glow-line {:id :icon-glow :x 221 :y 10 :visible? false})
+    ;; Cooldown wipe: upstream colorRect(221, 10+62*(1-prog), 62, 62*prog).
+    (dsl/box {:id :cd-mask :x 221 :y 10 :w 62 :h 62 :fill 0x4D999999 :visible? false})
+    (dsl/text {:id :cd-text :x 180 :y 55 :text "" :color 0xFFFFFFFF
+               :align :center :font-size 7 :visible? false})))
 
 ;; Upstream CPBar.drawPresetHint: 4 numbered boxes, 52×52 texture-space units
 ;; @ the bar's 0.2 scale ≈ 10.4×10.4px, step 62×0.2≈12.4px between boxes.
@@ -287,14 +308,12 @@
         ;; attach-overlay-bindings!; visibility follows the parent group.
         (dsl/glow-line {:id :activation-hint-glow :x -8 :y -4})
         (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
-      ;; ===== Skill Slots (right-aligned, below CP/OL bars) =====
-      ;; Upstream KeyHintUI: container 140×210 @ scale 0.46 (= ~64×97 effective),
-      ;; right-aligned, vertically centred.  Our layout stacks it below the CP
-      ;; bar; upstream uses ACHud halign(CENTER) which is effectively the screen
-      ;; centre.  We follow the stack order but keep the upstream scale.
-      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210 :scale skill-slot-scale
-                      :x (- sw 150) :y (+ bar-y bar-h 12)
-                      :template (skill-slot-template)})
+      ;; ===== Skill Slots (upstream KeyHintUI: independent widget, vertically
+      ;; centred on the right screen edge — see skill-slot-anchor) =====
+      (let [[ax ay] (skill-slot-anchor sw sh)]
+        (dsl/list-node {:id :skill-slots :spacing 0 :w 320 :h 400 :scale skill-slot-scale
+                        :x ax :y ay
+                        :template (skill-slot-template)}))
       ;; ===== Preset indicators (within bar area) =====
       (dsl/group {:id :preset-row :x (- sw 89) :y 39
                   :w (+ preset-box-size (* 3.0 preset-box-step)) :h preset-box-size
@@ -514,8 +533,8 @@
 (defn- update-skill-slot-glow! [r ^INode icon-glow visual glow this-sin-alpha]
   (when icon-glow
     (if (and glow (not= visual :idle))
-      (let [icon-w (* 27.0 skill-slot-scale)
-            icon-h (* 27.0 skill-slot-scale)
+      (let [icon-w (* 62.0 skill-slot-scale)   ;; upstream ICON_SIZE=62
+            icon-h (* 62.0 skill-slot-scale)
             glow-sz (Math/max 1.0 (* icon-w (/ 5.0 62.0)))    ;; upstream size=5 / ICON_SIZE=62
             [gr gg gb ga] glow
             tint-alpha (int (* (double (or ga 255)) this-sin-alpha))
@@ -548,14 +567,19 @@
         icon (ui/item-node item :icon)
         icon-glow (ui/item-node item :icon-glow)
         key-cap (ui/item-node item :key-cap)
+        key-label-node (ui/item-node item :key-label)
         cd-mask (ui/item-node item :cd-mask)
         cd-text (ui/item-node item :cd-text)]
     (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
-    (ui/set-node-prop! r (ui/item-node item :key-label) :text key-label)
+    (ui/set-node-prop! r key-label-node :text key-label)
+    ;; Upstream: !canUseAbility || tickLeft>0 → color4d(0.7,0.7,0.7,1) dims the
+    ;; key-cap plate + key character only (icon dimming is handled separately
+    ;; above via icon-alpha). We only have the cooldown half of that condition.
+    (ui/set-node-prop! r key-cap :tint (when in-cd? [178 178 178 255]))
+    (ui/set-node-prop! r key-label-node :color (if in-cd? 0xFFB2B2B2 0xFFFFFFFF))
     (when-let [icon-src (:skill-icon slot)]
       (ui/set-node-prop! r icon :src icon-src))
     (ui/set-node-prop! r icon :alpha icon-alpha)
-    (ui/set-node-prop! r (ui/item-node item :label) :text (str (:skill-name slot)))
     (update-skill-slot-glow! r icon-glow visual glow this-sin-alpha)
     ;; Cooldown wipe: proportional bottom-up gray overlay on the icon box,
     ;; matching upstream colorRect(iconX, iconY+ICON_SIZE*(1-prog), ICON_SIZE, ICON_SIZE*prog).
@@ -564,7 +588,7 @@
       (let [total (double (Math/max 1.0 (double (or (:cooldown-total slot) 1))))
             remaining (double (or (:cooldown-remaining slot) 0))
             prog (Math/max 0.0 (Math/min 1.0 (/ remaining total)))]
-        (set-box-node-at! r cd-mask 30 (+ 3.0 (* 27.0 (- 1.0 prog))) 27 (* 27.0 prog)
+        (set-box-node-at! r cd-mask 221 (+ 10.0 (* 62.0 (- 1.0 prog))) 62 (* 62.0 prog)
                           {:r 153 :g 153 :b 153 :a 76})))
     (when cd-text
       (if in-cd?
@@ -580,10 +604,18 @@
                (and (= (nth cached i) (:skill-id (nth slots i)))
                     (recur (unchecked-inc-int i))))))))
 
-(defn- update-skill-slots! [r snapshot now-ms]
+(defn- update-skill-slots! [r snapshot now-ms sw sh]
   (let [slots (:skill-slots snapshot)
         ^objects cache (rt/user-signal r :overlay-object-cache)
         cached-ids (aget cache 0)]
+    ;; Re-anchor every frame: upstream KeyHintUI is vertically centred on the
+    ;; right screen edge (halign CENTER), so its position tracks window resize.
+    (when-let [^INode list-node (ui/node r :skill-slots)]
+      (let [[ax ay] (skill-slot-anchor sw sh)]
+        (when (or (not= ax (.getX list-node)) (not= ay (.getY list-node)))
+          (.setX list-node (double ax))
+          (.setY list-node (double ay))
+          (.setFlag list-node node/FLAG-LAYOUT-DIRTY))))
     (when-not (same-skill-ids? cached-ids slots)
       (aset cache 0 (mapv #(get % :skill-id) slots))
       (ui/list-set! r :skill-slots slots
@@ -924,7 +956,7 @@
           (update-overload-lane! r snapshot sw)
           (update-numbers! r snapshot)
           (update-preset-indicators! r snapshot sw)
-          (update-skill-slots! r snapshot now-ms)
+          (update-skill-slots! r snapshot now-ms sw sh)
           (update-crosshair! r snapshot)))
       (update-vm-waves! r snapshot)
       (update-charging-layer! r snapshot sw sh)
