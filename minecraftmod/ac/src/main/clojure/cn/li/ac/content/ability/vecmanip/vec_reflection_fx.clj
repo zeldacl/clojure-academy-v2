@@ -160,7 +160,7 @@
                  {:r 255 :g 200 :b 160 :a alpha})]))
 
 (defn- build-plan
-  [camera-pos hand-center-pos _tick]
+  [camera-pos hand-center-pos _tick & _more]
   (let [{:keys [effect-state wave-effects]} (vec-reflection-fx-snapshot)
         vr (matching-active-state effect-state hand-center-pos)
         current-waves (mapcat val wave-effects)

@@ -593,7 +593,7 @@
         dim? (or in-cd? cant-use-ability?)]
     (ui/set-node-prop! r key-cap :src (key-cap-texture key-label-raw))
     (ui/set-node-prop! r key-label-node :text key-label)
-    (ui/set-node-prop! r key-cap :tint (when dim? [178 178 178 255]))
+    (ui/set-node-prop! r key-cap :tint (if dim? [178 178 178 255] [255 255 255 255]))
     (ui/set-node-prop! r key-label-node :color (if dim? 0xFFB2B2B2 0xFFFFFFFF))
     (when-let [icon-src (:skill-icon slot)]
       (ui/set-node-prop! r icon :src icon-src))

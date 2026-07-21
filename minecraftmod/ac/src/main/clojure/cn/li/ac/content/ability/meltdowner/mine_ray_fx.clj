@@ -127,7 +127,7 @@
      (ru/line-op {:x x0 :y y0 :z z1} {:x x0 :y y1 :z z1} col)]))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
+  [_camera-pos _hand-center-pos _tick & _more]
   (let [ops (mapcat (fn [st]
                       (when (and (:active? st) (:target st))
                         (progress-box-ops (:target st)
