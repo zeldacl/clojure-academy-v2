@@ -1,6 +1,8 @@
 (ns cn.li.ac.content.entities.all
   "Content entrypoint for AC entity declarations."
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.tutorial.config :as tutorial-config]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.runtime.install :as install]))
 
@@ -75,7 +77,13 @@
                                              :branch-attach-start 2
                                              :branch-attach-random-span-sub 3}}}}))
 
-    ;; EntityCoinThrowing - for Railgun skill
+    ;; EntityCoinThrowing - Railgun skill QTE throw; also carries upstream's
+    ;; standalone ItemCoin/EntityCoinThrowing "heads or tails" flavor message
+    ;; (upstream: right-click-throw a coin, random chat message on landing,
+    ;; gated by the "Play Heads or Tails" setting). This port merged that
+    ;; item/entity into the Railgun QTE, so the message now fires whenever
+    ;; *any* thrown coin lands — including QTE throws — matching upstream's
+    ;; unconditional-on-landing behavior as closely as the merged design allows.
     (edsl/register-entity!
       (edsl/create-entity-spec
         "entity_coin_throwing"
@@ -89,7 +97,20 @@
                                :follow-owner? true
                                :hook :vertical-ballistic
                                :hook-params {:gravity 0.06
-                                             :init-vel 0.92}}}}))
+                                             :init-vel 0.92
+                                             :on-landed-fn
+                                             ;; Ticks (and thus this callback) run on every
+                                             ;; nearby client, not just the thrower's — only
+                                             ;; the throwing player's own client can actually
+                                             ;; display a system message via itself, so guard
+                                             ;; on identity with the local client player
+                                             ;; (matches upstream's implicit isRemote-and-
+                                             ;; it's-my-own-EntityPlayerSP behavior).
+                                             (fn [owner-player]
+                                               (when (and (tutorial-config/heads-or-tails-enabled?)
+                                                          (= owner-player (bridge/get-client-player)))
+                                                 (bridge/send-system-message! owner-player
+                                                   (str "heads_or_tails." modid/MOD-ID "." (rand-int 2)))))}}}}))
 
     ;; Ray family (Forge adapter shells + renderer-id dispatch).
     (edsl/register-entity!

@@ -11,6 +11,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import clojure.lang.IFn;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -130,6 +131,15 @@ public class ScriptedEffectEntity extends Entity {
 
         if ((this.ballisticCurrentY < owner.getY() && this.ballisticVelY < 0.0D) || this.tickCount > BALLISTIC_MAX_LIFE) {
             this.ballisticStateInitialized = false;
+            // Client-side-only cosmetic callback (matches upstream EntityCoinThrowing's
+            // `getEntityWorld().isRemote` check) — e.g. the "heads or tails" flavor
+            // message registered as entity_coin_throwing's :on-landed-fn hook-param.
+            if (level().isClientSide()) {
+                Object onLanded = spec.getHookParams().get("on-landed-fn");
+                if (onLanded instanceof IFn fn) {
+                    fn.invoke(owner);
+                }
+            }
             this.discard();
             return true;
         }
