@@ -12,9 +12,7 @@
             [cn.li.mcmod.spi.key-scheme-provider :as key-provider]))
 
 ;; GLFW key codes (shared constants)
-(def GLFW_KEY_Z 90)
-(def GLFW_KEY_X 88)
-(def GLFW_KEY_R 82)
+(def GLFW_KEY_C 67)
 (def GLFW_KEY_V 86)
 (def GLFW_KEY_LEFT_ALT 342)
 
@@ -37,8 +35,10 @@
 
 (def ^:private key-down-time
   "Timestamp (System/currentTimeMillis) when the V key was last pressed.
-   Upstream AcademyCraft ClientHandler: toggle fires on KEY RELEASE only if
-   held < 300ms — longer holds are skill-slot activations ($3=V)."
+   Upstream AcademyCraft ClientHandler.keyActivate: toggle fires on KEY
+   RELEASE only if held < 300ms (ClientHandler.java onKeyUp/onKeyDown).
+   V is a standalone toggle key upstream — it is not reused for any ability
+   slot (those default to mouse-left/mouse-right/R/F)."
   (atom 0))
 
 (defn poll-all-inputs!
@@ -50,8 +50,8 @@
    For Fabric: the PRIMARY input mechanism (Fabric has no KeyMapping events).
 
    Polling targets:
-   - :content/cycle-selection (R key)
-   - :content/toggle-primary-state (V key)
+   - :content/cycle-selection (C key — upstream KEY_SWITCH_PRESET)
+   - :content/toggle-primary-state (V key — upstream KEY_ACTIVATE_ABILITY)
 
    Flow:
    1. Poll GLFW state for each input
@@ -72,8 +72,8 @@
    (poll-all-inputs! _minecraft-client player-uuid client-session-id nil))
   ([_minecraft-client player-uuid client-session-id {:keys [suppress-triggers?]}]
    (try
-     ;; Cycle selection (R key)
-     (let [key-code GLFW_KEY_R
+     ;; Cycle selection / switch preset (C key — upstream KEY_SWITCH_PRESET)
+     (let [key-code GLFW_KEY_C
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :cycle-selection false)]
        (when (and (not suppress-triggers?)
@@ -85,10 +85,9 @@
             :logical-side :client}))
        (swap! last-poll-time assoc :cycle-selection is-pressed))
 
-     ;; Toggle primary state (V key — mode switch)
+     ;; Toggle primary state (V key — mode switch, upstream KEY_ACTIVATE_ABILITY)
      ;; Upstream AcademyCraft ClientHandler: toggle fires on KEY RELEASE
-     ;; only if held < 300ms.  Holding V longer activates slot-3 skill,
-     ;; reusing the same key without conflict.
+     ;; only if held < 300ms.
      (let [key-code GLFW_KEY_V
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :toggle-primary-state false)]
@@ -129,3 +128,48 @@
   []
   (reset! last-poll-time {})
   nil)
+
+;; ============================================================================
+;; Per-frame held-key state — shared by Forge (runtime_bridge.clj) and Fabric
+;; (keyboard_init.clj) key-state-fn callbacks for keybinds/tick-keys!. Was
+;; previously duplicated verbatim in both loader packages; extracted here so
+;; a key remap (e.g. the ability-slot/preset-editor/skill-tree key alignment
+;; pass) only needs to change one place.
+;; ============================================================================
+
+;; Upstream AcademyCraft ClientHandler.keyIDsInit default: MOUSE_LEFT,
+;; MOUSE_RIGHT, R, F → ability slots 0-3.
+(def slot-glfw-keys [:mouse-left :mouse-right 82 70])
+(def movement-glfw-keys {:forward 87   ;; W
+                         :back 83      ;; S
+                         :left 65      ;; A
+                         :right 68})   ;; D
+;; :primary = N (78), :secondary = M (77) — raw key identity only; which
+;; screen each opens is decided in keybinds.clj/tick-keys!, matching upstream
+;; AcademyCraft's KEY_EDIT_PRESET = N (ClientHandler.java). Upstream has no
+;; binding on M at all; the rewrite-only skill-tree viewer (no upstream
+;; equivalent — upstream reaches it only via the terminal app) uses M so it
+;; doesn't collide with N's upstream-aligned meaning.
+(def screen-glfw-keys {:primary 78 :secondary 77})
+
+(defn glfw-key-state-fn
+  "key-state-fn callback for keybinds/tick-keys!. Takes [:slot idx],
+   [:movement kw], or [:screen kw] and returns boolean key/mouse-button state
+   from GLFW (via the installed KeySchemeProvider SPI)."
+  [[kind sub-key]]
+  (let [key-code (case kind
+                   :slot (nth slot-glfw-keys sub-key nil)
+                   :movement (get movement-glfw-keys sub-key)
+                   :screen (get screen-glfw-keys sub-key)
+                   nil)]
+    (when key-code
+      (try
+        (key-provider/query-key-down? :original key-code)
+        (catch Throwable _ false)))))
+
+(def no-key-down-fn
+  "key-state-fn used while a Screen (chat/inventory/GUI) is open: report every
+   key as released so typed characters never fire gameplay keybinds (e.g. 'm'
+   while typing '/aim' in chat opening the preset editor) and held keys get a
+   clean release transition instead of sticking."
+  (constantly false))

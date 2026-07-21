@@ -83,7 +83,11 @@
              :idx idx
              :x (- screen-width 120)
              :y (+ (- screen-height 100) (* idx 22))
-             :key-label (nth ["Z" "X" "C" "V"] idx)
+             ;; Upstream ClientHandler.keyIDsInit default: MOUSE_LEFT,
+             ;; MOUSE_RIGHT, R, F. Mouse slots carry a keyword (no text glyph
+             ;; upstream draws a mouse icon instead — see KeyHintUI.drawSingle
+             ;; TEX_MOUSE_L/TEX_MOUSE_R); keyboard slots carry the key name.
+             :key-label (nth [:mouse-left :mouse-right "R" "F"] idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))

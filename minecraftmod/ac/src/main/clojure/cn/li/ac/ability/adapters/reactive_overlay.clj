@@ -163,13 +163,17 @@
      (+ (- (/ sh 2.0) (/ h 2.0)) 30.0)]))
 
 (defn- key-cap-texture [key-label]
-  ;; Upstream KeyHintUI.drawSingle: Keyboard.getKeyName length <= 2 → key_short,
-  ;; else key_long (mouse buttons use mouse_left/mouse_right/mouse_generic, but
-  ;; the current preset model only ever emits Z/X/C/V key labels).
+  ;; Upstream KeyHintUI.drawSingle: MOUSE_LEFT/MOUSE_RIGHT draw TEX_MOUSE_L/
+  ;; TEX_MOUSE_R (no key character); any other key draws key_short/key_long
+  ;; (Keyboard.getKeyName length <= 2 → key_short, else key_long) plus the
+  ;; key character text.
   (modid/asset-path "textures"
-                    (if (<= (count (str key-label)) 2)
-                      "guis/key_hint/key_short.png"
-                      "guis/key_hint/key_long.png")))
+                    (case key-label
+                      :mouse-left "guis/key_hint/mouse_left.png"
+                      :mouse-right "guis/key_hint/mouse_right.png"
+                      (if (<= (count (str key-label)) 2)
+                        "guis/key_hint/key_short.png"
+                        "guis/key_hint/key_long.png"))))
 
 (defn- skill-slot-template []
   ;; Upstream KeyHintUI.drawSingle raw local-unit offsets (auto-scaled via the
@@ -569,7 +573,10 @@
         ;; Upstream KeyHintUI.drawSingle: alpha = 0.4 flat while on cooldown,
         ;; else state.alpha * (0.4 + sinAlpha*0.6).
         icon-alpha (if in-cd? 0.4 (* state-alpha (+ 0.4 (* this-sin-alpha 0.6))))
-        key-label (str (:key-label slot))
+        key-label-raw (:key-label slot)
+        ;; Upstream KeyHintUI.drawSingle draws no key character for
+        ;; MOUSE_LEFT/MOUSE_RIGHT (the mouse icon texture stands alone).
+        key-label (if (keyword? key-label-raw) "" (str key-label-raw))
         icon (ui/item-node item :icon)
         icon-glow (ui/item-node item :icon-glow)
         key-cap (ui/item-node item :key-cap)
@@ -584,7 +591,7 @@
         ;; overloaded? || interfered? — passed down from update-skill-slots!,
         ;; a per-player condition identical for every slot this frame.
         dim? (or in-cd? cant-use-ability?)]
-    (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
+    (ui/set-node-prop! r key-cap :src (key-cap-texture key-label-raw))
     (ui/set-node-prop! r key-label-node :text key-label)
     (ui/set-node-prop! r key-cap :tint (when dim? [178 178 178 255]))
     (ui/set-node-prop! r key-label-node :color (if dim? 0xFFB2B2B2 0xFFFFFFFF))

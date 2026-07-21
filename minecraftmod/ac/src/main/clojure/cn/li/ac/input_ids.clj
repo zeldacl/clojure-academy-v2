@@ -31,22 +31,9 @@
 ;; These will be called when corresponding keys are pressed.
 ;; Context structure: {:player-uuid string, :client-session-id string, :logical-side :client}
 
-(defn- on-slot-0-activate
-  "Handle slot 0 activation (slot key Z, index 0)"
-  [context]
-  (log/debug "Slot 0 activated" {:context context})
-  ;; Slot keys are polled per-frame by keybinds/tick-keys!, not via event dispatch.
-  ;; This handler exists for future event-based slot activation.
-  nil)
-
-(defn- on-slot-1-activate
-  "Handle slot 1 activation (slot key X, index 1)"
-  [context]
-  (log/debug "Slot 1 activated" {:context context})
-  nil)
-
 (defn- on-cycle-selection
-  "Handle cycle selection (R key press) — switch to next preset."
+  "Handle cycle selection (C key press, upstream KEY_SWITCH_PRESET) — switch
+   to next preset."
   [{:keys [player-uuid]}]
   (log/debug "Cycle selection — switching preset" {:uuid player-uuid})
   (when player-uuid
@@ -77,33 +64,20 @@
   {
     ;; ===== :alternative scheme (fully configurable) =====
     ;; These shortcuts are configured by AC. Platforms create KeyMappings from :key-mapping.
-    
-    :content/slot-0
-    {:input-id :content/slot-0
-     :scheme :alternative
-     :description "Activate slot 0"
-     :event-type :short-press
-     :key-mapping {:key 90  ; GLFW_KEY_Z
-                   :translation-key "key.content.slot.0"
-                   :category "keybind.category.content"}
-     :handler #'on-slot-0-activate}
-    
-    :content/slot-1
-    {:input-id :content/slot-1
-     :scheme :alternative
-     :description "Activate slot 1"
-     :event-type :short-press
-     :key-mapping {:key 88  ; GLFW_KEY_X
-                   :translation-key "key.content.slot.1"
-                   :category "keybind.category.content"}
-     :handler #'on-slot-1-activate}
-    
+    ;;
+    ;; Ability slot keys (upstream default: mouse-left/mouse-right/R/F) are
+    ;; NOT registered here — upstream itself doesn't put them in vanilla's
+    ;; Options→Controls screen either (ClientHandler.keyIDsInit is configured
+    ;; through AC's own SettingsUI, not a Minecraft KeyMapping); they are
+    ;; polled directly per-frame by keybinds/tick-keys! (see slot-glfw-keys in
+    ;; the platform key-state-fn), same as :screen and :movement keys below.
+
     :content/cycle-selection
     {:input-id :content/cycle-selection
      :scheme :alternative
-     :description "Cycle ability selection"
+     :description "Switch preset"
      :event-type :press
-     :key-mapping {:key 82  ; GLFW_KEY_R
+     :key-mapping {:key 67  ; GLFW_KEY_C — upstream KEY_SWITCH_PRESET
                    :translation-key "key.content.cycle.selection"
                    :category "keybind.category.content"}
      :handler #'on-cycle-selection}
