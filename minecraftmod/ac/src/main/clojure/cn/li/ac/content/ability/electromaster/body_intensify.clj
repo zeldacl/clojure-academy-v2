@@ -7,6 +7,7 @@
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -67,7 +68,10 @@
   (cfg-lerp :cost.down.overload (double (or exp 0.0))))
 
 (defn- tick-cp-cost [player-id _skill-id exp]
-  (when (<= (stored-hold-ticks player-id body-intensify-skill-id) (max-time))
+  ;; Cost is evaluated before body-intensify-tick! increments the stored tick
+  ;; count for this dispatch, so check against the tick this call is about to
+  ;; produce (matches upstream's post-increment "tick <= MAX_TIME" check).
+  (when (<= (inc (stored-hold-ticks player-id body-intensify-skill-id)) (max-time))
     (cfg-lerp :cost.tick.cp (double (or exp 0.0)))))
 
 (defn- select-random-effects
@@ -102,20 +106,34 @@
       (potion-effects/apply-potion-effect!*
        player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
+(defn- end-payload [ticks]
+  {:performed? (>= (long ticks) (min-time))})
+
+(defn- send-end-fx! [ctx-id ticks]
+  (fx/send! ctx-id {:topic :body-intensify/fx-end :mode :end} nil (end-payload ticks)))
+
 (defn- body-intensify-cost-fail!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (send-end-fx! ctx-id (stored-hold-ticks player-id body-intensify-skill-id))
   (ctx/terminate-context! ctx-id nil))
 
 (defn- body-intensify-tick!
-  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (update-skill-state-root! ctx-id assoc :hold-ticks (long hold-ticks))
-  (enforce-overload-floor! player-id (cfg-lerp :cost.down.overload (double (or exp 0.0))))
-  (when (>= (long (or hold-ticks 0)) (max-tolerant-time))
-    (ctx/terminate-context! ctx-id nil)))
+  "The generic dispatch pipeline's hold-ticks argument is never populated for
+  server-tick-driven charge-window contexts (cn.li.ac.ability.service.context-manager's
+  tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) — so this
+  self-tracks the charge duration in :skill-state instead of trusting the
+  argument, matching railgun.clj/scatter_bomb.clj/mark_teleport.clj."
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ticks (inc (stored-hold-ticks player-id body-intensify-skill-id))]
+    (update-skill-state-root! ctx-id assoc :hold-ticks ticks)
+    (enforce-overload-floor! player-id (cfg-lerp :cost.down.overload (double (or exp 0.0))))
+    (when (>= ticks (max-tolerant-time))
+      (send-end-fx! ctx-id ticks)
+      (ctx/terminate-context! ctx-id nil))))
 
 (defn- body-intensify-up!
-  [_ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (let [ticks (long (or hold-ticks 0))]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ticks (stored-hold-ticks player-id body-intensify-skill-id)]
     (when (>= ticks (min-time))
       (let [effective-tick (min ticks (max-time))
             exp*           (double (or exp 0.0))]
@@ -125,7 +143,8 @@
         (skill-effects/set-main-cooldown! player-id body-intensify-skill-id
                                           (skill-config/lerp-int body-intensify-skill-id
                                                                  :cooldown.ticks
-                                                                 exp*))))))
+                                                                 exp*))))
+    (send-end-fx! ctx-id ticks)))
 
 (defskill body-intensify
   :id          :body-intensify
@@ -139,9 +158,6 @@
   :cooldown    {:mode :manual}
   :cost        {:down {:overload down-overload-cost}
                 :tick {:cp tick-cp-cost}}
-  :fx          {:end {:topic   :body-intensify/fx-end
-                      :payload (fn [{:keys [hold-ticks]}]
-                                 {:performed? (>= (long (or hold-ticks 0)) (min-time))})}}
   :actions
   {:cost-fail! body-intensify-cost-fail!
    :tick!      body-intensify-tick!

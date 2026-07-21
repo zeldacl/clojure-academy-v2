@@ -452,7 +452,7 @@
   [player-uuid]
   (let [ctx-data (find-player-context player-uuid :body-intensify)
         hold-ticks (hold-ticks-from-context ctx-data)
-        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-time)))]
+        max-ticks (max 1 (long (skill-config/tunable-int :body-intensify :charge.max-ticks)))]
     {:active? (boolean ctx-data)
      :charge-ticks hold-ticks
      :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))

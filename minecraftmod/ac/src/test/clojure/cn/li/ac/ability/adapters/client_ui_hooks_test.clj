@@ -457,7 +457,7 @@
   (let [hooks (client-ui-hooks/runtime-client-ui-hooks)]
     (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
                                               (case [skill-id field-id]
-                                                [:body-intensify :charge.max-time] 40
+                                                [:body-intensify :charge.max-ticks] 40
                                                 1))
                   read-model/get-player-contexts-for-player (fn [& _] [])]
       (let [visual ((:client-visual-state hooks) :ac/body-intensify-charge {:player-uuid "p1"})]
@@ -466,7 +466,7 @@
         (is (= 0.0 (:charge-ratio visual)))))
     (with-redefs [skill-config/tunable-int (fn [skill-id field-id]
                                               (case [skill-id field-id]
-                                                [:body-intensify :charge.max-time] 40
+                                                [:body-intensify :charge.max-ticks] 40
                                                 1))
                   read-model/get-player-contexts-for-player (fn [& _]
                                                               [{:skill-id :body-intensify

@@ -64,23 +64,47 @@
          (is (= 1 (count @applied*)))
          (is (= :hunger (:effect (first @applied*))))))))
 
+(defn- seed-charge-context!
+  "body-intensify-up! ignores the (never-populated-in-production) hold-ticks
+  positional argument and instead self-tracks charge duration in
+  :skill-state — so tests must seed a real registered context rather than
+  passing :hold-ticks through cb/apply-invoke."
+  [player-id ctx-id ticks]
+  (let [owner {:logical-side :server :server-session-id :test-session :player-uuid player-id}]
+    (ctx/with-context-owner owner
+      (ctx/register-context!
+       (assoc (ctx/new-server-context player-id :body-intensify ctx-id owner)
+              :status ctx/STATUS-ALIVE))
+      (ctx-skill/update-skill-state-root! ctx-id identity {:hold-ticks ticks}))))
+
 (deftest up-action-requires-min-charge-before-performing-test
   (let [up-fn (get-in body-intensify/body-intensify [:actions :up!])
         applied* (atom [])
         exp-calls* (atom [])
-        cooldown-calls* (atom [])]
-    (with-buff-config ["speed:3"]
-      #(with-redefs [potion-effects/available? (constantly true)
-                     potion-effects/apply-potion-effect!* (fn [& _] (swap! applied* conj :applied) true)
-                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                    (swap! exp-calls* conj [player-id skill-id amount]))
-                     skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
-                                                        (swap! cooldown-calls* conj [player-id skill-id ticks]))]
-         (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-low" :exp 0.5 :hold-ticks 9)
-         (is (empty? @applied*) "below min charge does not apply buffs")
-         (is (empty? @exp-calls*))
-         (is (empty? @cooldown-calls*))
-         (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-ok" :exp 0.5 :hold-ticks 10)
-         (is (pos? (count @applied*)) "successful release applies buffs")
-         (is (= [["p1" :body-intensify 0.02]] @exp-calls*))
-         (is (= [["p1" :body-intensify 25]] @cooldown-calls*))))))
+        cooldown-calls* (atom [])
+        fx-calls* (atom [])
+        context-registry-val (ctx/snapshot-context-registry)]
+    (try
+      (ctx/reset-contexts-for-test!)
+      (with-buff-config ["speed:3"]
+        #(with-redefs [potion-effects/available? (constantly true)
+                       potion-effects/apply-potion-effect!* (fn [& _] (swap! applied* conj :applied) true)
+                       skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                      (swap! exp-calls* conj [player-id skill-id amount]))
+                       skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                          (swap! cooldown-calls* conj [player-id skill-id ticks]))
+                       fx/send! (fn [& args] (swap! fx-calls* conj args) nil)]
+           (seed-charge-context! "p-low" "ctx-low" 9)
+           (cb/apply-invoke up-fn :player-id "p-low" :ctx-id "ctx-low" :exp 0.5)
+           (is (empty? @applied*) "below min charge does not apply buffs")
+           (is (empty? @exp-calls*))
+           (is (empty? @cooldown-calls*))
+
+           (seed-charge-context! "p-ok" "ctx-ok" 10)
+           (cb/apply-invoke up-fn :player-id "p-ok" :ctx-id "ctx-ok" :exp 0.5)
+           (is (pos? (count @applied*)) "successful release applies buffs")
+           (is (= [["p-ok" :body-intensify 0.02]] @exp-calls*))
+           (is (= [["p-ok" :body-intensify 25]] @cooldown-calls*))
+           (is (= 2 (count @fx-calls*)) "fx sent on both the miss and the success release")))
+      (finally
+        (ctx/reset-contexts-for-test! context-registry-val)))))
