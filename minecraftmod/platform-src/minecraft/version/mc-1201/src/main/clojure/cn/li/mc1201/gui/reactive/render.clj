@@ -719,7 +719,23 @@
 
 (def ^:private SLOT-GL-X0 0) (def ^:private SLOT-GL-X1 1)
 (def ^:private SLOT-GL-Y 2) (def ^:private SLOT-GL-LINEW 3)
-(def ^:private SLOT-GL-GLOWSZ 4)
+(def ^:private SLOT-GL-GLOWSZ 4) (def ^:private SLOT-GL-TINT 5)
+(def ^:private SLOT-GL-NOCENTER 6)
+
+(defn- glow-line-tint-rgba
+  "Decode the packed-ARGB :tint dslot. Untouched (0.0, the Node ctor's
+   double-array default) means no caller ever set a color — keep the
+   pre-existing behavior of drawing at ambient/ whatever shader color the
+   prior tape node left (opaque white by convention)."
+  [^INode node]
+  (let [raw (long (.getDSlot node SLOT-GL-TINT))]
+    (if (zero? raw)
+      [1.0 1.0 1.0 1.0]
+      (let [argb (unchecked-int raw)]
+        [(float (/ (double (bit-and (bit-shift-right argb 16) 0xFF)) 255.0))
+         (float (/ (double (bit-and (bit-shift-right argb 8) 0xFF)) 255.0))
+         (float (/ (double (bit-and argb 0xFF)) 255.0))
+         (float (/ (double (bit-and (bit-shift-right argb 24) 0xFF)) 255.0))]))))
 
 (defn- bake-glow-line! [^INode node]
   (when (nil? (.getOSlot node 0))
@@ -754,12 +770,15 @@
               glx0 (- gx0 s) glx1 (+ gx1 s)
               gly0 (- gy s)  gly1 (+ gy s)
               gy0 (- gy hw)  gy1 (+ gy hw)
+              [tr tg tb ta] (glow-line-tint-rgba node)
+              no-center? (not (zero? (.getDSlot node SLOT-GL-NOCENTER)))
               ^PoseStack ps (.pose gg)
               ^Matrix4f pm (.pose (.last ps))
               ^Tesselator tess (Tesselator/getInstance)
               ^BufferBuilder bb (.getBuilder tess)]
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
+          (RenderSystem/setShaderColor tr tg tb ta)
           (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
           ;; corners
           (RenderSystem/setShaderTexture 0 ^ResourceLocation (:lu texs))
@@ -780,11 +799,15 @@
           (RenderSystem/setShaderTexture 0 ^ResourceLocation (:d texs))
           (glow-quad! pm bb gx0 gy1 gx1 gly1 0.0 0.0 1.0 1.0)
           (BufferUploader/drawWithShader (.end bb))
-          ;; center bright line
-          (RenderSystem/setShaderTexture 0 (resolve-rl (modid/asset-path "textures" "guis/line")))
-          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (glow-quad! pm bb gx0 (- gy hw) gx1 (+ gy hw) 0.0 0.0 1.0 1.0)
-          (BufferUploader/drawWithShader (.end bb)))))))
+          ;; center bright line (ACRenderingHelper.lineSegmentGlow only —
+          ;; drawGlow-style box glow, e.g. the skill-slot icon border, sets
+          ;; :no-center to skip this so only the 8 edge/corner segments show)
+          (when-not no-center?
+            (RenderSystem/setShaderTexture 0 (resolve-rl (modid/asset-path "textures" "guis/line")))
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+            (glow-quad! pm bb gx0 (- gy hw) gx1 (+ gy hw) 0.0 0.0 1.0 1.0)
+            (BufferUploader/drawWithShader (.end bb)))
+          (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================
 ;; :preview-item — renders an ItemStack scaled to fill the node area

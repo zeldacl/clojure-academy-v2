@@ -113,16 +113,58 @@
     (dsl/box {:id :border-r :x 199 :y 0 :w 1 :h 32 :fill 0xAAFFFFFF})
     (dsl/text {:id :msg :x 8 :y 9 :text "" :color 0xFFFFFFFF})))
 
+;; Upstream KeyHintUI: child widget 128×193, container 140×210 @ SCALE*2=0.46.
+;; Shared by the list-node's own :scale prop and the glow-line dslot math below
+;; (glow-line offsets are raw screen pixels, not auto-scaled — see update fn).
+(def ^:private skill-slot-scale 0.46)
+
+(defn- key-cap-texture [key-label]
+  ;; Upstream KeyHintUI.drawSingle: Keyboard.getKeyName length <= 2 → key_short,
+  ;; else key_long (mouse buttons use mouse_left/mouse_right/mouse_generic, but
+  ;; the current preset model only ever emits Z/X/C/V key labels).
+  (modid/asset-path "textures"
+                    (if (<= (count (str key-label)) 2)
+                      "guis/key_hint/key_short.png"
+                      "guis/key_hint/key_long.png")))
+
 (defn- skill-slot-template []
   ;; Upstream KeyHintUI: child widget 128×193, container 140×210 @ scale 0.46.
   ;; Each slot row ~35px tall matching the preset editor's 34.75px rows.
   (dsl/group {:id :slot :h 35 :w 120}
-    (dsl/box {:id :key-bg :x 0 :y 2 :w 26 :h 26 :fill 0x80000000})
+    (dsl/image {:id :slot-back :x -6 :y 1 :w 118 :h 32
+                :src (modid/asset-path "textures" "guis/key_hint/back.png")})
+    (dsl/image {:id :key-cap :x -1 :y 3 :w 28 :h 27
+                :src (key-cap-texture "")})
     (dsl/text {:id :key-label :x 3 :y 4 :text "" :color 0xFFFFFFFF})
+    (dsl/image {:id :icon-back :x 29 :y 2 :w 29 :h 29
+                :src (modid/asset-path "textures" "guis/key_hint/icon_back.png")})
     (dsl/image {:id :icon :x 30 :y 3 :w 27 :h 27 :src ""})
+    ;; Charge/active glow border (ACRenderingHelper.drawGlow port, no center
+    ;; line) — geometry + color/sine-pulse set per-frame in update fn.
+    (dsl/glow-line {:id :icon-glow :x 30 :y 3 :visible? false})
     (dsl/text {:id :label :x 60 :y 8 :text "" :color 0xFFFFFFFF})
-    (dsl/box {:id :cd-mask :x 0 :y 2 :w 26 :h 26 :fill 0x80000000 :visible? false})
+    ;; Cooldown wipe: aligned with the icon box (upstream colorRect covers the
+    ;; icon, not the key cap), proportional height set per-frame in update fn.
+    (dsl/box {:id :cd-mask :x 30 :y 3 :w 27 :h 27 :fill 0x4D999999 :visible? false})
     (dsl/text {:id :cd-text :x 3 :y 14 :text "" :color 0xFFFFFFFF :visible? false})))
+
+;; Upstream CPBar.drawPresetHint: 4 numbered boxes, 52×52 texture-space units
+;; @ the bar's 0.2 scale ≈ 10.4×10.4px, step 62×0.2≈12.4px between boxes.
+(def ^:private preset-box-size 10.4)
+(def ^:private preset-box-step 12.4)
+
+(defn- preset-box-id [idx suffix]
+  (keyword (str "preset-box-" idx "-" suffix)))
+
+(defn- preset-box-template [idx]
+  (dsl/group {:id (preset-box-id idx "grp") :x (* idx preset-box-step) :y 0
+              :w preset-box-size :h preset-box-size}
+    (dsl/box {:id (preset-box-id idx "back") :x 0 :y 0
+              :w preset-box-size :h preset-box-size :fill 0x00303030})
+    (dsl/text {:id (preset-box-id idx "digit") :x 3.0 :y 0.5
+               :text (str (inc idx)) :color 0x00FFFFFF})
+    ;; Glow border (ACRenderingHelper.drawGlow), shown only on the active preset.
+    (dsl/glow-line {:id (preset-box-id idx "glow") :x 0 :y 0 :visible? false})))
 
 (defn- coin-dot-template []
   (dsl/box {:id :dot :w 6 :h 6 :fill 0x80FFD700}))
@@ -146,7 +188,15 @@
                   :alpha 0.0})
       (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
       (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
-        (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x6E081220})
+        (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x00081220})
+        ;; Upstream CurrentChargingHUD "blue mask" (em_intensify_mask.png,
+        ;; full-screen, alpha = mAlpha) — the release/blend cinematic.
+        (dsl/image {:id :charging-mask :x 0 :y 0 :w sw :h sh
+                    :src (modid/asset-path "textures" "effects/em_intensify_mask.png")
+                    :alpha 0.0})
+        ;; Upstream SubArcHandler2D.drawAll: flickering arc sprites around
+        ;; screen center (ambient ring while charging, denser burst on release).
+        (dsl/list-node {:id :charging-arcs :w sw :h sh :template (vm-wave-template)})
         (dsl/box {:id :charging-bar-bg :w 140 :h 8 :fill 0x96081230})
         (dsl/box {:id :charging-bar-fill :w 2 :h 8 :fill 0xC85AD2FF})
         (dsl/text {:id :charging-label :text "" :color 0xFFFFFFFF})
@@ -181,19 +231,25 @@
       ;; ===== Activation hint (within bar area, with background box) =====
       (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
         (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
+        ;; Glow border (ACRenderingHelper.drawGlow, upstream CRL_KH_GLOW =
+        ;; white @ alpha 40/255) — static geometry, set once in
+        ;; attach-overlay-bindings!; visibility follows the parent group.
+        (dsl/glow-line {:id :activation-hint-glow :x -8 :y -4})
         (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
       ;; ===== Skill Slots (right-aligned, below CP/OL bars) =====
       ;; Upstream KeyHintUI: container 140×210 @ scale 0.46 (= ~64×97 effective),
       ;; right-aligned, vertically centred.  Our layout stacks it below the CP
       ;; bar; upstream uses ACHud halign(CENTER) which is effectively the screen
       ;; centre.  We follow the stack order but keep the upstream scale.
-      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210 :scale 0.46
+      (dsl/list-node {:id :skill-slots :spacing 2 :w 140 :h 210 :scale skill-slot-scale
                       :x (- sw 150) :y (+ bar-y bar-h 12)
                       :template (skill-slot-template)})
       ;; ===== Preset indicators (within bar area) =====
-      (dsl/group {:id :preset-row :x (- sw 89) :y 39 :w 212 :h 52}
-        (dsl/box {:id :preset-prev :x -18 :y 0 :w 8 :h 8 :fill 0x80666666 :visible? false})
-        (dsl/box {:id :preset-curr :x -4  :y 0 :w 8 :h 8 :fill 0x80FFAA00 :visible? false}))
+      (dsl/group {:id :preset-row :x (- sw 89) :y 39
+                  :w (+ preset-box-size (* 3.0 preset-box-step)) :h preset-box-size
+                  :visible? false}
+        (preset-box-template 0) (preset-box-template 1)
+        (preset-box-template 2) (preset-box-template 3))
       (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
       (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
       (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
@@ -217,7 +273,10 @@
         bg-smooth (anim/smoothed-color bg-target clock)
         cp-smooth (anim/smoothed cp-target clock 2.0)
         ol-smooth (anim/smoothed ol-target clock 2.0)
-        hl-alpha  (anim/breathe clock 4000.0 0.3 0.65)
+        ;; Upstream CPBar.drawOverload highlight: color4d(1,1,1, 0.3+0.35*(sin(time/200)+1))
+        ;; → alpha in [0.3,1.0], period = 2π*200ms ≈ 1257ms (anim/breathe takes a
+        ;; full-cycle period in ms, so this matches the upstream pulse speed).
+        hl-alpha  (anim/breathe clock 1256.6 0.3 1.0)
         jitter-x (anim/jitter-offset clock 0)
         jitter-y (anim/jitter-offset clock 1)
         ^INode bg-mask (ui/node r :bg-mask)]
@@ -233,7 +292,8 @@
     (rt/put-user-signal! r :hl-alpha hl-alpha)
     (rt/put-user-signal! r :jitter-x jitter-x)
     (rt/put-user-signal! r :jitter-y jitter-y)
-    (let [counts (int-array [-1 -1 -1 -1])]
+    ;; counts[0]=vm-waves [1]=toasts [2]=debug-lines [3]=coin-qte-dots [4]=charging-arcs
+    (let [counts (int-array [-1 -1 -1 -1 -1])]
       (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
       (rt/put-user-signal! r :overlay-count-cache counts)
       (rt/put-user-signal! r :overlay-flag-cache (boolean-array 2)))
@@ -247,6 +307,19 @@
     (ui/bind! r :overload-bar :scroll-offset ol-scroll)
     ;; Overload highlight: breathing alpha
     (ui/bind! r :overload-highlight :alpha hl-alpha)
+    ;; Activation-key hint glow border: static geometry matching
+    ;; activation-hint-bg (x=-8,y=-4,w=160,h=40); only visibility changes,
+    ;; inherited from the parent group, so dslots are set once here.
+    (when-let [^INode hint-glow (ui/node r :activation-hint-glow)]
+      (.setDSlot hint-glow 0 0.0)    ;; x0
+      (.setDSlot hint-glow 1 160.0)  ;; x1 (= bg width)
+      (.setDSlot hint-glow 2 20.0)   ;; y (= bg height / 2, box vertical center)
+      (.setDSlot hint-glow 3 40.0)   ;; line-w (= bg height)
+      (.setDSlot hint-glow 4 5.0)    ;; glow-sz (upstream ACRenderingHelper size=5)
+      ;; CRL_KH_GLOW = white @ alpha 40/255
+      (.setDSlot hint-glow 5 (double (unchecked-int 0x28FFFFFF)))
+      (.setDSlot hint-glow 6 1.0)    ;; no-center
+      (.setFlag hint-glow node/FLAG-RENDER-DIRTY))
     r))
 
 (defn build-overlay-runtime
@@ -305,29 +378,43 @@
         (set-visible! r :cp-numbers false)
         (set-visible! r :ol-numbers false)))))
 
+(defn- update-preset-box-glow! [r ^INode glow visible? intensity]
+  (when glow
+    (if visible?
+      (do
+        (set-node-visible! r glow true)
+        (.setDSlot glow 0 0.0) (.setDSlot glow 1 preset-box-size)
+        (.setDSlot glow 2 (/ preset-box-size 2.0)) (.setDSlot glow 3 preset-box-size)
+        (.setDSlot glow 4 2.0)
+        (.setDSlot glow 5 (double (unchecked-int
+                                   (bit-or (bit-shift-left (int (* 200.0 intensity)) 24)
+                                           0x00FFFFFF))))
+        (.setDSlot glow 6 1.0)
+        (.setFlag glow node/FLAG-RENDER-DIRTY))
+      (set-node-visible! r glow false))))
+
 (defn- update-preset-indicators! [r snapshot sw]
+  ;; Upstream CPBar.drawPresetHint: 4 static numbered boxes, back rgb(48,48,48)
+  ;; @ alpha*0.75, text white @ max(0.05, alpha*0.8), glow border on whichever
+  ;; index is currently active. Whole row shown for ~2s after a preset switch.
   (let [indicators (:preset-indicators snapshot)
-        prev (first indicators)
-        curr (last indicators)]
+        curr (last indicators)
+        visible? (boolean curr)]
     (when-let [^INode row (ui/node r :preset-row)]
       (.setX row (double (- sw 89))))
-    (if (seq indicators)
-      (do
-        (when prev
-          (set-visible! r :preset-prev true)
-          (when-let [^INode n (ui/node r :preset-prev)]
-            (let [fade (double (or (:fade prev) 1.0))
-                  alpha (int (* 128 fade))]
-              (ui/set-node-prop! r n :fill (bit-or (bit-shift-left alpha 24) 0x00666666)))))
-        (when curr
-          (set-visible! r :preset-curr true)
-          (when-let [^INode n (ui/node r :preset-curr)]
-            (let [fade (double (or (:fade curr) 1.0))
-                  alpha (int (* 255 fade))]
-              (ui/set-node-prop! r n :fill (bit-or (bit-shift-left alpha 24) 0x00FFAA00))))))
-      (do
-        (set-visible! r :preset-prev false)
-        (set-visible! r :preset-curr false)))))
+    (set-node-visible! r (ui/node r :preset-row) visible?)
+    (when curr
+      (let [fade (double (or (:fade curr) 1.0))
+            back-alpha (int (* 255.0 0.75 fade))
+            text-alpha (int (* 255.0 (Math/max 0.05 (* 0.8 fade))))
+            active-idx (:current curr)]
+        (dotimes [i 4]
+          (ui/set-node-prop! r (ui/node r (preset-box-id i "back")) :fill
+                             (bit-or (bit-shift-left back-alpha 24) 0x00303030))
+          (ui/set-node-prop! r (ui/node r (preset-box-id i "digit")) :color
+                             (bit-or (bit-shift-left text-alpha 24) 0x00FFFFFF))
+          (update-preset-box-glow! r (ui/node r (preset-box-id i "glow"))
+                                   (= i active-idx) fade))))))
 
 (defn- format-tenths-seconds
   "Format non-negative seconds as \"N.Ts\" (one decimal, rounded). Runs every
@@ -339,24 +426,67 @@
         frac (mod tenths 10)]
     (str whole "." frac "s")))
 
-(defn- update-skill-slot-item! [r item slot]
+(defn- sin-alpha
+  "Upstream KeyHintUI: sinAlpha = 0.6 + (1 + sin((time%100)/50)) * 0.2 — a fast
+   ~100ms shimmer applied to charge/active icon alpha and glow alpha."
+  ^double [^double now-ms]
+  (+ 0.6 (* 0.2 (+ 1.0 (Math/sin (/ (mod now-ms 100.0) 50.0))))))
+
+(defn- update-skill-slot-glow! [r ^INode icon-glow visual glow this-sin-alpha]
+  (when icon-glow
+    (if (and glow (not= visual :idle))
+      (let [icon-w (* 27.0 skill-slot-scale)
+            icon-h (* 27.0 skill-slot-scale)
+            glow-sz (Math/max 1.0 (* icon-w (/ 5.0 62.0)))    ;; upstream size=5 / ICON_SIZE=62
+            [gr gg gb ga] glow
+            tint-alpha (int (* (double (or ga 255)) this-sin-alpha))
+            argb (unchecked-int (bit-or (bit-shift-left tint-alpha 24)
+                                         (bit-shift-left (int gr) 16)
+                                         (bit-shift-left (int gg) 8)
+                                         (int gb)))]
+        (set-node-visible! r icon-glow true)
+        (.setDSlot icon-glow 0 0.0)              ;; x0
+        (.setDSlot icon-glow 1 icon-w)           ;; x1
+        (.setDSlot icon-glow 2 (/ icon-h 2.0))   ;; y (box vertical center)
+        (.setDSlot icon-glow 3 icon-h)           ;; line-w (= box height)
+        (.setDSlot icon-glow 4 glow-sz)
+        (.setDSlot icon-glow 5 (double argb))
+        (.setDSlot icon-glow 6 1.0)              ;; no-center: drawGlow has no bright core line
+        (.setFlag icon-glow node/FLAG-RENDER-DIRTY))
+      (set-node-visible! r icon-glow false))))
+
+(defn- update-skill-slot-item! [r item slot now-ms]
   (let [visual (:visual-state slot :idle)
-        alpha (double (or (:alpha slot) 1.0))
+        state-alpha (double (or (:alpha slot) 1.0))
         glow (:glow-color slot)
-        bg (case visual
-             :charge (rgb-vec->argb (or glow [255 173 55]) (* 0.4 alpha))
-             :active (rgb-vec->argb (or glow [70 179 255]) (* 0.4 alpha))
-             (rgb-vec->argb [0 0 0] (* 0.5 alpha)))
-        key-bg (ui/item-node item :key-bg)
+        sin-effect? (boolean (:sin-effect? slot))
+        this-sin-alpha (if sin-effect? (sin-alpha (double now-ms)) 1.0)
+        in-cd? (boolean (:in-cooldown slot))
+        ;; Upstream KeyHintUI.drawSingle: alpha = 0.4 flat while on cooldown,
+        ;; else state.alpha * (0.4 + sinAlpha*0.6).
+        icon-alpha (if in-cd? 0.4 (* state-alpha (+ 0.4 (* this-sin-alpha 0.6))))
+        key-label (str (:key-label slot))
+        icon (ui/item-node item :icon)
+        icon-glow (ui/item-node item :icon-glow)
+        key-cap (ui/item-node item :key-cap)
         cd-mask (ui/item-node item :cd-mask)
-        cd-text (ui/item-node item :cd-text)
-        in-cd? (:in-cooldown slot)]
-    (ui/set-node-prop! r key-bg :fill bg)
-    (ui/set-node-prop! r (ui/item-node item :key-label) :text (str (:key-label slot)))
-    (when-let [icon (:skill-icon slot)]
-      (ui/set-node-prop! r (ui/item-node item :icon) :src icon))
+        cd-text (ui/item-node item :cd-text)]
+    (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
+    (ui/set-node-prop! r (ui/item-node item :key-label) :text key-label)
+    (when-let [icon-src (:skill-icon slot)]
+      (ui/set-node-prop! r icon :src icon-src))
+    (ui/set-node-prop! r icon :alpha icon-alpha)
     (ui/set-node-prop! r (ui/item-node item :label) :text (str (:skill-name slot)))
-    (set-node-visible! r cd-mask (boolean in-cd?))
+    (update-skill-slot-glow! r icon-glow visual glow this-sin-alpha)
+    ;; Cooldown wipe: proportional bottom-up gray overlay on the icon box,
+    ;; matching upstream colorRect(iconX, iconY+ICON_SIZE*(1-prog), ICON_SIZE, ICON_SIZE*prog).
+    (set-node-visible! r cd-mask in-cd?)
+    (when in-cd?
+      (let [total (double (Math/max 1.0 (double (or (:cooldown-total slot) 1))))
+            remaining (double (or (:cooldown-remaining slot) 0))
+            prog (Math/max 0.0 (Math/min 1.0 (/ remaining total)))]
+        (set-box-node-at! r cd-mask 30 (+ 3.0 (* 27.0 (- 1.0 prog))) 27 (* 27.0 prog)
+                          {:r 153 :g 153 :b 153 :a 76})))
     (when cd-text
       (if in-cd?
         (do (set-node-visible! r cd-text true)
@@ -371,7 +501,7 @@
                (and (= (nth cached i) (:skill-id (nth slots i)))
                     (recur (unchecked-inc-int i))))))))
 
-(defn- update-skill-slots! [r snapshot]
+(defn- update-skill-slots! [r snapshot now-ms]
   (let [slots (:skill-slots snapshot)
         ^objects cache (rt/user-signal r :overlay-object-cache)
         cached-ids (aget cache 0)]
@@ -379,13 +509,13 @@
       (aset cache 0 (mapv #(get % :skill-id) slots))
       (ui/list-set! r :skill-slots slots
                     (fn [rt item slot-data]
-                      (update-skill-slot-item! rt item slot-data))))
+                      (update-skill-slot-item! rt item slot-data now-ms))))
     (when-let [^INode list-node (ui/node r :skill-slots)]
       (let [n (.getChildCount list-node)]
         (dotimes [i n]
           (when-let [slot (nth slots i nil)]
             (when-let [^INode item (.getChild list-node i)]
-              (update-skill-slot-item! r item slot)))))))
+              (update-skill-slot-item! r item slot now-ms)))))))
     (set-visible! r :skill-slots (seq (:skill-slots snapshot))))
 
 (defn- update-crosshair! [r snapshot]
@@ -464,12 +594,13 @@
 
 (defn- update-charging-layer! [r snapshot sw sh]
   (if-let [ch (:charging snapshot)]
-    (let [{:keys [dim-a bar label crosshair]} ch
+    (let [{:keys [dim-a mask-alpha bar label crosshair]} ch
           {:keys [x y w h fill-w backdrop accent]} bar
           {:keys [cx cy active?]} crosshair
           mark-a (if active? 200 120)]
       (set-visible! r :charging-layer true)
       (set-box-rgba! r :charging-dim {:r 8 :g 18 :b 32 :a dim-a})
+      (ui/set-prop! r :charging-mask :alpha (double (or mask-alpha 0.0)))
       (set-box-at! r :charging-bar-bg x y w h backdrop)
       (set-box-at! r :charging-bar-fill x y fill-w h accent)
       (when-let [^INode lbl (ui/node r :charging-label)]
@@ -479,7 +610,24 @@
         (ui/set-node-prop! r lbl :color (rgba-map->argb (:color label))))
       (set-box-at! r :charging-mark-v (- cx 2) (- cy 8) 4 16 {:r 120 :g 220 :b 255 :a mark-a})
       (set-box-at! r :charging-mark-h (- cx 8) (- cy 2) 16 4 {:r 120 :g 220 :b 255 :a mark-a}))
-    (set-visible! r :charging-layer false)))
+    (do
+      (set-visible! r :charging-layer false)
+      (ui/set-prop! r :charging-mask :alpha 0.0))))
+
+(defn- update-charging-arcs! [r snapshot]
+  (let [arcs (or (:charging-arcs snapshot) [])
+        ^ints counts (rt/user-signal r :overlay-count-cache)
+        n (count arcs)]
+    (when (not= (aget counts 4) n)
+      (aset-int counts 4 n)
+      (ui/list-set! r :charging-arcs arcs
+                    (fn [rt item data] (update-vm-wave-item! rt item data))))
+    (when-let [^INode list-node (ui/node r :charging-arcs)]
+      (let [n (.getChildCount list-node)]
+        (dotimes [i n]
+          (when-let [arc (nth arcs i nil)]
+            (when-let [^INode item (.getChild list-node i)]
+              (update-vm-wave-item! r item arc))))))))
 
 (defn- update-coin-qte-dot! [r item dot]
   (set-box-node-at! r (ui/item-node item :dot) (:x dot) (:y dot) (:w dot) (:h dot) (:color dot)))
@@ -685,10 +833,11 @@
           (update-activation-indicator! r snapshot)
           (update-numbers! r snapshot)
           (update-preset-indicators! r snapshot sw)
-          (update-skill-slots! r snapshot)
+          (update-skill-slots! r snapshot now-ms)
           (update-crosshair! r snapshot)))
       (update-vm-waves! r snapshot)
       (update-charging-layer! r snapshot sw sh)
+      (update-charging-arcs! r snapshot)
       (update-coin-qte-layer! r snapshot)
       (update-toasts! r snapshot)
       (update-tutorial-notif! r snapshot)

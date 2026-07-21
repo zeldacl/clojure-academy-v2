@@ -238,7 +238,7 @@
     :hit? false}
 
    :glow-line
-   {:dslots {:x0 0 :x1 1 :y 2 :line-w 3 :glow-sz 4}
+   {:dslots {:x0 0 :x1 1 :y 2 :line-w 3 :glow-sz 4 :tint 5 :no-center 6}
     :oslots {}
     :oslots-backend-base 0
     :prop-writers {}

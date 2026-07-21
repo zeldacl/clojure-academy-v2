@@ -27,6 +27,150 @@
 (defonce ^:private ^HashMap vm-waves-by-owner (HashMap.))
 (defonce ^:private ^HashMap vm-wave-spawn-by-owner (HashMap.))
 
+;; ============================================================================
+;; Charging arc particles — port of upstream CurrentChargingHUD/SubArc2D
+;; (electromaster BodyIntensify "current charging" full-screen release cue):
+;; a small ring of flickering arc sprites around the screen center, growing
+;; into a denser burst the instant the charge is released.
+;; ============================================================================
+
+(def ^:private arc-frame-count 10)
+
+(defn- arc-frame-src [idx]
+  (modid/asset-path "textures" (str "effects/arcs/" idx ".png")))
+
+(def ^:private arc-frame-srcs (mapv arc-frame-src (range arc-frame-count)))
+
+(defonce ^:private ^HashMap arc-particles-by-owner (HashMap.))
+(defonce ^:private ^HashMap arc-prior-active-by-owner (HashMap.))
+;; started-ms/blend-out-ms per owner, driving the mask fade (BLEND_TIME/
+;; BLEND_OUT_TIME below) — separate map/concern from the particle list above.
+(defonce ^:private ^HashMap charging-fade-session-by-owner (HashMap.))
+
+(defn- gen-arc
+  "One SubArc2D: fixed (x,y) in [-1,1] screen-fraction coords (phi·sin/cosθ),
+   fixed size, ticked texture-frame flicker + on/off flicker."
+  [phi-lo phi-hi size-lo size-hi life frame-rate switch-rate]
+  (let [phi (+ phi-lo (* (rand) (- phi-hi phi-lo)))
+        theta (* (rand) 2.0 Math/PI)]
+    {:x (* phi (Math/sin theta))
+     :y (* phi (Math/cos theta))
+     :size (+ size-lo (* (rand) (- size-hi size-lo)))
+     :tex-idx (rand-int arc-frame-count)
+     :tick 0
+     :life (long life)
+     :frame-rate (double frame-rate)
+     :switch-rate (double switch-rate)
+     :draw? true
+     :dead? false}))
+
+(defn- tick-arc
+  "Port of SubArc2D.tick(): stochastic frame reroll, tick-with-90%-chance
+   life countdown, and (for switch-rate>0 burst arcs) on/off flicker."
+  [{:keys [tick life frame-rate switch-rate draw?] :as arc}]
+  (let [tex-idx' (if (< (rand) (* 0.5 frame-rate)) (rand-int arc-frame-count) (:tex-idx arc))
+        tick' (if (< (rand) 0.9) (inc (long tick)) (long tick))
+        dead? (>= tick' (long life))
+        draw?' (cond
+                 (and draw? (< (rand) (* 0.4 switch-rate))) false
+                 (and (not draw?) (< (rand) (* 0.3 switch-rate))) true
+                 :else draw?)]
+    (assoc arc :tex-idx tex-idx' :tick tick' :dead? dead? :draw? draw?')))
+
+(defn tick-charging-arcs!
+  "Advance the arc-particle lifecycle for one player (client tick hook).
+   Mirrors upstream SubArcHandler2D.tick() plus CurrentChargingHUD's spawn
+   rules: an idle ring (5-7 arcs, phi 0.84-0.96) while charging, and — on the
+   active? rising edge (the moment of release, matching upstream startBlend
+   from BodyIntensify) — a denser burst (10-15 arcs, phi 0.6-1, life 25 ticks)."
+  [player-uuid]
+  (let [ok (owner-key player-uuid)
+        {:keys [active? blending? charge-ticks good?]} (current-charging-fx/current-state player-uuid)
+        charging? (or active? blending? (pos? (long (or charge-ticks 0))))
+        prior-active? (boolean (.get arc-prior-active-by-owner ok))
+        ^ArrayList particles (.get arc-particles-by-owner ok)]
+    (.put arc-prior-active-by-owner ok (boolean active?))
+    (cond
+      (and charging? (nil? particles))
+      (let [n (+ 5 (rand-int 3))
+            fresh (ArrayList.)]
+        (dotimes [_ n]
+          (.add fresh (gen-arc 0.84 0.96 25.0 30.0 233333 0.3 0.0)))
+        (.put arc-particles-by-owner ok fresh))
+
+      (and (not charging?) particles)
+      (.remove arc-particles-by-owner ok)
+
+      (and charging? particles)
+      (let [pending (ArrayList. ^java.util.Collection particles)]
+        (when (and active? (not prior-active?) good?)
+          (dotimes [_ (+ 10 (rand-int 6))]
+            (.add pending (gen-arc 0.6 1.0 35.0 40.0 25 0.3 0.2))))
+        (.clear particles)
+        (doseq [arc pending]
+          (let [arc' (tick-arc arc)]
+            (when-not (:dead? arc') (.add particles arc')))))))
+  nil)
+
+(defn clear-charging-arcs-for-owner!
+  [owner-key]
+  (.remove arc-particles-by-owner owner-key)
+  (.remove arc-prior-active-by-owner owner-key)
+  (.remove charging-fade-session-by-owner owner-key)
+  nil)
+
+(defn- charging-mask-alpha
+  "mAlpha: fade in over BLEND_TIME (500ms) since session start, held at 1.0
+   while charging, then fade out over BLEND_OUT_TIME (200ms) once blending."
+  ^double [session ^long now-ms]
+  (if (nil? session)
+    0.0
+    (let [{:keys [started-ms blend-out-ms]} session]
+      (if blend-out-ms
+        (Math/max 0.0 (- 1.0 (/ (- now-ms (long blend-out-ms)) 200.0)))
+        (Math/min 1.0 (/ (- now-ms (long started-ms)) 500.0))))))
+
+(defn- update-charging-fade-session!
+  "Upstream getTimeActive()/blendTime state machine: track when this charging
+   session started (drives the 500ms fade-in) and when it began blending out
+   (drives the 200ms fade-out), matching CurrentChargingHUD field semantics.
+   The session lingers past charging?→false until its own fade-out finishes
+   (started immediately if the game state never reports an explicit blending?
+   phase), so the mask/arcs always get their full local fade-out."
+  [ok charging? blending? now-ms]
+  (when-let [session (.get charging-fade-session-by-owner ok)]
+    (when (and (or blending? (not charging?)) (nil? (:blend-out-ms session)))
+      (.put charging-fade-session-by-owner ok (assoc session :blend-out-ms now-ms))))
+  (when (and charging? (nil? (.get charging-fade-session-by-owner ok)))
+    (.put charging-fade-session-by-owner ok {:started-ms now-ms :blend-out-ms nil}))
+  (let [session' (.get charging-fade-session-by-owner ok)]
+    (when (and session' (not charging?) (<= (charging-mask-alpha session' now-ms) 0.0))
+      (.remove charging-fade-session-by-owner ok))
+    (.get charging-fade-session-by-owner ok)))
+
+(defn- build-arc-particle-items
+  "Reactive arc-particle sprites for one frame — screen position derived from
+   each arc's fixed [-1,1] fraction, matching upstream's
+   width/2 + xScale*x - size/2 (xScale = width/2)."
+  [player-uuid screen-w screen-h]
+  (let [ok (owner-key player-uuid)
+        ^ArrayList particles (.get arc-particles-by-owner ok)
+        blending? (boolean (:blending? (current-charging-fx/current-state player-uuid)))
+        alpha (if blending? 0.4 0.3)
+        hw (/ (double screen-w) 2.0)
+        hh (/ (double screen-h) 2.0)]
+    (when particles
+      (->> particles
+           (filter :draw?)
+           (mapv (fn [{:keys [x y size tex-idx]}]
+                   {:src (nth arc-frame-srcs tex-idx)
+                    :x (int (- (+ hw (* hw (double x))) (/ size 2.0)))
+                    :y (int (- (+ hh (* hh (double y))) (/ size 2.0)))
+                    :w (int size)
+                    :h (int size)
+                    :alpha alpha
+                    :tint nil}))))))
+
 (defn- ease-in-out [t]
   (let [t (max 0.0 (min 1.0 (double t)))]
   (* t t (- 3.0 (* 2.0 t)))))
@@ -39,19 +183,25 @@
                            {:player-uuid player-uuid :now-ms now-ms})
       {:active? false :coin-active? false :coin-progress 0.0}))
 
-(defn- build-charging-layer [player-uuid screen-w screen-h]
-  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]}
+(defn- build-charging-layer [player-uuid screen-w screen-h now-ms]
+  (let [ok (owner-key player-uuid)
+        {:keys [active? blending? is-item good? charge-ticks charge-ratio]}
         (current-charging-fx/current-state player-uuid)
-        visible? (or active? blending? (pos? (long (or charge-ticks 0))))]
+        charging? (or active? blending? (pos? (long (or charge-ticks 0))))
+        session (update-charging-fade-session! ok charging? blending? now-ms)
+        visible? (or charging? session)]
     (when visible?
-      (let [bar-width 140
+      (let [mask-alpha (charging-mask-alpha session now-ms)
+            bar-width 140
             bar-height 8
             x (int (/ (- screen-w bar-width) 2))
             y (- screen-h 34)
             fill-width (max 2 (int (* bar-width (double (or charge-ratio 0.0)))))
             cx (int (/ screen-w 2))
             cy (int (/ screen-h 2))]
-        {:dim-a (if active? 110 55)
+        {;; Upstream CurrentChargingHUD: black mask alpha = 0.1*mAlpha.
+         :dim-a (int (* 0.1 mask-alpha 255.0))
+         :mask-alpha mask-alpha
          :bar {:x x :y y :w bar-width :h bar-height :fill-w fill-width
                :backdrop (if is-item
                             {:r 12 :g 24 :b 48 :a 150}
@@ -379,7 +529,8 @@
                    :x (int (/ screen-w 2))
                    :y (int (/ screen-h 2))})
      :vm-waves (build-vm-wave-items player-uuid now-ms vm-tint)
-     :charging (build-charging-layer player-uuid screen-w screen-h)
+     :charging (build-charging-layer player-uuid screen-w screen-h now-ms)
+     :charging-arcs (or (build-arc-particle-items player-uuid screen-w screen-h) [])
      :coin-qte (build-coin-qte-layer player-uuid screen-w screen-h now-ms)
      :toasts (toast/build-toast-layouts screen-w screen-h now-ms)
      :tutorial-notification (tutorial-notification/build-notification-layout screen-w screen-h now-ms)

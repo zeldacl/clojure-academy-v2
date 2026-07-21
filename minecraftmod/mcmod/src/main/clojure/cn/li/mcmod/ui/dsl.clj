@@ -79,6 +79,12 @@
   [props]
   (spec-map :crosshair props nil))
 
+(defn glow-line
+  "8 段模糊光晕（ACRenderingHelper.drawGlow/lineSegmentGlow 移植）。
+   dslots 由调用方每帧直接 .setDSlot：:x0 :x1 :y :line-w :glow-sz :tint :no-center。"
+  [props]
+  (spec-map :glow-line props nil))
+
 ;; ============================================================================
 ;; 动态列表
 ;; ============================================================================

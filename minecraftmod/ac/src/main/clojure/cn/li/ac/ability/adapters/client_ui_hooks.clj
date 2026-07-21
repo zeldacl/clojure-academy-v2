@@ -312,6 +312,7 @@
     (.remove overlay-skill-shape-cache owner-key)
     (.remove overlay-context-cache owner-key)
     (reactive-hud/clear-vm-wave-for-owner! (read-model/owner-key owner nil))
+    (reactive-hud/clear-charging-arcs-for-owner! (read-model/owner-key owner nil))
     nil))
 
 (defn- clear-client-player-state!
@@ -1057,6 +1058,10 @@
                 {:keys [reflection-active? deviation-active?]} (scan-vm-contexts player-uuid)]
             (reactive-hud/tick-vm-wave! player-uuid (or reflection-active? deviation-active?)
                                         (int screen-w) (int screen-h) now-ms)))))
+    (content-actions/register-client-tick-hook!
+      (fn tick-charging-arc-particles []
+        (when-let [player (client-bridge/get-client-player)]
+          (reactive-hud/tick-charging-arcs! (uuid/player-uuid player)))))
     (content-actions/register-client-tick-hook!
       (fn tick-cleanup-overlay []
         (toast/cleanup-expired!)
