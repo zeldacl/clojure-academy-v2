@@ -5,6 +5,7 @@
             [cn.li.ac.bootstrap :as ac-bootstrap]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
+            [cn.li.ac.media.external-scan :as media-external-scan]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.client.install-effect-reactive :as install-effect-reactive]
             [cn.li.ac.client.platform-hooks :as platform-hooks]
@@ -58,7 +59,8 @@
   (install-effect-reactive/install-push-handler!)
   (platform-hooks/install-client-content-actions!)
   (font-init/init-fonts!)
-  (hooks/load-all-client-renderers!))
+  (hooks/load-all-client-renderers!)
+  (media-external-scan/rescan!))
 
 (defn- register-lifecycle-hooks-body!
   []
