@@ -66,18 +66,27 @@
 (defn- lerp [a b t]
   (+ a (* (- b a) (clamp01 t))))
 
-(defn- connection-spec [{:keys [from-x from-y to-x to-y m-alpha child-learned? lb]} pdx pdy]
-  (let [blend (double (if (some? lb) lb 1.0))
-        x1 (lerp (+ from-x 8.0) (+ to-x 8.0) blend)
-        y1 (lerp (+ from-y 8.0) (+ to-y 8.0) blend)
-        x2 (+ to-x 8.0) y2 (+ to-y 8.0)]
-    (when (pos? blend)
-      {:kind :line
-       :props {:x 0.0 :y 0.0 :w 0.0 :h 0.0
-               :x1 (- x1 pdx) :y1 (- y1 pdy) :x2 (- x2 pdx) :y2 (- y2 pdy)
-               :thickness 5.5
-               :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
-               :color (line-color m-alpha child-learned?)}})))
+(defn- connection-endpoints
+  "Node-center coords for a connection (matches upstream's +8 to the node
+   corner). Lines are children of :tree-cam, same as the nodes, so parallax
+   is handled once at the camera-group level — no per-line offset needed."
+  [{:keys [from-x from-y to-x to-y]}]
+  [(+ (double from-x) 8.0) (+ (double from-y) 8.0)
+   (+ (double to-x) 8.0) (+ (double to-y) 8.0)])
+
+(defn- connection-spec
+  "blend in [0,1]: fraction of the line drawn from parent (0) to child (1) —
+   upstream lineBlend, the parent→child draw-in reveal."
+  [conn blend]
+  (let [[fx fy tx ty] (connection-endpoints conn)
+        {:keys [m-alpha child-learned?]} conn
+        x1 (lerp fx tx blend) y1 (lerp fy ty blend)]
+    {:kind :line
+     :props {:x 0.0 :y 0.0 :w 0.0 :h 0.0
+             :x1 x1 :y1 y1 :x2 tx :y2 ty
+             :thickness 5.5
+             :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
+             :color (line-color m-alpha child-learned?)}}))
 
 (defn- shell-spec
   "Minimal embed shell: parallax background + tree + popup layer. (The former
@@ -147,13 +156,18 @@
       (rt/build-child! rt {:kind :image :props {:x (+ back-x 11.5) :y (+ back-y 11.5) :w 27.0 :h 27.0
                                                 :src (icon-src skill-icon)}} layer)
       ;; Progress ring: exp when learned, live dev progress while developing.
+      ;; Upstream drawActionIcon(icon, progress, glow = progress==1): the ring
+      ;; texture swaps to the glow variant once fully progressed.
       (when (or learned developing?)
-        (rt/build-child! rt {:kind :shader-progress
-                             :props {:x back-x :y back-y :w 50.0 :h 50.0
-                                     :progress (float (if developing? (:progress dev-state 0.0) (or exp 0.0)))
-                                     :shader-props {:shader-id :ring-progbar
-                                                    :texture-0 (tex-src :skill-view-outline)
-                                                    :texture-1 (tex-src :skill-mask)}}} layer))
+        (let [progress (double (if developing? (:progress dev-state 0.0) (or exp 0.0)))]
+          (rt/build-child! rt {:kind :shader-progress
+                               :props {:x back-x :y back-y :w 50.0 :h 50.0
+                                       :progress (float progress)
+                                       :shader-props {:shader-id :ring-progbar
+                                                      :texture-0 (tex-src (if (>= progress 1.0)
+                                                                            :skill-view-outline-glow
+                                                                            :skill-view-outline))
+                                                      :texture-1 (tex-src :skill-mask)}}} layer)))
       ;; Title: learned → name; unlearned → "name (LV n)".
       (ctext (+ cy 28.0) 260 12.0 0xFFFFFFFF
              (if learned (str skill-name) (str skill-name " (LV " skill-level ")")))
@@ -221,10 +235,13 @@
                                                 :src (tex-src :skill-back)}} layer)
       (rt/build-child! rt {:kind :image :props {:x (+ icon-x 11.5) :y (+ icon-y 11.5) :w 27.0 :h 27.0
                                                 :src cond-icon}} layer)
+      ;; Upstream drawActionIcon(icon, progress, glow = progress==1).
       (rt/build-child! rt {:kind :shader-progress
                            :props {:x icon-x :y icon-y :w 50.0 :h 50.0 :progress (float progress)
                                    :shader-props {:shader-id :ring-progbar
-                                                  :texture-0 (tex-src :skill-view-outline)
+                                                  :texture-0 (tex-src (if (>= progress 1.0)
+                                                                        :skill-view-outline-glow
+                                                                        :skill-view-outline))
                                                   :texture-1 (tex-src :skill-mask)}}} layer)
       (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
              (i18n/translate "skill_tree.my_mod.uplevel" (str "Lv." target-level)))
@@ -321,6 +338,23 @@
     (when-let [ring (:ring h)]
       (ui/set-node-prop! rt ring :progress (float (* (:exp h) prog-mult))))))
 
+(defn- apply-connection-anim!
+  "Mutate a connection line's start point for the parent→child draw-in reveal
+   (upstream lineBlend = clampd(0,1, dt*5.0), dt keyed off the CHILD node's own
+   reveal stagger/offset). anim-s = nil → final state (full line)."
+  [^UiRt rt ch anim-s]
+  (let [reveal? (some? anim-s)
+        dt (if reveal? (- (double anim-s) (+ (* (double (:child-idx ch)) 0.08) 0.1)) 1.0)
+        blend (if reveal? (clamp01 (* dt 5.0)) 1.0)
+        ^INode line (:line ch)
+        x1 (lerp (:from-x ch) (:to-x ch) blend)
+        y1 (lerp (:from-y ch) (:to-y ch) blend)]
+    ;; :line has no :x1/:y1 prop-writer (only :color/:alpha) — poke the dslots
+    ;; directly, same pattern as :glow-line/:progress elsewhere in this UI stack.
+    (.setDSlot line 0 x1)
+    (.setDSlot line 1 y1)
+    (.setFlag line node/FLAG-RENDER-DIRTY)))
+
 (defn- build-tree!
   "Build the :tree-cam camera group + connections + skill nodes under :tree-layer
    once, returning mutation handles. Chrome/visibility is the caller's concern."
@@ -331,35 +365,56 @@
     (rt/clear-children! rt layer)
     (let [^INode cam (rt/build-child! rt {:kind :group :id :tree-cam
                                           :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
-                       layer)]
-      (doseq [conn (:connections render-data)]
-        (when-let [spec (connection-spec conn 0.0 0.0)]
-          (rt/build-child! rt spec cam)))
+                       layer)
+          conn-handles
+          (mapv (fn [conn]
+                  (let [^INode line (rt/build-child! rt (connection-spec conn 0.0) cam)
+                        [fx fy tx ty] (connection-endpoints conn)]
+                    {:line line :from-x fx :from-y fy :to-x tx :to-y ty
+                     :child-idx (long (or (:child-idx conn) 0))}))
+                (:connections render-data))]
       (rt/mark-tree-dirty! rt)
-      {:cam cam :fit [s offx offy] :nodes (mapv #(build-skill-node! rt cam %) nodes)})))
+      {:cam cam :fit [s offx offy] :connections conn-handles
+       :nodes (mapv #(build-skill-node! rt cam %) nodes)})))
 
 (defn build-embedded!
-  "Build the embedded skill tree once. Returns handles {:cam :fit :nodes} for
-   later mutation. Only a skill-data change should call this again."
+  "Build the embedded skill tree once. Returns handles {:cam :fit :nodes
+   :connections} for later mutation. Only a skill-data change should call
+   this again."
   [^UiRt rt render-data w h]
   (ensure-shell! rt w h)
   (clear-popup! rt)
   (build-tree! rt render-data w h))
 
 (defn apply-anim!
-  "Mutate node alphas for the reveal (anim-s) or final state (nil)."
+  "Mutate node alphas + connection-line draw-in for the reveal (anim-s), or
+   final state (nil)."
   [^UiRt rt handles anim-s]
+  (doseq [ch (:connections handles)] (apply-connection-anim! rt ch anim-s))
   (doseq [h (:nodes handles)] (apply-node-anim! rt h anim-s)))
 
 (defn apply-parallax!
   "Move the node container by the pointer parallax and re-layout its subtree —
-   no rebuild. (The background stays put; only the nodes drift.)"
+   no rebuild. (The background stays put; only the nodes drift.)
+
+   cam.x/y is rounded to whole pixels every frame (same reasoning as
+   area-fit-transform's offset rounding): each node's back/outline/icon share
+   one parent abs-x but have different non-integer local offsets (draw-align
+   -3.5 vs align 4.5 etc.), and images blit at truncated integer coords. With
+   cam.x continuously sweeping through fractional values as the mouse moves,
+   each child's independent truncation would round to a different pixel on
+   different frames — visible as the icon/backplate jittering out of sync
+   during mouse movement. Rounding cam.x keeps the per-node fractional
+   remainder (from its own fixed local offset × the constant fit scale)
+   identical frame to frame, so the truncation is stable instead of jittering."
   [^UiRt rt handles mx my w h]
   (let [[s offx offy] (:fit handles)
         [pdx pdy] (parallax-offset mx my w h)
-        ^INode cam (:cam handles)]
-    (.setX cam (- (double offx) (* (double pdx) (double s))))
-    (.setY cam (- (double offy) (* (double pdy) (double s))))
+        ^INode cam (:cam handles)
+        nx (Math/round (- (double offx) (* (double pdx) (double s))))
+        ny (Math/round (- (double offy) (* (double pdy) (double s))))]
+    (.setX cam (double nx))
+    (.setY cam (double ny))
     (mark-subtree-dirty! cam)))
 
 (defn step-hover!
