@@ -5,7 +5,8 @@
    Platform-specific code that Forge requires for key remapping UI."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry])
-  (:import [net.minecraft.client KeyMapping]))
+  (:import [net.minecraft.client KeyMapping Minecraft]
+           [com.mojang.blaze3d.platform InputConstants$Type]))
 
 ;; ===== KeyMapping Registry =====
 ;; Stores KeyMappings created from AC configuration.
@@ -58,6 +59,25 @@
    Returns: {input-id -> KeyMapping}"
   []
   @registered-key-mappings)
+
+(defn get-key-display-name
+  "Localized display name of a registered KeyMapping's current bound key
+   (e.g. \"C\", \"Left Alt\"), or nil if input-id isn't registered.
+   Backs the terminal Settings app's 'keys' category rebind rows."
+  [input-id]
+  (when-let [^KeyMapping km (get-key-mapping input-id)]
+    (.getString (.getDisplayName (.getKey km)))))
+
+(defn set-key-mapping-key!
+  "Rebind a registered KeyMapping to a new keyboard key-code and persist via
+   vanilla options.txt — the same path Options > Controls uses. Returns true
+   on success, nil if input-id isn't registered."
+  [input-id key-code]
+  (when-let [^KeyMapping km (get-key-mapping input-id)]
+    (.setKey km (.getOrCreate InputConstants$Type/KEYSYM (int key-code)))
+    (KeyMapping/resetMapping)
+    (.save (.options ^Minecraft (Minecraft/getInstance)))
+    true))
 
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.

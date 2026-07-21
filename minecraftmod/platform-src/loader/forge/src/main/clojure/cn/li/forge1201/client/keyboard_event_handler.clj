@@ -15,9 +15,6 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
 
-;; GLFW_KEY_V = 86 — cannot reference GLFW/GLFW_KEY_V at AOT compile time
-;; (native libs are absent). Matching the shared constant in mc1201/glfw_polling_core.
-(def ^:private ^:const v-key-code 86)
 (def ^:private ^:const v-toggle-threshold-ms 300)
 
 (def ^:private v-key-down-time-atom
@@ -62,16 +59,23 @@
           session-id (get-client-session-id)
           context {:player-uuid player-uuid
                    :client-session-id session-id
-                   :logical-side :client}]
-      ;; Track V press timestamp for release-based toggle
-      (when (= v-key-code (.getKey event))
+                   :logical-side :client}
+          ;; Resolve the CURRENT bound key for toggle-primary-state from the
+          ;; live KeyMapping rather than a hardcoded GLFW code — otherwise
+          ;; rebinding this key (Settings app "keys" category, or vanilla
+          ;; Options > Controls) would silently stop the toggle from firing
+          ;; on either the old or the new key.
+          ^KeyMapping v-mapping (key-mapping-adapter/get-key-mapping :content/toggle-primary-state)
+          v-key-code (when v-mapping (.getValue (.getKey v-mapping)))]
+      ;; Track press timestamp for release-based toggle
+      (when (and v-key-code (= (int v-key-code) (.getKey event)))
         (case (.getAction event)
           1 (reset! v-key-down-time-atom (System/currentTimeMillis))  ;; press
           0 (when (< (- (System/currentTimeMillis) @v-key-down-time-atom) v-toggle-threshold-ms)
               (kb-proto/emit-keyboard-input! :content/toggle-primary-state context))  ;; short release
           nil))
       ;; Dispatch other consumed Forge KeyMappings from AC :alternative scheme
-      ;; (skip V — handled above with release-based timing).
+      ;; (skip toggle-primary-state — handled above with release-based timing).
       (doseq [[input-id ^KeyMapping key-mapping] (key-mapping-adapter/get-key-mappings-by-input-id)]
         (when (and (not= input-id :content/toggle-primary-state)
                    (.consumeClick ^KeyMapping key-mapping))

@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.platform.config-persist :as config-persist]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson Gson GsonBuilder]
@@ -103,12 +104,16 @@
       (let [^Gson gson-instance (gson)]
         (.toJson gson-instance (nested-config-map descriptors values) writer)))))
 
+(defn- domain-file
+  ^File [domain]
+  (let [file-name (domain->file-name domain ".json")
+        config-dir (-> (FabricLoader/getInstance) (.getConfigDir) (.toFile))]
+    (io/file config-dir file-name)))
+
 (defn- load-domain!
   [domain]
   (let [descriptors (config-reg/get-config-descriptors domain)
-        file-name (domain->file-name domain ".json")
-        config-dir (-> (FabricLoader/getInstance) (.getConfigDir) (.toFile))
-        file (io/file config-dir file-name)
+        file (domain-file domain)
         parsed-tree (when (.exists file)
                       (try
                         (read-json-file file)
@@ -124,4 +129,26 @@
   (doseq [domain (config-reg/get-all-config-domains)]
     (when (seq (config-reg/get-config-descriptors domain))
       (load-domain! domain)))
+  nil)
+
+(defn set-config-value!
+  "Set a single config value and persist the whole domain back to its JSON
+  file (mirrors Forge's ConfigValue.set() + ModConfig.save()).
+  domain — e.g. :cn.li.example/config-domain
+  key    — e.g. :some-setting
+  value  — the new value (boolean/int/double/string)"
+  [domain key value]
+  (let [descriptors (config-reg/get-config-descriptors domain)]
+    (if (seq descriptors)
+      (do
+        (config-reg/set-config-value! domain key value)
+        (write-domain-file! (domain-file domain) descriptors (config-reg/get-config-values domain))
+        true)
+      (do
+        (log/warn "set-config-value!: unknown domain" {:domain domain})
+        false))))
+
+(defn install-config-persist-op!
+  []
+  (config-persist/install-config-persist-op! #'set-config-value! "fabric-config-persist")
   nil)

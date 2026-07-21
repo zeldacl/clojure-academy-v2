@@ -79,7 +79,8 @@
   (lifecycle-init/init-lifecycle!
     {:init-platform! platform-bootstrap/start!
      :init-from-java! init/init-from-java
-     :load-config! config-bridge/load-all!
+     :load-config! #(do (config-bridge/load-all!)
+                         (config-bridge/install-config-persist-op!))
      :activate-runtime-content! lifecycle/run-runtime-content-activation!
      :init-blockstate-properties! bsp/init-all-properties!
      :register-content! #(do

@@ -17,6 +17,22 @@
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-damage])))
 (defn current  [] (get-in @(fw/fw-atom) [:platform :entity-damage]))
 
+(defn install-pvp-gate!
+  "Install a 0-arg predicate (fn [] boolean) consulted whenever a damage
+   target resolves to a player — content modules (e.g. AC's global 'Enable
+   PvP' setting) register this without the platform adapter needing to know
+   about content-layer config. Absent = PvP allowed (matches prior
+   ungated behavior)."
+  [pred]
+  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :entity-damage-pvp-gate] pred))
+  nil)
+
+(defn pvp-allowed?
+  []
+  (if-let [pred (get-in @(fw/fw-atom) [:platform :entity-damage-pvp-gate])]
+    (boolean (pred))
+    true))
+
 (defn call-with-runtime [rt f] (f rt))
 
 (defn apply-direct-damage!* [world-id entity-uuid damage source-type]

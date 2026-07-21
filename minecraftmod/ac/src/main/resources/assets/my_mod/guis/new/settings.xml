@@ -26,14 +26,6 @@
 
       </group>
 
-      <group id="restore-row" pos="0.0,0.0" size="611.0,60.0" align="left,top">
-
-        <text id="restore-label" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="" font-size="40.0" color="#FFFFFFFF"/>
-
-        <text id="restore-button" pos="440.0,0.0" size="160.0,40.0" align="left,center" text="" font-size="40.0" color="#FFFFFFFF"/>
-
-      </group>
-
     </group>
 
   </template>

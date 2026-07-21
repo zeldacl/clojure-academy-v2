@@ -285,7 +285,13 @@
        :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
        :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
        :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
-       :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!}))
+       :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!
+       ;; Settings app "keys" category rebinding — Forge-only (Fabric has no
+       ;; KeyMapping remapping support; see key-mapping-adapter.clj / fabric's
+       ;; keyboard_init.clj comment). Rows still render read-only on Fabric.
+       :keybind-rebind-supported?  (constantly true)
+       :keybind-get-key-name       key-mapping-adapter/get-key-display-name
+       :keybind-set-key!           key-mapping-adapter/set-key-mapping-key!}))
 
 (defn- install-client-owner-hooks!
   []

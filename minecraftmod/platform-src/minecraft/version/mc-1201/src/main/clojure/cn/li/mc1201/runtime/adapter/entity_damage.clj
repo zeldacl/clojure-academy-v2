@@ -10,6 +10,7 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity LivingEntity]
+           [net.minecraft.world.entity.player Player]
            [net.minecraft.world.phys AABB]))
 
 (defn- resolve-level* [server resolve-level-fn world-id]
@@ -23,6 +24,14 @@
 (defn- apply-vanilla-hurt!
   [^LivingEntity entity dmg-source damage]
   (.hurt entity dmg-source (float damage)))
+
+(defn- pvp-blocked?
+  "True when `entity` is a player and the content-registered PvP gate
+   (mcmod.platform.entity-damage/install-pvp-gate!) currently disallows it —
+   matches upstream AbilityContext.dealDamage's
+   (canAttackPlayer() || !(target instanceof EntityPlayer)) check."
+  [entity]
+  (and (instance? Player entity) (not (ped/pvp-allowed?))))
 
 (defn create-entity-damage
   "Return a function map implementing the entity-damage contract.
@@ -45,7 +54,7 @@
        (try
          (if-let [^ServerLevel level (resolve-level world-id)]
            (if-let [entity (get-entity-by-uuid level entity-uuid)]
-             (if (living? entity)
+             (if (and (living? entity) (not (pvp-blocked? entity)))
                (let [^LivingEntity living entity
                      dmg-source (core/resolve-damage-source level source-type)]
                  (apply-hurt! living dmg-source (float damage))
@@ -68,7 +77,8 @@
              (core/apply-aoe-damage-flow!
                entities origin-pos radius damage falloff?
                (fn [^LivingEntity entity actual-damage]
-                 (apply-hurt! entity dmg-source (float actual-damage)))))
+                 (when-not (pvp-blocked? entity)
+                   (apply-hurt! entity dmg-source (float actual-damage))))))
            [])
          (catch Exception e
            (log/warn "Failed to apply AOE damage:" (ex-message e))
@@ -95,7 +105,8 @@
                        (when target-uuid
                          (get-entity-by-uuid level target-uuid))))
                    (fn [^LivingEntity target damage-value]
-                     (apply-hurt! target dmg-source (float damage-value)))))
+                     (when-not (pvp-blocked? target)
+                       (apply-hurt! target dmg-source (float damage-value))))))
                [])
              [])
            [])
