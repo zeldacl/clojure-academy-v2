@@ -10,7 +10,7 @@
   Exp: 0.003 per use"
   (:require
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
-            [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -88,7 +88,10 @@
   (long (or (get-in (active-skill-ctx-data player-id skill-id) [:skill-state :hold-ticks]) 0)))
 
 (defn- tick-cp-cost [player-id _skill-id exp]
-  (if (<= (stored-hold-ticks player-id :thunder-clap) (min-ticks))
+  ;; Cost is evaluated before thunder-clap-tick! increments the stored tick
+  ;; count for this dispatch, so check against the tick this call is about to
+  ;; produce (matches upstream's post-increment "ticks <= MIN_TICKS" check).
+  (if (<= (inc (stored-hold-ticks player-id :thunder-clap)) (min-ticks))
     (cfg-lerp :cost.tick.cp (bal/clamp01 (double (or exp 0.0))))
     0.0))
 
@@ -124,25 +127,46 @@
   (update-skill-state-root! ctx-id assoc :hit-pos (resolve-raycast-target player-id))
   nil)
 
+;; The generic dispatch pipeline's hold-ticks argument is never populated for
+;; server-tick-driven charge-window contexts (context-manager's
+;; tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) — so
+;; this self-tracks charge duration in :skill-state instead of trusting the
+;; argument, matching railgun.clj/body_intensify.clj.
+
+;; The skill's own :fx map (declared below in defskill) is never
+;; auto-dispatched by the framework — cn.li.ac.ability.service.skill-effects/emit-fx!,
+;; the only function that reads it, is never called from the dispatch
+;; pipeline. Skills must call it (or fx/send! directly) themselves, matching
+;; the pattern already used by railgun.clj/meltdowner.clj/mark_teleport.clj.
+(defn- emit-thunder-clap-fx! [stage evt]
+  (skill-effects/emit-fx! (skill-registry/get-skill :thunder-clap) evt stage))
+
 (defn- thunder-clap-down!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (refresh-hit-pos! ctx-id player-id)
-  (spawn-surround-and-mark! ctx-id player-id player-ref))
+  (spawn-surround-and-mark! ctx-id player-id player-ref)
+  (emit-thunder-clap-fx! :start {:ctx-id ctx-id :player-id player-id}))
 
 (defn- thunder-clap-tick!
-  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (update-skill-state-root! ctx-id assoc :hold-ticks (long hold-ticks))
-  (refresh-hit-pos! ctx-id player-id))
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ticks (inc (stored-hold-ticks player-id :thunder-clap))]
+    (update-skill-state-root! ctx-id assoc :hold-ticks ticks)
+    (refresh-hit-pos! ctx-id player-id)
+    (emit-thunder-clap-fx! :update {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})))
 
 (defn- thunder-clap-abort!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (mark-performed! ctx-id false))
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (mark-performed! ctx-id false)
+  (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
+                               :hold-ticks (stored-hold-ticks player-id :thunder-clap)}))
 
 (defn- thunder-clap-up!
-  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (let [ticks (long (or hold-ticks 0))]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ticks (stored-hold-ticks player-id :thunder-clap)]
     (if (< ticks (min-ticks))
-      (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
+      (do
+        (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
+        (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id :hold-ticks ticks}))
       (let [hit-pos  (current-target ctx-id player-id)
             world-id (geom/world-id-of player-id)
             exp*     (bal/clamp01 (double (or exp 0.0)))
@@ -162,15 +186,16 @@
         (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
         (skill-effects/add-skill-exp! player-id :thunder-clap
                                       (cfg-double :progression.exp-use))
-        (mark-performed! ctx-id true :final-target hit-pos)))))
+        (mark-performed! ctx-id true :final-target hit-pos)
+        (emit-thunder-clap-fx! :perform {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
+        (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})))))
 
 (defn- thunder-clap-cost-fail!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
   (mark-performed! ctx-id false)
   (when (= cost-stage :tick)
-    (fx/send! ctx-id {:topic :thunder-clap/fx-end :mode :end} nil
-              (merge {:ctx-id ctx-id}
-                     (end-payload {:ctx-id ctx-id}))))
+    (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
+                                 :hold-ticks (stored-hold-ticks player-id :thunder-clap)}))
   (ctx/terminate-context! ctx-id nil))
 
 (defskill thunder-clap
