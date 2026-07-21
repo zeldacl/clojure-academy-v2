@@ -14,7 +14,8 @@
 (def ^:private reason->key
   "Maps [domain reason] to translation keys from ac_content_translations.clj.
   Keys follow the original AcademyCraft pattern: app.my_mod.freq_transmitter.eN"
-  {:node    {:password  (str "app." modid/MOD-ID ".freq_transmitter.e1")
+  {:node    {:not-found (str "app." modid/MOD-ID ".freq_transmitter.e0")
+             :password  (str "app." modid/MOD-ID ".freq_transmitter.e1")
              :capacity  (str "app." modid/MOD-ID ".freq_transmitter.e2")
              :range     (str "app." modid/MOD-ID ".freq_transmitter.e2")
              :aborted   (str "app." modid/MOD-ID ".freq_transmitter.e4")

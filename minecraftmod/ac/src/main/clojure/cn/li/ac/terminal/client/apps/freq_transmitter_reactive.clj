@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.client.apps.freq-transmitter-reactive
   "Complete reactive replacement for freq_transmitter.clj — scan/configure/result FSM."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
+            [cn.li.ac.client.toast :as toast]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -68,6 +69,10 @@
                       :masked? (boolean masked?)}}]
     (rt/build-child! rt spec area)))
 
+(defn- show-messages! [response]
+  (doseq [m (:messages response)]
+    (toast/show-toast! {:message-key (:key m) :args (:args m)})))
+
 (defn- do-scan! [state player-uuid rebuild!]
   (swap! state assoc :scanning? true :message ""
          :state-start-time (System/currentTimeMillis))
@@ -78,7 +83,7 @@
       (if (:success response)
         (let [dev (:device response)]
           (swap! state assoc
-                 :phase :configure :device dev
+                 :phase :configure :device dev :pos (:pos dev)
                  :ssid (:ssid dev "") :password (:password dev "")
                  :scanning? false
                  :editing-field :ssid
@@ -96,12 +101,31 @@
   (rebuild!)
   (net-client/send-to-server freq-config-msg
     {:player-uuid player-uuid
+     :pos (:pos @state)
      :ssid (:ssid @state)
      :password (:password @state)}
     (fn [response]
+      (show-messages! response)
       (swap! state assoc :phase :result
              :message (if (:success response)
                         (or (:message response) "Configuration applied!")
+                        (str "Failed: " (or (:error response) "Unknown error")))
+             :state-start-time (System/currentTimeMillis))
+      (rebuild!))))
+
+(defn- do-unlink! [state player-uuid rebuild!]
+  (swap! state assoc :message "Transmitting..."
+         :state-start-time (System/currentTimeMillis))
+  (rebuild!)
+  (net-client/send-to-server freq-config-msg
+    {:player-uuid player-uuid
+     :pos (:pos @state)
+     :unlink? true}
+    (fn [response]
+      (show-messages! response)
+      (swap! state assoc :phase :result
+             :message (if (:success response)
+                        "Node disconnected"
                         (str "Failed: " (or (:error response) "Unknown error")))
              :state-start-time (System/currentTimeMillis))
       (rebuild!))))
@@ -116,42 +140,49 @@
     (add-text! rt 110 (:message @state) :color 0xFFFFAAAA :font-size 8.0)))
 
 (defn- build-configure-phase! [^UiRt rt state player-uuid rebuild!]
-  (when-let [dev (:device @state)]
-    (let [info (str (name (:type dev))
-                    (when (:ssid dev) (str " [" (:ssid dev) "]"))
-                    (when (contains? dev :has-network)
-                      (if (:has-network dev) " (active)" " (no network)"))
-                    (when (contains? dev :linked?)
-                      (if (:linked? dev) " (linked)" " (unlinked)")))]
-      (add-text! rt 5 info :color 0xFFAADDFF)))
-  (let [editing (:editing-field @state)
-        ssid-prefix "SSID: "
-        pass-prefix "Password: "
-        ssid-n (add-editable-field! rt 40 ssid-prefix (:ssid @state) (= editing :ssid) false)
-        pass-n (add-editable-field! rt 72 pass-prefix (:password @state) (= editing :password) true)]
-    (doseq [[field prefix ^INode n] [[:ssid ssid-prefix ssid-n] [:password pass-prefix pass-n]]]
-      (rt/register-event! rt (.getIdx n) :left-click
-        (fn [_ _ _] (swap! state assoc :editing-field field) (rebuild!)))
-      (rt/register-event! rt (.getIdx n) :confirm-input
-        (fn [_ _ _] (swap! state assoc :editing-field nil) (rebuild!)))
-      (rt/register-event! rt (.getIdx n) :change-content
-        (fn [_ _ evt]
-          (let [raw (:value evt)
-                v (if (str/starts-with? (str raw) prefix)
-                      (subs (str raw) (count prefix))
-                      (str raw))]
-            (if (= field :ssid)
-              (swap! state assoc :ssid v)
-              (swap! state assoc :password v)))))))
-  (when (:editing-field @state)
-    (add-text! rt 100 "Type to edit, Enter to confirm" :color 0xFF888888 :font-size 7.0))
-  (add-button! rt 120 "Apply" 0xFF336633
-    #(do (swap! state assoc :editing-field nil)
-         (do-configure! state player-uuid rebuild!)))
-  (add-button! rt 156 "Rescan" 0xFF443333
-    #(do (swap! state assoc :phase :scan :device nil :message "" :editing-field nil
-                 :state-start-time (System/currentTimeMillis))
-         (rebuild!))))
+  (let [dev (:device @state)
+        node? (= :node (:type dev))]
+    (when dev
+      (let [info (str (name (:type dev))
+                      (when (:node-name dev) (str " \"" (:node-name dev) "\""))
+                      (when (:ssid dev) (str " [" (:ssid dev) "]"))
+                      (when (contains? dev :has-network)
+                        (if (:has-network dev) " (active)" " (no network)"))
+                      (when (contains? dev :linked?)
+                        (if (:linked? dev) " (linked)" " (unlinked)")))]
+        (add-text! rt 5 info :color 0xFFAADDFF)))
+    (let [editing (:editing-field @state)
+          ssid-prefix (if node? "Target SSID: " "SSID: ")
+          pass-prefix "Password: "
+          ssid-n (add-editable-field! rt 40 ssid-prefix (:ssid @state) (= editing :ssid) false)
+          pass-n (add-editable-field! rt 72 pass-prefix (:password @state) (= editing :password) true)]
+      (doseq [[field prefix ^INode n] [[:ssid ssid-prefix ssid-n] [:password pass-prefix pass-n]]]
+        (rt/register-event! rt (.getIdx n) :left-click
+          (fn [_ _ _] (swap! state assoc :editing-field field) (rebuild!)))
+        (rt/register-event! rt (.getIdx n) :confirm-input
+          (fn [_ _ _] (swap! state assoc :editing-field nil) (rebuild!)))
+        (rt/register-event! rt (.getIdx n) :change-content
+          (fn [_ _ evt]
+            (let [raw (:value evt)
+                  v (if (str/starts-with? (str raw) prefix)
+                        (subs (str raw) (count prefix))
+                        (str raw))]
+              (if (= field :ssid)
+                (swap! state assoc :ssid v)
+                (swap! state assoc :password v)))))))
+    (when (:editing-field @state)
+      (add-text! rt 100 "Type to edit, Enter to confirm" :color 0xFF888888 :font-size 7.0))
+    (add-button! rt 120 (if node? "Link" "Rename") 0xFF336633
+      #(do (swap! state assoc :editing-field nil)
+           (do-configure! state player-uuid rebuild!)))
+    (when (and node? (:linked? dev))
+      (add-button! rt 156 "Unlink" 0xFF663333
+        #(do (swap! state assoc :editing-field nil)
+             (do-unlink! state player-uuid rebuild!))))
+    (add-button! rt 192 "Rescan" 0xFF443333
+      #(do (swap! state assoc :phase :scan :device nil :message "" :editing-field nil
+                   :state-start-time (System/currentTimeMillis))
+           (rebuild!)))))
 
 (defn- build-result-phase! [^UiRt rt state rebuild!]
   (let [msg (or (:message @state) "")
