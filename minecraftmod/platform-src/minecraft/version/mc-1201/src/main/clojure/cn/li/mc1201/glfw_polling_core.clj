@@ -14,6 +14,7 @@
 ;; GLFW key codes (shared constants)
 (def GLFW_KEY_C 67)
 (def GLFW_KEY_V 86)
+(def GLFW_KEY_F4 293)
 (def GLFW_KEY_LEFT_ALT 342)
 
 (defn ^:private is-key-pressed?
@@ -52,6 +53,7 @@
    Polling targets:
    - :content/cycle-selection (C key — upstream KEY_SWITCH_PRESET)
    - :content/toggle-primary-state (V key — upstream KEY_ACTIVATE_ABILITY)
+   - :content/toggle-debug-overlay (F4 key — upstream DebugConsole KEY_F4)
 
    Flow:
    1. Poll GLFW state for each input
@@ -103,6 +105,20 @@
             :client-session-id client-session-id
             :logical-side :client}))
        (swap! last-poll-time assoc :toggle-primary-state is-pressed))
+
+     ;; Toggle debug overlay (F4 key — upstream DebugConsole KEY_F4, cycles
+     ;; none -> normal -> show-exp -> none on key-down, fires once per press).
+     (let [key-code GLFW_KEY_F4
+           is-pressed (is-key-pressed? :original key-code)
+           was-pressed (get @last-poll-time :toggle-debug-overlay false)]
+       (when (and (not suppress-triggers?)
+                  (should-trigger? :toggle-debug-overlay was-pressed is-pressed))
+         (kb-proto/emit-keyboard-input!
+           :content/toggle-debug-overlay
+           {:player-uuid player-uuid
+            :client-session-id client-session-id
+            :logical-side :client}))
+       (swap! last-poll-time assoc :toggle-debug-overlay is-pressed))
 
      ;; Toggle terminal (Left Alt) — Fabric's only dispatch path for this input
      ;; (Forge covers it via the :alternative-scheme KeyMapping event and does

@@ -25,6 +25,7 @@
   (:require [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ===== Handler Function Implementations (defined before registry) =====
@@ -45,6 +46,13 @@
   (log/debug "Toggle primary state — toggling ability mode" {:uuid player-uuid})
   (when player-uuid
     (keybinds/trigger-mode-switch! player-uuid)))
+
+(defn- on-toggle-debug-overlay
+  "Handle debug overlay toggle (F4 key press). Matching original AcademyCraft
+   DebugConsole (ACKeyManager.addKeyHandler(\"debug_console\", KEY_F4, ...)) —
+   cycles the debug info overlay through none -> normal -> show-exp -> none."
+  [_context]
+  (runtime-hooks/toggle-debug-overlay-state!))
 
 (defn- on-toggle-terminal
   "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
@@ -92,6 +100,17 @@
                    :translation-key "key.content.toggle.primary"
                    :category "keybind.category.content"}
      :handler #'on-toggle-primary-state}
+
+    ;; F4 — cycle debug info overlay (none/normal/show-exp), upstream DebugConsole
+    :content/toggle-debug-overlay
+    {:input-id :content/toggle-debug-overlay
+     :scheme :alternative
+     :description "Toggle debug info overlay"
+     :event-type :press
+     :key-mapping {:key 293  ; GLFW_KEY_F4 — upstream DebugConsole KEY_F4
+                   :translation-key "key.content.toggle.debug.overlay"
+                   :category "keybind.category.content"}
+     :handler #'on-toggle-debug-overlay}
 
     ;; Terminal toggle — matching original AcademyCraft KEY_LMENU (Left Alt)
     :content/toggle-terminal
