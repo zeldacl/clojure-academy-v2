@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.gui.registry.open
   "Shared helper functions for GUI open flows in platform registry adapters."
-  (:require [cn.li.mcmod.platform.gui-open :as gui-open]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]
            [net.minecraft.world.level.block.entity BlockEntity]))
@@ -34,4 +35,5 @@
 (defn open-player-menu-with-fallback!
   "Open a player menu via the platform-injected loader-specific implementation."
   [player factory]
-  (gui-open/open-player-menu! player factory))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :gui-open :open-player-menu! player factory)))

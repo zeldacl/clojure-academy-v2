@@ -3,7 +3,8 @@
 
   Uses shared mc1201 installer with a Forge-specific adapter implementation."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.gui-open :as gui-open]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as framework-platform]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.platform.class-access :as class-access]
@@ -140,7 +141,10 @@
           :be-set-changed! (resolve-binding! 'be-set-changed!)
           :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)
           :be-sync-to-client! (resolve-binding! 'be-sync-to-client!)})
-       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!))
+       (framework-platform/install-adapter!
+         (fw/fw-atom)
+         :gui-open
+         {:open-player-menu! (resolve-binding! 'open-player-menu!)})
        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
        (log/info "forge platform initialized for selected target")))
   nil)

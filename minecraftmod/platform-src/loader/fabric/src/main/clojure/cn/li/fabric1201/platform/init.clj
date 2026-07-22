@@ -1,7 +1,8 @@
 (ns cn.li.fabric1201.platform.init
   "Fabric platform initializer."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.gui-open :as gui-open]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as framework-platform]
             [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.bootstrap.installer-core :as core]
@@ -145,7 +146,10 @@
           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
          nil)
        (install-be-ops!)
-       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!))
+       (framework-platform/install-adapter!
+         (fw/fw-atom)
+         :gui-open
+         {:open-player-menu! (resolve-binding! 'open-player-menu!)})
        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "fabric")
        (log/info "fabric platform initialized for selected target")))
   nil)
