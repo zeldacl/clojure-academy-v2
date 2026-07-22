@@ -55,7 +55,7 @@
 (defn menu-get-container-id [menu] (call :menu-get-container-id menu))
 
 ;; Entity type ID lookup (was protocol method with [world-id entity-uuid] arity)
-(defn entity-get-type-id* [world-id entity-uuid]
+(defn get-type-id [world-id entity-uuid]
   (when-let [f (get (current-ops) :entity-get-type-id-fn)]
     (f world-id entity-uuid)))
 

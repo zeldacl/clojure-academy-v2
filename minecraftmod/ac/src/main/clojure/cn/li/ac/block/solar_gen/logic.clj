@@ -21,16 +21,16 @@
 
 (defn- can-generate? [level pos]
   (when (and level pos)
-    (let [time (rem (long (world/world-get-day-time* level)) 24000)
+    (let [time (rem (long (world/day-time level)) 24000)
           day? (<= time (solar-config/daytime-threshold-ticks))]
       (and day?
-           (world/world-can-see-sky* level
+           (world/can-see-sky? level
              (pos/create-block-pos (pos/pos-x pos) (inc (pos/pos-y pos)) (pos/pos-z pos)))))))
 
 (defn solar-tick-state
   [state level pos _block-state _be]
   (let [generating? (can-generate? level pos)
-        raining? (world/world-is-raining* level)
+        raining? (world/raining? level)
         status (cond (not generating?) "STOPPED"
                      raining? "WEAK"
                      :else "STRONG")

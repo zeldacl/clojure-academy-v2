@@ -306,7 +306,7 @@
                        (filterv #(get % :block-state) blockstate-fields))]
     (fn [state level pos]
       (try
-        (if-let [blk-state (platform-world/world-get-block-state* level pos)]
+        (if-let [blk-state (platform-world/get-block-state level pos)]
           (let [state-def (platform-world/block-state-get-state-definition blk-state)
                 _ (when-not state-def
                     (log/warn "[blockstate-updater] state-def is nil for block at" pos))
@@ -315,7 +315,7 @@
                         blk-state
                         bs-specs)]
             (when (not= new-bs blk-state)
-              (platform-world/world-set-block* level pos new-bs 3)))
+              (platform-world/set-block! level pos new-bs 3)))
           (log/warn "[blockstate-updater] world-get-block-state* returned nil for" pos))
         (catch Exception e
           (log/stacktrace (str "Failed to update block state for " pos) e))))))

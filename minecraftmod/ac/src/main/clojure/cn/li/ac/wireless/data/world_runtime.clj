@@ -88,7 +88,7 @@
   (drain-pending-rebuilds! world-data (long (network-config/world-load-rebuild-batch-size)))
   (let [state (world-registry/world-state world-data)
         cfg (network-config/cfg)
-        game-time (long (or (platform-world/world-get-game-time* world) 0))
+        game-time (long (or (platform-world/game-time world) 0))
         ctx {:game-time game-time
              :cfg cfg
              :cap-cache (java.util.HashMap.)}]

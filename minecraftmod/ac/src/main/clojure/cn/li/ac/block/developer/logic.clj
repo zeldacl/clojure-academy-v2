@@ -63,7 +63,7 @@
 	                                    cy (- py ry)
 	                                    cz (- pz rz)
 	                                    cpos (pos/create-block-pos cx cy cz)
-	                                    ctile (world/world-get-tile-entity* world cpos)]
+	                                    ctile (world/get-tile-entity world cpos)]
 	                                (when (and ctile
 	                                           (= (:controller-block-id ctrl-mb)
 	                                              (platform-be/get-block-id ctile)))
@@ -142,7 +142,7 @@
 
 (defn- developer-server-before-open!
 	[player world open-pos]
-	(when-let [be (world/world-get-tile-entity* world open-pos)]
+	(when-let [be (world/get-tile-entity world open-pos)]
 		(let [state (machine-runtime/state-or-default be dev-default-state)
 					pid (uuid/player-uuid player)
 					cur (str (:user-uuid state ""))]
@@ -153,7 +153,7 @@
 				true))))
 
 (defn open-developer-gui-for [controller-block-id]
-	(machine-runtime/make-open-gui-handler*
+	(machine-runtime/make-open-gui-handler-with-predicate
 		:developer
 		(constantly true)
 		:resolve-open-pos (resolve-developer-open-pos controller-block-id)

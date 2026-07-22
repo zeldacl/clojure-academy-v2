@@ -22,7 +22,7 @@
    pitch 0.4 / (rand[0,1) * 0.4 + 0.8) ~= [0.333, 0.5)."
   [player]
   (when (world-effects/available?)
-    (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
+    (when-let [world-id (world/dimension-id (entity/player-get-level player))]
       (world-effects/play-sound!
         world-id
         (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)

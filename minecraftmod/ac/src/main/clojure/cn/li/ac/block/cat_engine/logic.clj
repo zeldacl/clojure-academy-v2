@@ -74,10 +74,10 @@
 		 :sync-client? true}))
 
 (defn cat-right-click! [_player world pos _block-id]
-	(let [be (and world pos (world/world-get-tile-entity* world pos))]
+	(let [be (and world pos (world/get-tile-entity world pos))]
 		(cond
 			(nil? be) {:consume? true}
-			(world/world-is-client-side* world) {:consume? true}
+			(world/client-side? world) {:consume? true}
 			(wireless-api/is-generator-linked? be)
 			(do (wireless-api/unlink-generator-from-node! be)
 					(refresh-link-state! be)
@@ -91,7 +91,7 @@
 								;; get-nodes-in-range returns capabilities for display, get-tile-at returns
 								;; tile entity for linking via link-generator-to-node!).
 								node-pos (try (.getBlockPos ^IWirelessNode target-node) (catch Exception _ nil))
-								node-be (when node-pos (world/world-get-tile-entity* world node-pos))
+								node-be (when node-pos (world/get-tile-entity world node-pos))
 								linked? (and node-be
 								         (try (:success (wireless-api/link-generator-to-node! be node-be "" false))
 								              (catch Exception _ false)))]

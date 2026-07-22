@@ -147,7 +147,7 @@
 
         (let [block-pos (pos/create-block-pos (int x) (int (+ y 1.0)) (int z))
 
-              block-state (world/world-get-block-state* level block-pos)]
+              block-state (world/get-block-state level block-pos)]
 
           (not (world/block-state-is-air block-state)))))))
 

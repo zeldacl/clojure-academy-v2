@@ -88,7 +88,7 @@
 (deftest handle-matrix-place-persists-uuid-and-canonical-name
   (let [saved-state (atom nil)
         handler (logic/handle-matrix-place)]
-    (with-redefs [world/world-get-tile-entity* (fn [_ _] :be)
+    (with-redefs [world/get-tile-entity (fn [_ _] :be)
                   platform-be/get-custom-state (fn [_] {:foo 1})
                   platform-be/set-custom-state! (fn [_ state] (reset! saved-state state))
                   uuid/player-uuid (fn [_] "test-uuid-123")

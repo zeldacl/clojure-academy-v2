@@ -23,8 +23,8 @@
     (with-redefs [cn.li.ac.gui.open/open-gui-by-type
                   (fn [& args] (swap! calls conj args))
                   bdsl/get-block-spec (fn [_] nil)
-                  world/world-is-client-side* (fn [_] true)]
-      ;; make-open-gui-handler* handlers take positional args
+                  world/client-side? (fn [_] true)]
+      ;; make-open-gui-handler-with-predicate handlers take positional args
       ;; (player world pos block-id & {:keys [sneaking item-stack]}).
       ((developer-logic/open-developer-gui-for "developer-normal")
        :player-1 :client-world [10 20 30] "developer-normal" :sneaking false)
@@ -47,7 +47,7 @@
 
 (deftest developer-on-close-clears-user-session-state-test
   (let [saved (atom nil)]
-    (with-redefs [world/world-is-client-side* (fn [_] false)
+    (with-redefs [world/client-side? (fn [_] false)
                   entity/player-get-level (fn [_] :server-level)
                   platform-be/get-custom-state (fn [_] {:user-uuid "u1"
                                                         :user-name "Player"

@@ -24,7 +24,7 @@
 (defn handle-imag-phase-click
 	[{:keys [world item-stack] :as _ctx}]
 	(when (and world
-						 (not (world/world-is-client-side* world))
+						 (not (world/client-side? world))
 						 (not (stack-empty? item-stack))
 						 (= (stack-id item-stack) phase-config/matter-unit-item-id))
 		(when (to-phase-liquid-matter-unit! item-stack)

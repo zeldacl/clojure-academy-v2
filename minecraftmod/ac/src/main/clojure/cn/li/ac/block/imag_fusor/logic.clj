@@ -199,7 +199,7 @@
   [level pos]
   (try
     (when (world-effects/available?)
-      (let [world-id (world/world-get-dimension-id* level)
+      (let [world-id (world/dimension-id level)
             x (pos/pos-x pos)
             y (pos/pos-y pos)
             z (pos/pos-z pos)]
@@ -239,7 +239,7 @@
                     (assoc state :sound-cooldown fusor-sound-interval))
                 (assoc state :sound-cooldown (if working? sound-cooldown 0)))]
     (assoc state :frame (animated-frame working?
-                                        (world/world-get-day-time* level)))))
+                                        (world/day-time level)))))
 
 (defn- sync-fusor-blockstate!
   "1.20-idiomatic BlockState update: cheap in-memory comparison of :frame and

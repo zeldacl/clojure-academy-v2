@@ -111,14 +111,14 @@
           (cond
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (when (world/world-remove-block* level hit-block-pos)
+              (when (world/remove-block! level hit-block-pos)
                 (mutate-or-convert-main-hand! player item-stack :phase-liquid))
               {:consume? true})
 
             (= kind :phase-liquid)
-            (let [target-state (world/world-get-block-state* level place-block-pos)
+            (let [target-state (world/get-block-state level place-block-pos)
                   placeable? (or (nil? target-state) (world/block-state-is-air target-state))]
-              (if (and placeable? (world/world-place-block-by-id* level imag-phase-block-id place-block-pos 3))
+              (if (and placeable? (world/place-block-by-id! level imag-phase-block-id place-block-pos 3))
                 (do
                   (mutate-or-convert-main-hand! player item-stack :none)
                   {:consume? true})
@@ -132,7 +132,7 @@
    pitch 0.4 / (rand[0,1) * 0.4 + 0.8) ~= [0.333, 0.5)."
   [player]
   (when (world-effects/available?)
-    (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
+    (when-let [world-id (world/dimension-id (entity/player-get-level player))]
       (world-effects/play-sound!
         world-id
         (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)

@@ -18,7 +18,7 @@
     (cond
       (map? world) (or (:server-session-id world) (:session-id world))
       (or (keyword? world) (string? world) (symbol? world) (number? world)) nil
-      :else (world/world-server-session-id* world))))
+      :else (world/server-session-id world))))
 
 (defn world-id
   [world]
@@ -28,7 +28,7 @@
     (cond
       (map? world) (or (:world-id world) (:dimension-id world))
       (or (keyword? world) (string? world) (symbol? world) (number? world)) nil
-      :else (world/world-get-dimension-id* world))))
+      :else (world/dimension-id world))))
 
 (defn world-key
   "Return [server-session-id dimension-id] for a world owner (map or platform Level)."

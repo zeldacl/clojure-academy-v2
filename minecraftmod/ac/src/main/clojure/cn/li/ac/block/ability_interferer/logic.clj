@@ -45,7 +45,7 @@
 (def clamp-range interferer-config/clamp-range)
 
 (defn source-id [level pos]
-	(let [dim-id (or (try (world/world-get-dimension-id* level) (catch Exception _ nil)) "unknown")]
+	(let [dim-id (or (try (world/dimension-id level) (catch Exception _ nil)) "unknown")]
 		(str "interferer@" dim-id "/" (pos/pos-x pos) "," (pos/pos-y pos) "," (pos/pos-z pos))))
 
 (defn- player-name [player]
@@ -59,7 +59,7 @@
 	(try (boolean (entity/player-spectator? player)) (catch Exception _ false)))
 
 (defn- raw-level-players [level]
-	(or (try (world/world-get-players* level) (catch Exception _ nil)) []))
+	(or (try (world/players level) (catch Exception _ nil)) []))
 
 (defn- player-in-aabb?
   "True when player is non-creative, non-spectator, and inside the AABB bounds.
@@ -222,7 +222,7 @@
                   ^HashSet affected (.affectedPlayers active)]
               (when (and level block-pos)
                 (try
-                  (when-not (world/world-is-chunk-loaded?*
+                  (when-not (world/chunk-loaded?
                               level
                               (world/block-to-chunk-coord (pos/pos-x block-pos))
                               (world/block-to-chunk-coord (pos/pos-z block-pos)))
@@ -360,7 +360,7 @@
 
 (defn on-interferer-placed! [player world pos _block-id]
 	(when (and player world pos)
-		(let [tile (world/world-get-tile-entity* world pos)]
+		(let [tile (world/get-tile-entity world pos)]
 			(when tile
 				(let [state (or (platform-be/get-custom-state tile) interferer-default-state)
 							existing-placer (str (get state :placer-name ""))
@@ -381,7 +381,7 @@
 
 (defn on-interferer-break! [world pos _block-id]
 	(when (and world pos)
-		(let [tile (world/world-get-tile-entity* world pos)]
+		(let [tile (world/get-tile-entity world pos)]
 			(when tile
 				(let [state (or (platform-be/get-custom-state tile) interferer-default-state)
 							uuids (set (:affected-player-uuids state []))

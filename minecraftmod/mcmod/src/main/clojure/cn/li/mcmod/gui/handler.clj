@@ -30,7 +30,7 @@
   [container-runtime]
   {:container-runtime container-runtime
    :get-server-container (fn [gui-id player world pos]
-                           (let [tile-entity (pworld/world-get-tile-entity* world pos)
+                           (let [tile-entity (pworld/get-tile-entity world pos)
                                  cfg? (get-gui-config gui-id)
                                  container-fn (gui-registry/get-container-fn gui-id)]
                              (if (and tile-entity cfg? container-fn)
@@ -46,7 +46,7 @@
                                    (log/warn "Missing :container-fn for GUI ID:" gui-id))
                                  nil))))
    :get-client-gui (fn [gui-id player world pos]
-                     (let [tile-entity (pworld/world-get-tile-entity* world pos)
+                     (let [tile-entity (pworld/get-tile-entity world pos)
                            cfg? (get-gui-config gui-id)
                            container-fn (gui-registry/get-container-fn gui-id)
                            screen-fn (gui-registry/get-screen-fn gui-id)]

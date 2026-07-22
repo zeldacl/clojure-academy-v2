@@ -35,7 +35,7 @@
               cy (:controller-pos-y state)
               cz (:controller-pos-z state)]
           (if (and world-obj (number? cx) (number? cy) (number? cz))
-            (or (world/world-get-tile-entity* world-obj (pos/create-block-pos (long cx) (long cy) (long cz)))
+            (or (world/get-tile-entity world-obj (pos/create-block-pos (long cx) (long cy) (long cz)))
                 be)
             be))))))
 
@@ -216,7 +216,7 @@
 (defn handle-matrix-place
   []
   (fn [player world pos _block-id]
-    (when-let [be (world/world-get-tile-entity* world pos)]
+    (when-let [be (world/get-tile-entity world pos)]
       (let [player-uuid (uuid/player-uuid player)
             player-name (try (str (or (entity/player-get-name player) ""))
                              (catch Exception _ ""))

@@ -40,22 +40,22 @@
 (defn- world-call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
 (defn- bs-call [k & args] (when-let [f (get (current-block-state-ops) k)] (apply f args)))
 
-;; World wrappers — callers use *-suffixed names
-(defn world-get-tile-entity*    [w pos]           (world-call :world-get-tile-entity w pos))
-(defn world-get-block-state*    [w pos]           (world-call :world-get-block-state w pos))
-(defn world-set-block*          [w pos s fl]      (world-call :world-set-block w pos s fl))
-(defn world-remove-block*       [w pos]           (world-call :world-remove-block w pos))
-(defn world-break-block*        [w pos drop?]     (world-call :world-break-block w pos drop?))
-(defn world-place-block-by-id*  [w id pos fl]     (world-call :world-place-block-by-id w id pos fl))
-(defn world-is-chunk-loaded?*   [w cx cz]         (world-call :world-is-chunk-loaded? w cx cz))
-(defn world-get-day-time*       [w]               (world-call :world-get-day-time w))
-(defn world-get-game-time*      [w]               (world-call :world-get-game-time w))
-(defn world-get-dimension-id*   [w]               (world-call :world-get-dimension-id w))
-(defn world-server-session-id*  [w]               (world-call :world-server-session-id w))
-(defn world-get-players*        [w]               (world-call :world-get-players w))
-(defn world-is-raining*         [w]               (world-call :world-is-raining w))
-(defn world-is-client-side*     [w]               (world-call :world-is-client-side w))
-(defn world-can-see-sky*        [w pos]           (world-call :world-can-see-sky w pos))
+;; World access API.
+(defn get-tile-entity    [w pos]       (world-call :world-get-tile-entity w pos))
+(defn get-block-state    [w pos]       (world-call :world-get-block-state w pos))
+(defn set-block!         [w pos s fl]  (world-call :world-set-block w pos s fl))
+(defn remove-block!      [w pos]       (world-call :world-remove-block w pos))
+(defn break-block!       [w pos drop?] (world-call :world-break-block w pos drop?))
+(defn place-block-by-id! [w id pos fl] (world-call :world-place-block-by-id w id pos fl))
+(defn chunk-loaded?      [w cx cz]     (world-call :world-is-chunk-loaded? w cx cz))
+(defn day-time           [w]           (world-call :world-get-day-time w))
+(defn game-time          [w]           (world-call :world-get-game-time w))
+(defn dimension-id       [w]           (world-call :world-get-dimension-id w))
+(defn server-session-id  [w]           (world-call :world-server-session-id w))
+(defn players            [w]           (world-call :world-get-players w))
+(defn raining?           [w]           (world-call :world-is-raining w))
+(defn client-side?       [w]           (world-call :world-is-client-side w))
+(defn can-see-sky?       [w pos]       (world-call :world-can-see-sky w pos))
 
 ;; BlockState wrappers — use separate [:platform :block-state-ops]
 (defn block-state-is-air               [bs]       (bs-call :block-state-is-air bs))
@@ -67,4 +67,4 @@
 (defn block-to-chunk-coord [block-coord] (bit-shift-right block-coord 4))
 (defn is-chunk-loaded-at-block? [world x z]
   (let [cx (block-to-chunk-coord x) cz (block-to-chunk-coord z)]
-    (world-call :world-is-chunk-loaded? world cx cz)))
+    (chunk-loaded? world cx cz)))

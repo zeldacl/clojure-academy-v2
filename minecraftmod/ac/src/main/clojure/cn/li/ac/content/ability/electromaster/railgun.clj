@@ -92,7 +92,7 @@
   and Fabric (description id) and never equals the bare registry name either
   way."
   [world-id ent]
-  (= coin-entity-registry-id (entity/entity-get-type-id* world-id (:uuid ent))))
+  (= coin-entity-registry-id (entity/get-type-id world-id (:uuid ent))))
 
 (defn- discard-coin-entity!
   "Kills a specific coin entity by UUID. Falls back to nearby cleanup when UUID is nil."
@@ -243,7 +243,7 @@
   (boolean
     (some (fn [entity-uuid]
             (= "minecraft:creeper"
-               (entity/entity-get-type-id* world-id entity-uuid)))
+               (entity/get-type-id world-id entity-uuid)))
           hit-uuids)))
 
 ;; ---------------------------------------------------------------------------

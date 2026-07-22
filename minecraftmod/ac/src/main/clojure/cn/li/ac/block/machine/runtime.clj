@@ -290,7 +290,7 @@
 
 (defn server-side?
   [level]
-  (and level (not (world/world-is-client-side* level))))
+  (and level (not (world/client-side? level))))
 
 (defn make-tick-fn
   "Wrap a pure tick step with server guard and commit-state!.
@@ -322,7 +322,7 @@
                                (if (fn? sync-client?) true (boolean sync-client?))
                                after-commit!)))))
 
-(defn make-open-gui-handler*
+(defn make-open-gui-handler-with-predicate
   "Build a block right-click handler that opens an AC GUI.
 
   `can-open?` receives (player world pos sneaking item-stack).
@@ -335,7 +335,7 @@
       (try
         (let [open-pos (if resolve-open-pos (resolve-open-pos player world pos) pos)]
           (when open-pos
-            (if (world/world-is-client-side* world)
+            (if (world/client-side? world)
               (gui-open/open-gui-by-type player gui-type world open-pos)
               (when (or (not server-before-open!) (server-before-open! player world open-pos))
                 (gui-open/open-gui-by-type player gui-type world open-pos)))))
@@ -346,4 +346,4 @@
 (defn make-open-gui-handler
   "Build a block right-click handler that opens an AC GUI by business type keyword."
   [gui-type]
-  (make-open-gui-handler* gui-type (fn [_ _ _ _ _] true)))
+  (make-open-gui-handler-with-predicate gui-type (fn [_ _ _ _ _] true)))

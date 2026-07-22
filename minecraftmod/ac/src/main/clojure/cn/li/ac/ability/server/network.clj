@@ -63,7 +63,7 @@
                    {:pos-x (long pos-x) :pos-y (long pos-y) :pos-z (long pos-z)}))
           st (when tile (or (platform-be/get-custom-state tile) {}))
           session-ok? (= (str (:user-uuid st "")) uuid)
-          server-world? (and world (not (world/world-is-client-side* world)))
+          server-world? (and world (not (world/client-side? world)))
           station
           (when all-coords?
             (cond (not server-world?) {:ok? false :reason :not-server}

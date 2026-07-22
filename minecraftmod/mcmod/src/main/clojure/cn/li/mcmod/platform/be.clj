@@ -47,7 +47,7 @@
 
 (defn get-block-entity [w block-pos]
   (try
-    (world/world-get-tile-entity* w block-pos)
+    (world/get-tile-entity w block-pos)
     (catch Exception e
       (call-log :warn "get-block-entity failed:" (ex-message e))
       (log/stacktrace "get-block-entity failed" e)

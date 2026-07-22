@@ -15,7 +15,7 @@
     (let [saved (atom nil)
           blockstate-calls (atom 0)
           be {:id "wireless-node-basic"}]
-      (with-redefs [world/world-is-client-side* (fn [_] false)
+      (with-redefs [world/client-side? (fn [_] false)
                     platform-be/get-block-id (fn [_] "wireless-node-basic")
                     platform-be/get-custom-state (fn [_] nil)
                     node-logic/tick-charge-in (fn [s] s)

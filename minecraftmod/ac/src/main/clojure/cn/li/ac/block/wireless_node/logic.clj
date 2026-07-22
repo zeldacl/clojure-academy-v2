@@ -261,7 +261,7 @@
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [player-name (player-name player)
           node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
-          be (platform-world/world-get-tile-entity* world pos)]
+          be (platform-world/get-tile-entity world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)
               state' (assoc state :node-type node-type :placer-name player-name)]

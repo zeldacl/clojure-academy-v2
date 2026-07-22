@@ -75,7 +75,7 @@
   (when-let [tile (:tile-entity container)]
     (when-let [pl (:player container)]
       (let [lvl (entity/player-get-level pl)]
-        (when (and lvl (not (world/world-is-client-side* lvl)))
+        (when (and lvl (not (world/client-side? lvl)))
           (try
             (machine-runtime/commit-transform! tile dev-logic/dev-default-state
               #(-> % (assoc :user-uuid "" :user-name "") dev-session/clear-session))

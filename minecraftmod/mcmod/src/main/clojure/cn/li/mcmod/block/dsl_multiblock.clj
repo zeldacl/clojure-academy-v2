@@ -128,7 +128,7 @@
                       master-pos (pos/create-block-pos (:x master-map)
                                                        (:y master-map)
                                                        (:z master-map))]
-                  (when (world/world-get-tile-entity* world master-pos)
+                  (when (world/get-tile-entity world master-pos)
                     master-pos)))
               positions)))))
 
@@ -162,7 +162,7 @@
       (let [positions (all-multi-block-positions master-pos block-spec)]
         (every?
           (fn [p]
-            (let [state (world/world-get-block-state* world p)]
+            (let [state (world/get-block-state world p)]
               (nil? state)))
           positions)))))
 
@@ -199,7 +199,7 @@
                               y (+ my (or (:relative-y rel-pos) (:y rel-pos) 0))
                               z (+ mz (or (:relative-z rel-pos) (:z rel-pos) 0))]
                           (pos/create-block-pos x y z)))
-              origin-state (world/world-get-block-state* world origin-pos)]
+              origin-state (world/get-block-state world origin-pos)]
 
           ;; Check origin first - must be controller block
           (if-not origin-state
@@ -208,7 +208,7 @@
                 false)
               ;; Check if origin is controller (when controller-parts mode)
               (if (and controller-id-str part-id-str)
-                (let [origin-be (world/world-get-tile-entity* world origin-pos)
+                (let [origin-be (world/get-tile-entity world origin-pos)
                       origin-block-id-str (some-> origin-be platform-be/get-block-id dsl-block-id-str)]
                   (if (not= origin-block-id-str controller-id-str)
                     (do
@@ -224,13 +224,13 @@
                                          (if is-origin?
                                            true  ; Already checked origin
                                            (let [pos (abs-pos rel-pos)
-                                                 block-state (world/world-get-block-state* world pos)]
+                                                 block-state (world/get-block-state world pos)]
                                              (if-not block-state
                                                (do
                                                  (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos)
                                                  false)
                                                ;; Verify it's a part block
-                                               (let [be (world/world-get-tile-entity* world pos)
+                                               (let [be (world/get-tile-entity world pos)
                                                      bid-str (some-> be platform-be/get-block-id dsl-block-id-str)]
                                                  (if (not= bid-str part-id-str)
                                                    (do
@@ -249,7 +249,7 @@
                                (fn [rel-pos]
                                  (try
                                    (let [pos (abs-pos rel-pos)
-                                         block-state (world/world-get-block-state* world pos)]
+                                         block-state (world/get-block-state world pos)]
                                      (when-not block-state
                                        (log/debug "Multi-block validation failed: missing block at" pos "rel-pos" rel-pos))
                                      (if block-state true false))

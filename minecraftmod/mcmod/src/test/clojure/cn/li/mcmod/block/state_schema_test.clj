@@ -75,19 +75,19 @@
                                                      :xf (fn [v _] (+ v 10))}}]
         calls (atom [])
         updater (schema/build-block-state-updater fields)]
-    (with-redefs [world/world-get-block-state* (fn [_ _] {:state true})
+    (with-redefs [world/get-block-state (fn [_ _] {:state true})
                   world/block-state-get-state-definition (fn [_] :def)
                   world/block-state-get-property (fn [_ _ prop] (when (#{"power" "mode"} prop) prop))
                   world/block-state-set-property (fn [bs prop v]
                                                    (swap! calls conj [:set prop v])
                                                    (assoc bs (keyword prop) v))
-                  world/world-set-block* (fn [_ _ new-bs flags] (swap! calls conj [:world-set new-bs flags]))]
+                  world/set-block! (fn [_ _ new-bs flags] (swap! calls conj [:world-set new-bs flags]))]
       (updater {:power 2 :mode 3} :level :pos)
       (is (= [[:set "power" 2] [:set "mode" 13]]
              (take 2 @calls)))
       (is (= :world-set (ffirst (drop 2 @calls)))))
     (testing "exceptions inside updater are swallowed"
-      (with-redefs [world/world-get-block-state* (fn [_ _] (throw (ex-info "boom" {})))]
+      (with-redefs [world/get-block-state (fn [_ _] (throw (ex-info "boom" {})))]
         (is (= nil (updater {} :level :pos)))))))
 
 (deftest network-handlers-contract-test
@@ -118,11 +118,11 @@
         updater (schema/build-block-state-updater fields)]
     (class-gen-guard/with-mocks-zero-class-gen
       "build-block-state-updater"
-      [#'world/world-get-block-state*           (fn [_ _] {:bs true})
+      [#'world/get-block-state           (fn [_ _] {:bs true})
        #'world/block-state-get-state-definition (fn [_] :def)
        #'world/block-state-get-property        (fn [_ _ prop] (when (#{"energy" "connected"} prop) prop))
        #'world/block-state-set-property        (fn [bs prop v] (assoc bs (keyword prop) v))
-       #'world/world-set-block*                (fn [_ _ _ _] nil)]
+       #'world/set-block!                (fn [_ _ _ _] nil)]
       :body ((dotimes [i 10000]
                (updater {:energy (double i) :enabled (even? i)} :level :pos))))))
 

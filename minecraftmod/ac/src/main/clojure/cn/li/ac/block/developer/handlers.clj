@@ -45,7 +45,7 @@
                                         cy (- py ry)
                                         cz (- pz rz)
                                         cpos (pos/create-block-pos cx cy cz)
-                                        ctile (world/world-get-tile-entity* world cpos)]
+                                        ctile (world/get-tile-entity world cpos)]
                                     (when (and ctile
                                                (= (:controller-block-id ctrl-mb)
                                                   (platform-be/get-block-id ctile)))

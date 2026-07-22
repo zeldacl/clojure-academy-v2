@@ -85,7 +85,7 @@
                     check-pos (pos/create-block-pos (+ (pos/pos-x p) dx)
                                                     (+ (pos/pos-y p) dy)
                                                     (+ (pos/pos-z p) dz))
-                    st (world/world-get-block-state* level check-pos)]
+                    st (world/get-block-state level check-pos)]
                 (if (world/block-state-is-air st) (recur (inc j)) j))))
         false
         (recur (inc i))))))
@@ -93,7 +93,7 @@
 (defn- find-base-below [level p]
   (loop [y (dec (pos/pos-y p)) pillars 0]
     (let [check-pos (pos/create-block-pos (pos/pos-x p) y (pos/pos-z p))
-          be (world/world-get-tile-entity* level check-pos)
+          be (world/get-tile-entity level check-pos)
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
@@ -107,7 +107,7 @@
 (defn- find-main-above-from-base [level base-pos]
   (loop [y (+ (pos/pos-y base-pos) 2) pillars 0]
     (let [check-pos (pos/create-block-pos (pos/pos-x base-pos) y (pos/pos-z base-pos))
-          be (world/world-get-tile-entity* level check-pos)
+          be (world/get-tile-entity level check-pos)
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
@@ -180,7 +180,7 @@
                          mz (:main-pos-z state2)]
                      (when (and (number? mx) (number? my) (number? mz))
                        (pos/create-block-pos mx my mz))))
-        main-be (when main-pos (world/world-get-tile-entity* level main-pos))
+        main-be (when main-pos (world/get-tile-entity level main-pos))
         main-state (when main-be (platform-be/get-custom-state main-be))
         working? (and (= (:completeness state2) "complete")
                       (true? (:no-obstacle main-state))
@@ -227,7 +227,7 @@
 
 (defn- main-controller-pos-at
   [level p bid]
-  (let [be (world/world-get-tile-entity* level p)
+  (let [be (world/get-tile-entity level p)
         st (when be (or (platform-be/get-custom-state be) {}))]
     (cond
       ;; Main controller block itself
@@ -241,7 +241,7 @@
             cz (:controller-pos-z st)]
         (when (and (number? cx) (number? cy) (number? cz))
           (let [cp (pos/create-block-pos cx cy cz)
-                cbe (world/world-get-tile-entity* level cp)
+                cbe (world/get-tile-entity level cp)
                 cbid (when cbe (platform-be/get-block-id cbe))]
             (when (and (contains? wind-main-controller-ids (id-path cbid)) (sub-id-zero? cbe))
               cp))))
@@ -251,7 +251,7 @@
 
 (defn- base-controller-pos-at
   [level p bid]
-  (let [be (world/world-get-tile-entity* level p)
+  (let [be (world/get-tile-entity level p)
         st (when be (or (platform-be/get-custom-state be) {}))]
     (cond
       ;; Base controller block itself
@@ -265,7 +265,7 @@
             cz (:controller-pos-z st)]
         (when (and (number? cx) (number? cy) (number? cz))
           (let [cp (pos/create-block-pos cx cy cz)
-                cbe (world/world-get-tile-entity* level cp)
+                cbe (world/get-tile-entity level cp)
                 cbid (when cbe (platform-be/get-block-id cbe))]
             (when (and (contains? wind-base-controller-ids (id-path cbid)) (sub-id-zero? cbe))
               cp))))
@@ -293,7 +293,7 @@
   (loop [y (dec (pos/pos-y p))
          pillars 0]
     (let [check-pos (pos/create-block-pos (pos/pos-x p) y (pos/pos-z p))
-          be (world/world-get-tile-entity* level check-pos)
+          be (world/get-tile-entity level check-pos)
           bid (when be (platform-be/get-block-id be))]
       (cond
         (wind-pillar-id? bid)
@@ -318,10 +318,10 @@
 
 (defn on-wind-pillar-placed!
   [_player world pos _block-id]
-  (when (and world pos (not (world/world-is-client-side* world)))
+  (when (and world pos (not (world/client-side? world)))
     (when-not (valid-pillar-support? world pos)
       (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
-            below-be (world/world-get-tile-entity* world below-pos)
+            below-be (world/get-tile-entity world below-pos)
             below-id (when below-be (platform-be/get-block-id below-be))]
         (log/info "wind-gen pillar place rejected:"
                   {:pos [(pos/pos-x pos) (pos/pos-y pos) (pos/pos-z pos)]
@@ -336,9 +336,9 @@
   "Validate that wind-gen-main is placed on top of a wind-gen-pillar (not beside it).
    Returns {:cancel-place? true} if no pillar is found directly below the controller."
   [_player world pos _block-id]
-  (when (and world pos (not (world/world-is-client-side* world)))
+  (when (and world pos (not (world/client-side? world)))
     (let [below-pos (pos/create-block-pos (pos/pos-x pos) (dec (pos/pos-y pos)) (pos/pos-z pos))
-          below-be (world/world-get-tile-entity* world below-pos)
+          below-be (world/get-tile-entity world below-pos)
           below-id (when below-be (platform-be/get-block-id below-be))]
       (when-not (wind-pillar-id? below-id)
         (log/info "wind-gen-main place rejected: no pillar directly below"
@@ -351,13 +351,13 @@
                      :text "wind_gen_main must be placed on top of wind_gen_pillar."}]}))))
 
 (def open-wind-main-gui!
-  (machine-runtime/make-open-gui-handler*
+  (machine-runtime/make-open-gui-handler-with-predicate
     :wind-gen-main
     (fn [_player _world _pos _sneaking item-stack]
       (not (pillar-item-stack? item-stack)))))
 
 (def open-wind-base-gui!
-  (machine-runtime/make-open-gui-handler*
+  (machine-runtime/make-open-gui-handler-with-predicate
     :wind-gen-base
     (fn [_player _world _pos _sneaking item-stack]
       (not (pillar-item-stack? item-stack)))))

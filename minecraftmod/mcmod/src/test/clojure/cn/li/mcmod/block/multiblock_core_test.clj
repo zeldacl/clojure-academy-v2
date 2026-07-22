@@ -61,7 +61,7 @@
 
 (deftest resolve-controller-pos-part-from-be-state-test
   (register-controller-and-part!)
-  (with-redefs [world/world-get-tile-entity* (constantly :fake-be)
+  (with-redefs [world/get-tile-entity (constantly :fake-be)
                 pbe/get-custom-state (constantly {:controller-pos-x 5
                                                   :controller-pos-y 6
                                                   :controller-pos-z 7})]
@@ -70,7 +70,7 @@
 
 (deftest route-to-controller-context-rewrites-ctx-test
   (register-controller-and-part!)
-  (with-redefs [world/world-get-tile-entity* (constantly :fake-be)
+  (with-redefs [world/get-tile-entity (constantly :fake-be)
                 pbe/get-custom-state (constantly {:controller-pos-x 10
                                                   :controller-pos-y 0
                                                   :controller-pos-z 0})]
