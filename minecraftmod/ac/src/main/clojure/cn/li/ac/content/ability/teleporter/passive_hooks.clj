@@ -10,9 +10,26 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.mcmod.platform.player-feedback :as player-feedback]))
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.util.log :as log]))
 
 (def ^:private teleporter-critical-hit-message-key "ability.teleporter.critical_hit")
+
+(defn- send-chat-message!
+  [player-uuid message args translate?]
+  (if-let [fw-atom (fw/fw-atom)]
+    (boolean
+     (platform/call-adapter fw-atom :player-feedback :send-player-feedback!
+                            player-uuid
+                            {:mode :chat
+                             :message message
+                             :args (vec (or args []))
+                             :translate? (boolean translate?)}))
+    (do
+      (log/debug "Player feedback unavailable; dropping chat message" {:player-uuid player-uuid
+                                                                       :message message})
+      false)))
 
 (defn- crit-rate-label
   [crit-rate]
@@ -89,7 +106,7 @@
   (skill-effects/add-skill-exp! player-id :space-fluct
                                 (skill-config/tunable-double :space-fluct :progression.exp-critical))
   (when message-key
-    (player-feedback/send-chat-message! player-id message-key message-args true))
+    (send-chat-message! player-id message-key message-args true))
   (doseq [event-id events]
     (ach-dispatcher/trigger-custom-event! player-id event-id)))
 

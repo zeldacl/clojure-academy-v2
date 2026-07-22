@@ -1,8 +1,9 @@
 (ns cn.li.mc1201.bootstrap.init-common
   "Shared platform init orchestration for Java entrypoints."
   (:require [cn.li.mcmod.aot :as aot]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
-            [cn.li.mcmod.platform.resource :as platform-resource]
             [cn.li.mcmod.platform.position :as platform-position]
             [cn.li.mcmod.platform.nbt :as platform-nbt]
             [cn.li.mcmod.platform.item :as platform-item]
@@ -15,7 +16,8 @@
 
 (defn assert-platform-ready!
   [platform-key]
-  (let [checks [{:k :resource :ok (platform-resource/factory-initialized?)}
+  (let [fw-atom (fw/fw-atom)
+        checks [{:k :resource :ok (boolean (get (platform/get-adapter fw-atom :resource) :factory))}
                 {:k :position :ok (platform-position/factory-initialized?)}
                 {:k :nbt :ok (platform-nbt/factory-initialized?)}
                 {:k :item :ok (platform-item/item-ops-available?)}]

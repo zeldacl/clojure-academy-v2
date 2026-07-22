@@ -1,13 +1,11 @@
 (ns cn.li.mcmod.client.resources
   "Client-side resource loading utilities for models and textures"
-  (:require [cn.li.mcmod.platform.resource :as res]
+  (:require [cn.li.mcmod.config :as config]
             [cn.li.mcmod.client.obj :as obj]))
 
 ;; ============================================================================
 ;; ResourceLocation Helpers
 ;; ============================================================================
-;; Uses res/invoke-resource-location so the content loader can inject *resource-location-fn*
-;; (e.g. bound to modid/resource-location) without mcmod depending on config.modid.
 
 (defn resource-location
   "Create a platform resource identifier in default (mod) namespace
@@ -17,7 +15,7 @@
   
   Returns: resource identifier"
   [loc]
-  (res/invoke-resource-location nil loc))
+  (config/resource-location loc))
 
 ;; ============================================================================
 ;; Model Loading
@@ -48,4 +46,3 @@
   Returns: ResourceLocation"
   [loc]
   (resource-location (str "textures/" loc ".png")))
-

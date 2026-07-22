@@ -5,10 +5,10 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
+            [cn.li.ac.content.ability.teleporter.passive-hooks :as passive-hooks]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
@@ -135,7 +135,7 @@
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        player-feedback/send-chat-message! (fn [pid message args translate?]
+                        #'passive-hooks/send-chat-message! (fn [pid message args translate?]
                                                                (swap! feedback-calls conj [pid message args translate?])
                                                                true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]
@@ -215,7 +215,7 @@
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        player-feedback/send-chat-message! (fn [& _] true)
+                        #'passive-hooks/send-chat-message! (fn [& _] true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]
                                                                (swap! events conj [pid event-id])
                                                                nil)]
@@ -249,7 +249,7 @@
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [& _] (is false "no exp when passives unlearned"))
-                        player-feedback/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
+                        #'passive-hooks/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
                         ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no events when passives unlearned"))]
             (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
               (is (= false (:critical? result)))
@@ -279,7 +279,7 @@
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        player-feedback/send-chat-message! (fn [pid message args translate?]
+                        #'passive-hooks/send-chat-message! (fn [pid message args translate?]
                                                              (swap! feedback-calls conj [pid message args translate?])
                                                              true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]

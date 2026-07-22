@@ -7,9 +7,21 @@
             [cn.li.ac.terminal.player :as terminal-player]
             [cn.li.ac.achievement.dispatcher :as achievement-dispatcher]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.player-feedback :as player-feedback]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
+
+(defn- send-chat-message!
+  [player-uuid message args translate?]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :player-feedback :send-player-feedback!
+                            player-uuid
+                            {:mode :chat
+                             :message message
+                             :args (vec (or args []))
+                             :translate? (boolean translate?)}))))
 
 (defn handle-right-click
   "Server-side handler for terminal_installer right-click.
@@ -23,7 +35,7 @@
     (if installed?
       ;; Already installed: always consume (matching original SUCCESS)
       (do
-        (player-feedback/send-chat-message! uuid-str (str "terminal." modid/MOD-ID ".alrdy_installed") [] true)
+        (send-chat-message! uuid-str (str "terminal." modid/MOD-ID ".alrdy_installed") [] true)
         {:consume? true})
       ;; Not installed: install, trigger achievement, push effect to client
       (do

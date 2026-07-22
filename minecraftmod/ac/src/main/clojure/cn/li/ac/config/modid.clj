@@ -2,7 +2,6 @@
   "AC-layer mod-id configuration. Delegates to cn.li.mcmod.ModId (generated
    from gradle.properties). Change mod_id in gradle.properties and rebuild."
   (:require [cn.li.mcmod.config :as mcmod-config]
-            [cn.li.mcmod.platform.resource :as platform-resource]
             [cn.li.mcmod.runtime.install :as install]))
 
 (def ^:const MOD-ID
@@ -18,12 +17,6 @@
   shared configuration state."
   []
   (install/install-root! #'mcmod-config/mod-id MOD-ID)
-  (platform-resource/install-resource-location-fn!
-   (fn [namespace path]
-     (if namespace
-       (mcmod-config/resource-location namespace path)
-       (mcmod-config/resource-location path)))
-   "ac-modid")
   nil)
 
 (def resource-location mcmod-config/resource-location)

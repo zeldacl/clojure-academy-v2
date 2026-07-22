@@ -1,11 +1,11 @@
 (ns cn.li.mc1201.bootstrap.installer-core
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.player-feedback :as player-feedback]
             [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.platform.resource :as resource]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
             [cn.li.mcmod.platform.capability :as platform-capability]
@@ -60,7 +60,7 @@
 (defn- install-player-feedback! []
   (install/framework-once! ::player-feedback-installed
     (fn []
-      (player-feedback/install-player-feedback!
+      (platform/install-adapter! (fw/fw-atom) :player-feedback
         {:send-player-feedback! (fn [player-uuid {:keys [message args translate?]}]
                                   (try
                                     (when-let [^ServerPlayer player (network-transport-spi/find-player-by-uuid player-uuid)]
@@ -74,8 +74,8 @@
                                         true))
                                     (catch Throwable t
                                       (log/warn "Failed to send player feedback" player-uuid (ex-message t))
-                                      false)))}
-        "mc1201 player feedback"))))
+                                      false)))})
+      (log/info "mc1201 player feedback installed"))))
 
 (defn install-block-state-protocol!
   [_adapter]
@@ -277,12 +277,12 @@
 (defn- install-resource-location-factory! []
   (install/framework-once! ::resource-installed
     (fn []
-      (resource/install-resource-factory!
-        (fn [namespace path]
-          (if namespace
-            (ResourceLocation. (str namespace) (str path))
-            (ResourceLocation. (str path))))
-        "mc1201"))))
+      (platform/install-adapter! (fw/fw-atom) :resource
+                                 {:factory (fn [namespace path]
+                                             (if namespace
+                                               (ResourceLocation. (str namespace) (str path))
+                                               (ResourceLocation. (str path))))})
+      (log/info "mc1201 resource factory installed"))))
 
 (defn install-resource-factory!
   []
