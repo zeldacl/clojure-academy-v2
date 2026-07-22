@@ -83,15 +83,16 @@
       (try
         (let [screen-data (client-session/with-current-client-owner
                             #(factory-fn menu player-inventory title))]
-          (cond
-            (reactive-container-screen? screen-data)
+          (if (reactive-container-screen? screen-data)
             (reactive-host/create-tech-ui-container-screen
               (assoc screen-data :minecraft-container menu :screen-title (str title) :player-inventory player-inventory))
-
-            :else
-            (fallback-container-screen menu player-inventory title)))
+            (throw (ex-info "Screen factory must return reactive container screen data"
+                            {:gui-id gui-id
+                             :factory-fn-kw factory-fn-kw
+                             :returned-type (some-> screen-data type str)
+                             :returned-type-key (:type screen-data)}))))
         (catch Throwable e
-          (log/error "[SCREEN-FACTORY] Error creating CGui screen for GUI ID" gui-id ":" (.getMessage e))
+          (log/error "[SCREEN-FACTORY] Error creating reactive screen for GUI ID" gui-id ":" (.getMessage e))
           (log/stacktrace "[SCREEN-FACTORY] Stacktrace for screen creation" e)
           (fallback-container-screen menu player-inventory title)))
       (do

@@ -1,7 +1,7 @@
 (ns cn.li.ac.wireless.gui.screen-factory
-  "Platform-agnostic screen factory for Wireless GUI system
+  "Platform-agnostic screen factory for AC block GUIs.
   
-  This namespace contains the core game logic for creating GUI screens,
+  This namespace contains the content-side logic for creating reactive screen data,
   independent of platform-specific implementation details (Forge/Fabric).
   
   Platform-specific screen_impl.clj files should delegate to this factory
@@ -35,7 +35,7 @@
   - player-inventory: Player inventory (not currently used but required by platform APIs)
   - title: Text component (not currently used but required by platform APIs)
   
-  Returns: CGuiScreenContainer instance or nil on error"
+  Returns: reactive screen data map or nil on error"
   [gui-type container-or-handler player-inventory _title]
   (log/info "[SCREEN-FACTORY-CORE] Creating" (name gui-type) "screen (platform-agnostic factory)")
   (log/info "[SCREEN-FACTORY-CORE] gui-type=" gui-type "container=" (type container-or-handler))
@@ -59,11 +59,11 @@
         player (entity/inventory-get-player player-inventory)
         _ (log/info "[SCREEN-FACTORY-CORE] Got player=" (str player))
         _ (log/info "[SCREEN-FACTORY-CORE] Calling screen-fn...")
-        cgui-screen (screen-fn clj-container container-or-handler player)]
+        screen-data (screen-fn clj-container container-or-handler player)]
       
-      (log/info "[SCREEN-FACTORY-CORE] Screen function returned:" (type cgui-screen))
+      (log/info "[SCREEN-FACTORY-CORE] Screen function returned:" (type screen-data))
       (log/info "[SCREEN-FACTORY-CORE] " (name gui-type) " screen created successfully")
-      cgui-screen)
+      screen-data)
     
     (catch Throwable e
       (log/error "[SCREEN-FACTORY-CORE] Failed to create " (name gui-type) " screen:" (ex-message e))
@@ -77,9 +77,9 @@
 
 ;; This factory provides a clean separation between:
 ;;
-;; 1. **Game Logic* (this namespace):
+;; 1. **Content Logic* (this namespace):
 ;;    - Extracting Clojure containers from platform wrappers
-;;    - Delegating to CGui-based GUI creation
+;;    - Delegating to registered reactive GUI creation
 ;;    - Error handling and logging
 ;;
 ;; 2. **Platform-Specific Code* (screen_impl.clj in each platform):

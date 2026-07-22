@@ -37,9 +37,7 @@
                     "gui-type=" gui-type "declared?" (boolean declared-screen-fn-kw))))))
   (hooks/call-all-network-handlers!)
   (tabbed-gui/register-set-tab-handler!)
-  ;; Register reactive block GUI screen-fns alongside old CGUI ones.
-  ;; Old registrations remain as fallback; reactive ones take priority
-  ;; when the platform layer checks :reactive? flag.
+  ;; Install the client bridge used by registered reactive GUI factories.
   (reactive-register/install-bridge!)
   nil)
 
