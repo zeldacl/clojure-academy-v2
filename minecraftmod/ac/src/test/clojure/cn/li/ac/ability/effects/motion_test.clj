@@ -1,14 +1,14 @@
 (ns cn.li.ac.ability.effects.motion-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.motion :as motion]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]))
 
 (deftest set-player-velocity-records-when-bound-test
   (let [calls (atom [])
         evt {:player-id "p1"}]
-    (with-redefs [player-motion/available? (constantly true)
-                  player-motion/set-velocity!* (fn [pid x y z]
+    (with-redefs [motion-effects/player-motion-available? (constantly true)
+                  motion-effects/set-player-velocity! (fn [pid x y z]
                                                  (swap! calls conj [:vel pid x y z])
                                                  true)]
       (is (= evt (motion/execute-set-player-velocity! evt {:x 1.0 :y 2.0 :z -0.5}))))
@@ -16,7 +16,7 @@
 
 (deftest set-player-velocity-noop-when-unbound-test
   (let [evt {:player-id "p2"}]
-    (with-redefs [player-motion/available? (constantly false)]
+    (with-redefs [motion-effects/player-motion-available? (constantly false)]
       (is (= evt (motion/execute-set-player-velocity! evt {:x 1.0 :y 0.0 :z 0.0}))))))
 
 (deftest add-entity-velocity-resolves-target-test

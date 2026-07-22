@@ -29,7 +29,12 @@
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
    (adapter-registry/step :item-handler runtime-item-handler/init!)
-   (adapter-registry/step :player-motion runtime-player-motion/install-player-motion!)
+   (adapter-registry/step :player-motion
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :player-motion
+                               (runtime-player-motion/fabric-player-motion))))
    (adapter-registry/step :entity-damage runtime-entity-damage/install-entity-damage!)
    (adapter-registry/step :entity-motion runtime-entity-motion/install-entity-motion!)
    (adapter-registry/step :entity-query runtime-entity-query/install-entity-query!)

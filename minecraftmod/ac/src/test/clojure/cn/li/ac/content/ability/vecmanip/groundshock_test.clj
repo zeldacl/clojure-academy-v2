@@ -9,7 +9,7 @@
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
@@ -74,8 +74,8 @@
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   fx/send! send!
-                  player-motion/available? (constantly true)
-                  player-motion/is-on-ground?* (constantly true)]
+                  motion-effects/player-motion-available? (constantly true)
+                  motion-effects/player-on-ground? (constantly true)]
       (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
     (is (= [["ctx-1" :groundshock/fx-end :end {:performed? false}]] @calls*))))
 
@@ -88,8 +88,8 @@
                                                0))
                   skill-effects/skill-exp (fn [_ _] 0.5)
                   fx/send! send!
-                  player-motion/available? (constantly true)
-                  player-motion/is-on-ground?* (constantly true)]
+                  motion-effects/player-motion-available? (constantly true)
+                  motion-effects/player-on-ground? (constantly true)]
       (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-2" :cost-ok? false))
     (is (= [["ctx-2" :groundshock/fx-end :end {:performed? false}]] @calls*))))
 
@@ -107,7 +107,7 @@
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 1.0 :z 0.0})
                   fx/send! send!
-                  player-motion/available? (constantly true)
-                  player-motion/is-on-ground?* (constantly true)]
+                  motion-effects/player-motion-available? (constantly true)
+                  motion-effects/player-on-ground? (constantly true)]
       (cb/apply-invoke gs/groundshock-on-key-up :player-id "p1" :ctx-id "ctx-3" :cost-ok? true))
     (is (= [["ctx-3" :groundshock/fx-end :end {:performed? false}]] @calls*))))

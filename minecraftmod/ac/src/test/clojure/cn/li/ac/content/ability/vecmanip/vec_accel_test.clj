@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             ;; side-effectful require: ensures defskill runs and private fns are compiled
@@ -160,8 +160,8 @@
                           ([_owner id] test-ctx))
                       ctx-skill/update-skill-state-root!
                       (fn [_id f & args] (swap! update-calls conj (apply list f args)))
-                      player-motion/available? (constantly true)
-                      player-motion/set-velocity!*
+                      motion-effects/player-motion-available? (constantly true)
+                      motion-effects/set-player-velocity!
                       (fn [pid x y z] (swap! vel-calls conj {:player-id pid :x x :y y :z z}))
                       teleportation/available? (constantly true)
                       teleportation/reset-fall-damage!*
@@ -191,8 +191,8 @@
         (with-redefs [ctx/get-context            (fn ([id] test-ctx) ([_ id] test-ctx))
                       ctx-skill/assoc-skill-state!     (fn [& _] nil)
                       ctx-skill/update-skill-state-root! (fn [& _] nil)
-                      player-motion/available? (constantly true)
-                      player-motion/set-velocity!*
+                      motion-effects/player-motion-available? (constantly true)
+                      motion-effects/set-player-velocity!
                       (fn [& _] (swap! vel-calls conj :called))
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]

@@ -27,7 +27,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.player-motion :as player-motion]
+                        [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -243,13 +243,13 @@
                             new-vz (accel-toward cur-vz tvz)]
 
                         ;; Apply velocity to player
-                        (when (player-motion/available?)
-                          (player-motion/set-velocity!*
+                        (when (motion-effects/player-motion-available?)
+                          (motion-effects/set-player-velocity!
                                                        player-id new-vx new-vy new-vz))
 
                         ;; Reset fall distance (done via motion)
-                        (when (player-motion/available?)
-                          (player-motion/set-on-ground!* player-id false))
+                        (when (motion-effects/player-motion-available?)
+                          (motion-effects/set-player-on-ground! player-id false))
 
                         ;; Save velocity in state
                         (update-skill-state-root! ctx-id #(assoc % :vx new-vx :vy new-vy :vz new-vz))

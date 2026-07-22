@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
@@ -86,8 +86,8 @@
           exp          (double (or exp 0.0))]
       (if (and can-perform? init-vel)
         (let [{:keys [x y z]} init-vel]
-          (when (player-motion/available?)
-            (player-motion/set-velocity!* player-id x y z))
+          (when (motion-effects/player-motion-available?)
+            (motion-effects/set-player-velocity! player-id x y z))
           (when (teleportation/available?)
             (teleportation/reset-fall-damage!* player-id))
           (skill-effects/set-main-cooldown! player-id :vec-accel

@@ -16,7 +16,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-                        [cn.li.mcmod.platform.player-motion :as player-motion]
+                        [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -155,8 +155,8 @@
         segment-distance (geom/vlen segment)
         segment-dir (geom/vnorm segment)]
         (when (zero? trigger-ticks)
-          (when (player-motion/available?)
-            (player-motion/dismount-riding!* player-id)))
+          (when (motion-effects/player-motion-available?)
+            (motion-effects/dismount-riding! player-id)))
         (when (teleportation/available?)
           (teleportation/teleport-player!* player-id
                                          world-id
@@ -164,10 +164,10 @@
                                          (:y next-pos)
                                          (:z next-pos))
           (teleportation/reset-fall-damage!* player-id))
-        (when (and (player-motion/available?)
+        (when (and (motion-effects/player-motion-available?)
                    (:velocity st))
           (let [{:keys [x y z]} (:velocity st)]
-            (player-motion/set-velocity!* player-id x y z)))
+            (motion-effects/set-player-velocity! player-id x y z)))
         (let [hit (when (and (raycast/available?)
                              (> segment-distance min-segment-distance))
                     (raycast/raycast-entities*

@@ -23,7 +23,7 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.entity-motion :as entity-motion]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -331,7 +331,7 @@
 
         ;; Check if charge is valid (5+ ticks) and player is on ground
           (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
-                 (player-motion/is-on-ground?* player-id))
+                 (motion-effects/player-on-ground? player-id))
           (if-not cost-ok?
             (do
               (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})

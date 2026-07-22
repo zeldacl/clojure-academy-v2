@@ -19,7 +19,7 @@
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -264,9 +264,9 @@
                   teleportation/available? (constantly true)
                   teleportation/teleport-player!* (fn [& _] true)
                   teleportation/reset-fall-damage!* (fn [& _] true)
-                  player-motion/available? (constantly true)
-                  player-motion/dismount-riding!* (fn [& _] true)
-                  player-motion/set-velocity!* (fn [& _] true)
+                  motion-effects/player-motion-available? (constantly true)
+                  motion-effects/dismount-riding! (fn [& _] true)
+                  motion-effects/set-player-velocity! (fn [& _] true)
                   raycast/available? (constantly true)
                   raycast/raycast-entities* (fn [& _] {:uuid victim})
                   entity-damage/available? (constantly true)

@@ -17,7 +17,6 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.platform.entity-motion :as pem]
             [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.entity :as pentity]))
@@ -54,9 +53,11 @@
                                :named-position-store
                                (position-store-core/create-named-position-store server-context/get-server))))
    (adapter-registry/step :player-motion
-                          #(install-bound-adapter! pm/install-player-motion!
-                                                   player-motion-core/create-player-motion
-                                                   "Forge player motion"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :player-motion
+                               (player-motion-core/create-player-motion server-context/get-server))))
    (adapter-registry/step :entity-motion
                           #(install-bound-adapter! pem/install-entity-motion!
                                                    entity-motion-core/create-entity-motion

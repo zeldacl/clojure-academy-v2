@@ -21,7 +21,7 @@
             [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.player-motion :as player-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -182,8 +182,8 @@
   (let [state-pos (player-pos player-id)]
     (if-let [{:keys [target-x target-y target-z] :as target-state}
              (resolve-target player-id)]
-      (let [velocity-now (when (player-motion/available?)
-                           (player-motion/get-velocity* player-id))]
+      (let [velocity-now (when (motion-effects/player-motion-available?)
+                           (motion-effects/player-velocity player-id))]
         (ctx-skill/replace-skill-state! ctx-id
                (merge target-state
                  {:has-target true
@@ -237,8 +237,8 @@
                       desired-x (/ dx scale)
                       desired-y (/ dy scale)
                       desired-z (/ dz scale)
-                      player-vel (when (player-motion/available?)
-                                   (player-motion/get-velocity* player-id))
+                      player-vel (when (motion-effects/player-motion-available?)
+                                   (motion-effects/player-velocity player-id))
                       cur-vx    (double (or (:x player-vel) 0.0))
                       cur-vy    (double (or (:y player-vel) 0.0))
                       cur-vz    (double (or (:z player-vel) 0.0))
@@ -253,8 +253,8 @@
                       next-x    (try-adjust base-x desired-x)
                       next-y    (try-adjust base-y desired-y)
                       next-z    (try-adjust base-z desired-z)]
-                  (when (player-motion/available?)
-                    (player-motion/set-velocity!*
+                  (when (motion-effects/player-motion-available?)
+                    (motion-effects/set-player-velocity!
                                                  player-id next-x next-y next-z))
                   (ctx-skill/replace-skill-state! ctx-id
                                          (assoc updated-state
