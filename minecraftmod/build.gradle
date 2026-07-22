@@ -105,6 +105,8 @@ tasks.register("verifyNoThinForwarders") {
             include "platform-src/**/spi_bootstrap.clj"
             include "platform-src/**/META-INF/services/cn.li.mcmod.platform.spi.PlatformBootstrap"
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/gui_open.clj"
+            include "mcmod/src/main/clojure/cn/li/mcmod/platform/media_library.clj"
+            include "mcmod/src/main/clojure/cn/li/mcmod/platform/media_playback.clj"
             exclude "**/build/**"
             exclude "**/.gradle/**"
         }.files

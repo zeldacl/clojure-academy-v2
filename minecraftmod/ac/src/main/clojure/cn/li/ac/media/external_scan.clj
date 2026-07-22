@@ -5,7 +5,8 @@
   custom name/desc are out of scope for this pass — edited names/descriptions
   live in memory only for the current session."
   (:require [cn.li.ac.media.catalog :as catalog]
-            [cn.li.mcmod.platform.media-library :as media-library]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log]))
 
 (defn rescan!
@@ -15,7 +16,9 @@
   []
   (try
     (catalog/reset-external-media!)
-    (doseq [{:keys [id source length-secs]} (media-library/scan-external-tracks!)]
+    (doseq [{:keys [id source length-secs]} (or (when-let [fw-atom (fw/fw-atom)]
+                                                  (platform/call-adapter fw-atom :media-library :scan-external-tracks!))
+                                                [])]
       (catalog/register-external-media!
         {:id (keyword id)
          :name id

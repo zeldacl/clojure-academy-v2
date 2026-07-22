@@ -2,7 +2,7 @@
   "Complete reactive replacement for media.clj — real track list + playback,
   matching upstream MediaGui/MediaBackend as closely as the simplified
   playback engine and list-templating framework allow:
-  - play/stop only, no true pause/seek (cn.li.mcmod.platform.media-playback)
+  - play/stop only, no true pause/seek (framework :media-playback adapter)
   - external tracks' name/desc are NOT click-to-edit in this pass — the
     list-templating mechanism (cn.li.mcmod.ui.core/list-set!) rebuilds every
     row from one shared static XML template, so a row can't carry its own
@@ -10,9 +10,10 @@
     hand-built (non-templated) rows do. Follow-up if this matters in practice."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.media.catalog :as catalog]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
-            [cn.li.mcmod.platform.media-playback :as playback]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.node :as node]
@@ -66,6 +67,10 @@
 ;; Playback
 ;; ============================================================================
 
+(defn- media-playback-call [fn-key & args]
+  (when-let [fw-atom (fw/fw-atom)]
+    (apply platform/call-adapter fw-atom :media-playback fn-key args)))
+
 (defn- write-progress-fill! [^INode fill-node progress]
   (let [w (* progress-full-w (max 0.0 (min 1.0 (double progress))))]
     (when-not (== w (.getW fill-node))
@@ -84,14 +89,14 @@
     (ui/set-prop! r :pop :src (if playing? t-pause t-play))))
 
 (defn- stop! [^UiRt r state]
-  (playback/stop!*)
+  (media-playback-call :stop!)
   (swap! state assoc :current nil :play-start-ms 0 :elapsed-ms 0)
   (update-now-playing-display! r state))
 
 (defn- play! [^UiRt r state track]
   (if-let [source (:source track)]
     (do
-      (playback/play!* source (double (:volume @state 1.0)))
+      (media-playback-call :play! source (double (:volume @state 1.0)))
       (swap! state assoc :current track :play-start-ms (System/currentTimeMillis) :elapsed-ms 0)
       (update-now-playing-display! r state))
     ;; Internal track with no bundled audio in this build — nothing to play.
@@ -170,7 +175,7 @@
           (.setX vb new-x)
           (.setFlag vb node/FLAG-LAYOUT-DIRTY)
           (swap! state assoc :volume progress)
-          (playback/set-volume!* progress))))))
+          (media-playback-call :set-volume! progress))))))
 
 ;; ============================================================================
 ;; Entry points

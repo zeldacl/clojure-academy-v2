@@ -1,10 +1,9 @@
 (ns cn.li.mc1201.client.audio.media-playback
   "Bridges the shared ExternalOggPlayer (raw OpenAL playback of an external
-  .ogg file path) into mcmod.platform.media-playback's function-map contract,
-  and the shared OggMetadata scanner into mcmod.platform.media-library's.
+  .ogg file path) and OggMetadata scanner into framework platform adapters.
   Shared by Forge and Fabric — both loaders install this identically."
-  (:require [cn.li.mcmod.platform.media-library :as media-library-bridge]
-            [cn.li.mcmod.platform.media-playback :as media-bridge]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.client.audio ExternalOggPlayer OggMetadata]
            [net.minecraft.client Minecraft]
@@ -59,12 +58,16 @@
 
 (defn install-media-playback-bridge!
   []
-  (media-bridge/install-media-playback!
-    {:play! play!
-     :stop! stop!
-     :set-volume! set-volume!
-     :playing? playing?}
-    "mc1201-media-playback")
-  (media-library-bridge/install-media-library!
-    {:scan-external-tracks! scan-external-tracks!}
-    "mc1201-media-library"))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter!
+      fw-atom
+      :media-playback
+      {:play! play!
+       :stop! stop!
+       :set-volume! set-volume!
+       :playing? playing?})
+    (platform/install-adapter!
+      fw-atom
+      :media-library
+      {:scan-external-tracks! scan-external-tracks!}))
+  nil)
