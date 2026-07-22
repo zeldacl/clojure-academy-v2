@@ -14,12 +14,6 @@
 (def ^:private gui-type :node)
 (defn- msg [action] (msg-registry/msg gui-type action))
 
-(defn- get-owner
-  "Ported verbatim from the deleted wireless_node/gui.clj."
-  [container]
-  (let [tile (:tile-entity container)]
-    (node-logic/owner-name (common/get-tile-state tile))))
-
 (defn- node-info-area-policy
   "Compute editable policy for node info-area fields (ported verbatim from
    the deleted wireless_node/gui.clj)."
@@ -74,8 +68,9 @@
   [^UiRt rt container player]
   (try
     (let [tile (:tile-entity container)
-          owner-name (get-owner container)
-          is-owner? (node-logic/owner-authorized? owner-name player)
+          tile-state (common/get-tile-state tile)
+          owner-name (node-logic/owner-name tile-state)
+          is-owner? (node-logic/owner-authorized? tile-state player)
           policy (node-info-area-policy is-owner?)
           node-range (fn []
                        (try (str (.getRange ^IWirelessNode tile))

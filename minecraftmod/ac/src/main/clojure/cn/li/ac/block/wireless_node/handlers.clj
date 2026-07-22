@@ -108,8 +108,7 @@
 
 (defn- owner-authorized?
   [tile player]
-  (let [owner (node-logic/owner-name (platform-be/get-custom-state tile))]
-    (node-logic/owner-authorized? owner player)))
+  (node-logic/owner-authorized? (platform-be/get-custom-state tile) player))
 
 (defn- with-owner-authorization
   [payload player handler-fn]

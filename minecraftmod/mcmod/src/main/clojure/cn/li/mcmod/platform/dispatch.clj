@@ -10,13 +10,3 @@
 (defn current-platform-version
   []
   (get-in @(fw/fw-atom) [:platform :platform-version]))
-
-(defn call-with-platform-version
-  [platform-key f]
-  ;; Set temporarily, call f, then restore (backward-compatible shim)
-  (let [old (get-in @(fw/fw-atom) [:platform :platform-version])]
-    (try
-      (swap! (fw/fw-atom) assoc-in [:platform :platform-version] platform-key)
-      (f)
-      (finally
-        (swap! (fw/fw-atom) assoc-in [:platform :platform-version] old)))))

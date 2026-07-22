@@ -46,6 +46,16 @@
     :gui-close-reset ""
     :doc "Player who placed this block (owner)"}
 
+   {:key :placer-uuid
+    :nbt-key (nbt-keys/get-key :placer-uuid)
+    :type :string
+    :default ""
+    :persist? true
+    :gui-sync? true
+    :gui-data-slot? false
+    :gui-close-reset ""
+    :doc "UUID of the player who placed this block"}
+
    ;; Energy storage
    {:key :energy
     :nbt-key (nbt-keys/get-key :energy)
@@ -151,6 +161,12 @@
     :gui-data-slot? false
     :gui-close-reset ""
     :doc "Owner name (synced from server)"}
+
+   {:key :placer-uuid
+    :gui-sync? true
+    :gui-data-slot? false
+    :gui-close-reset ""
+    :doc "Owner UUID (synced from server)"}
 
    {:key :node-name
     :gui-container-key :ssid
@@ -316,13 +332,13 @@
 ;; ============================================================================
 
 (def schema-groups
-  {:nbt-persisted (count nbt-persisted-fields)           ; 7 fields
+  {:nbt-persisted (count nbt-persisted-fields)           ; 8 fields
    :blockstate-properties (count blockstate-property-fields) ; 2 fields
-   :gui-container (count gui-container-fields)           ; 9 fields
+   :gui-container (count gui-container-fields)           ; 10 fields
    :network-editable (count network-editable-fields)     ; 2 fields
    :derived (count derived-fields)                       ; 6 fields
    :ephemeral (count ephemeral-fields)                   ; 3 fields
-   :total-unique (count unified-node-schema)})           ; 17 unique fields
+   :total-unique (count unified-node-schema)})           ; 18 unique fields
 
 ;; ============================================================================
 ;; USAGE DOCUMENTATION
@@ -333,17 +349,17 @@
 
   This schema demonstrates a reusable pattern for Minecraft blocks:
 
-  1. NBT-PERSISTED (7 fields)
+  1. NBT-PERSISTED (8 fields)
      - Saved to disk, loaded on world load
      - Used by: block.clj (server-side NBT load/save)
-     - Examples: node-type, placer-name, energy, node-name, password, enabled, inventory
+     - Examples: node-type, placer-name, placer-uuid, energy, node-name, password, enabled, inventory
 
   2. BLOCKSTATE-PROPERTIES (2 fields)
      - Affect block visual appearance in world
      - Used by: block.clj (update BlockState), blockstate.clj (datagen)
      - Examples: energy (0-4 bar), enabled (glow effect)
 
-  3. GUI-CONTAINER (9 fields)
+  3. GUI-CONTAINER (10 fields)
      - Client-side GUI container atoms
      - Used by: gui.clj (create-container, server-menu-sync!)
      - Examples: energy, node-type, ssid, password, is-online, charging-in/out, tab-index
@@ -369,8 +385,8 @@
 (comment
   ;; Quick reference
   schema-groups
-  ;; => {:nbt-persisted 7, :blockstate-properties 2, :gui-container 9,
-  ;;     :network-editable 2, :derived 6, :ephemeral 3, :total-unique 17}
+  ;; => {:nbt-persisted 8, :blockstate-properties 2, :gui-container 10,
+  ;;     :network-editable 2, :derived 6, :ephemeral 3, :total-unique 18}
 
   ;; See usage documentation
   (println usage-doc))

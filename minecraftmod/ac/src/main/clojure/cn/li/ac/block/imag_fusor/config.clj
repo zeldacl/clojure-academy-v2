@@ -16,9 +16,6 @@
   "Craft time in ticks (original WORK_SPEED = 1/120)."
   120)
 
-(def max-progress
-  "Legacy progress scale kept for compatibility with old sync payloads."
-  100)
 
 ;; Inventory slots
 (def input-slot-count

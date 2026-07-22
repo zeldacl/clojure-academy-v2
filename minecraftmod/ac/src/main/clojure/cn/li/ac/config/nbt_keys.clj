@@ -10,6 +10,7 @@
   "Map of semantic keys to NBT string keys used in block entity serialization."
   {;; Common keys
    :placer "Placer"
+   :placer-uuid "PlacerUuid"
    :energy "Energy"
   :mode "Mode"
   :input-slot "InputSlot"

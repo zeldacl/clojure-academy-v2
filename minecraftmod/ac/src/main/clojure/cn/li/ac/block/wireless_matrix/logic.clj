@@ -128,31 +128,19 @@
   (str (get (or state {}) :placer-name "")))
 
 (defn placer-uuid
-  "Return the placer's UUID string from tile custom state map, or nil.
-   New placements store this alongside :placer-name; legacy saves may lack it."
+  "Return the canonical placer UUID string from tile custom state map, or nil."
   [state]
   (get (or state {}) :placer-uuid))
 
 (defn owner-authorized?
   "True when player is allowed to edit matrix owner-protected fields.
-   Primary: UUID comparison (stable, canonical identity).
-   Fallback: name-based comparison for legacy saves that lack :placer-uuid,
-   including backward compatibility with older owner serialization that embeds
-   the player's name as `...'<name>'...`."
+   Empty stored UUID means the block is not initialized yet and remains editable."
   [state player]
-  (let [stored-uuid (placer-uuid state)
-        player-uuid (uuid/player-uuid player)]
-    (if (and stored-uuid player-uuid (not (str/blank? stored-uuid)) (not (str/blank? player-uuid)))
-      ;; Primary path: UUID comparison
-      (= stored-uuid player-uuid)
-      ;; Legacy fallback: name-based comparison
-      (let [owner (placer-name state)
-            player-name (try (str (entity/player-get-name player))
-                             (catch Exception _ ""))]
-        (or (str/blank? owner)
-            (= owner player-name)
-            (and (not (str/blank? player-name))
-                 (str/includes? owner (str "'" player-name "'"))))))))
+  (let [stored-uuid (str (or (placer-uuid state) ""))
+        player-uuid (str (or (uuid/player-uuid player) ""))]
+    (or (str/blank? stored-uuid)
+        (and (not (str/blank? player-uuid))
+             (= stored-uuid player-uuid)))))
 
 ;; ============================================================================
 ;; Tick

@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-node-test
   "Unit tests for wireless node pure logic."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.block.wireless-node.gui-reactive :as node-gui]
             [cn.li.ac.block.wireless-node.logic :as node-logic]
@@ -71,19 +72,20 @@
       (with-redefs [resolver/node-capability (fn [_] nil)]
         (is (= 20.0 (node-handlers/node-range :tile)))))))
 
-(deftest owner-authorization-compatibility-test
-  (testing "blank owner keeps compatibility and allows edits"
-    (is (true? (node-logic/owner-authorized? "" :player))))
+(deftest owner-authorization-test
+  (testing "blank or missing stored UUID allows initial edits"
+    (with-redefs [uuid/player-uuid (fn [_] nil)]
+      (is (true? (node-logic/owner-authorized? {:placer-uuid ""} :player)))
+      (is (true? (node-logic/owner-authorized? {} :player)))))
 
-  (testing "exact player name matches owner"
-    (with-redefs [node-logic/player-name (fn [_] "alice")]
-      (is (true? (node-logic/owner-authorized? "alice" :player)))
-      (is (false? (node-logic/owner-authorized? "bob" :player)))))
+  (testing "matching UUID grants access and mismatch denies"
+    (with-redefs [uuid/player-uuid (fn [_] "player-uuid")]
+      (is (true? (node-logic/owner-authorized? {:placer-uuid "player-uuid"} :player)))
+      (is (false? (node-logic/owner-authorized? {:placer-uuid "other-uuid"} :player)))))
 
-  (testing "legacy serialized owner containing quoted player name is accepted"
-    (with-redefs [node-logic/player-name (fn [_] "alice")]
-      (is (true? (node-logic/owner-authorized? "ServerPlayer['alice'/1, l='world']" :player)))
-      (is (false? (node-logic/owner-authorized? "ServerPlayer['bob'/1, l='world']" :player))))))
+  (testing "stored UUID requires a player UUID"
+    (with-redefs [uuid/player-uuid (fn [_] nil)]
+      (is (false? (node-logic/owner-authorized? {:placer-uuid "player-uuid"} :player))))))
 
 (deftest node-gui-slot-placement-policy-test
   (with-redefs [slot-schema/slot-type (fn [_ idx]

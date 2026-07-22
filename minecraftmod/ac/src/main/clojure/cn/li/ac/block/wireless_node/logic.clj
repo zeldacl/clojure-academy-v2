@@ -1,6 +1,7 @@
 (ns cn.li.ac.block.wireless-node.logic
   "Wireless Node state lifecycle, tick, inventory, block events, and ownership helpers."
   (:require [clojure.string :as str]
+            [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.machine.container :as machine-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.wireless-node.schema :as node-schema]
@@ -135,6 +136,11 @@
   [tile-state]
   (str (get (or tile-state {}) :placer-name "")))
 
+(defn owner-uuid
+  "Return the canonical owner UUID from tile custom state."
+  [tile-state]
+  (str (get (or tile-state {}) :placer-uuid "")))
+
 (defn player-name
   "Normalize player name for authorization checks.
   Returns an empty string on any lookup failure."
@@ -147,15 +153,13 @@
 
 (defn owner-authorized?
   "True when player is allowed to edit node owner-protected fields.
-  Backward compatibility: accept older owner serialization that embeds the
-  player's name as `...'<name>'...`."
-  [owner player]
-  (let [owner (str owner)
-        player-name (player-name player)]
-    (or (str/blank? owner)
-        (= owner player-name)
-        (and (not (str/blank? player-name))
-             (str/includes? owner (str "'" player-name "'"))))))
+  Empty stored UUID means the block is not initialized yet and remains editable."
+  [tile-state player]
+  (let [stored-uuid (owner-uuid tile-state)
+        player-uuid (str (or (uuid/player-uuid player) ""))]
+    (or (str/blank? stored-uuid)
+        (and (not (str/blank? player-uuid))
+             (= stored-uuid player-uuid)))))
 
 ;; ============================================================================
 ;; Tick (from tick.clj)
@@ -260,11 +264,13 @@
   (fn [player world pos _block-id]
     (log/info "Placing Wireless Node (" (name node-type) ")")
     (let [player-name (player-name player)
+          player-uuid (uuid/player-uuid player)
           node-vb (vb/create-vnode (ppos/pos-x pos) (ppos/pos-y pos) (ppos/pos-z pos))
           be (platform-world/get-tile-entity world pos)]
       (when be
         (let [state (or (platform-be/get-custom-state be) node-default-state)
-              state' (assoc state :node-type node-type :placer-name player-name)]
+              state' (cond-> (assoc state :node-type node-type :placer-name player-name)
+                       (not (str/blank? (str player-uuid))) (assoc :placer-uuid player-uuid))]
           (machine-runtime/commit-state! be world pos state state')))
       (try
         (wireless-api/register-node-spatial! world node-vb)
