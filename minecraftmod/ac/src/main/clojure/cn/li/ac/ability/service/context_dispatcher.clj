@@ -80,7 +80,7 @@
 
 (defn- transport-contexts-snapshot
   []
-  (.contexts (current-runtime)))
+  (into {} (.contexts (current-runtime))))
 
 (defn- context-store-session-id
   [ctx]

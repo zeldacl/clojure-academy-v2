@@ -100,7 +100,7 @@
               states)))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
+  [_camera-pos _hand-center-pos _tick & _more]
   nil)
 
 (defn init!

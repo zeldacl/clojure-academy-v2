@@ -103,9 +103,9 @@
 ;; delegate-map: {:skill-id kw :on-key-down fn :on-key-tick fn :on-key-up fn :on-key-abort fn}
 
 (defn register-key-delegate!
-  "Register a delegate for a key index in a named group."
+  "Register a delegate for a key index in a named group.
+   Called during runtime syncs (update-default-group!) — must work after freeze."
   [group key-idx delegate-map]
-  (assert-keybind-registries-open!)
   (let [^HashMap delegates (or (.get key-groups group)
                                (let [created (HashMap.)]
                                  (.put key-groups group created)
@@ -114,16 +114,16 @@
   nil)
 
 (defn clear-key-group!
-  "Remove all delegates in a group."
+  "Remove all delegates in a group.
+   Called during runtime syncs (not registration time) — must work after freeze."
   [group]
-  (assert-keybind-registries-open!)
   (.remove key-groups group)
   nil)
 
 (defn clear-all-key-groups!
-  "Remove all delegates from all groups."
+  "Remove all delegates from all groups.
+   Called during runtime syncs (not registration time) — must work after freeze."
   []
-  (assert-keybind-registries-open!)
   (.clear key-groups)
   nil)
 

@@ -115,6 +115,6 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-manip :hand]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mag-manip :hand] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :mag-manip [] (current-hand-transform))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :mag-manip [_effect-id] (current-hand-transform))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-manip [_ store owner-key]
   (assoc store :states (dissoc (:states store) owner-key)))

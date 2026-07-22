@@ -169,7 +169,7 @@
                         by-owner))))))
 
 (defn- build-plan
-  [camera-pos _hand-center-pos _tick]
+  [camera-pos _hand-center-pos _tick & _more]
   (let [{:keys [beams]} (electron-missile-fx-snapshot)
         ops (mapcat (fn [[_owner-key xs]]
                       (mapcat (fn [{:keys [start end ttl max-ttl]}]

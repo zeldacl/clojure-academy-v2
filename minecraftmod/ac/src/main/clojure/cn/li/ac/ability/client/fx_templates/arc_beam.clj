@@ -387,7 +387,8 @@
                          {:initial-state (resolve-initial-state opts :level)
                           :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
                           :tick-state-fn #(dispatch-tick! :level effect-id %1)
-                          :build-plan-fn #(apply dispatch-build-plan effect-id %1 %2 %3 %&)})
+                          :build-plan-fn (fn [eid cam pos tick & _more]
+                                           (dispatch-build-plan eid cam pos tick))})
                   spec)
                 (if (contains? #{:hand :both} runtime)
                   (assoc spec :hand

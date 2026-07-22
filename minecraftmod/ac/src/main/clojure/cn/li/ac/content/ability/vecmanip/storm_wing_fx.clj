@@ -101,7 +101,7 @@
         (vals effect-state)))
 
 (defn- build-plan
-  [_camera-pos hand-center-pos _tick]
+  [_camera-pos hand-center-pos _tick & _more]
   (let [{:keys [effect-state]} (storm-wing-fx-snapshot)
         sw (matching-active-state effect-state hand-center-pos)]
     (when (and hand-center-pos sw (:active? sw))
