@@ -101,7 +101,6 @@
  "cn.li.mcmod.platform.capability"
  "cn.li.mcmod.platform.command-runtime"
  "cn.li.mcmod.platform.config-persist"
- "cn.li.mcmod.platform.damage-interception"
  "cn.li.mcmod.platform.dispatch"
  "cn.li.mcmod.platform.energy-integration"
  "cn.li.mcmod.platform.entity"

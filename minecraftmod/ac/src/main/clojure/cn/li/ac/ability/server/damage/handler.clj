@@ -9,10 +9,18 @@
             [cn.li.ac.ability.service.runtime-store :as store]
 [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.mcmod.platform.damage-interception :as damage-interception]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- damage-interception-available? []
+  (boolean (when-let [fw-atom (fw/fw-atom)]
+             (platform/get-adapter fw-atom :damage-interception))))
+
+(defn- damage-interception-call [fn-key & args]
+  (when-let [fw-atom (fw/fw-atom)]
+    (apply platform/call-adapter fw-atom :damage-interception fn-key args)))
 
 (defn- runtime-player-state
   [player-id]
@@ -37,7 +45,7 @@
   ([handler-id skill-id handler-fn]
    (register-toggle-damage-handler! handler-id skill-id handler-fn 100))
   ([handler-id skill-id handler-fn priority]
-   (when (damage-interception/available?)
+   (when (damage-interception-available?)
      (let [session-id (runtime-hooks/require-player-state-session-id "damage.handler")
            wrapped-handler (fn [player-id attacker-id damage damage-source]
                             ;; Check if toggle skill is active by looking for active contexts
@@ -61,9 +69,10 @@
                                   [damage nil]))
                               ;; No player state - pass through
                               [damage nil]))]
-       (damage-interception/register-damage-handler!* handler-id
-                                                     wrapped-handler
-                                                     priority)))))
+       (damage-interception-call :register-damage-handler!
+                                 handler-id
+                                 wrapped-handler
+                                 priority)))))
 
 (defn unregister-damage-handler!
   "Unregister a damage handler.
@@ -73,7 +82,7 @@
 
   Returns: true if unregistered successfully"
   [handler-id]
-  (damage-interception/unregister-damage-handler!* handler-id))
+  (damage-interception-call :unregister-damage-handler! handler-id))
 
 ;; ============================================================================
 ;; Attack-cancel-check registry
@@ -181,4 +190,3 @@
                   (log/warn "Attack precheck side-effect failed:" effect-id (ex-message e))
                   nil)))
             (:precheck-side-effects (attack-check-registries-state-snapshot))))))
-

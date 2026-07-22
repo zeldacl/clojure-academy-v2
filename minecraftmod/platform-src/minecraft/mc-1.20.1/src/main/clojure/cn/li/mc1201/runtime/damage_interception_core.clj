@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.runtime.damage-interception-core
   "Shared Minecraft-side damage interception helpers (no loader API imports)."
-  (:require [cn.li.mcmod.platform.damage-interception :as pdi]
+  (:require [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.hooks.core :as damage-hooks])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]
@@ -17,7 +18,9 @@
 
 (defn install-damage-interception!
   []
-  (pdi/install-damage-interception! (make-damage-interception) "mc1201 damage interception"))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :damage-interception (make-damage-interception)))
+  nil)
 
 (defn should-allow-attack?
   [player-id attacker-id original-damage damage-source]
