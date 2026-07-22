@@ -2,26 +2,19 @@
   "Resolve wireless capabilities from tiles or VBlocks."
   (:require [cn.li.ac.wireless.core.vblock :as vb]
             [cn.li.ac.wireless.core.capability-lookup :as cap-lookup])
-  (:import [cn.li.acapi.wireless
-            IWirelessGenerator
-            IWirelessMatrix
-            IWirelessNode
-            IWirelessReceiver
-            WirelessCapabilityKeys]))
-
-(def tile-capability cap-lookup/tile-capability)
+  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
 
 (defn matrix-capability [tile]
-  (tile-capability tile WirelessCapabilityKeys/MATRIX IWirelessMatrix))
+  (cap-lookup/tile-capability tile WirelessCapabilityKeys/MATRIX))
 
 (defn node-capability [tile]
-  (tile-capability tile WirelessCapabilityKeys/NODE IWirelessNode))
+  (cap-lookup/tile-capability tile WirelessCapabilityKeys/NODE))
 
 (defn generator-capability [tile]
-  (tile-capability tile WirelessCapabilityKeys/GENERATOR IWirelessGenerator))
+  (cap-lookup/tile-capability tile WirelessCapabilityKeys/GENERATOR))
 
 (defn receiver-capability [tile]
-  (tile-capability tile WirelessCapabilityKeys/RECEIVER IWirelessReceiver))
+  (cap-lookup/tile-capability tile WirelessCapabilityKeys/RECEIVER))
 
 (defn resolve-tile
   "Resolve a VBlock to the platform tile after chunk/type checks."

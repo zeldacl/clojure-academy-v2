@@ -14,7 +14,7 @@
   "Resolve a capability from a tile via tile spec metadata and platform factories.
   Normalizes cap-key to a keyword so callers can use either strings (e.g.
   WirelessCapabilityKeys/MATRIX) or keywords consistently."
-  [tile cap-key _fallback-class]
+  [tile cap-key]
   (when tile
     (when-let [tile-id (tile-id-for tile)]
       (when-let [spec (tdsl/get-tile tile-id)]

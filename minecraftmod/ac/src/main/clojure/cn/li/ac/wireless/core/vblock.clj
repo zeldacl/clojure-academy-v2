@@ -8,7 +8,7 @@
   - Distance calculations
 
   Type checking (Design-3):
-  - For Clojure state maps: use :node-type / :placer-name keys
+  - For Clojure state maps: use :plate-count / :node-type keys
   - For Java ScriptedBlockEntity: use getCapability().isPresent() via CapabilitySlots"
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
             [cn.li.ac.wireless.core.vblock-resolver :as resolver]

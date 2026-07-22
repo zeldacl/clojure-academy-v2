@@ -6,12 +6,7 @@
   (:require [cn.li.ac.wireless.core.capability-lookup :as cap-lookup]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world])
-  (:import [cn.li.acapi.wireless
-            IWirelessGenerator
-            IWirelessMatrix
-            IWirelessNode
-            IWirelessReceiver
-            WirelessCapabilityKeys]))
+  (:import [cn.li.acapi.wireless WirelessCapabilityKeys]))
 
 (defn vblock-pos
   "Get BlockPos for a vblock using the platform abstraction."
@@ -27,24 +22,24 @@
 
 (defn- has-capability?
   "Delegates to the shared capability-lookup/tile-capability — no more duplication."
-  [tile cap-key fallback-class]
-  (some? (cap-lookup/tile-capability tile cap-key fallback-class)))
+  [tile cap-key]
+  (some? (cap-lookup/tile-capability tile cap-key)))
 
 (defn- tile-has-wireless-matrix? [tile]
   (if (map? tile)
     (contains? tile :plate-count)
-    (has-capability? tile WirelessCapabilityKeys/MATRIX IWirelessMatrix)))
+    (has-capability? tile WirelessCapabilityKeys/MATRIX)))
 
 (defn- tile-has-wireless-node? [tile]
   (if (map? tile)
     (contains? tile :node-type)
-    (has-capability? tile WirelessCapabilityKeys/NODE IWirelessNode)))
+    (has-capability? tile WirelessCapabilityKeys/NODE)))
 
 (defn- tile-has-wireless-generator? [tile]
-  (has-capability? tile WirelessCapabilityKeys/GENERATOR IWirelessGenerator))
+  (has-capability? tile WirelessCapabilityKeys/GENERATOR))
 
 (defn- tile-has-wireless-receiver? [tile]
-  (has-capability? tile WirelessCapabilityKeys/RECEIVER IWirelessReceiver))
+  (has-capability? tile WirelessCapabilityKeys/RECEIVER))
 
 (defn vblock-get
   "Get the TileEntity/state for this vblock with chunk and capability checks."
