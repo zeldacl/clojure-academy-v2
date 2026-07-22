@@ -11,7 +11,7 @@
             [cn.li.ac.item.special-items :as special-items]
             [cn.li.ac.item.windgen-fan :as windgen-fan]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.platform.integration-runtime :as integration-runtime]))
+            [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]))
 
 (defn init-items!
   []
@@ -27,5 +27,5 @@
     (media/init-media!)
     (special-items/init-special-items!)
     (windgen-fan/init-windgen-fan!)
-    (integration-runtime/register-jei-nbt-subtype-item-ids!
+    (integration-hooks/register-jei-nbt-subtype-item-ids!
       ["energy_unit" "developer_portable" "matter_unit"]))))

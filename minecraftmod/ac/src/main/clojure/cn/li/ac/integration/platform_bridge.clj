@@ -1,6 +1,6 @@
 (ns cn.li.ac.integration.platform-bridge
 	"AC bindings for optional integration hooks exposed through mcmod."
-	(:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
+	(:require [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
 						[cn.li.ac.integration.jei.plugin :as jei-plugin]
 						[cn.li.ac.integration.crafttweaker.bridge :as ct-bridge]
 						[cn.li.mcmod.runtime.install :as install]
@@ -10,7 +10,7 @@
 	[]
 	(install/framework-once! ::hooks-installed?
   (fn []
-    (integration-runtime/register-integration-hooks!
+    (integration-hooks/register-integration-hooks!
 			{:jei-get-all-categories jei-plugin/get-all-categories
 			 :jei-get-recipes jei-plugin/get-recipes
 			 :jei-format-recipe jei-plugin/format-recipe

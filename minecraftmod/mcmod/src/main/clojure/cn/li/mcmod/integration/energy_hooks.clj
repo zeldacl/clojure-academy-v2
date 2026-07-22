@@ -1,8 +1,7 @@
-(ns cn.li.mcmod.platform.energy-integration
-  "Platform-neutral bridge for energy integration settings.
+(ns cn.li.mcmod.integration.energy-hooks
+  "Energy integration hook registry.
 
-  State stored in Framework [:registry :integrations :energy].
-
+  State is stored in Framework [:registry :integrations :energy].
   Registered hooks start empty; readers apply built-in defaults when content has
   not claimed a slot yet."
   (:require [cn.li.mcmod.framework :as fw]))

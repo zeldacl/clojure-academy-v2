@@ -4,7 +4,7 @@
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
             [cn.li.mcmod.events.world-save-cache :as world-save-cache]
             [cn.li.mcmod.events.world-state-notify :as world-state-notify]
-            [cn.li.mcmod.platform.world-owner-key :as wok]
+            [cn.li.mcmod.events.world-owner-key :as wok]
             [cn.li.mcmod.framework :as fw]
             [cn.li.forge1201.integration.saveddata.world-lifecycle :as wl-saved])
 	  (:import [net.minecraft.server.level ServerLevel]

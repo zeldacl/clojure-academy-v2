@@ -9,8 +9,9 @@
 						[cn.li.ac.wireless.data.network-lookup :as lookup]
 						[cn.li.ac.wireless.data.world-registry :as world-registry]
 						[cn.li.mcmod.platform.be :as platform-be]
-						[cn.li.mcmod.util.log :as log]
-						[cn.li.mcmod.platform.events :as platform-events])
+						[cn.li.mcmod.framework :as fw]
+						[cn.li.mcmod.framework.platform :as platform]
+						[cn.li.mcmod.util.log :as log])
 		(:import [cn.li.acapi.wireless
 							IWirelessGenerator
 							IWirelessMatrix
@@ -22,6 +23,17 @@
 (def network-password network-state/get-password)
 (def network-load network-state/get-load)
 (def network-active? network-state/active?)
+
+(defn fire-event!
+	"Post an event object to the installed platform event bus. No-op when the
+	platform does not provide an event bridge."
+	[event]
+	(when-let [fw-atom (fw/fw-atom)]
+		(when event
+			(try
+				(platform/call-adapter fw-atom :event-bus :fire! event)
+				(catch Exception e
+					(log/warn "Event dispatch failed:" (ex-message e)))))))
 
 (defn get-wireless-net-by-matrix
 		[matrix-tile]
@@ -88,7 +100,7 @@
 					result (commands/create-network! world-data matrix-vb ssid password)]
 			(when (:success result)
 					(when-let [matrix-cap (resolver/matrix-capability matrix-tile)]
-					(platform-events/fire-event!
+					(fire-event!
 						{:kind :topology/network
 						 :action :created
 						 :ssid ssid
@@ -104,7 +116,7 @@
 						result (commands/destroy-network! world-data network-item)]
 				(when (:success result)
 						(when-let [matrix-cap (resolver/matrix-capability matrix-tile)]
-						(platform-events/fire-event!
+						(fire-event!
 							{:kind :topology/network
 							 :action :destroyed
 							 :ssid ssid
@@ -123,7 +135,7 @@
 							matrix-cap (resolver/resolve-matrix-cap world matrix-vb)
 							result (commands/destroy-network! world-data network-item)]
 					(when (and (:success result) matrix-cap)
-						(platform-events/fire-event!
+						(fire-event!
 							{:kind :topology/network
 							 :action :destroyed
 							 :ssid ssid
@@ -143,7 +155,7 @@
 					(when (:success result)
 						(when-let [node-cap (resolver/resolve-node-cap world node-vb)]
 							(when-let [matrix-cap (resolver/resolve-matrix-cap world (:matrix network-item))]
-								(platform-events/fire-event!
+								(fire-event!
 									{:kind :topology/node
 									 :action :disconnected
 									 :matrix ^IWirelessMatrix matrix-cap
@@ -162,7 +174,7 @@
 				(when (:success result)
 					(when-let [matrix-cap (resolver/matrix-capability matrix-tile)]
 						(when-let [node-cap (resolver/node-capability node-tile)]
-							(platform-events/fire-event!
+							(fire-event!
 								{:kind :topology/node
 								 :action :connected
 								 :matrix ^IWirelessMatrix matrix-cap
@@ -180,7 +192,7 @@
 				(when (:success result)
 						(when-let [node-cap (resolver/node-capability node-tile)]
 							(when-let [matrix-cap (some-> matrix-tile resolver/matrix-capability)]
-							(platform-events/fire-event!
+							(fire-event!
 								{:kind :topology/node
 								 :action :disconnected
 								 :matrix ^IWirelessMatrix matrix-cap
@@ -242,7 +254,7 @@
                 dev-vb     (create-vb device-tile)
                 result     (link-cmd world-data conn dev-vb world)]
             (when (:success result)
-              (platform-events/fire-event!
+              (fire-event!
                 {:kind :topology/node :action link-action
                  :node ^IWirelessNode node-cap
                  event-key dev-cap}))
@@ -264,7 +276,7 @@
         (when (:success result)
           (when-let [dev-cap (resolve-cap device-tile)]
             (when-let [node-cap (resolver/resolve-node-cap world (:node conn))]
-              (platform-events/fire-event!
+              (fire-event!
                 {:kind :topology/node :action unlink-action
                  :node ^IWirelessNode node-cap
                  event-key dev-cap}))))

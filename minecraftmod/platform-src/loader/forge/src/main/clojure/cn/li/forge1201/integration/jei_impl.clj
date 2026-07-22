@@ -10,7 +10,7 @@
   will not be loaded."
   (:require [cn.li.mc1201.integration.jei-core :as jei-core]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
+            [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.config :as mod-config])
   (:import [cn.li.mc1201.runtime RuntimeAccessShared]
@@ -104,7 +104,7 @@
   (try
     (let [gui-helper (.getJeiHelpers registration)
           gui-helper (.getGuiHelper gui-helper)]
-      (doseq [category-meta (integration-runtime/jei-get-all-categories)]
+      (doseq [category-meta (integration-hooks/jei-get-all-categories)]
         (let [recipe-category (create-recipe-category gui-helper category-meta)]
           (.addRecipeCategories registration (into-array IRecipeCategory [recipe-category]))
           (log/info (str "Registered JEI category: " (:id category-meta))))))
@@ -115,9 +115,9 @@
   "Register all AC recipes with JEI."
   [^IRecipeRegistration registration]
   (try
-    (doseq [category-meta (integration-runtime/jei-get-all-categories)]
-      (let [recipes (integration-runtime/jei-get-recipes category-meta)
-            ^java.util.List formatted-recipes (mapv integration-runtime/jei-format-recipe recipes)
+    (doseq [category-meta (integration-hooks/jei-get-all-categories)]
+      (let [recipes (integration-hooks/jei-get-recipes category-meta)
+            ^java.util.List formatted-recipes (mapv integration-hooks/jei-format-recipe recipes)
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
                           (.getNamespace (ResourceLocation. (:id category-meta)))
                           (.getPath (ResourceLocation. (:id category-meta)))
@@ -132,7 +132,7 @@
   "Register recipe catalysts (the blocks that perform the recipes)."
   [^IRecipeCatalystRegistration registration]
   (try
-    (doseq [category-meta (integration-runtime/jei-get-all-categories)]
+    (doseq [category-meta (integration-hooks/jei-get-all-categories)]
       (let [block-id (:block-id category-meta)
             ^ItemStack item-stack (jei-core/parse-item-id block-id)
             ^RecipeType recipe-type (mezz.jei.api.recipe.RecipeType/create
@@ -154,7 +154,7 @@
   so variants are not treated as duplicates."
   [^ISubtypeRegistration registration]
   (try
-    (let [item-ids (integration-runtime/get-jei-nbt-subtype-item-ids)
+    (let [item-ids (integration-hooks/get-jei-nbt-subtype-item-ids)
           items (->> item-ids
                      (map registry-state/get-registered-item)
                      (remove nil?)

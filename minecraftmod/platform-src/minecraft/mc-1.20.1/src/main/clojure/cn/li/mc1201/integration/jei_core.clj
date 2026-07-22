@@ -4,7 +4,7 @@
   This namespace provides ~75% of JEI integration that can be shared between
   Forge and Fabric. Platform-specific parts (plugin registration) remain
   in loader-specific platform layers."
-  (:require [cn.li.mcmod.platform.integration-runtime :as integration-runtime]
+  (:require [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.core.registries BuiltInRegistries]
@@ -75,7 +75,7 @@
     Vector of category metadata maps"
   []
   (try
-    (->> (integration-runtime/jei-get-all-categories)
+    (->> (integration-hooks/jei-get-all-categories)
          (filter identity)
          vec)
     (catch Exception e
@@ -92,8 +92,8 @@
     Vector of recipe maps"
   [category-meta]
   (try
-    (let [recipes (integration-runtime/jei-get-recipes category-meta)
-          formatted (mapv integration-runtime/jei-format-recipe recipes)]
+    (let [recipes (integration-hooks/jei-get-recipes category-meta)
+          formatted (mapv integration-hooks/jei-format-recipe recipes)]
       (vec formatted))
     (catch Exception e
       (log/error "Failed to get recipes for category" (:id category-meta) ":" (ex-message e))

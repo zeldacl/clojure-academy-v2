@@ -1,6 +1,6 @@
 (ns cn.li.ac.integration.block.energy-converter.platform-bridge
-	"AC energy converter bindings for platform-neutral integration hooks."
-	(:require [cn.li.mcmod.platform.energy-integration :as energy-integration]
+	"AC energy converter bindings for integration hooks."
+	(:require [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
 	          [cn.li.mcmod.content.registry :as content-registry]
 	          [cn.li.mcmod.runtime.install :as install]
 						[cn.li.ac.integration.block.energy-converter.config :as config]
@@ -28,7 +28,7 @@
 	[]
 	(install/framework-once! ::hooks-installed?
   (fn []
-    (energy-integration/register-energy-integration-hooks!
+    (energy-hooks/register-energy-integration-hooks!
 			{:forge-energy-conversion-rate (fn [] (double (config/rf-conversion-ratio)))
 			 :ic2-energy-conversion-rate (fn [] (double (config/eu-conversion-ratio)))})
 		(install-integration-descriptors!)

@@ -2,7 +2,8 @@
   "Forge 1.20.1 initialization and version-specific implementations"
   (:require [cn.li.mc1201.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.platform.events :as platform-events]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
             [cn.li.forge1201.capability.fluid-handler :as fluid-handler]
@@ -26,7 +27,8 @@
     (target/current-target-key!)
     (fn []
       ;; Bind platform-neutral event bridge to Forge IMC dispatcher.
-      (platform-events/install-fire-event-fn! imc-dispatch/dispatch-event! "Forge")
+      (when-let [fw-atom (fw/fw-atom)]
+        (platform/install-adapter! fw-atom :event-bus {:fire! imc-dispatch/dispatch-event!}))
       ;; Register custom advancement triggers.
       (ModTriggers/init)
       ;; Register Forge-specific capabilities (must precede content init so that

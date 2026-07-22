@@ -1,7 +1,7 @@
-(ns cn.li.mcmod.platform.command-runtime-test
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+(ns cn.li.mcmod.command.runtime-hooks-test
+  (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.command-runtime :as sut]))
+            [cn.li.mcmod.command.runtime-hooks :as sut]))
 
 (defn- with-framework [f]
   (let [prev-fw fw/framework]

@@ -1,6 +1,6 @@
 (ns cn.li.ac.command.platform-bridge
-	"AC command bindings for the platform-neutral command bridge."
-	(:require [cn.li.mcmod.platform.command-runtime :as command-runtime]
+	"AC command bindings for command runtime hooks."
+	(:require [cn.li.mcmod.command.runtime-hooks :as command-hooks]
 						[cn.li.mcmod.command.metadata :as command-metadata]
 						[cn.li.ac.command.actions :as command-actions]
 						[cn.li.ac.command.commands :as commands]
@@ -23,7 +23,7 @@
 	(install/framework-once! ::hooks-installed?
   (fn []
     (command-actions/install-command-actions!)
-		(command-runtime/register-command-hooks!
+		(command-hooks/register-command-hooks!
 			{:init-commands! init-commands-and-publish-metadata!})
 		(log/info "AC command hooks installed")))
 	nil)

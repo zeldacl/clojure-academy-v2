@@ -3,7 +3,7 @@
   world save/unload and the next matching world load.
 
   State stored in Framework [:service :world-save-cache]."
-  (:require [cn.li.mcmod.platform.world-owner-key :as world-owner-key]
+  (:require [cn.li.mcmod.events.world-owner-key :as world-owner-key]
             [cn.li.mcmod.framework :as fw]))
 
 (defn world-key

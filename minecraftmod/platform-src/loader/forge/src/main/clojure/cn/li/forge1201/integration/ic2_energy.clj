@@ -4,7 +4,7 @@
   SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
   Minecraft/Forge symbols and are allowlisted by verifyNoPlatformReflection."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.energy-integration :as energy-integration])
+            [cn.li.mcmod.integration.energy-hooks :as energy-hooks])
   (:import [cn.li.mcmod.energy IEnergyCapable]
            [java.lang.reflect InvocationHandler Proxy]))
 
@@ -98,7 +98,7 @@
 (defn eu-conversion-rate
   "Get the EU conversion rate from config or default."
   []
-  (double (or (energy-integration/ic2-energy-conversion-rate)
+  (double (or (energy-hooks/ic2-energy-conversion-rate)
               default-eu-conversion-rate)))
 
 (defn content-to-eu

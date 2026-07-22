@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.integration.forge-energy
   "Forge Energy integration for descriptor-declared content endpoints."
   (:require [cn.li.mcmod.platform.capability :as platform-cap]
-            [cn.li.mcmod.platform.energy-integration :as energy-integration]
+            [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
             [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.util.log :as log])
@@ -12,7 +12,7 @@
 
 (defn- fe-conversion-rate
   []
-  (double (energy-integration/forge-energy-conversion-rate)))
+  (double (energy-hooks/forge-energy-conversion-rate)))
 
 (defn- create-forge-energy-adapter
   [^IEnergyCapable energy-capable conversion-rate]

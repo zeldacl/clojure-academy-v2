@@ -5,7 +5,7 @@
   the mutable WorldRuntime stored in WiWorldData and never swap the Framework atom."
   (:require [cn.li.ac.wireless.core.spatial-index :as si]
             [cn.li.mcmod.events.world-state-notify :as world-state-notify]
-            [cn.li.mcmod.platform.world-owner-key :as world-owner-key]
+            [cn.li.mcmod.events.world-owner-key :as world-owner-key]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap HashSet]))

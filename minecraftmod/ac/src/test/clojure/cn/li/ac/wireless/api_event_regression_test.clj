@@ -7,8 +7,7 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.core.vblock :as vb]
-            [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.events :as platform-events]))
+            [cn.li.mcmod.platform.be :as platform-be]))
 
 (deftest create-network-fires-topology-map-when-created
   (testing "create-network! posts map event when create succeeds"
@@ -21,7 +20,7 @@
                     commands/create-network! (fn [_ _ _ _] {:success true})
                     resolver/matrix-capability (fn [tile]
                                                  (when (= tile :matrix-tile) matrix))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (is (:success (wireless-api/create-network! :matrix-tile "ssid-a" "pw")))
         (is (= 1 (count @events)))
         (let [event (first @events)]
@@ -38,7 +37,7 @@
                   cn.li.ac.wireless.data.network-lookup/get-network-by-matrix (constantly nil)
                   commands/create-network! (fn [_ _ _ _] {:success false})
                   resolver/matrix-capability (constantly (stubs/fake-matrix))
-                  platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                  wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
       (is (not (:success (wireless-api/create-network! :matrix-tile "ssid-a" "pw"))))
       (is (empty? @events)))))
 
@@ -52,7 +51,7 @@
                   commands/destroy-network! (fn [_ _] {:success true})
                   resolver/matrix-capability (fn [tile]
                                                (when (= tile :mt) matrix))
-                  platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                  wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
       (is (:success (wireless-api/destroy-network! :mt)))
       (is (= 1 (count @events)))
       (let [event (first @events)]
@@ -79,7 +78,7 @@
                                                    (when (= tile :matrix-tile) matrix))
                     resolver/node-capability (fn [tile]
                                                  (when (= tile :node-tile) node))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (is (:success (wireless-api/link-node-to-network! :node-tile :matrix-tile "pw")))
         (is (= 1 (count @events)))
         (let [event (first @events)]
@@ -103,7 +102,7 @@
                                                  (when (= tile :node-tile) node))
                     resolver/generator-capability (fn [tile]
                                                     (when (= tile :gen-tile) gen))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (is (:success (wireless-api/link-generator-to-node! :gen-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
         (let [event (first @events)]
@@ -117,7 +116,7 @@
           node (stubs/fake-node "correct-pw")]
       (with-redefs [resolver/node-capability (fn [tile]
                                                (when (= tile :node-tile) node))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (let [result (wireless-api/link-generator-to-node! :gen-tile :node-tile "wrong-pw" true)]
           (is (not (:success result)))
           (is (= :password (:reason result)))
@@ -138,7 +137,7 @@
                                                  (when (= tile :node-tile) node))
                     resolver/receiver-capability (fn [tile]
                                                    (when (= tile :rec-tile) rec))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (is (:success (wireless-api/link-receiver-to-node! :rec-tile :node-tile "pw" true)))
         (is (= 1 (count @events)))
         (let [event (first @events)]
@@ -152,7 +151,7 @@
           node (stubs/fake-node "correct-pw")]
       (with-redefs [resolver/node-capability (fn [tile]
                                                (when (= tile :node-tile) node))
-                    platform-events/fire-event! (fn [evt] (swap! events conj evt))]
+                    wireless-api/fire-event! (fn [evt] (swap! events conj evt))]
         (let [result (wireless-api/link-receiver-to-node! :rec-tile :node-tile "wrong-pw" true)]
           (is (not (:success result)))
           (is (= :password (:reason result)))

@@ -1,4 +1,4 @@
-(ns cn.li.mcmod.platform.world-owner-key
+(ns cn.li.mcmod.events.world-owner-key
   "Stable world owner keys for runtime caches/registries without MC reflection."
   (:require [cn.li.mcmod.platform.world :as world]))
 

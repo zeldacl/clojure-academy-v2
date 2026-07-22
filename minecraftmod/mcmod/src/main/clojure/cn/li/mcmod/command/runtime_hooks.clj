@@ -1,14 +1,8 @@
-(ns cn.li.mcmod.platform.command-runtime
-  "Platform-neutral bridge for content-owned command initialization.
-
-  State stored in Framework [:registry :commands :hooks].
-
-  Registered hooks start empty; platform readers apply noop fallbacks when a slot
-  has not been claimed by content yet."
+(ns cn.li.mcmod.command.runtime-hooks
+  "Content-owned command initialization hooks."
   (:require [cn.li.mcmod.framework :as fw]))
 
 (def ^:private noop (fn [] nil))
-
 (def ^:private cmd-hooks-path [:registry :commands :hooks])
 
 (defn- registered-hooks
@@ -18,9 +12,6 @@
     {}))
 
 (defn register-command-hooks!
-  "Register content-owned command hooks.
-
-  Throws only when a slot was already claimed by content with a different fn."
   [hooks]
   (when-let [fw-atom (fw/fw-atom)]
     (swap! fw-atom update-in cmd-hooks-path

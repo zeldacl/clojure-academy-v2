@@ -4,7 +4,7 @@
   Platform modules should delegate registration to this namespace and
   keep only loader-specific entry signatures."
   (:require [cn.li.mcmod.command.metadata :as cmd-meta]
-            [cn.li.mcmod.platform.command-runtime :as command-runtime]
+            [cn.li.mcmod.command.runtime-hooks :as command-hooks]
             [cn.li.mc1201.command.brigadier-tree :as brig-tree]
             [cn.li.mc1201.command.action-impls] ; Ensure action implementations are loaded
             [cn.li.mcmod.util.log :as log])
@@ -38,7 +38,7 @@
      (log/info "Registering commands with Brigadier" {:platform platform-label})
 
      (try
-       (command-runtime/init-commands!)
+       (command-hooks/init-commands!)
        (catch Exception e
          (log/error "Failed to load command definitions:" (ex-message e))))
 
