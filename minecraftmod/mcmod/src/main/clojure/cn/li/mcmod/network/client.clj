@@ -1,8 +1,8 @@
 (ns cn.li.mcmod.network.client
   "Client-side RPC request/response support for GUI/network logic"
-  (:require [cn.li.mcmod.gui.owner-contract :as owner-contract]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
+  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap]))
 
@@ -26,7 +26,7 @@
 (defn- client-session-id
   [owner]
   (if (some? owner)
-    (:client-session-id (owner-contract/require-client-owner owner))
+    (:client-session-id (runtime-owner/require-client-owner owner))
     (require-owner-value owner ":client-session-id"
                          (runtime-hooks/client-session-id))))
 
@@ -419,7 +419,7 @@
   ([msg-id payload callback]
    (send-to-server nil msg-id payload callback))
   ([owner msg-id payload callback]
-   (let [owner* (when owner (owner-contract/require-client-owner owner))
+   (let [owner* (when owner (runtime-owner/require-client-owner owner))
          session (resolve-client-network-session owner* {:allow-install? true})
          owner-key (client-owner-key owner*)
          request-id (if callback

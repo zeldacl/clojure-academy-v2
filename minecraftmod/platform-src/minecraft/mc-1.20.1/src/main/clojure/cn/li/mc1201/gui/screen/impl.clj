@@ -6,8 +6,8 @@
   (:require [cn.li.mc1201.client.session :as client-session]
             [cn.li.mc1201.gui.reactive.host-container :as reactive-host]
             [cn.li.mcmod.gui.container-state :as container-state]
-            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry :as gui-reg]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
            [net.minecraft.client.gui GuiGraphics]))
@@ -49,7 +49,7 @@
     (some-> menu
             container-state/get-container-for-menu
             container-state/owner-from-container
-            owner-contract/require-client-owner)))
+            runtime-owner/require-client-owner)))
 
 (defn with-screen-client-owner
   "Execute f with player-state-owner bound from the menu's Clojure container."

@@ -23,6 +23,18 @@
                           (registry-contract/validate-screen-contract!
                            {:owner-spec :server})))))
 
+(deftest sync-routing-contract-test
+  (testing "container-id routing passes"
+    (is (registry-contract/require-sync-routing {:container-id 17})))
+  (testing "pos-only routing fails"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"sync-routing contract violation"
+                          (registry-contract/require-sync-routing {:pos-x 1 :pos-y 2 :pos-z 3}))))
+  (testing "empty routing fails"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"sync-routing contract violation"
+                          (registry-contract/require-sync-routing {})))))
+
 (deftest verify-catalog-handlers-test
   (let [catalog {:specs [{:domain :node :action :change-name :msg-id "wireless_node_change_name"}]}
         contracts {:node {:owner-spec :server :payload-routing :sync-routing}}]

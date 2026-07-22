@@ -8,9 +8,9 @@
             [cn.li.mcmod.gui.container-state :as cs]
             [cn.li.mcmod.gui.adapter.platform-registry :as platform]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]
-            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mc1201.gui.slots.sync :as slots-sync]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.shim DelegatingCMenuBridge]
            [cn.li.mc1201.gui CMenuBridge]
@@ -22,7 +22,7 @@
 (defn- owner-map-for-player-context
   "Build canonical menu owner from resolved session/player fields (testable without MC Player)."
   [{:keys [player player-uuid server-session-id client-session-id]}]
-  (owner-contract/require-owner
+  (runtime-owner/require-owner
    (cond
      (and server-session-id player-uuid)
      {:logical-side :server

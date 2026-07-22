@@ -1,7 +1,6 @@
 (ns cn.li.mcmod.network.server
   "Server-side RPC handler registry for GUI/network logic"
   (:require [cn.li.mcmod.gui.registry-contract :as registry-contract]
-            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap]))
 
@@ -85,7 +84,7 @@
 (defn- validate-payload-routing!
   [contract payload]
   (when (= :sync-routing (:payload-routing contract))
-    (owner-contract/require-sync-routing payload))
+    (registry-contract/require-sync-routing payload))
   payload)
 
 (defn handle-request

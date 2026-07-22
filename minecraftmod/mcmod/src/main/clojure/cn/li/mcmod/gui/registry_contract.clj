@@ -14,6 +14,10 @@
 (def ^:private payload-routing-schema
   [:enum :none :sync-routing])
 
+(def ^:private sync-routing-schema
+  [:map
+   [:container-id int?]])
+
 (def ^:private handler-contract-schema
   [:map
    [:owner-spec owner-spec-schema]
@@ -29,6 +33,18 @@
 (def ^:private screen-contract-validator (schema/lazy-validator screen-contract-schema))
 (defn- valid-screen-contract? [x]
   (schema/valid? (screen-contract-validator) x))
+(def ^:private sync-routing-validator (schema/lazy-validator sync-routing-schema))
+(defn- valid-sync-routing? [x]
+  (schema/valid? (sync-routing-validator) x))
+
+(defn require-sync-routing
+  [routing]
+  (if (valid-sync-routing? routing)
+    routing
+    (throw (ex-info "sync-routing contract violation"
+                    {:contract :sync-routing
+                     :value routing
+                     :explain (schema/explain sync-routing-schema routing)}))))
 
 (defn default-server-gui-handler-contract
   []

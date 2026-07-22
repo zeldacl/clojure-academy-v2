@@ -4,12 +4,12 @@
    This is shared client/server tab switching logic used by platform GUI/menu bridges."
   (:require [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.container.sync-routing :as sync-routing]
-            [cn.li.mcmod.gui.owner-contract :as owner-contract]
             [cn.li.mcmod.gui.registry-contract :as registry-contract]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -57,7 +57,7 @@
         player-id (require-owner-value {:player player}
                                        ":player-uuid"
                                        (some-> player player-key))]
-    (owner-contract/require-server-owner
+    (runtime-owner/require-server-owner
      {:logical-side :server
       :server-session-id server-session-id
       :player-uuid player-id
@@ -65,7 +65,7 @@
 
 (defn- owner-client-session-id
   [owner]
-  (when (owner-contract/valid-client-owner? owner)
+  (when (runtime-owner/valid-client-owner? owner)
     (:client-session-id owner)))
 
 (defn- send-set-tab-safe!
@@ -181,4 +181,3 @@
       (when-let [idx (page-id->index pages cur)]
         (when (tabbed-container? container)
           (send-set-tab-safe! owner idx container-id))))))
-
