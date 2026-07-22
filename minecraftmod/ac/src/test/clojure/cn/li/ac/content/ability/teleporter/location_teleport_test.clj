@@ -6,16 +6,15 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.network.server :as net-srv]
-            [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
 (defn- with-platform-runtimes!
-  "Bind the starred named-position-store / teleportation platform fns to an
+  "Bind named-position-store adapter calls and teleportation platform fns to an
    in-memory store atom (the platform layer is a function map now — no
    protocol to reify)."
   [store current-pos f]
-  (with-redefs [position-store/available? (constantly true)
-                position-store/save-location!*
+  (with-redefs [#'loc-tp/position-store-available? (constantly true)
+                #'loc-tp/save-location!
                 (fn [player-uuid location-name world-id x y z]
                   (swap! store assoc-in [player-uuid location-name]
                          {:name location-name
@@ -24,23 +23,23 @@
                           :y (double y)
                           :z (double z)})
                   true)
-                position-store/delete-location!*
+                #'loc-tp/delete-location!
                 (fn [player-uuid location-name]
                   (let [exists? (contains? (get @store player-uuid {}) location-name)]
                     (swap! store update player-uuid dissoc location-name)
                     exists?))
-                position-store/get-location*
+                #'loc-tp/get-location
                 (fn [player-uuid location-name]
                   (get-in @store [player-uuid location-name]))
-                position-store/list-locations*
+                #'loc-tp/list-locations
                 (fn [player-uuid]
                   (->> (vals (get @store player-uuid {}))
                        (sort-by :name)
                        vec))
-                position-store/get-location-count*
+                #'loc-tp/get-location-count
                 (fn [player-uuid]
                   (count (get @store player-uuid {})))
-                position-store/has-location?*
+                #'loc-tp/has-location?
                 (fn [player-uuid location-name]
                   (contains? (get @store player-uuid {}) location-name))
                 teleportation/available? (constantly true)

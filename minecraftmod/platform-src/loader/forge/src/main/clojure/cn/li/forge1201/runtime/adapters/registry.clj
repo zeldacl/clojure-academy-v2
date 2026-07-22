@@ -14,8 +14,9 @@
             [cn.li.mc1201.runtime.entity-motion-core :as entity-motion-core]
             [cn.li.mc1201.runtime.raycast-core :as raycast-core]
             [cn.li.mc1201.runtime.entity-query-core :as entity-query-core]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.named-position-store :as position-store]
             [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.platform.entity-motion :as pem]
@@ -46,9 +47,11 @@
                                                    teleportation-core/create-teleportation
                                                    "Forge teleportation"))
    (adapter-registry/step :named-position-store
-                          #(install-bound-adapter! position-store/install-named-position-store!
-                                                   position-store-core/create-named-position-store
-                                                   "Forge named position store"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :named-position-store
+                               (position-store-core/create-named-position-store server-context/get-server))))
    (adapter-registry/step :player-motion
                           #(install-bound-adapter! pm/install-player-motion!
                                                    player-motion-core/create-player-motion

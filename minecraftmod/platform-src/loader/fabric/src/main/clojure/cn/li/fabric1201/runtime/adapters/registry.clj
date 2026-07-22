@@ -16,9 +16,10 @@
             [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
             [cn.li.mc1201.runtime.named-position-store-core :as named-position-store-core]
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.named-position-store :as pstore]
             [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.hooks.core :as power-runtime]))
 
@@ -43,9 +44,11 @@
                                                    teleportation-core/create-teleportation
                                                    "Fabric teleportation"))
    (adapter-registry/step :named-position-store
-                          #(install-bound-adapter! pstore/install-named-position-store!
-                                                   named-position-store-core/create-named-position-store
-                                                   "Fabric named position store"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :named-position-store
+                               (named-position-store-core/create-named-position-store server-context/get-server))))
    (adapter-registry/step :potion-effects
                           #(install-bound-adapter! ppe/install-potion-effects!
                                                    potion-effects-core/create-potion-effects

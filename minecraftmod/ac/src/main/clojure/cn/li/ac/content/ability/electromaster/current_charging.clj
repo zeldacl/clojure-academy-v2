@@ -12,7 +12,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.runtime-interop :as interop]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
@@ -25,8 +26,20 @@
   (cfg-double :targeting.range))
 
 (defn- main-hand-item [player-id]
-  (when (interop/available?)
-    (interop/get-player-main-hand-item* player-id)))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop :get-player-main-hand-item player-id)))
+
+(defn- player-view [player-id]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop :get-player-view player-id)))
+
+(defn- block-entity-at [world-id x y z]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop :get-block-entity-at world-id x y z)))
+
+(defn- player-entity [player-id]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop :get-player-entity player-id)))
 
 (defn- fx-payload [player-id payload]
   (cond-> (or payload {})
@@ -102,7 +115,7 @@
     (if-not hit
       {:effective? false :charged 0.0 :block-pos nil :ray-end ray-end}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
-            be (interop/get-block-entity-at* world-id bx by bz)]
+            be (block-entity-at world-id bx by bz)]
         (if-not be
           {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}
           (cond
@@ -123,8 +136,7 @@
   ;; contexts never populate it (see context-manager's tick-context-entry!) — so
   ;; the arc-spawn visual resolves its own player-entity server-side instead.
   [player-id ctx-id _player charge charge-ticks]
-  (let [view (when (interop/available?)
-               (interop/get-player-view* player-id))
+  (let [view (player-view player-id)
         result (when view (charge-block-target! view charge))
         {:keys [effective? charged block-pos ray-end]}
         (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]
@@ -132,8 +144,8 @@
                                   (if effective?
                                     (cfg-double :progression.exp-effective)
                                     (cfg-double :progression.exp-ineffective)))
-    (when (and effective? (zero? (mod (long charge-ticks) 6)) (interop/available?))
-      (when-let [player (interop/get-player-entity* player-id)]
+    (when (and effective? (zero? (mod (long charge-ticks) 6)))
+      (when-let [player (player-entity player-id)]
         (entity/player-spawn-entity-by-id! player charging-arc-entity-id 0.0)))
     (set-skill-state! ctx-id [:good?] (boolean effective?))
     (set-skill-state! ctx-id [:target] ray-end)

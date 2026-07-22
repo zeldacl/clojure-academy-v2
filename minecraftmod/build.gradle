@@ -115,6 +115,8 @@ tasks.register("verifyNoThinForwarders") {
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/energy_integration.clj"
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/command_runtime.clj"
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/integration_runtime.clj"
+            include "mcmod/src/main/clojure/cn/li/mcmod/platform/runtime_interop.clj"
+            include "mcmod/src/main/clojure/cn/li/mcmod/platform/named_position_store.clj"
             exclude "**/build/**"
             exclude "**/.gradle/**"
         }.files

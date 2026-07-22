@@ -8,13 +8,17 @@
   ability.adapters.server-hooks) — it never requires ac.item/ac.energy."
   (:require [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.item.item-energy-base :as energy-base]
-            [cn.li.mcmod.platform.runtime-interop :as interop]))
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]))
+
+(defn- runtime-interop-call [fn-key & args]
+  (when-let [fw-atom (fw/fw-atom)]
+    (apply platform/call-adapter fw-atom :runtime-interop fn-key args)))
 
 (defn- held-portable-stack [player-uuid]
-  (when (interop/available?)
-    (let [stack (interop/get-player-main-hand-item* player-uuid)]
-      (when (and stack (= :developer-portable (energy-base/get-energy-item-type stack)))
-        stack))))
+  (when-let [stack (runtime-interop-call :get-player-main-hand-item player-uuid)]
+    (when (and stack (= :developer-portable (energy-base/get-energy-item-type stack)))
+      stack)))
 
 (defn held-portable-energy
   "Energy on the held portable developer, or nil when not holding one."

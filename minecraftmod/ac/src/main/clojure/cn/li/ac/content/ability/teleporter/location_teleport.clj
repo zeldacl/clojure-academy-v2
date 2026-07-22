@@ -21,7 +21,8 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.math.vec3 :as vec3]
             [cn.li.mcmod.platform.teleportation :as teleportation]
-            [cn.li.mcmod.platform.named-position-store :as position-store]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.ac.ability.messages :as catalog]
             [clojure.string :as str]
@@ -76,9 +77,35 @@
   (when (teleportation/available?)
     (teleportation/get-player-position* player-id)))
 
+(defn- position-store-call [fn-key & args]
+  (when-let [fw-atom (fw/fw-atom)]
+    (apply platform/call-adapter fw-atom :named-position-store fn-key args)))
+
+(defn- position-store-available? []
+  (boolean (when-let [fw-atom (fw/fw-atom)]
+             (platform/get-adapter fw-atom :named-position-store))))
+
+(defn- save-location! [player-id location-name world-id x y z]
+  (position-store-call :save-location! player-id location-name world-id x y z))
+
+(defn- delete-location! [player-id location-name]
+  (position-store-call :delete-location! player-id location-name))
+
+(defn- get-location [player-id location-name]
+  (position-store-call :get-location player-id location-name))
+
+(defn- list-locations [player-id]
+  (position-store-call :list-locations player-id))
+
+(defn- get-location-count [player-id]
+  (position-store-call :get-location-count player-id))
+
+(defn- has-location? [player-id location-name]
+  (position-store-call :has-location? player-id location-name))
+
 (defn- all-locations [player-id]
-  (if (position-store/available?)
-    (vec (position-store/list-locations* player-id))
+  (if (position-store-available?)
+    (vec (list-locations player-id))
     []))
 
 (defn- max-saved-location-count []
@@ -86,9 +113,9 @@
 
 (defn- location-limit-reached?
   [player-id location-name]
-  (and (position-store/available?)
-       (not (position-store/has-location?* player-id location-name))
-       (>= (long (or (position-store/get-location-count* player-id) 0))
+  (and (position-store-available?)
+       (not (has-location? player-id location-name))
+       (>= (long (or (get-location-count player-id) 0))
            (max-saved-location-count))))
 
 (defn- location-limits []
@@ -149,7 +176,7 @@
         (str/blank? name*)
         {:success? false :error :invalid-name}
 
-        (not (position-store/available?))
+        (not (position-store-available?))
         {:success? false :error :service-unavailable}
 
         :else
@@ -158,7 +185,7 @@
             {:success? false
              :error :location-limit-reached
              :max-locations (max-saved-location-count)}
-            (let [ok? (position-store/save-location!*
+            (let [ok? (save-location!
                         player-id
                         name*
                         (:world-id pos)
@@ -182,11 +209,11 @@
         (str/blank? name*)
         {:success? false :error :invalid-name}
 
-        (not (position-store/available?))
+        (not (position-store-available?))
         {:success? false :error :service-unavailable}
 
         :else
-        {:success? (boolean (position-store/delete-location!*
+        {:success? (boolean (delete-location!
                               player-id
                               name*))
          :name name*}))
@@ -211,13 +238,13 @@
   [player-id location-name]
   (try
     (if (or (not (teleportation/available?))
-            (not (position-store/available?)))
+            (not (position-store-available?)))
       {:success? false :error :service-unavailable}
       (let [name* (norm-name location-name)
             exp (double (or (skill-exp player-id) 0.0))
             pos (current-pos player-id)
             dest (when (not (str/blank? name*))
-                   (position-store/get-location* player-id name*))]
+                   (get-location player-id name*))]
         (cond
           (str/blank? name*)
           {:success? false :error :invalid-name}

@@ -10,8 +10,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.runtime-interop :as interop]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
@@ -171,16 +170,15 @@
                                                  :targeting.range 5.0
                                                  :progression.exp-effective 0.0001
                                                  0.0))
-                  interop/available? (constantly true)
                   raycast/available? (constantly true)
                   raycast/raycast-blocks* (fn [_ _ _ _ _ _ _ _]
                                             {:x 1 :y 2 :z 3 :distance 2.0})
-                  interop/get-block-entity-at* (fn [_ _ _ _] :block-entity)
+                  #'current-charging/block-entity-at (fn [_ _ _ _] :block-entity)
                   energy/is-node-supported? (fn [_] true)
                   energy/charge-node (fn [_ charge _sim?] (- charge 8.0))
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  interop/get-player-view* (fn [_]
+                  #'current-charging/player-view (fn [_]
                                              {:world-id "minecraft:overworld"
                                               :x 0.0 :y 64.0 :z 0.0
                                               :look-x 1.0 :look-y 0.0 :look-z 0.0})
@@ -189,7 +187,7 @@
                   ;; context-manager's tick-context-entry!), so the arc spawn
                   ;; resolves its own player entity via this bridge instead —
                   ;; mock that bridge, not a fabricated :player-ref.
-                  interop/get-player-entity* (fn [player-id] {:uuid player-id})
+                  #'current-charging/player-entity (fn [player-id] {:uuid player-id})
                   entity/player-spawn-entity-by-id! (fn [player eid yaw]
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)

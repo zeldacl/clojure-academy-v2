@@ -4,7 +4,8 @@
   All operations use only vanilla MC APIs (ServerPlayer, ServerLevel)
   so this works identically on both Forge and Fabric."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.runtime-interop :as runtime-interop]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core BlockPos]
            [net.minecraft.server MinecraftServer]
@@ -83,6 +84,6 @@
 (defn install-runtime-interop!
   "Install canonical runtime interop using a shared implementation."
   [label server-fn]
-  (runtime-interop/install-runtime-interop!
-    (runtime-interop-impl server-fn)
-    (str label " runtime interop")))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :runtime-interop (runtime-interop-impl server-fn)))
+  nil)
