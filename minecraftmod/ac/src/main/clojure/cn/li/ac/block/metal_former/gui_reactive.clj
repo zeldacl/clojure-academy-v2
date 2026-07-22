@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.metal-former.gui-reactive
-  "Complete reactive replacement for metal_former/gui.clj.
-   Preserves ALL functional logic: container, slots, registration, network + reactive rendering."
+  "Reactive GUI registration for the Metal Former.
+   Owns container wiring, slots, registration, network actions, and reactive rendering."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
@@ -22,7 +22,7 @@
             [clojure.string :as str]))
 
 ;; ============================================================================
-;; Schema + Container (preserved from old gui.clj)
+;; Schema + container
 ;; ============================================================================
 
 (def ^:private former-slot-schema-id :metal-former)
@@ -62,7 +62,7 @@
 (defn- quick-move-stack [c i s] (move-common/quick-move-with-rules c i s @quick-move-config))
 
 ;; ============================================================================
-;; Network (preserved from old gui.clj)
+;; Network actions
 ;; ============================================================================
 
 (defn- request-alternate! [container dir]
@@ -120,7 +120,7 @@
 (def open! bgui/open!)
 
 ;; ============================================================================
-;; Registration (preserved from old gui.clj — registered alongside old for now)
+;; Registration
 ;; ============================================================================
 
 (defn- former-container? [c]

@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.phase-gen.gui-reactive
-  "Complete reactive replacement for phase_gen/gui.clj."
+  "Reactive GUI registration for the Phase Generator."
   (:refer-clojure :exclude [sync])
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]

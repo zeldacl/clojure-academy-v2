@@ -1,6 +1,6 @@
 (ns cn.li.ac.block.wireless-node.gui-reactive
-  "Complete reactive replacement for wireless_node/gui.clj.
-   All functional logic preserved: container, slots, animation, 2s link polling."
+  "Reactive GUI registration for the Wireless Node.
+   Owns container wiring, slots, animation, and 2s link polling."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.network.client :as net-client] [cn.li.ac.energy.operations :as energy-stub]
@@ -21,7 +21,7 @@
   (:import [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================
-;; Animation config (preserved from old wireless_node/gui.clj)
+;; Animation config
 ;; ============================================================================
 
 (defn- anim-config [state]
@@ -32,7 +32,7 @@
 (def ^:private anim-frame-count 10)
 
 ;; ============================================================================
-;; Container + slots (preserved)
+;; Container + slots
 ;; ============================================================================
 
 (def wireless-node-id :wireless-node) (def ^:private gui-type :node)
@@ -77,7 +77,7 @@
    `:inv` tab-page group (a hand-authored keyword id from tech-ui-tabs-reactive,
    not the XML-parsed page — XML-loaded node ids come back as plain strings,
    not keywords, so this is the reliable anchor), positioned/scaled to match
-   the old CGUI create-anim-widget widget (pos 42,35.5 size 186x75 scale 0.5)."
+   the node panel."
   [r container menu player _signals]
   (node-info/attach! r (assoc container :minecraft-container menu) player)
   (when-let [^INode ui-block (or (rt/node-by-id r :ui_block) (rt/node-by-id r "ui_block"))]
@@ -168,4 +168,4 @@
          :slot-count-fn get-slot-count :slot-get-fn get-slot-item
          :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item?
          :slot-changed-fn (fn [_ _] nil) :quick-move-fn quickly-move}))
-    (log/info "Wireless Node GUI initialized (reactive: animation+polling preserved)"))))
+    (log/info "Wireless Node GUI initialized (reactive animation and polling)"))))

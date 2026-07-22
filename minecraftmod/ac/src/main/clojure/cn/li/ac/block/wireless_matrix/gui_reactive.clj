@@ -1,8 +1,7 @@
 (ns cn.li.ac.block.wireless-matrix.gui-reactive
-  "Complete reactive replacement for wireless_matrix/gui.clj (deleted).
-   Container/slot/network/capability-proxy + ownership-policy logic was
-   ported verbatim — none of it ever touched CGUI, only the old
-   create-matrix-gui/create-screen did."
+  "Reactive GUI registration for the Wireless Matrix.
+   Owns container wiring, slots, network actions, capability proxy creation,
+   and ownership-policy checks."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]

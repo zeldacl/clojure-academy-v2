@@ -1,9 +1,8 @@
 (ns cn.li.ac.block.developer.gui-reactive
-  "Complete reactive replacement for developer/gui.clj (container/slot/sync/
-   validation logic ported in verbatim — the old file's CGUI screen assembly
-   is gone, only its pure container-protocol functions survive here). Screen
-   content (classic page_developer.xml layout, console, skill-tree area,
-   cover overlays) lives in panel-reactive.clj."
+  "Reactive GUI registration for the Developer block.
+   Owns container, slot, sync, and validation wiring. Screen content
+   (developer layout, console, skill-tree area, cover overlays) lives in
+   panel-reactive.clj."
   (:require [clojure.string :as str]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -24,7 +23,6 @@
 
 ;; ============================================================================
 ;; Container — internal inventory (2 slots, not user-visible) + state sync
-;; (ported verbatim from developer/gui.clj)
 ;; ============================================================================
 
 (def ^:private developer-sync

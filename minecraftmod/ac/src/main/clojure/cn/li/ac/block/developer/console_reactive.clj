@@ -1,9 +1,7 @@
 (ns cn.li.ac.block.developer.console-reactive
   "Reactive Developer Console — native text-node rendering of the developer
-   console state machine. All pure state transitions (boot animation, task
-   queue, command execution — ported verbatim from the deleted console.clj)
-   live here; only the CGUI textbox rendering has been replaced with native
-   node updates."
+   console state machine. Owns boot animation, task queue, command execution,
+   and native text-node updates."
   (:require [clojure.string :as str]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.runtime.install :as install]
@@ -36,7 +34,7 @@
     (if (> n max-history) (subvec (vec lines) (- n max-history)) (vec lines))))
 
 ;; ============================================================================
-;; Pure state machine (ported verbatim from console.clj)
+;; Console state machine
 ;; ============================================================================
 
 (defn loc

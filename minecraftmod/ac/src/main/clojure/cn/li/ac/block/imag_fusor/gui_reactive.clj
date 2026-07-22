@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.imag-fusor.gui-reactive
-  "Complete reactive replacement for imag_fusor/gui.clj."
+  "Reactive GUI registration for the Imag Fusor."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]

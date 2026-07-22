@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.wind-gen.gui-reactive
-  "Complete reactive replacement for wind_gen/gui.clj (main + base GUIs)."
+  "Reactive GUI registration for the Wind Generator main and base screens."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]

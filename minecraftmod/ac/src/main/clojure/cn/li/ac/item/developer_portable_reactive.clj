@@ -1,6 +1,6 @@
 (ns cn.li.ac.item.developer-portable-reactive
-  "Complete reactive replacement for developer_portable.clj.
-   Reuses cn.li.ac.block.developer.panel-reactive's full classic layout
+  "Reactive screen host for the portable developer item.
+   Reuses cn.li.ac.block.developer.panel-reactive's full developer layout
    (left/right panel, console, skill-tree area, overlays) via its shared
    build-runtime! entry point — the same one the block developer screen
    uses — since portable dev needs the identical UI, just standalone-hosted

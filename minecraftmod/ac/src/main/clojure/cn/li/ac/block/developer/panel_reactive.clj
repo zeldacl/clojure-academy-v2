@@ -1,14 +1,11 @@
 (ns cn.li.ac.block.developer.panel-reactive
-  "Complete reactive replacement for developer/panel.clj + gui.clj's classic
-   page_developer.xml layout (both deleted). All pure business logic
-   (category/level model, right-panel mode derivation, skill-tree render-data,
-   req-start-development!) was ported verbatim from the old panel.clj. Only
-   CGUI widget construction/lookup and the cover-overlay mechanics were ever
-   rewritten natively.
+  "Reactive Developer panel screen.
+   Owns the category/level model, right-panel mode derivation,
+   skill-tree render-data, development requests, and native overlay wiring.
 
    Layout note: page_developer.xml has no new-format XML equivalent, so the
    classic 400x187 layout is reconstructed here as absolute-position native
-   nodes (positions hand-derived from the old CGUI align/pivot math applied
+   nodes (positions hand-derived from the source align/pivot math applied
    to the original XML's fixed widget tree)."
   (:require [clojure.string :as str]
             [cn.li.ac.ability.service.runtime-store :as store]
@@ -66,10 +63,8 @@
 (def ^:private area-w 257.0) (def ^:private area-h 139.0)
 
 ;; ============================================================================
-;; Pure business logic (ported verbatim from the deleted panel.clj) — category/
-;; level model, right-panel mode derivation, skill-tree render-data, dev-start
-;; requests. Only CGUI widget construction/lookup was ever rewritten natively;
-;; none of this touches CGUI.
+;; Panel business logic: category/level model, right-panel mode derivation,
+;; skill-tree render-data, and development-start requests.
 ;; ============================================================================
 
 (defn dev-msg [action]

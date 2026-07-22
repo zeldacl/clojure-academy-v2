@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.solar-gen.gui-reactive
-  "Complete reactive replacement for solar_gen/gui.clj."
+  "Reactive GUI registration for the Solar Generator."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.ac.energy.operations :as energy] [cn.li.mcmod.util.log :as log]

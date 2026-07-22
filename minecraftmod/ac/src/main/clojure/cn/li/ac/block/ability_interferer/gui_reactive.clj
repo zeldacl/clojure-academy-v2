@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.ability-interferer.gui-reactive
-  "Complete reactive replacement for ability_interferer/gui.clj."
+  "Reactive GUI registration for the Ability Interferer."
   (:refer-clojure :exclude [sync])
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
