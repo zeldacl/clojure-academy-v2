@@ -6,7 +6,7 @@ Adding a real supported target is a product decision. If the goal is only to pro
 
 ## Principles
 
-- Use `platform-targets.json` as the only target catalog.
+- Use `platform-catalog.json` as the only target catalog.
 - Add source components explicitly; do not infer behavior from a target id string.
 - Do not generate loader/version combinations automatically.
 - Put Minecraft API differences under `platform-src/minecraft/*`.
@@ -18,7 +18,7 @@ Adding a real supported target is a product decision. If the goal is only to pro
 
 1. Create a new version component under `platform-src/minecraft/version/<mc-component>/`.
 2. Move only version-specific Minecraft API differences into that component.
-3. Keep shared Minecraft code in `platform-src/minecraft/base`.
+3. Keep shared Minecraft code in `platform-src/minecraft/mc-1.20.1`.
 4. Add the component to the target catalog only for targets that are intentionally supported.
 5. Update AOT manifests and target tests in the same change.
 6. Run the relevant single-target compile/test command and `verifyCurrentPlatforms`.
@@ -33,7 +33,7 @@ Adding a real supported target is a product decision. If the goal is only to pro
 
 ## Adding a real target
 
-1. Add an explicit entry in `platform-targets.json`.
+1. Add an explicit entry in `platform-catalog.json`.
 2. Declare:
    - `loader`
    - `minecraftVersion`

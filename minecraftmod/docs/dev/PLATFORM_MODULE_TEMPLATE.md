@@ -32,7 +32,7 @@ platform-src/minecraft/version/<mc-component>/
 Rules:
 
 - Put only version-specific Minecraft API differences here.
-- Move shared code to `platform-src/minecraft/base`.
+- Move shared code to `platform-src/minecraft/mc-1.20.1`.
 - Do not mention loader families from Minecraft components.
 
 ## Catalog entry

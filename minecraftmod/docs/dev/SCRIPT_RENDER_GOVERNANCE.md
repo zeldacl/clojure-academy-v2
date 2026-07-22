@@ -14,6 +14,6 @@ Script rendering code crosses `ac`, `mcmod`, Minecraft-version components and Lo
 ## Rules
 
 - Data model and render intent live in `ac` / `mcmod`.
-- Minecraft render implementation lives in `platform-src/minecraft/version/mc-1201/`.
+- Minecraft render implementation lives in `platform-src/minecraft/mc-1.20.1/`.
 - Loader lifecycle and registration live in `platform-src/loader/<loader>/`.
 - Do not add direct `ac` imports to Loader components.

@@ -2,7 +2,7 @@
   "Forge-specific JEI integration implementation.
 
   This namespace provides the platform-specific JEI recipe registration
-  using the shared Minecraft-version core logic from platform-src/minecraft/version/mc-1201.
+  using the shared Minecraft-version core logic from platform-src/minecraft/mc-1.20.1.
   Delegates ~75% of logic to jei_core; keeps only Forge-specific plugin
   registration and JEI API integration.
 

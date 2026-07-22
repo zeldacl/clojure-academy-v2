@@ -31,7 +31,7 @@
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.phys Vec3]))
 
-(declare install-item-protocols-only!)
+(declare install-item-protocols!)
 
 (defn- world-server-session-id-value
   [^Level level]
@@ -77,9 +77,7 @@
                                       false)))}
         "mc1201 player feedback"))))
 
-(defn install-block-state-protocol-only!
-  "Install BlockState interop functions into the world-ops Framework map.
-   (BlockState ops live in [:platform :world-ops] alongside world ops.)"
+(defn install-block-state-protocol!
   [_adapter]
   (install/framework-once! ::block-state-protocols-installed
     (fn []
@@ -140,8 +138,7 @@
          :position-get-pos (fn [^BlockEntity be] (.getBlockPos be))}
         "mc1201"))))
 
-(defn install-item-protocols-only!
-  "Install ItemStack/Item interop functions into Framework [:platform :item-ops]."
+(defn install-item-protocols!
   [adapter]
   (install/framework-once! ::item-protocols-installed
     (fn []
@@ -198,9 +195,7 @@
     (fn []
       (world/install-world-ops! (world-ops-map adapter) "mc1201"))))
 
-(defn install-entity-protocols-only!
-  "Install entity/player/inventory/menu operation fns into Framework [:platform :entity-ops].
-  Simple interop methods (entity-get-x, player-creative?, etc.) are now plain defn in entity.clj."
+(defn install-entity-protocols!
   [adapter]
   (install/framework-once! ::entity-installed
     (fn []
@@ -279,7 +274,7 @@
         (entity/install-entity-ops! player-impl "mc1201")
         (log/info "mc1201 shared entity protocols initialized")))))
 
-(defn- install-resource-factory! []
+(defn- install-resource-location-factory! []
   (install/framework-once! ::resource-installed
     (fn []
       (resource/install-resource-factory!
@@ -289,35 +284,19 @@
             (ResourceLocation. (str path))))
         "mc1201"))))
 
-(defn install-resource-factory-only!
-  "Install only the shared resource location factory.
-
-  Kept separate for incremental platform migration."
+(defn install-resource-factory!
   []
-  (install-resource-factory!)
+  (install-resource-location-factory!)
   (log/info "mc1201 shared resource factory initialized"))
 
-(defn install-be-fns-only!
-  "Install only block-entity related var-root function hooks.
-
-  `fns-map` keys:
-  :be-get-level, :be-get-world, :be-get-custom-state,
-  :be-set-custom-state!, :be-get-block-id, :be-set-changed!, :be-sync-to-client!"
+(defn install-be-fns!
   [fns-map]
   (install/framework-once! ::be-fns-installed
     (fn []
       (be/install-be-ops! fns-map "mc1201")
       (log/info "mc1201 shared block-entity function hooks initialized"))))
 
-(defn install-world-fns-only!
-  "Install only world-related var-root function hooks.
-
-  `fns-map` keys:
-  :world-get-tile-entity, :world-get-block-state, :world-set-block,
-  :world-remove-block, :world-break-block, :world-place-block-by-id,
-  :world-is-chunk-loaded?, :world-get-day-time, :world-get-dimension-id,
-  :world-server-session-id, :world-get-players, :world-is-raining,
-  :world-is-client-side, :world-can-see-sky"
+(defn install-world-fns!
   [fns-map]
   (install/framework-once! ::world-fns-installed
     (fn []
@@ -328,20 +307,23 @@
   [adapter]
   (install-nbt!)
   (install-position! adapter)
-  (install-item-protocols-only! adapter)
+  (install-item-protocols! adapter)
   (install-world! adapter)
-  (install-entity-protocols-only! adapter)
+  (install-entity-protocols! adapter)
   (install-player-feedback!)
-  (install-resource-factory!)
+  (install-resource-location-factory!)
   (log/info "mc1201 shared installer initialized"))
 
-(defn install-foundation!
-  "Install bootstrap-safe shared foundations only (NBT + position).
-
-  Useful for incremental platform migration where entity/world/item logic
-  still stays in platform-specific code."
-  ([] (install-foundation! nil))
-  ([adapter]
-   (install-nbt!)
-   (install-position! adapter)
-   (log/info "mc1201 foundation installer initialized")))
+(defn install-platform-services!
+  [adapter world-fns-map be-fns-map]
+  (install-nbt!)
+  (install-position! adapter)
+  (install-entity-protocols! adapter)
+  (install-item-protocols! adapter)
+  (install-block-state-protocol! adapter)
+  (install-resource-factory!)
+  (when world-fns-map
+    (install-world-fns! world-fns-map))
+  (when be-fns-map
+    (install-be-fns! be-fns-map))
+  (log/info "mc1201 platform services initialized"))

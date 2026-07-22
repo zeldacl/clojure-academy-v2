@@ -1,6 +1,6 @@
 # Multi-loader verification
 
-Current supported targets are declared in `platform-targets.json`.
+Current supported targets are declared in `platform-catalog.json`.
 
 Required local gate:
 

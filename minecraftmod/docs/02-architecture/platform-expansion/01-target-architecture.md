@@ -20,13 +20,13 @@ platform-src/
   test-support/
 
 platform-target/
-platform-targets.json
+platform-catalog.json
 build-logic/
 ```
 
 ## Rules
 
-- `platform-targets.json` is the only supported-target directory.
+- `platform-catalog.json` is the only supported-target directory.
 - Each target explicitly declares loader, Minecraft version, Java version, source components, test components, capabilities, dependencies, and artifact metadata.
 - Build logic must read the target model; it must not parse behavior from target id strings.
 - The repository must not generate all loader/version combinations.

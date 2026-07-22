@@ -1,14 +1,14 @@
 # 文档索引
 
-本目录只保留当前项目的维护文档。文档描述的是现行架构：核心工程 `api` / `mcmod` / `ac`，以及单一 Gradle 平台工程 `:platform`；具体 Loader 与 Minecraft 版本由 `platform-targets.json` 和 `-PplatformTarget=<target-id>` 选择。
+本目录只保留当前项目的维护文档。文档描述的是现行架构：核心工程 `api` / `mcmod` / `ac`，以及单一 Gradle 平台工程 `:platform`；具体 Loader 与 Minecraft 版本由 `platform-catalog.json` 和 `-PplatformTarget=<target-id>` 选择。
 
 ## 当前构建
 
 - 根工程：`api`、`mcmod`、`ac`、`:platform`。
-- 平台目标：`forge-1.20.1`、`fabric-1.20.1`，均在 `platform-targets.json` 显式声明。
+- 平台目标：`forge-1.20.1`、`fabric-1.20.1`，均在 `platform-catalog.json` 显式声明。
 - 源码组件：
   - 通用平台代码：`platform-src/common/`
-  - Minecraft API 层：`platform-src/minecraft/base/`、`platform-src/minecraft/version/mc-1201/`
+  - Minecraft API 层：`platform-src/minecraft/mc-1.20.1/`、`platform-src/minecraft/mc-1.20.1/`
   - Loader 层：`platform-src/loader/forge/`、`platform-src/loader/fabric/`
 - 构建输出：`platform-target/build/`。
 

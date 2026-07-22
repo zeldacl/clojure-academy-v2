@@ -1,6 +1,6 @@
 # Agent and Tooling Rules
 
-This repository uses a single `:platform` Gradle project. Loader/version behavior is selected only by `platform-targets.json` plus `-PplatformTarget=<target-id>`.
+This repository uses a single `:platform` Gradle project. Loader/version behavior is selected only by `platform-catalog.json` plus `-PplatformTarget=<target-id>`.
 
 ## Current layout
 
@@ -8,8 +8,8 @@ This repository uses a single `:platform` Gradle project. Loader/version behavio
 - `mcmod`: loader-neutral runtime framework.
 - `ac`: content layer.
 - `platform-src/common`: shared platform glue.
-- `platform-src/minecraft/base`: Minecraft API shared across supported Minecraft versions.
-- `platform-src/minecraft/version/mc-1201`: Minecraft 1.20.1-specific API adaptation.
+- `platform-src/minecraft/mc-1.20.1`: Minecraft API shared across supported Minecraft versions.
+- `platform-src/minecraft/mc-1.20.1`: Minecraft 1.20.1-specific API adaptation.
 - `platform-src/loader/forge`: Forge loader entrypoints, metadata, events, and loader bindings.
 - `platform-src/loader/fabric`: Fabric loader entrypoints, metadata, events, and loader bindings.
 - `platform-target`: the single Gradle platform project.

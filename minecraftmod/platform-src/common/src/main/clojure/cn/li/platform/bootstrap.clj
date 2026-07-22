@@ -2,7 +2,7 @@
   "Canonical platform target bootstrap.
 
   The built artifact contains META-INF/academy-target.edn generated from
-  platform-targets.json. Loader entrypoints call this namespace directly; there
+  platform-catalog.json. Loader entrypoints call this namespace directly; there
   is no platform ServiceLoader indirection."
   (:require [cn.li.platform.target :as target]))
 
@@ -40,11 +40,6 @@
   "Initialize the selected platform target exactly once."
   []
   (let [target-model (target/current-target!)
-        {:keys [loader entrypoint]} target-model]
+        {:keys [entrypoint]} target-model]
     (verify-capability-owners! target-model)
-    (case loader
-      "forge" ((require-resolve! (:namespace entrypoint) (:function entrypoint)))
-      "fabric" ((require-resolve! (:namespace entrypoint) (:function entrypoint)))
-      (throw (ex-info "Unsupported platform loader"
-                      {:loader loader
-                       :target (:id target-model)})))))
+    ((require-resolve! (:namespace entrypoint) (:function entrypoint)))))

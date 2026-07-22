@@ -5,7 +5,7 @@ This directory documents the current target-catalog platform architecture.
 Use these rules for all loader/version work:
 
 - One Gradle project: `:platform`.
-- One target catalog: `platform-targets.json`.
+- One target catalog: `platform-catalog.json`.
 - Explicit source components; no target-id string parsing.
 - No generated cartesian product of loader/version combinations.
 - No platform bootstrap SPI or ServiceLoader platform bootstrap files.

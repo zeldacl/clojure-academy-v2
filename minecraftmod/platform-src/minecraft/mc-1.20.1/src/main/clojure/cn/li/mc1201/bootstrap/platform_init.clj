@@ -13,20 +13,7 @@
   (core/install-platform-core! adapter)
   (accessor-registry/init-default-accessors!))
 
-(defn install-platform-foundation+hooks!
-  "Install shared foundation + adapter-driven protocols and factories,
-  then apply platform-provided world/be var-root hooks.
-
-  This is used by platforms that still keep world/be hooks in platform bindings
-  during incremental migration."
+(defn install-platform-services!
   [adapter world-fns-map be-fns-map]
-  (core/install-foundation!)
-  (core/install-entity-protocols-only! adapter)
-  (core/install-item-protocols-only! adapter)
-  (core/install-block-state-protocol-only! adapter)
-  (core/install-resource-factory-only!)
-  (when world-fns-map
-    (core/install-world-fns-only! world-fns-map))
-  (when be-fns-map
-    (core/install-be-fns-only! be-fns-map))
+  (core/install-platform-services! adapter world-fns-map be-fns-map)
   (accessor-registry/init-default-accessors!))

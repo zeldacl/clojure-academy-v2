@@ -55,7 +55,7 @@ subprojects {
 }
 
 ext.platformCatalog = {
-    new JsonSlurper().parse(rootProject.file("platform-targets.json"))
+    new JsonSlurper().parse(rootProject.file("platform-catalog.json"))
 }
 
 ext.cljNamespaceFromFile = { File root, File file ->
@@ -113,16 +113,56 @@ tasks.register("verifyNoThinForwarders") {
     }
 }
 
+tasks.register("verifyNoCompatibilityResidues") {
+    group = "verification"
+    description = "Fail if old compatibility or partial platform install APIs return."
+    doLast {
+        def patterns = [
+            ~/Backward compatible/,
+            ~/backward compatible/,
+            ~/install-[A-Za-z0-9_-]+-only!/,
+            ~/install-platform-foundation\+hooks!/,
+            ~/install-foundation!/
+        ]
+        def hits = []
+        fileTree(rootProject.projectDir) {
+            include "mcmod/src/main/clojure/**/*.clj"
+            include "platform-src/**/*.clj"
+            exclude "**/build/**"
+            exclude "**/.gradle/**"
+        }.files.each { File f ->
+            f.eachLine { line, number ->
+                patterns.each { pattern ->
+                    if ((line =~ pattern).find()) {
+                        hits << "${rootDir.toPath().relativize(f.toPath())}:${number}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (!hits.isEmpty()) {
+            throw new GradleException("Compatibility/partial-install residues remain:\n" + hits.join("\n"))
+        }
+    }
+}
+
 tasks.register("verifyNoDuplicateCapabilities") {
     group = "verification"
     description = "Verify each target capability has exactly one owner."
     doLast {
         def problems = []
         rootProject.ext.platformCatalog().targets.each { id, target ->
+            def components = rootProject.ext.platformCatalog().components ?: [:]
+            ((target.sourceComponents ?: []) + (target.testComponents ?: [])).each { componentId ->
+                if (!components.containsKey(componentId.toString())) {
+                    problems << "${id}: unknown component ${componentId}"
+                }
+            }
             (target.capabilities ?: []).each { capability ->
                 def owners = (target.capabilityOwners ?: [:])[capability] ?: []
                 if (owners.size() != 1) {
                     problems << "${id}:${capability} owners=${owners}"
+                } else if (!components.containsKey(owners.first().toString())) {
+                    problems << "${id}:${capability} unknown owner=${owners.first()}"
                 }
             }
         }
@@ -132,16 +172,69 @@ tasks.register("verifyNoDuplicateCapabilities") {
     }
 }
 
+tasks.register("verifyPlatformCatalog") {
+    group = "verification"
+    description = "Verify platform catalog targets compose declared components only."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def components = catalog.components ?: [:]
+        def problems = []
+        if (components.isEmpty()) {
+            problems << "catalog has no components"
+        }
+        components.each { id, component ->
+            ["source", "tests", "aotManifest"].each { key ->
+                if (component[key]) {
+                    def componentPath = file(component[key].toString())
+                    if (!componentPath.exists()) {
+                        problems << "component ${id}.${key} missing path ${component[key]}"
+                    }
+                }
+            }
+        }
+        catalog.targets.each { targetId, target ->
+            (target.sourceComponents ?: []).each { componentId ->
+                def component = components[componentId.toString()]
+                if (component == null) {
+                    problems << "${targetId} source component ${componentId} is not declared"
+                } else {
+                    if (!component.source) {
+                        problems << "${targetId} source component ${componentId} has no source root"
+                    }
+                    if (component.loader && component.loader != target.loader) {
+                        problems << "${targetId} loader ${target.loader} does not match component ${componentId} loader ${component.loader}"
+                    }
+                    if (component.minecraftVersion && component.minecraftVersion != target.minecraftVersion) {
+                        problems << "${targetId} Minecraft ${target.minecraftVersion} does not match component ${componentId} Minecraft ${component.minecraftVersion}"
+                    }
+                }
+            }
+            (target.testComponents ?: []).each { componentId ->
+                def component = components[componentId.toString()]
+                if (component == null) {
+                    problems << "${targetId} test component ${componentId} is not declared"
+                } else if (!(component.tests ?: component.source)) {
+                    problems << "${targetId} test component ${componentId} has no tests/source root"
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("Invalid platform catalog:\n" + problems.join("\n"))
+        }
+    }
+}
+
 tasks.register("verifyNoUnusedNamespaces") {
     group = "verification"
     description = "Verify platform AOT manifests match current source namespaces."
     doLast {
-        def checks = [
-            [name: "platform-common", dir: file("platform-src/common/src/main/clojure"), manifest: file("platform-src/common/aot-manifest.edn")],
-            [name: "mc-1201", dir: file("platform-src/minecraft/version/mc-1201/src/main/clojure"), manifest: file("platform-src/minecraft/version/mc-1201/aot-manifest.edn")],
-            [name: "forge", dir: file("platform-src/loader/forge/src/main/clojure"), manifest: file("platform-src/loader/forge/aot-manifest.edn")],
-            [name: "fabric", dir: file("platform-src/loader/fabric/src/main/clojure"), manifest: file("platform-src/loader/fabric/aot-manifest.edn")]
-        ]
+        def checks = (rootProject.ext.platformCatalog().components ?: [:]).collect { id, component ->
+            component.aotManifest ? [
+                name: id,
+                dir: file("${component.source}/clojure"),
+                manifest: file(component.aotManifest.toString())
+            ] : null
+        }.findAll { it != null }
         def problems = []
         checks.each { check ->
             def manifestText = check.manifest.isFile() ? check.manifest.text : "[]"
@@ -167,13 +260,23 @@ tasks.register("verifyNoTargetHardcoding") {
     group = "verification"
     description = "Verify active build files use the catalog instead of legacy project paths."
     doLast {
+        def legacyCatalogName = "platform-" + "targets.json"
+        def oldCatalog = file(legacyCatalogName)
+        if (oldCatalog.exists()) {
+            throw new GradleException("Legacy target catalog remains: ${oldCatalog}")
+        }
+        def newCatalog = file("platform-catalog.json")
+        if (!newCatalog.isFile()) {
+            throw new GradleException("Missing platform catalog: ${newCatalog}")
+        }
         def filesToScan = [file("settings.gradle"), file("build.gradle")] +
             fileTree("build-logic") { include "**/*.gradle" }.files +
             fileTree("platform-target") { include "**/*.gradle" }.files
         def forbidden = [
+            legacyCatalogName,
             "project(':forge-" + "1.20.1')",
             "project(':fabric-" + "1.20.1')",
-            "mc-" + "1.20.1/src"
+            "platform-src/minecraft/version/mc-" + "1201"
         ]
         def hits = []
         filesToScan.each { File f ->
@@ -185,6 +288,7 @@ tasks.register("verifyNoTargetHardcoding") {
             }
         }
         def sourceForbidden = [
+            legacyCatalogName,
             ":forge-" + "1.20.1",
             ":fabric-" + "1.20.1",
             "\"forge-" + "1.20.1\"",
@@ -282,6 +386,8 @@ tasks.register("verifyCurrentPlatforms") {
     description = "Run architecture gates for the catalog-based platform layout."
     dependsOn "verifyNoLegacyArchitecture",
               "verifyNoThinForwarders",
+              "verifyNoCompatibilityResidues",
+              "verifyPlatformCatalog",
               "verifyNoDuplicateCapabilities",
               "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",

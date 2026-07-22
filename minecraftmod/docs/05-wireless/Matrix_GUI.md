@@ -9,7 +9,7 @@ Wireless Matrix GUI is an `ac` business GUI. It shares the same GUI protocol, XM
 | Matrix GUI spec and handlers | `ac/src/main/clojure/cn/li/ac/block/wireless-matrix/gui.clj` |
 | Wireless domain state | `ac/src/main/clojure/cn/li/ac/wireless/` |
 | GUI protocol and registry | `mcmod/src/main/clojure/cn/li/mcmod/gui/` |
-| Minecraft 1.20.1 runtime | `platform-src/minecraft/version/mc-1201/gui/` |
+| Minecraft 1.20.1 runtime | `platform-src/minecraft/mc-1.20.1/gui/` |
 | Loader registration | `platform-src/loader/<loader>/` |
 
 ## Rules

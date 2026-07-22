@@ -1,5 +1,39 @@
 {
   "defaultTarget": "forge-1.20.1",
+  "components": {
+    "platform-common": {
+      "kind": "common",
+      "source": "platform-src/common/src/main",
+      "aotManifest": "platform-src/common/aot-manifest.edn"
+    },
+    "minecraft-1.20.1": {
+      "kind": "minecraft",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/minecraft/mc-1.20.1/src/main",
+      "aotManifest": "platform-src/minecraft/mc-1.20.1/aot-manifest.edn"
+    },
+    "forge-1.20.1": {
+      "kind": "loader",
+      "loader": "forge",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/loader/forge/src/main",
+      "tests": "platform-src/loader/forge/src/test",
+      "aotManifest": "platform-src/loader/forge/aot-manifest.edn",
+      "runtimeAotEntrypoint": "cn.li.forge1201.mod"
+    },
+    "fabric-1.20.1": {
+      "kind": "loader",
+      "loader": "fabric",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/loader/fabric/src/main",
+      "aotManifest": "platform-src/loader/fabric/aot-manifest.edn",
+      "runtimeAotEntrypoint": "cn.li.fabric1201.mod"
+    },
+    "platform-test-support": {
+      "kind": "test-support",
+      "tests": "platform-src/test-support/src/main"
+    }
+  },
   "targets": {
     "core": {
       "id": "core",
@@ -22,14 +56,13 @@
       "minecraftVersion": "1.20.1",
       "javaVersion": 17,
       "sourceComponents": [
-        "platform-src/common/src/main",
-        "platform-src/minecraft/base/src/main",
-        "platform-src/minecraft/version/mc-1201/src/main",
-        "platform-src/loader/forge/src/main"
+        "platform-common",
+        "minecraft-1.20.1",
+        "forge-1.20.1"
       ],
       "testComponents": [
-        "platform-src/test-support/src/main",
-        "platform-src/loader/forge/src/test"
+        "platform-test-support",
+        "forge-1.20.1"
       ],
       "capabilities": [
         "loader-entrypoint",
@@ -43,15 +76,15 @@
         "jei"
       ],
       "capabilityOwners": {
-        "loader-entrypoint": ["platform-src/loader/forge"],
-        "client-entrypoint": ["platform-src/loader/forge"],
-        "datagen-entrypoint": ["platform-src/loader/forge"],
-        "minecraft-runtime": ["platform-src/minecraft/version/mc-1201"],
-        "registry": ["platform-src/loader/forge"],
-        "network": ["platform-src/loader/forge"],
-        "gui": ["platform-src/loader/forge"],
-        "capability": ["platform-src/loader/forge"],
-        "jei": ["platform-src/loader/forge"]
+        "loader-entrypoint": ["forge-1.20.1"],
+        "client-entrypoint": ["forge-1.20.1"],
+        "datagen-entrypoint": ["forge-1.20.1"],
+        "minecraft-runtime": ["minecraft-1.20.1"],
+        "registry": ["forge-1.20.1"],
+        "network": ["forge-1.20.1"],
+        "gui": ["forge-1.20.1"],
+        "capability": ["forge-1.20.1"],
+        "jei": ["forge-1.20.1"]
       },
       "dependencies": {
         "minecraft": "com.mojang:minecraft:1.20.1",
@@ -77,14 +110,12 @@
       "minecraftVersion": "1.20.1",
       "javaVersion": 17,
       "sourceComponents": [
-        "platform-src/common/src/main",
-        "platform-src/minecraft/base/src/main",
-        "platform-src/minecraft/version/mc-1201/src/main",
-        "platform-src/loader/fabric/src/main"
+        "platform-common",
+        "minecraft-1.20.1",
+        "fabric-1.20.1"
       ],
       "testComponents": [
-        "platform-src/test-support/src/main",
-        "platform-src/loader/fabric/src/test"
+        "platform-test-support"
       ],
       "capabilities": [
         "loader-entrypoint",
@@ -96,13 +127,13 @@
         "gui"
       ],
       "capabilityOwners": {
-        "loader-entrypoint": ["platform-src/loader/fabric"],
-        "client-entrypoint": ["platform-src/loader/fabric"],
-        "datagen-entrypoint": ["platform-src/loader/fabric"],
-        "minecraft-runtime": ["platform-src/minecraft/version/mc-1201"],
-        "registry": ["platform-src/loader/fabric"],
-        "network": ["platform-src/loader/fabric"],
-        "gui": ["platform-src/loader/fabric"]
+        "loader-entrypoint": ["fabric-1.20.1"],
+        "client-entrypoint": ["fabric-1.20.1"],
+        "datagen-entrypoint": ["fabric-1.20.1"],
+        "minecraft-runtime": ["minecraft-1.20.1"],
+        "registry": ["fabric-1.20.1"],
+        "network": ["fabric-1.20.1"],
+        "gui": ["fabric-1.20.1"]
       },
       "dependencies": {
         "minecraft": "com.mojang:minecraft:1.20.1",

@@ -1,10 +1,10 @@
 # DataGenerator
 
-DataGen 随 `:platform` target 运行。目标由 `-PplatformTarget=<target-id>` 显式选择，配置来自 `platform-targets.json`。
+DataGen 随 `:platform` target 运行。目标由 `-PplatformTarget=<target-id>` 显式选择，配置来自 `platform-catalog.json`。
 
 ## Source ownership
 
-- 共享 Minecraft DataGen 逻辑：`platform-src/minecraft/version/mc-1201/src/main/clojure/cn/li/mc1201/datagen/`
+- 共享 Minecraft DataGen 逻辑：`platform-src/minecraft/mc-1.20.1/src/main/clojure/cn/li/mc1201/datagen/`
 - Forge provider glue：`platform-src/loader/forge/src/main/clojure/cn/li/forge1201/datagen/`
 - Fabric provider glue：`platform-src/loader/fabric/src/main/clojure/cn/li/fabric1201/datagen/`
 - Loader Java entrypoints：对应 `platform-src/loader/<loader>/src/main/java/`

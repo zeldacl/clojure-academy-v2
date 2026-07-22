@@ -9,7 +9,7 @@ Wireless Node GUI is an `ac` business GUI backed by `mcmod` GUI spec and the Min
 | Business GUI spec | `ac/src/main/clojure/cn/li/ac/block/wireless-node/gui.clj` |
 | Wireless tab/presenter | `ac/src/main/clojure/cn/li/ac/wireless/gui/` |
 | GUI protocol and slot schema | `mcmod/src/main/clojure/cn/li/mcmod/gui/` |
-| Minecraft 1.20.1 menu/runtime | `platform-src/minecraft/version/mc-1201/gui/` |
+| Minecraft 1.20.1 menu/runtime | `platform-src/minecraft/mc-1.20.1/gui/` |
 | Loader registration | `platform-src/loader/<loader>/` |
 
 ## Resource paths

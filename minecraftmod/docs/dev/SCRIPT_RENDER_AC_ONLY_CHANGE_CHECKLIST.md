@@ -1,6 +1,6 @@
 # ScriptRender AC-only Change Checklist
 
-Use this checklist when adding/changing visual behavior without touching `platform-src/minecraft/version/mc-1201` runtime.
+Use this checklist when adding/changing visual behavior without touching `platform-src/minecraft/mc-1.20.1` runtime.
 
 ## Preconditions
 

@@ -114,7 +114,7 @@
        (player-ops/install-player-ops-platform! (:player-ops-platform forge-adapter) "forge")
        (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops forge-adapter) "forge")
        (world-block-ops/install-world-block-ops! (:world-block-ops forge-adapter) "forge")
-       (platform-init/install-platform-foundation+hooks!
+       (platform-init/install-platform-services!
          forge-adapter
          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
           :world-get-block-state (resolve-binding! 'world-get-block-state)
@@ -140,7 +140,7 @@
           :be-set-changed! (resolve-binding! 'be-set-changed!)
           :be-get-fluid-height (resolve-binding! 'be-get-fluid-height)
           :be-sync-to-client! (resolve-binding! 'be-sync-to-client!)})
-       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "forge")
+       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!))
        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
        (log/info "forge platform initialized for selected target")))
   nil)

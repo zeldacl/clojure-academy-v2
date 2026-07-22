@@ -5,7 +5,7 @@ Adding a Minecraft version or loader is explicit and incremental.
 ## Minecraft version
 
 - Add a version component under `platform-src/minecraft/version/<component>`.
-- Keep shared API code in `platform-src/minecraft/base`.
+- Keep shared API code in `platform-src/minecraft/mc-1.20.1`.
 - Add the version component only to explicitly supported targets.
 
 ## Loader
@@ -16,5 +16,5 @@ Adding a Minecraft version or loader is explicit and incremental.
 
 ## Target
 
-- Add a `platform-targets.json` entry only when the combination is intentionally supported.
+- Add a `platform-catalog.json` entry only when the combination is intentionally supported.
 - Use synthetic fixture tests for architecture-only validation.

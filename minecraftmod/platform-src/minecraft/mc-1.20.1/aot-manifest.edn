@@ -23,6 +23,7 @@
  "cn.li.mc1201.bootstrap.init-common"
  "cn.li.mc1201.bootstrap.installer-core"
  "cn.li.mc1201.bootstrap.platform-init"
+ "cn.li.mc1201.client.audio.media-playback"
  "cn.li.mc1201.client.effects.hand"
  "cn.li.mc1201.client.effects.level-renderer"
  "cn.li.mc1201.client.effects.particle"

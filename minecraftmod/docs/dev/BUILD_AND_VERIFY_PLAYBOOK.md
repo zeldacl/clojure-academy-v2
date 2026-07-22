@@ -1,6 +1,6 @@
 # Build and Verify Playbook
 
-当前平台构建只有一个 Gradle 工程：`:platform`。具体目标由 `platform-targets.json` 声明，并通过 `-PplatformTarget=<target-id>` 选择；默认目标为 catalog 中声明的 `forge-1.20.1`。
+当前平台构建只有一个 Gradle 工程：`:platform`。具体目标由 `platform-catalog.json` 声明，并通过 `-PplatformTarget=<target-id>` 选择；默认目标为 catalog 中声明的 `forge-1.20.1`。
 
 ## 快速入口
 
@@ -22,7 +22,7 @@
 .\gradlew.bat :platform:remapJar "-PplatformTarget=fabric-1.20.1" -PreleaseAot
 ```
 
-发布件只取 `platform-target/build/libs/` 中由 `remapJar` 生成的非 `shadow` jar，文件名由 `platform-targets.json` 中当前 target 的 `artifact.baseName`、项目版本和 `artifact.classifier` 决定。
+发布件只取 `platform-target/build/libs/` 中由 `remapJar` 生成的非 `shadow` jar，文件名由 `platform-catalog.json` 中当前 target 的 `artifact.baseName`、项目版本和 `artifact.classifier` 决定。
 
 不要发布这些中间产物：
 

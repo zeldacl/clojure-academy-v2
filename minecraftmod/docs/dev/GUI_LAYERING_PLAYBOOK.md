@@ -8,7 +8,7 @@ Use this when adding or changing GUI code.
 |--------|----------|
 | Pure GUI spec / slot schema / metadata | `mcmod/src/main/clojure/cn/li/mcmod/gui/` |
 | Business GUI presenter or screen factory | `ac/src/main/clojure/cn/li/ac/**/gui.clj` |
-| Minecraft 1.20.1 menu/screen runtime | `platform-src/minecraft/version/mc-1201/gui/` |
+| Minecraft 1.20.1 menu/screen runtime | `platform-src/minecraft/mc-1.20.1/gui/` |
 | Forge lifecycle/registration/network glue | `platform-src/loader/forge/` |
 | Fabric lifecycle/registration/network glue | `platform-src/loader/fabric/` |
 

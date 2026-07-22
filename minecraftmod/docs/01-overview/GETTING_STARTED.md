@@ -1,6 +1,6 @@
 # 构建、验证与排障速查
 
-在包含根目录 `settings.gradle` 的 `minecraftmod` 目录执行命令。当前根工程为 `api`、`mcmod`、`ac`、`:platform`；平台目标由 `-PplatformTarget=<target-id>` 选择，默认目标来自 `platform-targets.json`。
+在包含根目录 `settings.gradle` 的 `minecraftmod` 目录执行命令。当前根工程为 `api`、`mcmod`、`ac`、`:platform`；平台目标由 `-PplatformTarget=<target-id>` 选择，默认目标来自 `platform-catalog.json`。
 
 ## 环境
 

@@ -11,7 +11,7 @@ These projects must not import Minecraft, Forge, Fabric, or other loader APIs.
 ## Platform source components
 
 - `platform-src/common`: shared target glue.
-- `platform-src/minecraft/base`: Minecraft API code shared by supported Minecraft versions.
+- `platform-src/minecraft/mc-1.20.1`: Minecraft API code shared by supported Minecraft versions.
 - `platform-src/minecraft/version/*`: version-specific Minecraft API differences.
 - `platform-src/loader/*`: loader lifecycle, metadata, events, and loader-specific bindings.
 

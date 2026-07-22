@@ -40,7 +40,7 @@
        :block-id (BlockRegistryShared/getBlockKey (.getBlock hit-state))})))
 
 (defn- install-be-ops! []
-  (core/install-be-fns-only!
+  (core/install-be-fns!
     {:be-get-level (fn [^ScriptedBlockEntity be] (.getLevel be))
      :be-get-world (fn [^ScriptedBlockEntity be] (.getLevel be))
      :be-get-custom-state (fn [^ScriptedBlockEntity be] (.getCustomState be))
@@ -126,7 +126,7 @@
        (player-ops/install-player-ops-platform! (:player-ops-platform fabric-adapter) "fabric")
        (menu-inventory-ops/install-menu-inventory-ops! (:menu-inventory-ops fabric-adapter) "fabric")
        (world-block-ops/install-world-block-ops! (:world-block-ops fabric-adapter) "fabric")
-       (platform-init/install-platform-foundation+hooks!
+       (platform-init/install-platform-services!
          fabric-adapter
          {:world-get-tile-entity (resolve-binding! 'world-get-tile-entity)
           :world-get-block-state (resolve-binding! 'world-get-block-state)
@@ -145,7 +145,7 @@
           :world-can-see-sky (resolve-binding! 'world-can-see-sky)}
          nil)
        (install-be-ops!)
-       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!) "fabric")
+       (gui-open/install-open-menu! (resolve-binding! 'open-player-menu!))
        (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "fabric")
        (log/info "fabric platform initialized for selected target")))
   nil)

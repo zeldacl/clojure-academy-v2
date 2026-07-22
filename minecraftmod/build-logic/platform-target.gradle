@@ -10,7 +10,9 @@ buildscript {
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
-def catalog = new JsonSlurper().parse(rootProject.file("platform-targets.json"))
+def catalogFile = rootProject.file("platform-catalog.json")
+def catalog = new JsonSlurper().parse(catalogFile)
+def components = catalog.components ?: [:]
 def targetId = (findProperty("platformTarget") ?: catalog.defaultTarget).toString()
 def target = catalog.targets[targetId]
 
@@ -29,6 +31,31 @@ if (target.loader == "none") {
 
 def componentDir = { String component, String child ->
     rootProject.file("${component}/${child}")
+}
+
+def resolveComponent = { String componentId ->
+    def component = components[componentId]
+    if (component == null) {
+        throw new GradleException("Target '${targetId}' references unknown platform component '${componentId}'")
+    }
+    component
+}
+
+def componentSourceRoot = { String componentId ->
+    def source = resolveComponent(componentId).source
+    if (!source) {
+        throw new GradleException("Platform component '${componentId}' has no source root")
+    }
+    source.toString()
+}
+
+def componentTestRoot = { String componentId ->
+    def component = resolveComponent(componentId)
+    def tests = component.tests ?: component.source
+    if (!tests) {
+        throw new GradleException("Platform component '${componentId}' has no test/source root")
+    }
+    tests.toString()
 }
 
 def cljNamespaceFromFile = { File root, File file ->
@@ -66,8 +93,16 @@ if (target.loader != "none") {
     def mcmodProject = project(":mcmod")
     def acProject = project(":ac")
     def releaseAot = rootProject.hasProperty("releaseAot")
-    def sourceComponents = target.sourceComponents.collect { it.toString() }
-    def testComponents = (target.testComponents ?: []).collect { it.toString() }
+    def sourceComponentIds = target.sourceComponents.collect { it.toString() }
+    def testComponentIds = (target.testComponents ?: []).collect { it.toString() }
+    def sourceComponents = sourceComponentIds.collect { componentSourceRoot(it) }
+    def testComponents = testComponentIds.collect { componentTestRoot(it) }
+    def platformAotManifests = sourceComponentIds.collect { resolveComponent(it).aotManifest }
+        .findAll { it }
+        .collect { rootProject.file(it.toString()) }
+    def runtimeEntrypointNamespaces = sourceComponentIds.collect { resolveComponent(it).runtimeAotEntrypoint }
+        .findAll { it }
+        .collect { it.toString() }
     def generatedTargetResources = layout.buildDirectory.dir("generated/target-metadata")
     def generatedDatagenResources = layout.buildDirectory.dir("generated/datagen/${target.id}")
     def datagenHashManifest = generatedDatagenResources.map { it.file("META-INF/academy-datagen-hashes.json") }
@@ -94,7 +129,7 @@ if (target.loader != "none") {
 
     def targetEdn = generatedTargetResources.map { it.file("META-INF/academy-target.edn") }
     tasks.register("generatePlatformTargetMetadata") {
-        inputs.file rootProject.file("platform-targets.json")
+        inputs.file catalogFile
         inputs.property "platformTarget", target.id
         outputs.file targetEdn
         doLast {
@@ -190,13 +225,8 @@ if (target.loader != "none") {
         dependsOn "compileJava"
         classpath.from(files(platformJavaClasses))
         if (rootProject.hasProperty("releaseAot")) {
-            def manifests = [
-                rootProject.file("platform-src/common/aot-manifest.edn"),
-                rootProject.file("platform-src/minecraft/version/mc-1201/aot-manifest.edn"),
-                rootProject.file("platform-src/loader/${target.loader}/aot-manifest.edn")
-            ]
             def runtimeNamespaces = new LinkedHashSet<String>()
-            manifests.findAll { it.isFile() }.each { File manifest ->
+            platformAotManifests.findAll { it.isFile() }.each { File manifest ->
                 manifest.readLines().collect { it.trim() }.findAll { line ->
                     line ==~ /^"[^"]+"$/
                 }.each { line ->
@@ -216,11 +246,6 @@ if (target.loader != "none") {
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
     def platformRuntimeAotDir = layout.buildDirectory.dir("clojure/platform-aot/main")
-    def platformAotManifests = [
-        rootProject.file("platform-src/common/aot-manifest.edn"),
-        rootProject.file("platform-src/minecraft/version/mc-1201/aot-manifest.edn"),
-        rootProject.file("platform-src/loader/${target.loader}/aot-manifest.edn")
-    ]
     def platformAotNamespaces = {
         def runtimeNamespaces = new LinkedHashSet<String>()
         platformAotManifests.findAll { it.isFile() }.each { File manifest ->
@@ -234,10 +259,8 @@ if (target.loader != "none") {
     }
     def platformEntrypointNamespaces = {
         def runtimeNamespaces = new LinkedHashSet<String>()
-        if (target.loader == "forge") {
-            runtimeNamespaces << "cn.li.forge1201.mod"
-        } else if (target.loader == "fabric") {
-            runtimeNamespaces << "cn.li.fabric1201.mod"
+        runtimeEntrypointNamespaces.each { namespaceName ->
+            runtimeNamespaces << namespaceName
         }
         runtimeNamespaces
     }
@@ -348,8 +371,7 @@ if (target.loader != "none") {
         doLast {
             def outputRoot = platformRuntimeAotDir.get().asFile
             def missingEntrypoints = platformRuntimeAotNamespaces().findAll { namespaceName ->
-                namespaceName == "cn.li.forge1201.mod" ||
-                    namespaceName == "cn.li.fabric1201.mod"
+                runtimeEntrypointNamespaces.contains(namespaceName)
             }.collect { namespaceName ->
                 new File(outputRoot, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")
             }.findAll { !it.isFile() }

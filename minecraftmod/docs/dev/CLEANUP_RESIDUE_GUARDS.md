@@ -10,7 +10,7 @@
 | `verifyNoThinForwarders` | Internal pass-through namespaces are not allowed. |
 | `verifyNoDuplicateCapabilities` | Each target capability has exactly one owner. |
 | `verifyNoUnusedNamespaces` | Removed or orphaned namespaces must not remain referenced. |
-| `verifyNoTargetHardcoding` | Build/source logic must read target data from `platform-targets.json`. |
+| `verifyNoTargetHardcoding` | Build/source logic must read target data from `platform-catalog.json`. |
 | `verifyRepositoryHygiene` | Generated output and transient logs stay out of source directories. |
 
 ## Current architecture seams
