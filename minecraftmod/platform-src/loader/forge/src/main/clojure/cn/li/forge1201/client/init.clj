@@ -9,7 +9,6 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
-            [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
@@ -27,7 +26,6 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
-            [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.ac.content.ability-client :as ability-client]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
@@ -331,7 +329,6 @@
   ;; their keybinding content.
   (try
     (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
-    (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
     (catch Exception e
       (log/warn e "Failed to install keyboard input SPI providers")
       (log/stacktrace "Failed to install keyboard input SPI providers" e)))

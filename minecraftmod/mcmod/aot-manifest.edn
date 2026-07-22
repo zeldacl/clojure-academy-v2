@@ -129,7 +129,6 @@
  "cn.li.mcmod.spi.entity-render-registry"
  "cn.li.mcmod.spi.key-scheme-provider"
  "cn.li.mcmod.spi.keybinding-registry"
- "cn.li.mcmod.spi.vanilla-input-control"
  "cn.li.mcmod.ui.anim"
  "cn.li.mcmod.ui.core"
  "cn.li.mcmod.ui.dsl"

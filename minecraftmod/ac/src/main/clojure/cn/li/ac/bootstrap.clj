@@ -23,7 +23,7 @@
   "Initialize the keybinding system for AC.
 
   Prerequisites:
-  - mcmod SPI providers (key-scheme-provider, vanilla-input-control) must be installed
+  - mcmod SPI providers (key-scheme-provider) must be installed
 
   This function:
   1. Registers AC keybinding configs into the neutral mcmod registry
