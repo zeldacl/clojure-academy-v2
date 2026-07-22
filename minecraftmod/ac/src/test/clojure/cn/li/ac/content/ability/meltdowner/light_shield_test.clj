@@ -12,7 +12,7 @@
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -184,7 +184,7 @@
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                             true)
                         potion-effects/available? (constantly true)
-                        potion-effects/apply-potion-effect!* (fn [& _]
+                        potion-effects/apply-effect! (fn [& _]
                                                                (swap! potion-calls* inc)
                                                                nil)]
             (cb/apply-invoke ls/light-shield-tick! :player-id "p-3" :ctx-id "ctx-3" :cost-ok? true)
@@ -209,7 +209,7 @@
                                                      :effect.slowness-amplifier 1
                                                      1))
                         potion-effects/available? (constantly true)
-                        potion-effects/apply-potion-effect!* (fn [& args]
+                        potion-effects/apply-effect! (fn [& args]
                                                                (swap! potion-calls* conj args)
                                                                nil)]
             (cb/apply-invoke ls/light-shield-abort! :player-id "p-4" :ctx-id "ctx-4")

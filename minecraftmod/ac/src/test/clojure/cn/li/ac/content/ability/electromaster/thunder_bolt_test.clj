@@ -9,7 +9,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (defn- stub-lerp-double [_skill-id field-id exp]
   (case field-id
@@ -113,7 +113,7 @@
                   entity-damage/apply-direct-damage!* (fn [_world-id target-id damage _]
                                                        (swap! damage* conj [target-id damage])
                                                        true)
-                  potion-effects/apply-potion-effect!* (fn [& args]
+                  potion-effects/apply-effect! (fn [& args]
                                                         (swap! potion* conj args)
                                                         nil)
                   skill-effects/add-skill-exp! (fn [& args]
@@ -165,7 +165,7 @@
                   entity-damage/apply-direct-damage!* (fn [_world-id target-id damage _]
                                                        (swap! damage* conj [target-id damage])
                                                        true)
-                  potion-effects/apply-potion-effect!* (fn [& args]
+                  potion-effects/apply-effect! (fn [& args]
                                                         (swap! potion* conj args)
                                                         nil)
                   skill-effects/add-skill-exp! (fn [& args]
@@ -201,7 +201,7 @@
                   world-effects/spawn-lightning!* (fn [& _] true)
                   world-effects/find-entities-in-radius* (fn [& _] [])
                   entity-damage/apply-direct-damage!* (fn [& _] true)
-                  potion-effects/apply-potion-effect!* (fn [& args]
+                  potion-effects/apply-effect! (fn [& args]
                                                         (swap! potion* conj args)
                                                         nil)
                   skill-effects/add-skill-exp! (fn [& _] nil)

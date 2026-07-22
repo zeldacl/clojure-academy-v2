@@ -22,7 +22,7 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -123,7 +123,7 @@
 (defn light-shield-deactivate!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when (potion-effects/available?)
-    (potion-effects/apply-potion-effect!*
+    (potion-effects/apply-effect!
       player-id :slowness
       (cfg-int :effect.deactivate-slowness-duration-ticks)
       (cfg-int :effect.slowness-amplifier)))
@@ -192,7 +192,7 @@
 (defn light-shield-abort!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when (potion-effects/available?)
-    (potion-effects/apply-potion-effect!*
+    (potion-effects/apply-effect!
       player-id :slowness
       (cfg-int :effect.abort-slowness-duration-ticks)
       (cfg-int :effect.slowness-amplifier)))

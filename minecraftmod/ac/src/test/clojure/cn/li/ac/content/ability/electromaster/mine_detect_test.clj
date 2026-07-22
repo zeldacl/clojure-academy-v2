@@ -5,7 +5,7 @@
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.ac.content.ability.electromaster.mine-detect :as mine-detect]))
 
 (deftest perform-sends-minimal-activation-payload-and-awards-exp-test
@@ -39,7 +39,7 @@
                                                        nil)
                     fx/send! send!
                     potion-effects/available? (constantly true)
-                    potion-effects/apply-potion-effect!* (fn [& args]
+                    potion-effects/apply-effect! (fn [& args]
                                                            (swap! potion* conj args)
                                                            nil)]
         (cb/apply-invoke mine-detect/mine-detect-perform! :player-id "mine-detect-player" :ctx-id "ctx-1"))

@@ -11,7 +11,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (defn- stub-lerp [_skill-id field-id exp]

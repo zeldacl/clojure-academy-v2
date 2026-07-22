@@ -12,7 +12,7 @@
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.mcmod.platform.world-effects :as world-effects]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def-skill-config-ops :thunder-bolt)
 (def ^:private thunder-bolt-skill-id :thunder-bolt)
@@ -28,7 +28,7 @@
                target-uuid
                (> exp exp-threshold)
                (< (rand) chance))
-      (potion-effects/apply-potion-effect!*
+      (potion-effects/apply-effect!
                                            target-uuid
                                            :slowness
                                            (cfg-int :effect.slowness-duration-ticks)

@@ -2,8 +2,8 @@
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)
-  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿½?0 ticks)
-  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿½?0 ticks)
+  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿?0 ticks)
+  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def-skill-config-ops :body-intensify)
 (def ^:private body-intensify-skill-id :body-intensify)
@@ -101,9 +101,9 @@
           shuffled        (vec (shuffle (base-effects)))]
       (doseq [{:keys [effect max-amplifier]}
               (select-random-effects shuffled prob)]
-        (potion-effects/apply-potion-effect!*
+        (potion-effects/apply-effect!
          player-id effect duration (min level max-amplifier)))
-      (potion-effects/apply-potion-effect!*
+      (potion-effects/apply-effect!
        player-id :hunger hunger-duration (cfg-int :effect.hunger-amplifier)))))
 
 (defn- end-payload [ticks]
@@ -120,7 +120,7 @@
 (defn- body-intensify-tick!
   "The generic dispatch pipeline's hold-ticks argument is never populated for
   server-tick-driven charge-window contexts (cn.li.ac.ability.service.context-manager's
-  tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) â€” so this
+  tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) â€?so this
   self-tracks the charge duration in :skill-state instead of trusting the
   argument, matching railgun.clj/scatter_bomb.clj/mark_teleport.clj."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]

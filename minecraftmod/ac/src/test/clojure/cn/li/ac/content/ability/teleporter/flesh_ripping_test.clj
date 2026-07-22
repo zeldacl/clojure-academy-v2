@@ -11,7 +11,7 @@
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.teleporter.flesh-ripping :as flesh]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (defn- with-flesh-env [f]
   (skill-ctx/with-server-skill-context f))
@@ -104,7 +104,7 @@
                                                  :damage-after damage
                                                  :applied? true})
                     potion-effects/available? (constantly true)
-                    potion-effects/apply-potion-effect!* (fn [_ target-id effect duration amplifier]
+                    potion-effects/apply-effect! (fn [_ target-id effect duration amplifier]
                                                            (swap! potion-calls* conj [target-id effect duration amplifier])
                                                            true)
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -165,7 +165,7 @@
                                                :crit-level 2
                                                :applied? false})
                     potion-effects/available? (constantly true)
-                    potion-effects/apply-potion-effect!* (fn [& _] true)
+                    potion-effects/apply-effect! (fn [& _] true)
                     skill-effects/add-skill-exp! (fn [& _] nil)
                     skill-effects/set-main-cooldown! (fn [& _] nil)
                     fx/send! (fn [_ctx-id entry _evt payload]

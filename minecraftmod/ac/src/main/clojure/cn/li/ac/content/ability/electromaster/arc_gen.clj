@@ -28,7 +28,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
 (def-skill-config-ops :arc-gen)

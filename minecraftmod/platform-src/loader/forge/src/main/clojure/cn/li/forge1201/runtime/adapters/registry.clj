@@ -17,7 +17,6 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.platform.player-motion :as pm]
             [cn.li.mcmod.platform.entity-motion :as pem]
             [cn.li.mcmod.platform.raycast :as prc]
@@ -39,9 +38,11 @@
    (adapter-registry/step :world-effects
                           world-effects/install-world-effects!)
    (adapter-registry/step :potion-effects
-                          #(install-bound-adapter! ppe/install-potion-effects!
-                                                   potion-effects-core/create-potion-effects
-                                                   "Forge potion effects"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :potion-effects
+                               (potion-effects-core/create-potion-effects server-context/get-server))))
    (adapter-registry/step :teleportation
                           #(install-bound-adapter! ptp/install-teleportation!
                                                    teleportation-core/create-teleportation

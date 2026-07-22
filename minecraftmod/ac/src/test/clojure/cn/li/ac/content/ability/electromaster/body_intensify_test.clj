@@ -7,7 +7,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.electromaster.body-intensify :as body-intensify]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]))
+            [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def ^:private apply-buffs! #'body-intensify/apply-body-intensify-buffs!)
 
@@ -40,7 +40,7 @@
   (let [applied* (atom [])]
     (with-buff-config ["speed:3" "jump-boost:3"]
       #(with-redefs [potion-effects/available? (constantly true)
-                     potion-effects/apply-potion-effect!* (fn [player-uuid effect duration amplifier]
+                     potion-effects/apply-effect! (fn [player-uuid effect duration amplifier]
                                                             (swap! applied* conj {:player-uuid player-uuid
                                                                                   :effect effect
                                                                                   :duration duration
@@ -54,7 +54,7 @@
   (let [applied* (atom [])]
     (with-buff-config []
       #(with-redefs [potion-effects/available? (constantly true)
-                     potion-effects/apply-potion-effect!* (fn [player-uuid effect duration amplifier]
+                     potion-effects/apply-effect! (fn [player-uuid effect duration amplifier]
                                                             (swap! applied* conj {:player-uuid player-uuid
                                                                                   :effect effect
                                                                                   :duration duration
@@ -67,7 +67,7 @@
 (defn- seed-charge-context!
   "body-intensify-up! ignores the (never-populated-in-production) hold-ticks
   positional argument and instead self-tracks charge duration in
-  :skill-state â€” so tests must seed a real registered context rather than
+  :skill-state â€?so tests must seed a real registered context rather than
   passing :hold-ticks through cb/apply-invoke."
   [player-id ctx-id ticks]
   (let [owner {:logical-side :server :server-session-id :test-session :player-uuid player-id}]
@@ -88,7 +88,7 @@
       (ctx/reset-contexts-for-test!)
       (with-buff-config ["speed:3"]
         #(with-redefs [potion-effects/available? (constantly true)
-                       potion-effects/apply-potion-effect!* (fn [& _] (swap! applied* conj :applied) true)
+                       potion-effects/apply-effect! (fn [& _] (swap! applied* conj :applied) true)
                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                       (swap! exp-calls* conj [player-id skill-id amount]))
                        skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]

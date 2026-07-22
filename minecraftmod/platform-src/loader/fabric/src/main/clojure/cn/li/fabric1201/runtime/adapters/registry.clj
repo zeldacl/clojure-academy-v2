@@ -20,7 +20,6 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.potion-effects :as ppe]
             [cn.li.mcmod.hooks.core :as power-runtime]))
 
 (defn- install-bound-adapter!
@@ -50,9 +49,11 @@
                                :named-position-store
                                (named-position-store-core/create-named-position-store server-context/get-server))))
    (adapter-registry/step :potion-effects
-                          #(install-bound-adapter! ppe/install-potion-effects!
-                                                   potion-effects-core/create-potion-effects
-                                                   "Fabric potion effects"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :potion-effects
+                               (potion-effects-core/create-potion-effects server-context/get-server))))
    (adapter-registry/step :runtime-interop
                           #(interop-core/install-runtime-interop! "Fabric" server-context/get-server))
    (adapter-registry/step :block-manipulation runtime-block-manipulation/install-block-manipulation!)

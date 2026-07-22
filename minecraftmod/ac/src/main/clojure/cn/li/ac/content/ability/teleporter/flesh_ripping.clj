@@ -38,7 +38,7 @@
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
 
-            [cn.li.mcmod.platform.potion-effects :as potion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
 
             [cn.li.mcmod.util.log :as log]))
 
@@ -166,7 +166,7 @@
 
                      (potion-effects/available?))
 
-            (potion-effects/apply-potion-effect!*
+            (potion-effects/apply-effect!
 
               e-uuid :nausea
 
