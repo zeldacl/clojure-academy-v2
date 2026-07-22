@@ -1,15 +1,12 @@
 (ns cn.li.mcmod.block.query
-  "Block query API - functions to query registered block specifications.
+  "Block query API for registered block specifications.
 
-  Accepts either block ids or already-resolved block specs for most helpers so
-  callers can progressively migrate away from registry wrapper layers."
+  Query helpers accept canonical DSL block ids; code that already has a block
+  spec should read the spec map directly."
   (:require [clojure.string :as str]
             [cn.li.mcmod.block.dsl-core :as dsl-core]
             [cn.li.mcmod.block.dsl-multiblock :as mb]
-            [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.protocol.core :as registry-core]))
-
-(declare get-block-spec)
+            [cn.li.mcmod.block.tile-dsl :as tdsl]))
 
 (defn- normalize-block-id
   [block-id]
@@ -17,18 +14,6 @@
     (keyword? block-id) (name block-id)
     (some? block-id) (str block-id)
     :else nil))
-
-(defn- spec-like?
-  [value]
-  (and (map? value)
-       (contains? value :id)
-       (contains? value :multi-block)))
-
-(defn- resolve-block-spec
-  [block-or-spec]
-  (if (spec-like? block-or-spec)
-    block-or-spec
-    (get-block-spec block-or-spec)))
 
 ;; ============================================================================
 ;; Block Registry Query API
@@ -100,8 +85,8 @@
 
 (defn controller-parts-block?
   "Return true when the block uses controller+parts multiblock mode."
-  [block-or-spec]
-  (= :controller-parts (get-in (resolve-block-spec block-or-spec)
+  [block-id]
+  (= :controller-parts (get-in (get-block-spec block-id)
                                [:multi-block :multiblock-mode])))
 
 ;; ============================================================================
@@ -110,10 +95,10 @@
 
 (defn is-controller-block?
   "Check if a block is a multi-block controller block
-   block-spec: BlockSpec record to check
+   block-id: string or keyword identifier
    Returns: true if this block is a multi-block controller"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (let [multi-block (:multi-block block-spec)
           block-id (normalize-block-id (:id block-spec))
           controller-id (normalize-block-id (:controller-block-id multi-block))]
@@ -129,10 +114,10 @@
 
 (defn is-part-block?
   "Check if a block is part of a multi-block structure
-   block-spec: BlockSpec record to check
+   block-id: string or keyword identifier
    Returns: true if this block is part of a multi-block"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (let [multi-block (:multi-block block-spec)
           block-id (normalize-block-id (:id block-spec))
           part-id (normalize-block-id (:part-block-id multi-block))]
@@ -148,27 +133,27 @@
 
 (defn is-multi-block?
   "Check if a block is multi-block enabled
-   block-spec: BlockSpec record to check
+   block-id: string or keyword identifier
    Returns: true if block has multi-block config"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (let [multi-block (:multi-block block-spec)]
       (:multi-block? multi-block))))
 
 (defn has-block-entity?
   "Check if a block is bound to a Tile DSL block entity.
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: true if Tile DSL maps the block to a tile-id"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (boolean (tdsl/get-tile-id-for-block (:id block-spec)))))
 
 (defn is-light-emitter?
   "Check if a block emits light
-   block-spec: BlockSpec record to check
+   block-id: string or keyword identifier
    Returns: true if block has light level > 0"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (pos? (get-in block-spec [:rendering :light-level] 0))))
 
 ;; ============================================================================
@@ -177,52 +162,52 @@
 
 (defn get-controller-block-id
   "Get the controller block ID for a multi-block structure
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: string block ID or nil"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:multi-block :controller-block-id])))
 
 (defn get-part-block-id
   "Get the part block ID for a multi-block structure
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: string block ID or nil"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:multi-block :part-block-id])))
 
 (defn get-tile-kind
   "Get the tile entity kind for a block
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: keyword tile kind or nil"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (some-> (tdsl/get-tile-id-for-block (:id block-spec))
             tdsl/get-tile
             :tile-kind)))
 
 (defn get-light-level
   "Get the light emission level for a block
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: integer 0-15"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:rendering :light-level] 0)))
 
 (defn get-hardness
   "Get the hardness value for a block
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: float hardness value"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:physical :hardness] 1.5)))
 
 (defn get-material
   "Get the material type for a block
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: keyword material (:stone, :wood, etc.)"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:physical :material] :stone)))
 
 ;; ============================================================================
@@ -231,10 +216,10 @@
 
 (defn get-structure-offsets
   "Get all relative offsets for a multi-block structure
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: vector of {:x :y :z :relative-x :relative-y :relative-z :is-origin?} maps or nil"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (let [multi-block (:multi-block block-spec)]
       (when (:multi-block? multi-block)
         (let [origin (or (:multi-block-origin multi-block) {:x 0 :y 0 :z 0})
@@ -244,21 +229,20 @@
           positions)))))
 
 (defn get-block-event-handler
-  "Get event handler function from block spec by event type."
-  [block-or-spec event-type]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  "Get a block event handler function by block id and event type."
+  [block-id event-type]
+  (when-let [block-spec (get-block-spec block-id)]
     (get-in block-spec [:events event-type])))
 
 (defn has-block-event-handler?
   "Return true when an explicit block event handler exists."
-  [block-or-spec event-type]
-  (some? (get-block-event-handler block-or-spec event-type)))
+  [block-id event-type]
+  (some? (get-block-event-handler block-id event-type)))
 
 (defn has-block-state-properties?
   "Check if a block has custom block state properties
-   block-spec: BlockSpec record
+   block-id: string or keyword identifier
    Returns: true if block has block-state-properties defined"
-  [block-or-spec]
-  (when-let [block-spec (resolve-block-spec block-or-spec)]
+  [block-id]
+  (when-let [block-spec (get-block-spec block-id)]
     (boolean (get-in block-spec [:block-state :block-state-properties]))))
-

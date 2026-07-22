@@ -67,7 +67,7 @@
   [{:keys [world pos block-id]}]
   (when (bquery/is-controller-block? block-id)
     (let [controller-spec (bquery/get-block-spec block-id)
-          part-block-id (bquery/get-part-block-id controller-spec)
+          part-block-id (get-in controller-spec [:multi-block :part-block-id])
           mx (pos/pos-x pos)
           my (pos/pos-y pos)
           mz (pos/pos-z pos)]
