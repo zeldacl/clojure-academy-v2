@@ -24,8 +24,6 @@
 (defn pose-ops-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :pose-ops])))
 
-(defn call-with-pose-ops [ops f] (f ops))
-
 (defn apply-y-rotation [pose-stack angle-degrees]
   (if-let [f (pose-op :y-rotation)]
     (try (f pose-stack angle-degrees)

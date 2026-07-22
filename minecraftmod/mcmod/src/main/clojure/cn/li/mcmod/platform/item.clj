@@ -1,5 +1,6 @@
 (ns cn.li.mcmod.platform.item
   "Item operations via Framework function map — pure relay layer, no MC dependencies."
+  (:refer-clojure :exclude [empty?])
   (:require [cn.li.mcmod.framework :as fw]))
 
 (def item-ops-keys
@@ -7,7 +8,7 @@
     :item-save-to-nbt :item-get-or-create-tag :item-get-max-damage
     :item-set-damage! :item-get-damage :item-get-item :item-get-tag-compound :item-split
     :item-get-description-id :item-get-registry-name
-    :create-item-from-nbt :create-item-stack-by-id :item-stack-empty? :item-registry-name})
+    :create-item-from-nbt :create-item-stack-by-id :item-stack-empty?})
 
 (defn install-item-ops!
   [ops-map _label]

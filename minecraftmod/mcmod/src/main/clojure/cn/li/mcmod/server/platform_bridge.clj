@@ -17,8 +17,6 @@
 (defn server-bridge-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :server-bridge])))
 
-(defn call-with-server-bridge [ops f] (f ops))
-
 (defn reset-server-bridge-for-test!
   []
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :server-bridge] nil)) nil)

@@ -23,8 +23,6 @@
 (defn render-buffer-ops-available? []
   (boolean (get-in @(fw/fw-atom) [:platform :render-buffer-ops])))
 
-(defn call-with-render-buffer-ops [ops f] (f ops))
-
 (defn- require-buffer-fn [buffer-fn kind]
   (or buffer-fn
       (throw (ex-info (str "Render buffer function not initialized: " kind)

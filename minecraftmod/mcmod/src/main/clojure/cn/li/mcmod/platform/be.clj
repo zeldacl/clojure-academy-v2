@@ -22,7 +22,6 @@
     (log/error "BeOps install FAILED: Framework atom nil")))
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :be-ops])))
-(defn call-with-be-ops [ops f] (f ops))
 
 (defn- call-log [level & xs]
   (case level
