@@ -1,5 +1,5 @@
 (ns cn.li.forge1201.runtime.block-manipulation
-  "Forge thin adapter for IBlockManipulation protocol.
+  "Forge block-manipulation runtime for IBlockManipulation protocol.
   Loader-agnostic ops delegate to mc1201 adapter.block-manipulation.
   Break/can-break use Forge BlockEvent$BreakEvent inline."
   (:require [cn.li.mc1201.runtime.adapter.block-manipulation :as block-manipulation]

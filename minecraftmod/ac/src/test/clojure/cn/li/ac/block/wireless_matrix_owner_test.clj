@@ -35,7 +35,7 @@
       (is (false? (logic/owner-authorized?
                    {:placer-uuid "11111111-1111-1111-1111-111111111111"
                     :placer-name "alice"}
-                   :player)))))))
+                   :player))))))
 
 (deftest placer-name-from-state
   (is (= "Dev" (logic/placer-name {:placer-name "Dev"})))

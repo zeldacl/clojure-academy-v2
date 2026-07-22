@@ -267,16 +267,6 @@
       (log/stacktrace "Error executing quick move" e)
       nil)))
 
-(defn safe-execute-quick-move
-  "Safe wrapper for execute-quick-move."
-  [container slot-index player-inventory-start]
-  (try
-    (execute-quick-move container slot-index player-inventory-start)
-    (catch Exception e
-      (log/error "Error in safe quick move:" (ex-message e))
-      (log/stacktrace "Error in safe quick move" e)
-      nil)))
-
 ;; ============================================================================
 ;; Design Notes
 ;; ============================================================================;
@@ -304,7 +294,7 @@
 ;;    - get-container-type: returns :gui-type from metadata
 ;;
 ;; 5. **Error Handling*:
-;;    - safe-* wrappers catch exceptions
+;;    - public platform callbacks catch exceptions
 ;;    - Return sensible defaults on error
 ;;    - Log errors for debugging
 ;;

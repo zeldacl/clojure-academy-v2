@@ -20,7 +20,7 @@
 (defn execute-quick-move-forge
   [_menu container slot-index _slot _stack]
   (let [player-inventory-start (player-inventory-start-for container)]
-    (dispatcher/safe-execute-quick-move container slot-index player-inventory-start)))
+    (dispatcher/execute-quick-move container slot-index player-inventory-start)))
 
 (defn get-gui-id-for-container
   [container]

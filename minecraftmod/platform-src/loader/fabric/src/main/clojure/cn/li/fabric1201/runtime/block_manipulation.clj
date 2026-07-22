@@ -1,5 +1,5 @@
 (ns cn.li.fabric1201.runtime.block-manipulation
-  "Fabric thin adapter for IBlockManipulation protocol.
+  "Fabric block-manipulation runtime for IBlockManipulation protocol.
   Delegates to mc1201 adapter.block-manipulation using Fabric server-context.
   break-guard uses vanilla build and spawn-protection checks."
   (:require [cn.li.mc1201.runtime.adapter.block-manipulation :as block-manipulation]

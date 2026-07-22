@@ -26,29 +26,22 @@
     (log/info "Constraint Plate initialized"))))
 
 (defn is-constraint-plate?
-  "Check if ItemStack (or item-like value) is a constraint plate.
-
-  Accepts either a platform `ItemStack` or an item/spec-like map.
-  For ItemStacks we extract the description id and compare against the
-  DSL `:id` to make the predicate robust across representations.
-  "
+  "Check whether a platform ItemStack is a constraint plate."
   [item-stack]
   (when item-stack
-    (let [id-from-spec #(when (map? %) (:id %))
-       item-obj (try (item/object item-stack) (catch Throwable _ nil))
-       registry-name (when item-obj
-             (try (item/registry-name item-obj) (catch Throwable _ nil)))
-       desc (when item-obj
-         (try (str (item/description-id item-obj)) (catch Throwable _ nil)))
-       id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
-       id (or id-from-stack (id-from-spec item-stack))
-            result (boolean
-                (or (= id constraint-plate-id)
-                  (and (string? desc) (str/includes? desc constraint-plate-id))))]
+    (let [item-obj (try (item/object item-stack) (catch Throwable _ nil))
+          registry-name (when item-obj
+                          (try (item/registry-name item-obj) (catch Throwable _ nil)))
+          desc (when item-obj
+                 (try (str (item/description-id item-obj)) (catch Throwable _ nil)))
+          item-id (or registry-name (when desc (last (str/split desc #"\\."))))
+          result (boolean
+                   (or (= item-id constraint-plate-id)
+                       (and (string? desc) (str/includes? desc constraint-plate-id))))]
       (try
         (log/debug "is-constraint-plate?" {:stack-class (class item-stack)
                                             :desc desc
-                                            :derived-id id
+                                            :derived-id item-id
                                             :result result})
         (catch Throwable _))
       result)))

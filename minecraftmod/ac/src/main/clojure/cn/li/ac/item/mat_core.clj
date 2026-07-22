@@ -57,33 +57,24 @@
 ;; ============================================================================
 
 (defn is-mat-core?
-  "Check if ItemStack (or item-like value) is a matrix core.
-
-  Accepts either a platform `ItemStack` or an item/spec-like value.
-  For ItemStacks we extract the item id from the item's description id
-  (e.g. \"item.my_mod.mat_core_0\") and compare against the DSL ids.
-  This makes the predicate robust across platform vs. DSL representations.
-  "
+  "Check whether a platform ItemStack is a matrix core."
   [item-stack]
   (when item-stack
-    (let [id-from-spec #(when (map? %) (:id %))
-       item-obj (try (item/object item-stack) (catch Throwable _ nil))
-       registry-name (when item-obj
-             (try (item/registry-name item-obj) (catch Throwable _ nil)))
-       desc (when item-obj
-         (try (str (item/description-id item-obj)) (catch Throwable _ nil)))
-       id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
-       id (or id-from-stack (id-from-spec item-stack))
-          ;; Match if derived desc contains DSL id (handles different desc formats)
-            result (boolean
-               (some (fn [spec-id]
-                 (or (= id spec-id)
-                     (and (string? desc) (str/includes? desc spec-id))))
-               core-item-ids))]
+    (let [item-obj (try (item/object item-stack) (catch Throwable _ nil))
+          registry-name (when item-obj
+                          (try (item/registry-name item-obj) (catch Throwable _ nil)))
+          desc (when item-obj
+                 (try (str (item/description-id item-obj)) (catch Throwable _ nil)))
+          item-id (or registry-name (when desc (last (str/split desc #"\\."))))
+          result (boolean
+                   (some (fn [spec-id]
+                           (or (= item-id spec-id)
+                               (and (string? desc) (str/includes? desc spec-id))))
+                         core-item-ids))]
       ;; (try
       ;;   (log/debug "is-mat-core?" {:stack-class (class item-stack)
       ;;                                :desc desc
-      ;;                                :derived-id id
+      ;;                                :derived-id item-id
       ;;                                :result result})
       ;;   (catch Throwable _))
       result)))
