@@ -9,7 +9,7 @@
             [cn.li.ac.content.ability.vecmanip.vec-reflection :as vr]
             [cn.li.ac.content.ability.vecmanip.arbitration]
             [cn.li.mcmod.platform.entity-damage]
-            [cn.li.mcmod.platform.entity-motion]
+            [cn.li.ac.ability.effects.motion]
             [cn.li.mcmod.platform.raycast]
             [cn.li.mcmod.platform.world-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -267,9 +267,9 @@
                                                                          {:success? true :uuid "spawned" :entity-id (:entity-id spec)})
                   cn.li.mcmod.platform.raycast/available? (constantly true)
                   cn.li.mcmod.platform.raycast/get-player-look-vector* (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/available? (constantly true)
-                  cn.li.mcmod.platform.entity-motion/get-velocity* (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/discard-entity!* (fn [world-id entity-id]
+                  cn.li.ac.ability.effects.motion/entity-motion-available? (constantly true)
+                  cn.li.ac.ability.effects.motion/entity-velocity (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
+                  cn.li.ac.ability.effects.motion/discard-entity! (fn [world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
          "p1" "ctx-1" true)
@@ -327,11 +327,11 @@
                                                                          {:success? false})
                   cn.li.mcmod.platform.raycast/available? (constantly true)
                   cn.li.mcmod.platform.raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 1.0 :z 0.0})
-                  cn.li.mcmod.platform.entity-motion/available? (constantly true)
-                  cn.li.mcmod.platform.entity-motion/get-velocity* (fn [& _] {:x 0.0 :y 0.0 :z 2.0})
-                  cn.li.mcmod.platform.entity-motion/set-velocity!* (fn [world-id entity-id vx vy vz]
+                  cn.li.ac.ability.effects.motion/entity-motion-available? (constantly true)
+                  cn.li.ac.ability.effects.motion/entity-velocity (fn [& _] {:x 0.0 :y 0.0 :z 2.0})
+                  cn.li.ac.ability.effects.motion/set-entity-velocity! (fn [world-id entity-id vx vy vz]
                                                                      (swap! set-velocity-calls conj [world-id entity-id vx vy vz]))
-                  cn.li.mcmod.platform.entity-motion/discard-entity!* (fn [world-id entity-id]
+                  cn.li.ac.ability.effects.motion/discard-entity! (fn [world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
          "p1" "ctx-1" true)

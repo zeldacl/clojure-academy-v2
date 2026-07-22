@@ -13,7 +13,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.fx :as fx]
                         [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
@@ -101,11 +101,11 @@
                                 (knockback-velocity player-id hit-pos))]
                 (when (entity-damage/available?)
                   (entity-damage/apply-direct-damage!* world-id target-id damage :generic))
-                (when (and knockback (entity-motion/available?))
-                  (entity-motion/set-velocity!* world-id target-id
+                (when (and knockback (motion-effects/entity-motion-available?))
+                  (motion-effects/set-entity-velocity! world-id target-id
                                                 (:x knockback) (:y knockback) (:z knockback)))
-                (when (entity-motion/available?)
-                  (entity-motion/add-velocity!* world-id target-id
+                (when (motion-effects/entity-motion-available?)
+                  (motion-effects/add-entity-velocity! world-id target-id
                                                 (:x impulse) (:y impulse) (:z impulse)))
                 (fx/send! ctx-id {:topic :directed-shock/fx-perform :mode :perform} nil {:target-id target-id
                                                                                           :world-id world-id

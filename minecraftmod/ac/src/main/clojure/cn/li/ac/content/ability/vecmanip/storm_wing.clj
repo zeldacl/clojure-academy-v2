@@ -28,7 +28,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
@@ -89,7 +89,7 @@
                                         player-id world-id bx by bz false))))))))
 
 (defn- knockback-nearby-entities! [player-id world-id px py pz]
-  (when (and (world-effects/available?) (entity-motion/available?))
+  (when (and (world-effects/available?) (motion-effects/entity-motion-available?))
     (let [entities (world-effects/find-entities-in-radius*
                      world-id (double px) (double py) (double pz) (cfg-double :combat.mastery-knockback-radius))]
       (doseq [entity entities
@@ -99,7 +99,7 @@
               dy (- (double (:y entity)) (double py))
               dz (- (double (:z entity)) (double pz))
               dist (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))]
-          (entity-motion/add-velocity!*
+          (motion-effects/add-entity-velocity!
                                        world-id eid
                                        (* (/ dx dist) (cfg-double :combat.mastery-knockback-strength))
                                        (* (/ dy dist) (cfg-double :combat.mastery-knockback-strength))

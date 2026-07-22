@@ -15,7 +15,7 @@
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]))
 
@@ -159,11 +159,11 @@
                 (entity-damage/apply-direct-damage!* world-id (:uuid entity) damage :generic))
               (let [knockback (knockback-impulse player-id entity)
                     push (push-impulse player-id entity)]
-                (when (entity-motion/available?)
-                  (entity-motion/set-velocity!* world-id (:uuid entity)
+                (when (motion-effects/entity-motion-available?)
+                  (motion-effects/set-entity-velocity! world-id (:uuid entity)
                                                 (:x knockback) (:y knockback) (:z knockback)))
-                (when (entity-motion/available?)
-                  (entity-motion/add-velocity!* world-id (:uuid entity)
+                (when (motion-effects/entity-motion-available?)
+                  (motion-effects/add-entity-velocity! world-id (:uuid entity)
                                                 (:x push) (:y push) (:z push)))))
             (break-nearby-blocks! player-id world-id hit-pos exp*)
             (fx/send! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos

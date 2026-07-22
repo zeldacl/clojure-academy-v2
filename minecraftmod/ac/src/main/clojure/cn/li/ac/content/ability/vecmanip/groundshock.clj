@@ -22,7 +22,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.entity-motion :as entity-motion]
+                        [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -194,8 +194,8 @@
                                               entity-id
                                               damage
                                               :generic))
-        (when (entity-motion/available?)
-          (entity-motion/add-velocity!*
+        (when (motion-effects/entity-motion-available?)
+          (motion-effects/add-entity-velocity!
                                        world-id
                                        entity-id
                                        0.0

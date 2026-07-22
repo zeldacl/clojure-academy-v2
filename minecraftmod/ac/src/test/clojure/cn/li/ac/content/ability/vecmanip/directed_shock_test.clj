@@ -10,7 +10,7 @@
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def ^:private spec ds/directed-shock)
@@ -128,10 +128,10 @@
                          entity-damage/available? (constantly true)
                          entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
                                                                 (swap! damage-calls* conj [world-id target-id damage kind]))
-                         entity-motion/available? (constantly true)
-                         entity-motion/add-velocity!* (fn [world-id target-id x y z]
+                         motion-effects/entity-motion-available? (constantly true)
+                         motion-effects/add-entity-velocity! (fn [world-id target-id x y z]
                                                         (swap! add-velocity-calls* conj [world-id target-id x y z]))
-                         entity-motion/set-velocity!* (fn [world-id target-id x y z]
+                         motion-effects/set-entity-velocity! (fn [world-id target-id x y z]
                                                         (swap! set-velocity-calls* conj [world-id target-id x y z]))
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (case (:topic entry)

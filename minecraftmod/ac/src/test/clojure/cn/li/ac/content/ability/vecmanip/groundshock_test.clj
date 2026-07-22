@@ -8,7 +8,7 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
@@ -42,8 +42,8 @@
     (with-redefs [entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage!* (fn [world-id entity-id damage _]
                                                        (swap! damage-calls* conj [world-id entity-id damage]))
-                  entity-motion/available? (constantly true)
-                  entity-motion/add-velocity!* (fn [world-id entity-id vx vy vz]
+                  motion-effects/entity-motion-available? (constantly true)
+                  motion-effects/add-entity-velocity! (fn [world-id entity-id vx vy vz]
                                                  (swap! velocity-calls* conj [world-id entity-id vx vy vz]))
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args) nil)
                   skill-config/tunable-double (fn [_ field-id]

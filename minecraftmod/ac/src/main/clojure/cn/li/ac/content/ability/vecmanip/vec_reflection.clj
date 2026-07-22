@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
-                        [cn.li.mcmod.platform.entity-motion :as entity-motion]
+                        [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -322,8 +322,8 @@
                                                (raycast/get-player-look-vector* player-id))]
                         (when (and arbitration-allowed?
                                    (arbitration/claim-projectile! player-id :vec-reflection entity-id))
-                          (let [entity-vel (when (entity-motion/available?)
-                                             (entity-motion/get-velocity*
+                          (let [entity-vel (when (motion-effects/entity-motion-available?)
+                                             (motion-effects/entity-velocity
                                                                          world-id
                                                                          entity-id))
                                 speed (Math/sqrt (+ (Math/pow (double (or (:x entity-vel) 0.0)) 2.0)
@@ -352,14 +352,14 @@
                                                                                      :vz vel-z
                                                                                      :owner-uuid player-id})
                                         spawned? (boolean (:success? spawn-result))]
-                                    (when (and spawned? (entity-motion/available?))
-                                      (entity-motion/discard-entity!* world-id entity-id))
-                                    (when (and (not spawned?) (entity-motion/available?))
-                                      (entity-motion/set-velocity!*
+                                    (when (and spawned? (motion-effects/entity-motion-available?))
+                                      (motion-effects/discard-entity! world-id entity-id))
+                                    (when (and (not spawned?) (motion-effects/entity-motion-available?))
+                                      (motion-effects/set-entity-velocity!
                                                                    world-id
                                                                    entity-id vel-x vel-y vel-z)))
-                                  (when (entity-motion/available?)
-                                    (entity-motion/set-velocity!*
+                                  (when (motion-effects/entity-motion-available?)
+                                    (motion-effects/set-entity-velocity!
                                                                  world-id
                                                                  entity-id vel-x vel-y vel-z)))
                                 (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))

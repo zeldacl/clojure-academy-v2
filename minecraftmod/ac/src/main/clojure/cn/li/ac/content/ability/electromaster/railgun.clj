@@ -19,7 +19,7 @@
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -97,7 +97,7 @@
 (defn- discard-coin-entity!
   "Kills a specific coin entity by UUID. Falls back to nearby cleanup when UUID is nil."
   [player-id coin-uuid]
-  (when (and (world-effects/available?) (entity-motion/available?))
+  (when (and (world-effects/available?) (motion-effects/entity-motion-available?))
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)]
       (when (and pos world-id)
@@ -106,7 +106,7 @@
           (when (and (coin-entity? world-id ent)
                      (or (nil? coin-uuid)
                          (= coin-uuid (:uuid ent))))
-            (entity-motion/discard-entity!*
+            (motion-effects/discard-entity!
                                            world-id (:uuid ent))))))))
 
 (defn- qte-status [p]

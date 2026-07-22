@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.vecmanip.vec-deviation :as vd]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 ;; ---------------------------------------------------------------------------
@@ -99,11 +99,11 @@
                    world-effects/find-entities-in-radius*
                    (fn [& _#] [(arrow-entity)])
                    world-effects/available? (constantly true)
-                   entity-motion/set-velocity!*
+                   motion-effects/set-entity-velocity!
                    (fn [& _#] (swap! set-vel-calls# conj :called))
-                   entity-motion/discard-entity!*
+                   motion-effects/discard-entity!
                    (fn [& _#] nil)
-                   entity-motion/available? (constantly true)
+                   motion-effects/entity-motion-available? (constantly true)
                    skill-effects/perform-resource!
                    (fn [_a# _b# cp# _d#]
                      (swap! consume-calls# conj cp#)

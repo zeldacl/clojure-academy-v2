@@ -1,7 +1,6 @@
 (ns cn.li.ac.ability.effects.motion
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.entity-motion :as entity-motion]
             [cn.li.mcmod.platform.teleportation :as teleportation]))
 
 (defn player-motion-available?
@@ -48,6 +47,39 @@
    (when-let [fw-atom (fw/fw-atom)]
      (platform/call-adapter fw-atom :player-motion :dismount-riding! player-id))))
 
+(defn entity-motion-available?
+  []
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/get-adapter fw-atom :entity-motion))))
+
+(defn set-entity-velocity!
+  [world-id entity-uuid x y z]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :set-velocity!
+                            world-id entity-uuid x y z))))
+
+(defn add-entity-velocity!
+  [world-id entity-uuid x y z]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :add-velocity!
+                            world-id entity-uuid x y z))))
+
+(defn discard-entity!
+  [world-id entity-uuid]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :discard-entity!
+                            world-id entity-uuid))))
+
+(defn entity-velocity
+  [world-id entity-uuid]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :entity-motion :get-velocity
+                           world-id entity-uuid)))
+
 (defn execute-set-player-velocity!
   [evt {:keys [x y z]}]
   (when (player-motion-available?)
@@ -60,12 +92,12 @@
 
 (defn execute-add-entity-velocity!
   [evt {:keys [target x y z]}]
-  (when (entity-motion/available?)
+  (when (entity-motion-available?)
     (let [uuid (or (when (map? target) (:uuid target))
                    (get evt target)
                    target)]
       (when (string? uuid)
-        (entity-motion/add-velocity!*
+        (add-entity-velocity!
                                      (:world-id evt)
                                      uuid
                                      (double (or x 0.0))
@@ -78,4 +110,3 @@
   (when (teleportation/available?)
     (teleportation/reset-fall-damage!* (:player-id evt)))
   evt)
-

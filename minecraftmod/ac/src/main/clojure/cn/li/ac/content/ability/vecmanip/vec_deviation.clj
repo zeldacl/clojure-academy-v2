@@ -23,7 +23,7 @@
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
-                        [cn.li.mcmod.platform.entity-motion :as entity-motion]
+                        [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -198,13 +198,13 @@
                           ;; Consume only after arbitration succeeds; cap to available CP (force-consume semantics)
                           (when (pos? actual-cost)
                             (fx-common/perform-resource! player-id 0.0 actual-cost false))
-                          (when (entity-motion/available?)
-                            (entity-motion/set-velocity!*
+                          (when (motion-effects/entity-motion-available?)
+                            (motion-effects/set-entity-velocity!
                                                          world-id entity-uuid 0.0 0.0 0.0))
                           (when (or (contains? (large-fireball-ids) eid)
                                     (contains? (small-fireball-ids) eid))
-                            (when (entity-motion/available?)
-                              (entity-motion/discard-entity!* world-id entity-uuid)))
+                            (when (motion-effects/entity-motion-available?)
+                              (motion-effects/discard-entity! world-id entity-uuid)))
                           (when (and (contains? (large-fireball-ids) eid)
                                      (world-effects/available?))
                             (world-effects/create-explosion!*

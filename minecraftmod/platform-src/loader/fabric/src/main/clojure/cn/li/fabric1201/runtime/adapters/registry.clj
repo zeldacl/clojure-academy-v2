@@ -36,7 +36,12 @@
                                :player-motion
                                (runtime-player-motion/fabric-player-motion))))
    (adapter-registry/step :entity-damage runtime-entity-damage/install-entity-damage!)
-   (adapter-registry/step :entity-motion runtime-entity-motion/install-entity-motion!)
+   (adapter-registry/step :entity-motion
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :entity-motion
+                               (runtime-entity-motion/fabric-entity-motion))))
    (adapter-registry/step :entity-query runtime-entity-query/install-entity-query!)
    (adapter-registry/step :raycast
                           #(install-bound-adapter! prc/install-raycast!

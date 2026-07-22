@@ -17,7 +17,6 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.teleportation :as ptp]
-            [cn.li.mcmod.platform.entity-motion :as pem]
             [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.entity :as pentity]))
 
@@ -59,9 +58,11 @@
                                :player-motion
                                (player-motion-core/create-player-motion server-context/get-server))))
    (adapter-registry/step :entity-motion
-                          #(install-bound-adapter! pem/install-entity-motion!
-                                                   entity-motion-core/create-entity-motion
-                                                   "Forge entity motion"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :entity-motion
+                               (entity-motion-core/create-entity-motion server-context/get-server))))
    (adapter-registry/step :entity-query
                           #(pentity/install-entity-type-id-fn!
                              (entity-query-core/create-entity-type-id-fn server-context/get-server)
