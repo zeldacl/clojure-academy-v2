@@ -20,7 +20,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)]
       (when (and pos world-id)
-        (doseq [ent (world-effects/find-entities-in-radius*
+        (doseq [ent (world-effects/find-entities-in-radius
                       world-id (:x pos) (:y pos) (:z pos) 4.0)]
           (when (and (coin-entity? world-id ent)
                      (or (nil? coin-uuid)
@@ -134,7 +134,7 @@
     (let [pos (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)
           entities (when (and pos world-id)
-                     (world-effects/find-entities-in-radius*
+                     (world-effects/find-entities-in-radius
                       world-id (:x pos) (:y pos) (:z pos) 4.0))
           judged-uuid (coin-judged-uuid player-id)
           candidates (coin-candidates world-id entities)
@@ -229,7 +229,7 @@
                      :fx-topic        :railgun/fx-shot})
             beam-result (or (:beam-result result) {:performed? false})]
         (when (and (:performed? beam-result) (world-effects/available?))
-          (world-effects/play-sound!*
+          (world-effects/play-sound!
                                      world-id
                                      (:x eye) (:y eye) (:z eye)
                                      (modid/namespaced-path "em.railgun")

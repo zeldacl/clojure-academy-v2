@@ -6,7 +6,7 @@
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.item.terminal-installer-handler :as terminal-installer-handler]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
@@ -23,7 +23,7 @@
   [player]
   (when (world-effects/available?)
     (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
-      (world-effects/play-sound!*
+      (world-effects/play-sound!
         world-id
         (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)
         "minecraft:entity.egg.throw"

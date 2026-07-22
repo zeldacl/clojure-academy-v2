@@ -12,7 +12,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.vecmanip.vec-deviation :as vd]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures
@@ -96,7 +96,7 @@
                    (fn [_id#] ctx-data#)
                    ctx-skill/update-skill-state-root!
                    (fn [_a# _b# & _rest#] nil)
-                   world-effects/find-entities-in-radius*
+                   world-effects/find-entities-in-radius
                    (fn [& _#] [(arrow-entity)])
                    world-effects/available? (constantly true)
                    motion-effects/set-entity-velocity!

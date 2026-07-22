@@ -6,7 +6,8 @@
   world-query orchestration and protocol-var installation."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mc1201.runtime.world-effects-core :as core]
-            [cn.li.mcmod.platform.world-effects :as pwe]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -98,4 +99,6 @@
 
 (defn install-world-effects!
   [world-effects label]
-  (pwe/install-world-effects! world-effects label))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :world-effects world-effects))
+  nil)

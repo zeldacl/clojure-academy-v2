@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.damage :as damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (deftest damage-direct-applies-when-bound-test
   (let [calls (atom [])
@@ -37,7 +37,7 @@
                                                                            :uuid entity-uuid
                                                                            :damage damage}))
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [_ _ _ _ r]
+                  world-effects/find-entities-in-radius (fn [_ _ _ _ r]
                                                           (swap! wcalls conj {:radius r})
                                                           [{:uuid "v1" :x 0.0 :y 0.0 :z 0.0}
                                                            {:uuid "att" :x 1.0 :y 0.0 :z 0.0}

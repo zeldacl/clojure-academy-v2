@@ -11,7 +11,7 @@
   2-arg (fn [target-player-uuid incoming-damage] ...) contract."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.block-manipulation :as block-manip])
   (:import [java.util HashSet]))
@@ -50,7 +50,7 @@
   :forward-dist and :radial-dist, sorted nearest-first."
   [player-id world-id start-pos dir max-distance query-radius radius]
   (when (world-effects/available?)
-      (->> (world-effects/find-entities-in-radius*
+      (->> (world-effects/find-entities-in-radius
                                                    world-id
                                                    (:x start-pos) (:y start-pos) (:z start-pos)
                                                    (double query-radius))

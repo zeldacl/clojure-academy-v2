@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
@@ -133,7 +133,7 @@
   [player]
   (when (world-effects/available?)
     (when-let [world-id (world/world-get-dimension-id* (entity/player-get-level player))]
-      (world-effects/play-sound!*
+      (world-effects/play-sound!
         world-id
         (entity/entity-get-x player) (entity/entity-get-y player) (entity/entity-get-z player)
         "minecraft:entity.egg.throw"

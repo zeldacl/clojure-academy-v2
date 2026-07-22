@@ -13,7 +13,7 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
@@ -147,7 +147,7 @@
                 look (when (raycast/available?)
                        (raycast/get-player-look-vector* player-id))
                 entities (if (world-effects/available?)
-                           (->> (world-effects/find-entities-in-radius*
+                           (->> (world-effects/find-entities-in-radius
                                  world-id (:x hit-pos) (:y hit-pos) (:z hit-pos)
                                  (cfg-double :combat.aoe-radius))
                                 (remove #(= (:uuid %) player-id))

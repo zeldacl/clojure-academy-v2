@@ -26,7 +26,7 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :electron-missile)
@@ -50,7 +50,7 @@
   (when (world-effects/available?)
     (let [seek-range (cfg-lerp :targeting.seek-range exp)
           eye (geom/eye-pos player-id)
-          candidates (world-effects/find-entities-in-radius*
+          candidates (world-effects/find-entities-in-radius
                        world-id
                        (double (:x eye))
                        (double (:y eye))

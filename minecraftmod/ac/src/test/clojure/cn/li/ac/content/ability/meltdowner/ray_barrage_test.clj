@@ -9,7 +9,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
   (case field-id
@@ -64,7 +64,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (capture-fx-topic! fx*)
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _] [])
+                  world-effects/find-entities-in-radius (fn [& _] [])
                   raycast/available? (constantly true)
                   raycast/raycast-combined* (fn [& _]
                                               {:hit-type :entity
@@ -102,7 +102,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (capture-fx-topic! fx*)
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _]
+                  world-effects/find-entities-in-radius (fn [& _]
                                                          [{:uuid "enemy-a" :x 1.0 :y 64.0 :z 5.0 :eye-height 1.6}
                                                           {:uuid "enemy-b" :x -1.0 :y 64.0 :z 5.0 :eye-height 1.6}])
                   raycast/available? (constantly true)
@@ -139,7 +139,7 @@
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (capture-fx-topic! fx*)
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
+                  world-effects/find-entities-in-radius (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
                   raycast/available? (constantly true)
                   raycast/raycast-combined* (fn [& _]
                                               (if (= 1 (swap! call-idx* inc))

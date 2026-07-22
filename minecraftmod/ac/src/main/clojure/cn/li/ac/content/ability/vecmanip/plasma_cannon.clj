@@ -27,7 +27,7 @@
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================
@@ -141,7 +141,7 @@
         radius (explosion-radius exp)]
     ;; Damage all living entities in 10-block radius (excluding caster)
     (when (world-effects/available?)
-      (let [entities (world-effects/find-entities-in-radius* world-id tx ty tz (cfg-double :combat.damage-radius))]
+      (let [entities (world-effects/find-entities-in-radius world-id tx ty tz (cfg-double :combat.damage-radius))]
         (doseq [entity entities]
           (when-not (= (:uuid entity) player-id)
             (when (entity-damage/available?)
@@ -153,7 +153,7 @@
                                                   :explosion))))))
     ;; Create Minecraft explosion (no fire, destroys terrain)
     (when (world-effects/available?)
-      (world-effects/create-explosion!*
+      (world-effects/create-explosion!
                                        world-id tx ty tz radius false))
     ;; Note: Experience is now granted in key-up (on fire), not here
     (log/info "PlasmaCannon: Exploded at" [tx ty tz]

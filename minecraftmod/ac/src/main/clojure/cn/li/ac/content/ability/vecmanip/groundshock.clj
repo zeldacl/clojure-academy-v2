@@ -26,7 +26,7 @@
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashSet]))
 
@@ -140,7 +140,7 @@
                                         (and drop? (< (rand) block-drop-rate)))
           (.add ^HashSet broken-blocks* [x y z])
           (when (world-effects/available?)
-            (world-effects/play-sound!*
+            (world-effects/play-sound!
                                        world-id
                                        (+ (double x) 0.5)
                                        (+ (double y) 0.5)
@@ -250,7 +250,7 @@
               block-y (int (Math/floor start-y))
               block-z (int (Math/floor z))
               candidate-entities (when (world-effects/available?)
-                                   (world-effects/find-entities-in-aabb*
+                                   (world-effects/find-entities-in-aabb
                                      world-id
                                      (- x (+ entity-search-radius 3.0))
                                      (- block-y 2.0)

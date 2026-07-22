@@ -22,7 +22,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :mag-movement)
@@ -76,7 +76,7 @@
   [{:keys [target-world-id target-entity-uuid target-x target-y target-z] :as skill-state}]
   (if-not (and (world-effects/available?) target-entity-uuid)
     nil
-    (let [candidates (world-effects/find-entities-in-radius*
+    (let [candidates (world-effects/find-entities-in-radius
                        (or target-world-id "minecraft:overworld")
                        (double target-x) (double target-y) (double target-z)
                        (cfg-double :targeting.target-update-radius))

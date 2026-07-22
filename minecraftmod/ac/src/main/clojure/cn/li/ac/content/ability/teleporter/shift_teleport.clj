@@ -45,7 +45,7 @@
 
             [cn.li.mcmod.platform.raycast :as raycast]
 
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
 
             [cn.li.mcmod.util.log :as log]))
 
@@ -345,7 +345,7 @@
 
           max-z (max (double (:z eye-pos)) (double (:z dest-pos)))
 
-          candidates (world-effects/find-entities-in-aabb*
+          candidates (world-effects/find-entities-in-aabb
 
                        world-id
 

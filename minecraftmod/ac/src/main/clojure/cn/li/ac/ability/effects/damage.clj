@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.effects.damage
   (:require [cn.li.ac.ability.util.balance :as bal]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]))
 
 (defn execute-damage-direct!
@@ -21,7 +21,7 @@
   (when (and (world-effects/available?) (entity-damage/available?))
     (let [center* (or (when (map? center) center) (get evt center))
           world-id (:world-id evt)
-          victims (world-effects/find-entities-in-radius*
+          victims (world-effects/find-entities-in-radius
                                                          world-id
                                                          (double (:x center*))
                                                          (double (:y center*))

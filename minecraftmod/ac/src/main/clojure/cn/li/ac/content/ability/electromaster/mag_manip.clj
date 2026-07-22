@@ -17,7 +17,7 @@
                         [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -302,7 +302,7 @@
                         radius (+ (* 0.5 (geom/vlen (geom/v- end start))) 2.0)
                         entities (sort-by #(get % :uuid)
                                           (remove #(= (:uuid %) player-id)
-                                                  (world-effects/find-entities-in-radius*
+                                                  (world-effects/find-entities-in-radius
                                                    world-id
                                                    (:x mid) (:y mid) (:z mid)
                                                    radius)))]

@@ -11,7 +11,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- make-context-mocks [initial]
   (let [ctx* (atom initial)]
@@ -134,7 +134,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _]
+                  world-effects/find-entities-in-radius (fn [& _]
                                                          [{:uuid "t-1"
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6

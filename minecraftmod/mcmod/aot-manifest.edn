@@ -108,7 +108,6 @@
  "cn.li.mcmod.platform.position"
  "cn.li.mcmod.platform.raycast"
  "cn.li.mcmod.platform.world"
- "cn.li.mcmod.platform.world-effects"
  "cn.li.mcmod.events.world-owner-key"
  "cn.li.mcmod.hooks.tutorial-events"
  "cn.li.mcmod.client.ui.registry"

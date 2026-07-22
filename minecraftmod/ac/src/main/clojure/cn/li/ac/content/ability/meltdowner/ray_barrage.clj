@@ -14,7 +14,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 
@@ -132,7 +132,7 @@
           sy (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
           sz (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))
           silbarn-uuid (some-> (:uuid silbarn-hit) str)
-          targets (->> (world-effects/find-entities-in-radius*
+          targets (->> (world-effects/find-entities-in-radius
                          world-id sx sy sz
                          (double (cfg-double :scatter.target-radius)))
                        (remove (partial scatter-remove-self-and-silbarn player-id silbarn-uuid))

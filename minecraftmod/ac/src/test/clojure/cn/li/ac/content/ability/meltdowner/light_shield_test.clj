@@ -11,7 +11,7 @@
             [cn.li.ac.content.ability.meltdowner.light-shield :as ls]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]))
@@ -138,7 +138,7 @@
                                                          {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                     world-effects/available? (constantly true)
-                    world-effects/find-entities-in-radius* (fn [& _]
+                    world-effects/find-entities-in-radius (fn [& _]
                                                              [{:uuid "enemy-1"
                                                                :x 1.0 :y 64.0 :z 0.0
                                                                :living? true}])]

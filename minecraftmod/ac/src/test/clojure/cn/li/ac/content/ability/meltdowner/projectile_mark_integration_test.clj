@@ -21,7 +21,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]
@@ -172,7 +172,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius* (fn [& _]
+                  world-effects/find-entities-in-radius (fn [& _]
                                                          [{:uuid victim
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6

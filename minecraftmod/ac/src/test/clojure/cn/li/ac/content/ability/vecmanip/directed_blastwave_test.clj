@@ -12,7 +12,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (def ^:private spec db/directed-blastwave)
 
@@ -119,7 +119,7 @@
                          raycast/raycast-from-player* (fn [& _] nil)
                          raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
-                         world-effects/find-entities-in-radius* (fn [& _] [])
+                         world-effects/find-entities-in-radius (fn [& _] [])
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (when (= :directed-blastwave/fx-perform (:topic entry))
                                       (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
@@ -162,7 +162,7 @@
                                                         {:hit-type :entity :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8})
                          raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
-                         world-effects/find-entities-in-radius* (fn [& _]
+                         world-effects/find-entities-in-radius (fn [& _]
                                                                   [{:uuid "e1" :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8}])
                          entity-damage/available? (constantly true)
                          entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]

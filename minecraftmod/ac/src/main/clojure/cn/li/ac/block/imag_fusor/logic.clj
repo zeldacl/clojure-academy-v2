@@ -20,7 +20,7 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (def ^:private fusor-rt
   (machine-runtime/schema-runtime fusor-schema/imag-fusor-schema :server-only? true))
@@ -203,7 +203,7 @@
             x (pos/pos-x pos)
             y (pos/pos-y pos)
             z (pos/pos-z pos)]
-        (world-effects/play-sound!* world-id
+        (world-effects/play-sound! world-id
                                      (double x) (double y) (double z)
                                      fusor-sound-id
                                      :blocks

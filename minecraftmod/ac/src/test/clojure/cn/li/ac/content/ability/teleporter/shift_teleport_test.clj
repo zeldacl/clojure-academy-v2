@@ -12,7 +12,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]))
+            [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- test-context-owner
   [player-uuid]
@@ -33,7 +33,7 @@
   [raycast/available? (constantly true)
    raycast/raycast-blocks* (fn [& _] block-hit)
    world-effects/available? (constantly true)
-   world-effects/find-entities-in-aabb* (fn [& _] entities)])
+   world-effects/find-entities-in-aabb (fn [& _] entities)])
 
 (defn- shift-tp-trace
   [entities & {:keys [eye drop dest place face target-hit?]

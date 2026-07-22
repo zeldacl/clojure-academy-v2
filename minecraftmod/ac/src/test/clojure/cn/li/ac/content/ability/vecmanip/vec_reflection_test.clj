@@ -11,7 +11,7 @@
             [cn.li.mcmod.platform.entity-damage]
             [cn.li.ac.ability.effects.motion]
             [cn.li.mcmod.platform.raycast]
-            [cn.li.mcmod.platform.world-effects]
+            [cn.li.ac.ability.effects.world]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]))
 
@@ -257,12 +257,12 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/send-fx-reflect-entity! (fn [& _] (swap! fx-calls inc))
                   cn.li.ac.content.ability.vecmanip.arbitration/dual-active? (fn [_] false)
                   cn.li.ac.content.ability.vecmanip.arbitration/claim-projectile! (fn [& _] true)
-                  cn.li.mcmod.platform.world-effects/available? (constantly true)
-                  cn.li.mcmod.platform.world-effects/find-entities-in-radius* (fn [& _]
+                  cn.li.ac.ability.effects.world/available? (constantly true)
+                  cn.li.ac.ability.effects.world/find-entities-in-radius (fn [& _]
                                                                                [{:uuid "e1"
                                                                                  :entity-id "minecraft:fireball"
                                                                                  :x 1.0 :y 65.0 :z 1.0}])
-                  cn.li.mcmod.platform.world-effects/spawn-projectile!* (fn [world-id spec]
+                  cn.li.ac.ability.effects.world/spawn-projectile! (fn [world-id spec]
                                                                          (swap! spawn-calls conj [world-id spec])
                                                                          {:success? true :uuid "spawned" :entity-id (:entity-id spec)})
                   cn.li.mcmod.platform.raycast/available? (constantly true)
@@ -317,12 +317,12 @@
                   cn.li.ac.content.ability.vecmanip.vec-reflection/send-fx-reflect-entity! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.arbitration/dual-active? (fn [_] false)
                   cn.li.ac.content.ability.vecmanip.arbitration/claim-projectile! (fn [& _] true)
-                  cn.li.mcmod.platform.world-effects/available? (constantly true)
-                  cn.li.mcmod.platform.world-effects/find-entities-in-radius* (fn [& _]
+                  cn.li.ac.ability.effects.world/available? (constantly true)
+                  cn.li.ac.ability.effects.world/find-entities-in-radius (fn [& _]
                                                                                [{:uuid "e1"
                                                                                  :entity-id "minecraft:fireball"
                                                                                  :x 1.0 :y 65.0 :z 1.0}])
-                  cn.li.mcmod.platform.world-effects/spawn-projectile!* (fn [world-id spec]
+                  cn.li.ac.ability.effects.world/spawn-projectile! (fn [world-id spec]
                                                                          (swap! spawn-calls conj [world-id spec])
                                                                          {:success? false})
                   cn.li.mcmod.platform.raycast/available? (constantly true)

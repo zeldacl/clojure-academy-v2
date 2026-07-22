@@ -9,7 +9,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- reset-state! [f]
@@ -32,7 +32,7 @@
 (deftest beam-uses-trace-origin-but-keeps-visual-origin-test
   (let [calls (atom [])]
     (with-redefs [world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius*
+                  world-effects/find-entities-in-radius
                   (fn [& args]
                     (swap! calls conj [:search args])
                     [{:uuid "e-1" :x 3.0 :y 2.0 :z 3.0}])
@@ -101,7 +101,7 @@
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
   (store/update-player-state! ps-fix/test-session-id "p1" assoc-in [:runtime :railgun :coin-judged-uuid] "coin-1")
   (with-redefs [world-effects/available? (constantly true)
-                world-effects/find-entities-in-radius* (fn [& _]
+                world-effects/find-entities-in-radius (fn [& _]
                                                          [{:uuid "coin-1"
                                                            :motion-progress 0.95}])
                 railgun/coin-candidates (fn [_world-id _entities]

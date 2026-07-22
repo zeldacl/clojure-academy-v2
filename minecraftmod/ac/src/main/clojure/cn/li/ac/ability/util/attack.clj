@@ -8,7 +8,7 @@
   copies of hit-kind/block-impact-point/entity-impact-point."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]))
 
 (defn hit-kind
@@ -91,7 +91,7 @@
   [world-id center radius excluded]
   (if-not (world-effects/available?)
     []
-    (->> (world-effects/find-entities-in-radius*
+    (->> (world-effects/find-entities-in-radius
            world-id
            (double (:x center))
            (double (:y center))

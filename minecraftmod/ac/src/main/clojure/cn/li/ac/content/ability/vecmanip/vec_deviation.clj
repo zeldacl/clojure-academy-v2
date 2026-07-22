@@ -24,7 +24,7 @@
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-deviation)
@@ -169,7 +169,7 @@
                     x (:x pos)
                     y (:y pos)
                     z (:z pos)
-                    entities (world-effects/find-entities-in-radius*
+                    entities (world-effects/find-entities-in-radius
                                                                     world-id x y z (cfg-double :targeting.radius))
                     visited (get-in ctx-data [:skill-state :vec-deviation-visited] #{})
                     marked (get-in ctx-data [:skill-state :vec-deviation-marked] #{})
@@ -206,7 +206,7 @@
                               (motion-effects/discard-entity! world-id entity-uuid)))
                           (when (and (contains? (large-fireball-ids) eid)
                                      (world-effects/available?))
-                            (world-effects/create-explosion!*
+                            (world-effects/create-explosion!
                                                              world-id
                                                              (double (or (:x entity) 0.0))
                                                              (double (or (:y entity) 0.0))

@@ -29,7 +29,7 @@
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
@@ -88,7 +88,7 @@
 
 (defn- knockback-nearby-entities! [player-id world-id px py pz]
   (when (and (world-effects/available?) (motion-effects/entity-motion-available?))
-    (let [entities (world-effects/find-entities-in-radius*
+    (let [entities (world-effects/find-entities-in-radius
                      world-id (double px) (double py) (double pz) (cfg-double :combat.mastery-knockback-radius))]
       (doseq [entity entities
               :let [eid (:uuid entity)]

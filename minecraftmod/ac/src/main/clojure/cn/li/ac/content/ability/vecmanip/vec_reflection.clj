@@ -13,7 +13,7 @@
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -243,7 +243,7 @@
       (when-let [self-pos (get-player-position player-id)]
         (when (world-effects/available?)
           (first (filter (fn [ent] (= (:uuid ent) attacker-id))
-                         (world-effects/find-entities-in-radius*
+                         (world-effects/find-entities-in-radius
                           (:world-id self-pos)
                           (:x self-pos)
                           (:y self-pos)
@@ -304,7 +304,7 @@
                     dual-active? (arbitration/dual-active? player-id)
                     arbitration-allowed? (or (not dual-active?)
                                              (arbitration/skill-allowed-in-dual-active? :vec-reflection))
-                    entities (world-effects/find-entities-in-radius*
+                    entities (world-effects/find-entities-in-radius
                                                                     world-id x y z (cfg-double :targeting.radius))
                     visited (normalize-visited-map
                              (or (get-in ctx-data [:skill-state :vec-reflection-visited-map])
@@ -340,7 +340,7 @@
                               (do
                                 (if (and (world-effects/available?)
                                          (fireball-entity? eid))
-                                  (let [spawn-result (world-effects/spawn-projectile!*
+                                  (let [spawn-result (world-effects/spawn-projectile!
                                                                                     world-id
                                                                                     {:entity-id eid
                                                                                      :x (double (or (:x entity) 0.0))

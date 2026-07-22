@@ -20,7 +20,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-                        [cn.li.mcmod.platform.world-effects :as world-effects]
+                        [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.entity :as entity]
@@ -136,7 +136,7 @@
 (defn- maybe-touch-damage!
   [{:keys [ctx-id player-id exp pos world-id look-vec ticks]}]
   (when (and pos (world-effects/available?))
-    (let [entities (world-effects/find-entities-in-radius*
+    (let [entities (world-effects/find-entities-in-radius
                     world-id (:x pos) (:y pos) (:z pos)
                     (cfg-double :combat.touch-radius))]
       (doseq [entity entities]
@@ -213,7 +213,7 @@
                        (skill-effects/player-path player-id [:position :world-id])
                        "minecraft:overworld")
           entities (when (and pos (world-effects/available?))
-                     (world-effects/find-entities-in-radius*
+                     (world-effects/find-entities-in-radius
                       world-id (:x pos) (:y pos) (:z pos)
                       (cfg-double :combat.touch-radius)))
           attacker (some #(when (= (str (:uuid %)) (str attacker-id)) %) entities)]

@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def-skill-config-ops :thunder-bolt)
@@ -61,7 +61,7 @@
                          victims)
         effective? (or direct-hit? (pos? aoe-hit-count))]
     (when (and (world-effects/available?) (not= hit-kind :miss))
-      (world-effects/spawn-lightning!*
+      (world-effects/spawn-lightning!
                                       world-id
                                       (double (:x impact))
                                       (double (:y impact))
