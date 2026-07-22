@@ -2,7 +2,7 @@
   "Single source of truth for resolving wireless capabilities from tiles."
   (:require [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.capability.registry :as cap-registry]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- tile-id-for [tile]
@@ -21,7 +21,7 @@
         (let [k (keyword cap-key)]
           (when (contains? (:capability-keys spec #{}) k)
             (try
-              (when-let [factory (platform-cap/get-handler-factory k)]
+              (when-let [factory (cap-registry/get-handler-factory k)]
                 (factory tile nil))
               (catch Exception e
                 (log/error "[wireless] tile-capability: factory threw for" k

@@ -16,7 +16,7 @@
 ```
 
 capability 解析链：`capability-lookup/tile-capability` → tile spec 的
-`:capability-keys` 判定 → `mcmod.platform.capability/get-handler-factory` 取
+`:capability-keys` 判定 → `mcmod.capability.registry/get-handler-factory` 取
 factory → `(factory tile nil)` 返回 `IWireless*` 实例。
 
 ### 2. 提供 capability factory
@@ -25,7 +25,7 @@ factory → `(factory tile nil)` 返回 `IWireless*` 实例。
 / `wireless-receiver-factory`，基于 state map 的 `:energy` 字段），或参照
 `cn.li.ac.block.energy-converter.wireless-impl` 用 `reify` 实现
 `IWirelessGenerator` / `IWirelessReceiver`（`get-state-fn`/`set-state-fn` 注入，
-支持自定义带宽与容量）。factory 经 `mcmod.platform.capability` 注册表按 key 注册。
+支持自定义带宽与容量）。factory 经 `mcmod.capability.registry` 注册表按 key 注册。
 
 ### 3. 经 api 挂接与清理
 
@@ -77,5 +77,5 @@ InterModComms.sendTo(WirelessImc.MOD_ID, WirelessImc.REGISTER_NETWORK_HANDLER,
 ### 尚未提供
 
 设备级第三方注册（外部 mod 直接把自己的方块注册为 wireless 设备类型）需要
-Java-facing registrar 桥接 `mcmod.platform.capability` 注册表——属新特性，
+Java-facing registrar 桥接 `mcmod.capability.registry` 注册表——属新特性，
 单独立项；当前第三方路径 = IMC 观察事件 + energy converter 能量桥。

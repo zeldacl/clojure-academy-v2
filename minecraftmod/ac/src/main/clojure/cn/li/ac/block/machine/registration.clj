@@ -5,7 +5,7 @@
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.block.tile-kind :as tile-kind]
-            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.capability.registry :as cap-registry]
             [cn.li.mcmod.util.log :as log]))
 
 (defn register-tile-spec!
@@ -38,8 +38,8 @@
   tile-ids: vector of tile id strings — returns capability key set for tile specs."
   [capabilities tile-ids]
   (doseq [{:keys [key interface factory]} capabilities]
-    (when-not (platform-cap/get-capability-entry key)
-      (platform-cap/declare-capability! key interface factory))
+    (when-not (cap-registry/get-capability-entry key)
+      (cap-registry/declare-capability! key interface factory))
     (doseq [tile-id tile-ids]
       (tdsl/register-tile-capability-keys! tile-id key)))
   (set (map #(get % :key) capabilities)))

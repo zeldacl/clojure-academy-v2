@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.integration.forge-energy
   "Forge Energy integration for descriptor-declared content endpoints."
-  (:require [cn.li.mcmod.platform.capability :as platform-cap]
+  (:require [cn.li.mcmod.capability.registry :as cap-registry]
             [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
             [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
@@ -38,9 +38,9 @@
 (defn- content-energy-capability
   [be descriptor]
   (when-let [capability-key (source-capability-key descriptor)]
-    (when-let [content-energy-cap (platform-cap/get-capability be capability-key nil)]
-      (when (platform-cap/is-present? content-energy-cap)
-        (platform-cap/or-else content-energy-cap nil)))))
+    (when-let [content-energy-cap (cap-registry/get-capability be capability-key nil)]
+      (when (cap-registry/is-present? content-energy-cap)
+        (cap-registry/or-else content-energy-cap nil)))))
 
 (defn- get-forge-energy-capability
   [be _side]
@@ -58,7 +58,7 @@
   (let [descriptors (vec (forge-energy-descriptors))]
     (doseq [capability-key (distinct (map target-capability-key descriptors))]
       (CapabilityRegistry/register (name capability-key) ForgeCapabilities/ENERGY)
-      (platform-cap/declare-capability! capability-key IEnergyStorage get-forge-energy-capability))
+      (cap-registry/declare-capability! capability-key IEnergyStorage get-forge-energy-capability))
     (doseq [descriptor descriptors
             tile-id (target-tile-ids descriptor)]
       (tdsl/register-tile-capability-keys! tile-id (target-capability-key descriptor)))

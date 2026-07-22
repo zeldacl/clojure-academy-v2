@@ -5,8 +5,7 @@
             [cn.li.ac.block.wind-gen.handlers :as wind-handlers]
             [cn.li.ac.block.wind-gen.logic :as wind-logic]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.block.dsl :as bdsl]
-            [cn.li.mcmod.platform.capability :as platform-cap])
+            [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
 (defn- register-wind-multiblocks! []

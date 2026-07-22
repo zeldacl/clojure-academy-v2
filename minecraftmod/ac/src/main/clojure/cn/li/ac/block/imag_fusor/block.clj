@@ -8,7 +8,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.platform.capability :as platform-cap])
+            [cn.li.mcmod.capability.registry :as cap-registry])
   (:import [cn.li.acapi.wireless IWirelessReceiver]))
 
 (defn- fusor-max-energy [state]
@@ -36,8 +36,8 @@
      :capabilities [{:key :wireless-receiver
                      :interface IWirelessReceiver
                      :factory fusor-receiver-cap-factory}]
-     :after #(when-not (platform-cap/get-capability-entry :wireless-receiver)
-               (platform-cap/declare-capability!
+     :after #(when-not (cap-registry/get-capability-entry :wireless-receiver)
+               (cap-registry/declare-capability!
                  :wireless-receiver IWirelessReceiver
                  fusor-receiver-cap-factory))
      :blocks [(bdsl/create-block-spec

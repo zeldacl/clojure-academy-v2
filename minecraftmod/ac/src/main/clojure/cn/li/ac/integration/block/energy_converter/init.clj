@@ -6,7 +6,6 @@
 	          [cn.li.mcmod.block.tile-dsl :as tdsl]
 	          [cn.li.ac.config.modid :as modid]
 		          [cn.li.mcmod.platform.be :as platform-be]
-		          [cn.li.mcmod.platform.capability :as platform-cap]
 		          [cn.li.ac.integration.block.energy-converter.base :as ec-base]
 	          [cn.li.ac.integration.block.energy-converter.config :as ec-config]
 		          [cn.li.ac.integration.block.energy-converter.schema :as ec-schema]

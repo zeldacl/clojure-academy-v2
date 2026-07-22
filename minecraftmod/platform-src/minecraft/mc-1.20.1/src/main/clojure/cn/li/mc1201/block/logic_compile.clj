@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.block.logic-compile
   "Compile declarative tile hook maps into loader-neutral Java TileLogicBundle instances."
-  (:require [cn.li.mcmod.platform.capability :as platform-cap])
+  (:require [cn.li.mcmod.capability.registry :as cap-registry])
   (:import [cn.li.mc1201.block.entity AbstractScriptedBlockEntity]
            [cn.li.mc1201.block.logic
             ITileTickLogic ITileNbtLogic ITileContainerLogic
@@ -66,7 +66,7 @@
         (resolve [_ ^AbstractScriptedBlockEntity be ^String cap-key side]
           (let [k (keyword cap-key)]
             (when (contains? keys k)
-              (when-let [factory (platform-cap/get-handler-factory k)]
+              (when-let [factory (cap-registry/get-handler-factory k)]
                 (factory be side)))))))))
 
 (defn ^TileLogicBundle compile-tile-logic

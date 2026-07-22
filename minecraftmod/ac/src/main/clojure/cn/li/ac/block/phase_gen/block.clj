@@ -7,7 +7,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.block.dsl :as bdsl]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.platform.capability :as platform-cap])
+            [cn.li.mcmod.capability.registry :as cap-registry])
   (:import [cn.li.acapi.wireless IWirelessGenerator]))
 
 (defn init-phase-gen!
@@ -27,7 +27,7 @@
                      :interface IWirelessGenerator
                      :factory impls/wireless-generator-factory}]
      :after #(do
-              (platform-cap/register-tile-fluid-spec! "phase-gen" modid/MOD-ID "imag_phase")
+              (cap-registry/register-tile-fluid-spec! "phase-gen" modid/MOD-ID "imag_phase")
               (tdsl/register-tile-capability-keys! "phase-gen" :fluid-handler))
      :blocks [(bdsl/create-block-spec
                 "phase-gen"

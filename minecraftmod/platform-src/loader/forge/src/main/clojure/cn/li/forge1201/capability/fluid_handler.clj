@@ -5,7 +5,7 @@
   `:fluid-handler` capability factories are available when AC block init
   calls `register-tile-capability!`."
   (:require [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.capability :as platform-cap]
+            [cn.li.mcmod.capability.registry :as cap-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.capability CapabilityRegistry]
            [cn.li.forge1201.shim UniversalFluidHandler]
@@ -29,7 +29,7 @@
   (or *phase-fluid*
       (locking phase-fluid-lock
         (or *phase-fluid*
-            (let [{:keys [mod-id path]} (platform-cap/get-tile-fluid-spec "phase-gen")
+            (let [{:keys [mod-id path]} (cap-registry/get-tile-fluid-spec "phase-gen")
                   rl (when (and mod-id path) (ResourceLocation. ^String mod-id ^String path))
                   fluid (when rl
                           (try (.getValue ForgeRegistries/FLUIDS rl)
@@ -44,7 +44,7 @@
 (defn- create-phase-gen-fluid-handler
   "Return an IFluidHandler backed by the phase-gen BE's custom state.
   Reads/writes `:liquid-amount` and `:tank-size` from the schema state map.
-  Only accepts the fluid registered via `platform-cap/register-tile-fluid-spec!`
+  Only accepts the fluid registered via `cap-registry/register-tile-fluid-spec!`
   for tile-id \"phase-gen\" (parity: upstream TilePhaseGen only accepted ACFluids.fluidImagProj)."
   [be]
   (let [^Fluid fluid (resolve-phase-fluid)]
@@ -125,8 +125,8 @@
   ;; 1. Map the Forge Capability token to the string key used by tile bundles.
   (CapabilityRegistry/register "fluid-handler" ForgeCapabilities/FLUID_HANDLER)
   ;; 2. Declare the Clojure-side handler factory.
-  (when-not (platform-cap/get-capability-entry :fluid-handler)
-    (platform-cap/declare-capability!
+  (when-not (cap-registry/get-capability-entry :fluid-handler)
+    (cap-registry/declare-capability!
       :fluid-handler IFluidHandler
       (fn [be _side] (create-phase-gen-fluid-handler be))))
   (log/info "Registered Forge fluid-handler capability for AC machines"))

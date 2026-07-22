@@ -208,9 +208,9 @@
   (try
     ;; Get the content energy capability first. Descriptor-specific binding is
     ;; handled by the content module before this optional integration is used.
-    (when-let [content-energy-cap (cap-call 'cn.li.mcmod.platform.capability/get-capability be :content-energy nil)]
-      (when (cap-call 'cn.li.mcmod.platform.capability/is-present? content-energy-cap)
-        (let [content-energy (cap-call 'cn.li.mcmod.platform.capability/or-else content-energy-cap nil)
+    (when-let [content-energy-cap (cap-call 'cn.li.mcmod.capability.registry/get-capability be :content-energy nil)]
+      (when (cap-call 'cn.li.mcmod.capability.registry/is-present? content-energy-cap)
+        (let [content-energy (cap-call 'cn.li.mcmod.capability.registry/or-else content-energy-cap nil)
               tier 2] ;; Default to tier 2 (Medium Voltage, 128 EU/t)
           (when content-energy
             ;; Create appropriate IC2 interface based on mode

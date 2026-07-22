@@ -8,7 +8,6 @@
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
-            [cn.li.mcmod.platform.capability :as platform-capability]
             [cn.li.mc1201.platform.item-ops :as item-ops]
             [cn.li.mc1201.platform.player-ops :as player-ops]
             [cn.li.mc1201.runtime.spi.network-transport :as network-transport-spi]

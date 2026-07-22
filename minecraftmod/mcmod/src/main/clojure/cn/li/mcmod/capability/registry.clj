@@ -1,5 +1,5 @@
-(ns cn.li.mcmod.platform.capability
-  "Platform-neutral capability declaration and lookup.
+(ns cn.li.mcmod.capability.registry
+  "Capability declaration and lookup registry.
 
   Content code calls declare-capability! to register a capability type and its
   handler factory. Handler factories are resolved at bundle compile time via
