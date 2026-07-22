@@ -9,9 +9,9 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-blastwave :as db]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]))
 
 (def ^:private spec db/directed-blastwave)
@@ -116,8 +116,8 @@
                          geom/body-pos (fn [_] {:x 2.0 :y 3.0 :z 4.0})
                          geom/eye-pos (fn [_] {:x 2.0 :y 4.62 :z 4.0})
                          raycast/available? (constantly true)
-                         raycast/raycast-from-player* (fn [& _] nil)
-                         raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
+                         raycast/raycast-from-player (fn [& _] nil)
+                         raycast/player-look-vector (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
                          world-effects/find-entities-in-radius (fn [& _] [])
                          fx/send! (fn [ctx-id entry _evt payload]
@@ -158,14 +158,14 @@
                          geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
                          raycast/available? (constantly true)
-                         raycast/raycast-from-player* (fn [& _]
+                         raycast/raycast-from-player (fn [& _]
                                                         {:hit-type :entity :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8})
-                         raycast/get-player-look-vector* (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
+                         raycast/player-look-vector (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
                          world-effects/find-entities-in-radius (fn [& _]
                                                                   [{:uuid "e1" :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8}])
                          entity-damage/available? (constantly true)
-                         entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
+                         entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
                                                               (swap! damage-calls* conj [world-id target-id damage kind]))
                          motion-effects/entity-motion-available? (constantly true)
                          motion-effects/set-entity-velocity! (fn [world-id target-id x y z]

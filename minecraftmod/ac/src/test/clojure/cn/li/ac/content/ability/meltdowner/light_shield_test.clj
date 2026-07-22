@@ -10,11 +10,11 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.meltdowner.light-shield :as ls]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- reduce-damage-fn []
   (var-get #'cn.li.ac.content.ability.meltdowner.light-shield/light-shield-reduce-damage))
@@ -136,7 +136,7 @@
                                                     0.0))
                     motion-effects/player-position (fn [_]
                                                          {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
-                    raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                    raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                     world-effects/available? (constantly true)
                     world-effects/find-entities-in-radius (fn [& _]
                                                              [{:uuid "enemy-1"
@@ -167,7 +167,7 @@
                         skill-effects/skill-exp (fn [& _] 0.0)
                         motion-effects/player-position (fn [_]
                                                              {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
-                        raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                        raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                         skill-config/lerp-int (fn [_skill-id field-id _exp]
                                                 (case field-id
                                                   :timing.max-active-ticks 5

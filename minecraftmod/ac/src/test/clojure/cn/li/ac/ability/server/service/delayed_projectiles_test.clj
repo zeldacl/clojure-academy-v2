@@ -8,8 +8,8 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]))
+            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]))
 
 (defn- with-fresh-delayed-projectile-runtime [f]
   (ps-fix/with-test-player-state-owner
@@ -34,13 +34,13 @@
   (let [calls (atom [])]
     (with-redefs [raycast/available? (constantly true)
                   entity-damage/available? (constantly true)
-                  raycast/raycast-entities* (fn [& _]
+                  raycast/raycast-entities (fn [& _]
                                              {:uuid "target-1"
                                               :x 4.0
                                               :y 65.0
                                               :z 6.0
                                               :distance 9.0})
-                  entity-damage/apply-direct-damage!* (fn [& args]
+                  entity-damage/apply-direct-damage! (fn [& args]
                                                       (swap! calls conj [:damage (vec args)])
                                                       true)
                   md-damage/mark-target! (fn [& args]
@@ -91,10 +91,10 @@
 
 (deftest electron-bomb-settlement-without-raycast-is-noop-test
   (let [calls (atom [])]
-    (with-redefs [raycast/raycast-entities* (fn [& _]
+    (with-redefs [raycast/raycast-entities (fn [& _]
                                              (swap! calls conj :raycast)
                                              nil)
-                  entity-damage/apply-direct-damage!* (fn [& _]
+                  entity-damage/apply-direct-damage! (fn [& _]
                                                       (swap! calls conj :damage)
                                                       true)
                   md-damage/mark-target! (fn [& _]

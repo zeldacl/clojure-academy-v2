@@ -12,7 +12,7 @@
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (defn- with-mark-env [f]
@@ -86,8 +86,8 @@
                                                       (swap! reset-calls* conj player-id)
                                                       true)
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :hit-x 1.0 :hit-y 62.4 :hit-z 6.5
                                                :eye-height 1.6})]

@@ -16,10 +16,10 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.block :as block-manip]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 ;; --- Constants ---
@@ -52,7 +52,7 @@
 
 (defn- look-dir [player-id]
   (when-let [look (when (raycast/available?)
-                    (raycast/get-player-look-vector* player-id))]
+                    (raycast/player-look-vector player-id))]
     (geom/vnorm {:x (double (:x look))
                  :y (double (:y look))
                  :z (double (:z look))})))
@@ -75,9 +75,9 @@
     (let [bx (int source-x)
           by (int source-y)
           bz (int source-z)
-          current (block-manip/get-block* world-id bx by bz)]
+          current (block-manip/get-block world-id bx by bz)]
       (when (or (nil? current) (= current "minecraft:air"))
-        (block-manip/set-block!* world-id bx by bz block-id)))))
+        (block-manip/set-block! world-id bx by bz block-id)))))
 
 (defn- return-held-item! [player {:keys [from-hand? block-id]}]
   (when (and from-hand?
@@ -97,7 +97,7 @@
     (when-let [dir (look-dir player-id)]
       (let [start (geom/eye-pos player-id)
             world-id (geom/world-id-of player-id)
-            hit (raycast/raycast-blocks*
+            hit (raycast/raycast-blocks
                                         world-id
                                         (:x start) (:y start) (:z start)
                                         (:x dir) (:y dir) (:z dir)
@@ -106,9 +106,9 @@
           (let [bx (int (or (:x hit) 0))
                 by (int (or (:y hit) 0))
                 bz (int (or (:z hit) 0))
-                block-id (or (block-manip/get-block* world-id bx by bz)
+                block-id (or (block-manip/get-block world-id bx by bz)
                              (:block-id hit))
-                hardness (block-manip/get-block-hardness* world-id bx by bz)]
+                hardness (block-manip/get-block-hardness world-id bx by bz)]
             (when (and (string? block-id)
                        (metal-block-id? block-id exp)
                        (number? hardness)
@@ -139,9 +139,9 @@
     (let [bx (geom/floor-int (:x end-pos))
           by (geom/floor-int (:y end-pos))
           bz (geom/floor-int (:z end-pos))
-          current (block-manip/get-block* world-id bx by bz)]
+          current (block-manip/get-block world-id bx by bz)]
       (when (or (nil? current) (= current "minecraft:air"))
-        (block-manip/set-block!* world-id bx by bz held-block-id)
+        (block-manip/set-block! world-id bx by bz held-block-id)
         true))))
 
 ;; --- Cost helpers ---
@@ -215,9 +215,9 @@
                                  {:fired false
                                   :mode :capture-failed})))
       (if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id exp)]
-        (let [can-break? (block-manip/can-break-block?* player-id world-id x y z)
+        (let [can-break? (block-manip/can-break-block? player-id world-id x y z)
               broken? (and can-break?
-                           (block-manip/break-block!* player-id world-id x y z false))]
+                           (block-manip/break-block! player-id world-id x y z false))]
           (if broken?
             (start-holding! ctx-id player-id {:block-id block-id
                                               :from-world? true
@@ -282,7 +282,7 @@
                   start focus
                   dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
                   hit (when (raycast/available?)
-                        (raycast/raycast-combined*
+                        (raycast/raycast-combined
                                                   world-id
                                                   (:x start) (:y start) (:z start)
                                                   (:x dir) (:y dir) (:z dir)
@@ -295,7 +295,7 @@
                                    (:uuid hit)
                                    (entity-damage/available?))]
               (if direct-hit?
-                (entity-damage/apply-direct-damage!*
+                (entity-damage/apply-direct-damage!
                                                     world-id (:uuid hit) damage :magic)
                 (when (and (world-effects/available?) (entity-damage/available?))
                   (let [mid (geom/v* (geom/v+ start end) 0.5)
@@ -310,7 +310,7 @@
                                        (filter (partial segment-hit? start end
                                                        (cfg-double :targeting.throw-hit-radius))
                                                entities))]
-                      (entity-damage/apply-direct-damage!*
+                      (entity-damage/apply-direct-damage!
                                                           world-id (:uuid target) damage :magic)))))
 
               (when-not (try-place-thrown-block! world-id end (:block-id held-block))

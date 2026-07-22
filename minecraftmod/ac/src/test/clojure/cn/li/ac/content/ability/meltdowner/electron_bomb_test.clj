@@ -7,7 +7,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]))
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
@@ -32,7 +32,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)
@@ -71,7 +71,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [& _] nil)
+                  raycast/player-look-vector (fn [& _] nil)
                   entity/player-spawn-entity-by-id! (fn [& args]
                                                       (swap! spawn-calls* conj args)
                                                       true)

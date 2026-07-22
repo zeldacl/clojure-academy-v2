@@ -11,8 +11,8 @@
             [cn.li.ac.entity.hook-catalog :as entity-hook-catalog]
             [cn.li.ac.tutorial.events :as tutorial-events]
             [cn.li.ac.wireless.data.world :as wireless-world]
-            [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.block :as block-effects]
+            [cn.li.ac.ability.effects.damage :as damage-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init
@@ -30,8 +30,8 @@
   ;; AbilityPipeline.canAttackPlayer()/canBreakBlock(), consulted by every
   ;; ability effect via the shared mcmod entity-damage/block-manipulation
   ;; primitives instead of each skill file checking config itself.
-  (entity-damage/install-pvp-gate! ability-config/attack-player-enabled?)
-  (block-manipulation/install-destroy-gate! ability-config/destroy-blocks-enabled?)
+  (damage-effects/install-pvp-gate! ability-config/attack-player-enabled?)
+  (block-effects/install-destroy-gate! ability-config/destroy-blocks-enabled?)
   (tutorial-events/register-platform-handlers!)
   (ability-runtime/install-runtime-hooks!
     (ability-runtime-container/create-ability-runtime-container))

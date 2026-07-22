@@ -43,7 +43,7 @@
 
                         [cn.li.mcmod.platform.entity :as entity]
 
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
 
             [cn.li.ac.ability.effects.world :as world-effects]
 
@@ -117,7 +117,7 @@
 
               eye-z (double (:z player-pos))
 
-              hit (raycast/raycast-blocks*
+              hit (raycast/raycast-blocks
 
                     world-id
 

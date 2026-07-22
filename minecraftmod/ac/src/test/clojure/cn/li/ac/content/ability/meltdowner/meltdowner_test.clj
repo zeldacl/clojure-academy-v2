@@ -11,8 +11,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- context-mocks []
   (let [{:keys [messages* send!]} (fx-mocks/capture-ctx-fx-messages!)
@@ -79,7 +79,7 @@
                                                :beam.block-energy 500.0
                                                0.0))
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
+                  raycast/player-look-vector (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
                   beam/execute-beam! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
@@ -134,15 +134,15 @@
                                                :combat.damage 40.0
                                                0.0))
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
-                  raycast/raycast-entities* (fn [world-id sx sy sz dx dy dz max-distance]
+                  raycast/player-look-vector (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
+                  raycast/raycast-entities (fn [world-id sx sy sz dx dy dz max-distance]
                                               (reset! ray-input* {:world-id world-id
                                                                   :start [sx sy sz]
                                                                   :dir [dx dy dz]
                                                                   :max-distance max-distance})
                                               {:hit-type :entity :uuid "target-1"})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-id damage source-type]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-id damage source-type]
                                                         (swap! damage-calls* conj [world-id entity-id damage source-type])
                                                         true)]
       (is (true?

@@ -11,7 +11,7 @@
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- test-context-owner
@@ -31,7 +31,7 @@
 
 (defn- shift-tp-platform-redefs [block-hit entities]
   [raycast/available? (constantly true)
-   raycast/raycast-blocks* (fn [& _] block-hit)
+   raycast/raycast-blocks (fn [& _] block-hit)
    world-effects/available? (constantly true)
    world-effects/find-entities-in-aabb (fn [& _] entities)])
 

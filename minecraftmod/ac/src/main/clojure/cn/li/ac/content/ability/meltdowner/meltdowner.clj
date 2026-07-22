@@ -25,8 +25,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-                        [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@
   (let [start-pos (geom/eye-pos reflector-player-id)
         world-id  (geom/world-id-of reflector-player-id)
         look-vec  (when (raycast/available?)
-                    (raycast/get-player-look-vector* reflector-player-id))]
+                    (raycast/player-look-vector reflector-player-id))]
     (when look-vec
   (let [look-dir (normalize-look-dir look-vec)
     dir (geom/vnorm look-dir)
@@ -84,7 +84,7 @@
         (fx/send! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil {:start start-pos
                                   :end   end})
         (let [hit (when (raycast/available?)
-                    (raycast/raycast-entities*
+                    (raycast/raycast-entities
                   world-id
                   (:x start-pos) (:y start-pos) (:z start-pos)
                   (:x look-dir) (:y look-dir) (:z look-dir)
@@ -95,7 +95,7 @@
              :target-pos {:x (:x hit)
                   :y (:y hit)
                   :z (:z hit)}})
-            (entity-damage/apply-direct-damage!*
+            (entity-damage/apply-direct-damage!
                  world-id
                  (:uuid hit)
                  (* (cfg-double :reflection.damage-multiplier)
@@ -115,7 +115,7 @@
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
         look-vec (when (raycast/available?)
-                   (raycast/get-player-look-vector* player-id))]
+                   (raycast/player-look-vector player-id))]
     (if-not look-vec
       {:performed? false}
       (let [reflection (vec-reflect/build-reflection-callbacks

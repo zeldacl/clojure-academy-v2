@@ -20,7 +20,7 @@
             [cn.li.ac.ability.effects.motion :as motion-op]
             [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -90,10 +90,10 @@
 
 (defn- resolve-target [player-id]
   (when-let [look (when (raycast/available?)
-                    (raycast/get-player-look-vector* player-id))]
+                    (raycast/player-look-vector player-id))]
     (let [eye      (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)
-          hit      (raycast/raycast-combined*
+          hit      (raycast/raycast-combined
                                              world-id
                                              (:x eye) (:y eye) (:z eye)
                                              (double (:x look))

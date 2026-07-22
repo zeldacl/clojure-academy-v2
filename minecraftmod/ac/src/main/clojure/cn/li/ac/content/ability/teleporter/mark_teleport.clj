@@ -46,7 +46,7 @@
 
             [cn.li.mcmod.platform.position :as pos]
 
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
 
             [cn.li.ac.ability.effects.motion :as motion-effects]
 
@@ -221,7 +221,7 @@
 
         look-vec (when (raycast/available?)
 
-                   (raycast/get-player-look-vector* player-id))]
+                   (raycast/player-look-vector player-id))]
 
     (when (and player-pos look-vec)
 
@@ -235,7 +235,7 @@
 
             hit (when (raycast/available?)
 
-                  (raycast/raycast-combined*
+                  (raycast/raycast-combined
 
                                             world-id
 

@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-accel)
@@ -32,7 +32,7 @@
   (when (raycast/available?)
     (when-let [pos (get-player-position player-id)]
       (let [world-id (or (:world-id pos) "minecraft:overworld")]
-        (some? (raycast/raycast-blocks*
+        (some? (raycast/raycast-blocks
                                        world-id
                                        (double (:x pos)) (double (:y pos)) (double (:z pos))
                                        0 -1 0 (cfg-double :targeting.ground-check-distance)))))))
@@ -68,7 +68,7 @@
   (let [can-perform? (boolean (or (>= (double (or exp 0.0)) (cfg-double :targeting.groundless-exp-threshold))
                                   (check-ground-raycast player-id)))
         look-dir     (when (raycast/available?)
-                       (raycast/get-player-look-vector* player-id))
+                       (raycast/player-look-vector player-id))
         init-vel     (when look-dir (compute-init-vel look-dir (long (or hold-ticks 0))))]
     (update-skill-state-root! ctx-id merge
                               {:can-perform? can-perform?

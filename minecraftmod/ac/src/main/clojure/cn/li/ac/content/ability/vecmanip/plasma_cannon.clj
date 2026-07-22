@@ -24,9 +24,9 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -120,7 +120,7 @@
           dist (geom/vlen {:x dx :y dy :z dz})]
       (when (> dist 1.0e-6)
         (let [dir (geom/vnorm {:x dx :y dy :z dz})
-              hit (raycast/raycast-blocks*
+              hit (raycast/raycast-blocks
                                          world-id
                                          (double (:x last-pos))
                                          (double (:y last-pos))
@@ -146,7 +146,7 @@
           (when-not (= (:uuid entity) player-id)
             (when (entity-damage/available?)
               ;; TODO: use apply-damage-bypass-immunity! once protocol is extended (Bug 4)
-              (entity-damage/apply-direct-damage!*
+              (entity-damage/apply-direct-damage!
                                                   world-id
                                                   (:uuid entity)
                                                   dmg
@@ -170,12 +170,12 @@
       eye-z (double (:z player-pos))
       max-distance (cfg-double :targeting.raycast-distance)]
     (if (raycast/available?)
-      (let [look (raycast/get-player-look-vector* player-id)
+      (let [look (raycast/player-look-vector player-id)
             dx (double (or (:x look) 0.0))
             dy (double (or (:y look) 0.0))
             dz (double (or (:z look) 1.0))
             ;; Combined trace: living entities + blocks, 100 blocks
-            hit (raycast/raycast-combined*
+            hit (raycast/raycast-combined
                                           world-id
                                           eye-x eye-y eye-z
                                           dx dy dz max-distance)]

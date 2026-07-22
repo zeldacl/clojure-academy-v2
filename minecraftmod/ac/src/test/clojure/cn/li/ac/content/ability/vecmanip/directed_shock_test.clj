@@ -9,9 +9,9 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (def ^:private spec ds/directed-shock)
 
@@ -90,7 +90,7 @@
                              ctx-skill/clear-skill-state! clear-skill-state!
                              ctx/terminate-context! terminate-context!
                              raycast/available? (constantly true)
-                             raycast/raycast-from-player* (fn [& _]
+                             raycast/raycast-from-player (fn [& _]
                                                             (swap! trace-calls* inc)
                                                             nil)
                              fx/send! (fn [ctx-id entry _evt payload]
@@ -121,12 +121,12 @@
                          geom/world-id-of (fn [_] "w")
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
                          raycast/available? (constantly true)
-                         raycast/raycast-from-player* (fn [& _]
+                         raycast/raycast-from-player (fn [& _]
                                                         {:entity-id "e1"
                                                          :x 1.0 :y 2.0 :z 3.0
                                                          :eye-height 1.8})
                          entity-damage/available? (constantly true)
-                         entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
+                         entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
                                                                 (swap! damage-calls* conj [world-id target-id damage kind]))
                          motion-effects/entity-motion-available? (constantly true)
                          motion-effects/add-entity-velocity! (fn [world-id target-id x y z]
@@ -173,7 +173,7 @@
                          geom/world-id-of (fn [_] "w")
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
                          raycast/available? (constantly true)
-                         raycast/raycast-from-player* (fn [& _] nil)
+                         raycast/raycast-from-player (fn [& _] nil)
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
                          skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]

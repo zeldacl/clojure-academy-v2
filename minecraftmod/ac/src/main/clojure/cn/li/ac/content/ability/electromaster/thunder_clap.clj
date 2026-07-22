@@ -19,7 +19,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
 	            [cn.li.mcmod.platform.entity :as entity]))
 
 (def-skill-config-ops :thunder-clap)
@@ -41,7 +41,7 @@
   [player-id]
   (let [eye (geom/eye-pos player-id)
         look (when (raycast/available?)
-               (raycast/get-player-look-vector* player-id))
+               (raycast/player-look-vector player-id))
         look* (or look {:x 0.0 :y 0.0 :z 1.0})
         range (targeting-range)]
     {:x (+ (double (:x eye)) (* (double (:x look*)) range))
@@ -54,9 +54,9 @@
         world-id (geom/world-id-of player-id)
         eye (geom/eye-pos player-id)
         look (when (raycast/available?)
-               (raycast/get-player-look-vector* player-id))
+               (raycast/player-look-vector player-id))
         hit (when (and (raycast/available?) look)
-              (raycast/raycast-combined*
+              (raycast/raycast-combined
                                         world-id
                                         (:x eye) (:y eye) (:z eye)
                                         (double (or (:x look) 0.0))

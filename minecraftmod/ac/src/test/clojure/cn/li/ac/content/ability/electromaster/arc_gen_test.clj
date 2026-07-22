@@ -6,10 +6,10 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.block :as block-manip]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
@@ -44,8 +44,8 @@
                   potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _] nil)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _] nil)
                   skill-effects/skill-exp (fn [& _] 0.25)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args) nil)
                   skill-config/lerp-double stub-lerp
@@ -71,13 +71,13 @@
                   server-bridge/server-bridge-available? (constantly false)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _]
                                              {:hit-type :block
                                               :x 1 :y 64 :z 6
                                               :hit-x 1.0 :hit-y 64.0 :hit-z 6.0})
-                  block-manip/liquid-block?* (fn [& _] true)
-                  block-manip/set-block!* (fn [& args] (swap! ignite-calls* conj args) nil)
+                  block-manip/liquid-block? (fn [& _] true)
+                  block-manip/set-block! (fn [& args] (swap! ignite-calls* conj args) nil)
                   pitem/create-item-stack-by-id (fn [_ _] {:item-id "minecraft:cooked_cod" :count 1})
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! fish-give* conj [player stack])
@@ -103,12 +103,12 @@
                   potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _]
                                              {:hit-type :entity
                                               :x 0.0 :y 64.0 :z 5.0
                                               :uuid "mob-1"})
-                  entity-damage/apply-direct-damage!* (fn [& args]
+                  entity-damage/apply-direct-damage! (fn [& args]
                                                         (swap! damage-calls* conj args)
                                                         true)
                   skill-effects/skill-exp (fn [& _] 1.0)
@@ -131,8 +131,8 @@
                   potion-effects/available? (constantly true)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 10.0 :y 64.0 :z 20.0})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _] nil)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _] nil)
                   skill-effects/skill-exp (fn [& _] 1.0)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-config/lerp-double stub-lerp

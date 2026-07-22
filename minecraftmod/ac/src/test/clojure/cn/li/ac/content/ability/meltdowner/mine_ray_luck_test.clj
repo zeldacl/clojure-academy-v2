@@ -9,8 +9,8 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.block-manipulation :as bm]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.block :as bm]
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- context-mocks
   [initial]
@@ -63,12 +63,12 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
-                  raycast/raycast-blocks* (fn [& _] {:x 1 :y 64 :z 2})
+                  raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                  raycast/raycast-blocks (fn [& _] {:x 1 :y 64 :z 2})
                   bm/available? (constantly true)
-                  bm/get-block-hardness* (fn [& _] 1.0)
-                  bm/can-break-block?* (fn [& _] true)
-                  bm/break-block!* (fn [& args]
+                  bm/get-block-hardness (fn [& _] 1.0)
+                  bm/can-break-block? (fn [& _] true)
+                  bm/break-block! (fn [& args]
                                      (swap! break-calls* conj (vec args))
                                      true)]
       (base/mining-ray-tick! {:range 16.0

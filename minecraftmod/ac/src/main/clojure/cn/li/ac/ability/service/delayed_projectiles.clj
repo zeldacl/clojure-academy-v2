@@ -8,8 +8,8 @@
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util ArrayList HashMap]))
 
@@ -115,7 +115,7 @@
       (let [dir (geom/vnorm {:x (double (or (:x look-dir) 0.0))
                              :y (double (or (:y look-dir) 0.0))
                              :z (double (or (:z look-dir) 0.0))})
-            hit (raycast/raycast-entities*
+            hit (raycast/raycast-entities
                                           world-id
                                           (double (:x eye))
                                           (double (:y eye))
@@ -129,7 +129,7 @@
                 target-uuid (:uuid hit)
                 damage-amt (double (or damage 0.0))]
             (when (and target-uuid (entity-damage/available?))
-              (entity-damage/apply-direct-damage!*
+              (entity-damage/apply-direct-damage!
                 world-id
                 target-uuid
                 damage-amt

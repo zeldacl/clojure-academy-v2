@@ -10,7 +10,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
@@ -171,7 +171,7 @@
                                                  :progression.exp-effective 0.0001
                                                  0.0))
                   raycast/available? (constantly true)
-                  raycast/raycast-blocks* (fn [_ _ _ _ _ _ _ _]
+                  raycast/raycast-blocks (fn [_ _ _ _ _ _ _ _]
                                             {:x 1 :y 2 :z 3 :distance 2.0})
                   #'current-charging/block-entity-at (fn [_ _ _ _] :block-entity)
                   energy/is-node-supported? (fn [_] true)

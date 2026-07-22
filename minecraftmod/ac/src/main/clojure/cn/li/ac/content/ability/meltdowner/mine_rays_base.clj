@@ -16,8 +16,8 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-                        [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.block-manipulation :as bm]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.block :as bm]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -44,9 +44,9 @@
           world-id  (geom/world-id-of player-id)
           eye       (geom/eye-pos player-id)
           look-vec  (when (raycast/available?)
-                      (raycast/get-player-look-vector* player-id))]
+                      (raycast/player-look-vector player-id))]
       (if (and look-vec (bm/available?))
-        (let [hit (raycast/raycast-blocks*
+        (let [hit (raycast/raycast-blocks
                     world-id
                     (:x eye) (:y eye) (:z eye)
                     (:x look-vec) (:y look-vec) (:z look-vec)
@@ -58,7 +58,7 @@
                   prev-y (get-in ctx-data [:skill-state :target-y])
                   prev-z (get-in ctx-data [:skill-state :target-z])
                   same-target? (and (= hx prev-x) (= hy prev-y) (= hz prev-z))
-                  hardness (double (or (bm/get-block-hardness*
+                  hardness (double (or (bm/get-block-hardness
                                                                world-id hx hy hz)
                                        1.0))
                   countdown-delta (/ (double break-speed) (max 0.1 hardness))
@@ -70,10 +70,10 @@
                         {:x hx :y hy :z hz
                          :progress (min 1.0 new-countdown)})
               (if (>= new-countdown 1.0)
-                (when (bm/can-break-block?* player-id world-id hx hy hz)
+                (when (bm/can-break-block? player-id world-id hx hy hz)
                   (if (pos? (long (or fortune-level 0)))
-                    (bm/break-block!* player-id world-id hx hy hz true fortune-level)
-                    (bm/break-block!* player-id world-id hx hy hz true))
+                    (bm/break-block! player-id world-id hx hy hz true fortune-level)
+                    (bm/break-block! player-id world-id hx hy hz true))
                   (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
                   (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
                 (ctx-skill/replace-skill-state! ctx-id

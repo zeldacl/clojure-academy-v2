@@ -18,12 +18,7 @@
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.hooks.core :as power-runtime]))
-
-(defn- install-bound-adapter!
-  [install-fn create-adapter label]
-  (install-fn (create-adapter server-context/get-server) label))
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
@@ -43,9 +38,11 @@
                                (runtime-entity-motion/fabric-entity-motion))))
    (adapter-registry/step :entity-query runtime-entity-query/install-entity-query!)
    (adapter-registry/step :raycast
-                          #(install-bound-adapter! prc/install-raycast!
-                                                   raycast-core/create-raycast
-                                                   "Fabric raycast"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :raycast
+                               (raycast-core/create-raycast server-context/get-server))))
    (adapter-registry/step :world-effects runtime-world-effects/install-world-effects!)
    (adapter-registry/step :teleportation
                           #(when-let [fw-atom (fw/fw-atom)]

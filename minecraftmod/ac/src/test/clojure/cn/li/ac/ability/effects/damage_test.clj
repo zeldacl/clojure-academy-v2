@@ -1,14 +1,14 @@
 (ns cn.li.ac.ability.effects.damage-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.damage :as damage]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]))
 
 (deftest damage-direct-applies-when-bound-test
   (let [calls (atom [])
         evt {:player-id "att" :world-id "overworld" :target :victim :victim "u1" :amount 7.0 :damage-type :magic}]
     (with-redefs [entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage source-type]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
                                                        (swap! calls conj {:world-id world-id
                                                                           :uuid entity-uuid
                                                                           :damage damage
@@ -32,7 +32,7 @@
              :amount 100.0
              :damage-type :generic}]
     (with-redefs [entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage _]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage _]
                                                        (swap! dcalls conj {:world-id world-id
                                                                            :uuid entity-uuid
                                                                            :damage damage}))

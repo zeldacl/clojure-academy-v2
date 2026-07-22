@@ -12,8 +12,8 @@
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip])
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.block :as block-manip])
   (:import [java.util HashSet]))
 
 (defn- beam-remove-self
@@ -92,25 +92,25 @@
                     bx       (geom/floor-int (:x pos))
                     by       (geom/floor-int (:y pos))
                     bz       (geom/floor-int (:z pos))
-                    hardness (block-manip/get-block-hardness*
+                    hardness (block-manip/get-block-hardness
                                                              world-id bx by bz)]
                 (if (or (nil? hardness) (neg? (double hardness)))
                   (recur (+ travel 1.0) remaining)
                   (if (and (pos? (double hardness))
                            (<= (double hardness) remaining)
-                           (block-manip/can-break-block?*
+                           (block-manip/can-break-block?
                                                          player-id world-id bx by bz))
                     (do
-                      (block-manip/break-block!*
+                      (block-manip/break-block!
                                                 player-id world-id bx by bz (< (rand) 0.05))
                       (when (< (rand) 0.05)
                         (let [[ox oy oz] (rand-nth neighbor-offsets)
                               nx         (+ bx (int ox))
                               ny         (+ by (int oy))
                               nz         (+ bz (int oz))]
-                          (when (block-manip/can-break-block?*
+                          (when (block-manip/can-break-block?
                                                               player-id world-id nx ny nz)
-                            (block-manip/break-block!*
+                            (block-manip/break-block!
                                                       player-id world-id nx ny nz false))))
                       (recur (+ travel 1.0) (- remaining (double hardness))))
                     (recur (+ travel 1.0) 0.0)))))))))))
@@ -165,7 +165,7 @@
                                 :hit-uuids           hit-uuids}))
                     (do
                       (when (and (pos? dmg) (entity-damage/available?))
-                        (entity-damage/apply-direct-damage!*
+                        (entity-damage/apply-direct-damage!
                                                             world-id uuid
                                                             scaled-dmg
                                                             (or damage-type :magic)))

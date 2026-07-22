@@ -13,7 +13,7 @@
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
@@ -104,7 +104,7 @@
 (defn- raycast-front-hit
   [world-id eye look-dir]
   (when (raycast/available?)
-    (raycast/raycast-combined*
+    (raycast/raycast-combined
                               world-id
                               (double (:x eye)) (double (:y eye)) (double (:z eye))
                               (double (:dx look-dir)) (double (:dy look-dir)) (double (:dz look-dir))
@@ -155,7 +155,7 @@
           world-id       (geom/world-id-of player-id)
           eye            (geom/eye-pos player-id)
           look-vec       (when (raycast/available?)
-                           (raycast/get-player-look-vector* player-id))
+                           (raycast/player-look-vector player-id))
           look-dir       (when look-vec (normalize-look-dir look-vec))]
       (when look-dir
         (let [front-hit     (raycast-front-hit world-id eye look-dir)

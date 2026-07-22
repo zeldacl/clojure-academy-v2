@@ -16,20 +16,17 @@
             [cn.li.mc1201.runtime.entity-query-core :as entity-query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.entity :as pentity]))
-
-(defn- install-bound-adapter!
-  [install-fn create-adapter label]
-  (install-fn (create-adapter server-context/get-server) label))
 
 (def runtime-install-steps
   [(adapter-registry/step :entity-damage
                           entity-damage/install-entity-damage!)
    (adapter-registry/step :raycast
-                          #(install-bound-adapter! prc/install-raycast!
-                                                   raycast-core/create-raycast
-                                                   "Forge raycast"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :raycast
+                               (raycast-core/create-raycast server-context/get-server))))
    (adapter-registry/step :interop
                           #(interop-core/install-runtime-interop! "Forge" server-context/get-server))
    (adapter-registry/step :world-effects

@@ -7,8 +7,8 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- mock-cfg-int [field]
   (case field
@@ -96,10 +96,10 @@
                   geom/world-id-of (fn [_] "w")
                   raycast/available? (constantly true)
                   entity-damage/available? (constantly true)
-                  raycast/raycast-from-player* (fn [& _]
+                  raycast/raycast-from-player (fn [& _]
                                                 {:entity-id "target-1"
                                                  :x 1.0 :y 2.0 :z 3.0})
-                  raycast/raycast-blocks* (fn [& _]
+                  raycast/raycast-blocks (fn [& _]
                                            {:x 1.0 :y 2.0 :z 3.0 :face :up})
                   fx/send! (fn [ctx-id entry _evt payload]
                             (case (:topic entry)
@@ -108,7 +108,7 @@
                               :blood-retrograde/fx-end
                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
                               nil))
-                  entity-damage/apply-direct-damage!* (fn [world-id target-id damage kind]
+                  entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
                                                       (swap! damage-calls* conj [world-id target-id damage kind]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
@@ -143,12 +143,12 @@
                   geom/world-id-of (fn [_] "w")
                   raycast/available? (constantly true)
                   entity-damage/available? (constantly true)
-                  raycast/raycast-from-player* (fn [& _] nil)
+                  raycast/raycast-from-player (fn [& _] nil)
                   fx/send! (fn [ctx-id entry _evt payload]
                             (when (= :blood-retrograde/fx-end (:topic entry))
                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload]))
                             nil)
-                  entity-damage/apply-direct-damage!* (fn [& _]
+                  entity-damage/apply-direct-damage! (fn [& _]
                                                       (swap! damage-calls* conj :damage))]
         (cb/apply-invoke br/blood-retrograde-on-key-up :player-id "p1" :ctx-id "ctx-2" :cost-ok? true))
     (is (empty? @damage-calls*))

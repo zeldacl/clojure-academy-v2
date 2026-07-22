@@ -7,9 +7,9 @@
   No Minecraft imports."
   (:require [cn.li.ac.content.ability.teleporter.passive-hooks :as passive-hooks]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -46,7 +46,7 @@
   "Raycast from world position and direction, returning first hit map or nil."
   [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (when (raycast/available?)
-    (raycast/raycast-combined*
+    (raycast/raycast-combined
                               world-id
                               (double start-x)
                               (double start-y)
@@ -60,7 +60,7 @@
   "Raycast blocks from world position and direction, returning block hit or nil."
   [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
   (when (raycast/available?)
-    (raycast/raycast-blocks*
+    (raycast/raycast-blocks
                             world-id
                             (double start-x)
                             (double start-y)
@@ -78,7 +78,7 @@
   "Cast ray from player, returning first living non-player entity UUID, or nil."
   [player-id max-dist]
   (when (raycast/available?)
-    (when-let [result (raycast/raycast-from-player*
+    (when-let [result (raycast/raycast-from-player
                                                     player-id (double max-dist) true)]
       (when (and (:hit-entity result)
                  (not= (str (:entity-uuid result)) (str player-id)))
@@ -93,7 +93,7 @@
   3-arity is plain damage; 4-arity applies teleporter passive crit pipeline."
   ([world-id entity-uuid damage]
    (when (entity-damage/available?)
-     (entity-damage/apply-direct-damage!*
+     (entity-damage/apply-direct-damage!
        world-id entity-uuid (double damage) :magic)))
   ([attacker-id world-id entity-uuid damage]
    (let [crit-result (passive-hooks/calc-teleporter-crit attacker-id (double damage))
@@ -112,7 +112,7 @@
 
 (defn player-look-vec [player-id]
   (when (raycast/available?)
-    (raycast/get-player-look-vector* player-id)))
+    (raycast/player-look-vector player-id)))
 
 (defn player-position [player-id]
   (when (motion-effects/teleportation-available?)

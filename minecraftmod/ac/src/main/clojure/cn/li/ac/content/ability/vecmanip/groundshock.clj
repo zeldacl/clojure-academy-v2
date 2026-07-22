@@ -23,9 +23,9 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.block :as block-manip]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashSet]))
@@ -33,7 +33,7 @@
 (def-skill-config-ops :groundshock)
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and (raycast/available?)
-                           (raycast/get-player-look-vector* player-id))]
+                           (raycast/player-look-vector player-id))]
     (let [flat {:x (double (:x look-vec))
                 :y 0.0
                 :z (double (:z look-vec))}
@@ -123,17 +123,17 @@
 (defn- break-with-force!
   [player-id world-id x y z drop? energy* block-drop-rate broken-blocks*]
   (when (and (block-manip/available?)
-             (block-manip/can-break-block?* player-id world-id x y z))
-    (let [hardness (block-manip/get-block-hardness* world-id x y z)
-          block-id (block-manip/get-block* world-id x y z)]
+             (block-manip/can-break-block? player-id world-id x y z))
+    (let [hardness (block-manip/get-block-hardness world-id x y z)
+          block-id (block-manip/get-block world-id x y z)]
       (when (and block-id
                  (number? hardness)
                  (>= (double hardness) 0.0)
                  (>= (aget ^doubles energy* 0) (double hardness))
-                 (not (block-manip/farmland-block?* world-id x y z))
-                 (not (block-manip/liquid-block?* world-id x y z)))
+                 (not (block-manip/farmland-block? world-id x y z))
+                 (not (block-manip/liquid-block? world-id x y z)))
         (aset-double ^doubles energy* 0 (- (aget ^doubles energy* 0) (double hardness)))
-        (when (block-manip/break-block!*
+        (when (block-manip/break-block!
                                         player-id
                                         world-id
                                         x y z
@@ -187,7 +187,7 @@
                  (not (.contains ^HashSet affected-entities* entity-id))
                  (entity-overlaps-shock-box? entity bx by bz))
         (when (entity-damage/available?)
-          (entity-damage/apply-direct-damage!*
+          (entity-damage/apply-direct-damage!
                                               world-id
                                               entity-id
                                               damage
@@ -215,7 +215,7 @@
            :y y
            :z z
            :block-id (or (and (block-manip/available?)
-                              (block-manip/get-block* world-id x y z))
+                              (block-manip/get-block world-id x y z))
                          "minecraft:stone")})
         positions))
 
@@ -266,19 +266,19 @@
                     pos-key [bx by bz]]
                 (when-not (.contains affected-blocks* pos-key)
                   (when-let [block-id (and (block-manip/available?)
-                                           (block-manip/get-block*
+                                           (block-manip/get-block
                                                                   world-id bx by bz))]
                     (.add affected-blocks* pos-key)
                     (case block-id
                       "minecraft:stone"
                       (do
-                        (block-manip/set-block!*
+                        (block-manip/set-block!
                                                 world-id bx by bz "minecraft:cobblestone")
                         (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
                       "minecraft:grass_block"
                       (do
-                        (block-manip/set-block!*
+                        (block-manip/set-block!
                                                 world-id bx by bz "minecraft:dirt")
                         (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
@@ -313,7 +313,7 @@
       (doseq [x (range (- x0 (cfg-int :breaking.mastery-radius)) (+ x0 (cfg-int :breaking.mastery-radius)))
               y (range (- y0 1) (+ y0 1))
           z (range (- z0 (cfg-int :breaking.mastery-radius)) (+ z0 (cfg-int :breaking.mastery-radius)))]
-        (when-let [hardness (block-manip/get-block-hardness* world-id x y z)]
+        (when-let [hardness (block-manip/get-block-hardness world-id x y z)]
           (when (and (number? hardness)
              (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
             (break-with-force! player-id world-id x y z true energy* 1.0 broken-blocks*)))))))

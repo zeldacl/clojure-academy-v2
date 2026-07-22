@@ -14,7 +14,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :current-charging)
@@ -103,7 +103,7 @@
   [view charge]
   (let [world-id (or (:world-id view) "minecraft:overworld")
         hit (when (raycast/available?)
-              (raycast/raycast-blocks*
+              (raycast/raycast-blocks
                world-id
                (double (:x view)) (double (:y view)) (double (:z view))
                (double (:look-x view)) (double (:look-y view)) (double (:look-z view))

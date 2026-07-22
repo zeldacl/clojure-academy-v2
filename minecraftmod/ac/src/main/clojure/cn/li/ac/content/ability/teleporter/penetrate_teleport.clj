@@ -33,7 +33,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
-            [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.ac.ability.effects.block :as bm]
 
                         [cn.li.mcmod.util.log :as log]))
 
@@ -117,7 +117,7 @@
 
   (when (bm/available?)
 
-    (let [h (bm/get-block-hardness* world-id bx by bz)]
+    (let [h (bm/get-block-hardness world-id bx by bz)]
 
       (and (some? h) (pos? (double h))))))
 

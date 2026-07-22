@@ -8,7 +8,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -37,7 +37,7 @@
                     (swap! calls conj [:search args])
                     [{:uuid "e-1" :x 3.0 :y 2.0 :z 3.0}])
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& _]
+                  entity-damage/apply-direct-damage! (fn [& _]
                                                        (swap! calls conj [:damage]))
                   fx/send! (fn [_ctx-id entry _evt payload]
                              (swap! calls conj [:fx (:topic entry) payload])

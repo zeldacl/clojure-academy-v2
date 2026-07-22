@@ -8,7 +8,7 @@
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
@@ -66,11 +66,11 @@
                   world-effects/available? (constantly true)
                   world-effects/find-entities-in-radius (fn [& _] [])
                   raycast/available? (constantly true)
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :uuid "enemy-1"
                                                :type "entity.my_mod.enemy"})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   beam/execute-beam! (fn [_ _]
                                        (swap! run-calls* inc)
                                        {:beam-result {:performed? true
@@ -106,11 +106,11 @@
                                                          [{:uuid "enemy-a" :x 1.0 :y 64.0 :z 5.0 :eye-height 1.6}
                                                           {:uuid "enemy-b" :x -1.0 :y 64.0 :z 5.0 :eye-height 1.6}])
                   raycast/available? (constantly true)
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :uuid "silbarn-1"
                                                :type "entity.my_mod.silbarn"})
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   beam/execute-beam! (fn [_ spec]
                                        (swap! run-calls* conj (:damage spec))
                                        {:beam-result {:performed? true
@@ -141,7 +141,7 @@
                   world-effects/available? (constantly true)
                   world-effects/find-entities-in-radius (fn [& _] [{:uuid "enemy" :x 0.0 :y 64.0 :z 6.0 :eye-height 1.6}])
                   raycast/available? (constantly true)
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/raycast-combined (fn [& _]
                                               (if (= 1 (swap! call-idx* inc))
                                                 {:hit-type :entity
                                                  :uuid "silbarn-1"
@@ -151,7 +151,7 @@
                                                  :uuid "silbarn-1"
                                                  :type "entity.my_mod.silbarn"
                                                  :is-hit true}))
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   beam/execute-beam! (fn [_ _]
                                        (swap! run-calls* inc)
                                        {:beam-result {:performed? true

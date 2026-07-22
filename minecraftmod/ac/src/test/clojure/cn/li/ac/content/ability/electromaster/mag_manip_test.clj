@@ -8,7 +8,7 @@
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.mag-manip :as mag-manip]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.ac.ability.effects.block :as block-manip]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]))
 
@@ -32,8 +32,8 @@
                                                     :block-id "minecraft:iron_block"})
                   entity/player-get-main-hand-item-id (fn [_] nil)
                   block-manip/available? (constantly true)
-                  block-manip/can-break-block?* (fn [& _] true)
-                  block-manip/break-block!* (fn [& _] false)
+                  block-manip/can-break-block? (fn [& _] true)
+                  block-manip/break-block! (fn [& _] false)
                   ctx/get-context (fn
                                     ([id] (get @contexts* id))
                                     ([_owner id] (get @contexts* id)))

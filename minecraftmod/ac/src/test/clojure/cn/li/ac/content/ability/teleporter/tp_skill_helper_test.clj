@@ -8,8 +8,8 @@
             [cn.li.ac.content.ability.teleporter.passive-hooks :as passive-hooks]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
@@ -32,7 +32,7 @@
 
 (deftest player-look-vec-delegates-test
   (with-redefs [raycast/available? (constantly true)
-                raycast/get-player-look-vector* (fn [player-id]
+                raycast/player-look-vector (fn [player-id]
                                                   (when (= "p1" player-id)
                                                     {:x 0.0 :y 1.0 :z 0.0}))]
     (is (= {:x 0.0 :y 1.0 :z 0.0} (h/player-look-vec "p1")))))
@@ -67,7 +67,7 @@
 
 (defn- with-raycast-from-player [result f]
   (with-redefs [raycast/available? (constantly true)
-                raycast/raycast-from-player* (fn [_ _ _] result)]
+                raycast/raycast-from-player (fn [_ _ _] result)]
     (f)))
 
 (deftest raycast-entity-filters-self-and-nil-miss-test
@@ -80,7 +80,7 @@
   (is (nil? (h/deal-magic-damage! "world" "e1" 5.5)))
   (let [last-args (atom nil)]
     (with-redefs [entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [w u dmg st]
+                  entity-damage/apply-direct-damage! (fn [w u dmg st]
                                                        (reset! last-args [w u dmg st])
                                                        true)]
       (is (true? (h/deal-magic-damage! "world" "e1" 5.5)))
@@ -129,7 +129,7 @@
       (with-crit-config 1.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage!* (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [pid sid amount]
@@ -176,7 +176,7 @@
       (with-crit-config 0.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage!* (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [& _] (is false "no exp on non-crit"))
@@ -209,7 +209,7 @@
       (with-crit-config 0.0 0.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage!* (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [pid sid amount]
@@ -245,7 +245,7 @@
       (with-crit-config 1.0 1.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage!* (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [& _] (is false "no exp when passives unlearned"))
@@ -275,7 +275,7 @@
       (with-crit-config 1.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage!* (fn [& _] false)
+                        entity-damage/apply-direct-damage! (fn [& _] false)
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)

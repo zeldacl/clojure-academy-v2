@@ -21,10 +21,10 @@
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -72,7 +72,7 @@
 
 (defn- get-player-look-vector
   [player-id]
-  (raycast/get-player-look-vector* player-id))
+  (raycast/player-look-vector player-id))
 
 (defn- enforce-overload-floor!
   [player-id ctx-data]
@@ -150,7 +150,7 @@
                                      :target-pos {:x (:x entity)
                                                   :y (:y entity)
                                                   :z (:z entity)}})
-            (entity-damage/apply-direct-damage!*
+            (entity-damage/apply-direct-damage!
              world-id (:uuid entity)
              (cfg-lerp :combat.touch-damage exp)
              :magic)

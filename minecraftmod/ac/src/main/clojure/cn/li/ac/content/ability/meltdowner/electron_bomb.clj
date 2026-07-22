@@ -19,7 +19,7 @@
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :electron-bomb)
@@ -38,7 +38,7 @@
           world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when (raycast/available?)
-                     (raycast/get-player-look-vector* player-id))]
+                     (raycast/player-look-vector player-id))]
       (when look-vec
         (when player-ref
           (entity/player-spawn-entity-by-id!

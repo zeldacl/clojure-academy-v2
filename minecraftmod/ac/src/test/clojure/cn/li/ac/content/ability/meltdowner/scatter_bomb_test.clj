@@ -12,8 +12,8 @@
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- context-mocks
   [initial]
@@ -111,7 +111,7 @@
                                                       true)
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage source-type]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
                                                        true)]
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"})))
@@ -142,7 +142,7 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity/player-spawn-entity-by-id! (fn [& _] true)
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-uuid damage source-type]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
                                                        true)]
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-afk" :player-ref {:id "player-obj"})))
@@ -168,7 +168,7 @@
                                                       true)
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [_ _ _ _ _] true)]
+                  entity-damage/apply-direct-damage! (fn [_ _ _ _ _] true)]
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-window" :player-ref {:id "player-obj"})))
     (is (= 81 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 4 (get-in @ctx* [:skill-state :balls])))
@@ -204,7 +204,7 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})]
          (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-3")))
 
     (is (= [15 16 17] (mapv :delay-ticks @scheduled*)))

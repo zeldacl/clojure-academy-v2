@@ -17,9 +17,9 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :blood-retrograde)
@@ -29,7 +29,7 @@
 
 (defn- get-player-look [player-id]
   (or (when (raycast/available?)
-        (some-> (raycast/get-player-look-vector* player-id)
+        (some-> (raycast/player-look-vector player-id)
                 geom/vnorm))
       {:x 0.0 :y 0.0 :z 1.0}))
 
@@ -77,7 +77,7 @@
                           :up true
                           false)]
     (when (and should-release? (raycast/available?))
-      (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))))
+      (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))))
 
 (defn- release-hit?
   [player-id ctx-id stage]
@@ -115,7 +115,7 @@
                          dir (geom/rotate-around-axis yaw-turned right-axis pitch-deg)
                          start (geom/v- head-pos (geom/v* dir 0.5))
                          hit (when (raycast/available?)
-                               (raycast/raycast-blocks*
+                               (raycast/raycast-blocks
                                                       world-id
                                                       (:x start) (:y start) (:z start)
                                                       (:x dir) (:y dir) (:z dir)
@@ -185,7 +185,7 @@
         (do
           (skill-effects/set-main-cooldown! player-id :blood-retrograde (cooldown-ticks exp))
           (when (entity-damage/available?)
-            (entity-damage/apply-direct-damage!*
+            (entity-damage/apply-direct-damage!
                                                 world-id
                                                 target-id
                                                 (damage-value exp)
@@ -219,7 +219,7 @@
                      :charge-ratio (scaling/clamp-exp (/ (double ticks) (cfg-double :charge.fx-ratio-ticks)))})
           (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when (raycast/available?)
-                        (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
+                        (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))
                   performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
               (finish! ctx-id performed?)
               (log/debug "BloodRetrograde auto-release" "ticks" ticks "performed" performed?))))))))
@@ -232,7 +232,7 @@
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
         (let [hit (when (raycast/available?)
-              (raycast/raycast-from-player* player-id (cfg-double :targeting.distance) true))
+              (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))
               performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
           (finish! ctx-id performed?)
           (log/debug "BloodRetrograde released" "performed" performed?))))))

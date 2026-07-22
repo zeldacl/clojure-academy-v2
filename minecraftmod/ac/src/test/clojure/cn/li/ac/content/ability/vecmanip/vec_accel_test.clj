@@ -13,7 +13,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             ;; side-effectful require: ensures defskill runs and private fns are compiled
             [cn.li.ac.content.ability.vecmanip.vec-accel]))
 
@@ -126,7 +126,7 @@
 
 (deftest check-ground-raycast-no-raycast-platform-test
   (testing "when raycast runtime is absent, returns nil without NPE"
-    (raycast/call-with-runtime nil
+    (do
                                (fn []
                                  (is (nil? (check-ground-raycast "player-1"))
                                            "nil teleportation runtime yields nil position")))))

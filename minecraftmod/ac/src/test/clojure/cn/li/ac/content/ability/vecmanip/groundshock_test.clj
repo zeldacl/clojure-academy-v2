@@ -7,9 +7,9 @@
             [cn.li.ac.content.ability.vecmanip.groundshock :as gs]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (deftest horizontal-look-fallback-toggle-test
   (testing "fallback disabled returns nil when no horizontal look vector is available"
@@ -38,7 +38,7 @@
         exp-calls* (atom [])
         affected* (java.util.HashSet.)]
     (with-redefs [entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [world-id entity-id damage _]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-id damage _]
                                                        (swap! damage-calls* conj [world-id entity-id damage]))
                   motion-effects/entity-motion-available? (constantly true)
                   motion-effects/add-entity-velocity! (fn [world-id entity-id vx vy vz]
@@ -70,7 +70,7 @@
                   skill-effects/skill-exp (fn [_ _] 0.5)
                   motion-effects/teleportation-available? (constantly false)
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   fx/send! send!
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/player-on-ground? (constantly true)]
@@ -103,7 +103,7 @@
                   motion-effects/teleportation-available? (constantly true)
                   motion-effects/player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 1.0 :z 0.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 1.0 :z 0.0})
                   fx/send! send!
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/player-on-ground? (constantly true)]

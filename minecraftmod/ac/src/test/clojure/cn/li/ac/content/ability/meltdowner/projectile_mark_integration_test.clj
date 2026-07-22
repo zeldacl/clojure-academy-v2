@@ -18,9 +18,9 @@
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet-engine]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
@@ -129,13 +129,13 @@
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-entities* (fn [& _]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-entities (fn [& _]
                                               {:uuid victim :x 0.0 :y 64.0 :z 8.0 :distance 8.0})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& _] true)
-                  entity-damage/apply-aoe-damage!* (fn [& _] [])
-                  entity-damage/apply-reflection-damage!* (fn [& _] [])]
+                  entity-damage/apply-direct-damage! (fn [& _] true)
+                  entity-damage/apply-aoe-damage! (fn [& _] [])
+                  entity-damage/apply-reflection-damage! (fn [& _] [])]
       (dp/schedule-electron-bomb-beam!
        {:player-id attacker
         :ctx-id "ctx-eb"
@@ -178,9 +178,9 @@
                                                            :eye-height 1.6
                                                            :living? true}])
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& _] true)
-                  entity-damage/apply-aoe-damage!* (fn [& _] [])
-                  entity-damage/apply-reflection-damage!* (fn [& _] [])]
+                  entity-damage/apply-direct-damage! (fn [& _] true)
+                  entity-damage/apply-aoe-damage! (fn [& _] [])
+                  entity-damage/apply-reflection-damage! (fn [& _] [])]
       (cb/apply-invoke missile/electron-missile-tick! :player-id attacker :ctx-id "ctx-em" :player-ref {:id "player-obj"}))
       (is (= 1.6 (:rate (get (dh/marks-snapshot) victim))))
       (is (= 16.0 (double (rt/process-damage! victim attacker 10.0 :magic))))))
@@ -204,8 +204,8 @@
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
-                  raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined (fn [& _]
                                               {:hit-type :block :x 0.0 :y 64.0 :z 5.0})
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
@@ -267,11 +267,11 @@
                   motion-effects/dismount-riding! (fn [& _] true)
                   motion-effects/set-player-velocity! (fn [& _] true)
                   raycast/available? (constantly true)
-                  raycast/raycast-entities* (fn [& _] {:uuid victim})
+                  raycast/raycast-entities (fn [& _] {:uuid victim})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& _] true)
-                  entity-damage/apply-aoe-damage!* (fn [& _] [])
-                  entity-damage/apply-reflection-damage!* (fn [& _] [])
+                  entity-damage/apply-direct-damage! (fn [& _] true)
+                  entity-damage/apply-aoe-damage! (fn [& _] [])
+                  entity-damage/apply-reflection-damage! (fn [& _] [])
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
       (cb/apply-invoke jet-engine/jet-engine-tick! :player-id attacker :ctx-id "ctx-jet" :hold-ticks 1))

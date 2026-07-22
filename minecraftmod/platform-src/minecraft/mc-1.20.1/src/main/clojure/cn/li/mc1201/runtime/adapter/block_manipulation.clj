@@ -5,7 +5,8 @@
   Minecraft-version-specific code owns the protocol implementation and delegates
   the actual block operations to block-manipulation-core."
   (:require [cn.li.mc1201.runtime.block-manipulation-core :as core]
-            [cn.li.mcmod.platform.block-manipulation :as bm]))
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]))
 
 (defn create-block-manipulation
   [server-fn break-guard-fn]
@@ -31,4 +32,6 @@
 
 (defn install-block-manipulation!
   [block-manipulation label]
-  (bm/install-block-manipulation! block-manipulation label))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :block-manipulation block-manipulation))
+  nil)

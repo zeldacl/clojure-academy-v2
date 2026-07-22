@@ -10,7 +10,7 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.world :as world-effects]))
 
 (defn- make-context-mocks [initial]
@@ -140,7 +140,7 @@
                                                            :eye-height 1.6
                                                            :living? true}])
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& args]
+                  entity-damage/apply-direct-damage! (fn [& args]
                                                        (swap! damage-calls* conj args)
                                                        true)
                   md-damage/mark-target! (fn [player-id uuid fx-context]

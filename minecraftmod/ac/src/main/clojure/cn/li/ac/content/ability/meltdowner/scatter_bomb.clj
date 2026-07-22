@@ -22,8 +22,8 @@
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
                         [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :scatter-bomb)
@@ -104,7 +104,7 @@
         ;; Anti-AFK self-damage at tick 200
         (when (= ticks (cfg-int :effect.anti-afk-tick))
           (when (entity-damage/available?)
-            (entity-damage/apply-direct-damage!*
+            (entity-damage/apply-direct-damage!
               (geom/world-id-of player-id)
               player-id
               (cfg-double :effect.anti-afk-damage)
@@ -134,7 +134,7 @@
       (let [world-id (geom/world-id-of player-id)
             eye      (geom/eye-pos player-id)
             look-vec (when (raycast/available?)
-                       (raycast/get-player-look-vector* player-id))
+                       (raycast/player-look-vector player-id))
             damage   (cfg-lerp :combat.damage exp)]
         (when look-vec
           ;; Each ball settles with a slight delay to preserve projectile cadence.

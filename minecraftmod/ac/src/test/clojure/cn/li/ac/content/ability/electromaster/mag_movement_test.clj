@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.mag-movement
@@ -229,14 +229,14 @@
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
                 mag-movement/is-metal-entity? (fn [_] true)
                 raycast/available? (constantly true)
-                raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
                 geom/world-id-of (fn [_] "w")
                 mag-movement/cfg-double (fn [k]
                                           (case k
                                             :targeting.range 25.0
                                             0.0))
-                raycast/raycast-combined* (fn [_ _ _ _ _ _ _ _]
+                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _]
                                            {:hit-type :block
                                             :block-id "minecraft:iron_block"
                                             :x 1.25 :y 2.5 :z 3.75})]
@@ -250,14 +250,14 @@
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
                 mag-movement/is-metal-entity? (fn [_] true)
                 raycast/available? (constantly true)
-                raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
                 geom/world-id-of (fn [_] "w")
                 mag-movement/cfg-double (fn [k]
                                           (case k
                                             :targeting.range 25.0
                                             0.0))
-                raycast/raycast-combined* (fn [_ _ _ _ _ _ _ _]
+                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _]
                                            {:hit-type :entity
                                             :type "minecraft:iron_golem"
                                             :uuid "e-1"

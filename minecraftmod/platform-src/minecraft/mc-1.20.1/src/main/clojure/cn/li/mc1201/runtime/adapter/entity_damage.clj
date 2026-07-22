@@ -5,7 +5,9 @@
   query callbacks; this namespace owns the damage-flow orchestration."
   (:require [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.platform.entity-damage :as ped]
+            [cn.li.ac.ability.effects.damage :as damage-effects]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -27,11 +29,11 @@
 
 (defn- pvp-blocked?
   "True when `entity` is a player and the content-registered PvP gate
-   (mcmod.platform.entity-damage/install-pvp-gate!) currently disallows it —
+   (ac.ability.effects.damage/install-pvp-gate!) currently disallows it —
    matches upstream AbilityContext.dealDamage's
    (canAttackPlayer() || !(target instanceof EntityPlayer)) check."
   [entity]
-  (and (instance? Player entity) (not (ped/pvp-allowed?))))
+  (and (instance? Player entity) (not (damage-effects/pvp-allowed?))))
 
 (defn create-entity-damage
   "Return a function map implementing the entity-damage contract.
@@ -116,4 +118,6 @@
 
 (defn install-entity-damage!
   [entity-damage label]
-  (ped/install-entity-damage! entity-damage label))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :entity-damage entity-damage))
+  nil)

@@ -41,7 +41,7 @@
 
                         [cn.li.mcmod.platform.entity :as entity]
 
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
 
             [cn.li.mcmod.util.log :as log]))
 
@@ -129,7 +129,7 @@
 
             dz (double (:z look-vec))
 
-            hit (raycast/raycast-combined*
+            hit (raycast/raycast-combined
 
                                           world-id
 

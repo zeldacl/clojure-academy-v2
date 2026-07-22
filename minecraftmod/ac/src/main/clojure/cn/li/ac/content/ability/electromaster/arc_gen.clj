@@ -24,10 +24,10 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.ac.ability.effects.block :as block-manip]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))
 
@@ -44,11 +44,11 @@
   [world-id x y z probability]
   (when (and (block-manip/available?)
              (< (rand) probability))
-    (let [current-block (block-manip/get-block*
+    (let [current-block (block-manip/get-block
                                                 world-id x (inc y) z)]
       (when (or (nil? current-block)
                 (= current-block "minecraft:air"))
-        (block-manip/set-block!*
+        (block-manip/set-block!
                                 world-id x (inc y) z
                                 "minecraft:fire")))))
 
@@ -58,7 +58,7 @@
   [world-id x y z probability player]
   (when (and (block-manip/available?)
              (< (rand) probability))
-    (when (block-manip/liquid-block?*
+    (when (block-manip/liquid-block?
                                      world-id x y z)
       (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
         ;; Spawn item entity in world at hit position (matching original EntityItem spawn).
@@ -75,7 +75,7 @@
   [world-id x y z]
   (try
     (when (block-manip/available?)
-      (let [block-id (block-manip/get-block* world-id x y z)]
+      (let [block-id (block-manip/get-block world-id x y z)]
         (and block-id
              (not= block-id "minecraft:air")
              (not= block-id "minecraft:cave_air")
@@ -102,10 +102,10 @@
           world-id      (geom/world-id-of player-id)
           eye           (geom/eye-pos player-id)
           look-vec      (when (raycast/available?)
-                          (raycast/get-player-look-vector* player-id))]
+                          (raycast/player-look-vector player-id))]
       (when look-vec
         (let [hit-result (when (raycast/available?)
-                           (raycast/raycast-combined*
+                           (raycast/raycast-combined
                                                      world-id
                                                      (:x eye) (:y eye) (:z eye)
                                                      (double (:x look-vec))
@@ -128,7 +128,7 @@
             (= hit-type :entity)
             (let [entity-uuid (:uuid hit-result)]
               (when (and (entity-damage/available?) entity-uuid)
-                (entity-damage/apply-direct-damage!*
+                (entity-damage/apply-direct-damage!
                                                     world-id
                                                     entity-uuid
                                                     damage
@@ -141,7 +141,7 @@
                   block-y (int (:y hit-result))
                   block-z (int (:z hit-result))]
               (if (and (block-manip/available?)
-                   (block-manip/liquid-block?*
+                   (block-manip/liquid-block?
                                 world-id block-x block-y block-z))
               (try-fishing! world-id block-x block-y block-z fish-prob player)
               ;; Only ignite normal solid blocks (matching original BlockSelectors.filNormal filter)

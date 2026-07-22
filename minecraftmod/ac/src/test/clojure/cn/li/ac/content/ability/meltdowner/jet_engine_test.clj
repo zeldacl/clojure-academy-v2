@@ -10,9 +10,9 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- context-mocks [initial]
   (let [ctx* (atom initial)
@@ -126,9 +126,9 @@
                   motion-effects/player-velocity (fn [& _] {:x 0.0 :y 0.0 :z 0.0})
                   motion-effects/set-player-velocity! (fn [& _] true)
                   raycast/available? (constantly true)
-                  raycast/raycast-entities* (fn [& _] {:uuid "target-1"})
+                  raycast/raycast-entities (fn [& _] {:uuid "target-1"})
                   entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage!* (fn [& args]
+                  entity-damage/apply-direct-damage! (fn [& args]
                                                         (swap! damage-calls* conj (nth args 1))
                                                         true)]
       (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 1)

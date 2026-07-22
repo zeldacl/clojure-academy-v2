@@ -7,9 +7,9 @@
   Extracted from thunder-bolt/thunder-clap, which had byte-for-byte identical
   copies of hit-kind/block-impact-point/entity-impact-point."
   (:require [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]))
+            [cn.li.ac.ability.effects.damage :as entity-damage]))
 
 (defn hit-kind
   "Classify a raycast hit map as :entity, :block, or :miss."
@@ -51,9 +51,9 @@
   (let [world-id (geom/world-id-of player-id)
         eye (geom/eye-pos player-id)
         look (when (raycast/available?)
-               (raycast/get-player-look-vector* player-id))
+               (raycast/player-look-vector player-id))
         hit (when (and (raycast/available?) look)
-              (raycast/raycast-combined*
+              (raycast/raycast-combined
                 world-id
                 (:x eye) (:y eye) (:z eye)
                 (double (or (:x look) 0.0))
@@ -78,7 +78,7 @@
   "Apply direct damage of damage-type to target-uuid. Returns true if applied."
   [world-id target-uuid damage damage-type]
   (when (and (entity-damage/available?) target-uuid (> (double damage) 0.0))
-    (entity-damage/apply-direct-damage!*
+    (entity-damage/apply-direct-damage!
       world-id target-uuid (double damage) damage-type)
     true))
 

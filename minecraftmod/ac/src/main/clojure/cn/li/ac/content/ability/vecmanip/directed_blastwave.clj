@@ -12,11 +12,11 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.ac.ability.effects.block :as block-manip]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :directed-blastwave)
@@ -33,7 +33,7 @@
 
 (defn- hit-pos-from-trace [player-id trace]
   (let [look (or (when (raycast/available?)
-                   (raycast/get-player-look-vector* player-id))
+                   (raycast/player-look-vector player-id))
                  {:x 0.0 :y 0.0 :z 1.0})]
     (cond
       (nil? trace)
@@ -91,15 +91,15 @@
               dist-sq (+ (* dx dx) (* dy dy) (* dz dz))]
           (when (and (<= dist-sq 6)
                      (or (zero? dist-sq) (< (rand) p-break)))
-            (let [hardness (block-manip/get-block-hardness* world-id x y z)
-                  block-id (block-manip/get-block* world-id x y z)
+            (let [hardness (block-manip/get-block-hardness world-id x y z)
+                  block-id (block-manip/get-block world-id x y z)
                   breakable? (and (number? hardness)
                                   (>= (double hardness) 0.0)
                                   (<= (double hardness) (double hard-cap))
                                   (some? block-id)
-                                  (block-manip/can-break-block?* player-id world-id x y z))]
+                                  (block-manip/can-break-block? player-id world-id x y z))]
               (when breakable?
-                (block-manip/break-block!*
+                (block-manip/break-block!
                                           player-id world-id x y z
                                           (or full-exp? (< (rand) p-drop)))))))))))
 
@@ -139,13 +139,13 @@
           (terminate-with-end! ctx-id false)
           (let [world-id (geom/world-id-of player-id)
                 trace (when (raycast/available?)
-                        (raycast/raycast-from-player*
+                        (raycast/raycast-from-player
                          player-id
                          (cfg-double :targeting.raycast-distance)
                          true))
                 hit-pos (hit-pos-from-trace player-id trace)
                 look (when (raycast/available?)
-                       (raycast/get-player-look-vector* player-id))
+                       (raycast/player-look-vector player-id))
                 entities (if (world-effects/available?)
                            (->> (world-effects/find-entities-in-radius
                                  world-id (:x hit-pos) (:y hit-pos) (:z hit-pos)
@@ -156,7 +156,7 @@
                 damage (cfg-lerp :combat.damage exp*)]
             (doseq [entity entities]
               (when (entity-damage/available?)
-                (entity-damage/apply-direct-damage!* world-id (:uuid entity) damage :generic))
+                (entity-damage/apply-direct-damage! world-id (:uuid entity) damage :generic))
               (let [knockback (knockback-impulse player-id entity)
                     push (push-impulse player-id entity)]
                 (when (motion-effects/entity-motion-available?)

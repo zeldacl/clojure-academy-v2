@@ -28,9 +28,9 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.ac.ability.effects.block :as block-manip]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -80,10 +80,10 @@
               bx (+ (int px) (- (rand-int diameter) radius))
               by (+ (int py) (- (rand-int diameter) radius))
               bz (+ (int pz) (- (rand-int diameter) radius))]
-          (when-let [hardness (block-manip/get-block-hardness*
+          (when-let [hardness (block-manip/get-block-hardness
                                 world-id bx by bz)]
             (when (and (> hardness 0.0) (<= hardness (cfg-double :breaking.soft-hardness-max)))
-              (block-manip/break-block!*
+              (block-manip/break-block!
                                         player-id world-id bx by bz false))))))))
 
 (defn- knockback-nearby-entities! [player-id world-id px py pz]
@@ -225,7 +225,7 @@
                               ;; No movement: hover - check ground proximity
                               (let [;; Raycast down to detect near ground
                                     near-ground? (when (raycast/available?)
-                                                   (let [hit (raycast/raycast-blocks*
+                                                   (let [hit (raycast/raycast-blocks
                                                                world-id
                                                                px (+ py (cfg-double :targeting.near-ground-eye-height)) pz
                                                                0.0 -1.0 0.0

@@ -14,8 +14,8 @@
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-reflection)
@@ -318,7 +318,7 @@
                         difficulty (affect-difficulty-with-snapshot entity excluded-ids difficulty-map)]
                     (when (and entity-id (not= entity-id player-id) difficulty)
                       (when-let [look-vec (and (raycast/available?)
-                                               (raycast/get-player-look-vector* player-id))]
+                                               (raycast/player-look-vector player-id))]
                         (when (and arbitration-allowed?
                                    (arbitration/claim-projectile! player-id :vec-reflection entity-id))
                           (let [entity-vel (when (motion-effects/entity-motion-available?)
@@ -430,7 +430,7 @@
                         (let [world-id (or (get-in state [:position :world-id])
                                            (fx-common/player-path attacker-id [:position :world-id])
                                            "minecraft:overworld")]
-                          (entity-damage/apply-direct-damage!*
+                          (entity-damage/apply-direct-damage!
                                                               world-id
                                                               attacker-id
                                                               reflected-damage

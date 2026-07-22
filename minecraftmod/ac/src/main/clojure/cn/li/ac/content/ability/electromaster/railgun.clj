@@ -16,9 +16,9 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.ability.item-actions :as item-actions]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+                        [cn.li.ac.ability.effects.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.ac.ability.effects.damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.world :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -159,21 +159,21 @@
   (let [start-pos (geom/eye-pos reflector-player-id)
         world-id  (geom/world-id-of reflector-player-id)
         look-vec  (when (raycast/available?)
-                    (raycast/get-player-look-vector* reflector-player-id))]
+                    (raycast/player-look-vector reflector-player-id))]
     (when look-vec
       (let [max-distance (reflection-distance)
-            ;; get-player-look-vector* only ever returns {:x :y :z} — there is
+            ;; player-look-vector only ever returns {:x :y :z} — there is
             ;; no :dx/:dy/:dz key on this bridge's result.
             look-x (double (or (:x look-vec) 0.0))
             look-y (double (or (:y look-vec) 0.0))
             look-z (double (or (:z look-vec) 1.0))
-            hit (raycast/raycast-entities*
+            hit (raycast/raycast-entities
                                           world-id
                                           (:x start-pos) (:y start-pos) (:z start-pos)
                                           look-x look-y look-z
                                           max-distance)
-            ;; raycast-entities* never sets :hit-type (that key only appears
-            ;; on raycast-combined* results) — a real hit is just non-nil,
+            ;; raycast-entities never sets :hit-type (that key only appears
+            ;; on raycast-combined results) — a real hit is just non-nil,
             ;; identified by :uuid.
             hit-uuid    (:uuid hit)
             actual-dist (if hit-uuid
@@ -185,7 +185,7 @@
                                   :end          end-pos
                                   :hit-distance actual-dist})
         (when (and hit-uuid (entity-damage/available?))
-          (entity-damage/apply-direct-damage!*
+          (entity-damage/apply-direct-damage!
                                               world-id hit-uuid
                                               (reflection-damage) :generic)
           true)))))
@@ -201,7 +201,7 @@
         eye       (geom/eye-pos player-id)
         trace-pos (body-pos player-id)
         look-vec  (when (raycast/available?)
-                    (raycast/get-player-look-vector* player-id))]
+                    (raycast/player-look-vector player-id))]
     (if-not look-vec
       {:performed? false}
       (let [damage   (cfg-lerp :beam.damage exp)

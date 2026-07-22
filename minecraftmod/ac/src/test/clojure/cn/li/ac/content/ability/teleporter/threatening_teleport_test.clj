@@ -12,7 +12,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.ac.ability.effects.raycast :as raycast]))
 
 (defn- make-context-mocks [initial-ctx]
   (let [ctx* (atom initial-ctx)]
@@ -60,7 +60,7 @@
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
                   raycast/available? (constantly true)
-                  raycast/raycast-combined* (fn [& _]
+                  raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :entity-uuid "enemy"
                                                :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
