@@ -5,7 +5,7 @@
   (:require [cn.li.mcmod.framework :as fw]))
 
 (def runtime-interop-keys
-  #{:get-player-view :get-player-main-hand-item :get-block-entity-at})
+  #{:get-player-view :get-player-main-hand-item :get-block-entity-at :get-player-entity})
 
 (defn install-runtime-interop!
   [impl _label]
@@ -22,3 +22,4 @@
 (defn get-player-view*            [player-uuid]    (call :get-player-view player-uuid))
 (defn get-player-main-hand-item*  [player-uuid]    (call :get-player-main-hand-item player-uuid))
 (defn get-block-entity-at*        [world-id x y z] (call :get-block-entity-at world-id x y z))
+(defn get-player-entity*          [player-uuid]    (call :get-player-entity player-uuid))

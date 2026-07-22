@@ -184,6 +184,12 @@
                                              {:world-id "minecraft:overworld"
                                               :x 0.0 :y 64.0 :z 0.0
                                               :look-x 1.0 :look-y 0.0 :look-z 0.0})
+                  ;; The dispatch pipeline's positional player-ref argument is
+                  ;; never populated on the tick path in production (see
+                  ;; context-manager's tick-context-entry!), so the arc spawn
+                  ;; resolves its own player entity via this bridge instead —
+                  ;; mock that bridge, not a fabricated :player-ref.
+                  interop/get-player-entity* (fn [player-id] {:uuid player-id})
                   entity/player-spawn-entity-by-id! (fn [player eid yaw]
                                                       (swap! spawned* conj [player eid yaw])
                                                       true)
@@ -195,7 +201,7 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id :player-ref {:uuid "p1"}))
+      (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id))
     (is (= [[{:uuid "p1"} "my_mod:entity_charging_arc" 0.0]] @spawned*))
     (is (= [[ctx-id :current-charging/fx-update
              {:is-item false

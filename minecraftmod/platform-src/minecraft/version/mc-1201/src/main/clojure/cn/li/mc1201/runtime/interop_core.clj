@@ -46,6 +46,19 @@
       (log/warn "Failed to get player main hand item:" (ex-message e))
       nil)))
 
+(defn get-player-entity
+  "Resolve the live ServerPlayer for player-uuid, for callers (e.g. tick-driven
+  entity-spawn visuals) that only have a player-id and no player-ref — the
+  generic skill-callback dispatch's positional player-ref argument is never
+  populated for server-tick-driven contexts (see context-manager's
+  tick-context-entry!, which omits :player from the tick payload)."
+  [^MinecraftServer server player-uuid]
+  (try
+    (query-core/get-player-by-uuid server player-uuid)
+    (catch Exception e
+      (log/warn "Failed to get player entity:" (ex-message e))
+      nil)))
+
 (defn get-block-entity-at
   [^MinecraftServer server world-id x y z]
   (try
@@ -63,7 +76,9 @@
    :get-player-main-hand-item (fn [player-uuid]
                                 (get-player-main-hand-item (server-fn) player-uuid))
    :get-block-entity-at (fn [world-id x y z]
-                          (get-block-entity-at (server-fn) world-id x y z))})
+                          (get-block-entity-at (server-fn) world-id x y z))
+   :get-player-entity (fn [player-uuid]
+                        (get-player-entity (server-fn) player-uuid))})
 
 (defn install-runtime-interop!
   "Install canonical runtime interop using a shared implementation."

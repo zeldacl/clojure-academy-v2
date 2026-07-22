@@ -119,7 +119,10 @@
             :else {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}))))))
 
 (defn- charge-block-tick!
-  [player-id ctx-id player charge charge-ticks]
+  ;; player (the positional player-ref) is always nil here — server-tick-driven
+  ;; contexts never populate it (see context-manager's tick-context-entry!) — so
+  ;; the arc-spawn visual resolves its own player-entity server-side instead.
+  [player-id ctx-id _player charge charge-ticks]
   (let [view (when (interop/available?)
                (interop/get-player-view* player-id))
         result (when view (charge-block-target! view charge))
@@ -129,8 +132,9 @@
                                   (if effective?
                                     (cfg-double :progression.exp-effective)
                                     (cfg-double :progression.exp-ineffective)))
-    (when (and player effective? (zero? (mod (long charge-ticks) 6)))
-      (entity/player-spawn-entity-by-id! player charging-arc-entity-id 0.0))
+    (when (and effective? (zero? (mod (long charge-ticks) 6)) (interop/available?))
+      (when-let [player (interop/get-player-entity* player-id)]
+        (entity/player-spawn-entity-by-id! player charging-arc-entity-id 0.0)))
     (set-skill-state! ctx-id [:good?] (boolean effective?))
     (set-skill-state! ctx-id [:target] ray-end)
     (set-skill-state! ctx-id [:block-pos] block-pos)
