@@ -109,6 +109,7 @@ tasks.register("verifyNoThinForwarders") {
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/media_playback.clj"
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/saved_data.clj"
             include "mcmod/src/main/clojure/cn/li/mcmod/platform/damage_interception.clj"
+            include "mcmod/src/main/clojure/cn/li/mcmod/platform/config_persist.clj"
             exclude "**/build/**"
             exclude "**/.gradle/**"
         }.files

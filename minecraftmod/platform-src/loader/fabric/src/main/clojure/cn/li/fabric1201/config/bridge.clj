@@ -2,7 +2,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
-            [cn.li.mcmod.platform.config-persist :as config-persist]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson Gson GsonBuilder]
@@ -150,5 +151,6 @@
 
 (defn install-config-persist-op!
   []
-  (config-persist/install-config-persist-op! #'set-config-value! "fabric-config-persist")
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/install-adapter! fw-atom :config-persist {:persist! #'set-config-value!}))
   nil)

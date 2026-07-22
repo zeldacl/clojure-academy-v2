@@ -6,7 +6,9 @@
             [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.platform.config-persist :as config-persist]
+            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -56,7 +58,10 @@
 (def ^:private glfw-key-names
   {67 "C" 86 "V" 293 "F4" 342 "Left Alt"})
 
-(defn- persist! [domain key value] (config-persist/persist-config-value! domain key value))
+(defn- persist! [domain key value]
+  (config-reg/set-config-value! domain key value)
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :config-persist :persist! domain key value)))
 (defn- toggle-config! [p] (let [v (not ((:get p)))] (persist! (:domain p) (:key p) v) v))
 
 (defn- settings-i18n [suffix]
