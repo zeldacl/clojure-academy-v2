@@ -79,7 +79,7 @@
 
 (defn- slot-has-stack?
   [stk]
-  (and stk (try (pos? (long (pitem/item-get-count stk))) (catch Exception _ true))))
+  (and stk (try (pos? (long (pitem/stack-count stk))) (catch Exception _ true))))
 
 (defn recalculate-counts
   [state]
@@ -89,7 +89,7 @@
                              slot))
         core-stack (get-in state [:inventory (core-slot-index)])
         core-level (if (slot-has-stack? core-stack)
-                     (inc (int (max 0 (pitem/item-get-damage core-stack))))
+                     (inc (int (max 0 (pitem/damage core-stack))))
                      0)]
     (assoc state :plate-count plate-count :core-level core-level)))
 

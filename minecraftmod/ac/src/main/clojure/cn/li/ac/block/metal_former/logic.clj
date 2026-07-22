@@ -29,10 +29,10 @@
 (defn- rebuild-stack-with-damage [stack new-count]
   (when (and stack (pos? (int new-count)))
     (when-let [item-id (recipes/item-id-from-stack stack)]
-      (let [new-stack (pitem/create-item-stack-by-id item-id (int new-count))]
+      (let [new-stack (pitem/stack-by-id item-id (int new-count))]
         (when new-stack
           (try
-            (pitem/item-set-damage! new-stack (int (pitem/item-get-damage stack)))
+            (pitem/set-damage! new-stack (int (pitem/damage stack)))
             (catch Exception _ nil))
           new-stack)))))
 

@@ -49,7 +49,7 @@
    (machine-render-runtime/reset-render-cache-for-test! fan-rot-cache-key (HashMap.) (HashMap. ^java.util.Map cache))))
 
 (defn- tile-key [tile]
-  (let [p (pos/position-get-block-pos tile)]
+  (let [p (pos/block-pos tile)]
     [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)]))
 
 (defn- update-fan-rotation!

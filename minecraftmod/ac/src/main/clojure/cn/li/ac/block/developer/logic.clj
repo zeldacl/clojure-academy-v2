@@ -51,9 +51,9 @@
 	    (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
 	      (let [ctrl-mb (:multi-block ctrl-spec)
 	            positions (or (:multi-block-positions ctrl-mb))
-	            px (pos/pos-x (pos/position-get-block-pos tile))
-	            py (pos/pos-y (pos/position-get-block-pos tile))
-	            pz (pos/pos-z (pos/position-get-block-pos tile))
+	            px (pos/pos-x (pos/block-pos tile))
+	            py (pos/pos-y (pos/block-pos tile))
+	            pz (pos/pos-z (pos/block-pos tile))
 	            ;; Enumerate relative positions: controller = part - rel-offset
 	            ctrl-tile (some (fn [rel-pos]
 	                              (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
@@ -77,7 +77,7 @@
 	      (log/debug "[check-structure-valid?] no controller spec for" block-id))
 	    ;; Controller (or non-multiblock): validate directly
 	    (when block-spec
-	      (let [pos (pos/position-get-block-pos tile)
+	      (let [pos (pos/block-pos tile)
 	            result (validate-structure world pos block-spec)]
 	        (log/debug "[check-structure-valid?] block-id=" block-id
 	                 "multiblock?=" (:multi-block? mb)

@@ -36,7 +36,7 @@
   "Check if container is still valid for player based on distance."
   [container player]
   (let [tile (:tile-entity container)
-        raw-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))
+        raw-pos (try (pos/block-pos tile) (catch Exception _ nil))
         max-distance 8.0]
     (and (= player (:player container))
          raw-pos

@@ -24,20 +24,20 @@
 
 (defn- load-state
   [tag]
-  (when (nbt/nbt-has-key-safe? tag nbt-key)
-    (let [root (nbt/nbt-get-compound tag nbt-key)]
-      (when (= schema-version (nbt/nbt-get-int root "schema"))
-        {:terminal-installed? (nbt/nbt-get-boolean root "installed")
+  (when (nbt/has-key-safe? tag nbt-key)
+    (let [root (nbt/get-compound tag nbt-key)]
+      (when (= schema-version (nbt/get-int root "schema"))
+        {:terminal-installed? (nbt/get-boolean root "installed")
          :installed-apps (nbt-coll/read-keyword-set root "apps")}))))
 
 (defn- save-state!
   [tag state]
   (let [state (model/normalize-state state)
-        root (nbt/create-nbt-compound)]
-    (nbt/nbt-set-int! root "schema" schema-version)
-    (nbt/nbt-set-boolean! root "installed" (:terminal-installed? state))
+        root (nbt/create-compound)]
+    (nbt/set-int! root "schema" schema-version)
+    (nbt/set-boolean! root "installed" (:terminal-installed? state))
     (nbt-coll/write-keyword-set! root "apps" (:installed-apps state))
-    (nbt/nbt-set-tag! tag nbt-key root)))
+    (nbt/set-tag! tag nbt-key root)))
 
 ;; --- Public API ---
 

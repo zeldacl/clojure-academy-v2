@@ -38,9 +38,9 @@
             (if-let [world (net-helpers/get-world player)]
               (let [ctrl-mb (:multi-block ctrl-spec)
                     positions (:multi-block-positions ctrl-mb)
-                    px (pos/pos-x (pos/position-get-block-pos tile))
-                    py (pos/pos-y (pos/position-get-block-pos tile))
-                    pz (pos/pos-z (pos/position-get-block-pos tile))]
+                    px (pos/pos-x (pos/block-pos tile))
+                    py (pos/pos-y (pos/block-pos tile))
+                    pz (pos/pos-z (pos/block-pos tile))]
                 (or (some (fn [rel-pos]
                             (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
                                   ry (or (:relative-y rel-pos) (:y rel-pos) 0)
@@ -78,7 +78,7 @@
   [get-linked-node device world]
   (let [linked-node (get-linked-node device)
         nodes (if world
-                (nodes-in-range world (pos/position-get-block-pos device))
+                (nodes-in-range world (pos/block-pos device))
                 [])]
     (link-helpers/link-panel-state linked-node nodes)))
 
@@ -104,7 +104,7 @@
                 (let [linked-node (get-linked-node tile)]
                   (link-helpers/list-nodes-success-response
                     linked-node
-                    (nodes-in-range world (pos/position-get-block-pos tile))))
+                    (nodes-in-range world (pos/block-pos tile))))
                 (link-helpers/list-nodes-empty-response)))
             (catch Exception e
               (log/error "[handle-list-nodes]" (ex-message e))

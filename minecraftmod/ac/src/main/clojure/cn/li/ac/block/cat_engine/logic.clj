@@ -43,7 +43,7 @@
 
 (defn refresh-link-state! [be]
   (let [world (platform-be/be-get-world-safe be)
-        pos (when world (pos/position-get-block-pos be))
+        pos (when world (pos/block-pos be))
         state0 (machine-runtime/state-or-default be cat-default-state)
         state1 (sync-link-state be state0)]
     (when (not= state1 state0)

@@ -5,25 +5,25 @@
 (defn stack-empty?
   [stack]
   (or (nil? stack)
-      (try (boolean (pitem/item-is-empty? stack)) (catch Exception _ false))))
+      (try (boolean (pitem/empty? stack)) (catch Exception _ false))))
 
 (defn stack-count
   [stack]
   (if (stack-empty? stack)
     0
-    (try (int (pitem/item-get-count stack)) (catch Exception _ 0))))
+    (try (int (pitem/stack-count stack)) (catch Exception _ 0))))
 
 (defn stack-id
   [stack]
   (when-not (stack-empty? stack)
-    (try (some-> stack pitem/item-get-item pitem/item-get-registry-name str)
+    (try (some-> stack pitem/object pitem/registry-name str)
          (catch Exception _ nil))))
 
 (defn rebuild-stack
   [stack new-count]
   (when (and stack (pos? (int new-count)))
     (when-let [item-id (stack-id stack)]
-      (pitem/create-item-stack-by-id item-id (int new-count)))))
+      (pitem/stack-by-id item-id (int new-count)))))
 
 (defn consume-stack
   [stack amount]

@@ -20,7 +20,7 @@
   the Framework, so tests that swap in a fresh Framework must call this again
   — guard on the live atom, never on a one-shot flag."
   []
-  (when (and (fw/fw-atom) (not (nbt/nbt-ops-available?)))
+  (when (and (fw/fw-atom) (not (nbt/available?)))
     (nbt/install-nbt-ops!
       {:nbt-set-int! (fn [c k v]
                        (when (compound? c)

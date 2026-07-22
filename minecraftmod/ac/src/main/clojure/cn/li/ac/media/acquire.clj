@@ -20,15 +20,15 @@
 
 (defn- load-ids
   [tag]
-  (when (nbt/nbt-has-key-safe? tag nbt-key)
-    (let [root (nbt/nbt-get-compound tag nbt-key)]
+  (when (nbt/has-key-safe? tag nbt-key)
+    (let [root (nbt/get-compound tag nbt-key)]
       (nbt-coll/read-keyword-set root "acquired"))))
 
 (defn- save-ids!
   [tag ids]
-  (let [root (nbt/create-nbt-compound)]
+  (let [root (nbt/create-compound)]
     (nbt-coll/write-keyword-set! root "acquired" ids)
-    (nbt/nbt-set-tag! tag nbt-key root)))
+    (nbt/set-tag! tag nbt-key root)))
 
 (defn acquired-ids
   "Set of acquired internal media ids (keywords) for `player`."

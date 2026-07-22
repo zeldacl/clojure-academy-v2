@@ -78,7 +78,7 @@
                                               :hit-x 1.0 :hit-y 64.0 :hit-z 6.0})
                   block-manip/liquid-block? (fn [& _] true)
                   block-manip/set-block! (fn [& args] (swap! ignite-calls* conj args) nil)
-                  pitem/create-item-stack-by-id (fn [_ _] {:item-id "minecraft:cooked_cod" :count 1})
+                  pitem/stack-by-id (fn [_ _] {:item-id "minecraft:cooked_cod" :count 1})
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! fish-give* conj [player stack])
                                                    true)

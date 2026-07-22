@@ -140,16 +140,16 @@
 (deftest world-lifecycle-skips-invalid-saved-wireless-entries-test
   (test-nbt/install-test-nbt-ops!)
   (let [world-id (test-world :w-lifecycle-corrupt)
-        payload (nbt/create-nbt-compound)
-        networks (nbt/create-nbt-list)
-        connections (nbt/create-nbt-list)]
+        payload (nbt/create-compound)
+        networks (nbt/create-list)
+        connections (nbt/create-list)]
     ;; Entries missing required nested fields (`matrix`, `node`, ...).
     ;; A single corrupt entry must not prevent the world from loading.
-    (nbt/nbt-set-int! payload "schemaVersion" 2)
-    (nbt/nbt-append! networks (nbt/create-nbt-compound))
-    (nbt/nbt-append! connections (nbt/create-nbt-compound))
-    (nbt/nbt-set-tag! payload "networks" networks)
-    (nbt/nbt-set-tag! payload "connections" connections)
+    (nbt/set-int! payload "schemaVersion" 2)
+    (nbt/append! networks (nbt/create-compound))
+    (nbt/append! connections (nbt/create-compound))
+    (nbt/set-tag! payload "networks" networks)
+    (nbt/set-tag! payload "connections" connections)
     (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
       (is (= restored (world/get-world-data-non-create world-id)))
       (is (empty? (world-registry/networks restored)))
@@ -158,8 +158,8 @@
 (deftest world-load-rejects-old-schema-with-fresh-state-test
   (test-nbt/install-test-nbt-ops!)
   (let [world-id (test-world :w-schema-v1)
-        payload (nbt/create-nbt-compound)]
-    (nbt/nbt-set-int! payload "schemaVersion" 1)
+        payload (nbt/create-compound)]
+    (nbt/set-int! payload "schemaVersion" 1)
     (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
       (is (some? restored))
       (is (empty? (world-registry/networks restored)))

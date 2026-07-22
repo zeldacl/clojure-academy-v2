@@ -33,7 +33,7 @@
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :nbt-ops :nbt-has-key?] f)) nil)
 
 ;; Queries
-(defn nbt-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :nbt-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :nbt-ops])))
 (defn current-ops [] (get-in @(fw/fw-atom) [:platform :nbt-ops]))
 
 ;; Helper
@@ -41,48 +41,48 @@
   (when-let [f (get (current-ops) k)]
     (apply f args)))
 
-;; CompoundTag wrappers
-(defn nbt-set-int!      [c k v] (call :nbt-set-int! c k v))
-(defn nbt-get-int       [c k]   (call :nbt-get-int c k))
-(defn nbt-set-string!   [c k v] (call :nbt-set-string! c k v))
-(defn nbt-get-string    [c k]   (call :nbt-get-string c k))
-(defn nbt-set-boolean!  [c k v] (call :nbt-set-boolean! c k v))
-(defn nbt-get-boolean   [c k]   (call :nbt-get-boolean c k))
-(defn nbt-set-double!   [c k v] (call :nbt-set-double! c k v))
-(defn nbt-get-double    [c k]   (call :nbt-get-double c k))
-(defn nbt-set-tag!      [c k tag] (call :nbt-set-tag! c k tag))
-(defn nbt-get-tag       [c k]   (call :nbt-get-tag c k))
-(defn nbt-get-compound  [c k]   (call :nbt-get-compound c k))
-(defn nbt-get-list      [c k]   (call :nbt-get-list c k))
-(defn nbt-has-key?      [c k]   (call :nbt-has-key? c k))
-(defn nbt-set-float!    [c k v] (call :nbt-set-float! c k v))
-(defn nbt-get-float     [c k]   (call :nbt-get-float c k))
-(defn nbt-set-long!     [c k v] (call :nbt-set-long! c k v))
-(defn nbt-get-long      [c k]   (call :nbt-get-long c k))
+;; CompoundTag access API
+(defn set-int!      [c k v]   (call :nbt-set-int! c k v))
+(defn get-int       [c k]     (call :nbt-get-int c k))
+(defn set-string!   [c k v]   (call :nbt-set-string! c k v))
+(defn get-string    [c k]     (call :nbt-get-string c k))
+(defn set-boolean!  [c k v]   (call :nbt-set-boolean! c k v))
+(defn get-boolean   [c k]     (call :nbt-get-boolean c k))
+(defn set-double!   [c k v]   (call :nbt-set-double! c k v))
+(defn get-double    [c k]     (call :nbt-get-double c k))
+(defn set-tag!      [c k tag] (call :nbt-set-tag! c k tag))
+(defn get-tag       [c k]     (call :nbt-get-tag c k))
+(defn get-compound  [c k]     (call :nbt-get-compound c k))
+(defn get-list      [c k]     (call :nbt-get-list c k))
+(defn has-key?      [c k]     (call :nbt-has-key? c k))
+(defn set-float!    [c k v]   (call :nbt-set-float! c k v))
+(defn get-float     [c k]     (call :nbt-get-float c k))
+(defn set-long!     [c k v]   (call :nbt-set-long! c k v))
+(defn get-long      [c k]     (call :nbt-get-long c k))
 
-;; ListTag wrappers
-(defn nbt-append!          [lst el] (call :nbt-append! lst el))
-(defn nbt-list-size        [lst]    (call :nbt-list-size lst))
-(defn nbt-list-get         [lst i]  (call :nbt-list-get lst i))
-(defn nbt-list-get-compound [lst i] (call :nbt-list-get-compound lst i))
+;; ListTag access API
+(defn append!       [lst el] (call :nbt-append! lst el))
+(defn list-size     [lst]    (call :nbt-list-size lst))
+(defn list-get      [lst i]  (call :nbt-list-get lst i))
+(defn list-compound [lst i]  (call :nbt-list-get-compound lst i))
 
-;; Factory wrappers
-(defn create-nbt-compound []
+;; Factory access API
+(defn create-compound []
   (if-let [f (get (current-ops) :create-compound)]
     (f)
     (throw (ex-info "NBT ops not installed" {:key :create-compound}))))
-(defn create-nbt-list []
+(defn create-list []
   (if-let [f (get (current-ops) :create-list)]
     (f)
     (throw (ex-info "NBT ops not installed" {:key :create-list}))))
 
 ;; Convenience
-(defn nbt-has-key-safe? [compound key]
-  (try (boolean (nbt-has-key? compound key)) (catch Throwable _ false)))
-(defn nbt-compound-to-map [compound]
+(defn has-key-safe? [compound key]
+  (try (boolean (has-key? compound key)) (catch Throwable _ false)))
+(defn compound->map [compound]
   (let [result (java.util.HashMap.)]
     (if-let [f (get (current-ops) :nbt-get-all-keys)]
-      (doseq [k (f compound)] (.put result k (nbt-get-tag compound k)))
+      (doseq [k (f compound)] (.put result k (get-tag compound k)))
       ;; Without :nbt-get-all-keys installed, can't enumerate keys from pure relay layer
       ;; (MC class .keySet would require import not available in mcmod)
       )

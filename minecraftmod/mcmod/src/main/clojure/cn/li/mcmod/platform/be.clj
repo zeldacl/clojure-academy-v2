@@ -21,7 +21,7 @@
         (log/error "BeOps MISSING required keys:" (pr-str missing))))
     (log/error "BeOps install FAILED: Framework atom nil")))
 
-(defn be-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :be-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :be-ops])))
 (defn call-with-be-ops [ops f] (f ops))
 
 (defn- call-log [level & xs]

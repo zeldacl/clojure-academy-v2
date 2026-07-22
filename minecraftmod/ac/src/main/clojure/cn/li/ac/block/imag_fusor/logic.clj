@@ -50,7 +50,7 @@
 (defn- rebuild-stack [stack new-count]
   (when (and stack (pos? (int new-count)))
     (when-let [item-id (recipes/item-id-from-stack stack)]
-      (pitem/create-item-stack-by-id item-id (int new-count)))))
+      (pitem/stack-by-id item-id (int new-count)))))
 
 (defn- consume-stack [stack amount]
   (let [left (- (stack-count stack) (int amount))]

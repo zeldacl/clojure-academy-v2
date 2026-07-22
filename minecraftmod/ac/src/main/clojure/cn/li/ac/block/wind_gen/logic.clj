@@ -54,14 +54,14 @@
   (zero? (long (get (or (platform-be/get-custom-state be) {}) :sub-id 0))))
 
 (defn- fan-item-stack? [stack]
-  (when (and stack (not (item/item-is-empty? stack)))
-    (let [p (-> (try (some-> stack item/item-get-item item/item-get-registry-name) (catch Exception _ nil))
+  (when (and stack (not (item/empty? stack)))
+    (let [p (-> (try (some-> stack item/object item/registry-name) (catch Exception _ nil))
                 id-path)]
       (= p "windgen_fan"))))
 
 (defn- pillar-item-stack? [stack]
-  (when (and stack (not (item/item-is-empty? stack)))
-    (let [p (-> (try (some-> stack item/item-get-item item/item-get-registry-name) (catch Exception _ nil))
+  (when (and stack (not (item/empty? stack)))
+    (let [p (-> (try (some-> stack item/object item/registry-name) (catch Exception _ nil))
                 id-path)]
       (wind-pillar-id? p))))
 
@@ -363,7 +363,7 @@
       (not (pillar-item-stack? item-stack)))))
 
 (defn get-linked-node ^IWirelessNode [tile]
-  (let [gen-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))
+  (let [gen-pos (try (pos/block-pos tile) (catch Exception _ nil))
         pos-str (when gen-pos (str (pos/pos-x gen-pos) "," (pos/pos-y gen-pos) "," (pos/pos-z gen-pos)))]
     (if-let [conn (try (wireless-api/get-node-conn-by-generator tile)
                        (catch Exception e

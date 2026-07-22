@@ -161,7 +161,7 @@
               (let [nk (:nbt-key spec)]
                 (if-let [load-fn (:load-fn spec)]
                   (assoc state k (load-fn tag nk dflt))
-                  (if (nbt/nbt-has-key-safe? tag nk)
+                  (if (nbt/has-key-safe? tag nk)
                     (if-let [reader (get nbt-readers (:type spec))]
                       (assoc state k (reader tag nk))
                       (assoc state k dflt))

@@ -6,18 +6,18 @@
 (defn- stack-empty? [stack]
 	(or (nil? stack)
 			(try
-				(boolean (pitem/item-is-empty? stack))
+				(boolean (pitem/empty? stack))
 				(catch Exception _ false))))
 
 (defn- stack-id [stack]
 	(when-not (stack-empty? stack)
 		(try
-			(some-> stack pitem/item-get-item pitem/item-get-registry-name str)
+			(some-> stack pitem/object pitem/registry-name str)
 			(catch Exception _ nil))))
 
 (defn- to-phase-liquid-matter-unit! [stack]
 	(try
-		(pitem/item-set-damage! stack phase-config/matter-unit-phase-liquid-meta)
+		(pitem/set-damage! stack phase-config/matter-unit-phase-liquid-meta)
 		true
 		(catch Exception _ false)))
 

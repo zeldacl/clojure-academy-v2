@@ -11,28 +11,28 @@
                  {:Slot 2 :id "EMPTY"}
                  {:Slot 9 :id "out_of_range"}]]
     (testing "returns default when key not present"
-      (with-redefs [nbt/nbt-has-key-safe? (fn [_ _] false)]
+      (with-redefs [nbt/has-key-safe? (fn [_ _] false)]
         (is (= default (helpers/load-inventory :tag "inv" default)))))
     (testing "loads valid slots and ignores empty/out-of-range entries"
-      (with-redefs [nbt/nbt-has-key-safe? (fn [_ _] true)
-                    nbt/nbt-get-list (fn [_ _] inv-tag)
-                    nbt/nbt-list-size count
-                    nbt/nbt-list-get-compound (fn [xs i] (nth xs i))
-                    nbt/nbt-get-int (fn [compound _] (:Slot compound))
-                    pitem/create-item-from-nbt identity
-                    pitem/item-is-empty? (fn [item] (= "EMPTY" (:id item)))]
+      (with-redefs [nbt/has-key-safe? (fn [_ _] true)
+                    nbt/get-list (fn [_ _] inv-tag)
+                    nbt/list-size count
+                    nbt/list-compound (fn [xs i] (nth xs i))
+                    nbt/get-int (fn [compound _] (:Slot compound))
+                    pitem/from-nbt identity
+                    pitem/empty? (fn [item] (= "EMPTY" (:id item)))]
         (is (= [{:Slot 0 :id "iron_ingot"} nil nil]
                (helpers/load-inventory :tag "inv" default)))))))
 
 (deftest save-inventory-test
   (let [state {:inventory [nil {:id "a"} nil {:id "b"}]}
         writes (atom [])]
-    (with-redefs [nbt/create-nbt-list (fn [] (atom []))
-                  nbt/create-nbt-compound (fn [] (atom {}))
-                  nbt/nbt-set-int! (fn [st k v] (swap! st assoc (keyword k) v))
-                  pitem/item-save-to-nbt (fn [item st] (swap! st assoc :item item))
-                  nbt/nbt-append! (fn [lst st] (swap! lst conj @st))
-                  nbt/nbt-set-tag! (fn [_ key lst] (swap! writes conj [key @lst]))]
+    (with-redefs [nbt/create-list (fn [] (atom []))
+                  nbt/create-compound (fn [] (atom {}))
+                  nbt/set-int! (fn [st k v] (swap! st assoc (keyword k) v))
+                  pitem/save-to-nbt (fn [item st] (swap! st assoc :item item))
+                  nbt/append! (fn [lst st] (swap! lst conj @st))
+                  nbt/set-tag! (fn [_ key lst] (swap! writes conj [key @lst]))]
       (helpers/save-inventory state :tag "inv")
       (is (= [["inv" [{:Slot 1 :item {:id "a"}}
                       {:Slot 3 :item {:id "b"}}]]]

@@ -13,49 +13,49 @@
   [ops-map _label]
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :item-ops] ops-map)) nil)
 
-(defn item-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :item-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :item-ops])))
 (defn current-ops         [] (get-in @(fw/fw-atom) [:platform :item-ops]))
 
 (defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
 
-;; ItemStack wrappers
-(defn item-is-empty?          [stack]        (call :item-is-empty? stack))
-(defn item-get-count          [stack]        (call :item-get-count stack))
-(defn item-get-max-stack-size [stack]        (call :item-get-max-stack-size stack))
-(defn item-is-equal?          [stack other]  (call :item-is-equal? stack other))
-(defn item-save-to-nbt        [stack nbt]    (call :item-save-to-nbt stack nbt))
-(defn item-get-or-create-tag  [stack]        (call :item-get-or-create-tag stack))
-(defn item-get-max-damage     [stack]        (call :item-get-max-damage stack))
-(defn item-set-damage!        [stack dmg]    (call :item-set-damage! stack dmg))
-(defn item-get-damage         [stack]        (call :item-get-damage stack))
-(defn item-get-item           [stack]        (call :item-get-item stack))
-(defn item-get-tag-compound   [stack]        (call :item-get-tag-compound stack))
-(defn item-split              [stack amount] (call :item-split stack amount))
+;; ItemStack access API
+(defn empty?            [stack]        (call :item-is-empty? stack))
+(defn stack-count       [stack]        (call :item-get-count stack))
+(defn max-stack-size    [stack]        (call :item-get-max-stack-size stack))
+(defn same?             [stack other]  (call :item-is-equal? stack other))
+(defn save-to-nbt       [stack nbt]    (call :item-save-to-nbt stack nbt))
+(defn get-or-create-tag [stack]        (call :item-get-or-create-tag stack))
+(defn max-damage        [stack]        (call :item-get-max-damage stack))
+(defn set-damage!       [stack dmg]    (call :item-set-damage! stack dmg))
+(defn damage            [stack]        (call :item-get-damage stack))
+(defn object            [stack]        (call :item-get-item stack))
+(defn tag-compound      [stack]        (call :item-get-tag-compound stack))
+(defn split             [stack amount] (call :item-split stack amount))
 
-;; Item wrappers
-(defn item-get-description-id [item] (call :item-get-description-id item))
-(defn item-get-registry-name  [item] (call :item-get-registry-name item))
+;; Item access API
+(defn description-id [item] (call :item-get-description-id item))
+(defn registry-name  [item] (call :item-get-registry-name item))
 
-;; Factory wrappers
-(defn create-item-from-nbt [nbt-tag]
+;; Factory access API
+(defn from-nbt [nbt-tag]
   (if-let [f (get (current-ops) :create-item-from-nbt)]
     (f nbt-tag)
     (throw (ex-info "Item ops not installed" {:key :create-item-from-nbt}))))
-(defn create-item-stack-by-id [item-id count]
+(defn stack-by-id [item-id count]
   (if-let [f (get (current-ops) :create-item-stack-by-id)]
     (f item-id count)
     (throw (ex-info "Item ops not installed" {:key :create-item-stack-by-id}))))
 ;; Tag helpers
-(defn item-is-in-tag? [stack tag-str]
+(defn in-tag? [stack tag-str]
   (if-let [f (get (current-ops) :item-tag-checker)]
     (f stack tag-str)
     false))
-(defn create-item-stack-from-tag [tag-str count]
+(defn stack-from-tag [tag-str count]
   (if-let [f (get (current-ops) :tag-item-resolver)]
     (f tag-str count)
     nil))
 
-(defn item-stack-empty? [stack]
+(defn stack-empty? [stack]
   (if-let [f (get (current-ops) :item-stack-empty?)]
     (f stack)
     (throw (ex-info "Item ops not installed" {:key :item-stack-empty?}))))

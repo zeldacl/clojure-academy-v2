@@ -5,9 +5,9 @@
 
 (defn- stack-count [stack]
   (if (or (nil? stack)
-          (try (boolean (pitem/item-is-empty? stack)) (catch Exception _ true)))
+          (try (boolean (pitem/empty? stack)) (catch Exception _ true)))
     0
-    (try (int (pitem/item-get-count stack)) (catch Exception _ 0))))
+    (try (int (pitem/stack-count stack)) (catch Exception _ 0))))
 
 (defn make-inventory-container-fns
   "Build container fns for a fixed-size [:inventory slot] vector in customState.
@@ -53,7 +53,7 @@
                           (if (<= cnt amount)
                             (do (commit! be (apply-transform (assoc-slot state slot nil)))
                                 item)
-                            (pitem/item-split item amount))))))
+                            (pitem/split item amount))))))
      :remove-item-no-update (fn [be slot]
                               (let [state (machine-runtime/state-or-default be default-state)
                                     item (get-in state [inventory-key slot])]

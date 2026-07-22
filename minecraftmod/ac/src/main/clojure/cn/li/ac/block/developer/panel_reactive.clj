@@ -227,7 +227,7 @@
 
 (defn- player-holding-magnetic-coil? [player]
   (and player
-       (entity/entity-ops-available?)
+       (entity/available?)
        (= special-items/magnetic-coil-item-id (entity/player-get-main-hand-item-id player))))
 
 (defn right-panel-mode

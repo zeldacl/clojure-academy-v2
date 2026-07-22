@@ -41,4 +41,4 @@
 
 	Object
 	(toString [_]
-		(str "CatEngineGeneratorImpl@" (pos/position-get-block-pos be))))
+		(str "CatEngineGeneratorImpl@" (pos/block-pos be))))

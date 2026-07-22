@@ -35,11 +35,11 @@
   [item-stack]
   (when item-stack
     (let [id-from-spec #(when (map? %) (:id %))
-       item-obj (try (item/item-get-item item-stack) (catch Throwable _ nil))
+       item-obj (try (item/object item-stack) (catch Throwable _ nil))
        registry-name (when item-obj
-             (try (item/item-get-registry-name item-obj) (catch Throwable _ nil)))
+             (try (item/registry-name item-obj) (catch Throwable _ nil)))
        desc (when item-obj
-         (try (str (item/item-get-description-id item-obj)) (catch Throwable _ nil)))
+         (try (str (item/description-id item-obj)) (catch Throwable _ nil)))
        id-from-stack (or registry-name (when desc (last (str/split desc #"\\."))))
        id (or id-from-stack (id-from-spec item-stack))
             result (boolean

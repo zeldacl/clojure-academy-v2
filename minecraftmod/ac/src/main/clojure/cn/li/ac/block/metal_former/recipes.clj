@@ -33,12 +33,12 @@
   "Best-effort item id extraction from ItemStack."
   [stack]
   (when stack
-    (let [item-obj (try (pitem/item-get-item stack) (catch Exception _ nil))
+    (let [item-obj (try (pitem/object stack) (catch Exception _ nil))
           reg-id (when item-obj
-                   (try (pitem/item-get-registry-name item-obj)
+                   (try (pitem/registry-name item-obj)
                         (catch Exception _ nil)))
           desc-id (when item-obj
-                    (try (pitem/item-get-description-id item-obj)
+                    (try (pitem/description-id item-obj)
                          (catch Exception _ nil)))]
       (or reg-id
           (when (string? desc-id)
@@ -49,14 +49,14 @@
 (defn- stack-empty?
   [stack]
   (or (nil? stack)
-      (try (boolean (pitem/item-is-empty? stack))
+      (try (boolean (pitem/empty? stack))
            (catch Exception _ false))))
 
 (defn- stack-count
   [stack]
   (if (stack-empty? stack)
     0
-    (try (int (pitem/item-get-count stack))
+    (try (int (pitem/stack-count stack))
          (catch Exception _ 0))))
 
 (defn- normalize-item-id
@@ -76,7 +76,7 @@
        (let [min-count (int (or (:count item-spec) 1))]
          (and (>= (stack-count stack) min-count)
               (or (when-let [tag (:tag item-spec)]
-                    (pitem/item-is-in-tag? stack tag))
+                    (pitem/in-tag? stack tag))
                   (let [expected-id (normalize-item-id (:item item-spec))
                         actual-id (item-id-from-stack stack)]
                     (and expected-id
@@ -89,9 +89,9 @@
         count (int (or (:count output) 1))]
     (when (pos? count)
       (or (when-let [tag (:tag output)]
-            (pitem/create-item-stack-from-tag tag count))
+            (pitem/stack-from-tag tag count))
           (when-let [item-id (normalize-item-id (:item output))]
-            (pitem/create-item-stack-by-id item-id count))))))
+            (pitem/stack-by-id item-id count))))))
 
 (defn- default-recipes
   []
@@ -325,12 +325,12 @@
       (let [items-compatible?
             (or (when-let [tag (:tag output-spec)]
                   ;; Tag-based output: check if existing item also belongs to the same tag
-                  (pitem/item-is-in-tag? output-slot-item tag))
-                (try (pitem/item-is-equal? output-slot-item result-stack)
+                  (pitem/in-tag? output-slot-item tag))
+                (try (pitem/same? output-slot-item result-stack)
                      (catch Exception _ false)))]
         (and items-compatible?
              (<= (+ (stack-count output-slot-item) (stack-count result-stack))
-                 (int (or (try (pitem/item-get-max-stack-size output-slot-item)
+                 (int (or (try (pitem/max-stack-size output-slot-item)
                                (catch Exception _ 64))
                           64))))))))
 

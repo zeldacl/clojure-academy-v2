@@ -33,7 +33,7 @@
         (log/error "Block-state ops MISSING required keys:" (pr-str missing))))
     (log/error "Block-state ops install FAILED: Framework atom nil")))
 
-(defn world-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :world-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :world-ops])))
 (defn current-ops          [] (get-in @(fw/fw-atom) [:platform :world-ops]))
 (defn current-block-state-ops [] (get-in @(fw/fw-atom) [:platform :block-state-ops]))
 

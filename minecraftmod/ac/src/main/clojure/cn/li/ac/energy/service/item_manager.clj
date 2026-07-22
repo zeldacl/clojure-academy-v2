@@ -27,9 +27,9 @@
   "Read current energy from an item stack."
   [item-stack]
   (if (is-energy-item-supported? item-stack)
-    (let [nbt-data (item/item-get-tag-compound item-stack)]
+    (let [nbt-data (item/tag-compound item-stack)]
       (if nbt-data
-        (nbt/nbt-get-double nbt-data "energy")
+        (nbt/get-double nbt-data "energy")
         0.0))
     0.0))
 
@@ -60,11 +60,11 @@
           clamped-energy (min max-energy (max 0.0 amount))
           bandwidth (energy-item/get-bandwidth config)
           battery-type (name (energy-base/get-energy-item-type item-stack))
-          tag (item/item-get-or-create-tag item-stack)]
-      (nbt/nbt-set-double! tag "energy" clamped-energy)
-      (nbt/nbt-set-double! tag "maxEnergy" max-energy)
-      (nbt/nbt-set-double! tag "bandwidth" bandwidth)
-      (nbt/nbt-set-string! tag "batteryType" battery-type))
+          tag (item/get-or-create-tag item-stack)]
+      (nbt/set-double! tag "energy" clamped-energy)
+      (nbt/set-double! tag "maxEnergy" max-energy)
+      (nbt/set-double! tag "bandwidth" bandwidth)
+      (nbt/set-string! tag "batteryType" battery-type))
     nil))
 
 ;; ============================================================================

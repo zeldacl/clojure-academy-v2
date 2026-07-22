@@ -239,7 +239,7 @@
   [tile]
   (when tile
     (let [level (try (platform-be/be-get-world-safe tile) (catch Exception _ nil))
-          block-pos (when level (try (pos/position-get-block-pos tile) (catch Exception _ nil)))]
+          block-pos (when level (try (pos/block-pos tile) (catch Exception _ nil)))]
       [level block-pos])))
 
 (defn- compute-dirty-flag

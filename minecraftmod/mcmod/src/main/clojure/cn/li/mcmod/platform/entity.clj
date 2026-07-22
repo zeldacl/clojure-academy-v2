@@ -22,7 +22,7 @@
         (log/error "Entity ops MISSING required keys:" (pr-str missing))))
     (log/error "Entity ops install FAILED: Framework atom nil")))
 
-(defn entity-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-ops])))
 (defn current-ops           [] (get-in @(fw/fw-atom) [:platform :entity-ops]))
 
 (defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))

@@ -21,7 +21,7 @@
   "Info-area \"altitude\" value (upstream: tile.getPos.getY). The block never
    moves, so resolve it once at screen creation rather than per frame."
   [container]
-  (or (try (some-> (:tile-entity container) pos/position-get-block-pos pos/pos-y str)
+  (or (try (some-> (:tile-entity container) pos/block-pos pos/pos-y str)
            (catch Exception _ nil))
       "..."))
 
@@ -29,7 +29,7 @@
 ;; Main GUI (fan slot)
 ;; ============================================================================
 (def ^:private main-schema-id :wind-gen-main) (def ^:private main-sync (gui-sync/schema-sync-fns wind-schema/wind-gen-main-schema))
-(defn- fan-item-stack? [s] (when (and s (not (try (pitem/item-is-empty? s) (catch Exception _ true)))) (let [^String rn (try (some-> s pitem/item-get-item pitem/item-get-registry-name str) (catch Exception _ nil))] (or (= rn "windgen_fan") (= rn (modid/namespaced-path "windgen_fan")) (and rn (.endsWith rn ":windgen_fan"))))))
+(defn- fan-item-stack? [s] (when (and s (not (try (pitem/empty? s) (catch Exception _ true)))) (let [^String rn (try (some-> s pitem/object pitem/registry-name str) (catch Exception _ nil))] (or (= rn "windgen_fan") (= rn (modid/namespaced-path "windgen_fan")) (and rn (.endsWith rn ":windgen_fan"))))))
 (defn- create-main-container [tile player] (gui-sync/create-schema-container wind-schema/wind-gen-main-schema tile player :wind-gen-main {:gui-id (gui-manifest/gui-id :wind-gen-main)}))
 (defn- main-slot-count [_] (slot-schema/tile-slot-count main-schema-id))
 (defn- main-get-slot [c i] (common/get-slot-item-be c i))

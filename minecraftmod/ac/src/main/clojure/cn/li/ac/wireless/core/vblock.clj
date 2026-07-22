@@ -43,8 +43,8 @@
   "Create a virtual block reference from a TileEntity"
   [tile-entity block-type ignore-chunk]
   ;; MC 1.17+ renamed getPos() to getBlockPos() on BlockEntity; try both.
-  (let [block-pos (or (try (pos/position-get-block-pos tile-entity) (catch Exception _ nil))
-                      (try (pos/position-get-pos tile-entity) (catch Exception _ nil)))]
+  (let [block-pos (or (try (pos/block-pos tile-entity) (catch Exception _ nil))
+                      (try (pos/pos tile-entity) (catch Exception _ nil)))]
     (from-foundation
       (foundation-vb/vblock
         (pos/pos-x block-pos)

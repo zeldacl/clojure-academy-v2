@@ -15,9 +15,9 @@
 (def ^:private slot-schema-id :phase-gen) (def ^:private gui-type :phase-gen)
 (def ^:private sync (gui-sync/schema-sync-fns phase-schema/phase-gen-schema))
 
-(defn- stack-empty? [s] (or (nil? s) (try (pitem/item-is-empty? s) (catch Exception _ false))))
-(defn- stack-id [s] (when-not (stack-empty? s) (try (some-> s pitem/item-get-item pitem/item-get-registry-name str) (catch Exception _ nil))))
-(defn- phase-liquid-unit? [s] (and (not (stack-empty? s)) (= (stack-id s) phase-config/matter-unit-item-id) (= (int (try (pitem/item-get-damage s) (catch Exception _ -1))) phase-config/matter-unit-phase-liquid-meta)))
+(defn- stack-empty? [s] (or (nil? s) (try (pitem/empty? s) (catch Exception _ false))))
+(defn- stack-id [s] (when-not (stack-empty? s) (try (some-> s pitem/object pitem/registry-name str) (catch Exception _ nil))))
+(defn- phase-liquid-unit? [s] (and (not (stack-empty? s)) (= (stack-id s) phase-config/matter-unit-item-id) (= (int (try (pitem/damage s) (catch Exception _ -1))) phase-config/matter-unit-phase-liquid-meta)))
 
 (defn create-container [tile player] (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player gui-type {:gui-id (gui-manifest/gui-id :phase-gen)}))
 (defn get-slot-count [_] (slot-schema/tile-slot-count slot-schema-id))

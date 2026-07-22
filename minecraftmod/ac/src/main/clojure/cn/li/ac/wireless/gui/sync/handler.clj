@@ -47,7 +47,7 @@
   Returns: Map with :pos-x, :pos-y, :pos-z keys.
   Throws ex-info if position cannot be resolved."
   [tile]
-  (let [block-pos (pos/position-get-block-pos tile)]
+  (let [block-pos (pos/block-pos tile)]
     (when-not block-pos
       (throw (ex-info "tile-pos-payload: tile has no position"
                       {:tile tile})))

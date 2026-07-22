@@ -17,7 +17,7 @@
                    "- position ops will fail silently!")))
     (log/error "Position ops install FAILED: Framework atom nil")))
 
-(defn position-ops-available? [] (boolean (get-in @(fw/fw-atom) [:platform :position-ops])))
+(defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :position-ops])))
 (defn current-ops            [] (get-in @(fw/fw-atom) [:platform :position-ops]))
 
 (defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
@@ -35,5 +35,5 @@
 (defn factory-initialized? []
   (boolean (get (current-ops) :create-block-pos)))
 
-(defn position-get-block-pos [this] (call :position-get-block-pos this))
-(defn position-get-pos [this] (call :position-get-pos this))
+(defn block-pos [this] (call :position-get-block-pos this))
+(defn pos [this] (call :position-get-pos this))

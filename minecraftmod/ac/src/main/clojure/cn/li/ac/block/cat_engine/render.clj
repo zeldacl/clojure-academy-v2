@@ -39,7 +39,7 @@
    (machine-render-runtime/reset-render-cache-for-test! rotor-cache-key (HashMap.) (HashMap. ^java.util.Map cache))))
 
 (defn- tile-key [tile]
-  (let [p (pos/position-get-block-pos tile)]
+  (let [p (pos/block-pos tile)]
     [(pos/pos-x p) (pos/pos-y p) (pos/pos-z p)]))
 
 (defn- next-rotation!
@@ -82,7 +82,7 @@
         rot (next-rotation! tile tick-gen)
         t (render/get-render-time)
         bob (* 0.03 (Math/sin (* t 0.006)))
-        p (pos/position-get-block-pos tile)
+        p (pos/block-pos tile)
         wx (+ 0.5 (double (pos/pos-x p)))
         wz (+ 0.5 (double (pos/pos-z p)))
         yaw-deg (+ 180.0 (Math/toDegrees (Math/atan2 wx wz)))

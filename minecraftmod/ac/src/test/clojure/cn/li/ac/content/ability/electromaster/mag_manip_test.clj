@@ -64,7 +64,7 @@
                   mag-manip/max-hold-distance-sq (fn [] 1.0)
                   skill-effects/player-path (fn [& _] {:x 0.0 :y 0.0 :z 0.0})
                   entity/player-creative? (fn [_] false)
-                  pitem/create-item-stack-by-id (fn [item-id count]
+                  pitem/stack-by-id (fn [item-id count]
                                                   {:item-id item-id :count count})
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! give-calls* conj [player stack])

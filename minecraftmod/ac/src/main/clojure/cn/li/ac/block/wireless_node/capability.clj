@@ -46,11 +46,11 @@
       (str (state-schema/get-field node-logic/node-state-schema state :password))))
 
   (getBlockPos [_]
-    (pos/position-get-block-pos be))
+    (pos/block-pos be))
 
   Object
   (toString [_]
-    (str "WirelessNodeImpl@" (pos/position-get-block-pos be))))
+    (str "WirelessNodeImpl@" (pos/block-pos be))))
 
 (deftype ClojureEnergyImpl [be]
   cn.li.mcmod.energy.IEnergyCapable
@@ -90,4 +90,4 @@
 
   Object
   (toString [_]
-    (str "ClojureEnergyImpl@" (pos/position-get-block-pos be))))
+    (str "ClojureEnergyImpl@" (pos/block-pos be))))

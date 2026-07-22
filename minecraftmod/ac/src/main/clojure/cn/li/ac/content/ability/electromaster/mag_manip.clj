@@ -84,7 +84,7 @@
              player
              (not (entity/player-creative? player))
              (string? block-id))
-    (when-let [stack (pitem/create-item-stack-by-id block-id 1)]
+    (when-let [stack (pitem/stack-by-id block-id 1)]
       (entity/player-give-item-stack! player stack))))
 
 (defn- release-or-rollback! [player held-block]

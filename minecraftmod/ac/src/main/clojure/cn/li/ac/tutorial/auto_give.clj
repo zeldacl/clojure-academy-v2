@@ -26,7 +26,7 @@
 
 (defn- tutorial-acquired-in-nbt?
   [tag]
-  (and (nbt/nbt-has-key-safe? tag nbt-key) (nbt/nbt-get-boolean tag nbt-key)))
+  (and (nbt/has-key-safe? tag nbt-key) (nbt/get-boolean tag nbt-key)))
 
 (defn auto-give-on-login!
   "Check NBT flag directly (matching upstream @SerializeIncluded boolean).
@@ -36,9 +36,9 @@
     (let [tag (player-persistent-data player)]
       (when-not (tutorial-acquired-in-nbt? tag)
         (try
-          (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]
+          (when-let [stack (pitem/stack-by-id tutorial-item-id 1)]
             (entity/player-give-item-stack! player stack)
-            (nbt/nbt-set-boolean! tag nbt-key true)
+            (nbt/set-boolean! tag nbt-key true)
             (log/info "Tutorial item auto-given to player" {:uuid (uuid/player-uuid player)}))
           (catch Exception e
             (log/warn "Failed to auto-give tutorial item:" (ex-message e))))))))

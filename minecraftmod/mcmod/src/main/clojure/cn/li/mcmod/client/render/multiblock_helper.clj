@@ -87,7 +87,7 @@
   [tile]
   (when tile
     (try
-      (let [bp (pos/position-get-block-pos tile)]
+      (let [bp (pos/block-pos tile)]
         [(long (pos/pos-x bp))
          (long (pos/pos-y bp))
          (long (pos/pos-z bp))])

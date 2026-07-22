@@ -64,32 +64,32 @@
 
 (defn- get-matter-kind
   [item-stack]
-  (let [tag (try (pitem/item-get-tag-compound item-stack) (catch Exception _ nil))
-        from-tag (when tag (try (nbt/nbt-get-string tag "matterKind") (catch Exception _ nil)))]
+  (let [tag (try (pitem/tag-compound item-stack) (catch Exception _ nil))
+        from-tag (when tag (try (nbt/get-string tag "matterKind") (catch Exception _ nil)))]
     (or (case (some-> from-tag str)
           "phase-liquid" :phase-liquid
           "none" :none
           nil)
-        (case (int (try (pitem/item-get-damage item-stack) (catch Exception _ 0)))
+        (case (int (try (pitem/damage item-stack) (catch Exception _ 0)))
           1 :phase-liquid
           :none))))
 
 (defn- set-matter-kind!
   [item-stack kind]
-  (let [tag (pitem/item-get-or-create-tag item-stack)]
-    (nbt/nbt-set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
-    (pitem/item-set-damage! item-stack (if (= kind :phase-liquid) 1 0))))
+  (let [tag (pitem/get-or-create-tag item-stack)]
+    (nbt/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
+    (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))))
 
 (defn- make-matter-unit-stack
   [kind]
-  (let [stack (pitem/create-item-stack-by-id matter-unit-item-id 1)]
+  (let [stack (pitem/stack-by-id matter-unit-item-id 1)]
     (when stack
       (set-matter-kind! stack kind)
       stack)))
 
 (defn- mutate-or-convert-main-hand!
   [player item-stack target-kind]
-  (if (<= (int (pitem/item-get-count item-stack)) 1)
+  (if (<= (int (pitem/stack-count item-stack)) 1)
     (set-matter-kind! item-stack target-kind)
     (do
       (entity/player-consume-main-hand-item! player 1)

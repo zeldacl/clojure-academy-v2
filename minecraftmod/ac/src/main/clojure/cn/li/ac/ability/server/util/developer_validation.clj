@@ -14,7 +14,7 @@
 
 (defn dist-sq-ok-for-station?
 	[player tile]
-	(let [raw-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))]
+	(let [raw-pos (try (pos/block-pos tile) (catch Exception _ nil))]
 		(boolean
 			(when raw-pos
 				(let [bx (+ 0.5 (double (or (try (pos/pos-x raw-pos) (catch Exception _ nil))

@@ -20,7 +20,7 @@
         checks [{:k :resource :ok (boolean (get (platform/get-adapter fw-atom :resource) :factory))}
                 {:k :position :ok (platform-position/factory-initialized?)}
                 {:k :nbt :ok (platform-nbt/factory-initialized?)}
-                {:k :item :ok (platform-item/item-ops-available?)}]
+                {:k :item :ok (platform-item/available?)}]
         missing (->> checks (remove #(get % :ok)) (map #(get % :k)) vec)]
     (when (seq missing)
       (throw (ex-info "Platform bootstrap incomplete - init-platform! must run before init-from-java"

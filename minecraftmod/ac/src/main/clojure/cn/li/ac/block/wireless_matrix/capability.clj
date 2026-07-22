@@ -44,4 +44,4 @@
   (getMatrixBandwidth [_] (long (:bandwidth (matrix-params be))))
   (getMatrixRange [_] (double (:range (matrix-params be))))
   (getLoad [_] 0)
-  (getPos [_] (pos/position-get-block-pos be)))
+  (getPos [_] (pos/block-pos be)))

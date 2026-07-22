@@ -8,13 +8,13 @@
   [stack matter-unit-item-id]
   (when (and (not (inv/stack-empty? stack))
              (= (inv/stack-id stack) matter-unit-item-id))
-    (let [tag (try (pitem/item-get-tag-compound stack) (catch Exception _ nil))
-          tag-kind (when tag (try (nbt/nbt-get-string tag "matterKind") (catch Exception _ nil)))]
+    (let [tag (try (pitem/tag-compound stack) (catch Exception _ nil))
+          tag-kind (when tag (try (nbt/get-string tag "matterKind") (catch Exception _ nil)))]
       (or (case (some-> tag-kind str)
             "none" :none
             "phase-liquid" :phase-liquid
             nil)
-          (case (int (try (pitem/item-get-damage stack) (catch Exception _ -1)))
+          (case (int (try (pitem/damage stack) (catch Exception _ -1)))
             0 :none
             1 :phase-liquid
             nil)))))
@@ -29,14 +29,14 @@
 
 (defn make-empty-matter-unit
   [matter-unit-item-id none-meta count]
-  (let [stack (pitem/create-item-stack-by-id matter-unit-item-id (int count))]
+  (let [stack (pitem/stack-by-id matter-unit-item-id (int count))]
     (when stack
       (try
-        (let [tag (pitem/item-get-or-create-tag stack)]
-          (nbt/nbt-set-string! tag "matterKind" "none"))
+        (let [tag (pitem/get-or-create-tag stack)]
+          (nbt/set-string! tag "matterKind" "none"))
         (catch Exception _ nil))
       (try
-        (pitem/item-set-damage! stack none-meta)
+        (pitem/set-damage! stack none-meta)
         (catch Exception _ nil))
       stack)))
 

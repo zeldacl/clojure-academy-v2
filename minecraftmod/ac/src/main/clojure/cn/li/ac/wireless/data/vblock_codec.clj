@@ -22,12 +22,12 @@
   "Serialize a vblock-like map to an NBT compound."
   [vblock]
   (let [vblock (normalize-vblock vblock)
-        compound (nbt/create-nbt-compound)]
-    (nbt/nbt-set-int! compound "x" (:x vblock))
-    (nbt/nbt-set-int! compound "y" (:y vblock))
-    (nbt/nbt-set-int! compound "z" (:z vblock))
-    (nbt/nbt-set-string! compound "type" (name (or (:block-type vblock) :node)))
-    (nbt/nbt-set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
+        compound (nbt/create-compound)]
+    (nbt/set-int! compound "x" (:x vblock))
+    (nbt/set-int! compound "y" (:y vblock))
+    (nbt/set-int! compound "z" (:z vblock))
+    (nbt/set-string! compound "type" (name (or (:block-type vblock) :node)))
+    (nbt/set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
     compound))
 
 (defn vblock-from-nbt
@@ -35,26 +35,26 @@
   ([compound]
    (vblock-from-nbt compound :node false))
   ([compound default-type default-ignore-chunk]
-   (let [x (nbt/nbt-get-int compound "x")
-         y (nbt/nbt-get-int compound "y")
-         z (nbt/nbt-get-int compound "z")
+   (let [x (nbt/get-int compound "x")
+         y (nbt/get-int compound "y")
+         z (nbt/get-int compound "z")
          block-type-str (try
-                          (nbt/nbt-get-string compound "type")
+                          (nbt/get-string compound "type")
                           (catch Exception _ ""))
          block-type (if (seq block-type-str)
                       (keyword block-type-str)
                       default-type)
          ignore-chunk (try
-                        (nbt/nbt-get-boolean compound "ignoreChunk")
+                        (nbt/get-boolean compound "ignoreChunk")
                         (catch Exception _ default-ignore-chunk))]
      (foundation-vb/vblock x y z block-type ignore-chunk))))
 
 (defn vblocks-to-nbt-list
   "Serialize a collection of vblocks to an NBT list."
   [vblocks]
-  (let [items (nbt/create-nbt-list)]
+  (let [items (nbt/create-list)]
     (doseq [vblock vblocks]
-      (nbt/nbt-append! items (vblock-to-nbt vblock)))
+      (nbt/append! items (vblock-to-nbt vblock)))
     items))
 
 (defn nbt-list->vblocks
@@ -65,10 +65,10 @@
   ([items default-type default-ignore-chunk]
    (nbt-list->vblocks items default-type default-ignore-chunk identity))
   ([items default-type default-ignore-chunk from-foundation]
-   (let [size (if items (nbt/nbt-list-size items) 0)]
+   (let [size (if items (nbt/list-size items) 0)]
      (vec
        (keep
          (fn [index]
-           (when-let [compound (nbt/nbt-list-get-compound items index)]
+           (when-let [compound (nbt/list-compound items index)]
              (from-foundation (vblock-from-nbt compound default-type default-ignore-chunk))))
          (range size))))))

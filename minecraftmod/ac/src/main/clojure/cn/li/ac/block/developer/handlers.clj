@@ -34,9 +34,9 @@
         (if-let [world (net-helpers/get-world player)]
           (let [ctrl-mb (:multi-block ctrl-spec)
                 positions (or (:multi-block-positions ctrl-mb))
-                px (pos/pos-x (pos/position-get-block-pos tile))
-                py (pos/pos-y (pos/position-get-block-pos tile))
-                pz (pos/pos-z (pos/position-get-block-pos tile))
+                px (pos/pos-x (pos/block-pos tile))
+                py (pos/pos-y (pos/block-pos tile))
+                pz (pos/pos-z (pos/block-pos tile))
                 ctrl-tile (some (fn [rel-pos]
                                   (let [rx (or (:relative-x rel-pos) (:x rel-pos) 0)
                                         ry (or (:relative-y rel-pos) (:y rel-pos) 0)

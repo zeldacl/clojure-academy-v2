@@ -60,7 +60,7 @@
              (< (rand) probability))
     (when (block-manip/liquid-block?
                                      world-id x y z)
-      (when-let [fish-stack (pitem/create-item-stack-by-id fish-item-id 1)]
+      (when-let [fish-stack (pitem/stack-by-id fish-item-id 1)]
         ;; Spawn item entity in world at hit position (matching original EntityItem spawn).
         ;; Uses requiring-resolve to keep ac layer free of MC imports.
         (if (server-bridge/server-bridge-available?)

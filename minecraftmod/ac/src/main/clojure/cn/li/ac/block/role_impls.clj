@@ -51,7 +51,7 @@
 
   Object
   (toString [_]
-    (str "WirelessGeneratorImpl@" (pos/position-get-block-pos be))))
+    (str "WirelessGeneratorImpl@" (pos/block-pos be))))
 
 (defn wireless-generator-factory
   "Named capability factory — avoids anonymous fn literal in init options,
@@ -100,7 +100,7 @@
 
   Object
   (toString [_]
-    (str "WirelessReceiverImpl@" (pos/position-get-block-pos be))))
+    (str "WirelessReceiverImpl@" (pos/block-pos be))))
 
 (defn wireless-receiver-factory
   "Named capability factory — avoids anonymous fn literal in init options.

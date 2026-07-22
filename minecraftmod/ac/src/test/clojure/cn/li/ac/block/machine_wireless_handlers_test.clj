@@ -29,7 +29,7 @@
                     :unlink! (fn [_] nil)})]
     (with-redefs [sync-routing/require-open-container! (network-support/require-open-container-mock :tile)
                   net-helpers/get-world (fn [_] :world)
-                  pos/position-get-block-pos (fn [_] :tile-pos)
+                  pos/block-pos (fn [_] :tile-pos)
                   wireless-api/get-nodes-in-range (fn [_ _] [])]
       (is (= {:success true :linked nil :avail []}
              ((:list-nodes handlers) base-payload :player))))))
@@ -51,7 +51,7 @@
                         {:tile-entity :recv}))
                     net-helpers/get-world (fn [_] :world)
                     net-helpers/get-tile-at (fn [_ _] :recv)
-                    pos/position-get-block-pos identity
+                    pos/block-pos identity
                     wireless-api/get-nodes-in-range (fn [_ _] [])]
         (let [result ((:connect handlers)
                       (merge base-payload
@@ -81,6 +81,6 @@
                       :unlink! (fn [_] (swap! unlink-calls inc))})]
       (with-redefs [sync-routing/require-open-container! (network-support/require-open-container-mock :recv)
                     net-helpers/get-world (fn [_] nil)
-                    pos/position-get-block-pos identity]
+                    pos/block-pos identity]
         (is (true? (:success ((:disconnect handlers) base-payload :player))))
         (is (= 1 @unlink-calls))))))

@@ -78,7 +78,7 @@
   (machine-runtime/make-open-gui-handler :solar))
 
 (defn get-linked-node ^IWirelessNode [tile]
-  (let [gen-pos (try (pos/position-get-block-pos tile) (catch Exception _ nil))
+  (let [gen-pos (try (pos/block-pos tile) (catch Exception _ nil))
         pos-str (when gen-pos (str (pos/pos-x gen-pos) "," (pos/pos-y gen-pos) "," (pos/pos-z gen-pos)))]
     (if-let [conn (try (wireless-api/get-node-conn-by-generator tile)
                        (catch Exception e

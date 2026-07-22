@@ -27,28 +27,28 @@
 
 (defn- load-state
   [tag]
-  (when (nbt/nbt-has-key-safe? tag nbt-key)
-    (let [root (nbt/nbt-get-compound tag nbt-key)]
-      (when (= schema-version (nbt/nbt-get-int root "schema"))
+  (when (nbt/has-key-safe? tag nbt-key)
+    (let [root (nbt/get-compound tag nbt-key)]
+      (when (= schema-version (nbt/get-int root "schema"))
         {:activated-tuts (nbt-coll/read-keyword-set root "activated")
          :condition-flags (nbt-coll/read-int-set root "conditions")
-         :misaka-id (when (nbt/nbt-get-boolean root "has_misaka")
-                      (nbt/nbt-get-int root "misaka"))
-         :first-open? (nbt/nbt-get-boolean root "first_open")
+         :misaka-id (when (nbt/get-boolean root "has_misaka")
+                      (nbt/get-int root "misaka"))
+         :first-open? (nbt/get-boolean root "first_open")
          :dirty? false}))))
 
 (defn- save-state!
   [tag state]
-  (let [root (nbt/create-nbt-compound)
+  (let [root (nbt/create-compound)
         misaka-id (:misaka-id state)]
-    (nbt/nbt-set-int! root "schema" schema-version)
+    (nbt/set-int! root "schema" schema-version)
     (nbt-coll/write-keyword-set! root "activated" (:activated-tuts state))
     (nbt-coll/write-int-set! root "conditions" (:condition-flags state))
-    (nbt/nbt-set-boolean! root "has_misaka" (some? misaka-id))
+    (nbt/set-boolean! root "has_misaka" (some? misaka-id))
     (when (some? misaka-id)
-      (nbt/nbt-set-int! root "misaka" (int misaka-id)))
-    (nbt/nbt-set-boolean! root "first_open" (boolean (:first-open? state)))
-    (nbt/nbt-set-tag! tag nbt-key root)))
+      (nbt/set-int! root "misaka" (int misaka-id)))
+    (nbt/set-boolean! root "first_open" (boolean (:first-open? state)))
+    (nbt/set-tag! tag nbt-key root)))
 
 ;; --- Public API ---
 

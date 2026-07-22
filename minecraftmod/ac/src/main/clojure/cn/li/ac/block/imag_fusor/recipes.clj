@@ -10,12 +10,12 @@
    Returns namespaced id string when available, else nil."
   [stack]
   (when stack
-    (let [item-obj (try (pitem/item-get-item stack) (catch Exception _ nil))
+    (let [item-obj (try (pitem/object stack) (catch Exception _ nil))
           reg-id (when item-obj
-                   (try (pitem/item-get-registry-name item-obj)
+                   (try (pitem/registry-name item-obj)
                         (catch Exception _ nil)))
           desc-id (when item-obj
-                    (try (pitem/item-get-description-id item-obj)
+                    (try (pitem/description-id item-obj)
                          (catch Exception _ nil)))]
       (or reg-id
           (when (string? desc-id)
@@ -26,7 +26,7 @@
 (defn- stack-count
   [stack]
   (if stack
-    (try (int (pitem/item-get-count stack)) (catch Exception _ 0))
+    (try (int (pitem/stack-count stack)) (catch Exception _ 0))
     0))
 
 (defn- normalize-item-id
@@ -54,7 +54,7 @@
         item-id (normalize-item-id (:item output))
         count (int (or (:count output) 1))]
     (when (and item-id (pos? count))
-      (pitem/create-item-stack-by-id item-id count))))
+      (pitem/stack-by-id item-id count))))
 
 (defn- default-recipes
   []
@@ -148,9 +148,9 @@
       (nil? result-stack) false
       (nil? output-slot-item) true
       :else
-      (and (try (pitem/item-is-equal? output-slot-item result-stack) (catch Exception _ false))
+      (and (try (pitem/same? output-slot-item result-stack) (catch Exception _ false))
            (<= (+ (stack-count output-slot-item) (stack-count result-stack))
-               (int (or (try (pitem/item-get-max-stack-size output-slot-item)
+               (int (or (try (pitem/max-stack-size output-slot-item)
                              (catch Exception _ 64))
                         64)))))))
 
@@ -202,11 +202,11 @@
              (try (= (item-id-from-stack output-item)
                      (item-id-from-stack result-stack))
                   (catch Exception _ false))
-             (or (not (try (pitem/item-is-equal? output-item result-stack)
+             (or (not (try (pitem/same? output-item result-stack)
                            (catch Exception _ false)))
                  (let [output-count (stack-count output-item)
                        result-count (stack-count result-stack)
-                       max-size (int (or (try (pitem/item-get-max-stack-size output-item)
+                       max-size (int (or (try (pitem/max-stack-size output-item)
                                               (catch Exception _ 64))
                                          64))]
                    (> (+ output-count result-count) max-size)))))))

@@ -165,7 +165,7 @@
     (if tile
       (let [linked (linked-network tile)
             linked-ssid (when linked (wireless-api/network-ssid linked))
-            block-pos (pos/position-get-block-pos tile)
+            block-pos (pos/block-pos tile)
             x (double (pos/pos-x block-pos))
             y (double (pos/pos-y block-pos))
             z (double (pos/pos-z block-pos))
