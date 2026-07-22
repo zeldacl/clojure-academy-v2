@@ -123,14 +123,3 @@
       (get-item-energy item-stack)
       (max 1.0 (get-item-bandwidth item-stack))
       1.0)))
-
-(defn charge-item
-  "Protocol-friendly alias returning amount successfully charged."
-  [item-stack amount]
-  (let [leftover (charge-energy-to-item item-stack amount false)]
-    (- (double amount) leftover)))
-
-(defn discharge-item
-  "Protocol-friendly alias returning amount successfully discharged."
-  [item-stack amount]
-  (pull-energy-from-item item-stack amount false))

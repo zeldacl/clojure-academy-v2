@@ -97,14 +97,3 @@
       (double (or (get-node-energy tile-entity) 0.0))
       (max 1.0 (or (get-node-bandwidth tile-entity) 1.0))
       1.0)))
-
-(defn inject-energy
-  "Protocol-friendly alias returning amount successfully inserted."
-  [tile-entity amount]
-  (let [leftover (charge-node tile-entity amount false)]
-    (- (double amount) leftover)))
-
-(defn extract-node-energy
-  "Protocol-friendly alias returning amount successfully extracted."
-  [tile-entity amount]
-  (pull-from-node tile-entity amount false))

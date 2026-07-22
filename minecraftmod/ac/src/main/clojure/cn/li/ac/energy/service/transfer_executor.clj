@@ -6,12 +6,11 @@
 (defn extract-from-provider
   "Extract up to `amount` from a provider.
 
-  Container providers remain unsupported here to preserve the legacy Phase C API
-  semantics from `energy.api.impl`."
+  Container providers are immutable snapshots, so direct extraction is unsupported."
   [{:keys [kind value]} amount]
   (case kind
-    :item (item-manager/discharge-item value amount)
-    :node (node-manager/extract-node-energy value amount)
+    :item (item-manager/pull-energy-from-item value amount false)
+    :node (node-manager/pull-from-node value amount false)
     :container 0.0
     0.0))
 

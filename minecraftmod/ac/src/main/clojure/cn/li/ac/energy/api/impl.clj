@@ -134,10 +134,11 @@
                       (item-manager/is-energy-item-supported? item-stack))
 
    :charge-item (fn [_system item-stack amount]
-                  (item-manager/charge-item item-stack amount))
+                  (let [leftover (item-manager/charge-energy-to-item item-stack amount false)]
+                    (- (double amount) (double leftover))))
 
    :discharge-item (fn [_system item-stack amount]
-                     (item-manager/discharge-item item-stack amount))})
+                     (item-manager/pull-energy-from-item item-stack amount false))})
 
 (defn- create-node-impl
   "Create the IEnergyNode implementation function map."
@@ -153,10 +154,11 @@
                         (node-manager/get-node-capacity node-vblock))
 
    :inject-energy (fn [_system node-vblock amount]
-                    (node-manager/inject-energy node-vblock amount))
+                    (let [leftover (node-manager/charge-node node-vblock amount false)]
+                      (- (double amount) (double leftover))))
 
    :extract-node-energy (fn [_system node-vblock amount]
-                          (node-manager/extract-node-energy node-vblock amount))})
+                          (node-manager/pull-from-node node-vblock amount false))})
 
 (defn- create-admin-impl
   "Create the combined IEnergyValidator + IEnergyAdmin implementation map."

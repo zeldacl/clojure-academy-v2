@@ -2,7 +2,7 @@
 	"Energy transfer service for Phase C.
 
 	Centralizes transfer math so callers no longer duplicate ad-hoc formulas.
-	The current policy keeps compatibility with existing behavior:
+	The current wireless transfer policy is explicit:
 	- wireless transfer applies a default 10% loss model
 	- callers can override loss-rate when needed")
 
