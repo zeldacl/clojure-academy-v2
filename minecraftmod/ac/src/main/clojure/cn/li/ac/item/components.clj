@@ -6,7 +6,7 @@
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.item.terminal-installer-handler :as terminal-installer-handler]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))

@@ -19,7 +19,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.ac.ability.effects.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
 	            [cn.li.mcmod.platform.entity :as entity]))
 
 (def-skill-config-ops :thunder-clap)
@@ -243,4 +243,3 @@
    :cost-fail! thunder-clap-cost-fail!
    :abort!     thunder-clap-abort!}
   :prerequisites [{:skill-id :thunder-bolt :min-exp 1.0}])
-

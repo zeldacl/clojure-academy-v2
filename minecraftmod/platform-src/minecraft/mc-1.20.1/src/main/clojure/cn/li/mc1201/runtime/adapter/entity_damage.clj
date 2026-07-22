@@ -5,7 +5,7 @@
   query callbacks; this namespace owns the damage-flow orchestration."
   (:require [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.ac.ability.effects.damage :as damage-effects]
+            [cn.li.mcmod.platform.entity-damage :as damage-effects]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
@@ -29,7 +29,7 @@
 
 (defn- pvp-blocked?
   "True when `entity` is a player and the content-registered PvP gate
-   (ac.ability.effects.damage/install-pvp-gate!) currently disallows it —
+   (mcmod.platform.entity-damage/install-pvp-gate!) currently disallows it —
    matches upstream AbilityContext.dealDamage's
    (canAttackPlayer() || !(target instanceof EntityPlayer)) check."
   [entity]

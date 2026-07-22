@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 

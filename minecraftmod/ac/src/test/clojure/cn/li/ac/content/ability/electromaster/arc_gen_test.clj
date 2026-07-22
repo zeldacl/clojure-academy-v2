@@ -6,10 +6,10 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.block :as block-manip]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]))

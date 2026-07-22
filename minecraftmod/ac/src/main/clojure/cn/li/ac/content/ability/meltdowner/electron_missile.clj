@@ -25,8 +25,8 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :electron-missile)

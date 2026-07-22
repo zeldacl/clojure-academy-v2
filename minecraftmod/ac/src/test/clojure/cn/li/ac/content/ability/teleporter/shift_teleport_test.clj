@@ -11,8 +11,8 @@
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.world :as world-effects]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (defn- test-context-owner
   [player-uuid]

@@ -33,7 +33,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
-            [cn.li.ac.ability.effects.block :as bm]
+            [cn.li.mcmod.platform.block-manipulation :as bm]
 
                         [cn.li.mcmod.util.log :as log]))
 

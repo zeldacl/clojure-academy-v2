@@ -8,8 +8,8 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- reset-state! [f]

@@ -11,9 +11,9 @@
   2-arg (fn [target-player-uuid incoming-damage] ...) contract."
   (:require [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
-            [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.block :as block-manip])
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.block-manipulation :as block-manip])
   (:import [java.util HashSet]))
 
 (defn- beam-remove-self

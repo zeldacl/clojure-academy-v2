@@ -14,7 +14,7 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :current-charging)

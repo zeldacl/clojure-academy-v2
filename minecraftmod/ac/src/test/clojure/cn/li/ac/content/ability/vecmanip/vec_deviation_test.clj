@@ -12,7 +12,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.vecmanip.vec-deviation :as vd]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.world :as world-effects]))
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 ;; ---------------------------------------------------------------------------
 ;; Fixtures

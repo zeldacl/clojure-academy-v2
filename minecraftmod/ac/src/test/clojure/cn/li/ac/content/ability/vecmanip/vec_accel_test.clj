@@ -13,7 +13,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             ;; side-effectful require: ensures defskill runs and private fns are compiled
             [cn.li.ac.content.ability.vecmanip.vec-accel]))
 

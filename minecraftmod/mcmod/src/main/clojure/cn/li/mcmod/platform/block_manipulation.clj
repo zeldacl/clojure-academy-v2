@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.effects.block
+(ns cn.li.mcmod.platform.block-manipulation
   (:require [cn.li.mcmod.framework :as fw]))
 
 (defn available?

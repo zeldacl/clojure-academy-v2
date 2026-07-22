@@ -46,7 +46,7 @@
 
             [cn.li.mcmod.platform.position :as pos]
 
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
 
             [cn.li.ac.ability.effects.motion :as motion-effects]
 

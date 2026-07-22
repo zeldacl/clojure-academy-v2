@@ -24,7 +24,7 @@
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-deviation)

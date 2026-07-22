@@ -12,7 +12,7 @@
             [cn.li.ac.content.ability.teleporter.mark-teleport :as mark]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (defn- with-mark-env [f]

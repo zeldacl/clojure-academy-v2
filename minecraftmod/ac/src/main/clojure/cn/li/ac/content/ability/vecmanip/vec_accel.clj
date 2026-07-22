@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-accel)

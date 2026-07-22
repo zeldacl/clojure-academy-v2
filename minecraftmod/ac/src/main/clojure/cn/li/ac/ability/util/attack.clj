@@ -7,9 +7,9 @@
   Extracted from thunder-bolt/thunder-clap, which had byte-for-byte identical
   copies of hit-kind/block-impact-point/entity-impact-point."
   (:require [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.ac.ability.effects.damage :as entity-damage]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]))
 
 (defn hit-kind
   "Classify a raycast hit map as :entity, :block, or :miss."

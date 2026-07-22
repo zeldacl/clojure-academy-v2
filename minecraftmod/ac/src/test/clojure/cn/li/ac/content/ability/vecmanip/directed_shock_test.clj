@@ -9,9 +9,9 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-shock :as ds]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def ^:private spec ds/directed-shock)
 

@@ -1,4 +1,4 @@
-(ns cn.li.ac.ability.effects.raycast
+(ns cn.li.mcmod.platform.raycast
   (:require [cn.li.mcmod.framework :as fw]))
 
 (defn available?

@@ -10,7 +10,7 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging

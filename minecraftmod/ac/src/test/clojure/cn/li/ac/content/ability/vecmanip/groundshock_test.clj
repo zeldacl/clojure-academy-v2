@@ -7,9 +7,9 @@
             [cn.li.ac.content.ability.vecmanip.groundshock :as gs]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (deftest horizontal-look-fallback-toggle-test
   (testing "fallback disabled returns nil when no horizontal look vector is available"

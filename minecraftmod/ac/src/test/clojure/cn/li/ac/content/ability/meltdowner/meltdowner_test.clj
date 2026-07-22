@@ -11,8 +11,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- context-mocks []
   (let [{:keys [messages* send!]} (fx-mocks/capture-ctx-fx-messages!)

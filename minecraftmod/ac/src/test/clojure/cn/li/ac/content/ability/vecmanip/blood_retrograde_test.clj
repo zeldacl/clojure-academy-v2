@@ -7,8 +7,8 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde :as br]
             [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- mock-cfg-int [field]
   (case field

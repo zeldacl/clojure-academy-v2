@@ -12,7 +12,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- make-context-mocks [initial-ctx]
   (let [ctx* (atom initial-ctx)]

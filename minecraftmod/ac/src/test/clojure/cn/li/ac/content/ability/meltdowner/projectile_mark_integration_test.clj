@@ -18,10 +18,10 @@
             [cn.li.ac.content.ability.meltdowner.jet-engine :as jet-engine]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
 
 (defn- with-fresh-meltdowner-runtimes [f]

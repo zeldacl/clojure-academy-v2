@@ -9,10 +9,10 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.content.ability.vecmanip.directed-blastwave :as db]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.world :as world-effects]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private spec db/directed-blastwave)
 

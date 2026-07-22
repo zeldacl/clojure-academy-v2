@@ -8,8 +8,8 @@
             [cn.li.ac.content.ability.teleporter.passive-hooks :as passive-hooks]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)

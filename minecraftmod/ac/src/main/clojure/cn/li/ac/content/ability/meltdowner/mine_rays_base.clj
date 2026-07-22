@@ -16,8 +16,8 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.geom :as geom]
-                        [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.block :as bm]
+                        [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------

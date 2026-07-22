@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def-skill-config-ops :thunder-bolt)

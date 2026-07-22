@@ -16,11 +16,11 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.ability.item-actions :as item-actions]
-                        [cn.li.ac.ability.effects.raycast :as raycast]
+                        [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -85,8 +85,8 @@
 (def ^:private coin-entity-registry-id (modid/namespaced-path "entity_coin_throwing"))
 
 (defn- coin-entity?
-  "Whether ent (a find-entities-in-radius* result map) is the coin-throwing
-  entity. Resolved via entity-get-type-id* (registry-key format, e.g.
+  "Whether ent (a world-effects/find-entities-in-radius result map) is the
+  coin-throwing entity. Resolved via entity-get-type-id* (registry-key format, e.g.
   \"modid:entity_coin_throwing\") rather than the ad-hoc :type/:entity-id
   fields on the entity map, whose format differs across Forge (registry key)
   and Fabric (description id) and never equals the bare registry name either
@@ -428,4 +428,3 @@
   (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
   (item-actions/register-item-entity-spawn! (modid/namespaced-path "coin") {:entity-id "entity_coin_throwing" :speed 0.0})
   nil)
-

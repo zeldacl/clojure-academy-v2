@@ -13,8 +13,8 @@
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
-            [cn.li.ac.ability.effects.raycast :as raycast]
-            [cn.li.ac.ability.effects.world :as world-effects]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [clojure.string :as str]
             [cn.li.mcmod.util.log :as log]))
 

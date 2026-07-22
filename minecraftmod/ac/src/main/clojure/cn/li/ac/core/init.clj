@@ -11,8 +11,8 @@
             [cn.li.ac.entity.hook-catalog :as entity-hook-catalog]
             [cn.li.ac.tutorial.events :as tutorial-events]
             [cn.li.ac.wireless.data.world :as wireless-world]
-            [cn.li.ac.ability.effects.block :as block-effects]
-            [cn.li.ac.ability.effects.damage :as damage-effects]
+            [cn.li.mcmod.platform.block-manipulation :as block-effects]
+            [cn.li.mcmod.platform.entity-damage :as damage-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (defn init

@@ -28,9 +28,9 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.block :as block-manip]
-            [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================

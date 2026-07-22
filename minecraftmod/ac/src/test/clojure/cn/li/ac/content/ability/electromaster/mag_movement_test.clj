@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.content.ability.electromaster.mag-movement :as mag-movement]
-            [cn.li.ac.ability.effects.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.mag-movement

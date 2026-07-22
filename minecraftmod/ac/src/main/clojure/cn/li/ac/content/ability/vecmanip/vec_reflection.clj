@@ -13,9 +13,9 @@
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.world :as world-effects]
-            [cn.li.ac.ability.effects.damage :as entity-damage]
-            [cn.li.ac.ability.effects.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-reflection)

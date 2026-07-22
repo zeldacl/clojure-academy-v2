@@ -20,7 +20,7 @@
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
-            [cn.li.ac.ability.effects.world :as world-effects]))
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private fusor-rt
   (machine-runtime/schema-runtime fusor-schema/imag-fusor-schema :server-only? true))
