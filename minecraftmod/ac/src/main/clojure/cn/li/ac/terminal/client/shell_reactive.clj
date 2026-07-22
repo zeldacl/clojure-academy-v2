@@ -17,7 +17,7 @@
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -337,7 +337,7 @@
 (defn install-ui-hooks-reactive!
   "Registers the reactive terminal screen under :ac/terminal-gui factory key."
   []
-  (platform-ui/register-widget-factory!
+  (widget-registry/register-widget-factory!
     :ac/terminal-gui
     (fn [{:keys [player]}] (create-terminal-gui-reactive player)))
   (log/info "AC terminal UI hooks installed (reactive)"))

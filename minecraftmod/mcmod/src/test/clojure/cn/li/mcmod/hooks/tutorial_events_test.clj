@@ -1,7 +1,7 @@
-(ns cn.li.mcmod.platform.tutorial-events-test
+(ns cn.li.mcmod.hooks.tutorial-events-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.tutorial-events :as sut]))
+            [cn.li.mcmod.hooks.tutorial-events :as sut]))
 
 (defn- with-framework [f]
   (let [prev-fw fw/framework]

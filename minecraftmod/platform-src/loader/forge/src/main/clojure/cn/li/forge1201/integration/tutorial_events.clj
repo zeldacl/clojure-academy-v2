@@ -5,7 +5,7 @@
   and dispatches matching condition checks through mcmod platform hooks.
 
   Uses the same MinecraftForge/EVENT_BUS pattern as item_handler.clj."
-  (:require [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
+  (:require [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraftforge.event.entity.player PlayerEvent$ItemCraftedEvent
@@ -45,7 +45,7 @@
   [^Player player item-id event-type]
   (when (and player item-id)
     (try
-      (tutorial-platform/on-item-event! player item-id event-type)
+      (tutorial-hooks/on-item-event! player item-id event-type)
       (catch Throwable e
         (log/stacktrace "dispatch-item-event!: failed to dispatch item event" e)))))
 
@@ -91,7 +91,7 @@
       (when (zero? (mod c 3))
         (let [^ServerPlayer player (.player event)]
           (try
-            (tutorial-platform/process-pending-activations! player)
+            (tutorial-hooks/process-pending-activations! player)
             (catch Throwable e
               (log/stacktrace "on-player-tick: process-pending-activations! failed" e))))))))
 

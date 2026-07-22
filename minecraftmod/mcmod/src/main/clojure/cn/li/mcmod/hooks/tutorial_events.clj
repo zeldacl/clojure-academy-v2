@@ -1,5 +1,5 @@
-(ns cn.li.mcmod.platform.tutorial-events
-  "Platform-neutral tutorial item-event and activation hooks.
+(ns cn.li.mcmod.hooks.tutorial-events
+  "Tutorial item-event and activation hook registry.
 
   State stored in Framework [:service :tutorial-events].
 

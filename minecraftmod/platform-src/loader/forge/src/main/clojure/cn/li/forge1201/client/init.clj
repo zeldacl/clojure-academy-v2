@@ -7,12 +7,12 @@
   (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
+            [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
@@ -171,7 +171,7 @@
   "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
-    (if-let [widget (platform-ui/create-widget arg payload)]
+    (if-let [widget (widget-registry/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
         (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
       (throw (ex-info "No reactive screen widget registered"
@@ -308,7 +308,7 @@
 
 (defn- install-tutorial-activated-bridge!
   []
-  (tutorial-platform/register-tutorial-activated-hook!
+  (tutorial-hooks/register-tutorial-activated-hook!
     (fn [player-uuid tut-id]
       (try
         (let [uuid (java.util.UUID/fromString player-uuid)

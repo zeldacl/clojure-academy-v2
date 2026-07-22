@@ -19,7 +19,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -321,7 +321,7 @@
   []
   (install/framework-once! ::init
     (fn []
-      (platform-ui/register-widget-factory! :ac/saved-position
+      (widget-registry/register-widget-factory! :ac/saved-position
         (fn [{:keys [player payload]}] (open-screen! player (or payload {}))))
       (log/info "Location Teleport reactive screen registered")))
   nil)

@@ -6,7 +6,7 @@
             [cn.li.mc1201.client.overlay.state :as overlay-state]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.platform.ui :as platform-ui]
+            [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.util.render :as render]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
@@ -105,7 +105,7 @@
   "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
-    (if-let [widget (platform-ui/create-widget arg payload)]
+    (if-let [widget (widget-registry/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
         (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
       (throw (ex-info "No reactive screen widget registered"

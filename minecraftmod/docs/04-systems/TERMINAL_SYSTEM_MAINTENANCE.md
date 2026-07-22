@@ -42,7 +42,7 @@
 
 ### 平台与 mcmod
 
-- Widget 注册：`mcmod.platform.ui/register-widget-factory!`，键 `:ac/terminal-gui`。
+- Widget 注册：`mcmod.client.ui.registry/register-widget-factory!`，键 `:ac/terminal-gui`。
 - 打开屏幕：`mcmod.client.platform-bridge/open-screen!` `:ac/terminal`（非已删的 `mcmod.platform.terminal-ui`）。
 - Forge **无** `terminal_screen_bridge`；简单 CGui 屏幕走通用 `cgui_screen_bridge`。
 - Gradle：`verifyTerminalBridgeInitOrchestration`、`verifyTerminalMessageIdsStatic` 约束上述边界。

@@ -14,7 +14,7 @@
    [cn.li.mcmod.i18n :as i18n]
    [cn.li.mcmod.runtime.install :as install]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
-   [cn.li.mcmod.platform.ui :as platform-ui]
+   [cn.li.mcmod.client.ui.registry :as widget-registry]
    [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions used by widget factory (defined later in file)
@@ -310,6 +310,6 @@
   []
   (install/framework-once! ::install-widget-factory
     (fn []
-      (platform-ui/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
+      (widget-registry/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
       (log/info "Skill-tree widget factory registered")))
   nil)

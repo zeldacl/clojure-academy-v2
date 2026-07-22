@@ -12,13 +12,13 @@
             [cn.li.ac.tutorial.model :as model]
             [cn.li.ac.tutorial.conditions :as conds]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.platform.tutorial-events :as tutorial-platform]
+            [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
             [cn.li.mcmod.util.log :as log]))
 
 (defn install-tutorial-activated-hook!
   "Register a callback that fires on tutorial activation."
   [hook-fn]
-  (tutorial-platform/register-tutorial-activated-hook! hook-fn))
+  (tutorial-hooks/register-tutorial-activated-hook! hook-fn))
 
 ;; Cache the tutorial-condition-map after first build
 (def ^:private tutorial-cond-map*
@@ -52,13 +52,13 @@
         (doseq [tut-id acts]
           (log/info "Tutorial activated by condition (batched)"
                     {:player uuid-str :tutorial (name tut-id)})
-          (try (tutorial-platform/notify-tutorial-activated! uuid-str tut-id)
+          (try (tutorial-hooks/notify-tutorial-activated! uuid-str tut-id)
                (catch Throwable e (log/warn "Tutorial activation processing failed:" (ex-message e)))))))))
 
 (defn register-platform-handlers!
   "Register tutorial business handlers with the mcmod platform bridge."
   []
-  (tutorial-platform/register-tutorial-handlers!
+  (tutorial-hooks/register-tutorial-handlers!
    {:on-item-event! on-item-event!
     :process-pending-activations! process-pending-activations!})
   (runtime-hooks/register-server-player-login-hook! auto-give/auto-give-on-login!)

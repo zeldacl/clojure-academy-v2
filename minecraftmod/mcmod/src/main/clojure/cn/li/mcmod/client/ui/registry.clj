@@ -1,5 +1,5 @@
-(ns cn.li.mcmod.platform.ui
-  "Platform-neutral UI widget factory registry.
+(ns cn.li.mcmod.client.ui.registry
+  "Client UI widget factory registry.
 
   Widget ids and payload schemas are content-owned; mcmod only stores and invokes
   registered factories.
