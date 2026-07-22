@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.ability-interferer.block
-  "Ability Interferer block - thin coordinator."
+  "Ability Interferer block registration and runtime wiring."
   (:require [cn.li.ac.block.ability-interferer.handlers :as interferer-handlers]
             [cn.li.ac.block.ability-interferer.logic :as interferer-logic]
             [cn.li.ac.block.machine.registration :as machine-reg]

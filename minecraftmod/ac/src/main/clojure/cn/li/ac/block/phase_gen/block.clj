@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.phase-gen.block
-  "Phase Generator block - thin coordinator."
+  "Phase Generator block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.phase-gen.handlers :as phase-handlers]
             [cn.li.ac.block.phase-gen.logic :as phase-logic]

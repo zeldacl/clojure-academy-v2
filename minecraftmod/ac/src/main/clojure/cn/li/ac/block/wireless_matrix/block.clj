@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.wireless-matrix.block
-  "Wireless Matrix block - thin coordinator."
+  "Wireless Matrix block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.wireless-matrix.handlers :as matrix-handlers]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]

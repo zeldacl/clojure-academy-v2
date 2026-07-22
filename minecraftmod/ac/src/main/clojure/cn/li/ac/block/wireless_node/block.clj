@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.wireless-node.block
-  "Wireless Node block - thin coordinator."
+  "Wireless Node block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.wireless-node.capability :as node-capability]
             [cn.li.ac.block.wireless-node.handlers :as node-handlers]

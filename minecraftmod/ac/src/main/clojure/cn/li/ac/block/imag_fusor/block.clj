@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.imag-fusor.block
-  "Imaginary Fusor block thin coordinator."
+  "Imaginary Fusor block registration and runtime wiring."
   (:require [cn.li.ac.block.imag-fusor.handlers :as fusor-handlers]
             [cn.li.ac.block.imag-fusor.logic :as fusor-logic]
             [cn.li.ac.block.imag-fusor.config :as fusor-config]

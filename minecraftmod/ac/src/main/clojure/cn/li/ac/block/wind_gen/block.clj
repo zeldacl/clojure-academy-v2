@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.wind-gen.block
-  "Wind Generator blocks thin coordinator."
+  "Wind Generator block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.block.wind-gen.handlers :as wind-handlers]

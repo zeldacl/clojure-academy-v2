@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.cat-engine.block
-  "Cat Engine block - thin coordinator."
+  "Cat Engine block registration and runtime wiring."
   (:require [cn.li.ac.block.cat-engine.logic :as cat-logic]
             [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.role-impls :as impls]

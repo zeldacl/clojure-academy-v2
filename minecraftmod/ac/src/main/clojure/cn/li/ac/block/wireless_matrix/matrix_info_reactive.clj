@@ -1,7 +1,6 @@
 (ns cn.li.ac.block.wireless-matrix.matrix-info-reactive
   "Reactive info-area for Wireless Matrix — SSID/password editing + INIT form.
-   Network-info policy/messaging (ported verbatim from the deleted
-   wireless_matrix/gui.clj) lives here since it's this namespace's only
+   Network-info policy/messaging lives here since this namespace is its only
    consumer."
   (:require [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.gui.info-area-reactive :as info-area]
@@ -15,7 +14,7 @@
            [cn.li.mcmod.ui.node INode]))
 
 ;; ============================================================================
-;; Data — network info (ported verbatim from the deleted wireless_matrix/gui.clj)
+;; Data — network info
 ;; ============================================================================
 
 (defrecord MatrixNetworkData

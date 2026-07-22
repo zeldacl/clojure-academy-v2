@@ -1,5 +1,5 @@
 (ns cn.li.ac.block.solar-gen.block
-  "Solar Generator block - thin coordinator."
+  "Solar Generator block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
             [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.config.modid :as modid]

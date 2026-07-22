@@ -15,8 +15,7 @@
 (defn- msg [action] (msg-registry/msg gui-type action))
 
 (defn- node-info-area-policy
-  "Compute editable policy for node info-area fields (ported verbatim from
-   the deleted wireless_node/gui.clj)."
+  "Compute editable policy for node info-area fields."
   [is-owner?]
   {:editable-node-name? (boolean is-owner?)
    :editable-password? (boolean is-owner?)})
@@ -27,8 +26,7 @@
   []
   (runtime-hooks/default-client-owner))
 
-;; Network-send helpers (matching matrix_info_reactive pattern: try/catch wrappers
-;; so any exception in action-payload or send-to-server is logged, not swallowed.)
+;; Network-send helpers log action-payload/send failures and keep UI state consistent.
 ;; On success, update the container atom directly so the value is correct on next rebuild.
 (defn send-change-name
   [container new-name]
