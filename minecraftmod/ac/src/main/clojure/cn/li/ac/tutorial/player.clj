@@ -10,12 +10,18 @@
             [cn.li.ac.tutorial.conditions :as conditions]
             [cn.li.ac.tutorial.model :as model]
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "ac_tutorial_v2")
 (def ^:private schema-version 2)
+
+(defn- player-persistent-data
+  [player]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :player-persistent-data :get! player)))
 
 ;; --- NBT helpers ---
 
@@ -49,14 +55,14 @@
 (defn state
   "Read tutorial state for a player. Returns fresh-state when not yet initialized."
   [player]
-  (or (load-state (player-pd/get-persistent-data! player))
+  (or (load-state (player-persistent-data player))
       (model/fresh-state)))
 
 (defn update-state!
   "Apply f to the player's tutorial state and write back to NBT.
   f receives the current state (or fresh-state) and should return the new state."
   [player f & args]
-  (let [tag (player-pd/get-persistent-data! player)
+  (let [tag (player-persistent-data player)
         current (or (load-state tag) (model/fresh-state))
         new-state (apply f current args)]
     (save-state! tag new-state)

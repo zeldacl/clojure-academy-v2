@@ -7,12 +7,18 @@
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.terminal.model :as model]
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.nbt :as nbt]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "ac_terminal_v2")
 (def ^:private schema-version 2)
+
+(defn- player-persistent-data
+  [player]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :player-persistent-data :get! player)))
 
 ;; --- NBT helpers ---
 
@@ -37,12 +43,12 @@
 
 (defn state
   [player]
-  (or (load-state (player-pd/get-persistent-data! player))
+  (or (load-state (player-persistent-data player))
       (model/fresh-state)))
 
 (defn update-state!
   [player f & args]
-  (let [tag (player-pd/get-persistent-data! player)
+  (let [tag (player-persistent-data player)
         current (or (load-state tag) (model/fresh-state))
         new-state (apply f current args)]
     (save-state! tag new-state)

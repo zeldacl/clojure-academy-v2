@@ -11,12 +11,18 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   )
 
 (def tutorial-item-id (modid/namespaced-path "tutorial"))
 (def ^:private nbt-key "ac_tutorial_acquired_v2")
+
+(defn- player-persistent-data
+  [player]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :player-persistent-data :get! player)))
 
 (defn- tutorial-acquired-in-nbt?
   [tag]
@@ -27,7 +33,7 @@
   Called with just the ServerPlayer, resolved in the lifecycle hook."
   [player]
   (when (tut-config/give-cloud-terminal-enabled?)
-    (let [tag (player-pd/get-persistent-data! player)]
+    (let [tag (player-persistent-data player)]
       (when-not (tutorial-acquired-in-nbt? tag)
         (try
           (when-let [stack (pitem/create-item-stack-by-id tutorial-item-id 1)]

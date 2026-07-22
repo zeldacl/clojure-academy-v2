@@ -5,7 +5,6 @@
             [cn.li.ac.terminal.player :as player]
             [cn.li.ac.test.support.nbt :as test-nbt]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mcmod.util.log :as log]))
 
 (defn- mock-player []
@@ -29,7 +28,7 @@
         (with-redefs [log/info (fn [& _])
                       log/warn (fn [& _])
                       uuid/player-uuid (fn [_] #uuid "00000000-0000-0000-0000-000000000001")
-                      player-pd/get-persistent-data! (fn [p] (:persistent-data p))]
+                      #'player/player-persistent-data (fn [p] (:persistent-data p))]
           (f))))))
 
 (deftest terminal-nbt-persistence-test

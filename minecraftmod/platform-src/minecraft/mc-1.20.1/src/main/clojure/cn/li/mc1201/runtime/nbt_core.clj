@@ -2,7 +2,8 @@
   "Incompatible player persistence v2: one native NBT root, schema 2."
   (:require [cn.li.mc1201.runtime.native-nbt :as native-nbt]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]
            [net.minecraft.nbt CompoundTag]))
@@ -14,7 +15,8 @@
 
 (defn- player-tag
   ^CompoundTag [^ServerPlayer player]
-  (player-pd/get-persistent-data! player))
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :player-persistent-data :get! player)))
 
 (defn- read-root
   [^CompoundTag player-data]

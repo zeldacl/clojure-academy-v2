@@ -5,7 +5,6 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as framework-platform]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
             [cn.li.mc1201.bootstrap.platform-init :as platform-init]
             [cn.li.mc1201.platform.class-access :as class-access]
             [cn.li.mc1201.platform.item-ops :as item-ops]
@@ -145,6 +144,9 @@
          (fw/fw-atom)
          :gui-open
          {:open-player-menu! (resolve-binding! 'open-player-menu!)})
-       (player-pd/install-player-persistent-data! (resolve-binding! 'player-persistent-data) "forge")
+       (framework-platform/install-adapter!
+         (fw/fw-atom)
+         :player-persistent-data
+         {:get! (resolve-binding! 'player-persistent-data)})
        (log/info "forge platform initialized for selected target")))
   nil)

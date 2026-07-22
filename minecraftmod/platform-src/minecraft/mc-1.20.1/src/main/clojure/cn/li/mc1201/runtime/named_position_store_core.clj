@@ -6,7 +6,8 @@
   selected by content-owned persistence descriptors."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]
@@ -25,7 +26,8 @@
 (defn- get-positions-tag
   ^CompoundTag [^ServerPlayer player]
   (when-let [store-key (nbt-store-key)]
-    (let [^CompoundTag persistent-data (player-pd/get-persistent-data! player)]
+    (let [^CompoundTag persistent-data (when-let [fw-atom (fw/fw-atom)]
+                                         (platform/call-adapter fw-atom :player-persistent-data :get! player))]
       (if (.contains persistent-data store-key)
         (.getCompound persistent-data store-key)
         (let [new-tag (CompoundTag.)]

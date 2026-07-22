@@ -6,11 +6,17 @@
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.media.catalog :as catalog]
             [cn.li.mcmod.platform.nbt :as nbt]
-            [cn.li.mcmod.platform.player-persistent-data :as player-pd]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "ac_media_v1")
+
+(defn- player-persistent-data
+  [player]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :player-persistent-data :get! player)))
 
 (defn- load-ids
   [tag]
@@ -27,7 +33,7 @@
 (defn acquired-ids
   "Set of acquired internal media ids (keywords) for `player`."
   [player]
-  (or (load-ids (player-pd/get-persistent-data! player)) #{}))
+  (or (load-ids (player-persistent-data player)) #{}))
 
 (defn is-acquired?
   [player media-id]
@@ -41,7 +47,7 @@
   [player media-id]
   (let [media-id (keyword media-id)]
     (when (catalog/internal-media? media-id)
-      (let [tag (player-pd/get-persistent-data! player)
+      (let [tag (player-persistent-data player)
             current (or (load-ids tag) #{})]
         (when-not (contains? current media-id)
           (log/info "Acquired media" media-id "for player:" (str (uuid/player-uuid player)))
