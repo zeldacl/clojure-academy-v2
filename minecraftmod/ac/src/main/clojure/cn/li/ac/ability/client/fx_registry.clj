@@ -44,9 +44,8 @@
 
 (defn dispatch-fx-channel! [ctx-id channel payload]
   (if-let [handler-fn (.get handlers channel)]
-    (do (log/info "[FX-DIAG] dispatching" {:channel channel :ctx-id ctx-id})
-        (handler-fn ctx-id channel payload) true)
-    (do (log/info "[FX-DIAG] no handler" {:channel channel}) false)))
+    (do (handler-fn ctx-id channel payload) true)
+    (do (log/debug "No FX handler for channel" channel) false)))
 
 (defn registered-channels []
   (set (.keySet handlers)))

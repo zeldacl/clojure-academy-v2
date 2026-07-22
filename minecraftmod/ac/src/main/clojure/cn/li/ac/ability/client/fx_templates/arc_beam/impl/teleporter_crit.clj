@@ -60,7 +60,7 @@
   [store]
   (or store {}))
 
-(defn- build-plan [_cp _hcp _tick]
+(defn- build-plan [_cp _hcp _tick & _more]
   nil)
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:teleporter-crit :level] [_ _] {})

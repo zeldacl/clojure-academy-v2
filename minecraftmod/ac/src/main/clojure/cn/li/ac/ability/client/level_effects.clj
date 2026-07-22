@@ -21,8 +21,7 @@
 (defn register-level-effect! [effect-id handler-map]
   (when-not (and (keyword? effect-id) (map? handler-map)
                  (fn? (:enqueue-state-fn handler-map))
-                 (fn? (:tick-state-fn handler-map))
-                 (fn? (:build-plan-fn handler-map)))
+                 (fn? (:tick-state-fn handler-map)))
     (throw (IllegalArgumentException.
              "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
@@ -94,12 +93,12 @@
    (let [results
          (keep (fn [eid]
                  (when-let [entry (.get registry eid)]
-                   (when (= eid :arc-gen)
-                     (log/info "[ARC-DIAG] level-effect-iter" {:eid eid :has-build-plan? (some? (:build-plan-fn entry))}))
                    (when-let [build-plan-fn (:build-plan-fn entry)]
-                     (if query-nearby-blocks-fn
-                       (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
-                       (build-plan-fn camera-pos hand-center-pos tick)))))
+                     (when-let [state (.get effect-states eid)]
+                       ;; skip build when no active state
+                       (if query-nearby-blocks-fn
+                         (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
+                         (build-plan-fn camera-pos hand-center-pos tick))))))
                effect-order)
          all-ops (vec (mapcat #(get % :ops) results))
          walk-speeds (keep #(get % :local-walk-speed) results)

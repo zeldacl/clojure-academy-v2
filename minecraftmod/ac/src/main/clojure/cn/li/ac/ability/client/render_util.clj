@@ -83,7 +83,7 @@
         outer-color (arc/pattern-color pattern :color-outer outer-alpha)
         inner-color (arc/pattern-color pattern :color-inner inner-alpha)
         line-color  (arc/pattern-color pattern :color-line line-alpha)
-        width       (double (or (:width pattern) 0.04))
+        width       (double (or (:width pattern) 0.15))
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
         ;; Per-segment quads

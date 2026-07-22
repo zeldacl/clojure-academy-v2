@@ -154,7 +154,6 @@
         base (base-meta owner-key* ctx-id channel payload)
         arc-life (long (or (:arc-life opts) 10))
         arc-pattern (:arc-pattern opts :weak)]
-    (log/info "[ARC-DIAG] enqueue" {:mode mode :has-start? (some? start) :has-end? (some? end) :owner-key owner-key*})
     (case mode
       :perform
       (cond
@@ -214,7 +213,7 @@
         items (mapcat val (:arcs (or state-snap (default-arc-state))))
         arc-pattern (:arc-pattern opts :weak)
         ops (mapcat #(arc-ops camera-pos % arc-pattern) items)]
-    (log/info "[ARC-DIAG] build-plan" {:effect-id effect-id :has-state? (some? state-snap) :item-count (count items) :op-count (count ops)})
+    (log/info "[ARC-DIAG] build-plan" {:effect-id effect-id :items (count items) :ops (count ops)})
     (when (seq ops)
       {:ops (vec ops)})))
 
@@ -245,7 +244,6 @@
 (defmethod effect-build-plan :default
   [effect-id camera-pos hand-center-pos tick & args]
   (when-let [entry (effect-entry effect-id)]
-    (log/info "[ARC-DIAG] effect-build-plan :default" {:effect-id effect-id :has-arc-opts? (some? (:arc-opts entry))})
     (when (:arc-opts entry)
       (apply build-arc-plan (merge {:effect-id effect-id} (:arc-opts entry))
              camera-pos hand-center-pos tick args))))
@@ -272,7 +270,6 @@
 
 (defn- dispatch-build-plan
   [effect-id camera-pos hand-center-pos tick & args]
-  (log/info "[ARC-DIAG] dispatch-build-plan" {:effect-id effect-id :has-cam? (some? camera-pos) :has-args? (some? args)})
   (apply effect-build-plan effect-id camera-pos hand-center-pos tick args))
 
 (defn- dispatch-clear-owner!
@@ -419,12 +416,15 @@
           (not= runtime :none)
           (as-> spec spec
                 (if (contains? #{:level :both} runtime)
-                  (assoc spec :level
-                         {:initial-state (resolve-initial-state opts :level)
-                          :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
-                          :tick-state-fn #(dispatch-tick! :level effect-id %1)
-                          :build-plan-fn (fn [eid cam pos tick & _more]
-                                           (dispatch-build-plan eid cam pos tick))})
+                  (let [level-base {:initial-state (resolve-initial-state opts :level)
+                                    :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
+                                    :tick-state-fn #(dispatch-tick! :level effect-id %1)}]
+                    (assoc spec :level
+                           (if arc-opts
+                             (assoc level-base :build-plan-fn
+                                    (fn [cam pos tick & _more]
+                                      (dispatch-build-plan effect-id cam pos tick)))
+                             level-base)))
                   spec)
                 (if (contains? #{:hand :both} runtime)
                   (assoc spec :hand

@@ -185,22 +185,33 @@
       (catch Exception _
         []))))
 
+(defn- color-int→channels
+  "Render ops store colours as packed ARGB ints (from arc/pattern-color);
+   Minecraft's VertexConsumer expects separate RGBA int channels."
+  [color-int]
+  (let [c (long color-int)]
+    [(unchecked-int (bit-shift-right c 24))                     ;; a
+     (unchecked-int (bit-and (bit-shift-right c 16) 0xFF))      ;; r
+     (unchecked-int (bit-and (bit-shift-right c 8)  0xFF))      ;; g
+     (unchecked-int (bit-and c 0xFF))]))                         ;; b
+
 (defn- emit-line-vertex!
   [^VertexConsumer vc mat x y z r g b a]
   (-> vc
       (.vertex mat (float x) (float y) (float z))
       (.color (int r) (int g) (int b) (int a))
+      (.normal 0.0 1.0 0.0)
       (.endVertex)))
 
 (defn- emit-line!
   [^VertexConsumer vc mat {:keys [^V3 p1 ^V3 p2 color]}]
-  (let [{:keys [r g b a]} color]
+  (let [[a r g b] (color-int→channels color)]
     (emit-line-vertex! vc mat (.-x p1) (.-y p1) (.-z p1) r g b a)
     (emit-line-vertex! vc mat (.-x p2) (.-y p2) (.-z p2) r g b a)))
 
 (defn- emit-quad-vertex!
   [^VertexConsumer vc mat ^V3 p u v color]
-  (let [{:keys [r g b a]} color]
+  (let [[a r g b] (color-int→channels color)]
     (-> vc
         (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
         (.color (int r) (int g) (int b) (int a))

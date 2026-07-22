@@ -69,7 +69,7 @@
                         {:r 255 :g 120 :b 40 :a alpha})))))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
+  [_camera-pos _hand-center-pos _tick & _more]
   (let [ops (->> (:marks (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :rad-intensify-mark))
                  vals
                  (mapcat mark-ops)
