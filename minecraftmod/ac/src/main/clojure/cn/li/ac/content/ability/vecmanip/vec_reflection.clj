@@ -16,7 +16,6 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-reflection)
@@ -74,7 +73,7 @@
   (cfg-lerp :cost.tick.cp (double (or exp 0.0))))
 
 (defn- get-player-position [player-id]
-  (teleportation/get-player-position* player-id))
+  (motion-effects/player-position player-id))
 
 (defn- entity-registry-id [entity]
   (or (:entity-id entity) (:type entity) ""))

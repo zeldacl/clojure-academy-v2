@@ -14,7 +14,6 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             ;; side-effectful require: ensures defskill runs and private fns are compiled
             [cn.li.ac.content.ability.vecmanip.vec-accel]))
 
@@ -136,12 +135,7 @@
 ;; 5. check-ground-raycast �?no teleportation platform (nil guard)
 ;; ---------------------------------------------------------------------------
 
-(deftest check-ground-raycast-no-teleport-position-test
-  (testing "when teleportation runtime is absent, returns nil without NPE"
-    (teleportation/call-with-runtime nil
-                                     (fn []
-                                       (is (nil? (check-ground-raycast "player-1"))
-            "nil teleportation platform �?get-player-position returns nil �?result nil")))))
+(deftest check-ground-raycast-no-teleport-position-test`n  (testing "when teleportation runtime is absent, returns nil without NPE"`n    (is (nil? (check-ground-raycast "player-1"))`n        "nil teleportation adapter returns nil position, so result is nil"))))
 
 ;; ---------------------------------------------------------------------------
 ;; 6. perform! �?launches player when can-perform? + init-vel both present
@@ -163,8 +157,8 @@
                       motion-effects/player-motion-available? (constantly true)
                       motion-effects/set-player-velocity!
                       (fn [pid x y z] (swap! vel-calls conj {:player-id pid :x x :y y :z z}))
-                      teleportation/available? (constantly true)
-                      teleportation/reset-fall-damage!*
+                      motion-effects/teleportation-available? (constantly true)
+                      motion-effects/reset-fall-damage!
                       (fn [_pid] nil)
                       skill-effects/set-main-cooldown! (fn [& _] nil)
                       skill-effects/add-skill-exp!     (fn [& _] nil)]

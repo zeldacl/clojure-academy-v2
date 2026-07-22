@@ -20,7 +20,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.util.math.vec3 :as vec3]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.network.server :as net-srv]
@@ -74,8 +74,8 @@
     false))
 
 (defn- current-pos [player-id]
-  (when (teleportation/available?)
-    (teleportation/get-player-position* player-id)))
+  (when (motion-effects/teleportation-available?)
+    (motion-effects/player-position player-id)))
 
 (defn- position-store-call [fn-key & args]
   (when-let [fw-atom (fw/fw-atom)]
@@ -237,7 +237,7 @@
   Returns {:success? boolean ...} for client RPC callbacks."
   [player-id location-name]
   (try
-    (if (or (not (teleportation/available?))
+    (if (or (not (motion-effects/teleportation-available?))
             (not (position-store-available?)))
       {:success? false :error :service-unavailable}
       (let [name* (norm-name location-name)
@@ -273,7 +273,7 @@
               {:success? false :error :err-cp :cp-cost cp}
 
               :else
-              (let [result (teleportation/teleport-with-entities!*
+              (let [result (motion-effects/teleport-with-entities!
                              player-id
                              (:world-id dest)
                              (:x dest)
@@ -283,7 +283,7 @@
                 (if-not (:success result)
                   {:success? false :error :teleport-failed}
                   (do
-                    (teleportation/reset-fall-damage!* player-id)
+                    (motion-effects/reset-fall-damage! player-id)
                     (add-exp! player-id (compute-exp-gain _dist))
                     (when cross-dim?
                       (ach-dispatcher/trigger-custom-event! player-id "teleporter.ignore_barrier"))

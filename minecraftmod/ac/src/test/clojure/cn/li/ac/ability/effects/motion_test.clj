@@ -1,7 +1,6 @@
 (ns cn.li.ac.ability.effects.motion-test
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.effects.motion :as motion]
-            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (deftest set-player-velocity-records-when-bound-test

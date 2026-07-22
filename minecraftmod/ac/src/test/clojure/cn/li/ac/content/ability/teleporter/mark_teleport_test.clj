@@ -13,7 +13,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (defn- with-mark-env [f]
   (skill-ctx/with-server-skill-context f))
@@ -75,14 +75,14 @@
                                                   :progression.exp-per-distance 0.00018
                                                   0.0))
                   entity/player-creative? (fn [_] false)
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [_]
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [_]
                                                        {:world-id "minecraft:overworld"
                                                         :x 1.0 :y 64.0 :z 3.0})
-                  teleportation/teleport-player!* (fn [player-id world-id x y z]
+                  motion-effects/teleport-player! (fn [player-id world-id x y z]
                                                     (swap! teleport-calls* conj [player-id world-id x y z])
                                                     true)
-                  teleportation/reset-fall-damage!* (fn [player-id]
+                  motion-effects/reset-fall-damage! (fn [player-id]
                                                       (swap! reset-calls* conj player-id)
                                                       true)
                   raycast/available? (constantly true)
@@ -122,9 +122,9 @@
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [& _] nil)
-                  teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)]
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [& _] nil)
+                  motion-effects/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)]
       (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-3" :player-ref :player :cost-ok? false))
     (is (= 0 @teleport-calls*))
     (is (= 0 @fx-calls*))
@@ -152,9 +152,9 @@
                                                   0.0))
                   raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [& _] nil)
-                  teleportation/teleport-player!* (fn [& _] (swap! teleport-calls* inc) true)
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [& _] nil)
+                  motion-effects/teleport-player! (fn [& _] (swap! teleport-calls* inc) true)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)]
       (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true))
@@ -179,10 +179,10 @@
                   skill-config/tunable-double (fn [_ _] 3.0)
                   raycast/available? (constantly false)
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [& _] nil)
-                  teleportation/teleport-player!* (fn [& _] false)
-                  teleportation/reset-fall-damage!* (fn [& _] true)
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [& _] nil)
+                  motion-effects/teleport-player! (fn [& _] false)
+                  motion-effects/reset-fall-damage! (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)
                   skill-effects/set-main-cooldown! (fn [& _] (swap! cooldown-calls* inc) nil)]
       (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-5" :player-ref :player :cost-ok? true))

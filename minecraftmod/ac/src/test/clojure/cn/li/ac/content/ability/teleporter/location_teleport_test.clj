@@ -6,7 +6,7 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.mcmod.network.server :as net-srv]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (defn- with-platform-runtimes!
   "Bind named-position-store adapter calls and teleportation platform fns to an
@@ -42,9 +42,9 @@
                 #'loc-tp/has-location?
                 (fn [player-uuid location-name]
                   (contains? (get @store player-uuid {}) location-name))
-                teleportation/available? (constantly true)
-                teleportation/get-player-position* (constantly current-pos)
-                teleportation/get-player-dimension* (constantly (:world-id current-pos))]
+                motion-effects/teleportation-available? (constantly true)
+                motion-effects/player-position (constantly current-pos)
+                motion-effects/player-dimension (constantly (:world-id current-pos))]
     (f)))
 
 (deftest save-query-delete-saved-location-roundtrip-test

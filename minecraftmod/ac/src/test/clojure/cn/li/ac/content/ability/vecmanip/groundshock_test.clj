@@ -9,9 +9,7 @@
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (deftest horizontal-look-fallback-toggle-test
   (testing "fallback disabled returns nil when no horizontal look vector is available"
@@ -28,8 +26,8 @@
   (testing "returns nil when teleportation runtime is unavailable"
     (is (nil? (@#'cn.li.ac.content.ability.vecmanip.groundshock/get-player-position "p1"))))
   (testing "reads position from teleportation protocol when available"
-    (with-redefs [teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [impl-player-id]
+    (with-redefs [motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [impl-player-id]
                                                        {:world-id "w" :x 1.0 :y 2.0 :z 3.0 :player impl-player-id})]
       (is (= {:world-id "w" :x 1.0 :y 2.0 :z 3.0 :player "p1"}
              (@#'cn.li.ac.content.ability.vecmanip.groundshock/get-player-position "p1"))))))
@@ -70,7 +68,7 @@
                                                :charge.min-ticks 5
                                                0))
                   skill-effects/skill-exp (fn [_ _] 0.5)
-                  teleportation/available? (constantly false)
+                  motion-effects/teleportation-available? (constantly false)
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   fx/send! send!
@@ -102,8 +100,8 @@
                                                0))
                   skill-config/tunable-boolean (fn [_ _] false)
                   skill-effects/skill-exp (fn [_ _] 0.5)
-                  teleportation/available? (constantly true)
-                  teleportation/get-player-position* (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
                   raycast/get-player-look-vector* (fn [_] {:x 0.0 :y 1.0 :z 0.0})
                   fx/send! send!

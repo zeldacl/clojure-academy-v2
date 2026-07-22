@@ -16,7 +16,6 @@
             [cn.li.mc1201.runtime.entity-query-core :as entity-query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.teleportation :as ptp]
             [cn.li.mcmod.platform.raycast :as prc]
             [cn.li.mcmod.platform.entity :as pentity]))
 
@@ -42,9 +41,11 @@
                                :potion-effects
                                (potion-effects-core/create-potion-effects server-context/get-server))))
    (adapter-registry/step :teleportation
-                          #(install-bound-adapter! ptp/install-teleportation!
-                                                   teleportation-core/create-teleportation
-                                                   "Forge teleportation"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :teleportation
+                               (teleportation-core/create-teleportation server-context/get-server))))
    (adapter-registry/step :named-position-store
                           #(when-let [fw-atom (fw/fw-atom)]
                              (platform/install-adapter!

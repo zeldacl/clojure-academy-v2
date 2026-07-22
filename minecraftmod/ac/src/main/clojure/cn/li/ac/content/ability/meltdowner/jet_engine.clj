@@ -18,7 +18,6 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
 
@@ -71,8 +70,8 @@
           (geom/v+ eye (geom/v* dir jet-target-range)))))))
 
 (defn- get-player-pos [player-id]
-  (or (when (teleportation/available?)
-        (teleportation/get-player-position* player-id))
+  (or (when (motion-effects/teleportation-available?)
+        (motion-effects/player-position player-id))
       (eye-pos-safe player-id)))
 
 (defn- update-skill-state-root!
@@ -157,13 +156,13 @@
         (when (zero? trigger-ticks)
           (when (motion-effects/player-motion-available?)
             (motion-effects/dismount-riding! player-id)))
-        (when (teleportation/available?)
-          (teleportation/teleport-player!* player-id
+        (when (motion-effects/teleportation-available?)
+          (motion-effects/teleport-player! player-id
                                          world-id
                                          (:x next-pos)
                                          (:y next-pos)
                                          (:z next-pos))
-          (teleportation/reset-fall-damage!* player-id))
+          (motion-effects/reset-fall-damage! player-id))
         (when (and (motion-effects/player-motion-available?)
                    (:velocity st))
           (let [{:keys [x y z]} (:velocity st)]

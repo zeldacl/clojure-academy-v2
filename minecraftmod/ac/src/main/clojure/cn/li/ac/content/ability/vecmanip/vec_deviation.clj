@@ -24,7 +24,6 @@
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -70,7 +69,7 @@
 (defn- get-player-position
   "Get player position from teleportation protocol."
   [player-id]
-  (teleportation/get-player-position* player-id))
+  (motion-effects/player-position player-id))
 
 (defn- entity-registry-id
   [entity]

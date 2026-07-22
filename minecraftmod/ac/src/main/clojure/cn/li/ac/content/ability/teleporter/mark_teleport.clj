@@ -48,7 +48,7 @@
 
             [cn.li.mcmod.platform.raycast :as raycast]
 
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
 
             [cn.li.mcmod.platform.world :as world]
 
@@ -215,9 +215,9 @@
 
         cp (current-cp player-id)
 
-        player-pos (when (teleportation/available?)
+        player-pos (when (motion-effects/teleportation-available?)
 
-                     (teleportation/get-player-position* player-id))
+                     (motion-effects/player-position player-id))
 
         look-vec (when (raycast/available?)
 
@@ -421,7 +421,7 @@
 
         (ctx-skill/replace-skill-state! ctx-id {:hold-ticks hold-ticks :has-target false}))
 
-      (when (and target (teleportation/available?))
+      (when (and target (motion-effects/teleportation-available?))
 
         (let [distance (double (:distance target))
 
@@ -429,7 +429,7 @@
 
           (when (and cost-ok? (>= distance (cfg-double :targeting.min-distance)))
 
-            (let [success (teleportation/teleport-player!* player-id
+            (let [success (motion-effects/teleport-player! player-id
 
                                                           (:world-id target)
 
@@ -451,7 +451,7 @@
 
                                  (or (build-target-fx-payload target) {})))
 
-                (teleportation/reset-fall-damage!* player-id)
+                (motion-effects/reset-fall-damage! player-id)
 
                 (add-exp! player-id (* (cfg-double :progression.exp-per-distance)
 

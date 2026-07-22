@@ -13,7 +13,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.potion :as potion-effects]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- reduce-damage-fn []
@@ -134,7 +134,7 @@
                                                     :combat.front-cone-dot 0.5
                                                     :combat.touch-radius 3.0
                                                     0.0))
-                    teleportation/get-player-position* (fn [_]
+                    motion-effects/player-position (fn [_]
                                                          {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                     raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                     world-effects/available? (constantly true)
@@ -165,7 +165,7 @@
                         toggle/is-toggle-active? (fn [_ _] true)
                         toggle/remove-toggle! (fn [& _] (swap! remove-calls* inc))
                         skill-effects/skill-exp (fn [& _] 0.0)
-                        teleportation/get-player-position* (fn [_]
+                        motion-effects/player-position (fn [_]
                                                              {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                         raycast/get-player-look-vector* (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                         skill-config/lerp-int (fn [_skill-id field-id _exp]

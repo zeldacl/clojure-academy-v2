@@ -19,7 +19,6 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.raycast :as prc]
-            [cn.li.mcmod.platform.teleportation :as ptp]
             [cn.li.mcmod.hooks.core :as power-runtime]))
 
 (defn- install-bound-adapter!
@@ -49,9 +48,11 @@
                                                    "Fabric raycast"))
    (adapter-registry/step :world-effects runtime-world-effects/install-world-effects!)
    (adapter-registry/step :teleportation
-                          #(install-bound-adapter! ptp/install-teleportation!
-                                                   teleportation-core/create-teleportation
-                                                   "Fabric teleportation"))
+                          #(when-let [fw-atom (fw/fw-atom)]
+                             (platform/install-adapter!
+                               fw-atom
+                               :teleportation
+                               (teleportation-core/create-teleportation server-context/get-server))))
    (adapter-registry/step :named-position-store
                           #(when-let [fw-atom (fw/fw-atom)]
                              (platform/install-adapter!

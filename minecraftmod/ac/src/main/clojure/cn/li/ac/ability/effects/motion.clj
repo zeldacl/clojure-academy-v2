@@ -1,7 +1,6 @@
 (ns cn.li.ac.ability.effects.motion
   (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.mcmod.framework.platform :as platform]))
 
 (defn player-motion-available?
   []
@@ -80,6 +79,43 @@
     (platform/call-adapter fw-atom :entity-motion :get-velocity
                            world-id entity-uuid)))
 
+(defn teleportation-available?
+  []
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/get-adapter fw-atom :teleportation))))
+
+(defn teleport-player!
+  [player-uuid world-id x y z]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :teleportation :teleport-player!
+                            player-uuid world-id x y z))))
+
+(defn teleport-with-entities!
+  [player-uuid world-id x y z radius]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :teleportation :teleport-with-entities!
+                            player-uuid world-id x y z radius))))
+
+(defn reset-fall-damage!
+  [player-uuid]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :teleportation :reset-fall-damage!
+                            player-uuid))))
+
+(defn player-position
+  [player-uuid]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :teleportation :get-player-position player-uuid)))
+
+(defn player-dimension
+  [player-uuid]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :teleportation :get-player-dimension player-uuid)))
+
 (defn execute-set-player-velocity!
   [evt {:keys [x y z]}]
   (when (player-motion-available?)
@@ -107,6 +143,6 @@
 
 (defn execute-reset-fall-damage!
   [evt _params]
-  (when (teleportation/available?)
-    (teleportation/reset-fall-damage!* (:player-id evt)))
+  (when (teleportation-available?)
+    (reset-fall-damage! (:player-id evt)))
   evt)

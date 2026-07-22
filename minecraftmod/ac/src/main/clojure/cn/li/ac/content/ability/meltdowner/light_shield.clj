@@ -25,7 +25,7 @@
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
@@ -88,7 +88,7 @@
   (ctx-skill/update-skill-state-root! ctx-id f))
 
 (defn- get-player-position [player-id]
-  (teleportation/get-player-position* player-id))
+  (motion-effects/player-position player-id))
 
 (defn- in-front-cone?
   "Check if entity is within 60° cone in front of player."

@@ -20,7 +20,6 @@
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]))
@@ -261,9 +260,9 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   fx/send! send!
-                  teleportation/available? (constantly true)
-                  teleportation/teleport-player!* (fn [& _] true)
-                  teleportation/reset-fall-damage!* (fn [& _] true)
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/teleport-player! (fn [& _] true)
+                  motion-effects/reset-fall-damage! (fn [& _] true)
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/dismount-riding! (fn [& _] true)
                   motion-effects/set-player-velocity! (fn [& _] true)

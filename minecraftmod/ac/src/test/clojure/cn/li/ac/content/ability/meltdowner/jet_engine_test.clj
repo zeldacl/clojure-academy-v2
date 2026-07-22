@@ -12,8 +12,7 @@
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- context-mocks [initial]
   (let [ctx* (atom initial)
@@ -65,10 +64,10 @@
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 1.0})
-                  teleportation/available? (constantly true)
-                  teleportation/teleport-player!* (fn [& _] true)
-                  teleportation/reset-fall-damage!* (fn [& _] true)
-                  teleportation/get-player-position* (fn [_] {:world-id "w" :x 1.0 :y 64.0 :z 1.0})]
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/teleport-player! (fn [& _] true)
+                  motion-effects/reset-fall-damage! (fn [& _] true)
+                  motion-effects/player-position (fn [_] {:world-id "w" :x 1.0 :y 64.0 :z 1.0})]
       (cb/apply-invoke jet/jet-engine-up! :player-id "p1" :ctx-id "ctx-1")
       (is (= :triggering (get-in @ctx* [:skill-state :phase])))
       (is (seq @exp-calls*))
@@ -116,12 +115,12 @@
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! marks* conj [player-id target-id fx-context])
                                            true)
-                  teleportation/available? (constantly true)
-                  teleportation/teleport-player!* (fn [& args]
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/teleport-player! (fn [& args]
                                                     (when (>= (count args) 5)
                                                       (swap! teleport-calls* conj [(nth args 2) (nth args 3) (nth args 4)]))
                                                     true)
-                  teleportation/reset-fall-damage!* (fn [& _] true)
+                  motion-effects/reset-fall-damage! (fn [& _] true)
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/dismount-riding! (fn [& _] true)
                   motion-effects/player-velocity (fn [& _] {:x 0.0 :y 0.0 :z 0.0})

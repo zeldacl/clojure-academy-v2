@@ -25,7 +25,7 @@
                         [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -55,7 +55,7 @@
   (scaling/clamp-exp (double (or exp 0.0))))
 
 (defn- get-player-position [player-id]
-  (or (teleportation/get-player-position* player-id)
+  (or (motion-effects/player-position player-id)
       (skill-effects/player-path player-id :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
 
 (defn- get-world-id [player-id]

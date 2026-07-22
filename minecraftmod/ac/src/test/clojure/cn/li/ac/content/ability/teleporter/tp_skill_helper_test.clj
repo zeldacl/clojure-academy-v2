@@ -10,7 +10,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as h]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]))
+            [cn.li.ac.ability.effects.motion :as motion-effects]))
 
 (use-fixtures :each ps-fix/clean-player-states-fixture)
 
@@ -40,11 +40,11 @@
 (deftest teleport-to-success-and-fall-reset-test
   (let [tp-calls (atom [])
         reset-calls (atom [])]
-    (with-redefs [teleportation/available? (constantly true)
-                  teleportation/teleport-player!* (fn [pid wid x y z]
+    (with-redefs [motion-effects/teleportation-available? (constantly true)
+                  motion-effects/teleport-player! (fn [pid wid x y z]
                                                     (swap! tp-calls conj [pid wid x y z])
                                                     true)
-                  teleportation/reset-fall-damage!* (fn [pid]
+                  motion-effects/reset-fall-damage! (fn [pid]
                                                       (swap! reset-calls conj pid)
                                                       true)]
       (is (true? (h/teleport-to! "u1" "minecraft:overworld" 1.0 2.0 3.0))))
@@ -54,11 +54,11 @@
 (deftest teleport-to-failure-skips-fall-reset-test
   (let [tp-called? (atom false)
         reset-called? (atom false)]
-    (with-redefs [teleportation/available? (constantly true)
-                  teleportation/teleport-player!* (fn [& _]
+    (with-redefs [motion-effects/teleportation-available? (constantly true)
+                  motion-effects/teleport-player! (fn [& _]
                                                     (reset! tp-called? true)
                                                     false)
-                  teleportation/reset-fall-damage!* (fn [& _]
+                  motion-effects/reset-fall-damage! (fn [& _]
                                                       (reset! reset-called? true)
                                                       true)]
       (is (false? (h/teleport-to! "u1" "w" 0 0 0))))

@@ -13,7 +13,6 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :vec-accel)
@@ -26,8 +25,8 @@
     (* (Math/sin prog) (cfg-double :movement.max-velocity))))
 
 (defn- get-player-position [player-id]
-  (when (teleportation/available?)
-    (teleportation/get-player-position* player-id)))
+  (when (motion-effects/teleportation-available?)
+    (motion-effects/player-position player-id)))
 
 (defn- check-ground-raycast [player-id]
   (when (raycast/available?)
@@ -88,8 +87,8 @@
         (let [{:keys [x y z]} init-vel]
           (when (motion-effects/player-motion-available?)
             (motion-effects/set-player-velocity! player-id x y z))
-          (when (teleportation/available?)
-            (teleportation/reset-fall-damage!* player-id))
+          (when (motion-effects/teleportation-available?)
+            (motion-effects/reset-fall-damage! player-id))
           (skill-effects/set-main-cooldown! player-id :vec-accel
                                           (cfg-lerp-int :cooldown.ticks exp))
           (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))

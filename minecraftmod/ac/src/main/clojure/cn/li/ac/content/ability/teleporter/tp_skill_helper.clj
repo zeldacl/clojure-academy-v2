@@ -10,7 +10,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (declare player-look-vec player-position)
@@ -29,18 +29,18 @@
   "Teleport player-id to (x y z) in world-id.
   Returns true if successful."
   [player-id world-id x y z]
-  (when (teleportation/available?)
-    (let [result (teleportation/teleport-player!* player-id world-id
+  (when (motion-effects/teleportation-available?)
+    (let [result (motion-effects/teleport-player! player-id world-id
                                                  (double x) (double y) (double z))]
       (when result
-        (teleportation/reset-fall-damage!* player-id))
+        (motion-effects/reset-fall-damage! player-id))
       result)))
 
 (defn reset-fall-damage!
   "Reset player's fall damage state. Returns true on success."
   [player-id]
-  (when (teleportation/available?)
-    (teleportation/reset-fall-damage!* player-id)))
+  (when (motion-effects/teleportation-available?)
+    (motion-effects/reset-fall-damage! player-id)))
 
 (defn raycast-combined
   "Raycast from world position and direction, returning first hit map or nil."
@@ -115,6 +115,6 @@
     (raycast/get-player-look-vector* player-id)))
 
 (defn player-position [player-id]
-  (when (teleportation/available?)
-    (teleportation/get-player-position* player-id)))
+  (when (motion-effects/teleportation-available?)
+    (motion-effects/player-position player-id)))
 
