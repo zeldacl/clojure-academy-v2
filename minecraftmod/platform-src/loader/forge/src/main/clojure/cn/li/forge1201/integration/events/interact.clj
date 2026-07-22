@@ -8,7 +8,9 @@
             [cn.li.forge1201.integration.events.gui-open-port :as gui-open-port]
             [cn.li.forge1201.runtime.owner :as runtime-owner])
   (:import [net.minecraftforge.event.entity.player PlayerInteractEvent$RightClickBlock
-            PlayerInteractEvent$LeftClickBlock]
+            PlayerInteractEvent$LeftClickBlock
+            PlayerInteractEvent$EntityInteract
+            AttackEntityEvent]
            [net.minecraft.world InteractionHand]))
 
 (defn- is-gui-result?
@@ -77,3 +79,29 @@
     (catch Throwable t
       (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] EXCEPTION:" (ex-message t))
       (log/error "[FORGE-LEFT-CLICK-BLOCK-EVENT] Stack trace:" t))))
+
+(defn handle-attack-entity-event
+  [^AttackEntityEvent evt]
+  (try
+    (let [player (.getEntity evt)]
+      (when (event-handlers/runtime-active-result?
+              (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
+                #(event-handlers/handle-entity-attack {:player player})))
+        (event-apply/cancel-event! evt)))
+    (catch Throwable t
+      (log/error "[FORGE-ATTACK-ENTITY-EVENT] EXCEPTION:" (ex-message t))
+      (log/error "[FORGE-ATTACK-ENTITY-EVENT] Stack trace:" t))))
+
+(defn handle-entity-interact-event
+  [^PlayerInteractEvent$EntityInteract evt]
+  (try
+    (let [player (.getEntity evt)
+          hand (.getHand evt)]
+      (when (= hand InteractionHand/MAIN_HAND)
+        (when (event-handlers/runtime-active-result?
+                (runtime-owner/with-player-owner player (if (.isClientSide (.level player)) :client :server)
+                  #(event-handlers/handle-entity-interact {:player player})))
+          (event-apply/cancel-player-interact-fail! evt))))
+    (catch Throwable t
+      (log/error "[FORGE-ENTITY-INTERACT-EVENT] EXCEPTION:" (ex-message t))
+      (log/error "[FORGE-ENTITY-INTERACT-EVENT] Stack trace:" t))))

@@ -66,3 +66,25 @@
     (catch Throwable t
       (log/error "Error handling fabric attack block:" (.getMessage t))
       InteractionResult/PASS)))
+
+(defn handle-attack-entity
+  [player _world _hand _entity _hit-result]
+  (try
+    (if (event-handlers/runtime-active-result?
+          (event-handlers/handle-entity-attack {:player player}))
+      InteractionResult/FAIL
+      InteractionResult/PASS)
+    (catch Throwable t
+      (log/error "Error handling fabric attack entity:" (.getMessage t))
+      InteractionResult/PASS)))
+
+(defn handle-use-entity
+  [player _world _hand _entity _hit-result]
+  (try
+    (if (event-handlers/runtime-active-result?
+          (event-handlers/handle-entity-interact {:player player}))
+      InteractionResult/FAIL
+      InteractionResult/PASS)
+    (catch Throwable t
+      (log/error "Error handling fabric use entity:" (.getMessage t))
+      InteractionResult/PASS)))

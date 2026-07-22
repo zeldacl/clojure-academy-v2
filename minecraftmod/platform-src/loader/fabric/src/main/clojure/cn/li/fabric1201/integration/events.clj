@@ -23,6 +23,8 @@
             ServerTickEvents$EndWorldTick]
            [net.fabricmc.fabric.api.event.player UseBlockCallback
             AttackBlockCallback
+            AttackEntityCallback
+            UseEntityCallback
             PlayerBlockBreakEvents$Before]))
 
 (defn handle-block-place-mixin
@@ -47,6 +49,16 @@
                  (reify AttackBlockCallback
                    (interact [_ player world hand pos direction]
                      (interact-events/handle-attack-block player world hand pos direction))))
+
+      (.register AttackEntityCallback/EVENT
+                 (reify AttackEntityCallback
+                   (interact [_ player world hand entity hit-result]
+                     (interact-events/handle-attack-entity player world hand entity hit-result))))
+
+      (.register UseEntityCallback/EVENT
+                 (reify UseEntityCallback
+                   (interact [_ player world hand entity hit-result]
+                     (interact-events/handle-use-entity player world hand entity hit-result))))
 
       (.register net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents/BEFORE
                  (reify PlayerBlockBreakEvents$Before

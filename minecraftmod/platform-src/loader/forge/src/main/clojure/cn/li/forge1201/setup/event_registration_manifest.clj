@@ -26,6 +26,10 @@
     :handler interact-events/handle-right-click-event}
    {:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$LeftClickBlock
     :handler interact-events/handle-left-click-block-event}
+   {:listener-class net.minecraftforge.event.entity.player.AttackEntityEvent
+    :handler interact-events/handle-attack-entity-event}
+   {:listener-class net.minecraftforge.event.entity.player.PlayerInteractEvent$EntityInteract
+    :handler interact-events/handle-entity-interact-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$EntityPlaceEvent
     :handler block-events/handle-block-place-event}
    {:listener-class net.minecraftforge.event.level.BlockEvent$BreakEvent

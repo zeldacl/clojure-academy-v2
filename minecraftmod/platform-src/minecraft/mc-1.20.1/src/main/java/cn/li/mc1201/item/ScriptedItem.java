@@ -12,44 +12,35 @@ import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ScriptedItem extends Item {
     private final int enchantability;
     private final List<String> tooltipLines;
-    @Nullable
     private final IFn onUseCallback;
 
-    /** Backward-compatible: items without a DSL right-click callback. */
-    public ScriptedItem(Properties properties, int enchantability, List<String> tooltipLines) {
-        this(properties, enchantability, tooltipLines, null);
-    }
-
-    /** Primary constructor: callback is a per-item closure built in item_properties.clj
+    /** Callback is a per-item closure built in item_properties.clj
      *  that encapsulates the DSL :on-use and :on-right-click handlers. */
     public ScriptedItem(Properties properties, int enchantability,
-                        List<String> tooltipLines, @Nullable IFn onUseCallback) {
+                        List<String> tooltipLines, IFn onUseCallback) {
         super(properties);
         this.enchantability = Math.max(0, enchantability);
         this.tooltipLines = tooltipLines == null ? List.of() : List.copyOf(tooltipLines);
-        this.onUseCallback = onUseCallback;
+        this.onUseCallback = Objects.requireNonNull(onUseCallback, "onUseCallback");
     }
 
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player,
                                                    InteractionHand hand) {
-        if (this.onUseCallback != null) {
-            Object result = this.onUseCallback.invoke(level, player, hand);
-            if (result instanceof InteractionResultHolder<?> holder) {
-                @SuppressWarnings("unchecked")
-                InteractionResultHolder<ItemStack> typed =
-                    (InteractionResultHolder<ItemStack>) holder;
-                return typed;
-            }
+        Object result = this.onUseCallback.invoke(level, player, hand);
+        if (result instanceof InteractionResultHolder<?> holder) {
+            @SuppressWarnings("unchecked")
+            InteractionResultHolder<ItemStack> typed =
+                (InteractionResultHolder<ItemStack>) holder;
+            return typed;
         }
         // No callback or callback returned non-standard — fall through to vanilla.
-        // MUST call super.use(), not return a hardcoded value, to preserve
-        // vanilla item lifecycles (food eating, bow charging, etc.).
-        return super.use(level, player, hand);
+        throw new IllegalStateException("ScriptedItem use callback must return InteractionResultHolder");
     }
 
     @Override

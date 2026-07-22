@@ -52,6 +52,23 @@
   (when (runtime-active-event? event-data)
     (runtime-active-result :left-click)))
 
+(defn handle-entity-attack
+  "Shared entity-attack policy. Runtime-active players cannot attack entities
+  with vanilla LMB — upstream AcademyCraft overrides the attack KeyBinding
+  itself while ability mode is active, suppressing entity attack uniformly
+  alongside block breaking."
+  [event-data]
+  (when (runtime-active-event? event-data)
+    (runtime-active-result :attack-entity)))
+
+(defn handle-entity-interact
+  "Shared entity-interact policy. Runtime-active players cannot interact with
+  entities via vanilla RMB (trading, mounting, feeding, etc.) — mirrors
+  handle-entity-attack for the use/interact KeyBinding."
+  [event-data]
+  (when (runtime-active-event? event-data)
+    (runtime-active-result :entity-interact)))
+
 (defn handle-block-place
   "Shared block place handler with runtime-active policy."
   [event-data dispatcher-fn log-prefix]
