@@ -93,10 +93,13 @@
   ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
    (let [results
          (keep (fn [eid]
-                 (when-let [build-plan-fn (:build-plan-fn (.get registry eid))]
-                   (if query-nearby-blocks-fn
-                     (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
-                     (build-plan-fn camera-pos hand-center-pos tick))))
+                 (when-let [entry (.get registry eid)]
+                   (when (= eid :arc-gen)
+                     (log/info "[ARC-DIAG] level-effect-iter" {:eid eid :has-build-plan? (some? (:build-plan-fn entry))}))
+                   (when-let [build-plan-fn (:build-plan-fn entry)]
+                     (if query-nearby-blocks-fn
+                       (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
+                       (build-plan-fn camera-pos hand-center-pos tick)))))
                effect-order)
          all-ops (vec (mapcat #(get % :ops) results))
          walk-speeds (keep #(get % :local-walk-speed) results)

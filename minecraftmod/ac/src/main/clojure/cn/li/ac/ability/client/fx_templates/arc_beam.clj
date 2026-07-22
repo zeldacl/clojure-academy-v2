@@ -9,7 +9,8 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.mcmod.runtime.install :as install]))
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effect registry (populated by build-spec)
@@ -74,6 +75,36 @@
 (defmulti effect-transform-fn
   (fn [effect-id] effect-id))
 
+(defn validate-multimethod-arity!
+  "Check every NON-VARIADIC defmethod of `mf` against `dispatch-arity`.
+  Variadic defmethods (with `& args`) accept extra args from the dispatch
+  fn beyond their named params, so a lower required-arity is legitimate.
+  Only flag methods that are FIXED-ARITY and don't match — those are the
+  ones that corrupt the dispatch table."
+  [label mf dispatch-arity]
+  (let [mis (keep (fn [[dv method]]
+                    (let [ma (if (instance? clojure.lang.RestFn method)
+                               (.getRequiredArity ^clojure.lang.RestFn method)
+                               dispatch-arity)]  ;; non-RestFn → skip check
+                      (when (< ma (dec dispatch-arity))
+                        {:dispatch-value dv :method-arity ma :min-acceptable (dec dispatch-arity)})))
+                  (.getMethodTable ^clojure.lang.MultiFn mf))]
+    (when (seq mis)
+      (throw (ex-info (str label ": defmethod arity mismatch — "
+                           (count mis) " FIXED-ARITY method(s) have wrong arity "
+                           "(the MULTIMETHOD dispatch table is CORRUPTED, "
+                           "ALL calls silently return nil)")
+                      {:multimethod label :mismatches mis})))))
+
+(defn validate-fx-multimethods!
+  "Call after all impl namespaces are loaded (post init-discovered-fx!).
+  Catches the groundshock-class bug where a defmethod with wrong arity
+  silently breaks every effect's build-plan / clear / transform."
+  []
+  (validate-multimethod-arity! "effect-build-plan"   effect-build-plan   4)
+  (validate-multimethod-arity! "effect-clear-owner!"  effect-clear-owner! 3)
+  (validate-multimethod-arity! "effect-transform-fn"  effect-transform-fn  1))
+
 ;; ---------------------------------------------------------------------------
 ;; Default arc state / arc implementation
 ;; ---------------------------------------------------------------------------
@@ -123,6 +154,7 @@
         base (base-meta owner-key* ctx-id channel payload)
         arc-life (long (or (:arc-life opts) 10))
         arc-pattern (:arc-pattern opts :weak)]
+    (log/info "[ARC-DIAG] enqueue" {:mode mode :has-start? (some? start) :has-end? (some? end) :owner-key owner-key*})
     (case mode
       :perform
       (cond
@@ -178,9 +210,11 @@
 (defn- build-arc-plan
   [opts camera-pos _hand-center-pos _tick]
   (let [effect-id (:effect-id opts)
-        items (mapcat val (:arcs (or (level-effects/effect-state-snapshot effect-id) (default-arc-state))))
+        state-snap (level-effects/effect-state-snapshot effect-id)
+        items (mapcat val (:arcs (or state-snap (default-arc-state))))
         arc-pattern (:arc-pattern opts :weak)
         ops (mapcat #(arc-ops camera-pos % arc-pattern) items)]
+    (log/info "[ARC-DIAG] build-plan" {:effect-id effect-id :has-state? (some? state-snap) :item-count (count items) :op-count (count ops)})
     (when (seq ops)
       {:ops (vec ops)})))
 
@@ -211,6 +245,7 @@
 (defmethod effect-build-plan :default
   [effect-id camera-pos hand-center-pos tick & args]
   (when-let [entry (effect-entry effect-id)]
+    (log/info "[ARC-DIAG] effect-build-plan :default" {:effect-id effect-id :has-arc-opts? (some? (:arc-opts entry))})
     (when (:arc-opts entry)
       (apply build-arc-plan (merge {:effect-id effect-id} (:arc-opts entry))
              camera-pos hand-center-pos tick args))))
@@ -237,6 +272,7 @@
 
 (defn- dispatch-build-plan
   [effect-id camera-pos hand-center-pos tick & args]
+  (log/info "[ARC-DIAG] dispatch-build-plan" {:effect-id effect-id :has-cam? (some? camera-pos) :has-args? (some? args)})
   (apply effect-build-plan effect-id camera-pos hand-center-pos tick args))
 
 (defn- dispatch-clear-owner!

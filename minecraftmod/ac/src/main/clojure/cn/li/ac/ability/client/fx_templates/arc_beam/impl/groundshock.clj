@@ -144,5 +144,5 @@
   [_ _ store ctx-id channel owner-key payload] (hand-enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :level] [_ _ store] (level-tick! store))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :hand] [_ _ store] (hand-tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :groundshock [_ _ _] nil)
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :groundshock [_ _ _ & _more] nil)
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :groundshock [_ store owner-key] (update store :hand-state dissoc owner-key))
