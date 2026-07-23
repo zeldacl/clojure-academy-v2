@@ -113,10 +113,20 @@
                                                      (double (:z look-vec))
                                                      (double range)))
               hit-type   (:hit-type hit-result)
+              ;; Visual endpoint should land on the precise raycast surface
+              ;; point (hit-x/y/z), not the block's integer corner or the
+              ;; entity's feet position (:x/:y/:z) — see
+              ;; cn.li.ac.ability.util.attack/block-impact-point and
+              ;; entity-impact-point for the same convention.
               hit-pos    (when hit-result
-                           {:x (:x hit-result)
-                            :y (:y hit-result)
-                            :z (:z hit-result)})]
+                           (case hit-type
+                             :entity {:x (double (or (:x hit-result) 0.0))
+                                      :y (+ (double (or (:y hit-result) 0.0))
+                                            (double (or (:eye-height hit-result) 0.0)))
+                                      :z (double (or (:z hit-result) 0.0))}
+                             {:x (double (or (:hit-x hit-result) (:x hit-result) 0.0))
+                              :y (double (or (:hit-y hit-result) (:y hit-result) 0.0))
+                              :z (double (or (:hit-z hit-result) (:z hit-result) 0.0))}))]
 
           (fx/send! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
                     {:start eye

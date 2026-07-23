@@ -31,14 +31,15 @@
                            (log/warn "Failed to raycast entities:" (ex-message e))
                            nil)))
    :raycast-combined (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
-                       (let [^MinecraftServer srv (get-server)
-                             level (resolve-level srv world-id)
-                             raw   (when level
-                                     (RaycastShared/raycastCombined
-                                       level start-x start-y start-z dir-x dir-y dir-z max-distance))]
-                         (let [norm (try (rn/normalize-bridge-map raw) (catch Exception _ nil))]
-                           (log/info "[RC-DIAG] raycast" {:server? (some? srv) :level? (some? level) :raw? (some? raw) :norm? (some? norm) :raw-keys (when raw (keys raw)) :norm-keys (when norm (keys norm)) :hit-type-raw (get raw "hit-type") :hit-type-norm (:hit-type norm)})
-                           norm)))
+                       (let [level (resolve-level (get-server) world-id)]
+                         (try
+                           (when level
+                             (rn/normalize-bridge-map
+                               (RaycastShared/raycastCombined
+                                 level start-x start-y start-z dir-x dir-y dir-z max-distance)))
+                           (catch Exception e
+                             (log/warn "Failed to raycast combined:" (ex-message e))
+                             nil))))
    :get-player-look-vector (fn [player-uuid]
                              (try
                                (rn/normalize-bridge-map

@@ -190,7 +190,7 @@
    Minecraft's VertexConsumer expects separate RGBA int channels."
   [color-int]
   (let [c (long color-int)]
-    [(unchecked-int (bit-shift-right c 24))                     ;; a
+    [(unchecked-int (bit-and (bit-shift-right c 24) 0xFF))      ;; a
      (unchecked-int (bit-and (bit-shift-right c 16) 0xFF))      ;; r
      (unchecked-int (bit-and (bit-shift-right c 8)  0xFF))      ;; g
      (unchecked-int (bit-and c 0xFF))]))                         ;; b
