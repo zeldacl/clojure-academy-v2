@@ -63,7 +63,7 @@
           (fn [store _]
             (tick-state! store))
           nil))
-      (let [plan (build-plan nil {:x 0.0 :y 64.0 :z 0.0 :player-uuid "player-a"} 0)]
+      (let [plan (build-plan nil {:x 0.0 :y 64.0 :z 0.0 :player-uuid "player-a"} 0 nil)]
         (is (= 2 (count @sound-calls*)))
         (is (= 12 (count @particle-calls*)))
         (is (= 40 (count (:ops plan))))

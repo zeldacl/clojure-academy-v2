@@ -230,6 +230,21 @@
   (emit-quad-vertex! vc mat p3 u0 v1 color)
   (emit-quad-vertex! vc mat p0 u0 v0 color))
 
+(defn- sort-ops
+  "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
+  :plasma [...]} — replaces 3 filters + a group-by (4 traversals plus the
+  lazy-seq allocations each filter produces) with one reduce."
+  [ops]
+  (reduce
+    (fn [acc op]
+      (case (:kind op)
+        :line (update acc :lines conj op)
+        :quad (update acc :quads update (:texture op) (fnil conj []) op)
+        :plasma-body (update acc :plasma conj op)
+        acc))
+    {:lines [] :quads {} :plasma []}
+    ops))
+
 (defn render-level-plan!
   [{:keys [^LocalPlayer player
            ^PoseStack pose-stack
@@ -238,32 +253,33 @@
            tick
            render-plasma-op!]}]
   (let [owner (client-session/current-local-player-owner)
-        hand-pos (hand-center-pos player)
-        query-fn (make-nearby-block-query-fn player)
-        plan (power-runtime/client-build-level-effect-plan camera-pos hand-pos tick query-fn)]
+        ;; Skip hand-center-pos/query-fn allocation and the plan build itself
+        ;; when no level effect is active (idle skill) — checked first so the
+        ;; common (idle) frame does none of the below.
+        plan (when (power-runtime/client-level-effects-active?)
+               (power-runtime/client-build-level-effect-plan
+                 camera-pos (hand-center-pos player) tick (make-nearby-block-query-fn player)))]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
-      (let [line-ops (filter #(= (:kind %) :line) (:ops plan))
-            quad-ops (filter #(= (:kind %) :quad) (:ops plan))
-            plasma-ops (filter #(= (:kind %) :plasma-body) (:ops plan))]
+      (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
         (.pushPose pose-stack)
         (.translate pose-stack
                     (double (- (:x camera-pos)))
                     (double (- (:y camera-pos)))
                     (double (- (:z camera-pos))))
         (let [mat (.pose (.last pose-stack))]
-          (when (seq line-ops)
+          (when (seq lines)
             (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
-              (doseq [op line-ops]
+              (doseq [op lines]
                 (emit-line! line-vc mat op))))
-          (doseq [[texture ops] (group-by #(get % :texture) quad-ops)]
+          (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
-                (doseq [op ops]
+                (doseq [op texture-ops]
                   (emit-quad! quad-vc mat op)))))
-          (when (and render-plasma-op! (seq plasma-ops))
-            (doseq [op plasma-ops]
+          (when (and render-plasma-op! (seq plasma))
+            (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source
                                   :mat mat
                                   :camera-pos camera-pos

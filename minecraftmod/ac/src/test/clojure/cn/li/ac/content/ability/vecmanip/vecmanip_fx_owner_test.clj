@@ -105,7 +105,7 @@
                                     {:mode :update :charge-ticks 8 :charge-pos {:x 2.0 :y 64.0 :z 2.0}
                                      :flight-ticks 2 :state :go}))
     (let [snapshot (plasma-cannon-fx/fx-snapshot)
-          plan (level-effects/build-level-effect-plan nil nil 0)]
+          plan (level-effects/build-level-effect-plan nil nil 0 nil)]
       (is (= 24 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= :go (:state (get (:effect-state snapshot) [:ctx "ctx-b"]))))
       (is (= 2 (count (:ops plan))))

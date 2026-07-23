@@ -3,14 +3,14 @@
 
   Ability FX namespaces register via `build-spec` and expose only `init!`
   plus test helpers delegating to this template."
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.runtime.install :as install]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effect registry (populated by build-spec)
@@ -128,14 +128,25 @@
    :world-id (:world-id payload)})
 
 (defn- arc-item
-  [base-meta start end arc-life & {:keys [is-aoe? hit-type]}]
-  (merge base-meta
-         {:start start
-          :end end
-          :ttl arc-life
-          :max-ttl arc-life
-          :is-aoe? (boolean is-aoe?)
-          :hit-type hit-type}))
+  "Precompute the zigzag vertex path once per arc, at enqueue time — the
+  path is deterministic given (start, end, pattern, seed) and fixed for the
+  arc's lifetime, so it must not be recomputed every frame in build-arc-plan."
+  [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type]}]
+  (let [pattern-key* (if is-aoe? :aoe pattern-key)
+        pattern (arc-patterns/get-pattern pattern-key*)
+        start-v3 (rv3/map->v3 start)
+        end-v3 (rv3/map->v3 end)
+        seed (rand-int 100000)
+        vertices (arc-patterns/generate-zigzag-segments start-v3 end-v3
+                   {:segments (:segments pattern)
+                    :amplitude (:amplitude pattern)
+                    :seed seed})]
+    (merge base-meta
+           {:ttl arc-life
+            :max-ttl arc-life
+            :pattern-key pattern-key*
+            :hit-type hit-type
+            :vertices vertices})))
 
 (defn- play-sound!
   [{:keys [sound-id sound-volume sound-pitch]}]
@@ -158,12 +169,12 @@
       :perform
       (cond
         (and (:aoe-points? opts) start end)
-        (let [main-arcs (vec (repeat 3 (arc-item base start end arc-life)))
+        (let [main-arcs (vec (repeat 3 (arc-item base start end arc-life arc-pattern)))
               aoe-arcs (->> aoe-points
                             (keep (fn [pt]
                                     (when (map? pt)
                                       (let [life (+ 15 (rand-int 11))]
-                                        (arc-item base end pt life :is-aoe? true)))))
+                                        (arc-item base end pt life arc-pattern :is-aoe? true)))))
                             vec)
               store** (update-in store* [:arcs owner-key*] (fnil into []) (into main-arcs aoe-arcs))]
           (play-sound! opts)
@@ -173,7 +184,7 @@
         (do
           (play-sound! opts)
           (update-in store* [:arcs owner-key*] (fnil conj [])
-                     (arc-item base start end arc-life :hit-type hit-type)))
+                     (arc-item base start end arc-life arc-pattern :hit-type hit-type)))
 
         :else store*)
 
@@ -197,25 +208,29 @@
             by-owner))))
 
 (defn- arc-ops
-  "`cam-pos`/`start`/`end` cross in as maps — `start`/`end` from the stored
-  arc-item (originally decoded from a network payload), `cam-pos` from the
-  shared level-effect-plan context. Convert once per arc, right before the
-  render-pipeline V3 math in render-util."
-  [cam-pos {:keys [start end ttl max-ttl is-aoe?]} arc-pattern]
-  (ru/zigzag-arc-ops (rv3/map->v3 cam-pos) (rv3/map->v3 start) (rv3/map->v3 end)
-    {:arc-pattern (if is-aoe? :aoe arc-pattern)
-     :life-ratio (/ (double ttl) (double (max 1 max-ttl)))}))
+  "`cam-v3`/`wiggle-phase` are computed once per build-arc-plan call, not
+  once per arc — camera position and the global wiggle clock don't vary
+  within a single frame's plan build. `vertices`/`pattern-key` were
+  precomputed at enqueue time (see arc-item)."
+  [cam-v3 wiggle-phase {:keys [vertices pattern-key ttl max-ttl]}]
+  (let [pattern (arc-patterns/get-pattern pattern-key)
+        life-ratio (/ (double ttl) (double (max 1 max-ttl)))]
+    (ru/zigzag-arc-ops cam-v3 vertices pattern
+      {:life-ratio life-ratio
+       :wiggle-phase wiggle-phase
+       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
 (defn- build-arc-plan
   [opts camera-pos _hand-center-pos _tick]
   (let [effect-id (:effect-id opts)
-        state-snap (level-effects/effect-state-snapshot effect-id)
-        items (mapcat val (:arcs (or state-snap (default-arc-state))))
-        arc-pattern (:arc-pattern opts :weak)
-        ops (mapcat #(arc-ops camera-pos % arc-pattern) items)]
-    (log/info "[ARC-DIAG] build-plan" {:effect-id effect-id :items (count items) :ops (count ops)})
-    (when (seq ops)
-      {:ops (vec ops)})))
+        by-owner (:arcs (level-effects/effect-state-snapshot effect-id))]
+    (when (seq by-owner)
+      (let [cam-v3 (rv3/map->v3 camera-pos)
+            wiggle-phase (arc-patterns/wiggle-phase)
+            items (mapcat val by-owner)
+            ops (into [] (mapcat #(arc-ops cam-v3 wiggle-phase %)) items)]
+        (when (seq ops)
+          {:ops ops})))))
 
 (defmethod effect-initial-state :default
   [effect-id runtime]
@@ -232,9 +247,8 @@
 (defmethod effect-enqueue-state! :default
   [runtime effect-id store ctx-id channel owner-key payload]
   (when (= runtime :level)
-    (let [entry (effect-entry effect-id)]
-      (enqueue-arc-state! (merge {:effect-id effect-id} (:arc-opts entry {}))
-                          store ctx-id channel owner-key payload))))
+    (enqueue-arc-state! (:arc-opts (effect-entry effect-id))
+                        store ctx-id channel owner-key payload)))
 
 (defmethod effect-tick-state! :default
   [runtime effect-id store]
@@ -242,11 +256,10 @@
     (tick-arc-state! store)))
 
 (defmethod effect-build-plan :default
-  [effect-id camera-pos hand-center-pos tick & args]
+  [effect-id camera-pos hand-center-pos tick & _args]
   (when-let [entry (effect-entry effect-id)]
-    (when (:arc-opts entry)
-      (apply build-arc-plan (merge {:effect-id effect-id} (:arc-opts entry))
-             camera-pos hand-center-pos tick args))))
+    (when-let [arc-opts (:arc-opts entry)]
+      (build-arc-plan arc-opts camera-pos hand-center-pos tick))))
 
 (defmethod effect-clear-owner! :default
   [effect-id store owner-key]
@@ -267,10 +280,6 @@
 (defn- dispatch-tick!
   [runtime effect-id store]
   (effect-tick-state! runtime effect-id store))
-
-(defn- dispatch-build-plan
-  [effect-id camera-pos hand-center-pos tick & args]
-  (apply effect-build-plan effect-id camera-pos hand-center-pos tick args))
 
 (defn- dispatch-clear-owner!
   [effect-id store owner-key]
@@ -422,8 +431,8 @@
                     (assoc spec :level
                            (if arc-opts
                              (assoc level-base :build-plan-fn
-                                    (fn [cam pos tick & _more]
-                                      (dispatch-build-plan effect-id cam pos tick)))
+                                    (fn [cam pos tick query-fn]
+                                      (effect-build-plan effect-id cam pos tick query-fn)))
                              level-base)))
                   spec)
                 (if (contains? #{:hand :both} runtime)

@@ -74,6 +74,29 @@
                 (merge base-meta {:active? false :ticks 0}))
       store*)))
 
+(defn- ring-segments-local
+  "Local (center-relative) ring line-segment endpoints for one tick's
+  rotation angle. Depends only on sw-ticks — computed once per tick here,
+  not once per frame in build-plan (previously ~80 trig calls + 80 point
+  map allocations per frame; now per tick, i.e. at most 20/s)."
+  [sw-ticks]
+  (let [offsets [[-0.1 -0.3 0.1 0]
+                 [0.1 -0.3 0.1 45]
+                 [-0.1 -0.5 -0.1 90]
+                 [0.1 -0.5 -0.1 135]]
+        radius 0.35
+        segments 10]
+    (vec
+      (mapcat
+        (fn [[ox oy oz sep-deg]]
+          (let [angle (+ (* 3.0 (double sw-ticks)) sep-deg)]
+            (for [i (range segments)
+                  :let [a0 (Math/toRadians (+ angle (* 36.0 i)))
+                        a1 (Math/toRadians (+ angle (* 36.0 (inc i))))]]
+              {:p0 {:x (+ ox (* radius (Math/cos a0))) :y oy :z (+ oz (* radius (Math/sin a0)))}
+               :p1 {:x (+ ox (* radius (Math/cos a1))) :y oy :z (+ oz (* radius (Math/sin a1)))}})))
+        offsets))))
+
 (defn- tick-state!
   [store]
   (let [store* (or store (default-storm-wing-fx-runtime-state))]
@@ -82,11 +105,21 @@
         (into {}
               (keep (fn [[owner-key st]]
                       (when (:active? st)
-                        (let [ticks (inc (long (or (:ticks st) 0)))]
+                        (let [ticks (inc (long (or (:ticks st) 0)))
+                              phase (or (:phase st) :charging)
+                              alpha-raw (case phase
+                                          :charging (* 0.7 (double (or (:charge-ratio st) 0.0)))
+                                          :flying 0.7
+                                          0.0)
+                              alpha (int (* 255 alpha-raw))]
                           (when (zero? (mod ticks 10))
                             (client-sounds/queue-sound-effect! (:queue-owner st)
                               {:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0}))
-                          [owner-key (assoc st :ticks ticks)]))))
+                          [owner-key (assoc st
+                                       :ticks ticks
+                                       :ring-alpha alpha
+                                       :ring-segments-local (when (pos? alpha)
+                                                              (ring-segments-local ticks)))]))))
               states)))))
 
 (defn- matching-active-state
@@ -100,62 +133,55 @@
             st))
         (vals effect-state)))
 
+(defn- maybe-spawn-flying-particles!
+  "Particle spawn needs the live hand-center-pos, which only build-plan has
+  (tick-state-fn receives no player-position argument) — so this stays
+  called from build-plan, but gated on the real game tick (via the shared
+  `update-effect-state!`-from-build-plan pattern already used by
+  mine-detect's rescan throttle) rather than firing every render call.
+  build-plan runs at frame rate (up to hundreds/s); the original unthrottled
+  `dotimes 12` ran on every one of those calls instead of the intended
+  12-per-tick (20/s)."
+  [owner-key sw tick center]
+  (when (and (= (:phase sw) :flying)
+             (not= tick (:last-particle-tick sw)))
+    (level-effects/update-effect-state!
+      storm-wing-effect-id
+      (fn [store]
+        (update-in (or store (default-storm-wing-fx-runtime-state))
+          [:effect-state owner-key] assoc :last-particle-tick tick)))
+    (dotimes [_ 12]
+      (let [r (+ 3.0 (* (rand) 5.0))
+            theta (* (rand) Math/PI)
+            phi (* (rand) 2.0 Math/PI)]
+        (client-particles/queue-particle-effect! (:queue-owner sw)
+          {:type :particle
+           :particle-type :block-crack
+           :block-id "minecraft:dirt"
+           :x (+ (double (:x center)) (* r (Math/sin theta) (Math/cos phi)))
+           :y (+ (double (:y center)) (* r (Math/cos theta)))
+           :z (+ (double (:z center)) (* r (Math/sin theta) (Math/sin phi)))
+           :count 1
+           :speed 0.05
+           :offset-x 0.1 :offset-y 0.1 :offset-z 0.1}))))
+  nil)
+
 (defn- build-plan
-  [_camera-pos hand-center-pos _tick & _more]
+  [_camera-pos hand-center-pos tick _query-fn]
   (let [{:keys [effect-state]} (storm-wing-fx-snapshot)
         sw (matching-active-state effect-state hand-center-pos)]
     (when (and hand-center-pos sw (:active? sw))
-      (let [center (dissoc hand-center-pos :player-uuid)
-            sw-ticks (long (or (:ticks sw) 0))
-            phase (or (:phase sw) :charging)
-            charge-ratio (double (or (:charge-ratio sw) 0.0))
-            _ (when (= phase :flying)
-                (dotimes [_ 12]
-                  (let [r (+ 3.0 (* (rand) 5.0))
-                        theta (* (rand) Math/PI)
-                        phi (* (rand) 2.0 Math/PI)]
-                    (client-particles/queue-particle-effect! (:queue-owner sw)
-                      {:type :particle
-                       :particle-type :block-crack
-                       :block-id "minecraft:dirt"
-                       :x (+ (double (:x center)) (* r (Math/sin theta) (Math/cos phi)))
-                       :y (+ (double (:y center)) (* r (Math/cos theta)))
-                       :z (+ (double (:z center)) (* r (Math/sin theta) (Math/sin phi)))
-                       :count 1
-                       :speed 0.05
-                       :offset-x 0.1 :offset-y 0.1 :offset-z 0.1}))))
-            alpha-raw (case phase
-                        :charging (* 0.7 charge-ratio)
-                        :flying 0.7
-                        0.0)
-            alpha (int (* 255 alpha-raw))
-            offsets [[-0.1 -0.3 0.1 0]
-                     [0.1 -0.3 0.1 45]
-                     [-0.1 -0.5 -0.1 90]
-                     [0.1 -0.5 -0.1 135]]]
-        (when (> alpha 0)
-          {:ops (vec
-                  (mapcat
-                    (fn [[ox oy oz sep-deg]]
-                      (let [ring-center {:x (+ (double (:x center)) ox)
-                                         :y (+ (double (:y center)) oy)
-                                         :z (+ (double (:z center)) oz)}
-                            angle (+ (* 3.0 (double sw-ticks)) sep-deg)
-                            radius 0.35
-                            segments 10
-                            color {:r 200 :g 230 :b 255 :a alpha}]
-                        (vec
-                          (for [i (range segments)
-                                :let [a0 (Math/toRadians (+ angle (* 36.0 i)))
-                                      a1 (Math/toRadians (+ angle (* 36.0 (inc i))))
-                                      p0 {:x (+ (:x ring-center) (* radius (Math/cos a0)))
-                                          :y (:y ring-center)
-                                          :z (+ (:z ring-center) (* radius (Math/sin a0)))}
-                                      p1 {:x (+ (:x ring-center) (* radius (Math/cos a1)))
-                                          :y (:y ring-center)
-                                          :z (+ (:z ring-center) (* radius (Math/sin a1)))}]]
-                            (ru/line-op p0 p1 color)))))
-                    offsets))})))))
+      (let [center (dissoc hand-center-pos :player-uuid)]
+        (maybe-spawn-flying-particles! (:owner-key sw) sw tick center)
+        (when (seq (:ring-segments-local sw))
+          (let [cx (double (:x center)) cy (double (:y center)) cz (double (:z center))
+                color {:r 200 :g 230 :b 255 :a (:ring-alpha sw)}]
+            {:ops (mapv (fn [{:keys [p0 p1]}]
+                          (ru/line-op
+                            {:x (+ cx (:x p0)) :y (+ cy (:y p0)) :z (+ cz (:z p0))}
+                            {:x (+ cx (:x p1)) :y (+ cy (:y p1)) :z (+ cz (:z p1))}
+                            color))
+                        (:ring-segments-local sw))}))))))
 
 (defn init!
   []

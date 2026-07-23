@@ -12,16 +12,28 @@
   (when (aget ^booleans frozen 0)
     (throw (ex-info "Level effect registry is frozen" {}))))
 
+(defn- default-empty-state?
+  "True for the standard level-effect state shape: a map whose values are
+  all empty collections (per-owner tables). Non-map / scalar-bearing states
+  are never auto-emptied unless the effect supplies :empty-state?."
+  [state]
+  (and (map? state)
+       (reduce-kv (fn [acc _ v]
+                    (if (and (coll? v) (empty? v)) acc (reduced false)))
+                  true state)))
+
 (defn- put-effect-state! [effect-id state]
-  (if (nil? state)
-    (.remove effect-states effect-id)
-    (.put effect-states effect-id state))
+  (let [empty-state? (or (:empty-state? (.get registry effect-id)) default-empty-state?)]
+    (if (or (nil? state) (empty-state? state))
+      (.remove effect-states effect-id)
+      (.put effect-states effect-id state)))
   nil)
 
 (defn register-level-effect! [effect-id handler-map]
   (when-not (and (keyword? effect-id) (map? handler-map)
                  (fn? (:enqueue-state-fn handler-map))
-                 (fn? (:tick-state-fn handler-map)))
+                 (fn? (:tick-state-fn handler-map))
+                 (or (nil? (:empty-state? handler-map)) (fn? (:empty-state? handler-map))))
     (throw (IllegalArgumentException.
              "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
@@ -80,31 +92,40 @@
 
 (defn tick-level-effects! []
   (dotimes [i (.size effect-order)]
-    (let [eid (.get effect-order i)
-          handler (.get registry eid)]
-      (when-let [tick-state-fn (:tick-state-fn handler)]
-        (put-effect-state! eid (tick-state-fn (.get effect-states eid))))))
+    (let [eid (.get effect-order i)]
+      (when-some [state (.get effect-states eid)]
+        (when-let [tick-state-fn (:tick-state-fn (.get registry eid))]
+          (put-effect-state! eid (tick-state-fn state))))))
   nil)
 
+(defn any-level-effect-active? []
+  (not (.isEmpty effect-states)))
+
 (defn build-level-effect-plan
-  ([camera-pos hand-center-pos tick]
-   (build-level-effect-plan camera-pos hand-center-pos tick nil))
-  ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
-   (let [results
-         (keep (fn [eid]
-                 (when-let [entry (.get registry eid)]
-                   (when-let [build-plan-fn (:build-plan-fn entry)]
-                     (when-let [state (.get effect-states eid)]
-                       ;; skip build when no active state
-                       (if query-nearby-blocks-fn
-                         (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
-                         (build-plan-fn camera-pos hand-center-pos tick))))))
-               effect-order)
-         all-ops (vec (mapcat #(get % :ops) results))
-         walk-speeds (keep #(get % :local-walk-speed) results)
-         local-walk-speed (when (seq walk-speeds) (float (apply min walk-speeds)))]
-     (when (or (seq all-ops) local-walk-speed)
-       {:ops all-ops :local-walk-speed local-walk-speed}))))
+  "Build the combined render plan from all active level effects.
+
+  build-plan-fn contract: fixed 4-arity [camera-pos hand-center-pos tick
+  query-nearby-blocks-fn]. Effects with no state in effect-states (idle) are
+  skipped without invoking build-plan-fn."
+  [camera-pos hand-center-pos tick query-nearby-blocks-fn]
+  (when-not (.isEmpty effect-states)
+    (loop [i 0, ops (transient []), walk-speed nil]
+      (if (< i (.size effect-order))
+        (let [eid (.get effect-order i)
+              state (.get effect-states eid)
+              build-plan-fn (when state (:build-plan-fn (.get registry eid)))
+              result (when build-plan-fn
+                       (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn))
+              ops* (if-let [r (:ops result)] (reduce conj! ops r) ops)
+              ws (:local-walk-speed result)
+              walk-speed* (if (number? ws)
+                            (if walk-speed (min (double walk-speed) (double ws)) (double ws))
+                            walk-speed)]
+          (recur (inc i) ops* walk-speed*))
+        (let [ops-v (persistent! ops)]
+          (when (or (seq ops-v) walk-speed)
+            {:ops ops-v
+             :local-walk-speed (when walk-speed (float walk-speed))}))))))
 
 (defn registered-effects []
   (set (.keySet registry)))

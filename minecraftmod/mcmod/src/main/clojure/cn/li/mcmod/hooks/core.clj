@@ -78,7 +78,8 @@
    :client-notify-visual-event! noop
    :client-show-combat-notice! noop
    :client-enqueue-level-effect! noop
-   :client-build-level-effect-plan (fn [_ _ _ & _] nil)
+   :client-build-level-effect-plan (fn [_ _ _ _] nil)
+   :client-level-effects-active? (fn [] false)
    :client-tick-level-effects! noop
    :client-slot-visual-state (fn [_ _] :idle)
    :client-visual-state (fn [_ _] nil)
@@ -673,11 +674,13 @@
   (apply (:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id ctx-id channel payload opts))
 
 (defn client-build-level-effect-plan
-  ([camera-pos hand-center-pos tick]
-   ((:client-build-level-effect-plan (hooks-core-state-snapshot)) camera-pos hand-center-pos tick))
-  ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
-   ((:client-build-level-effect-plan (hooks-core-state-snapshot))
-    camera-pos hand-center-pos tick query-nearby-blocks-fn)))
+  [camera-pos hand-center-pos tick query-nearby-blocks-fn]
+  ((:client-build-level-effect-plan (hooks-core-state-snapshot))
+   camera-pos hand-center-pos tick query-nearby-blocks-fn))
+
+(defn client-level-effects-active?
+  []
+  ((:client-level-effects-active? (hooks-core-state-snapshot))))
 
 (defn client-tick-level-effects!
   []

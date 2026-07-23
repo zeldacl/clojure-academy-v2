@@ -99,18 +99,13 @@
                         [owner-key (assoc st :ticks (inc (long (or (:ticks st) 0))))])))
               states)))))
 
-(defn- build-plan
-  [_camera-pos _hand-center-pos _tick & _more]
-  nil)
-
 (defn init!
   []
   (fx-spec/register!
     {:id scatter-bomb-effect-id
      :level {:initial-state (default-scatter-bomb-fx-runtime-state)
              :enqueue-state-fn enqueue-state!
-             :tick-state-fn tick-state!
-             :build-plan-fn build-plan}
+             :tick-state-fn tick-state!}
      :channels {:start {:topic :scatter-bomb/fx-start :mode :start}
                 :ball {:topic :scatter-bomb/fx-ball :mode :ball
                        :level-payload (fn [_ _ p]

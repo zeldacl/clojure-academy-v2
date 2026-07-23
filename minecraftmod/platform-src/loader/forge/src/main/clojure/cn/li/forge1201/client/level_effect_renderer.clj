@@ -28,9 +28,14 @@
   ;; Stage is a fixed enum-like singleton set (RenderLevelStageEvent$Stage) — identical?
   ;; avoids a fresh string allocation + two substring scans on every stage dispatch
   ;; this tick (~9 stages/frame), most of which are not eligible.
-  (let [stage (.getStage evt)]
-    (or (identical? stage RenderLevelStageEvent$Stage/AFTER_PARTICLES)
-        (identical? stage RenderLevelStageEvent$Stage/AFTER_TRANSLUCENT_BLOCKS))))
+  ;;
+  ;; Single stage only: the shared renderer doesn't branch on stage, so
+  ;; accepting both AFTER_PARTICLES and AFTER_TRANSLUCENT_BLOCKS ran the
+  ;; entire build-plan + vertex-emission pipeline twice per frame and
+  ;; double-blended translucent quads. AFTER_TRANSLUCENT_BLOCKS is correct
+  ;; for translucent beam/line geometry that must composite after translucent
+  ;; terrain (water/glass) — matches Fabric's WorldRenderEvents/AFTER_TRANSLUCENT.
+  (identical? (.getStage evt) RenderLevelStageEvent$Stage/AFTER_TRANSLUCENT_BLOCKS))
 
 (defn- emit-plasma-vertex! [^VertexConsumer vc mat ^V3 p]
   (-> vc

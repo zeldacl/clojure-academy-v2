@@ -48,7 +48,7 @@
   (when level
     (level-effects/register-level-effect!
       effect-id
-      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn :build-plan-fn])))
+      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn :build-plan-fn :empty-state?])))
   (when hand
     (hand-effects/register-hand-effect!
       effect-id

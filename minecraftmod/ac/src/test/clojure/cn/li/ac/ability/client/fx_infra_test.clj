@@ -27,7 +27,7 @@
 (defn- level-handler []
   {:enqueue-state-fn (fn [state _ _ _ _] state)
    :tick-state-fn (fn [state] state)
-   :build-plan-fn (fn [_ _ _] nil)})
+   :build-plan-fn (fn [_ _ _ _] nil)})
 
 (defn- hand-handler []
   {:enqueue-state-fn (fn [state _ _ _ _] state)
@@ -76,7 +76,7 @@
                                                 :owner-key owner-key})
                            state)
        :tick-state-fn (fn [state] state)
-       :build-plan-fn (fn [_ _ _] nil)})
+       :build-plan-fn (fn [_ _ _ _] nil)})
     (level-effects/enqueue-level-effect! :test/level-event "ctx-1" :test/fx {:v 1})
     (is (= [{:effect-id :test/level-event
              :payload {:v 1}

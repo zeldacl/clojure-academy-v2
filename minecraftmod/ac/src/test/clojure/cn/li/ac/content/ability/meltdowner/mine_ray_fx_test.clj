@@ -63,7 +63,7 @@
                                                  :source-player-id "player-a"})
       (is (= {:x 2 :y 64 :z 5}
              (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"] :target])))
-      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0))))
+      (is (seq (:ops (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0 nil))))
       (dotimes [_ 8]
         (level-effects/update-effect-state! :mine-ray
           (fn [store _]

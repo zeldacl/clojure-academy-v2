@@ -175,7 +175,7 @@
 
       (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"] 0 :ttl])))
       (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"] 0 :ttl])))
-      (is (some? (build-plan nil nil 0)))
+      (is (some? (build-plan nil nil 0 nil)))
       (is (= 2 (count @particles*))
           "one impact spark and one beam-end spark should be emitted per tick while both entries are alive")
 
@@ -187,4 +187,4 @@
 
       (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"]])))
       (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"]])))
-      (is (nil? (build-plan nil nil 0))))))
+      (is (nil? (build-plan nil nil 0 nil))))))

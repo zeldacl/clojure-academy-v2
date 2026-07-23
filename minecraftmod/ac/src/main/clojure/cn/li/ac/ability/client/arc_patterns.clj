@@ -144,8 +144,13 @@
 ;; ============================================================================
 
 (defn generate-zigzag-segments
-  "Generate zigzag vertex path from `start` to `end`.
-  Returns vector of {:pos {:x :y :z} :u :v} entries forming the arc path.
+  "Generate zigzag vertex path from `start` to `end` (both ^V3).
+  Returns vector of {:pos ^V3 :u :v} entries forming the arc path.
+
+  Deterministic given (start, end, pattern segments/amplitude, seed) — no
+  camera/time dependence — so callers precompute this once when an arc is
+  enqueued (its shape is fixed for the arc's lifetime) rather than every
+  frame.
 
   Each vertex is offset perpendicular to the beam direction by a pseudo-random
   amount (deterministic via :seed) to create the classic lightning-bolt shape.
@@ -157,8 +162,9 @@
   [^cn.li.mcmod.math.V3 start ^cn.li.mcmod.math.V3 end
    {:keys [segments amplitude seed]
     :or {segments 8 amplitude 0.15 seed 42}}]
-  (let [dir (v/vnorm (v/v- end start))
-        len (v/vlen (v/v- end start))
+  (let [end-start (v/v- end start)
+        dir (v/vnorm end-start)
+        len (v/vlen end-start)
         ;; Compute perpendicular axis (any axis perpendicular to dir works)
         up (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 dir)) 0.99) v/unit-y v/unit-x)
         perp (v/vnorm (v/vcross dir up))
@@ -169,7 +175,7 @@
       (if (>= i n)
         (conj vertices {:pos end :u 1.0 :v 0.0})
         (let [t (/ (inc i) (inc (double n)))
-              pt (v/v+ start (v/v* (v/v- end start) t))
+              pt (v/v+ start (v/v* end-start t))
               ;; Deterministic pseudo-random offset based on seed + index
               r1 (Math/sin (+ (* seed 12.9898) (* i 78.233)))
               r2 (Math/cos (+ (* seed 45.1641) (* i 93.117)))
@@ -199,31 +205,36 @@
 (defn- lerp [a b t]
   (+ a (* t (- b a))))
 
+(defn effective-wiggle-amount
+  "Wiggle amplitude for `pattern` at `life-ratio` (the showWiggle/hideWiggle
+  transition envelope, matching original EntityArc):
+    - First 15% of life: ramps from showWiggle → texWiggle
+    - Middle 55%: stays at texWiggle
+    - Last 30%: ramps from texWiggle → hideWiggle
+
+  Depends only on life-ratio (tick-rate), not on wall-clock time — callers
+  should compute this once per arc per plan build, not once per segment."
+  [pattern life-ratio]
+  (let [show-phase  (min 1.0 (/ (max 0.0 (double life-ratio)) 0.15))
+        hide-phase  (max 0.0 (/ (- (max 0.0 (double life-ratio)) 0.7) 0.3))
+        tex-wiggle  (double (or (:tex-wiggle pattern) 0.5))
+        show-wiggle (double (or (:show-wiggle pattern) 0.1))
+        hide-wiggle (double (or (:hide-wiggle pattern) 0.4))]
+    (cond
+      (> hide-phase 0.0) (lerp tex-wiggle hide-wiggle (min 1.0 hide-phase))
+      (< show-phase 1.0) (lerp show-wiggle tex-wiggle show-phase)
+      :else tex-wiggle)))
+
 (defn current-wiggle-offset
   "Compute UV wiggle offset for an arc segment based on pattern and life ratio.
 
   life-ratio: 0.0 (just spawned) to 1.0 (about to die).
 
-  Matching original EntityArc showWiggle/hideWiggle transitions:
-    - First 15% of life: wiggle ramps from showWiggle → texWiggle
-    - Middle 55%: wiggle stays at texWiggle
-    - Last 30%: wiggle ramps from texWiggle → hideWiggle
-
   Returns wiggle offset value to add to UV u-coordinate."
   [pattern life-ratio]
-  (let [show-phase     (min 1.0 (/ (max 0.0 (double life-ratio)) 0.15))
-        hide-phase     (max 0.0 (/ (- (max 0.0 (double life-ratio)) 0.7) 0.3))
-        tex-wiggle     (double (or (:tex-wiggle pattern) 0.5))
-        show-wiggle    (double (or (:show-wiggle pattern) 0.1))
-        hide-wiggle    (double (or (:hide-wiggle pattern) 0.4))
-        effective-wiggle (cond
-                           (> hide-phase 0.0)
-                           (lerp tex-wiggle hide-wiggle (min 1.0 hide-phase))
-                           (< show-phase 1.0)
-                           (lerp show-wiggle tex-wiggle show-phase)
-                           :else tex-wiggle)
-        phase          (wiggle-phase)
-        segment-idx    0]  ;; caller provides this per-segment
+  (let [effective-wiggle (effective-wiggle-amount pattern life-ratio)
+        phase            (wiggle-phase)
+        segment-idx      0]  ;; caller provides this per-segment
     (* effective-wiggle (Math/sin (+ phase (* segment-idx 0.5))))))
 
 (defn segment-wiggle-offset
@@ -232,20 +243,10 @@
   pattern: arc pattern map
   life-ratio: 0.0-1.0"
   [segment-t pattern life-ratio]
-  (let [show-phase     (min 1.0 (/ (max 0.0 (double life-ratio)) 0.15))
-        hide-phase     (max 0.0 (/ (- (max 0.0 (double life-ratio)) 0.7) 0.3))
-        tex-wiggle     (double (or (:tex-wiggle pattern) 0.5))
-        show-wiggle    (double (or (:show-wiggle pattern) 0.1))
-        hide-wiggle    (double (or (:hide-wiggle pattern) 0.4))
-        effective-wiggle (cond
-                           (> hide-phase 0.0)
-                           (lerp tex-wiggle hide-wiggle (min 1.0 hide-phase))
-                           (< show-phase 1.0)
-                           (lerp show-wiggle tex-wiggle show-phase)
-                           :else tex-wiggle)
-        phase          (wiggle-phase)
+  (let [effective-wiggle (effective-wiggle-amount pattern life-ratio)
+        phase            (wiggle-phase)
         ;; Each segment along the arc has a different wiggle phase
-        seg-phase      (+ phase (* segment-t 3.0))]
+        seg-phase        (+ phase (* segment-t 3.0))]
     (* effective-wiggle (Math/sin seg-phase))))
 
 ;; ============================================================================

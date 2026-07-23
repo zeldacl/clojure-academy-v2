@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-fx
   "Client FX for ElectronMissile: orbiting sparks + impact flash per fired ball."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -169,12 +170,17 @@
                         by-owner))))))
 
 (defn- build-plan
-  [camera-pos _hand-center-pos _tick & _more]
+  "start/end/camera-pos cross in as {:x :y :z ...} maps (network payload,
+  shared level-effect-plan context) — render-util's beam ops require V3
+  (see rv3.clj docstring), so convert once per call/beam, not inside the
+  hot vector math."
+  [camera-pos _hand-center-pos _tick _query-fn]
   (let [{:keys [beams]} (electron-missile-fx-snapshot)
+        cam-v3 (rv3/map->v3 camera-pos)
         ops (mapcat (fn [[_owner-key xs]]
                       (mapcat (fn [{:keys [start end ttl max-ttl]}]
                                 (let [life (/ (double ttl) (double (max 1 max-ttl)))]
-                                  (ru/billboard-beam-ops camera-pos start end
+                                  (ru/billboard-beam-ops cam-v3 (rv3/map->v3 start) (rv3/map->v3 end)
                                     {:width       (* 0.04 (+ 0.3 (* 0.5 life)))
                                      :core-width  (* 0.015 (+ 0.3 (* 0.5 life)))
                                      :outer-color {:r 140 :g 255 :b 170 :a (int (+ 60 (* 140 life)))}

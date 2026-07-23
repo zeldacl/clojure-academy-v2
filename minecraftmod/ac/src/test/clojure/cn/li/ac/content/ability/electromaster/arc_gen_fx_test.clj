@@ -73,7 +73,7 @@
          :start {:x 0.0 :y 64.0 :z 0.0}
          :end {:x 3.0 :y 64.0 :z 3.0}
          :hit-type :block})
-      (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+      (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0 nil)]
         (is (some? plan))
         (is (seq (:ops plan))))
       (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))

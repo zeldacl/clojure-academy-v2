@@ -21,11 +21,11 @@
      (apply level-effects/enqueue-level-effect! effect-id ctx-id channel payload opts))
 
    :client-build-level-effect-plan
-   (fn
-     ([camera-pos hand-center-pos tick]
-      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick))
-     ([camera-pos hand-center-pos tick query-nearby-blocks-fn]
-      (level-effects/build-level-effect-plan camera-pos hand-center-pos tick query-nearby-blocks-fn)))
+   (fn [camera-pos hand-center-pos tick query-nearby-blocks-fn]
+     (level-effects/build-level-effect-plan camera-pos hand-center-pos tick query-nearby-blocks-fn))
+
+   :client-level-effects-active?
+   (fn [] (level-effects/any-level-effect-active?))
 
    :client-tick-level-effects!
    (fn []
