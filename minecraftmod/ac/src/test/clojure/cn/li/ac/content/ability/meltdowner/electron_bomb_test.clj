@@ -19,16 +19,25 @@
 
 (defn- stub-tunable-double [_skill-id field-id]
   (case field-id
-    :progression.exp-hit 0.003
+    :progression.exp-hit 0.005
+    :charge.improved-exp-threshold 0.8
     0.0))
+
+(defn- stub-tunable-int [_skill-id field-id]
+  (case field-id
+    :charge.settle-ticks 20
+    :charge.settle-ticks-improved 5
+    0))
 
 (deftest perform-schedules-delayed-settlement-and-spawn-fx-test
   (let [spawn-calls* (atom [])
         fx-calls* (atom [])
-        scheduled* (atom [])]
+        scheduled* (atom [])
+        exp-calls* (atom [])]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.5)
                   skill-config/lerp-double stub-lerp-double
                   skill-config/tunable-double stub-tunable-double
+                  skill-config/tunable-int stub-tunable-int
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
@@ -39,10 +48,16 @@
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)
-                  delayed-projectiles/mdball-near-expire-delay (fn [] 15)
+                  skill-effects/add-skill-exp! (fn [& args]
+                                                (swap! exp-calls* conj args)
+                                                nil)
+                  delayed-projectiles/mdball-near-expire-delay (fn [life-ticks offset-ticks]
+                                                                 (- life-ticks offset-ticks))
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
                                                                      (swap! scheduled* conj task)
                                                                      nil)]
+      ;; exp defaults to 0.0 in cb/apply-invoke (below the 0.8 improved-exp
+      ;; threshold), so this exercises the un-improved 20-tick settle branch.
       (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
       (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]]
              @spawn-calls*))
@@ -51,15 +66,34 @@
                {:x 1.0 :y 64.0 :z 2.0
                 :dx 0.0 :dy 0.0 :dz 1.0}]]
              @fx-calls*))
+      ;; Exp is granted immediately/unconditionally at cast time, matching
+      ;; original's ctx.addSkillExp(.005f) firing in s_Execute.
+      (is (= [["p1" :electron-bomb 0.005]] @exp-calls*))
       (is (= [{:player-id "p1"
                :ctx-id "ctx-1"
-               :world-id "w"
-               :eye {:x 1.0 :y 64.0 :z 2.0}
-               :look-dir {:x 0.0 :y 0.0 :z 1.0}
                :damage 12.5
-               :exp-gain 0.003
-               :delay-ticks 15}]
+               :delay-ticks 18}]
              @scheduled*)))))
+
+(deftest perform-uses-improved-settle-ticks-above-exp-threshold-test
+  (let [scheduled* (atom [])]
+    (with-redefs [skill-effects/skill-exp (fn [& _] 0.9)
+                  skill-config/lerp-double stub-lerp-double
+                  skill-config/tunable-double stub-tunable-double
+                  skill-config/tunable-int stub-tunable-int
+                  geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  raycast/available? (constantly true)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  entity/player-spawn-entity-by-id! (constantly true)
+                  fx/send! (constantly nil)
+                  skill-effects/add-skill-exp! (constantly nil)
+                  delayed-projectiles/mdball-near-expire-delay (fn [life-ticks offset-ticks]
+                                                                 (- life-ticks offset-ticks))
+                  delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
+                                                                     (swap! scheduled* conj task)
+                                                                     nil)]
+      (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :exp 0.9 :player-ref {:id "player-obj"})
+      (is (= [3] (mapv :delay-ticks @scheduled*))))))
 
 (deftest perform-without-look-vector-is-noop-test
   (let [spawn-calls* (atom [])

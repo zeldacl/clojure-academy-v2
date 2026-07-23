@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.test.support.player-state :as ps-fix]
@@ -31,67 +32,72 @@
   (is (= 5 (dp/mdball-near-expire-delay 10))))
 
 (deftest electron-bomb-settlement-hit-path-test
+  (testing "eye/look-dir are re-fetched fresh at settle time, not read from the scheduled task"
+    (let [calls (atom [])]
+      (with-redefs [raycast/available? (constantly true)
+                    entity-damage/available? (constantly true)
+                    geom/world-id-of (fn [_] "w")
+                    geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                    raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    raycast/raycast-entities (fn [& _]
+                                               {:uuid "target-1"
+                                                :x 4.0
+                                                :y 65.0
+                                                :z 6.0
+                                                :distance 9.0})
+                    entity-damage/apply-direct-damage! (fn [& args]
+                                                        (swap! calls conj [:damage (vec args)])
+                                                        true)
+                    md-damage/mark-target! (fn [& args]
+                                             (swap! calls conj [:mark (vec args)])
+                                             true)
+                    skill-effects/add-skill-exp! (fn [& args]
+                                                   (swap! calls conj [:exp (vec args)])
+                                                   true)
+                    ctx-mgr/push-channel-to-player! (fn [& args]
+                                                     (swap! calls conj [:fx (vec args)])
+                                                     true)
+                    ctx-mgr/push-channel-to-nearby-players! (fn [& args]
+                                                             (swap! calls conj [:fx-nearby (vec args)])
+                                                             true)]
+        (dp/schedule-electron-bomb-beam!
+         {:player-id "p1"
+          :ctx-id "ctx-1"
+          :damage 12.5
+          :delay-ticks 1})
+        (dp/tick-player! "p1")
+        ;; Exp is no longer granted here — original grants it unconditionally
+        ;; at cast time, so the skill's perform! now owns that call.
+        (is (= [[:damage ["w" "target-1" 12.5 :magic]]
+            [:mark ["p1" "target-1" {:ctx-id "ctx-1"
+                    :target-pos {:x 4.0 :y 65.0 :z 6.0}}]]
+                [:fx ["p1"
+                      "ctx-1"
+                      :electron-bomb/fx-beam
+                      {:mode :perform
+                       :start {:x 1.0 :y 64.0 :z 2.0}
+                       :end {:x 1.0 :y 64.0 :z 17.0}
+                       :hit-distance 15.0
+                       :performed? true
+                     :target-uuid "target-1"}]]
+                  [:fx-nearby ["ctx-1"
+                       :electron-bomb/fx-beam
+                       {:mode :perform
+                        :start {:x 1.0 :y 64.0 :z 2.0}
+                        :end {:x 1.0 :y 64.0 :z 17.0}
+                        :hit-distance 15.0
+                        :performed? true
+                        :target-uuid "target-1"}]]]
+               @calls))
+        (is (empty? (dp/pending-tasks-snapshot "p1")))))))
+
+(deftest electron-bomb-settlement-without-look-vector-is-noop-test
   (let [calls (atom [])]
     (with-redefs [raycast/available? (constantly true)
-                  entity-damage/available? (constantly true)
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  raycast/player-look-vector (fn [_] nil)
                   raycast/raycast-entities (fn [& _]
-                                             {:uuid "target-1"
-                                              :x 4.0
-                                              :y 65.0
-                                              :z 6.0
-                                              :distance 9.0})
-                  entity-damage/apply-direct-damage! (fn [& args]
-                                                      (swap! calls conj [:damage (vec args)])
-                                                      true)
-                  md-damage/mark-target! (fn [& args]
-                                           (swap! calls conj [:mark (vec args)])
-                                           true)
-                  skill-effects/add-skill-exp! (fn [& args]
-                                                 (swap! calls conj [:exp (vec args)])
-                                                 true)
-                  ctx-mgr/push-channel-to-player! (fn [& args]
-                                                   (swap! calls conj [:fx (vec args)])
-                                                   true)
-                  ctx-mgr/push-channel-to-nearby-players! (fn [& args]
-                                                           (swap! calls conj [:fx-nearby (vec args)])
-                                                           true)]
-      (dp/schedule-electron-bomb-beam!
-       {:player-id "p1"
-        :ctx-id "ctx-1"
-        :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
-        :damage 12.5
-        :exp-gain 0.125
-        :delay-ticks 1})
-      (dp/tick-player! "p1")
-      (is (= [[:damage ["w" "target-1" 12.5 :magic]]
-          [:mark ["p1" "target-1" {:ctx-id "ctx-1"
-                  :target-pos {:x 4.0 :y 65.0 :z 6.0}}]]
-              [:exp ["p1" :electron-bomb 0.125]]
-              [:fx ["p1"
-                    "ctx-1"
-                    :electron-bomb/fx-beam
-                    {:mode :perform
-                     :start {:x 1.0 :y 64.0 :z 2.0}
-                     :end {:x 1.0 :y 64.0 :z 17.0}
-                     :hit-distance 15.0
-                     :performed? true
-                   :target-uuid "target-1"}]]
-                [:fx-nearby ["ctx-1"
-                     :electron-bomb/fx-beam
-                     {:mode :perform
-                      :start {:x 1.0 :y 64.0 :z 2.0}
-                      :end {:x 1.0 :y 64.0 :z 17.0}
-                      :hit-distance 15.0
-                      :performed? true
-                      :target-uuid "target-1"}]]]
-             @calls))
-      (is (empty? (dp/pending-tasks-snapshot "p1"))))))
-
-(deftest electron-bomb-settlement-without-raycast-is-noop-test
-  (let [calls (atom [])]
-    (with-redefs [raycast/raycast-entities (fn [& _]
                                              (swap! calls conj :raycast)
                                              nil)
                   entity-damage/apply-direct-damage! (fn [& _]
@@ -109,11 +115,7 @@
       (dp/schedule-electron-bomb-beam!
        {:player-id "p1"
         :ctx-id "ctx-1"
-        :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir nil
         :damage 12.5
-        :exp-gain 0.125
         :delay-ticks 1})
       (dp/tick-player! "p1")
       (is (empty? @calls))

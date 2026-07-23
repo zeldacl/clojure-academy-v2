@@ -91,10 +91,12 @@
 
 (defn mdball-near-expire-delay
   ([]
-   (mdball-near-expire-delay mdball-default-life-ticks))
+   (mdball-near-expire-delay mdball-default-life-ticks mdball-settle-offset-ticks))
   ([life-ticks]
+   (mdball-near-expire-delay life-ticks mdball-settle-offset-ticks))
+  ([life-ticks offset-ticks]
    (max 1 (- (int (or life-ticks mdball-default-life-ticks))
-             mdball-settle-offset-ticks))))
+             (int (or offset-ticks mdball-settle-offset-ticks))))))
 
 (defn schedule-electron-bomb-beam!
   [{:keys [player-id] :as task}]
@@ -109,52 +111,57 @@
   (double (or (get beam key) default)))
 
 (defn- run-electron-bomb-beam!
-  [{:keys [player-id ctx-id world-id eye look-dir damage exp-gain]}]
+  "Matches original's callback: getDest(player)/eye are re-evaluated fresh at
+  settle time (not the values captured when the skill was cast), so the
+  player can turn or move during the delay and still redirect the shot."
+  [{:keys [player-id ctx-id damage]}]
   (try
-    (when (and (raycast/available?) look-dir eye)
-      (let [dir (geom/vnorm {:x (double (or (:x look-dir) 0.0))
-                             :y (double (or (:y look-dir) 0.0))
-                             :z (double (or (:z look-dir) 0.0))})
-            hit (raycast/raycast-entities
-                                          world-id
-                                          (double (:x eye))
-                                          (double (:y eye))
-                                          (double (:z eye))
-                                          (double (:x dir))
-                                          (double (:y dir))
-                                          (double (:z dir))
-                                          electron-bomb-ray-distance)]
-        (when hit
-          (let [end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
-                target-uuid (:uuid hit)
-                damage-amt (double (or damage 0.0))]
-            (when (and target-uuid (entity-damage/available?))
-              (entity-damage/apply-direct-damage!
-                world-id
-                target-uuid
-                damage-amt
-                :magic)
-              (md-damage/mark-target! player-id target-uuid
-                                      {:ctx-id ctx-id
-                                       :target-pos {:x (:x hit)
-                                                    :y (:y hit)
-                                                    :z (:z hit)}})
-              (skill-effects/add-skill-exp! player-id :electron-bomb
-                                            (double (or exp-gain 0.003))))
-            (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
-              {:mode :perform
-               :start eye
-               :end end-pos
-               :hit-distance electron-bomb-ray-distance
-               :performed? true
-               :target-uuid target-uuid})
-            (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam
-              {:mode :perform
-               :start eye
-               :end end-pos
-               :hit-distance electron-bomb-ray-distance
-               :performed? true
-               :target-uuid target-uuid})))))
+    (when (raycast/available?)
+      (let [world-id (geom/world-id-of player-id)
+            eye (geom/eye-pos player-id)
+            look-vec (raycast/player-look-vector player-id)]
+        (when look-vec
+          (let [dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
+                                 :y (double (or (:y look-vec) 0.0))
+                                 :z (double (or (:z look-vec) 0.0))})
+                hit (raycast/raycast-entities
+                                              world-id
+                                              (double (:x eye))
+                                              (double (:y eye))
+                                              (double (:z eye))
+                                              (double (:x dir))
+                                              (double (:y dir))
+                                              (double (:z dir))
+                                              electron-bomb-ray-distance)]
+            (when hit
+              (let [end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+                    target-uuid (:uuid hit)
+                    damage-amt (double (or damage 0.0))]
+                (when (and target-uuid (entity-damage/available?))
+                  (entity-damage/apply-direct-damage!
+                    world-id
+                    target-uuid
+                    damage-amt
+                    :magic)
+                  (md-damage/mark-target! player-id target-uuid
+                                          {:ctx-id ctx-id
+                                           :target-pos {:x (:x hit)
+                                                        :y (:y hit)
+                                                        :z (:z hit)}}))
+                (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
+                  {:mode :perform
+                   :start eye
+                   :end end-pos
+                   :hit-distance electron-bomb-ray-distance
+                   :performed? true
+                   :target-uuid target-uuid})
+                (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam
+                  {:mode :perform
+                   :start eye
+                   :end end-pos
+                   :hit-distance electron-bomb-ray-distance
+                   :performed? true
+                   :target-uuid target-uuid})))))))
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 

@@ -459,7 +459,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 50
-                               :follow-owner? false
+                               :follow-owner? true
                                :renderer-id "md-ball"
                                :hook :md-ball
                                :hook-params {:range-from 0.8

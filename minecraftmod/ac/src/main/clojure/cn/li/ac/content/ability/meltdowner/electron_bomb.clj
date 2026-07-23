@@ -2,13 +2,17 @@
   "ElectronBomb skill - delayed MdBall settlement with single-ray hit.
 
   Pattern: :instant (key press fires the bomb)
-  Cost: CP lerp(250, 180, exp), overload lerp(120, 90, exp)
+  Cost: CP lerp(250, 180, exp), overload lerp(120, 90, exp) — not present in
+  original (which consumes no resource at all); kept as a deliberate departure.
   Damage: lerp(6, 12, exp) at target, settled near MdBall end-of-life callback
   Cooldown: lerp(20, 10, exp) ticks
-  Exp: +0.003 per hit
+  Exp: +0.005 per cast, unconditional (matches original's ctx.addSkillExp
+  firing immediately regardless of whether the delayed ray hits)
 
   Implementation note: the 'ball' delay is driven by delayed projectile
-  settlement and the client FX receives a single-ray visual event.
+  settlement and the client FX receives a single-ray visual event. The
+  settle delay shortens once skill exp exceeds charge.improved-exp-threshold,
+  matching original's Life(20)/LifeImproved(5) split.
 
   No Minecraft imports."
   (:require
@@ -32,10 +36,15 @@
 ;; Action
 ;; ---------------------------------------------------------------------------
 
+(defn- life-ticks-for-exp
+  [exp]
+  (if (> (double (or exp 0.0)) (cfg-double :charge.improved-exp-threshold))
+    (cfg-int :charge.settle-ticks-improved)
+    (cfg-int :charge.settle-ticks)))
+
 (defn- perform-electron-bomb! [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (try
     (let [damage   (cfg-lerp :combat.damage exp)
-          world-id (geom/world-id-of player-id)
           eye      (geom/eye-pos player-id)
           look-vec (when (raycast/available?)
                      (raycast/player-look-vector player-id))]
@@ -49,18 +58,19 @@
         (fx/send! ctx-id {:topic :electron-bomb/fx-spawn} nil
                   {:x (:x eye) :y (:y eye) :z (:z eye)
                    :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})
-        (delayed-projectiles/schedule-electron-bomb-beam!
-          {:player-id player-id
-           :ctx-id ctx-id
-           :world-id world-id
-           :eye eye
-           :look-dir look-vec
-           :damage damage
-           :exp-gain (cfg-double :progression.exp-hit)
-           :delay-ticks (delayed-projectiles/mdball-near-expire-delay)})
-        (log/debug "ElectronBomb: scheduled delayed beam"
-                   {:delay (delayed-projectiles/mdball-near-expire-delay)
-                    :player player-id})))
+        ;; Exp/cooldown are granted at cast time in original, unconditionally,
+        ;; before the ball's delayed callback ever fires.
+        (skill-effects/add-skill-exp! player-id :electron-bomb (cfg-double :progression.exp-hit))
+        (let [life-ticks (life-ticks-for-exp exp)
+              delay-ticks (delayed-projectiles/mdball-near-expire-delay life-ticks 2)]
+          (delayed-projectiles/schedule-electron-bomb-beam!
+            {:player-id player-id
+             :ctx-id ctx-id
+             :damage damage
+             :delay-ticks delay-ticks})
+          (log/debug "ElectronBomb: scheduled delayed beam"
+                     {:delay delay-ticks
+                      :player player-id}))))
     (catch Exception e
       (log/warn "ElectronBomb perform! failed:" (ex-message e)))))
 
