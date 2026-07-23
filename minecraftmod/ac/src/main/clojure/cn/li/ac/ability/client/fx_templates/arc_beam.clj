@@ -129,9 +129,7 @@
    :world-id (:world-id payload)})
 
 (defn- arc-item
-  "Precompute the zigzag vertex path once per arc, at enqueue time — the
-  path is deterministic given (start, end, pattern, seed) and fixed for the
-  arc's lifetime, so it must not be recomputed every frame in build-arc-plan."
+  "Precompute the zigzag vertex path once per arc, at enqueue time."
   [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type]}]
   (let [pattern-key* (if is-aoe? :aoe pattern-key)
         pattern (arc-patterns/get-pattern pattern-key*)
@@ -209,15 +207,11 @@
             by-owner))))
 
 (defn- arc-ops
-  "`cam-v3`/`wiggle-phase` are computed once per build-arc-plan call, not
-  once per arc — camera position and the global wiggle clock don't vary
-  within a single frame's plan build. `vertices`/`pattern-key` were
-  precomputed at enqueue time (see arc-item)."
   [cam-v3 wiggle-phase {:keys [vertices pattern-key ttl max-ttl]}]
   (let [pattern (arc-patterns/get-pattern pattern-key)
-        life-ratio (/ (double ttl) (double (max 1 max-ttl)))]
+        life-ratio (- 1.0 (/ (double ttl) (double (max 1 max-ttl))))]
     (ru/zigzag-arc-ops cam-v3 vertices pattern
-      {:life-ratio 0.5
+      {:life-ratio life-ratio
        :wiggle-phase wiggle-phase
        :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
