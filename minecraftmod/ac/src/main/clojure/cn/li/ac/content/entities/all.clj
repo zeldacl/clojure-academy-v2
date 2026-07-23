@@ -516,8 +516,11 @@
          :update-interval 1
          :properties {:block-body {:default-block-id "minecraft:stone"
                                    :gravity 0.02
-                                   :damage 6.0
-                                   :place-when-collide? false
+                                   ;; Matches original's new MagManipEntityBlock(player, 10) — hardcoded,
+                                   ;; not exp-scaled (the original's exp-lerp'd damage field was declared
+                                   ;; but never actually passed to the entity).
+                                   :damage 10.0
+                                   :place-when-collide? true
                                    :renderer-id "block-body"
                                    :hook :magmanip-block}}}))
 

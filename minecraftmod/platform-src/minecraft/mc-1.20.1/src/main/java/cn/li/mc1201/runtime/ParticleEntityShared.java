@@ -86,4 +86,41 @@ public final class ParticleEntityShared {
         }
         return level.addFreshEntity(entity);
     }
+
+    /**
+     * Same spawn as spawnEntityByIdFromPlayer, but returns the spawned
+     * entity's UUID string (or null on failure) instead of a bare boolean —
+     * lets callers reference the entity again later (e.g. MagManip's
+     * held-block tracking via the entity-motion adapter).
+     */
+    public static String spawnTrackedEntityByIdFromPlayer(Object playerObj, String entityId, float speed) {
+        if (!(playerObj instanceof Player player) || entityId == null || entityId.isEmpty()) {
+            return null;
+        }
+        Level level = player.level();
+        if (level.isClientSide) {
+            return null;
+        }
+        EntityType<?> type;
+        try {
+            type = BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(entityId));
+        } catch (Exception ignored) {
+            return null;
+        }
+        if (type == null) {
+            return null;
+        }
+        Entity entity = type.create(level);
+        if (entity == null) {
+            return null;
+        }
+        entity.moveTo(player.getX(), player.getEyeY() - 0.1D, player.getZ(), player.getYRot(), player.getXRot());
+        if (speed > 0.0F) {
+            entity.setDeltaMovement(player.getLookAngle().normalize().scale(speed));
+        }
+        if (entity instanceof Projectile projectile) {
+            projectile.setOwner(player);
+        }
+        return level.addFreshEntity(entity) ? entity.getStringUUID() : null;
+    }
 }

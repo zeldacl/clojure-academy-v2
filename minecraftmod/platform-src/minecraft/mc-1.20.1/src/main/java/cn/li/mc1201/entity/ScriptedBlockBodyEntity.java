@@ -1,6 +1,7 @@
 package cn.li.mc1201.entity;
 
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
@@ -17,6 +18,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
@@ -213,8 +217,66 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             if (isSilbarn()) {
                 markSilbarnHit(false);
             } else if (isSyncedPlaceWhenCollide() && !this.level().isClientSide) {
-                this.discard();
+                placeSyncedBlockOnHit((BlockHitResult) result);
             }
+        }
+    }
+
+    /**
+     * Matches original EntityBlock's CollideEvent handler: try the hit
+     * block position, then the face-adjacent position, then the 26
+     * surrounding neighbors, placing the synced block wherever the first
+     * replaceable position is found. Discards (block is lost) if none of
+     * those are replaceable — matches original's "EntityBlock Lost" fallback.
+     */
+    private void placeSyncedBlockOnHit(BlockHitResult result) {
+        Level level = this.level();
+        BlockState state = resolveSyncedBlockState();
+        if (state == null) {
+            this.discard();
+            return;
+        }
+        BlockPos origin = result.getBlockPos();
+        if (canReplace(level, origin)) {
+            level.setBlock(origin, state, 3);
+            this.discard();
+            return;
+        }
+        BlockPos adjacent = origin.relative(result.getDirection());
+        if (canReplace(level, adjacent)) {
+            level.setBlock(adjacent, state, 3);
+            this.discard();
+            return;
+        }
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (dx == 0 && dy == 0 && dz == 0) {
+                        continue;
+                    }
+                    BlockPos candidate = origin.offset(dx, dy, dz);
+                    if (canReplace(level, candidate)) {
+                        level.setBlock(candidate, state, 3);
+                        this.discard();
+                        return;
+                    }
+                }
+            }
+        }
+        this.discard();
+    }
+
+    private static boolean canReplace(Level level, BlockPos pos) {
+        return level.getBlockState(pos).canBeReplaced();
+    }
+
+    private BlockState resolveSyncedBlockState() {
+        try {
+            ResourceLocation blockId = new ResourceLocation(getSyncedBlockId());
+            Block block = BuiltInRegistries.BLOCK.get(blockId);
+            return block == null ? null : block.defaultBlockState();
+        } catch (Exception ignored) {
+            return null;
         }
     }
 

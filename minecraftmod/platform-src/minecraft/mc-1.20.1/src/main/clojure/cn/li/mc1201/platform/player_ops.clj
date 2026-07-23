@@ -3,7 +3,8 @@
 
 (def player-ops-keys #{:player-level :player-container-menu :count-player-item-by-id
                         :consume-player-item-by-id! :drop-player-main-hand-item-at!
-                        :give-player-item-stack! :spawn-entity-by-id! :raytrace-block})
+                        :give-player-item-stack! :spawn-entity-by-id! :spawn-tracked-entity-by-id!
+                        :raytrace-block})
 
 (defn install-player-ops-platform! [impl-map _label]
   (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :player-ops-platform] impl-map)) nil)
@@ -17,4 +18,5 @@
 (defn drop-player-main-hand-item-at! [adapter player amount x y z] (call :drop-player-main-hand-item-at! adapter player amount x y z))
 (defn give-player-item-stack!       [adapter player stack] (call :give-player-item-stack! adapter player stack))
 (defn spawn-entity-by-id!           [adapter player entity-id speed] (call :spawn-entity-by-id! adapter player entity-id speed))
+(defn spawn-tracked-entity-by-id!   [adapter player entity-id speed] (call :spawn-tracked-entity-by-id! adapter player entity-id speed))
 (defn raytrace-block                [adapter player reach fluid-source-only?] (call :raytrace-block adapter player reach fluid-source-only?))

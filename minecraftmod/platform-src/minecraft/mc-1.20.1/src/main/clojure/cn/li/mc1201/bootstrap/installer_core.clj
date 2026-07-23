@@ -266,6 +266,7 @@
                          :player-consume-item-by-id! (fn [this item-id amount] (player-ops/consume-player-item-by-id! adapter this item-id amount))
                          :player-give-item-stack! (fn [this stack] (player-ops/give-player-item-stack! adapter this stack))
                          :player-spawn-entity-by-id! (fn [this entity-id speed] (player-ops/spawn-entity-by-id! adapter this entity-id speed))
+                         :player-spawn-tracked-entity-by-id! (fn [this entity-id speed] (player-ops/spawn-tracked-entity-by-id! adapter this entity-id speed))
                          :player-raytrace-block (fn [this reach fluid-source-only?] (player-ops/raytrace-block adapter this reach fluid-source-only?))
                          :player-get-container-menu (fn [this] (player-ops/player-container-menu adapter this))
                          :inventory-get-player (fn [this] (menu-inventory-ops/inventory-owner adapter this))

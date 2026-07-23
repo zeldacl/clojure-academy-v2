@@ -106,6 +106,7 @@
                                                   (boolean (.addFreshEntity level (ItemEntity. level (double x) (double y) (double z) drop-stack))))))))))
     :give-player-item-stack! (fn [_adapter player stack] (ItemPlayerOpsShared/givePlayerItemStack player stack))
     :spawn-entity-by-id! (fn [_adapter player entity-id speed] (ParticleEntityShared/spawnEntityByIdFromPlayer player (str entity-id) (float (or speed 1.0))))
+    :spawn-tracked-entity-by-id! (fn [_adapter player entity-id speed] (ParticleEntityShared/spawnTrackedEntityByIdFromPlayer player (str entity-id) (float (or speed 0.0))))
     :raytrace-block (fn [_adapter player reach fluid-source-only?] (raytrace-block-map player reach fluid-source-only?))}
 
    :menu-inventory-ops

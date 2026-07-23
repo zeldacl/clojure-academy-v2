@@ -38,6 +38,13 @@
        :y (.y vel)
        :z (.z vel)})))
 
+(defn get-position-for-entity
+  [^Entity entity]
+  (when entity
+    {:x (.getX entity)
+     :y (.getY entity)
+     :z (.getZ entity)}))
+
 (defn resolve-entity
   [^MinecraftServer server world-id entity-uuid]
   (try
@@ -58,4 +65,6 @@
    :discard-entity! (fn [world-id entity-uuid]
                       (boolean (discard-entity! (resolve-entity (get-server) world-id entity-uuid))))
    :get-velocity (fn [world-id entity-uuid]
-                   (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))})
+                   (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))
+   :get-position (fn [world-id entity-uuid]
+                   (get-position-for-entity (resolve-entity (get-server) world-id entity-uuid)))})

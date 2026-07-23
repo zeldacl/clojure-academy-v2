@@ -10,7 +10,7 @@
     :player-get-main-hand-item-stack :player-main-hand-placeable-block?
     :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
     :player-drop-main-hand-item-at! :player-count-item-by-id :player-consume-item-by-id!
-    :player-give-item-stack! :player-spawn-entity-by-id!
+    :player-give-item-stack! :player-spawn-entity-by-id! :player-spawn-tracked-entity-by-id!
     :player-raytrace-block :player-get-container-menu})
 
 (defn install-entity-ops!
@@ -47,6 +47,7 @@
 (defn player-consume-item-by-id!     [p id n](call :player-consume-item-by-id! p id n))
 (defn player-give-item-stack!        [p s]   (call :player-give-item-stack! p s))
 (defn player-spawn-entity-by-id!     [p eid sp] (call :player-spawn-entity-by-id! p eid sp))
+(defn player-spawn-tracked-entity-by-id! [p eid sp] (call :player-spawn-tracked-entity-by-id! p eid sp))
 (defn player-raytrace-block          [p r f?](call :player-raytrace-block p r f?))
 (defn player-get-container-menu      [p]     (call :player-get-container-menu p))
 

@@ -79,6 +79,12 @@
     (platform/call-adapter fw-atom :entity-motion :get-velocity
                            world-id entity-uuid)))
 
+(defn entity-position
+  [world-id entity-uuid]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :entity-motion :get-position
+                           world-id entity-uuid)))
+
 (defn teleportation-available?
   []
   (boolean
