@@ -52,21 +52,26 @@
                         (when-let [^MinecraftServer server (server-fn)]
                           (resolve-level* server resolve-level-fn world-id)))]
     {:apply-direct-damage!
-     (fn [world-id entity-uuid damage source-type]
-       (try
-         (if-let [^ServerLevel level (resolve-level world-id)]
-           (if-let [entity (get-entity-by-uuid level entity-uuid)]
-             (if (and (living? entity) (not (pvp-blocked? entity)))
-               (let [^LivingEntity living entity
-                     dmg-source (core/resolve-damage-source level source-type)]
-                 (apply-hurt! living dmg-source (float damage))
-                 true)
-               false)
-             false)
-           false)
-         (catch Exception e
-           (log/warn "Failed to apply direct damage:" (ex-message e))
-           false)))
+     (fn apply-direct-damage-impl
+       ([world-id entity-uuid damage source-type]
+        (apply-direct-damage-impl world-id entity-uuid damage source-type nil))
+       ([world-id entity-uuid damage source-type opts]
+        (try
+          (if-let [^ServerLevel level (resolve-level world-id)]
+            (if-let [entity (get-entity-by-uuid level entity-uuid)]
+              (if (and (living? entity) (not (pvp-blocked? entity)))
+                (let [^LivingEntity living entity
+                      dmg-source (core/resolve-damage-source level source-type)]
+                  (when (:reset-invulnerable-time? opts)
+                    (set! (.-invulnerableTime living) (int 0)))
+                  (apply-hurt! living dmg-source (float damage))
+                  true)
+                false)
+              false)
+            false)
+          (catch Exception e
+            (log/warn "Failed to apply direct damage:" (ex-message e))
+            false))))
 
      :apply-aoe-damage!
      (fn [world-id x y z radius damage source-type falloff?]

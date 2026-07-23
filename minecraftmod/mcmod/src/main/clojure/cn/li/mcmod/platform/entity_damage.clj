@@ -22,9 +22,15 @@
     true))
 
 (defn apply-direct-damage!
-  [world-id entity-uuid damage source-type]
-  (when-let [f (get-in @(fw/fw-atom) [:platform :entity-damage :apply-direct-damage!])]
-    (f world-id entity-uuid damage source-type)))
+  "opts (optional) supports :reset-invulnerable-time? — when true, clears the
+  target's post-hit invulnerability window before applying damage, for
+  skills whose original deliberately does this (e.g. ElectronMissile's
+  hurtResistantTime = -1) so rapid successive hits always land full damage."
+  ([world-id entity-uuid damage source-type]
+   (apply-direct-damage! world-id entity-uuid damage source-type nil))
+  ([world-id entity-uuid damage source-type opts]
+   (when-let [f (get-in @(fw/fw-atom) [:platform :entity-damage :apply-direct-damage!])]
+     (f world-id entity-uuid damage source-type opts))))
 
 (defn apply-aoe-damage!
   [world-id x y z radius damage source-type falloff?]

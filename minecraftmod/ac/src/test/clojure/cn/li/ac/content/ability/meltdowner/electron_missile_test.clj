@@ -149,6 +149,10 @@
       (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-3" :player-ref {:id "player-obj"}))
 
     (is (= 1 (count @damage-calls*)))
+    ;; Original resets hurtResistantTime = -1 before each hit; the port asks
+    ;; the platform bridge to clear the same invulnerability window.
+    (is (= ["w" "t-1" 12.0 :magic {:reset-invulnerable-time? true}]
+           (vec (first @damage-calls*))))
     (is (= [["p1" "t-1" {:ctx-id "ctx-3"
                           :target-pos {:x 3.0 :y 64.0 :z 0.0}}]]
            @mark-calls*))
@@ -175,7 +179,9 @@
       (cb/apply-invoke missile/electron-missile-up! :player-id "p1" :ctx-id "ctx-4")
       (cb/apply-invoke missile/electron-missile-abort! :ctx-id "ctx-4"))
 
-    (is (= [["p1" :electron-missile 550]] @cooldown-calls*))
+    ;; abort applies cooldown too — original funnels release/abort/timeout
+    ;; through the same MSG_TERMINATED handler that always sets it.
+    (is (= [["p1" :electron-missile 550] ["p1" :electron-missile 550]] @cooldown-calls*))
     (is (= {:ticks 0 :active-balls 0 :active? false}
            (:skill-state @ctx*)))
     (is (= [:electron-missile/fx-end :electron-missile/fx-end]
@@ -187,12 +193,16 @@
         (make-context-mocks {:skill-state {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}})
         local-fx* (atom [])
         nearby-fx* (atom [])
-        terminate-calls* (atom [])]
+        terminate-calls* (atom [])
+        cooldown-calls* (atom [])]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.5)
                   skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                     (swap! cooldown-calls* conj [player-id skill-id ticks])
+                                                     nil)
                   ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! (fn [& args]
@@ -204,7 +214,11 @@
       (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-5" :player-ref {:id "player-obj"}))
 
     (is (= 1 (count @terminate-calls*)))
+    ;; Exceeding max-hold is also a termination path, and must apply
+    ;; cooldown just like a normal release — original funnels it through
+    ;; the same MSG_TERMINATED handler.
+    (is (= [["p1" :electron-missile 550]] @cooldown-calls*))
     (is (= [:electron-missile/fx-end] (mapv second @local-fx*)))
     (is (= @local-fx* @nearby-fx*))
-    (is (= {:ticks 80 :active-balls 2 :active? true :overload-floor 200.0}
+    (is (= {:ticks 0 :active-balls 0 :active? false}
            (:skill-state @ctx*)))))

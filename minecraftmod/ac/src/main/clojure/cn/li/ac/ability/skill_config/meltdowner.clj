@@ -19,9 +19,6 @@
   {:skill-id :electron-missile :id :projectile.max-hold-balls :path "projectile.max-hold-balls" :section-suffix "projectile" :type :int :min 1 :default 5 :comment "ElectronMissile max active stored balls."}
   {:skill-id :electron-missile :id :timing.spawn-interval-ticks :path "timing.spawn-interval-ticks" :section-suffix "timing" :type :int :min 1 :default 10 :comment "ElectronMissile ticks between ball spawns."}
    {:skill-id :electron-missile :id :timing.fire-interval-ticks :path "timing.fire-interval-ticks" :section-suffix "timing" :type :int :min 1 :default 8 :comment "ElectronMissile ticks between ball launches."}
-   {:skill-id :electron-missile :id :projectile.travel-speed :path "projectile.travel-speed" :section-suffix "projectile" :type :double :min 0.001 :default 1.6 :comment "ElectronMissile estimated projectile speed in blocks per tick."}
-   {:skill-id :electron-missile :id :projectile.travel-ticks-min :path "projectile.travel-ticks-min" :section-suffix "projectile" :type :int :min 1 :default 2 :comment "ElectronMissile minimum delayed hit ticks."}
-   {:skill-id :electron-missile :id :projectile.travel-ticks-max :path "projectile.travel-ticks-max" :section-suffix "projectile" :type :int :min 1 :default 20 :comment "ElectronMissile maximum delayed hit ticks."}
    {:skill-id :electron-missile :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 18.0] :comment "ElectronMissile damage per ball."}
    {:skill-id :electron-missile :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double :min 0.0 :default 200.0 :comment "ElectronMissile activation overload floor/cost."}
   {:skill-id :electron-missile :id :cost.attack.cp :path "cost.attack.cp" :section-suffix "cost.attack" :type :double-list :min 0.0 :list-count 2 :default [60.0 25.0] :comment "ElectronMissile extra CP cost per fired ball."}

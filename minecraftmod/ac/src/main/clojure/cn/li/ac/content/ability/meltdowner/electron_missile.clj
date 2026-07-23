@@ -124,7 +124,14 @@
       (if (>= ticks max-hold)
         (do
           (log/debug "ElectronMissile: max hold reached" ticks "/" max-hold)
+          ;; Original applies cooldown on every termination path (normal
+          ;; release, abort, and exceeding the hold time limit) since they
+          ;; all funnel through the same server MSG_TERMINATED listener.
+          (skill-effects/set-main-cooldown! player-id electron-missile-skill-id
+                                            (cfg-lerp-int :cooldown.ticks exp))
           (send-end-fx! ctx-id)
+          (ctx-skill/replace-skill-state! ctx-id
+                                 {:ticks 0 :active-balls 0 :active? false})
           (ctx/terminate-context! ctx-id nil))
         (let [balls-after-spawn (if (and (zero? (mod ticks spawn-interval))
                                          (< active-balls max-balls))
@@ -143,11 +150,16 @@
                                             (try-pay-attack-cost! player-id exp))
                                      (do
                                        (when (and (entity-damage/available?) (:uuid target))
+                                         ;; Original resets hurtResistantTime = -1 before
+                                         ;; each hit so the 8-tick fire cadence always lands
+                                         ;; full damage instead of being absorbed by MC's
+                                         ;; post-hit invulnerability window.
                                          (entity-damage/apply-direct-damage!
                                            world-id
                                            (:uuid target)
                                            (cfg-lerp :combat.damage exp)
-                                           :magic)
+                                           :magic
+                                           {:reset-invulnerable-time? true})
                                           (md-damage/mark-target! player-id (:uuid target)
                                                                   {:ctx-id ctx-id
                                                                    :target-pos {:x (:x target)
@@ -177,7 +189,11 @@
                  {:ticks 0 :active-balls 0 :active? false})))
 
 (defn electron-missile-abort!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  ;; Original applies cooldown on abort too (same MSG_TERMINATED handler as
+  ;; a normal release) — abort must not be a free zero-cooldown re-cast.
+  (let [cd (cfg-lerp-int :cooldown.ticks exp)]
+    (skill-effects/set-main-cooldown! player-id electron-missile-skill-id cd))
   (send-end-fx! ctx-id)
   (ctx-skill/replace-skill-state! ctx-id
                          {:ticks 0 :active-balls 0 :active? false}))
