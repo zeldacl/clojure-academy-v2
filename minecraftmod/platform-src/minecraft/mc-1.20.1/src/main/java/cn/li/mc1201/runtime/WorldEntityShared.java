@@ -28,11 +28,23 @@ public final class WorldEntityShared {
     }
 
     public static boolean spawnLightning(ServerLevel level, double x, double y, double z) {
-        Entity lightning = EntityType.LIGHTNING_BOLT.create(level);
+        return spawnLightning(level, x, y, z, false);
+    }
+
+    /**
+     * visualOnly matches original ThunderClap's EntityLightningBolt(world, x,
+     * y, z, effectOnly=true): flash + thunder sound only, no vanilla damage,
+     * no fire, no creeper-charging — the skill applies its own damage
+     * separately, and a real bolt's side effects were never part of the
+     * original design.
+     */
+    public static boolean spawnLightning(ServerLevel level, double x, double y, double z, boolean visualOnly) {
+        LightningBolt lightning = (LightningBolt) EntityType.LIGHTNING_BOLT.create(level);
         if (lightning == null) {
             return false;
         }
         lightning.moveTo(x, y, z);
+        lightning.setVisualOnly(visualOnly);
         return level.addFreshEntity(lightning);
     }
 

@@ -122,7 +122,7 @@
               :world-id "world-1"
               :hit-pos {:x 8.0 :y 64.0 :z 8.0}
               :exp 0.5}
-             {:at :hit-pos}]
+             {:at :hit-pos :visual-only? true}]
             [:damage-aoe
              {:player-id "p1"
               :ctx-id "ctx-hit"

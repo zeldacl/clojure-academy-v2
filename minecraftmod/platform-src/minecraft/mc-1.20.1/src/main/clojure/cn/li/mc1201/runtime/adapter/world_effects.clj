@@ -24,21 +24,23 @@
                    get-entity-by-uuid-fn query-core/get-entity-by-uuid
                    resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
                    block-id-fn (fn [^Block block _block-state] (str (.getDescriptionId block)))}}]
-  (let [spawn-lightning! (or spawn-lightning-fn (fn [_level _x _y _z] false))
+  (let [spawn-lightning! (or spawn-lightning-fn (fn [_level _x _y _z _visual-only?] false))
         create-explosion! (or create-explosion-fn (fn [_level _x _y _z _radius _fire?] false))
         spawn-projectile! (or spawn-projectile-fn
                               (fn [level projectile-spec]
                                 (core/spawn-projectile-in-level!
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))]
-    {:spawn-lightning! (fn [world-id x y z]
-                         (try
-                           (when-let [^MinecraftServer server (server-fn)]
-                             (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                               (spawn-lightning! level x y z)))
-                           (catch Exception e
-                             (log/warn "Failed to spawn lightning:" (ex-message e))
-                             false)))
+    {:spawn-lightning! (fn spawn-lightning-adapter!
+                         ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
+                         ([world-id x y z visual-only?]
+                          (try
+                            (when-let [^MinecraftServer server (server-fn)]
+                              (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                (spawn-lightning! level x y z (boolean visual-only?))))
+                            (catch Exception e
+                              (log/warn "Failed to spawn lightning:" (ex-message e))
+                              false))))
      :create-explosion! (fn [world-id x y z radius fire?]
                           (try
                             (when-let [^MinecraftServer server (server-fn)]

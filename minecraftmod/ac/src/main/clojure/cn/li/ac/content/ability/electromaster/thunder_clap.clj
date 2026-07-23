@@ -9,7 +9,7 @@
   Cooldown: ticks * lerp(10,6,exp)
   Exp: 0.003 per use"
   (:require
-            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
@@ -19,8 +19,7 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
-	            [cn.li.mcmod.platform.entity :as entity]))
+                        [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def-skill-config-ops :thunder-clap)
 (defn- min-ticks [] (cfg-int :charge.min-ticks))
@@ -104,15 +103,6 @@
                             (merge {:performed? (boolean performed?)} extra-state))
   (boolean performed?))
 
-(defn- spawn-surround-and-mark!
-  "Spawn surround arc + ripple mark entities matching original ThunderClapContextC
-  c_spawnEffect: EntitySurroundArc(BOLD) + EntityRippleMark."
-  [_ctx-id player-id player]
-  (when player
-    (entity/player-spawn-entity-by-id! player (modid/namespaced-path "entity_surround_arc") 0.0)
-    (when-let [hit-pos (resolve-raycast-target player-id)]
-      (entity/player-spawn-entity-by-id! player (modid/namespaced-path "entity_ripple_mark") 0.0))))
-
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
   (let [ticks (long (or hold-ticks 0))]
@@ -142,9 +132,8 @@
   (skill-effects/emit-fx! (skill-registry/get-skill :thunder-clap) evt stage))
 
 (defn- thunder-clap-down!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (refresh-hit-pos! ctx-id player-id)
-  (spawn-surround-and-mark! ctx-id player-id player-ref)
   (emit-thunder-clap-fx! :start {:ctx-id ctx-id :player-id player-id}))
 
 (defn- thunder-clap-tick!
@@ -178,7 +167,12 @@
                                      (cfg-lerp :cooldown.ticks-per-hold exp*))))]
         (let [evt {:player-id player-id :ctx-id ctx-id :world-id world-id
                    :hit-pos hit-pos :exp exp*}]
-          (world-op/execute-spawn-lightning! evt {:at :hit-pos})
+          ;; visual-only: matches original's EntityLightningBolt(..., effectOnly=true)
+          ;; — flash + thunder sound only. Damage comes entirely from
+          ;; execute-damage-aoe! below, matching original's separate
+          ;; ctx.attackRange call; a real bolt would double up on vanilla's
+          ;; own incidental damage/fire/creeper-charging.
+          (world-op/execute-spawn-lightning! evt {:at :hit-pos :visual-only? true})
           (damage-op/execute-damage-aoe! evt {:center      :hit-pos
                                               :radius      radius
                                               :amount      dmg

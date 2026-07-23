@@ -12,8 +12,8 @@
   (world-effects/create-world-effects
     server-context/get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
-     :spawn-lightning-fn (fn [^ServerLevel level x y z]
-                 (WorldEntityShared/spawnLightning level (double x) (double y) (double z)))
+     :spawn-lightning-fn (fn [^ServerLevel level x y z visual-only?]
+                 (WorldEntityShared/spawnLightning level (double x) (double y) (double z) (boolean visual-only?)))
      :create-explosion-fn (fn [^ServerLevel level x y z radius fire?]
                 (WorldEntityShared/createExplosion level x y z (float radius) (boolean fire?))
                             true)

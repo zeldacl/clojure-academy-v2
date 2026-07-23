@@ -19,10 +19,11 @@
   (world-effects/create-world-effects
     get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
-     :spawn-lightning-fn (fn [^ServerLevel level x y z]
-                           (let [bolt (.create EntityType/LIGHTNING_BOLT level)]
+     :spawn-lightning-fn (fn [^ServerLevel level x y z visual-only?]
+                           (let [^LightningBolt bolt (.create EntityType/LIGHTNING_BOLT level)]
                              (when bolt
-                               (.moveTo ^LightningBolt bolt (double x) (double y) (double z))
+                               (.moveTo bolt (double x) (double y) (double z))
+                               (.setVisualOnly bolt (boolean visual-only?))
                                (boolean (.addFreshEntity level bolt)))))
      :create-explosion-fn (fn [^ServerLevel level x y z radius fire?]
                             (try

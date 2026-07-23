@@ -11,12 +11,13 @@
   evt)
 
 (defn execute-spawn-lightning!
-  [evt {:keys [at]}]
+  [evt {:keys [at visual-only?]}]
   (when (world-effects/available?)
     (let [{:keys [x y z]} (or (when (map? at) at) (get evt at))]
       (world-effects/spawn-lightning!
         (:world-id evt)
-        (double x) (double y) (double z))))
+        (double x) (double y) (double z)
+        (boolean visual-only?))))
   evt)
 
 (defn execute-create-explosion!

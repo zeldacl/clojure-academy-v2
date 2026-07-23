@@ -15,8 +15,10 @@
     (apply f args)))
 
 (defn spawn-lightning!
-  [world-id x y z]
-  (call :spawn-lightning! world-id x y z))
+  ([world-id x y z]
+   (call :spawn-lightning! world-id x y z))
+  ([world-id x y z visual-only?]
+   (call :spawn-lightning! world-id x y z visual-only?)))
 
 (defn create-explosion!
   [world-id x y z radius fire?]
