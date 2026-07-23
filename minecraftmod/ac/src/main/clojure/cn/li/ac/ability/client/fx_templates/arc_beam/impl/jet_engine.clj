@@ -283,17 +283,12 @@
                                             (impact-spike-ops target-v ttl trigger-ticks)
                                             (impact-billboard-ops cam-v target-v ttl trigger-ticks))))))))
                               triggering-states))
-        alpha (->> triggering-states
-                   (map #(long (or (:ttl %) 0)))
-                   (filter pos?)
-                   (map #(int (* 220 (/ (double %) (double trigger-ttl)))))
-                   (reduce max 0))
-        flash-op (when (pos? alpha)
-                   {:type :screen-flash
-                    :r 200 :g 220 :b 255 :a (min 85 alpha)})
+        ;; Screen-flash intensity during trigger is computed by the content
+        ;; layer's jet-engine-fx/flash-alpha (same formula, player-scoped) for
+        ;; the 2D overlay — this :ops vector is pure 3D world-space geometry,
+        ;; it has no route to a full-screen tint.
         ws (when (seq triggering-states) 0.07)  ;; walk speed during trigger (matching original)
-        ops (cond-> (into mark-ops trigger-ops)
-              flash-op (conj flash-op))]
+        ops (into mark-ops trigger-ops)]
     (cond-> (when (seq ops) {:ops ops})
       ws (assoc :local-walk-speed (float ws)))))
 

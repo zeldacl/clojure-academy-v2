@@ -341,7 +341,11 @@
       (dsl/group {:id :overlay-app-layer :w sw :h sh :visible? false}
         (dsl/box {:id :overlay-app-panel :fill 0xC0202020})
         (dsl/text {:id :overlay-app-title :text "" :color 0xFFFFFFFF})
-        (dsl/text {:id :overlay-app-subtitle :text "" :color 0xFF888888 :visible? false})))))
+        (dsl/text {:id :overlay-app-subtitle :text "" :color 0xFF888888 :visible? false}))
+      ;; Full-screen skill flash (e.g. jet-engine's trigger pulse) — last
+      ;; child so it draws on top of everything else; transparent (alpha 0
+      ;; fill) until update-skill-flash! drives it.
+      (dsl/box {:id :skill-flash-screen :x 0 :y 0 :w sw :h sh :fill 0x00000000}))))
 
 (defn- attach-overlay-bindings! [r]
   (let [clock (rt/clock-ms-sig r)
@@ -851,6 +855,10 @@
                 (ui/set-node-prop! r txt :color (long (:color line)))))))))
     (set-visible! r :debug-lines (seq lines))))
 
+(defn- update-skill-flash! [r snapshot]
+  (let [alpha (int (or (:screen-flash-alpha snapshot) 0))]
+    (set-box-rgba! r :skill-flash-screen {:r 200 :g 220 :b 255 :a alpha})))
+
 (defn- update-overlay-app! [r snapshot]
   (if-let [app-ui (:overlay-app-ui snapshot)]
     (let [{:keys [panel title subtitle]} app-ui]
@@ -994,4 +1002,5 @@
       (update-toasts! r snapshot)
       (update-tutorial-notif! r snapshot)
       (update-debug-lines! r snapshot)
+      (update-skill-flash! r snapshot)
       (apply-jitter! r (:interfered? snapshot)))))

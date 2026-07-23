@@ -136,10 +136,14 @@
                   :pos {:x 1.0 :y 64.0 :z 0.0}
                   :trigger-ticks 0})
 
-      (let [a0 (:a (last (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 0))))]
+      ;; Screen-flash intensity is exposed via je-fx/flash-alpha (consumed by
+      ;; the 2D reactive-hud overlay), not via the world-space :ops vector —
+      ;; see jet-engine-fx.clj's flash-alpha docstring.
+      (let [a0 (je-fx/flash-alpha nil)]
+        (is (pos? a0))
         (dotimes [_ 13]
           (level-effects/tick-level-effects!))
-        (let [a1 (:a (last (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 13))))]
+        (let [a1 (je-fx/flash-alpha nil)]
           (is (> a0 a1)
               "screen flash alpha should fade as trigger ttl decreases")))
 
@@ -147,4 +151,5 @@
         (level-effects/tick-level-effects!))
 
       (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 20)))
+      (is (zero? (je-fx/flash-alpha nil)))
       (is (empty? (:fx-state (je-fx/fx-snapshot)))))))

@@ -13,6 +13,7 @@
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
+            [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.i18n :as i18n])
@@ -535,6 +536,7 @@
      :toasts (toast/build-toast-layouts screen-w screen-h now-ms)
      :tutorial-notification (tutorial-notification/build-notification-layout screen-w screen-h now-ms)
      :debug-lines (or (debug-overlay/build-debug-line-items player-state) [])
+     :screen-flash-alpha (jet-engine-fx/flash-alpha player-uuid)
      :overload-pulse-intensity (when (> ol-pct 0.8) (* (- ol-pct 0.8) 5.0))
      :screen-w screen-w
      :screen-h screen-h}))
