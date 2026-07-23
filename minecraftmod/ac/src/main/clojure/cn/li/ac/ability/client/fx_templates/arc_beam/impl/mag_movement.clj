@@ -1,49 +1,11 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement
   (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
-            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]))
 
 (def ^:private loop-sound (modid/namespaced-path "em.move_loop"))
-
-
-
-
-
-
-
-
-
-
-(defn- magnetic-beam-style [tick]
-  (let [phase (* 0.9 (double tick))
-        tex-phase (* 1.7 (double tick))
-        wiggle (+ 0.02
-                  (* 0.02 (Math/sin phase))
-                  (* 0.012 (Math/sin tex-phase)))
-        flicker (+ (* 0.5 (+ 1.0 (Math/sin (* 0.27 (double tick)))))
-                   (* 0.5 (+ 1.0 (Math/sin (* 0.53 (double tick))))))
-        show-prob (+ 0.1 (* 0.35 flicker))
-        hide-prob (+ 0.6 (* 0.25 (- 1.0 flicker)))]
-    {:width wiggle
-     :core-width (* wiggle 0.52)
-     :outer-rgb {:r 89 :g 196 :b 255}
-     :outer-alpha (int (+ 45 (* 95 show-prob)))
-     :inner-rgb {:r 234 :g 250 :b 255}
-     :inner-alpha (int (+ 70 (* 120 hide-prob)))
-     :line-rgb {:r 161 :g 236 :b 255}
-     :line-alpha (int (+ 90 (* 110 flicker)))}))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]

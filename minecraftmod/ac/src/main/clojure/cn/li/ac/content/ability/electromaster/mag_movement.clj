@@ -297,7 +297,6 @@
   :ctrl-id         :mag-movement
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks  (fn [_] (cfg-int :cooldown.ticks))
   :pattern         :hold-channel
   :cooldown        {:mode :manual}
   :cost {:down {:overload   down-overload-cost

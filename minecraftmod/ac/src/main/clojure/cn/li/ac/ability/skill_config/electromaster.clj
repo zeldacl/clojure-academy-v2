@@ -87,7 +87,6 @@
    {:skill-id :mag-movement :id :targeting.target-update-radius :path "targeting.target-update-radius" :section-suffix "targeting" :type :double :min 0.0 :default 4.0 :comment "MagMovement entity target refresh radius."}
    {:skill-id :mag-movement :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "MagMovement down-stage overload cost lerp endpoints."}
    {:skill-id :mag-movement :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [15.0 8.0] :comment "MagMovement tick-stage CP cost lerp endpoints."}
-   {:skill-id :mag-movement :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 1 :default 60 :comment "MagMovement cooldown ticks."}
    {:skill-id :mag-movement :id :progression.exp-min :path "progression.exp-min" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "MagMovement minimum exp gained on completion."}
    {:skill-id :mag-movement :id :progression.exp-distance-scale :path "progression.exp-distance-scale" :section-suffix "progression" :type :double :min 0.0 :default 0.0011 :comment "MagMovement exp gained per traveled block."}
 
