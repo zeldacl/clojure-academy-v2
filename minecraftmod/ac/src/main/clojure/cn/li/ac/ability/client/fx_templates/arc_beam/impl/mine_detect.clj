@@ -57,10 +57,12 @@
 
 (defn- advanced-tier
   "Map ore harvest-level to color tier, matching original MineDetect:
-   Math.min(3, harvestLevel+1) → 0-3 index into colors array (size 4)."
+   colors[Math.min(3, harvestLevel+1)], re-indexed to this 0-based 4-entry
+   map (advanced-tier-colors key K == original colors[K+1]) — so the tier
+   here is Math.min(2, harvestLevel), one less than the original index."
   [{:keys [harvest-level block-id]}]
   (if (number? harvest-level)
-    (min 3 (inc (long harvest-level)))
+    (min 2 (long harvest-level))
     (fallback-advanced-tier (str block-id))))
 
 (defn- ore-color
@@ -71,13 +73,13 @@
 
 (defn- faded-color
   "Alpha based on distance from player, matching original calcAlpha:
-   alpha = 0.3 + (1 - dist/range * 2.2) * 0.7, clamped to [0.0, 1.0]"
+   alpha = 0.3 + (1 - (dist/range) * 2.2) * 0.7, clamped to [0.0, 1.0]"
   [color player-pos ore-x ore-y ore-z range]
   (let [dx (- (double ore-x) (double (:x player-pos 0.0)))
         dy (- (double ore-y) (double (:y player-pos 0.0)))
         dz (- (double ore-z) (double (:z player-pos 0.0)))
         dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-        jdg (max 0.0 (- 1.0 (/ dist (double range) 2.2)))
+        jdg (max 0.0 (- 1.0 (* 2.2 (/ dist (double range)))))
         alpha-factor (+ 0.3 (* jdg 0.7))
         scaled-alpha (int (* (double (:a color)) (max 0.0 (min 1.0 alpha-factor))))]
     (ru/with-alpha color scaled-alpha)))
