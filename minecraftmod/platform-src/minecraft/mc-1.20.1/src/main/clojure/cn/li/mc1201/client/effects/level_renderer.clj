@@ -261,6 +261,8 @@
                  camera-pos (hand-center-pos player) tick (make-nearby-block-query-fn player)))]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
+    (when owner
+      (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
       (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
         (.pushPose pose-stack)

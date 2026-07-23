@@ -1,8 +1,9 @@
 (ns cn.li.ac.ability.effects.geom
-  (:require 
+  (:require
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.util.math.vec3 :as vec3]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- runtime-player-state
   [player-id]
@@ -21,8 +22,13 @@
 ;; ---------------------------------------------------------------------------
 
 (defn world-id-of
+  "Return world-id (dimension string) for `player-id` from live Minecraft entity."
   [player-id]
-  (world-id-of-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+  (if (raycast/available?)
+    (if-let [pos (raycast/player-position player-id)]
+      (or (:world-id pos) "minecraft:overworld")
+      "minecraft:overworld")
+    (world-id-of-in-session (runtime-hooks/require-player-state-session-id "geom") player-id)))
 
 (defn world-id-of-in-session
   [session-id player-id]
@@ -30,8 +36,15 @@
       "minecraft:overworld"))
 
 (defn eye-pos
+  "Return {:x :y :z} eye position from live Minecraft player entity."
   [player-id]
-  (eye-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+  (if (raycast/available?)
+    (if-let [pos (raycast/player-position player-id)]
+      {:x (double (:x pos))
+       :y (double (:eye-y pos))
+       :z (double (:z pos))}
+      {:x 0.0 :y 65.62 :z 0.0})
+    (eye-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id)))
 
 (defn eye-pos-in-session
   [session-id player-id]
@@ -41,8 +54,15 @@
      :z (double (or (:z pos) 0.0))}))
 
 (defn body-pos
+  "Return {:x :y :z} body (feet) position from live Minecraft player entity."
   [player-id]
-  (body-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id))
+  (if (raycast/available?)
+    (if-let [pos (raycast/player-position player-id)]
+      {:x (double (:x pos))
+       :y (double (:y pos))
+       :z (double (:z pos))}
+      {:x 0.0 :y 64.0 :z 0.0})
+    (body-pos-in-session (runtime-hooks/require-player-state-session-id "geom") player-id)))
 
 (defn body-pos-in-session
   [session-id player-id]

@@ -91,7 +91,7 @@
         outer-color (arc/pattern-color pattern :color-outer outer-alpha)
         inner-color (arc/pattern-color pattern :color-inner inner-alpha)
         line-color  (arc/pattern-color pattern :color-line line-alpha)
-        width       (double (or (:width pattern) 0.15))
+        width       (double (or (:width pattern) 1.0))
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
         segment-count (dec (count vertices))
@@ -257,9 +257,15 @@
         mid (vec3/v* (vec3/v+ start end) 0.5)
         to-cam (vec3/vnorm (vec3/v- cam-pos mid))
         raw (vec3/vcross dir to-cam)]
+    ;; Camera at start → to-cam ∥ dir → cross→0. Fall back to a
+    ;; camera-relative perpendicular instead of a fixed world axis
+    ;; that renders the beam edge-on and invisible.
     (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
-      vec3/unit-x)))
+      (let [perp (vec3/vcross vec3/unit-y dir)]
+        (if (> (vec3/vlen perp) 1.0e-5)
+          (vec3/vnorm perp)
+          vec3/unit-x)))))
 
 (defn camera-facing-right-axis
   "Right axis for a camera-facing billboard at `center`."

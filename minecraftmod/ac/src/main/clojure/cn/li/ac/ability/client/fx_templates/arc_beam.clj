@@ -10,7 +10,8 @@
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.mcmod.runtime.install :as install]))
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effect registry (populated by build-spec)
@@ -216,7 +217,7 @@
   (let [pattern (arc-patterns/get-pattern pattern-key)
         life-ratio (/ (double ttl) (double (max 1 max-ttl)))]
     (ru/zigzag-arc-ops cam-v3 vertices pattern
-      {:life-ratio life-ratio
+      {:life-ratio 0.5
        :wiggle-phase wiggle-phase
        :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
