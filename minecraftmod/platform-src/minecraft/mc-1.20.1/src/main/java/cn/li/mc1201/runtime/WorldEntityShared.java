@@ -5,7 +5,9 @@ import java.util.List;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LightningBolt;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
@@ -39,5 +41,32 @@ public final class WorldEntityShared {
             ? Level.ExplosionInteraction.MOB
             : Level.ExplosionInteraction.NONE;
         level.explode(null, x, y, z, radius, interaction);
+    }
+
+    /**
+     * Matches original EMDamageHelper.attack's creeper-charging side effect:
+     * a skill hit on a creeper has some chance to power it, without the
+     * incidental damage/fire/100%-radius side effects of a real lightning
+     * bolt entity. Chance is rolled by the caller.
+     *
+     * Creeper has no public setPowered — the sanctioned API is
+     * Creeper#thunderHit(ServerLevel, LightningBolt), which vanilla itself
+     * uses when a real bolt strikes one. The LightningBolt passed in is
+     * marked visualOnly and never added to the level, so it never ticks,
+     * deals its own incidental damage, or ignites anything — it exists only
+     * as the parameter thunderHit expects.
+     */
+    public static boolean tryPowerCreeper(ServerLevel level, Entity entity) {
+        if (!(entity instanceof Creeper creeper)) {
+            return false;
+        }
+        LightningBolt bolt = EntityType.LIGHTNING_BOLT.create(level);
+        if (bolt == null) {
+            return false;
+        }
+        bolt.setVisualOnly(true);
+        bolt.moveTo(entity.getX(), entity.getY(), entity.getZ());
+        creeper.thunderHit(level, bolt);
+        return true;
     }
 }

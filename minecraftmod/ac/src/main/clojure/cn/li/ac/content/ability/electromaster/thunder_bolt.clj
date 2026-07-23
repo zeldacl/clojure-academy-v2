@@ -11,7 +11,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.motion :as motion]
             [cn.li.ac.ability.effects.potion :as potion-effects]))
 
 (def-skill-config-ops :thunder-bolt)
@@ -20,6 +20,17 @@
 (defn- cost-lerp [field-id]
   (fn [_player-id _skill-id exp]
     (cfg-lerp field-id (double (or exp 0.0)))))
+
+(defn- try-charge-creeper!
+  "Matches original EMDamageHelper.attack: a flat chance to power a creeper
+  that was actually hit by this strike (direct or AOE) — not a real
+  lightning-bolt entity, which would charge any creeper near the impact
+  point at 100% regardless of whether the skill actually damaged it."
+  [world-id target-uuid]
+  (when (and target-uuid
+             (motion/entity-motion-available?)
+             (< (rand) (cfg-double :effect.creeper-charge-chance)))
+    (motion/power-creeper! world-id target-uuid)))
 
 (defn- try-apply-slowness! [target-uuid exp]
   (let [exp-threshold (cfg-double :effect.slowness-exp-threshold)
@@ -53,20 +64,16 @@
                   (attack/aoe-victims world-id impact aoe-radius excluded))
         aoe-hit-count (if (= hit-kind :miss)
                         0
-                        (attack/apply-flat-aoe-damage! world-id victims aoe-damage :lightning))
+                        (attack/apply-flat-aoe-damage! world-id victims aoe-damage :lightning
+                                                       (fn [victim-uuid] (try-charge-creeper! world-id victim-uuid))))
         aoe-points (mapv (fn [{:keys [x y z eye-height]}]
                            {:x (double x)
                             :y (+ (double y) (double (or eye-height 0.0)))
                             :z (double z)})
                          victims)
         effective? (or direct-hit? (pos? aoe-hit-count))]
-    (when (and (world-effects/available?) (not= hit-kind :miss))
-      (world-effects/spawn-lightning!
-                                      world-id
-                                      (double (:x impact))
-                                      (double (:y impact))
-                                      (double (:z impact))))
     (when direct-hit?
+      (try-charge-creeper! world-id target-uuid)
       (try-apply-slowness! target-uuid exp*))
     (fx/send! ctx-id {:topic :thunder-bolt/fx-perform} nil {:start eye
                               :end impact

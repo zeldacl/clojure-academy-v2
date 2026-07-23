@@ -106,6 +106,7 @@
   {:skill-id :thunder-bolt :id :effect.slowness-exp-threshold :path "effect.slowness-exp-threshold" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.2 :comment "ThunderBolt minimum skill exp required before slowness can trigger."}
    {:skill-id :thunder-bolt :id :effect.slowness-duration-ticks :path "effect.slowness-duration-ticks" :section-suffix "effect" :type :int :min 0 :default 40 :comment "ThunderBolt slowness duration in ticks."}
    {:skill-id :thunder-bolt :id :effect.slowness-amplifier :path "effect.slowness-amplifier" :section-suffix "effect" :type :int :min 0 :default 3 :comment "ThunderBolt slowness amplifier."}
+   {:skill-id :thunder-bolt :id :effect.creeper-charge-chance :path "effect.creeper-charge-chance" :section-suffix "effect" :type :double :min 0.0 :max 1.0 :default 0.3 :comment "ThunderBolt chance to charge a creeper actually hit by the strike."}
    {:skill-id :thunder-bolt :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [280.0 420.0] :comment "ThunderBolt down-stage CP cost lerp endpoints."}
    {:skill-id :thunder-bolt :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [50.0 27.0] :comment "ThunderBolt down-stage overload cost lerp endpoints."}
    {:skill-id :thunder-bolt :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [120.0 50.0] :comment "ThunderBolt cooldown lerp endpoints."}

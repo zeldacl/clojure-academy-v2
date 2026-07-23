@@ -85,6 +85,15 @@
     (platform/call-adapter fw-atom :entity-motion :get-position
                            world-id entity-uuid)))
 
+(defn power-creeper!
+  "True if entity-uuid resolved to a creeper and it was flipped to powered
+  (charged) — matches original EMDamageHelper.attack's creeper side effect."
+  [world-id entity-uuid]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :power-creeper!
+                            world-id entity-uuid))))
+
 (defn teleportation-available?
   []
   (boolean

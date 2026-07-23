@@ -2,7 +2,9 @@
   "Shared Minecraft-side entity motion helpers (no loader API imports)."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
+  (:import [cn.li.mc1201.runtime WorldEntityShared]
+           [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
            [net.minecraft.world.phys Vec3]))
 
@@ -45,6 +47,11 @@
      :y (.getY entity)
      :z (.getZ entity)}))
 
+(defn power-creeper-for-entity!
+  [^ServerLevel level ^Entity entity]
+  (when (and level entity)
+    (boolean (WorldEntityShared/tryPowerCreeper level entity))))
+
 (defn resolve-entity
   [^MinecraftServer server world-id entity-uuid]
   (try
@@ -54,6 +61,17 @@
     (catch Exception e
       (log/warn "Failed to resolve entity:" world-id entity-uuid (ex-message e))
       nil)))
+
+(defn resolve-level-and-entity
+  "Returns [level entity], either of which may be nil."
+  [^MinecraftServer server world-id entity-uuid]
+  (try
+    (when server
+      (let [^ServerLevel level (query-core/resolve-level server world-id)]
+        [level (some-> level (query-core/get-entity-by-uuid entity-uuid))]))
+    (catch Exception e
+      (log/warn "Failed to resolve level/entity:" world-id entity-uuid (ex-message e))
+      [nil nil])))
 
 (defn create-entity-motion
   "Create an IEntityMotion adapter using a platform-provided server supplier."
@@ -67,4 +85,7 @@
    :get-velocity (fn [world-id entity-uuid]
                    (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))
    :get-position (fn [world-id entity-uuid]
-                   (get-position-for-entity (resolve-entity (get-server) world-id entity-uuid)))})
+                   (get-position-for-entity (resolve-entity (get-server) world-id entity-uuid)))
+   :power-creeper! (fn [world-id entity-uuid]
+                     (let [[level entity] (resolve-level-and-entity (get-server) world-id entity-uuid)]
+                       (boolean (power-creeper-for-entity! level entity))))})

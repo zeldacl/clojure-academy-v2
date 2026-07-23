@@ -101,11 +101,18 @@
          vec)))
 
 (defn apply-flat-aoe-damage!
-  "Flat (no distance falloff) AOE damage to all victims. Returns hit count."
-  [world-id victims amount damage-type]
-  (reduce (fn [hit-count {:keys [uuid]}]
-            (if (damage-entity! world-id uuid (double amount) damage-type)
-              (inc hit-count)
-              hit-count))
-          0
-          victims))
+  "Flat (no distance falloff) AOE damage to all victims. Returns hit count.
+
+  Optional `on-hit!` is called with each victim's uuid after a successful
+  hit — for per-victim side effects (e.g. ThunderBolt's creeper-charging)
+  that should only fire for entities the skill actually damaged."
+  ([world-id victims amount damage-type]
+   (apply-flat-aoe-damage! world-id victims amount damage-type nil))
+  ([world-id victims amount damage-type on-hit!]
+   (reduce (fn [hit-count {:keys [uuid]}]
+             (if (damage-entity! world-id uuid (double amount) damage-type)
+               (do (when on-hit! (on-hit! uuid))
+                   (inc hit-count))
+               hit-count))
+           0
+           victims)))
