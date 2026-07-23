@@ -100,8 +100,6 @@
                 {}
                 states)))))
 
-(defn- build-plan [_cp _hcp _tick] nil)
-
 (defn- flesh-target-payload [_ctx-id _channel p]
   {:target-x (:target-x p)
    :target-y (:target-y p)

@@ -83,5 +83,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:ray-barrage :level] [_ _ store] (tick-state! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :ray-barrage
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store owner-key]
   (update store :beam-queue dissoc owner-key))

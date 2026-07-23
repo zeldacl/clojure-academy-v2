@@ -210,11 +210,14 @@
         (mapcat (fn [idx]
                   (let [t (* (double idx) (/ beam-length (max 1 (dec arc-count))))
                         world-pos (v+ start (v* direction t))
+                        ;; template is a list of segment-lists (main trunk +
+                        ;; branches, per generate-arc-segments) — flatten to
+                        ;; the flat segment list segment->quads expects.
                         template (nth templates (mod idx num-templates))]
                     (map (fn [quad] (-> quad
                                       (assoc :p0 (v+ (:p0 quad) world-pos))
                                       (assoc :p1 (v+ (:p1 quad) world-pos))
                                       (assoc :p2 (v+ (:p2 quad) world-pos))
                                       (assoc :p3 (v+ (:p3 quad) world-pos))))
-                         (segment->quads template))))
+                         (segment->quads (apply concat template)))))
                 (range arc-count))))))

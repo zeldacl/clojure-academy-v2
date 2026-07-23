@@ -126,5 +126,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mark-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mark-teleport :level] [_ _ store] (tick-state! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mark-teleport
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mark-teleport [_ store owner-key]
   (update store :effect-state dissoc owner-key))

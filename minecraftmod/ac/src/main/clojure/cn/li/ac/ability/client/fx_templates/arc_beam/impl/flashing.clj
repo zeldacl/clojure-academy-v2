@@ -68,8 +68,6 @@
                     (assoc acc owner-key (assoc st :burst burst'))))
                 {} states)))))
 
-(defn- build-plan [_cp _hcp _tick] nil)
-
 (defn- preview-to-payload [_ctx-id _channel p] {:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)})
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flashing :level] [_ _] {:fx-state {}})

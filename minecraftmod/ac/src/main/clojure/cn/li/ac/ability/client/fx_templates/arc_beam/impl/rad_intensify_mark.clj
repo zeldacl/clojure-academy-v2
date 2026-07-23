@@ -82,4 +82,8 @@
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:rad-intensify-mark :level] [_ _ store] (tick-state! store))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :rad-intensify-mark
-  [camera-pos hand-center-pos tick & args] (apply build-plan camera-pos hand-center-pos tick args))
+  [_effect-id camera-pos hand-center-pos tick & _more] (build-plan camera-pos hand-center-pos tick))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :rad-intensify-mark
+  [_ store owner-key]
+  (update (or store {:marks {}}) :marks
+          (fn [marks] (into {} (remove (fn [[k _]] (= owner-key (first k)))) marks))))

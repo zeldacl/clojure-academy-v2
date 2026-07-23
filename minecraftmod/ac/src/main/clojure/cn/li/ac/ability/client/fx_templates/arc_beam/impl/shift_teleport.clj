@@ -90,8 +90,6 @@
                     (assoc acc owner-key next-st)))
                 {} states)))))
 
-(defn- build-plan [_cp _hcp _tick] nil)
-
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {:fx-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:shift-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))

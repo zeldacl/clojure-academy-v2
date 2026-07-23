@@ -65,8 +65,6 @@
     (update state* :fx-state
             (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))))
 
-(defn- build-plan [_cp _hcp _tick] nil)
-
 (defn- target-payload [_ctx-id _channel p]
   {:target-x (:target-x p) :target-y (:target-y p) :target-z (:target-z p) :hit? (:hit? p)})
 

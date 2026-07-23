@@ -80,7 +80,7 @@
                       (let [life (+ 16 (rand-int 8))]
                         (update-in store* [:rays owner-key*] (fnil conj [])
                                    (merge base-meta
-                                          {:start start :end end
+                                          {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
                                            :ttl life :max-ttl life
                                            :beam-length (double (or beam-length 30.0))
                                            :charge-ticks (int (or charge-ticks 20))
@@ -94,7 +94,7 @@
         (let [life (+ 10 (rand-int 6))]
           (update-in store* [:rays owner-key*] (fnil conj [])
                      (merge base-meta
-                            {:start start :end end
+                            {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
                              :ttl life :max-ttl life
                              :beam-length 10.0 :charge-ticks 20
                              :is-reflect? true})))
@@ -104,6 +104,23 @@
 ;; ---------------------------------------------------------------------------
 ;; Tick
 ;; ---------------------------------------------------------------------------
+
+(defn- charge-ring-segments-local
+  "Ring segment endpoints relative to center — depends only on ticks (charge
+  animation phase) and charge-ratio (pulse radius), both tick-rate state, so
+  precomputed once per tick here rather than every frame in build-plan."
+  [ticks charge-ratio]
+  (let [base-radius (+ 0.72 (* 0.28 (double charge-ratio)))
+        pulse (+ base-radius (* 0.08 (Math/sin (* 0.23 (double ticks)))))
+        y-base 0.18
+        ring-segments 18]
+    (vec
+      (for [idx (range ring-segments)
+            :let [a0 (/ (* 2.0 Math/PI idx) ring-segments)
+                  a1 (/ (* 2.0 Math/PI (inc idx)) ring-segments)
+                  h (+ y-base (* 0.22 (Math/sin (+ (* 0.17 ticks) idx))))]]
+        {:p0 {:x (* pulse (Math/cos a0)) :y h :z (* pulse (Math/sin a0))}
+         :p1 {:x (* pulse (Math/cos a1)) :y h :z (* pulse (Math/sin a1))}}))))
 
 (defn- tick-state!
   [store]
@@ -130,7 +147,10 @@
                                                :motion-x (- (rand 0.06) 0.03)
                                                :motion-y (+ 0.01 (rand 0.04))
                                                :motion-z (- (rand 0.06) 0.03)})))
-                                        [owner-key (assoc st :ticks ticks)]))))
+                                        [owner-key (assoc st
+                                                     :ticks ticks
+                                                     :charge-ring-segments-local
+                                                     (charge-ring-segments-local ticks (double (or (:charge-ratio st) 0.0))))]))))
                             (:effect-state store*))
         rays* (into {}
                     (keep (fn [[owner-key xs]]
@@ -156,25 +176,21 @@
 ;; Render ops
 ;; ---------------------------------------------------------------------------
 
-(defn- charge-ops [^V3 center ticks charge-ratio]
-  (let [base-radius (+ 0.72 (* 0.28 (double charge-ratio)))
-        pulse (+ base-radius (* 0.08 (Math/sin (* 0.23 (double ticks)))))
-        cx (.-x center) cz (.-z center)
-        y-base (+ (.-y center) 0.18)
-        ring-segments 18]
+(defn- charge-ops
+  "segments-local: precomputed by charge-ring-segments-local (per tick); this
+  fn only translates by the live hand-center each frame."
+  [^V3 center segments-local]
+  (let [cx (.-x center) cy (.-y center) cz (.-z center)
+        ray-color {:r 170 :g 255 :b 190 :a 170}
+        link-color {:r 140 :g 240 :b 170 :a 120}]
     (vec
       (mapcat
-        (fn [idx]
-          (let [a0 (/ (* 2.0 Math/PI idx) ring-segments)
-                a1 (/ (* 2.0 Math/PI (inc idx)) ring-segments)
-                h (+ y-base (* 0.22 (Math/sin (+ (* 0.17 ticks) idx))))
-                p0 (vec3/v3 (+ cx (* pulse (Math/cos a0))) h (+ cz (* pulse (Math/sin a0))))
-                p1 (vec3/v3 (+ cx (* pulse (Math/cos a1))) h (+ cz (* pulse (Math/sin a1))))
-                ray-color {:r 170 :g 255 :b 190 :a 170}
-                link-color {:r 140 :g 240 :b 170 :a 120}]
-            [(ru/line-op p0 p1 ray-color)
-             (ru/line-op center p0 link-color)]))
-        (range ring-segments)))))
+        (fn [{:keys [p0 p1]}]
+          (let [p0' (vec3/v3 (+ cx (:x p0)) (+ cy (:y p0)) (+ cz (:z p0)))
+                p1' (vec3/v3 (+ cx (:x p1)) (+ cy (:y p1)) (+ cz (:z p1)))]
+            [(ru/line-op p0' p1' ray-color)
+             (ru/line-op center p0' link-color)]))
+        segments-local))))
 
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
@@ -193,16 +209,18 @@
 ;; Build plan
 ;; ---------------------------------------------------------------------------
 
-(defn- build-plan [camera-pos hand-center-pos _tick]
+(defn- build-plan
+  "Ray :start/:end are precomputed to V3 at enqueue time (see :perform /
+  :reflect above) — a ray's endpoints never change after it's fired, so
+  converting once there instead of once per frame here removes an
+  otherwise-per-frame allocation for every live ray."
+  [camera-pos hand-center-pos _tick]
   (let [md (matching-active-state hand-center-pos)
         ^V3 cam-v (vec3/map->v3 camera-pos)
-        current-rays (map (fn [ray] (assoc ray :start (vec3/map->v3 (:start ray)) :end (vec3/map->v3 (:end ray))))
-                           (all-rays))
-        charge-plan (if (and hand-center-pos md (:active? md))
-                      (let [center (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
-                            ticks (long (or (:ticks md) 0))
-                            ratio (double (or (:charge-ratio md) 0.0))]
-                        (charge-ops center ticks ratio))
+        current-rays (all-rays)
+        charge-plan (if (and hand-center-pos md (:active? md) (seq (:charge-ring-segments-local md)))
+                      (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
+                                  (:charge-ring-segments-local md))
                       [])
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
@@ -219,5 +237,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:meltdowner :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:meltdowner :level] [_ _ store] (tick! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :meltdowner
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
   (-> store (update :effect-state dissoc owner-key) (update :rays dissoc owner-key)))

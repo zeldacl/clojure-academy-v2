@@ -45,8 +45,8 @@
 			(let [store* (if (and start end)
 											(update-in store* [:beams owner-key*] (fnil conj [])
 																 (merge base-meta
-																				{:start start
-																				 :end end
+																				{:start (vec3/map->v3 start)
+																				 :end (vec3/map->v3 end)
 																				 :ttl 8
 																				 :max-ttl 8
 																				 :performed? (boolean (:performed? payload))
@@ -121,14 +121,15 @@
 
 (defn- beam-flash-ops [camera-pos beams]
   "Render with exact EntityMdRaySmall colors:
-   inner=0.03 rgba(216,248,216,230), outer=0.045 rgba(106,242,106,50), glow=0.3 a=128"
+   inner=0.03 rgba(216,248,216,230), outer=0.045 rgba(106,242,106,50), glow=0.3 a=128.
+   start/end are precomputed to V3 at enqueue time (see :beam mode above)."
   (mapcat (fn [{:keys [start end ttl max-ttl]}]
             (let [life-ratio (if (pos? (or max-ttl 1)) (/ (or ttl 1.0) (double max-ttl)) 1.0)
                   blend-in  (min 1.0 (/ (max 0 (- 1.0 life-ratio)) 0.28))
                   blend-out (min 1.0 (/ life-ratio 0.57))
                   am (* blend-in blend-out)
                   shrink (if (< life-ratio 0.3) 0.0 1.0)]
-              (ru/billboard-beam-ops camera-pos (vec3/map->v3 start) (vec3/map->v3 end)
+              (ru/billboard-beam-ops camera-pos start end
                 {:width 0.3
                  :core-width 0.045
                  :core-ratio 0.667
@@ -155,5 +156,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:electron-bomb :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:electron-bomb :level] [_ _ store] (tick-state! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :electron-bomb
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
   (-> store (update :effect-state dissoc owner-key) (update :beams dissoc owner-key)))

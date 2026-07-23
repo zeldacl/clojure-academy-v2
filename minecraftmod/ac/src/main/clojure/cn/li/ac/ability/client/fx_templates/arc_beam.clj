@@ -407,7 +407,14 @@
   Runtime: `:runtime` — :level (default), :hand, :both, :none
   State: `:initial-state`, or `:level-initial-state` / `:hand-initial-state` for :both
   Arc opts (default impl): `:sound-id`, `:arc-life`, `:arc-pattern`, `:aoe-points?`
-  Hand: `:transform-fn` — static fn or keyword dispatching effect-transform-fn"
+  Hand: `:transform-fn` — static fn or keyword dispatching effect-transform-fn
+
+  Every :level/:both effect gets a :build-plan-fn wired to the
+  effect-build-plan multimethod — effects with arc-opts render the default
+  arc via the :default method; effects with a custom `defmethod
+  effect-build-plan :<id>` render that; effects with neither get nil every
+  call (idle-gated by level-effects, so this costs one multimethod dispatch
+  only while the effect has live state, never while idle)."
   [opts]
   (let [effect-id (:effect-id opts)
         runtime (or (:runtime opts) :level)
@@ -425,15 +432,12 @@
           (not= runtime :none)
           (as-> spec spec
                 (if (contains? #{:level :both} runtime)
-                  (let [level-base {:initial-state (resolve-initial-state opts :level)
-                                    :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
-                                    :tick-state-fn #(dispatch-tick! :level effect-id %1)}]
-                    (assoc spec :level
-                           (if arc-opts
-                             (assoc level-base :build-plan-fn
-                                    (fn [cam pos tick query-fn]
-                                      (effect-build-plan effect-id cam pos tick query-fn)))
-                             level-base)))
+                  (assoc spec :level
+                         {:initial-state (resolve-initial-state opts :level)
+                          :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
+                          :tick-state-fn #(dispatch-tick! :level effect-id %1)
+                          :build-plan-fn (fn [cam pos tick query-fn]
+                                          (effect-build-plan effect-id cam pos tick query-fn))})
                   spec)
                 (if (contains? #{:hand :both} runtime)
                   (assoc spec :hand

@@ -25,6 +25,50 @@
 
 
 
+(defn- integrate-trajectory-positions
+	"Physics integration (drag 0.98/step, gravity -1.9*dt) is purely a function
+	of init-vel — it does not depend on camera-pos/look-dir, so it is
+	precomputed once here (enqueue time, on :start/:update) instead of once
+	per frame in build-plan. Returns 100 positions (idx 0..99) relative to a
+	(0,0,0) origin; build-plan translates by the live start position."
+	[^V3 init-vel]
+	(let [dt 0.02]
+		(loop [^V3 pos (vec3/v3 0.0 0.0 0.0)
+					 ^V3 vel init-vel
+					 positions (transient [pos])
+					 idx 0]
+			(if (>= idx 99)
+				(persistent! positions)
+				(let [vel2 (vec3/v3 (* (.-x vel) 0.98) (* (.-y vel) 0.98) (* (.-z vel) 0.98))
+							pos2 (vec3/v3 (+ (.-x pos) (* (.-x vel2) dt))
+														(+ (.-y pos) (* (.-y vel2) dt))
+														(+ (.-z pos) (* (.-z vel2) dt)))
+							vel3 (vec3/v3 (.-x vel2) (- (.-y vel2) (* dt 1.9)) (.-z vel2))]
+					(recur pos2 vel3 (conj! positions pos2) (inc idx)))))))
+
+(defn- start-offset
+	"First-person weapon-relative start offset, derived from look-dir alone —
+	independent of the live camera position, so it is precomputed alongside
+	the trajectory instead of every frame. Folds in the constant eye-height
+	offset (-1.62) that build-plan previously applied to camera-pos.-y."
+	[^V3 look-dir]
+	(let [lx (.-x look-dir) ly (.-y look-dir) lz (.-z look-dir)
+				horiz-len (Math/sqrt (+ (* lx lx) (* lz lz)))
+				safe-h (max 1.0e-8 horiz-len)
+				rot-x (* (/ lz safe-h) -0.08)
+				rot-z (* (/ (- lx) safe-h) -0.08)]
+		(vec3/v3 (- rot-x (* lx 0.12))
+						 (- 1.56 (* ly 0.12) 1.62)
+						 (- rot-z (* lz 0.12)))))
+
+(defn- precompute-trajectory
+	[st]
+	(let [look-dir-v (vec3/map->v3 (or (:look-dir st) {:x 0.0 :y 0.0 :z 1.0}))
+				init-vel-v (vec3/map->v3 (or (:init-vel st) {:x 0.0 :y 0.0 :z 1.0}))]
+		(assoc st
+					 :start-offset (start-offset look-dir-v)
+					 :trajectory-positions (integrate-trajectory-positions init-vel-v))))
+
 (defn- enqueue-state!
 	[store ctx-id channel owner-key payload]
 	(let [store* (or store {:effect-state {}})
@@ -38,33 +82,34 @@
 		(case mode
 			:start
 			(assoc-in store* [:effect-state owner-key*]
-								(merge base-meta
-											 {:active? true :charge-ticks 0
-												:can-perform? false
-												:look-dir {:x 0.0 :y 0.0 :z 1.0}
-												:init-vel {:x 0.0 :y 0.0 :z 1.0}}))
+								(precompute-trajectory
+									(merge base-meta
+												 {:active? true :charge-ticks 0
+													:can-perform? false
+													:look-dir {:x 0.0 :y 0.0 :z 1.0}
+													:init-vel {:x 0.0 :y 0.0 :z 1.0}})))
 			:update
 			(update-in store* [:effect-state owner-key*]
 				(fn [st]
-					(assoc (merge base-meta (or st {:active? true}))
-								 :owner-key owner-key*
-								 :ctx-id ctx-id
-								 :channel channel
-								 :source-player-id source-player-id
-								 :world-id world-id
-								 :active? true
-								 :charge-ticks (long (or charge-ticks 0))
-								 :can-perform? (boolean can-perform?)
-								 :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
-								 :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0}))))
+					(precompute-trajectory
+						(assoc (merge base-meta (or st {:active? true}))
+									 :owner-key owner-key*
+									 :ctx-id ctx-id
+									 :channel channel
+									 :source-player-id source-player-id
+									 :world-id world-id
+									 :active? true
+									 :charge-ticks (long (or charge-ticks 0))
+									 :can-perform? (boolean can-perform?)
+									 :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+									 :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0})))))
 			:perform
 			(do
 				(client-sounds/queue-current-sound-effect!
 					{:type :sound :sound-id sound-id :volume 0.35 :pitch 1.0})
 				store*)
 			:end
-			(assoc-in store* [:effect-state owner-key*]
-								(merge base-meta {:active? false}))
+			(update store* :effect-state dissoc owner-key*)
 			store*)))
 
 (defn- tick-state!
@@ -73,52 +118,31 @@
 
 (defn- trajectory-ops
 	[^V3 camera-pos effect]
-	(when (and effect (:active? effect))
-		(let [init-vel  (vec3/map->v3 (or (:init-vel effect) {:x 0.0 :y 0.0 :z 1.0}))
-					look-dir  (vec3/map->v3 (or (:look-dir effect) {:x 0.0 :y 0.0 :z 1.0}))
-					can-do?   (boolean (:can-perform? effect))
-					px        (.-x camera-pos)
-					py        (- (.-y camera-pos) 1.62)
-					pz        (.-z camera-pos)
-					lx        (.-x look-dir)
-					ly        (.-y look-dir)
-					lz        (.-z look-dir)
-					horiz-len (Math/sqrt (+ (* lx lx) (* lz lz)))
-					safe-h    (max 1.0e-8 horiz-len)
-					rot-x     (* (/ lz safe-h) -0.08)
-					rot-z     (* (/ (- lx) safe-h) -0.08)
-					off-x     (- rot-x (* lx 0.12))
-					off-y     (- 1.56 (* ly 0.12))
-					off-z     (- rot-z (* lz 0.12))
-					start-pos (vec3/v3 (+ px off-x) (+ py off-y) (+ pz off-z))
-					h         0.02
-					dt        0.02]
-			(loop [^V3 pos   start-pos
-						 ^V3 vel   init-vel
-						 ^V3 prev  nil
-						 ops   (transient [])
-						 idx   0]
-				(let [vel2  (vec3/v3 (* (.-x vel) 0.98) (* (.-y vel) 0.98) (* (.-z vel) 0.98))
-							pos2  (vec3/v3 (+ (.-x pos) (* (.-x vel2) dt))
-														(+ (.-y pos) (* (.-y vel2) dt))
-														(+ (.-z pos) (* (.-z vel2) dt)))
-							vel3  (vec3/v3 (.-x vel2) (- (.-y vel2) (* dt 1.9)) (.-z vel2))]
-					(when (and prev (< idx 99))
-						(let [a-int (fx-beam/fade-alpha idx)]
-							(when (> a-int 0)
-								(let [color (fx-beam/rgba
-															(if can-do?
-																{:r 255 :g 255 :b 255}
-																{:r 255 :g 51 :b 51})
-															a-int)
-											p0 (vec3/v3 (.-x prev) (+ (.-y prev) h) (.-z prev))
-											p1 (vec3/v3 (.-x pos) (+ (.-y pos) h) (.-z pos))
-											p2 (vec3/v3 (.-x pos) (- (.-y pos) h) (.-z pos))
-											p3 (vec3/v3 (.-x prev) (- (.-y prev) h) (.-z prev))]
-									(conj! ops (fx-beam/glow-line-quad-op p0 p1 p2 p3 color))))))
-					(if (>= idx 99)
-						(persistent! ops)
-						(recur pos2 vel3 pos ops (inc idx))))))))
+	(when (and effect (:active? effect) (:start-offset effect) (seq (:trajectory-positions effect)))
+		(let [can-do?   (boolean (:can-perform? effect))
+					^V3 start-pos (vec3/v+ camera-pos (:start-offset effect))
+					positions (:trajectory-positions effect)
+					h         0.02]
+			(loop [idx 1
+						 ops (transient [])]
+				(if (>= idx 99)
+					(persistent! ops)
+					(recur (inc idx)
+								 (let [a-int (fx-beam/fade-alpha idx)]
+									 (if (> a-int 0)
+										 (let [^V3 prev (vec3/v+ start-pos (nth positions (dec idx)))
+													 ^V3 pos  (vec3/v+ start-pos (nth positions idx))
+													 color (fx-beam/rgba
+																	 (if can-do?
+																		 {:r 255 :g 255 :b 255}
+																		 {:r 255 :g 51 :b 51})
+																	 a-int)
+													 p0 (vec3/v3 (.-x prev) (+ (.-y prev) h) (.-z prev))
+													 p1 (vec3/v3 (.-x pos) (+ (.-y pos) h) (.-z pos))
+													 p2 (vec3/v3 (.-x pos) (- (.-y pos) h) (.-z pos))
+													 p3 (vec3/v3 (.-x prev) (- (.-y prev) h) (.-z prev))]
+											 (conj! ops (fx-beam/glow-line-quad-op p0 p1 p2 p3 color)))
+										 ops))))))))
 
 (defn- build-plan
 	[camera-pos _hand-center-pos _tick]
@@ -132,5 +156,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:vec-accel :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:vec-accel :level] [_ _ store] (tick-state! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :vec-accel
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :vec-accel [_ store owner-key]
   (update store :effect-state dissoc owner-key))

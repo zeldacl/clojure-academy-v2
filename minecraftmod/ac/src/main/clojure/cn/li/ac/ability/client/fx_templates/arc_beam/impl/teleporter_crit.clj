@@ -60,12 +60,7 @@
   [store]
   (or store {}))
 
-(defn- build-plan [_cp _hcp _tick & _more]
-  nil)
-
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:teleporter-crit :level] [_ _] {})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:teleporter-crit :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:teleporter-crit :level] [_ _ store] (tick! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :teleporter-crit
-  [camera-pos hand-center-pos tick & args] (apply build-plan camera-pos hand-center-pos tick args))

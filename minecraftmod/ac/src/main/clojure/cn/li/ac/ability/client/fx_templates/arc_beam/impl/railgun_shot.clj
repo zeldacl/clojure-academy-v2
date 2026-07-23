@@ -76,8 +76,8 @@
     (when (and start end)
       (update-in store* [:beam-effects owner-key*] (fnil conj [])
                  (merge base-meta
-                        {:start start
-                         :end end
+                        {:start (vec3/map->v3 start)
+                         :end (vec3/map->v3 end)
                          :mode (or mode :block-hit)
                          :hit-distance (double (or hit-distance 18.0))
                          :ttl beam-life-ticks
@@ -138,22 +138,26 @@
       :p0 p0 :p1 p1 :p2 p2 :p3 p3
       :color {:r 255 :g 255 :b 255 :a a}}]))
 
-(defn- build-plan [camera-pos hand-center-pos game-ticks]
+(defn- build-plan
+  "Beam :start/:end are precomputed to V3 at enqueue time (see enqueue-state!
+  above) — a beam's endpoints never change after it's fired, so converting
+  once there instead of once per frame here removes an otherwise-per-frame
+  allocation for every live beam."
+  [camera-pos hand-center-pos game-ticks]
   (let [beams (all-beam-effects)
         ^V3 cam-v (vec3/map->v3 camera-pos)
         player-uuid (:player-uuid hand-center-pos)
         charge-state (when player-uuid
                        (client-runtime/railgun-charge-visual-state player-uuid (* (double game-ticks) 50.0)))
         beam-plan (mapcat (fn [beam]
-                            (let [beam-v (assoc beam :start (vec3/map->v3 (:start beam)) :end (vec3/map->v3 (:end beam)))]
-                              (concat
-                                ;; Arc/lightning branches
-                                (arc-fx/railgun-arc-ops cam-v beam-v {})
-                                ;; Glow layer (behind core beam)
-                                (when-let [glow-style (:glow railgun-beam-style)]
-                                  (fx-beam/fading-beam-ops cam-v beam-v glow-style))
-                                (fx-beam/fading-beam-ops cam-v beam-v railgun-beam-style)
-                                (impact-ring-ops (:end beam-v) (:ttl beam) (:max-ttl beam)))))
+                            (concat
+                              ;; Arc/lightning branches
+                              (arc-fx/railgun-arc-ops cam-v beam {})
+                              ;; Glow layer (behind core beam)
+                              (when-let [glow-style (:glow railgun-beam-style)]
+                                (fx-beam/fading-beam-ops cam-v beam glow-style))
+                              (fx-beam/fading-beam-ops cam-v beam railgun-beam-style)
+                              (impact-ring-ops (:end beam) (:ttl beam) (:max-ttl beam))))
                           beams)
         charge-plan (if (and hand-center-pos (:active? charge-state))
                       (charge-hand-ops cam-v
@@ -170,5 +174,8 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:railgun-shot :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:railgun-shot :level] [_ _ store] (tick-state! store))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :railgun-shot
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :railgun-shot [_ store owner-key]
   (update store :beam-effects dissoc owner-key))
