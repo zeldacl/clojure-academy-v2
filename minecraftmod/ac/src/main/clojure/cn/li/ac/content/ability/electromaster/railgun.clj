@@ -293,6 +293,27 @@
     0.0))
 
 ;; ---------------------------------------------------------------------------
+;; Charge FX markers — purely a level-effect idle-gating signal. The actual
+;; charge-hand visual data is already tracked client-side by
+;; client-runtime/railgun-charge-visual-state (fed by the ordinary skill-state
+;; context sync, independent of these messages); without a live :railgun-shot
+;; level-effect entry during the charge-only window (no beam yet exists),
+;; level-effects' idle-gating never invokes build-plan at all, so the charge
+;; animation silently never rendered until the first beam appeared. These
+;; mirror jet-engine's send-mark-start!/-update!/-end! pattern.
+;; ---------------------------------------------------------------------------
+
+(defn- send-charge-start! [ctx-id]
+  (fx/send! ctx-id {:topic :railgun/fx-charge-start :mode :charge-start}))
+
+(defn- send-charge-update! [ctx-id charge-ticks-left]
+  (fx/send! ctx-id {:topic :railgun/fx-charge-update :mode :charge-update} nil
+            {:charge-ticks-left (long charge-ticks-left)}))
+
+(defn- send-charge-end! [ctx-id]
+  (fx/send! ctx-id {:topic :railgun/fx-charge-end :mode :charge-end}))
+
+;; ---------------------------------------------------------------------------
 ;; Action handlers
 ;; ---------------------------------------------------------------------------
 
@@ -329,11 +350,13 @@
         (log/debug "Railgun coin-QTE miss" player-id (:progress qte)))
 
       (accepted-item-in-hand? player)
-      (ctx-skill/replace-skill-state! ctx-id
-                             {:fired        false
-                              :mode         :item-charge
-                              :charge-ticks (item-charge-ticks)
-                              :hit-count    0})
+      (do
+        (ctx-skill/replace-skill-state! ctx-id
+                               {:fired        false
+                                :mode         :item-charge
+                                :charge-ticks (item-charge-ticks)
+                                :hit-count    0})
+        (send-charge-start! ctx-id))
 
       :else
       (ctx-skill/replace-skill-state! ctx-id {:fired false :mode :idle-no-trigger}))))
@@ -366,8 +389,11 @@
                                               :hit-count normal-hit-count})))
                   (ctx-skill/replace-skill-state! ctx-id
                                          (assoc skill-state :fired false :mode :item-charge-failed)))
-                (set-skill-state! ctx-id [:charge-ticks] 0))
-              (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left)))))))
+                (set-skill-state! ctx-id [:charge-ticks] 0)
+                (send-charge-end! ctx-id))
+              (do
+                (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left))
+                (send-charge-update! ctx-id (dec ticks-left))))))))
     (catch Exception e
       (log/warn "railgun-on-key-tick error" (ex-message e)))))
 
@@ -379,13 +405,17 @@
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))
         (ctx-skill/replace-skill-state! ctx-id
-                               (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0)))
+                               (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0))
+        (send-charge-end! ctx-id))
       (when (:fired skill-state)
         (log/debug "Railgun completed")))))
 
 (defn- railgun-on-key-abort
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (ctx-skill/clear-skill-state! ctx-id)
+  ;; Unconditional, matching jet-engine's abort handler: a harmless no-op on
+  ;; the client (dissoc of an absent owner-key) when no charge was active.
+  (send-charge-end! ctx-id)
   (log/debug "Railgun aborted"))
 
 ;; ---------------------------------------------------------------------------

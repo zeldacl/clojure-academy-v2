@@ -58,14 +58,24 @@
 
 
 
+(def ^:private charge-ttl 8)
+
 (defn- all-beam-effects []
   (mapcat val (:beam-effects (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :railgun-shot))))
 
+(defn- ensure-store [store]
+  (if (contains? (or store {}) :beam-effects)
+    (or store {:beam-effects {} :charging {}})
+    {:beam-effects {} :charging {}}))
+
 (defn- enqueue-state!
+  "Charge-start/-update/-end are pure idle-gating markers (see charge-ttl
+  above) — the real charge-hand visual is read straight from
+  client-runtime/railgun-charge-visual-state by build-plan, which only needs
+  :charging to be non-empty so level-effects' idle-gating actually invokes it
+  during the charge-only window (before any beam exists)."
   [store ctx-id channel owner-key payload]
-  (let [store* (if (contains? (or store {}) :beam-effects)
-                 (or store {:beam-effects {}})
-                 {:beam-effects {}})
+  (let [store* (ensure-store store)
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode start end hit-distance source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
@@ -73,33 +83,48 @@
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}]
-    (when (and start end)
-      (update-in store* [:beam-effects owner-key*] (fnil conj [])
-                 (merge base-meta
-                        {:start (vec3/map->v3 start)
-                         :end (vec3/map->v3 end)
-                         :mode (or mode :block-hit)
-                         :hit-distance (double (or hit-distance 18.0))
-                         :ttl beam-life-ticks
-                         :max-ttl beam-life-ticks
-                         :wiggle-seed (* 2.0 Math/PI (rand))})))))  ;; random phase [0, 2π)
+    (case mode
+      (:charge-start :charge-update)
+      (assoc-in store* [:charging owner-key*] {:ttl charge-ttl})
+
+      :charge-end
+      (update store* :charging (fnil dissoc {}) owner-key*)
+
+      (if (and start end)
+        (update-in store* [:beam-effects owner-key*] (fnil conj [])
+                   (merge base-meta
+                          {:start (vec3/map->v3 start)
+                           :end (vec3/map->v3 end)
+                           :mode (or mode :block-hit)
+                           :hit-distance (double (or hit-distance 18.0))
+                           :ttl beam-life-ticks
+                           :max-ttl beam-life-ticks
+                           :wiggle-seed (* 2.0 Math/PI (rand))}))  ;; random phase [0, 2π)
+        store*))))
 
 (defn- tick-state!
   [store]
-  (let [store* (if (contains? (or store {}) :beam-effects)
-                 (or store {:beam-effects {}})
-                 {:beam-effects {}})]
-    (update store* :beam-effects
-      (fn [by-owner]
-        (into {}
-              (keep (fn [[owner-key xs]]
-                      (let [live (->> xs
-                                      (map #(update % :ttl dec))
-                                      (filter #(pos? (long (:ttl %))))
-                                      vec)]
-                        (when (seq live)
-                          [owner-key live]))))
-              by-owner)))))
+  (let [store* (ensure-store store)]
+    (-> store*
+        (update :beam-effects
+          (fn [by-owner]
+            (into {}
+                  (keep (fn [[owner-key xs]]
+                          (let [live (->> xs
+                                          (map #(update % :ttl dec))
+                                          (filter #(pos? (long (:ttl %))))
+                                          vec)]
+                            (when (seq live)
+                              [owner-key live]))))
+                  by-owner)))
+        (update :charging
+          (fn [by-owner]
+            (into {}
+                  (keep (fn [[owner-key st]]
+                          (let [ttl (dec (long (or (:ttl st) 0)))]
+                            (when (pos? ttl)
+                              [owner-key (assoc st :ttl ttl)]))))
+                  by-owner))))))
 
 (defn- impact-ring-ops [^V3 end ttl max-ttl]
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
@@ -170,7 +195,7 @@
     (when (or (seq beam-plan) (seq charge-plan))
       {:ops (vec (concat beam-plan charge-plan))})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:railgun-shot :level] [_ _] {:beam-effects {}})
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:railgun-shot :level] [_ _] {:beam-effects {} :charging {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:railgun-shot :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:railgun-shot :level] [_ _ store] (tick-state! store))
@@ -178,4 +203,6 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :railgun-shot [_ store owner-key]
-  (update store :beam-effects dissoc owner-key))
+  (-> store
+      (update :beam-effects dissoc owner-key)
+      (update :charging dissoc owner-key)))

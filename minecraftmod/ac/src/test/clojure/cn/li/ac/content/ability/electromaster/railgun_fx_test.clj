@@ -3,6 +3,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
@@ -34,7 +35,8 @@
       (railgun-fx/init!)
       (is (= :railgun-shot (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
-      (is (= #{:railgun/fx-shot :railgun/fx-reflect}
+      (is (= #{:railgun/fx-shot :railgun/fx-reflect
+               :railgun/fx-charge-start :railgun/fx-charge-update :railgun/fx-charge-end}
              @registered-topics*)))))
 
 (deftest fx-handler-routes-with-ctx-metadata-test
@@ -89,5 +91,44 @@
         (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-b"]))))))))
 
 (deftest fx-snapshot-default-without-registered-state-test
-  (is (= {:beam-effects {}}
+  (is (= {:beam-effects {} :charging {}}
          (railgun-fx/fx-snapshot))))
+
+(deftest charging-lifecycle-populates-and-clears-the-idle-gating-marker-test
+  ;; :charging is a pure idle-gating marker (see impl/railgun_shot.clj):
+  ;; before this fix, no level-effect state existed during the charge-only
+  ;; window (no beam yet), so level-effects' idle-gating suppressed build-plan
+  ;; entirely and the charge-hand animation never rendered until a beam
+  ;; existed. default-empty-state? only treats :railgun-shot as idle once
+  ;; BOTH :beam-effects and :charging are empty.
+  (do
+    (is (empty? (:charging (railgun-fx/fx-snapshot))))
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-start {:mode :charge-start})
+    (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"]))
+
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-update {:mode :charge-update :charge-ticks-left 5})
+    (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"]))
+
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-end {:mode :charge-end})
+    (is (not (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"])))
+    (is (empty? (:charging (railgun-fx/fx-snapshot))))))
+
+(deftest charge-hand-visual-renders-once-charging-marker-is-live-test
+  (with-redefs [client-runtime/railgun-charge-visual-state
+                (fn [_player-uuid _now-ms]
+                  {:active? true :charge-start-ms 0 :charge-ratio 0.5 :coin-active? false})]
+    (let [hand {:x 1.0 :y 65.0 :z 1.0 :player-uuid "p1"}]
+      (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-start {:mode :charge-start})
+      (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} hand 0)]
+        (is (seq (:ops plan)))
+        (is (every? #(= :quad (:kind %)) (:ops plan))
+            "no beam exists yet — the only ops should be the charge-hand quad")))))
+
+(deftest charging-marker-expires-via-ttl-without-explicit-end-test
+  (do
+    (arc-beam/enqueue-for-test! :railgun-shot "ctx-stale" :railgun/fx-charge-start {:mode :charge-start})
+    (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"]))
+    (dotimes [_ 8]
+      (level-effects/update-effect-state! :railgun-shot
+        (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store))))
+    (is (not (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"])))))
