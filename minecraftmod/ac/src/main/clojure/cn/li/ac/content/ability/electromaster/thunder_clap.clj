@@ -110,7 +110,8 @@
      :charge-ticks ticks
      :ticks        ticks
      :charge-ratio (compute-overcharge-ratio ticks)
-     :target       (current-target ctx-id player-id)}))
+     :target       (current-target ctx-id player-id)
+     :caster-pos   (geom/eye-pos player-id)}))
 
 (defn- refresh-hit-pos!
   [ctx-id player-id]
@@ -128,8 +129,15 @@
 ;; the only function that reads it, is never called from the dispatch
 ;; pipeline. Skills must call it (or fx/send! directly) themselves, matching
 ;; the pattern already used by railgun.clj/meltdowner.clj/mark_teleport.clj.
+;;
+;; Broadcast (not owner-only): matches original, where EntitySurroundArc is
+;; publicly spawned and visible to everyone nearby — only the ripple mark
+;; (EntityRippleMark) was isLocal-gated to the caster. The client-side
+;; build-plan (impl/thunder_clap.clj) is what actually keeps the ripple mark
+;; private despite the broadcast: it only draws target-mark-ops for the
+;; state matching the viewer's own player-uuid.
 (defn- emit-thunder-clap-fx! [stage evt]
-  (skill-effects/emit-fx! (skill-registry/get-skill :thunder-clap) evt stage))
+  (skill-effects/emit-fx! (skill-registry/get-skill :thunder-clap) evt stage true))
 
 (defn- thunder-clap-down!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -212,14 +220,16 @@
                                         {:charge-ticks 0
                                          :ticks        0
                                          :charge-ratio 0.0
-                                         :target       (current-target ctx-id player-id)})}
+                                         :target       (current-target ctx-id player-id)
+                                         :caster-pos   (geom/eye-pos player-id)})}
                     :update {:topic   :thunder-clap/fx-update
                              :payload (fn [{:keys [hold-ticks ctx-id player-id]}]
                                         (let [ticks (long (or hold-ticks 0))]
                                           {:charge-ticks ticks
                                            :ticks        ticks
                                            :charge-ratio (compute-overcharge-ratio ticks)
-                                           :target       (current-target ctx-id player-id)}))}
+                                           :target       (current-target ctx-id player-id)
+                                           :caster-pos   (geom/eye-pos player-id)}))}
                     :perform {:topic   :thunder-clap/fx-perform
                               :payload (fn [{:keys [hold-ticks ctx-id player-id]}]
                                          (let [ticks (long (or hold-ticks 0))]
@@ -227,7 +237,8 @@
                                             :charge-ticks ticks
                                             :ticks        ticks
                                             :charge-ratio (compute-overcharge-ratio ticks)
-                                            :target       (current-target ctx-id player-id)}))}
+                                            :target       (current-target ctx-id player-id)
+                                            :caster-pos   (geom/eye-pos player-id)}))}
                     :end    {:topic   :thunder-clap/fx-end
                              :payload end-payload}}
   :actions

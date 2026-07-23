@@ -16,7 +16,7 @@
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:effect-state {} :impacts {}})
-        {:keys [mode ticks charge-ratio target performed? source-player-id world-id]} (or payload {})
+        {:keys [mode ticks charge-ratio target caster-pos performed? source-player-id world-id]} (or payload {})
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
@@ -33,6 +33,7 @@
                         :ticks 0
                         :charge-ratio 0.0
                         :target nil
+                        :caster-pos caster-pos
                         :performed? false}))
 
       :update
@@ -42,7 +43,8 @@
                        {:active? true
                         :ticks (long (or ticks 0))
                         :charge-ratio (double (or charge-ratio 0.0))
-                        :target target}))
+                        :target target
+                        :caster-pos (or caster-pos (:caster-pos current-st))}))
 
       :perform
       (let [next-store (assoc-in store* [:effect-state owner-key*]
@@ -52,6 +54,7 @@
                                          :ticks (long (or ticks (:ticks current-st) 0))
                                          :charge-ratio (double (or charge-ratio (:charge-ratio current-st) 0.0))
                                          :target (or target (:target current-st))
+                                         :caster-pos (or caster-pos (:caster-pos current-st))
                                          :performed? true}))]
         (if (map? target)
           (update-in next-store [:impacts owner-key*] (fnil conj [])
@@ -155,28 +158,41 @@
         value (- max-speed (* (/ (- max-speed min-speed) 60.0) (double ticks)))]
     (float (max min-speed value))))
 
+(defn- own-state?
+  "True when st belongs to the local viewer (nil source-player-id/hand-center-pos
+  is treated as a match, same as before — used only as a defensive fallback)."
+  [st hand-center-pos]
+  (or (nil? (:source-player-id st))
+      (nil? (:player-uuid hand-center-pos))
+      (= (str (:source-player-id st)) (str (:player-uuid hand-center-pos)))))
+
 (defn- build-plan [_camera-pos hand-center-pos _tick]
   (let [{:keys [effect-state impacts]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :thunder-clap)
-        tc (some (fn [st]
-                   (when (and (:active? st)
-                              (or (nil? (:source-player-id st))
-                                  (nil? (:player-uuid hand-center-pos))
-                                  (= (str (:source-player-id st))
-                                     (str (:player-uuid hand-center-pos)))))
-                     st))
-                 (vals effect-state))
-        charge-ops (if (and hand-center-pos tc (:active? tc))
-                     (let [player-center (dissoc hand-center-pos :player-uuid)
-                           ticks (long (or (:ticks tc) 0))
-                           ratio (double (or (:charge-ratio tc) 0.0))]
-                       (vec (concat
-                              (surround-ops player-center ticks)
-                              (when (map? (:target tc))
-                                (target-mark-ops (:target tc) ticks ratio)))))
-                     [])
+        active-states (filter :active? (vals effect-state))
+        own-tc (some #(when (own-state? % hand-center-pos) %) active-states)
+        ;; The surround arc is broadcast and public (matches original's
+        ;; EntitySurroundArc, spawned for everyone to see); the ripple mark
+        ;; stays caster-only (matches original's isLocal EntityRippleMark) —
+        ;; per-state below, not per-message, since both ride the same fx.
+        charge-ops
+        (vec (mapcat
+               (fn [st]
+                 (let [own? (own-state? st hand-center-pos)
+                       ;; Zero-latency live position for the caster's own
+                       ;; client; synced :caster-pos (from the fx payload)
+                       ;; for everyone else observing this cast.
+                       center (if (and own? hand-center-pos)
+                                (dissoc hand-center-pos :player-uuid)
+                                (:caster-pos st))
+                       ticks (long (or (:ticks st) 0))
+                       ratio (double (or (:charge-ratio st) 0.0))]
+                   (concat
+                     (when (map? center) (surround-ops center ticks))
+                     (when (and own? (map? (:target st)))
+                       (target-mark-ops (:target st) ticks ratio)))))
+               active-states))
         impact-render-ops (vec (mapcat impact-ops (mapcat val impacts)))
-        ws (when (and tc (:active? tc))
-             (local-walk-speed (:ticks tc)))]
+        ws (when own-tc (local-walk-speed (:ticks own-tc)))]
     (when (or (seq charge-ops) (seq impact-render-ops) ws)
       {:ops (vec (concat charge-ops impact-render-ops))
        :local-walk-speed ws})))

@@ -65,7 +65,8 @@
                   :charge-ticks 20
                   :ticks 20
                   :charge-ratio 0.0
-                  :target {:x 1.0 :y 2.0 :z 3.0}}
+                  :target {:x 1.0 :y 2.0 :z 3.0}
+                  :caster-pos {:x 0.0 :y 65.62 :z 0.0}}
                  (end-payload-fn {:ctx-id "ctx-short" :player-id "p1" :hold-ticks 20}))))
         (is (empty? @cooldown-calls*))
         (is (empty? @exp-calls*))
@@ -140,5 +141,6 @@
                   :charge-ticks 50
                   :ticks 50
                   :charge-ratio (/ 1.0 6.0)
-                  :target {:x 8.0 :y 64.0 :z 8.0}}
+                  :target {:x 8.0 :y 64.0 :z 8.0}
+                  :caster-pos {:x 0.0 :y 65.62 :z 0.0}}
                  (end-payload-fn {:ctx-id "ctx-hit" :player-id "p1" :hold-ticks 50}))))))))

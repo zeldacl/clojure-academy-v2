@@ -267,10 +267,18 @@
         (add-skill-exp! (:player-id evt) skill-id value rate)))))
 
 (defn emit-fx!
-  "Emit fx stage for a context event."
-  [spec evt stage]
-  (when-let [entry (get-in spec [:fx stage])]
-    (fx/send! (:ctx-id evt) entry evt)))
+  "Emit fx stage for a context event.
+
+  By default this reaches only the context owner (fx/send!'s :client
+  default). Pass broadcast? true to also fan out to nearby players
+  (fx/send-local-and-nearby!) for effects that should be publicly visible,
+  not just to the caster."
+  ([spec evt stage] (emit-fx! spec evt stage false))
+  ([spec evt stage broadcast?]
+   (when-let [entry (get-in spec [:fx stage])]
+     (if broadcast?
+       (fx/send-local-and-nearby! (:ctx-id evt) entry evt nil)
+       (fx/send! (:ctx-id evt) entry evt)))))
 
 (defn get-player-state
   "Return full player state map or nil when absent."
