@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner
-  "Meltdowner skill �?charge-window beam with block-breaking and reflection.
+  "Meltdowner skill �?charge-window beam with block-breaking and reflection.
 
   Uses the escape-hatch pattern: fn hooks for overload-floor enforcement and
   min/max charge-window gating; :beam op (effect.beam) for the actual shot.
@@ -65,6 +65,12 @@
   [player-id floor-value]
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
+;; Original's MSG_TERMINATED (stops the charge loop sound / walk-speed
+;; slowdown) is delivered to every recipient that has this context ALIVE —
+;; owner + nearby, the same set that would have received fx-perform's beam.
+(defn- send-end-fx! [ctx-id performed?]
+  (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-end} nil {:performed? (boolean performed?)}))
+
 ;; ---------------------------------------------------------------------------
 ;; Vec-reflection interaction
 ;; ---------------------------------------------------------------------------
@@ -81,7 +87,10 @@
   (let [look-dir (normalize-look-dir look-vec)
     dir (geom/vnorm look-dir)
             end (geom/v+ start-pos (geom/v* dir (cfg-double :reflection.shot-distance)))]
-        (fx/send! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil {:start start-pos
+        ;; Original's s_perform's reflection callback calls sendToClient(MSG_REFLECTED,...)
+        ;; — every reflected shot spawns a world-space EntityMDRay visible to
+        ;; owner + nearby, not just the caster.
+        (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil {:start start-pos
                                   :end   end})
         (let [hit (when (raycast/available?)
                     (raycast/raycast-entities
@@ -159,7 +168,7 @@
     (when-let [floor (get-in (ctx-skill/get-context ctx-id) [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
-      (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+      (send-end-fx! ctx-id false)
       (ctx/terminate-context! ctx-id nil)
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
@@ -168,7 +177,7 @@
   (let [ticks (long (or hold-ticks 0))]
     (if (< ticks (ticks-min))
       (do
-        (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+        (send-end-fx! ctx-id false)
         (ctx/terminate-context! ctx-id nil)
         (log/debug "Meltdowner: insufficient charge ticks" ticks))
       (let [{:keys [performed? reflection-hit?]}
@@ -181,23 +190,23 @@
                                              (int (* (time-rate ct)
                                                      (cfg-double :cooldown.base-multiplier)
                                                      (cfg-lerp :cooldown.ticks exp))))
-            (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? true})
+            (send-end-fx! ctx-id true)
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner performed; reflection?" (boolean reflection-hit?)))
           (do
-            (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+            (send-end-fx! ctx-id false)
             (ctx/terminate-context! ctx-id nil)
             (log/debug "Meltdowner: beam failed")))))))
 
 (defn- meltdowner-abort!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false})
+  (send-end-fx! ctx-id false)
   (ctx/terminate-context! ctx-id nil))
 
 (defn- meltdowner-cost-fail!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
   (when (= cost-stage :tick)
-    (fx/send! ctx-id {:topic :meltdowner/fx-end} nil {:performed? false}))
+    (send-end-fx! ctx-id false))
   (ctx/terminate-context! ctx-id nil))
 
 ;; ---------------------------------------------------------------------------

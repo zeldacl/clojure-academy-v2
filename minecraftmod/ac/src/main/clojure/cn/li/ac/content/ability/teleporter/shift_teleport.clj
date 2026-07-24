@@ -587,7 +587,11 @@
 
                 (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
 
-              (fx/send! ctx-id {:topic :shift-teleport/fx-perform :mode :perform} nil
+              ;; Original's s_execute sendToClient(MSG_EXECUTE, attacked) —
+              ;; c_end's particle trail runs unconditionally for every
+              ;; recipient; only the target/block marker cleanup is
+              ;; isLocal-gated (handled by :shift-teleport/fx-update above).
+              (fx/send-local-and-nearby! ctx-id {:topic :shift-teleport/fx-perform :mode :perform} nil
 
                         {:from-x (get-in trace [:eye-pos :x])
 

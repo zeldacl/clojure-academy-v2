@@ -184,7 +184,12 @@
         (when (and break-blocks? (pos? benergy))
           (break-blocks! player-id world-id trace dir block-dist benergy r st))
         (when fx-topic
-          (fx/send! (:ctx-id evt) {:topic fx-topic :mode :perform} evt
+          ;; World-space beam (:start/:end are absolute coordinates), matching
+          ;; every original caller (Railgun.performServer, Meltdowner's beam
+          ;; perform, RayBarrage's beam) broadcasting via sendToClient/
+          ;; sendToAllAround — nearby players must see the shot, not just the
+          ;; shooter.
+          (fx/send-local-and-nearby! (:ctx-id evt) {:topic fx-topic :mode :perform} evt
                     {:start eye
                      :end end-pos
                      :hit-distance visual-dist}))

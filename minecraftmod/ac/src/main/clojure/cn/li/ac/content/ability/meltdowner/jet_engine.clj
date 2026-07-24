@@ -87,6 +87,10 @@
     (and (>= cur-cp cp-needed)
          (<= (+ cur-overload overload-needed) max-overload))))
 
+;; Mark (targeting reticle) FX stays owner-only: original's l_spawnMark/
+;; l_updateMark/l_endMark are all gated by isLocal even though MSG_MARK_END
+;; itself is sent via sendToClient — the ripple mark is the caster's own aim
+;; feedback, never rendered for bystanders.
 (defn- send-mark-start! [ctx-id target]
   (fx/send! ctx-id {:topic :jet-engine/fx-start :mode :mark-start} nil {:target target}))
 
@@ -98,17 +102,22 @@
 (defn- send-mark-end! [ctx-id target]
   (fx/send! ctx-id {:topic :jet-engine/fx-end :mode :mark-end} nil {:target target}))
 
+;; Trigger (dash) FX broadcasts: original's c_tStartEffect/c_tUpdateEffect
+;; spawn the diamond-shield entity and particle burst unconditionally for
+;; every MSG_TRIGGER recipient (owner + nearby, no isLocal check) — only the
+;; walk-speed change inside those handlers is isLocal-gated, and that has no
+;; port-side FX payload anyway.
 (defn- send-trigger-start! [ctx-id start target velocity]
-  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-start :mode :trigger-start} nil {:start start
+  (fx/send-local-and-nearby! ctx-id {:topic :jet-engine/fx-trigger-start :mode :trigger-start} nil {:start start
                             :target target
                             :velocity velocity}))
 
 (defn- send-trigger-update! [ctx-id pos trigger-ticks]
-  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-update :mode :trigger-update} nil {:pos pos
+  (fx/send-local-and-nearby! ctx-id {:topic :jet-engine/fx-trigger-update :mode :trigger-update} nil {:pos pos
                             :trigger-ticks trigger-ticks}))
 
 (defn- send-trigger-end! [ctx-id]
-  (fx/send! ctx-id {:topic :jet-engine/fx-trigger-end :mode :trigger-end}))
+  (fx/send-local-and-nearby! ctx-id {:topic :jet-engine/fx-trigger-end :mode :trigger-end} nil nil))
 
 (defn- mark-hit-and-damage!
   [player-id ctx-id world-id hit hit-uuids]

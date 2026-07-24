@@ -55,7 +55,11 @@
             mdball-entity-id
             0.0))
         ;; Send spawn FX first; the delayed task owns the actual hit settlement.
-        (fx/send! ctx-id {:topic :electron-bomb/fx-spawn} nil
+        ;; Original has no explicit sendTo* here at all — ElectronBomb relies
+        ;; entirely on the base Context's implicit MSG_MAKEALIVE replication
+        ;; (owner + nearby), so every visible/audible part of casting it is
+        ;; broadcast by default.
+        (fx/send-local-and-nearby! ctx-id {:topic :electron-bomb/fx-spawn} nil
                   {:x (:x eye) :y (:y eye) :z (:z eye)
                    :dx (:x look-vec) :dy (:y look-vec) :dz (:z look-vec)})
         ;; Exp/cooldown are granted at cast time in original, unconditionally,

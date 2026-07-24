@@ -128,7 +128,7 @@
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
              (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-miss" :exp 0.5 :cost-ok? true)))))
-    (is (= 1 (count @perform-calls*)))
+    (is (= 2 (count @perform-calls*)) "fanned out to owner + nearby")
     (is (= {:x 2.0 :y 3.0 :z 8.0}
            (get-in @perform-calls* [0 3 :pos])))
     (is (= [["p1" :directed-blastwave 80]] @cooldown-calls*))
@@ -183,7 +183,7 @@
     (is (= [["w" "e1" 20.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= 1 (count @add-velocity-calls*)))
-    (is (= 1 (count @perform-calls*)))
+    (is (= 2 (count @perform-calls*)) "fanned out to owner + nearby")
     (is (empty? @terminate-calls))
     (is (= [["p1" :directed-blastwave 80]] @cooldown-calls*))
     (is (= [["p1" :directed-blastwave 0.0025]] @exp-calls*))

@@ -74,7 +74,7 @@
                              nil)]
       (cb/apply-invoke thunder-bolt/thunder-bolt-perform! :player-id "p1" :ctx-id "ctx-1" :exp 0.5)
       (is (empty? @damage*))
-      (is (= 1 (count @fx*)))
+      (is (= 2 (count @fx*)) "fanned out to owner + nearby")
       (let [[_ _ payload] (first @fx*)]
         (is (= :miss (:hit-kind payload)))
         (is (= {:x 0.0 :y 64.0 :z 20.0} (:end payload)))

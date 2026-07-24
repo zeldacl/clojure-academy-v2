@@ -193,6 +193,13 @@
 ;; ============================================================
 ;; Key handlers
 ;; ============================================================
+;;
+;; All FX below broadcast (fx/send-local-and-nearby!): original's
+;; c_begin/c_stateChange/c_syncPos are plain ClientContext listeners with no
+;; isLocal gate, so every player who received MSG_MADEALIVE (owner + nearby)
+;; spawns their own PlasmaBodyEffect/Tornado and tracks the same charge/flight
+;; position — the glowing plasma ball is genuinely visible to bystanders, not
+;; a local-only hand effect like Railgun's charge glow.
 
 (defn plasma-cannon-on-key-down
   "Server-side: initialize charge. Consume initial overload (500–300 by exp).
@@ -203,7 +210,7 @@
           ct  (int (charge-time exp))]
       (if-not cost-ok?
         (do
-          (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
           (ctx/terminate-context! ctx-id nil)
           (log/debug "PlasmaCannon: Not enough resources to activate"))
         (let [pos      (get-player-position player-id)
@@ -219,8 +226,8 @@
                     :flight-ticks  0
                     :charge-pos    spawn-pos
                     :destination   nil})
-          (fx/send! ctx-id {:topic :plasma-cannon/fx-start :mode :start})
-          (fx/send! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state :charging :charge-pos spawn-pos :charge-ticks 0 :fully-charged? false})
+          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-start :mode :start} nil nil)
+          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state :charging :charge-pos spawn-pos :charge-ticks 0 :fully-charged? false})
           (log/debug "PlasmaCannon: Charge started, need" ct "ticks"))))
     (catch Exception e
       (log/warn "PlasmaCannon key-down failed:" (ex-message e)))))
@@ -248,7 +255,7 @@
             (if-not success?
               ;; Out of CP: abort (original: terminate())
               (do
-                (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+                (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
                 (ctx/terminate-context! ctx-id nil)
                 (log/debug "PlasmaCannon: Ran out of CP, aborting"))
               ;; Still charging
@@ -256,7 +263,7 @@
                 (set-skill-state! ctx-id [:charge-ticks] next-ticks)
                 ;; Notify client: fully-charged flag triggers plasma_cannon_t sound
                 (let [fully-charged? (>= next-ticks charge-time)]
-                  (fx/send! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-ticks  next-ticks
+                  (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-ticks  next-ticks
                                     :fully-charged? fully-charged?})))))
 
           :go
@@ -277,8 +284,8 @@
                   ;; Explode at destination
                   (let [exp (get-skill-exp-from exp)]
                     (do-explode! player-id world-id destination exp)
-                    (fx/send! ctx-id {:topic :plasma-cannon/fx-perform :mode :perform} nil {:pos destination})
-                    (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? true})
+                    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-perform :mode :perform} nil {:pos destination})
+                    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? true})
                     (ctx/terminate-context! ctx-id nil))
                   ;; Still flying: move and sync every configured interval
                   (let [next-sync (if (zero? sync-ticks) (cfg-int :projectile.sync-interval-ticks) (dec sync-ticks))]
@@ -287,12 +294,12 @@
                                                              :flight-ticks next-flight
                                                              :sync-ticks next-sync))
                     (when (zero? sync-ticks)
-                      (fx/send! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-pos   new-pos
+                      (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-pos   new-pos
                                         :flight-ticks next-flight})))))))
 
           ;; Fallback: unknown state �?terminate
           (do
-            (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
             (ctx/terminate-context! ctx-id nil)))))
     (catch Exception e
       (log/warn "PlasmaCannon key-tick failed:" (ex-message e)))))
@@ -313,7 +320,7 @@
                 (< charge-ticks charge-time))
           ;; Not fully charged or already flying �?abort
           (when-not (= state :go)
-            (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
             (ctx/terminate-context! ctx-id nil)
             (log/debug "PlasmaCannon: Released before fully charged, aborting"))
 
@@ -338,7 +345,7 @@
                                                      :flight-ticks 0
                                                      :sync-ticks 0))
             ;; Notify client: state change to flying
-            (fx/send! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state       :go
+            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state       :go
                               :charge-pos  spawn-pos
                               :destination dest})
             (log/info "PlasmaCannon: Fired �?destination"
@@ -350,7 +357,7 @@
   "Clean up on abort."
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (fx/send! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
     (ctx-skill/clear-skill-state! ctx-id)
     (log/debug "PlasmaCannon: Aborted")
     (catch Exception e

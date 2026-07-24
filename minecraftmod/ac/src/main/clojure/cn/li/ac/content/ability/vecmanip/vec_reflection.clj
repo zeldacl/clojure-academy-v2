@@ -221,8 +221,11 @@
 (defn- add-exp! [player-id amount]
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
 
+;; Original's MSG_REFLECT_ENTITY/MSG_EFFECT are both sendToClient, and their
+;; c_reflectEntity/reflectEffect client handlers (WaveEffect spawn + world
+;; sound) have no isLocal gate — bystanders see/hear the reflection too.
 (defn- send-fx-reflect-entity! [ctx-id entity]
-  (fx/send! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
+  (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
             {:x (double (or (:x entity) 0.0))
              :y (double (+ (double (or (:y entity) 0.0))
                            (* 0.6 (double (or (:eye-height entity)
@@ -232,7 +235,7 @@
              :reflected? true}))
 
 (defn- send-fx-play! [ctx-id pos]
-  (fx/send! ctx-id {:topic :vec-reflection/fx-play :mode :play} nil
+  (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-play :mode :play} nil
             {:x (double (or (:x pos) 0.0))
              :y (double (or (:y pos) 0.0))
              :z (double (or (:z pos) 0.0))}))

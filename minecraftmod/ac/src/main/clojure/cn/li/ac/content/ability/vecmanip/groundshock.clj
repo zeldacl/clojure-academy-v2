@@ -354,7 +354,14 @@
                   (apply-cooldown! player-id exp)
                   (add-exp! player-id (cfg-double :progression.exp-use))
                   (ctx-skill/replace-skill-state! ctx-id (assoc skill-state :performed? true))
-                  (fx/send! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
+                  ;; Original's c_perform plays the smash sound and spawns
+                  ;; BLOCK_CRACK particles at every affected block
+                  ;; unconditionally (outside the isLocal guard, which only
+                  ;; covers the caster's own look-pitch animation) — this
+                  ;; effect is :both runtime, so fanning it out correctly
+                  ;; reaches the :level (block particle) half for bystanders
+                  ;; while the :hand half stays local regardless.
+                  (fx/send-local-and-nearby! ctx-id {:topic :groundshock/fx-perform :mode :perform} nil
                             {:affected-blocks (:affected-blocks result)
                              :broken-blocks (finalize-broken-blocks broken-blocks*)})
                   (log/info "Groundshock: Affected" affected-count "blocks/entities"))

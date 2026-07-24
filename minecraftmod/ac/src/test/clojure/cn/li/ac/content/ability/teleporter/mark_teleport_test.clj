@@ -96,7 +96,7 @@
     (is (= ["p1"] @reset-calls*))
     (is (= 1 (count @exp-calls*)))
     (is (= 1 (count @cooldown-calls*)))
-    (is (= 1 (count @calls*)))
+    (is (= 2 (count @calls*)) "fanned out to owner + nearby")
     (is (= :mark-teleport/fx-perform (nth (first @calls*) 1)))
     (is (map? (get (nth (first @calls*) 3) :target)))
     (is (= true (get-in @ctx* [:skill-state :has-target])))))

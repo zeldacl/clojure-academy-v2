@@ -441,7 +441,10 @@
 
               (when success
 
-                (fx/send! ctx-id {:topic :mark-teleport/fx-perform :mode :perform} nil
+                ;; Original's s_execute sendToClient(MSG_SOUND) plays the
+                ;; teleport sound for owner + nearby unconditionally — only
+                ;; the aim-mark entity itself is isLocal-gated separately.
+                (fx/send-local-and-nearby! ctx-id {:topic :mark-teleport/fx-perform :mode :perform} nil
 
                           (merge {:skill-id mark-teleport-skill-id
 

@@ -40,8 +40,9 @@
                                                :charge.max-tolerant-ticks 100
                                                0))]
       (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 10)
-      (is (= [{:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}]
-             @messages*))
+      (is (= [{:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}
+              {:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}]
+             @messages*) "fanned out to owner + nearby")
       (is (= [["ctx-1" nil]] @terminated*))
       (is (empty? @exp-calls*))
       (is (empty? @cooldown-calls*)))))
@@ -86,8 +87,9 @@
       (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 30)
       (is (= [["p1" :meltdowner 0.0022]] @exp-calls*))
       (is (= [["p1" :meltdowner 264]] @cooldown-calls*))
-      (is (= [{:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}]
-             @messages*))
+      (is (= [{:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}
+              {:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}]
+             @messages*) "fanned out to owner + nearby")
       (is (= [["ctx-2" nil]] @terminated*)))))
 
 (deftest meltdowner-tick-over-tolerant-aborts-test
@@ -106,8 +108,9 @@
                                                0))]
       (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick! :player-id "p1" :ctx-id "ctx-3" :hold-ticks 101)
       (is (= [["p1" 123.0]] @overload-calls*))
-      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}]
-             @messages*))
+      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}
+              {:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}]
+             @messages*) "fanned out to owner + nearby")
       (is (= [["ctx-3" nil]] @terminated*)))))
 
 (deftest reflection-shot-supports-delta-look-vector-test

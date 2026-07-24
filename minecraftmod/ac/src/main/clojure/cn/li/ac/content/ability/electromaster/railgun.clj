@@ -181,7 +181,10 @@
                           max-distance)
             dir         {:x look-x :y look-y :z look-z}
             end-pos     (geom/v+ start-pos (geom/v* dir actual-dist))]
-        (fx/send! ctx-id {:topic :railgun/fx-reflect :mode :reflect} nil {:start        start-pos
+        ;; Original's reflectServer uses NetworkMessage.sendToAllAround (owner
+        ;; + 20-block radius) for the reflected beam — a world-space shot,
+        ;; visible to anyone nearby, not just the caster.
+        (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-reflect :mode :reflect} nil {:start        start-pos
                                   :end          end-pos
                                   :hit-distance actual-dist})
         (when (and hit-uuid (entity-damage/available?))
@@ -301,6 +304,20 @@
 ;; level-effects' idle-gating never invokes build-plan at all, so the charge
 ;; animation silently never rendered until the first beam appeared. These
 ;; mirror jet-engine's send-mark-start!/-update!/-end! pattern.
+;;
+;; Deliberately owner-only, unlike the original's MSG_CHARGE_EFFECT (which
+;; broadcasts to nearby players via sendToAllAround, so a bystander sees the
+;; caster's coin-charge hand glow — original's RailgunHandEffect is a
+;; PlayerRenderHook attached to the caster's own model and rendered by
+;; whoever can see that model). This port's charge-hand-ops instead reads
+;; through client-runtime/railgun-charge-visual-state keyed by the LOCAL
+;; viewer's own hand-center-pos, so it can only ever show for the caster
+;; looking at their own hand — fanning these markers out would deliver the
+;; idle-gating wakeup to bystanders' clients for no visible effect, since
+;; their own hand-center-pos was never charging. Making bystanders see this
+;; needs the charge glow re-anchored to the caster's world position (a
+;; :level effect keyed by source-player-id, like thunder-bolt/arc-gen),
+;; which is a bigger rendering change than this fan-out pass covers.
 ;; ---------------------------------------------------------------------------
 
 (defn- send-charge-start! [ctx-id]

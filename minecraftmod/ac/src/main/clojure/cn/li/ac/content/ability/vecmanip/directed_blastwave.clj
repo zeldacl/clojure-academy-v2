@@ -166,7 +166,13 @@
                   (motion-effects/add-entity-velocity! world-id (:uuid entity)
                                                 (:x push) (:y push) (:z push)))))
             (break-nearby-blocks! player-id world-id hit-pos exp*)
-            (fx/send! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos
+            ;; Original's s_perform sendToClient(MSG_PERFORM, position); each
+            ;; recipient's c_perform (owner + nearby, no isLocal gate) then
+            ;; locally triggers effectAt — a world-positioned sound + WaveEffect
+            ;; — so every recipient independently renders it, bystanders
+            ;; included. Only the caster's own hand-punch animation is
+            ;; isLocal-gated separately.
+            (fx/send-local-and-nearby! ctx-id {:topic :directed-blastwave/fx-perform :mode :perform} nil {:pos hit-pos
                                                                                           :look-dir (or look {:x 0.0 :y 0.0 :z 1.0})
                                                                                           :charge-ticks (long (max 0 charge-ticks))})
             (ctx-skill/replace-skill-state! ctx-id

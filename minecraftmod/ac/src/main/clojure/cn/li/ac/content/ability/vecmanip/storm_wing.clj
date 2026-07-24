@@ -9,7 +9,7 @@
     or hover when no direction (float up 0.078/tick, or 0.1 near ground)
   - Speed: (if exp<0.45 0.7 1.2) * lerp(2,3,exp)
   - Acceleration: 0.16 per tick toward target velocity
-  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in range?0 each tick
+  - Low exp (<15%): tries to break 40 random soft blocks (hardness 0-0.3) in rangeï¿½?0 each tick
   - Max exp (=1.0): on transition to flight, knockback nearby entities (range 3, strength 2.0)
   - On terminate: set cooldown lerp(30,10,exp) ticks
 
@@ -147,6 +147,15 @@
 ;; ============================================================================
 ;; Skill callbacks
 ;; ============================================================================
+;;
+;; All FX below broadcast (fx/send-local-and-nearby!): original's
+;; c_makealive/c_tick (MSG_MADEALIVE/MSG_TICK, ClientContext, no isLocal
+;; guard) spawn the StormWingEffect wing entity, start the flight loop sound,
+;; and emit swirling dust particles every tick â€” replicated to owner + nearby
+;; the same way Meltdowner's charge particles are, so bystanders see and hear
+;; someone flying. (The MSG_UPDSTATE/MSG_SYNC_STATE sendToExceptLocal calls
+;; elsewhere in the original are unrelated key-icon/state bookkeeping with no
+;; visible render of their own, not the wing effect.)
 
 (defn storm-wing-on-key-down
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -158,7 +167,7 @@
                               :charge-ticks 0
                               :charge-ticks-needed charge-needed
                               :vx 0.0 :vy 0.0 :vz 0.0})
-      (fx/send! ctx-id {:topic :storm-wing/fx-start :mode :start} nil
+      (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-start :mode :start} nil
                 {:charge-ticks (long charge-needed)}))
     (catch Exception e
       (log/error "StormWing key-down failed:" e)
@@ -178,7 +187,7 @@
                     needed (long (:charge-ticks-needed skill-state 70))
                     new-ct (inc ct)]
                 (update-skill-state-root! ctx-id #(assoc % :charge-ticks new-ct))
-                (fx/send! ctx-id {:topic :storm-wing/fx-update :mode :update} nil
+                (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-update :mode :update} nil
                           {:phase :charging
                            :charge-ticks (long new-ct)
                            :charge-ratio (min 1.0 (/ (double new-ct) (double needed)))})
@@ -258,27 +267,27 @@
                           (log/warn "StormWing: Failed to grant exp to player" player-id))
 
                         ;; FX update
-                        (fx/send! ctx-id {:topic :storm-wing/fx-update :mode :update} nil {:phase :flying
+                        (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-update :mode :update} nil {:phase :flying
                                          :charge-ticks 0
                                          :charge-ratio 1.0})))
                     ;; pos?nil????????????
                     (do
                       (log/warn "StormWing: Player position unavailable, terminating")
                       (apply-cooldown! player-id exp)
-                      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
+                      (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
                       (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))
 
                 ;; Insufficient resources: terminate
                 (do
                   (apply-cooldown! player-id exp)
-                  (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
+                  (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
                   (update-skill-state-root! ctx-id #(assoc % :phase :terminated))))))))))
     (catch Exception e
       (log/error "StormWing key-tick failed:" e)
       ;; ???????????????
       (when-let [exp (try (skill-exp player-id) (catch Exception _ 0.0))]
         (apply-cooldown! player-id exp))
-      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
+      (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
       (update-skill-state-root! ctx-id #(assoc % :phase :terminated)))))
 
 (defn storm-wing-on-key-up
@@ -286,7 +295,7 @@
   (try
     (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
-      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
+      (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
       (ctx-skill/clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-up failed:" e)
@@ -297,7 +306,7 @@
   (try
     (let [exp (double (or exp 0.0))]
       (apply-cooldown! player-id exp)
-      (fx/send! ctx-id {:topic :storm-wing/fx-end :mode :end})
+      (fx/send-local-and-nearby! ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
       (ctx-skill/clear-skill-state! ctx-id))
     (catch Exception e
       (log/error "StormWing key-abort failed:" e)

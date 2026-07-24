@@ -2,8 +2,8 @@
   "BodyIntensify skill - hold to charge randomised potions.
 
   Pattern: :charge-window (min 10, max 40, tolerant 100)
-  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿?0 ticks)
-  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿?0 ticks)
+  Cost: overload lerp(200,120) on down; CP lerp(20,15)/tick while charging (ï¿½?0 ticks)
+  Cooldown: lerp(900,600) ticks (manual, applied on successful up ï¿½?0 ticks)
   Exp: +0.01 on successful release"
   (:require [clojure.string :as str]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
@@ -110,7 +110,10 @@
   {:performed? (>= (long ticks) (min-time))})
 
 (defn- send-end-fx! [ctx-id ticks]
-  (fx/send! ctx-id {:topic :body-intensify/fx-end :mode :end} nil (end-payload ticks)))
+  ;; Original's sendToClient(MSG_EFFECT_END, performed) reaches the caster and
+  ;; nearby players, each of whom independently spawns their own local
+  ;; EntityIntensifyEffect when performed? is true â€” bystanders need to see it.
+  (fx/send-local-and-nearby! ctx-id {:topic :body-intensify/fx-end :mode :end} nil (end-payload ticks)))
 
 (defn- body-intensify-cost-fail!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -120,7 +123,7 @@
 (defn- body-intensify-tick!
   "The generic dispatch pipeline's hold-ticks argument is never populated for
   server-tick-driven charge-window contexts (cn.li.ac.ability.service.context-manager's
-  tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) â€?so this
+  tick-context-entry! passes {:ctx-id :skill-id} only, no :hold-ticks) ï¿½?so this
   self-tracks the charge duration in :skill-state instead of trusting the
   argument, matching railgun.clj/scatter_bomb.clj/mark_teleport.clj."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]

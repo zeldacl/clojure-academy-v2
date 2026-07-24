@@ -66,7 +66,10 @@
                                    (double (or (get-in ctx-data [:skill-state :countdown]) 0.0))
                                    0.0)
                   new-countdown (+ prev-countdown countdown-delta)]
-              (fx/send! ctx-id {:topic :mine-ray/fx-progress} nil
+              ;; Original's sendToClient(MSG_PARTICLES,...) has no isLocal gate
+              ;; in c_spawnParticles — mining sparks are visible to everyone
+              ;; nearby, not just the miner.
+              (fx/send-local-and-nearby! ctx-id {:topic :mine-ray/fx-progress} nil
                         {:x hx :y hy :z hz
                          :progress (min 1.0 new-countdown)})
               (if (>= new-countdown 1.0)

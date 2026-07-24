@@ -182,7 +182,11 @@
 
             (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd))
 
-          (fx/send! ctx-id {:topic :flesh-ripping/fx-perform :mode :perform} nil
+          ;; Original's s_end sendToClient(MSG_EFFECT_END, target) — the hit
+          ;; sound and blood-splash particles are unconditional for every
+          ;; recipient in c_endEffect; only the local aim marker is
+          ;; isLocal-gated (handled by :flesh-ripping/fx-update above).
+          (fx/send-local-and-nearby! ctx-id {:topic :flesh-ripping/fx-perform :mode :perform} nil
 
                     {:target-x (:target-x trace)
 

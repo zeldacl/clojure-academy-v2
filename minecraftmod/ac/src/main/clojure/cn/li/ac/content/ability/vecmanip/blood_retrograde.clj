@@ -158,7 +158,10 @@
 (defn- send-fx-perform! [ctx-id player-id world-id target-id hit]
   (let [target-info (get-target-info world-id target-id hit)
         look-dir (get-player-look player-id)]
-    (fx/send! ctx-id {:topic :blood-retrograde/fx-perform :mode :perform} nil
+    ;; Original's s_perform sendToClient(MSG_PERFORM, targ) — c_perform spawns
+    ;; the blood-splash particles unconditionally for owner + nearby; only the
+    ;; caster's own walk-speed slowdown (no fx counterpart here) is isLocal.
+    (fx/send-local-and-nearby! ctx-id {:topic :blood-retrograde/fx-perform :mode :perform} nil
               {:sound-pos {:x (:x target-info)
                            :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.5))
                            :z (:z target-info)}

@@ -67,7 +67,7 @@
 (defn- seed-charge-context!
   "body-intensify-up! ignores the (never-populated-in-production) hold-ticks
   positional argument and instead self-tracks charge duration in
-  :skill-state â€?so tests must seed a real registered context rather than
+  :skill-state ï¿½?so tests must seed a real registered context rather than
   passing :hold-ticks through cb/apply-invoke."
   [player-id ctx-id ticks]
   (let [owner {:logical-side :server :server-session-id :test-session :player-uuid player-id}]
@@ -105,6 +105,6 @@
            (is (pos? (count @applied*)) "successful release applies buffs")
            (is (= [["p-ok" :body-intensify 0.02]] @exp-calls*))
            (is (= [["p-ok" :body-intensify 25]] @cooldown-calls*))
-           (is (= 2 (count @fx-calls*)) "fx sent on both the miss and the success release")))
+           (is (= 4 (count @fx-calls*)) "fx sent on both the miss and the success release, each fanned out to owner + nearby")))
       (finally
         (ctx/reset-contexts-for-test! context-registry-val)))))

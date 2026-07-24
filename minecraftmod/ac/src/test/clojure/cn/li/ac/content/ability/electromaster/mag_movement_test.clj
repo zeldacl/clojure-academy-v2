@@ -92,7 +92,7 @@
                                                    nil)]
          (cb/apply-invoke cost-fail! :ctx-id ctx-id :player-id "p1" :cost-stage :down)))
     (is (empty? @exp*))
-    (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
+    (is (= [[ctx-id :mag-movement/fx-end :end nil] [ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
 
@@ -120,7 +120,7 @@
                                                    nil)]
          (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.4)))
     (is (empty? @exp*))
-    (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
+    (is (= [[ctx-id :mag-movement/fx-end :end nil] [ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
 
@@ -170,7 +170,7 @@
          (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? false)
          (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? false)))
     (is (= 1 (count @exp*)))
-    (is (= 1 (count (filter #(= :mag-movement/fx-end (second %)) @calls*))))
+    (is (= 2 (count (filter #(= :mag-movement/fx-end (second %)) @calls*))))
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
 
@@ -221,7 +221,7 @@
                                                    nil)]
          (cb/apply-invoke tick! :ctx-id ctx-id :player-id "p1" :cost-ok? true)))
     (is (= 1 (count @exp*)))
-    (is (= [[ctx-id :mag-movement/fx-end :end nil]] @calls*))
+    (is (= [[ctx-id :mag-movement/fx-end :end nil] [ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
 
@@ -313,5 +313,5 @@
            (cb/apply-invoke up! :ctx-id ctx-id :player-id "p1")
            (cb/apply-invoke abort! :ctx-id ctx-id :player-id "p1"))))
     (is (= 1 (count @exp*)))
-    (is (= 1 (count @calls*)))
+    (is (= 2 (count @calls*)) "one logical fx-end event, fanned out to owner + nearby")
     (is (= [ctx-id] @terminated*))))

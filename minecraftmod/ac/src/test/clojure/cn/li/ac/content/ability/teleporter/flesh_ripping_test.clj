@@ -122,6 +122,8 @@
     (is (empty? @potion-calls*))
     (is (= [["p1" :flesh-ripping 0.003]] @exp-calls*))
     (is (= [["p1" :flesh-ripping 20]] @cooldown-calls*))
+    ;; fx-crit-hit stays owner-only (a per-player text message); fx-perform
+    ;; fans out to owner + nearby (blood splash + sound are world-visible).
     (is (= [[:teleporter/fx-crit-hit {:x 1.0
                                       :y 2.0
                                       :z 3.0
@@ -131,6 +133,11 @@
                                       :message-args ["x2.6"]
                                       :target-uuid "target-1"
                                       :skill-id :flesh-ripping}]
+            [:flesh-ripping/fx-perform {:target-x 1.0
+                                        :target-y 2.0
+                                        :target-z 3.0
+                                        :hit? true
+                                        :target-uuid "target-1"}]
             [:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
                                         :target-z 3.0
@@ -174,6 +181,11 @@
                     clojure.core/rand (fn [] 0.0)]
          (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-1b" :cost-ok? true)))
     (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
+                                        :target-y 2.0
+                                        :target-z 3.0
+                                        :hit? true
+                                        :target-uuid "target-1"}]
+            [:flesh-ripping/fx-perform {:target-x 1.0
                                         :target-y 2.0
                                         :target-z 3.0
                                         :hit? true

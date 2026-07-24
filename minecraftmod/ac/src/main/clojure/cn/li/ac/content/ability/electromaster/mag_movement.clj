@@ -173,7 +173,10 @@
                                           (max (cfg-double :progression.exp-min)
                                                (* (cfg-double :progression.exp-distance-scale) traveled)))))
         (motion-op/execute-reset-fall-damage! {:player-id player-id} nil)
-        (fx/send! ctx-id {:topic :mag-movement/fx-end :mode :end} nil)
+        ;; Original's MSG_TERMINATED is broadcast to owner + nearby (they all
+        ;; got MSG_EFFECT_START earlier via sendToClient), so everyone who saw
+        ;; the arc appear must also see it torn down.
+        (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-end :mode :end} nil nil)
         (ctx-skill/clear-skill-state! ctx-id)
         (ctx/terminate-context! ctx-id nil)))))
 
@@ -196,8 +199,11 @@
                   :motion-x (double (or (:x velocity-now) 0.0))
                   :motion-y (double (or (:y velocity-now) 0.0))
                   :motion-z (double (or (:z velocity-now) 0.0))}))
-        (fx/send! ctx-id {:topic :mag-movement/fx-start :mode :start} nil)
-        (fx/send! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
+        ;; Original's s_onEffectStart/s_onEffectUpdate both use sendToClient
+        ;; (owner + nearby) — the arc + loop sound are ordinary world FX, not
+        ;; gated to isLocal like MineDetect's overlay.
+        (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-start :mode :start} nil nil)
+        (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                   {:target {:x (double target-x)
                             :y (double target-y)
                             :z (double target-z)}})
@@ -262,7 +268,7 @@
                                                 :motion-x next-x
                                                 :motion-y next-y
                                                 :motion-z next-z))
-                  (fx/send! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
+                  (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
                             {:target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))

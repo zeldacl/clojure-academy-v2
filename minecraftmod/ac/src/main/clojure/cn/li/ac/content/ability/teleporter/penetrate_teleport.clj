@@ -538,6 +538,13 @@
 
           (skill-effects/set-main-cooldown! player-id penetrate-teleport-skill-id (cooldown-ticks exp))
 
+          ;; Deliberately owner-only, unlike this file's teleporter siblings.
+          ;; Original's teleport sound is played by l_onKeyUp — a CLIENT-side
+          ;; listener driven by the local key-press input, so it only ever
+          ;; runs on the caster's own client, never on a bystander's mirrored
+          ;; context (MSG_KEYUP is never network-delivered to nearby players
+          ;; in the first place). s_execute itself has no sendToClient/
+          ;; sendToAllAround call at all — a silent teleport, no broadcast FX.
           (fx/send! ctx-id {:topic :penetrate-teleport/fx-perform :mode :perform} nil dest))
 
         (log/debug "PenetrateTP: execute failed" {:cost-ok? cost-ok?

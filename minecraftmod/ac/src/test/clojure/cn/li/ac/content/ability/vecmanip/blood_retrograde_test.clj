@@ -118,7 +118,7 @@
     (is (= [["w" "target-1" 30.0 :generic]] @damage-calls*))
     (is (= [["p1" :blood-retrograde 90]] @cooldown-calls*))
     (is (= [["p1" :blood-retrograde 0.002]] @exp-calls*))
-    (is (= 1 (count @perform-calls*)))
+    (is (= 2 (count @perform-calls*)) "fx-perform fanned out to owner + nearby")
     (is (= 1 (count @end-calls*)))
     (is (= ["ctx-1"] @terminate-calls))
     (is (true? (get-in @ctx-state [:skill-state :executed?])))

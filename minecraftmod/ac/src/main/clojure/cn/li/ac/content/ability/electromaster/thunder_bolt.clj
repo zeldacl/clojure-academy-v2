@@ -75,7 +75,10 @@
     (when direct-hit?
       (try-charge-creeper! world-id target-uuid)
       (try-apply-slowness! target-uuid exp*))
-    (fx/send! ctx-id {:topic :thunder-bolt/fx-perform} nil {:start eye
+    ;; Original's s_perform sendToClient(MSG_PERFORM, ad) reaches owner +
+    ;; nearby unconditionally (no isLocal gate in c_spawnEffect) — the strong
+    ;; arcs, AOE arcs, and sound must render for bystanders too.
+    (fx/send-local-and-nearby! ctx-id {:topic :thunder-bolt/fx-perform} nil {:start eye
                               :end impact
                               :aoe-points aoe-points
                               :source-player-id player-id

@@ -319,7 +319,10 @@
 
               (ach-dispatcher/trigger-custom-event! player-id "teleporter.threatening_teleport")
 
-              (fx/send! ctx-id {:topic :threatening-teleport/fx-perform :mode :perform} nil
+              ;; Original's s_execute sendToClient(MSG_EXECUTE, attacked) — the
+              ;; sound + particle trail in c_end run unconditionally; only the
+              ;; marker cleanup is isLocal-gated (:threatening-teleport/fx-update).
+              (fx/send-local-and-nearby! ctx-id {:topic :threatening-teleport/fx-perform :mode :perform} nil
 
                         {:start-x (:start-x trace)
 

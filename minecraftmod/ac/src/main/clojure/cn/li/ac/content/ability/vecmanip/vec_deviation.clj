@@ -110,15 +110,18 @@
   [player-id amount]
   (fx-common/add-skill-exp! player-id :vec-deviation amount))
 
+;; Original's MSG_STOP_ENTITY/MSG_PLAY are both sendToClient, and their
+;; c_stopEntity/playSound client handlers (WaveEffect spawn + world-positioned
+;; sound) have no isLocal gate — bystanders see/hear it, not just the caster.
 (defn- send-fx-stop-entity! [ctx-id entity marked?]
-  (fx/send! ctx-id {:topic :vec-deviation/fx-stop-entity :mode :stop-entity} nil
+  (fx/send-local-and-nearby! ctx-id {:topic :vec-deviation/fx-stop-entity :mode :stop-entity} nil
             {:x (double (or (:x entity) 0.0))
              :y (double (or (:y entity) 0.0))
              :z (double (or (:z entity) 0.0))
              :marked? (boolean marked?)}))
 
 (defn- send-fx-play! [ctx-id pos]
-  (fx/send! ctx-id {:topic :vec-deviation/fx-play :mode :play} nil
+  (fx/send-local-and-nearby! ctx-id {:topic :vec-deviation/fx-play :mode :play} nil
             {:x (double (or (:x pos) 0.0))
              :y (double (or (:y pos) 0.0))
              :z (double (or (:z pos) 0.0))}))

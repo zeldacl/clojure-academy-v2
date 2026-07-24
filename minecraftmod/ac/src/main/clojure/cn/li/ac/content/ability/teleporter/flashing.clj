@@ -388,7 +388,10 @@
 
           (ach-dispatcher/trigger-custom-event! player-id "teleporter.flashing")
 
-          (fx/send! ctx-id {:topic :flashing/fx-perform :mode :perform} nil preview)
+          ;; Original's serverPerform sendToClient(MSG_PERFORM) plays the
+          ;; blink sound for owner + nearby unconditionally (only the
+          ;; anti-fall-damage GravityCancellor hack is isLocal-gated).
+          (fx/send-local-and-nearby! ctx-id {:topic :flashing/fx-perform :mode :perform} nil preview)
 
           true)))))
 

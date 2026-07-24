@@ -64,8 +64,12 @@
       (is (= [["ctx-1"
                :electron-bomb/fx-spawn
                {:x 1.0 :y 64.0 :z 2.0
+                :dx 0.0 :dy 0.0 :dz 1.0}]
+              ["ctx-1"
+               :electron-bomb/fx-spawn
+               {:x 1.0 :y 64.0 :z 2.0
                 :dx 0.0 :dy 0.0 :dz 1.0}]]
-             @fx-calls*))
+             @fx-calls*) "fanned out to owner + nearby")
       ;; Exp is granted immediately/unconditionally at cast time, matching
       ;; original's ctx.addSkillExp(.005f) firing in s_Execute.
       (is (= [["p1" :electron-bomb 0.005]] @exp-calls*))

@@ -89,7 +89,10 @@
                {:balls        0
             :hold-ticks   0
             :overload-floor floor})
-      (fx/send! ctx-id {:topic :scatter-bomb/fx-start} nil {}))))
+      ;; Original has no explicit sendTo* at all here — every ball is a real
+      ;; server-spawned entity, vanilla-visible to everyone by default; this
+      ;; port-added charge/release FX follows the same broadcast default.
+      (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-start} nil {}))))
 
 (defn scatter-bomb-tick!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
@@ -109,7 +112,7 @@
               player-id
               (cfg-double :effect.anti-afk-damage)
               :magic))
-          (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})
+          (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})
           (ctx/terminate-context! ctx-id nil))
         ;; Spawn new ball every N ticks
         (when (and (<= ticks (cfg-int :projectile.max-hold-ticks))
@@ -122,7 +125,7 @@
             (when player-ref
               (entity/player-spawn-entity-by-id! player-ref mdball-entity-id 0.0))
             (let [eye (geom/eye-pos player-id)]
-              (fx/send! ctx-id {:topic :scatter-bomb/fx-ball} nil
+              (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-ball} nil
                         {:x (:x eye) :y (:y eye) :z (:z eye)
                          :count new-balls}))))))))
 
@@ -157,17 +160,17 @@
             player-id scatter-bomb-skill-id
             (int (* balls (cfg-lerp :cooldown.ticks-per-ball exp))))
           (log/debug "ScatterBomb: fired" balls "balls"))))
-    (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
+    (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
 
 (defn scatter-bomb-cost-fail!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
   (when (= cost-stage :tick)
     (let [balls (int (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :balls]) 0))]
-      (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
+      (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
 
 (defn scatter-bomb-abort!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (fx/send! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls 0}))
+  (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls 0}))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration

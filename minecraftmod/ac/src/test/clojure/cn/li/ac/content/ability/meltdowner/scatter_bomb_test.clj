@@ -87,7 +87,9 @@
          (cb/apply-invoke scatter/scatter-bomb-down! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
     (is (= {:balls 0 :hold-ticks 0 :overload-floor 120.0}
            (:skill-state @ctx*)))
-    (is (= [["ctx-1" :scatter-bomb/fx-start nil {}]] @messages*))))
+    (is (= [["ctx-1" :scatter-bomb/fx-start nil {}]
+            ["ctx-1" :scatter-bomb/fx-start nil {}]]
+           @messages*) "fanned out to owner + nearby")))
 
 (deftest scatter-bomb-tick-spawns-ball-at-cadence-test
   (let [{:keys [ctx* get-context update-skill-state-root! assoc-skill-state! send! messages*]}
@@ -223,5 +225,7 @@
       #(with-redefs [ctx/get-context get-context
                   fx/send! send!]
          (cb/apply-invoke scatter/scatter-bomb-cost-fail! :ctx-id "ctx-fail" :cost-stage :tick)))
-    (is (= [["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]] @messages*))))
+    (is (= [["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]
+            ["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]]
+           @messages*) "fanned out to owner + nearby")))
 

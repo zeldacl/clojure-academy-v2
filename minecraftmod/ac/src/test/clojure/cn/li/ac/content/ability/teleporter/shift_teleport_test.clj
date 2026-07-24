@@ -189,6 +189,15 @@
                                          :z 21.5
                                          :target-count 1
                                          :placed? true
+                                         :dropped? false}]
+            [:shift-teleport/fx-perform {:from-x 1.0
+                                         :from-y 65.6
+                                         :from-z 3.0
+                                         :x 20.5
+                                         :y 65.0
+                                         :z 21.5
+                                         :target-count 1
+                                         :placed? true
                                          :dropped? false}]]
            @fx-calls*))))
 
