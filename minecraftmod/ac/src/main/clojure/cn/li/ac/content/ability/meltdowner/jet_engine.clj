@@ -46,9 +46,11 @@
   (or (geom/eye-pos player-id)
       {:x 0.0 :y 64.0 :z 0.0}))
 
+;; Unclamped, matching original's VecUtils.lerp/MathUtils.lerp (a + lambda*(b-a)):
+;; the dash keeps extrapolating past the target for the remainder of the
+;; trigger lifetime instead of stopping dead on arrival.
 (defn- lerp-pos [a b t]
-  (let [clamped (max 0.0 (min 1.0 (double t)))]
-    (geom/v+ a (geom/v* (geom/v- b a) clamped))))
+  (geom/v+ a (geom/v* (geom/v- b a) (double t))))
 
 (defn- get-target-pos [player-id]
   (let [world-id (geom/world-id-of player-id)
@@ -78,14 +80,12 @@
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn- can-afford-release? [player-id]
-  (let [cp-needed (release-cp-cost player-id)
-        overload-needed (release-overload-cost player-id)
-        cur-cp (skill-effects/current-cp player-id)
-        cur-overload (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))
-        max-overload (double (or (skill-effects/player-path player-id [:resource-data :max-overload] 0.0) 0.0))]
-    (and (>= cur-cp cp-needed)
-         (<= (+ cur-overload overload-needed) max-overload))))
+;; Matches original's per-tick hold gate (s_onTick -> ctx.canConsumeCP(consumption)):
+;; only CP availability is checked while holding. Overload is only checked
+;; once, atomically, at release time via perform-resource! in jet-engine-up!
+;; — same as original's ctx.consume() running once in s_onEnd.
+(defn- can-hold? [player-id]
+  (>= (skill-effects/current-cp player-id) (release-cp-cost player-id)))
 
 ;; Mark (targeting reticle) FX stays owner-only: original's l_spawnMark/
 ;; l_updateMark/l_endMark are all gated by isLocal even though MSG_MARK_END
@@ -212,7 +212,7 @@
       (tick-triggering! ctx-id player-id)
 
       :marking
-      (if-not (can-afford-release? player-id)
+      (if-not (can-hold? player-id)
         (do
           (send-mark-end! ctx-id (:target-pos st))
           (ctx/terminate-context! ctx-id nil))

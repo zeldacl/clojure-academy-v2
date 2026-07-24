@@ -258,9 +258,10 @@
         mark-ops (vec
                    (mapcat (fn [st]
                              (when-let [target (:target st)]
+                               ;; Green, matching original EntityRippleMark's (51,255,51,179).
                                (ring-ops (vec3/map->v3 target)
                                          (+ 0.55 (* 0.2 (Math/sin (* 0.15 (double (:hold-ticks st))))))
-                                         {:r 120 :g 245 :b 255 :a 170})))
+                                         {:r 51 :g 255 :b 51 :a 179})))
                            marking-states))
         trigger-ops (vec
                       (mapcat (fn [st]
