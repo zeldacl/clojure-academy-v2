@@ -47,7 +47,7 @@
 (def ^:private default-beam-texture
   (modid/asset-path "textures" "effects/arc.png"))
 
-(declare beam-right-axis)
+(declare beam-right-axis camera-facing-right-axis)
 
 (defn- rand-offset
   "Random vec3 offset within magnitude."
@@ -91,9 +91,17 @@
         outer-color (arc/pattern-color pattern :color-outer outer-alpha)
         inner-color (arc/pattern-color pattern :color-inner inner-alpha)
         line-color  (arc/pattern-color pattern :color-line line-alpha)
-        width       (double (or (:width pattern) 0.15))
+        width       (double (or (:width pattern) 0.1))
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
+        ;; Single billboard axis for the entire arc (matching original:
+        ;; all segments share normal=(0,0,1) in local frame, then one
+        ;; ViewOptimize.fix rotation).  Computed from overall start→end
+        ;; direction at arc midpoint, avoiding the per-segment
+        ;; dir ∥ to-cam degenerate case for near-camera segments.
+        arc-start   (:pos (first vertices))
+        arc-end     (:pos (peek vertices))
+        arc-right   (beam-right-axis arc-start arc-end cam-pos)
         segment-count (dec (count vertices))
         seg-quads
         (mapcat (fn [i]
@@ -102,10 +110,9 @@
                         seg-start (:pos v0)
                         seg-end   (:pos v1)
                         seg-t     (:u v0 0.0)
-                        right (beam-right-axis seg-start seg-end cam-pos)
                         wiggle (* effective-wiggle (Math/sin (+ wiggle-phase (* seg-t 3.0))))
-                        outer-o (vec3/v* right width)
-                        core-o  (vec3/v* right core-width)
+                        outer-o (vec3/v* arc-right width)
+                        core-o  (vec3/v* arc-right core-width)
                         p0 (vec3/v+ seg-start outer-o)
                         p1 (vec3/v- seg-start outer-o)
                         p2 (vec3/v- seg-end outer-o)
@@ -154,6 +161,17 @@
                            (arc/pattern-color pattern :color-line (int (* line-alpha 0.5))))]))
                     (range n))))]
     (vec (concat seg-quads fork-quads))))
+
+(defn- arc-billboard-right
+  "Single billboard right-axis for the entire arc, matching original
+  AcademyCraft approach: normal = (0,0,1) in local frame, then
+  ViewOptimize.fix rotates the entity once.
+
+  Uses beam-right-axis on the overall arc direction from start→end,
+  computed at the arc midpoint (where dir and to-cam are not parallel)."
+  [^V3 arc-start ^V3 arc-end cam-pos]
+  (let [arc-mid (vec3/v* (vec3/v+ arc-start arc-end) 0.5)]
+    (beam-right-axis arc-start arc-end cam-pos)))
 
 (defn billboard-beam-ops
   "Build ability beam primitives matching original ArcPatterns visual style:
@@ -257,9 +275,15 @@
         mid (vec3/v* (vec3/v+ start end) 0.5)
         to-cam (vec3/vnorm (vec3/v- cam-pos mid))
         raw (vec3/vcross dir to-cam)]
+    ;; Camera at start → to-cam ∥ dir → cross→0. Fall back to a
+    ;; camera-relative perpendicular instead of a fixed world axis
+    ;; that renders the beam edge-on and invisible.
     (if (> (vec3/vlen raw) 1.0e-5)
       (vec3/vnorm raw)
-      vec3/unit-x)))
+      (let [perp (vec3/vcross vec3/unit-y dir)]
+        (if (> (vec3/vlen perp) 1.0e-5)
+          (vec3/vnorm perp)
+          vec3/unit-x)))))
 
 (defn camera-facing-right-axis
   "Right axis for a camera-facing billboard at `center`."

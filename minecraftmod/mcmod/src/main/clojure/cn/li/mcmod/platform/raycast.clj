@@ -30,6 +30,12 @@
   [player-uuid]
   (call :get-player-look-vector player-uuid))
 
+(defn player-position
+  "Return {:x :y :z :eye-y} for a player UUID, or nil if not found.
+  :x/:y/:z are body position (feet); :eye-y is eye-height Y."
+  [player-uuid]
+  (call :get-player-position player-uuid))
+
 (defn raycast-from-player
   [player-uuid max-dist living-only?]
   (call :raycast-from-player player-uuid max-dist living-only?))

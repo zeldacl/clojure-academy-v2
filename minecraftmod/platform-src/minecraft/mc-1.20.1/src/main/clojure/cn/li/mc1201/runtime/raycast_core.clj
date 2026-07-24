@@ -47,6 +47,13 @@
                                (catch Exception e
                                  (log/warn "Failed to get player look vector:" (ex-message e))
                                  nil)))
+   :get-player-position (fn [player-uuid]
+                          (try
+                            (rn/normalize-bridge-map
+                              (RaycastShared/getPlayerPosition (query-core/get-player-by-uuid (get-server) player-uuid)))
+                            (catch Exception e
+                              (log/warn "Failed to get player position:" (ex-message e))
+                              nil)))
    :raycast-from-player (fn [player-uuid max-distance living-only?]
                           (try
                             (rn/normalize-bridge-map

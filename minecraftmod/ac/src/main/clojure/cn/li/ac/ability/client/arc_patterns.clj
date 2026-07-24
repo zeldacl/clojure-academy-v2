@@ -28,17 +28,18 @@
 (def arc-patterns
   {:weak
    {:name          "weakArc"
-    :segments      8
-    :amplitude     0.15
-    :width         0.04
+    :segments      24        ;; dense zigzag for lightning look (was 8)
+    :amplitude     0.12      ;; matching original offset ratio
+    :width         0.1       ;; matching original ArcFactory.width = 0.1
     :core-ratio    0.45
     :tex-wiggle    0.7
     :show-wiggle   0.1
     :hide-wiggle   0.4
     :life-ticks    10
-    :color-outer   {:r 110 :g 190 :b 255}
-    :color-inner   {:r 210 :g 235 :b 255}
-    :color-line    {:r 180 :g 225 :b 255}
+    ;; Original uses glColor4d(1,1,1,alpha) — pure white
+    :color-outer   {:r 255 :g 255 :b 255}
+    :color-inner   {:r 255 :g 255 :b 255}
+    :color-line    {:r 255 :g 255 :b 255}
     :flicker       1.0
     :fork-count    0
     :fork-length   0.5
@@ -185,6 +186,112 @@
               pt-offset (v/v+ pt offset)]
           (recur (inc i)
                  (conj vertices {:pos pt-offset :u t :v 0.0})))))))
+
+;; ============================================================================
+;; L-system recursive arc generation (matching original ArcFactory)
+;; ============================================================================
+
+(defn- rand-perp-offset
+  "Random offset vector in the plane perpendicular to the beam direction."
+  [^cn.li.mcmod.math.V3 perp ^cn.li.mcmod.math.V3 perp2 magnitude]
+  (let [theta (* 2.0 Math/PI (rand))
+        r (* magnitude (rand))]
+    (v/v+ (v/v* perp (* r (Math/sin theta)))
+          (v/v* perp2 (* r (Math/cos theta))))))
+
+(defn- random-rotate-small
+  "Rotate a direction vector by a small random angle (radians), matching
+  original ArcFactory.randomRotate(10, dir) — ±10° ≈ ±0.17 rad."
+  [^cn.li.mcmod.math.V3 dir perp perp2 max-angle]
+  (let [angle (* max-angle (- (* 2.0 (rand)) 1.0))
+        theta (* 2.0 Math/PI (rand))
+        rot-vec (v/v+ (v/v* perp (Math/sin theta))
+                      (v/v* perp2 (Math/cos theta)))]
+    (v/vnorm (v/v+ dir (v/v* rot-vec (Math/sin angle))))))
+
+(defn generate-lsystem-segments
+  "Generate arc segments using L-system recursive subdivision.
+
+  Parameters are SCALED by arc length to match the original's visual density
+  (original generated for 20-block reference length):
+    - passes: scaled so segment density ≈ 3.2 segments/block
+    - max-offset: scaled proportionally (original 1.1 / 20 length)
+    - branch length: proportional to parent segment (not total arc)
+
+  Returns vector of segment maps:
+    {:start-pos ^V3  :end-pos ^V3
+     :start-width double  :end-width double
+     :alpha double}"
+  [^cn.li.mcmod.math.V3 start ^cn.li.mcmod.math.V3 end
+   {:keys [width lsystem-passes lsystem-max-offset
+           lsystem-branch-factor lsystem-width-shrink
+           lsystem-alpha-shrink]
+    :or {width 0.1 lsystem-passes 6 lsystem-max-offset 1.1
+         lsystem-branch-factor 0.15 lsystem-width-shrink 0.7
+         lsystem-alpha-shrink 0.9}}]
+  (let [dir (v/vnorm (v/v- end start))
+        total-len (v/vlen (v/v- end start))
+        ;; Scale parameters to actual arc length.
+        ;; Original reference: 20 blocks, 6 passes, offset 1.1.
+        ref-len 20.0
+        len-ratio (/ (max 1.0 total-len) ref-len)
+        scaled-offset (* lsystem-max-offset len-ratio)
+        ;; Segment density: original 64 seg / 20 blk = 3.2/blk
+        seg-target (max 2.0 (* total-len 3.2))
+        effective-passes (max 2 (min lsystem-passes
+                                     (int (Math/ceil (/ (Math/log seg-target)
+                                                       (Math/log 2.0))))))
+        ;; Local coordinate frame
+        up (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 dir)) 0.99)
+             v/unit-y v/unit-x)
+        perp (v/vnorm (v/vcross dir up))
+        perp2 (v/vnorm (v/vcross dir perp))
+        segments (java.util.ArrayList.)]
+    (letfn [(subdivide [^cn.li.mcmod.math.V3 s ^cn.li.mcmod.math.V3 e
+                        sw ew alpha depth
+                        s-perp s-perp2]
+              (if (>= depth effective-passes)
+                (.add segments {:start-pos s :end-pos e
+                                :start-width sw :end-width ew
+                                :alpha alpha})
+                (let [seg-dir (v/vnorm (v/v- e s))
+                      seg-len (v/vlen (v/v- e s))
+                      mid (v/v* (v/v+ s e) 0.5)
+                      mw (/ (+ sw ew) 2.0)
+                      ;; Offset per pass (matching original: offset /= 2 each pass,
+                      ;; independent of current segment length)
+                      offset-scale (* scaled-offset
+                                     (Math/pow 0.5 (double depth)))
+                      offset (rand-perp-offset perp perp2 offset-scale)
+                      mid' (v/v+ mid offset)
+                      ;; Local perpendiculars for this segment
+                      seg-up (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 seg-dir)) 0.99)
+                               v/unit-y v/unit-x)
+                      seg-perp (v/vnorm (v/vcross seg-dir seg-up))
+                      seg-perp2 (v/vnorm (v/vcross seg-dir seg-perp))]
+                  ;; Two child segments
+                  (subdivide s mid' sw mw alpha (inc depth) seg-perp seg-perp2)
+                  (subdivide mid' e mw ew alpha (inc depth) seg-perp seg-perp2)
+                  ;; Branch: direction ≈ parent segment direction, ±10°
+                  ;; length proportional to parent segment (matching original:
+                  ;; multiply(subtract(ave, s.start), lengthShrink))
+                  (when (< (rand) lsystem-branch-factor)
+                    (let [br-dir (random-rotate-small seg-dir seg-perp seg-perp2 0.17)
+                          br-len (* seg-len 0.5 lsystem-width-shrink)
+                          br-end (v/v+ mid' (v/v* br-dir br-len))
+                          bw (* mw lsystem-width-shrink)
+                          ba (* alpha lsystem-alpha-shrink)]
+                      (subdivide mid' br-end mw bw ba (inc depth)
+                                seg-perp seg-perp2))))))]
+      (subdivide start end width width 1.0 0 perp perp2))
+    (vec segments)))
+
+(defn generate-lsystem-variants
+  "Pre-generate N L-system arc variants (different random seeds → different
+  lightning shapes).  Matching original ArcPatterns static GEN = 20."
+  [n start end pattern]
+  (mapv (fn [_] (generate-lsystem-segments start end pattern))
+        (range n)))
 
 ;; ============================================================================
 ;; Wiggle animation state

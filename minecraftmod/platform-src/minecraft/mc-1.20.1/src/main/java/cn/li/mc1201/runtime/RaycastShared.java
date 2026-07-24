@@ -159,6 +159,20 @@ public final class RaycastShared {
         return result;
     }
 
+    public static Map<String, Object> getPlayerPosition(ServerPlayer player) {
+        if (player == null) {
+            return null;
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("x", player.getX());
+        result.put("y", player.getY());
+        result.put("z", player.getZ());
+        result.put("eye-y", player.getEyeY());
+        result.put("world-id", player.level().dimension().location().toString());
+        return result;
+    }
+
     public static Map<String, Object> raycastFromPlayer(ServerPlayer player, double maxDistance, boolean livingOnly) {
         if (player == null) {
             return null;
