@@ -116,9 +116,7 @@
                     skill-config/tunable-int (fn [_skill-id field-id]
                                                (case field-id
                                                  :combat.absorb-interval-ticks 18
-                                                 :combat.touch-interval-ticks 4
-                                                 :effect.deactivate-slowness-duration-ticks 60
-                                                 :effect.abort-slowness-duration-ticks 40
+                                                 :effect.slowness-duration-ticks 100
                                                  :effect.slowness-amplifier 1
                                                  1))
                     skill-config/lerp-double (fn [_skill-id field-id _exp]
@@ -131,7 +129,7 @@
                     skill-config/tunable-double (fn [_skill-id field-id]
                                                   (case field-id
                                                     :progression.exp-absorbed-scale 0.0004
-                                                    :combat.front-cone-dot 0.5
+                                                    :combat.front-cone-degrees 60.0
                                                     :combat.touch-radius 3.0
                                                     0.0))
                     motion-effects/player-position (fn [_]
@@ -171,13 +169,11 @@
                         skill-config/lerp-int (fn [_skill-id field-id _exp]
                                                 (case field-id
                                                   :timing.max-active-ticks 5
-                                                  :cooldown.ticks 100
                                                   1))
                         skill-config/tunable-int (fn [_skill-id field-id]
                                                    (case field-id
-                                                     :effect.deactivate-slowness-duration-ticks 60
+                                                     :effect.slowness-duration-ticks 100
                                                      :effect.slowness-amplifier 1
-                                                     :combat.touch-interval-ticks 4
                                                      1))
                         skill-effects/enforce-overload-floor! (fn [& _] true)
                         skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
@@ -192,20 +188,30 @@
             (is (= 1 @potion-calls*))
             (is (= 1 (count @cooldown-calls*))))))))
 
-(deftest abort-applies-short-slowness-and-clears-state-test
-  (testing "abort! applies abort slowness and clears skill state"
+(deftest abort-applies-same-slowness-and-cooldown-as-deactivate-test
+  ;; Matches original: keyup and keyabort both funnel through the same
+  ;; s_onEnd (slowness + ticks-based cooldown) — abort is not a free pass.
+  (testing "abort! applies the unified slowness+cooldown and clears skill state"
     (let [potion-calls* (atom [])
           remove-calls* (atom 0)
-          update-calls* (atom [])]
+          update-calls* (atom [])
+          cooldown-calls* (atom [])
+          ctx-data {:player-uuid "p-4"
+                    :skill-state {:light-shield {:ticks 10}}}]
       (with-light-shield-env
         (fn []
-          (with-redefs [ctx-skill/update-skill-state-root! (fn [& args]
+          (with-redefs [ctx/get-context (fn ([_ctx-id] ctx-data) ([_ _ctx-id] ctx-data))
+                        ctx-skill/update-skill-state-root! (fn [& args]
                                                              (swap! update-calls* conj args)
                                                              nil)
                         toggle/remove-toggle! (fn [& _] (swap! remove-calls* inc))
+                        skill-effects/skill-exp (fn [& _] 0.0)
+                        skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                            (swap! cooldown-calls* conj [player-id skill-id ticks])
+                                                            true)
                         skill-config/tunable-int (fn [_skill-id field-id]
                                                    (case field-id
-                                                     :effect.abort-slowness-duration-ticks 40
+                                                     :effect.slowness-duration-ticks 100
                                                      :effect.slowness-amplifier 1
                                                      1))
                         potion-effects/available? (constantly true)
@@ -215,4 +221,6 @@
             (cb/apply-invoke ls/light-shield-abort! :player-id "p-4" :ctx-id "ctx-4")
             (is (= 1 @remove-calls*))
             (is (= 1 (count @potion-calls*)))
+            ;; ticks=10, exp=0.0 -> toggle-cooldown-ticks = 10*(2-0.0) = 20
+            (is (= [["p-4" :light-shield 20]] @cooldown-calls*))
             (is (seq @update-calls*)))))))))

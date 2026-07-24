@@ -2,18 +2,16 @@
   "LightShield skill - toggle energy barrier that absorbs damage and pushes enemies.
 
   Pattern: :toggle
-  Activation cost: CP lerp(200, 160, exp), overload lerp(100, 70, exp)
-  Tick cost: CP lerp(12, 8, exp) per tick
+  Activation cost: overload lerp(110, 60, exp), no CP
+  Tick cost: CP lerp(9, 4, exp) per tick
   Damage reduction: lerp(0.5, 0.8, exp) of incoming damage
-  Touch damage: lerp(3, 8, exp) to entities in front 60° cone within 3 blocks
-  On deactivate: slowness II for 60 ticks
-  Cooldown: lerp(100, 60, exp) ticks (manual)
-  Exp: +0.0004 per damage absorbed
+  Touch damage: lerp(2, 6, exp) to entities in front 60° yaw cone within 3 blocks
+  On deactivate or abort: slowness II for 100 ticks, cooldown = ticks-held * (2 - exp)
+  Exp: damage-absorbed * 0.0004 (touch and defensive absorb alike)
 
   No Minecraft imports."
   (:require
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.util.toggle :as toggle]
@@ -90,19 +88,22 @@
 (defn- get-player-position [player-id]
   (motion-effects/player-position player-id))
 
+(defn- horizontal-yaw-degrees
+  [x z]
+  (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
+
+;; Matches original's isEntityReachable: a horizontal-yaw-only comparison
+;; (dy is explicitly ignored in the original — pitch/height never affect the
+;; cone), not a full 3D dot-product cone.
 (defn- in-front-cone?
-  "Check if entity is within 60° cone in front of player."
   [player-pos player-look entity-pos]
   (when (and player-pos player-look entity-pos)
     (let [dx (- (double (:x entity-pos)) (double (:x player-pos)))
-          dy (- (double (:y entity-pos)) (double (:y player-pos)))
           dz (- (double (:z entity-pos)) (double (:z player-pos)))
-          len (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))
-          nx (/ dx len) ny (/ dy len) nz (/ dz len)
-          dot (+ (* nx (double (:x player-look)))
-                 (* ny (double (:y player-look)))
-                 (* nz (double (:z player-look))))]
-      (> dot (cfg-double :combat.front-cone-dot)))))  ; cos(60°) = 0.5
+          player-yaw (horizontal-yaw-degrees (:x player-look) (:z player-look))
+          target-yaw (horizontal-yaw-degrees dx dz)
+          diff (mod (Math/abs (double (- target-yaw player-yaw))) 360.0)]
+      (< diff (cfg-double :combat.front-cone-degrees)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -113,28 +114,45 @@
   (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
     (set-shield-state-path! ctx-id [:ticks] 0)
     (set-shield-state-path! ctx-id [:last-absorb-tick] (- (cfg-int :combat.absorb-interval-ticks)))
-    (set-shield-state-path! ctx-id [:last-touch-tick] (- (cfg-int :combat.touch-interval-ticks)))
     (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
     ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
     (when player-ref
       (entity/player-spawn-entity-by-id! player-ref (modid/namespaced-path "entity_md_shield") 0.0)))
   (log/info "LightShield: Activated"))
 
+;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp): cooldown scales
+;; with how long the shield was actually held (ticks), not a flat exp range.
+(defn- toggle-cooldown-ticks
+  [ticks exp]
+  (long (Math/round (* (double ticks) (- 2.0 (double exp))))))
+
+;; Matches original's unified s_onEnd (MSG_TERMINATED): both voluntary
+;; deactivation and forced abort funnel through the same slowness + cooldown
+;; application, regardless of which path ended the toggle.
+(defn- end-shield!
+  [ctx-id player-id exp]
+  (let [ticks (shield-ticks (ctx-skill/get-context ctx-id))]
+    (when (potion-effects/available?)
+      (potion-effects/apply-effect!
+        player-id :slowness
+        (cfg-int :effect.slowness-duration-ticks)
+        (cfg-int :effect.slowness-amplifier)))
+    (skill-effects/set-main-cooldown!
+      player-id light-shield-skill-id
+      (toggle-cooldown-ticks ticks exp))))
+
 (defn light-shield-deactivate!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (when (potion-effects/available?)
-    (potion-effects/apply-effect!
-      player-id :slowness
-      (cfg-int :effect.deactivate-slowness-duration-ticks)
-      (cfg-int :effect.slowness-amplifier)))
-  (skill-effects/set-main-cooldown!
-    player-id light-shield-skill-id
-    (cfg-lerp-int :cooldown.ticks exp))
+  (end-shield! ctx-id player-id exp)
   (update-skill-state-root! ctx-id #(dissoc % light-shield-state-key))
   (log/info "LightShield: Deactivated"))
 
+;; Matches original's per-tick attempt (no interval throttle) — the only
+;; original gate is target invulnerability (e.hurtResistantTime<=0), which
+;; apply-direct-damage! already respects via the vanilla hurt() call, plus
+;; whether the resource cost can be paid.
 (defn- maybe-touch-damage!
-  [{:keys [ctx-id player-id exp pos world-id look-vec ticks]}]
+  [{:keys [ctx-id player-id exp pos world-id look-vec]}]
   (when (and pos (world-effects/available?))
     (let [entities (world-effects/find-entities-in-radius
                     world-id (:x pos) (:y pos) (:z pos)
@@ -157,8 +175,7 @@
             (skill-effects/add-skill-exp!
              player-id light-shield-skill-id
              (* (cfg-lerp :combat.touch-damage exp)
-                (cfg-double :progression.exp-absorbed-scale))))))
-          (set-shield-state-path! ctx-id [:last-touch-tick] ticks))))
+                (cfg-double :progression.exp-absorbed-scale)))))))))
 
 (defn light-shield-tick!
   [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -170,32 +187,24 @@
             world-id (or (:world-id pos)
                          (skill-effects/player-path player-id [:position :world-id])
                          "minecraft:overworld")
-            look-vec (get-player-look-vector player-id)
-            touch-interval (cfg-int :combat.touch-interval-ticks)
-            last-touch (long (or (get-in ctx-data (state-path :last-touch-tick)) (- touch-interval)))]
+            look-vec (get-player-look-vector player-id)]
         (set-shield-state-path! ctx-id [:ticks] next-ticks)
         (enforce-overload-floor! player-id ctx-data)
         (if (> next-ticks max-active)
           (do
             (toggle/remove-toggle! ctx-id :light-shield)
             (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil))
-          (when (>= (- next-ticks last-touch) touch-interval)
-            (maybe-touch-damage!
-             {:ctx-id ctx-id
-              :player-id player-id
-              :exp exp
-              :ticks next-ticks
-              :pos pos
-              :world-id world-id
-              :look-vec look-vec})))))))
+          (maybe-touch-damage!
+           {:ctx-id ctx-id
+            :player-id player-id
+            :exp exp
+            :pos pos
+            :world-id world-id
+            :look-vec look-vec}))))))
 
 (defn light-shield-abort!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (when (potion-effects/available?)
-    (potion-effects/apply-effect!
-      player-id :slowness
-      (cfg-int :effect.abort-slowness-duration-ticks)
-      (cfg-int :effect.slowness-amplifier)))
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (end-shield! ctx-id player-id exp)
   (toggle/remove-toggle! ctx-id :light-shield)
   (update-skill-state-root! ctx-id #(dissoc % light-shield-state-key)))
 
@@ -226,7 +235,9 @@
       (let [ticks (shield-ticks ctx-data)
             last-absorb (long (or (get-in ctx-data (state-path :last-absorb-tick)) (- (cfg-int :combat.absorb-interval-ticks))))
             interval (cfg-int :combat.absorb-interval-ticks)]
-        (if (or (< (- ticks last-absorb) interval)
+        ;; Matches original's <= (skip when diff<=interval, i.e. requires
+        ;; interval+1 ticks since the last absorb, not just interval ticks).
+        (if (or (<= (- ticks last-absorb) interval)
                 (not (attacker-front? player-id attacker-id)))
           [damage nil]
           (let [exp (skill-exp player-id)]
@@ -267,14 +278,13 @@
   :ctrl-id        :light-shield
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
+  ;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp) — cooldown scales
+  ;; with actual shield uptime, so this display estimate is 0 before the
+  ;; shield has ever been held (ticks defaults to 0).
   :cooldown-ticks (fn [{:keys [player-id ctx-id]}]
                     (let [exp (skill-exp player-id)
-                          ticks (long (or (some-> ctx-id ctx-skill/get-context :skill-state :ticks) 0))]
-                      (skill-config/lerp-int light-shield-skill-id
-                                             :cooldown.ticks
-                                             (double (or exp 0.0)))))
-  ;; Note: deactivate handler overrides this with lerp(2*ticks, ticks, exp)
-  ;; matching original getCooldown(ct) = lerp(2*ct, ct, exp)
+                          ticks (long (or (some-> ctx-id ctx-skill/get-context (get-in [:skill-state light-shield-state-key :ticks])) 0))]
+                      (toggle-cooldown-ticks ticks exp)))
   :pattern        :toggle
   :cooldown       {:mode :manual}
   :cost           {:down {:overload (fn [{:keys [player-id]}]
