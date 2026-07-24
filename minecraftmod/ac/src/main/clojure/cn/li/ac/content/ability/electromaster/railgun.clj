@@ -296,39 +296,37 @@
     0.0))
 
 ;; ---------------------------------------------------------------------------
-;; Charge FX markers — purely a level-effect idle-gating signal. The actual
-;; charge-hand visual data is already tracked client-side by
-;; client-runtime/railgun-charge-visual-state (fed by the ordinary skill-state
-;; context sync, independent of these messages); without a live :railgun-shot
-;; level-effect entry during the charge-only window (no beam yet exists),
-;; level-effects' idle-gating never invokes build-plan at all, so the charge
-;; animation silently never rendered until the first beam appeared. These
-;; mirror jet-engine's send-mark-start!/-update!/-end! pattern.
+;; Charge FX markers.
 ;;
-;; Deliberately owner-only, unlike the original's MSG_CHARGE_EFFECT (which
-;; broadcasts to nearby players via sendToAllAround, so a bystander sees the
-;; caster's coin-charge hand glow — original's RailgunHandEffect is a
-;; PlayerRenderHook attached to the caster's own model and rendered by
-;; whoever can see that model). This port's charge-hand-ops instead reads
-;; through client-runtime/railgun-charge-visual-state keyed by the LOCAL
-;; viewer's own hand-center-pos, so it can only ever show for the caster
-;; looking at their own hand — fanning these markers out would deliver the
-;; idle-gating wakeup to bystanders' clients for no visible effect, since
-;; their own hand-center-pos was never charging. Making bystanders see this
-;; needs the charge glow re-anchored to the caster's world position (a
-;; :level effect keyed by source-player-id, like thunder-bolt/arc-gen),
-;; which is a bigger rendering change than this fan-out pass covers.
+;; Two jobs, both broadcast (owner + nearby), matching original's
+;; MSG_CHARGE_EFFECT (sendToAllAround, 30-block radius):
+;;
+;; 1. Idle-gating: without a live :railgun-shot level-effect entry during the
+;;    charge-only window (no beam yet exists), level-effects' idle-gating
+;;    never invokes build-plan at all. Mirrors jet-engine's
+;;    send-mark-start!/-update!/-end! pattern.
+;; 2. The actual charge-hand glow: original's RailgunHandEffect is a
+;;    PlayerRenderHook attached to the caster's model, rendered by whoever
+;;    can see that model. Ported as a world-anchored scripted-effect entity
+;;    (entities/all.clj's railgun_charge, :follow-owner? true) spawned on
+;;    fx-charge-start and despawned on fx-charge-end — see
+;;    railgun_fx.clj's :immediate channel handlers. It's keyed by
+;;    :source-player-id, not the local viewer, so every recipient's client
+;;    spawns their own copy anchored to the CASTER, not themselves.
 ;; ---------------------------------------------------------------------------
 
-(defn- send-charge-start! [ctx-id]
-  (fx/send! ctx-id {:topic :railgun/fx-charge-start :mode :charge-start}))
+(defn- send-charge-start! [ctx-id player-id]
+  (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-start :mode :charge-start} nil
+            {:source-player-id player-id}))
 
-(defn- send-charge-update! [ctx-id charge-ticks-left]
-  (fx/send! ctx-id {:topic :railgun/fx-charge-update :mode :charge-update} nil
-            {:charge-ticks-left (long charge-ticks-left)}))
+(defn- send-charge-update! [ctx-id player-id charge-ticks-left]
+  (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-update :mode :charge-update} nil
+            {:source-player-id player-id
+             :charge-ticks-left (long charge-ticks-left)}))
 
-(defn- send-charge-end! [ctx-id]
-  (fx/send! ctx-id {:topic :railgun/fx-charge-end :mode :charge-end}))
+(defn- send-charge-end! [ctx-id player-id]
+  (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-end :mode :charge-end} nil
+            {:source-player-id player-id}))
 
 ;; ---------------------------------------------------------------------------
 ;; Action handlers
@@ -373,7 +371,7 @@
                                 :mode         :item-charge
                                 :charge-ticks (item-charge-ticks)
                                 :hit-count    0})
-        (send-charge-start! ctx-id))
+        (send-charge-start! ctx-id player-id))
 
       :else
       (ctx-skill/replace-skill-state! ctx-id {:fired false :mode :idle-no-trigger}))))
@@ -407,32 +405,32 @@
                   (ctx-skill/replace-skill-state! ctx-id
                                          (assoc skill-state :fired false :mode :item-charge-failed)))
                 (set-skill-state! ctx-id [:charge-ticks] 0)
-                (send-charge-end! ctx-id))
+                (send-charge-end! ctx-id player-id))
               (do
                 (set-skill-state! ctx-id [:charge-ticks] (dec ticks-left))
-                (send-charge-update! ctx-id (dec ticks-left))))))))
+                (send-charge-update! ctx-id player-id (dec ticks-left))))))))
     (catch Exception e
       (log/warn "railgun-on-key-tick error" (ex-message e)))))
 
 (defn- railgun-on-key-up
   "Cancels an unfinished item charge. Cooldown is only applied on successful perform."
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx)
           mode        (:mode skill-state)]
       (when (and (= mode :item-charge) (not (:fired skill-state)))
         (ctx-skill/replace-skill-state! ctx-id
                                (assoc skill-state :mode :item-charge-cancelled :charge-ticks 0))
-        (send-charge-end! ctx-id))
+        (send-charge-end! ctx-id player-id))
       (when (:fired skill-state)
         (log/debug "Railgun completed")))))
 
 (defn- railgun-on-key-abort
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (ctx-skill/clear-skill-state! ctx-id)
   ;; Unconditional, matching jet-engine's abort handler: a harmless no-op on
   ;; the client (dissoc of an absent owner-key) when no charge was active.
-  (send-charge-end! ctx-id)
+  (send-charge-end! ctx-id player-id)
   (log/debug "Railgun aborted"))
 
 ;; ---------------------------------------------------------------------------

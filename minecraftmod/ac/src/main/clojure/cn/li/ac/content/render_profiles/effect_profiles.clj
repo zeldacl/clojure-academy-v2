@@ -110,7 +110,22 @@
                :wiggle-amp 0.6 :wiggle-freq 8.0
                :color-a [140 220 255] :color-b [240 250 255]}}
 
-     {:id "ray-composite"
+       ;; Railgun charge-hand glow. Matching original RailgunHandEffect's
+     ;; arc-burst billboard sequence at the caster's hand — simplified to a
+     ;; billboard-cross here since it needs to be a world-anchored entity
+     ;; (follow-owner?, see entities/all.clj's railgun_charge spec) rather
+     ;; than a hand-runtime effect, so every nearby player sees it too.
+     ;; :params is declared for documentation only, matching effect-billboard/
+     ;; marker-billboard above — ScriptedEffectBillboardRenderer's
+     ;; billboard-cross case doesn't read size/color from the profile yet.
+     {:id "railgun-charge-glow"
+      :kind :billboard-cross
+      :state {:layer :translucent
+              :blend :alpha}
+      :params {:size 0.5
+               :color [236 170 93]}}
+
+   {:id "ray-composite"
       :kind :ray-composite
       :state {:layer :translucent
         :blend :alpha}

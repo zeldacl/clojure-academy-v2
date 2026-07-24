@@ -30,6 +30,18 @@
                                            :on-anchored-hurt :discard-when-hurt}}}}))
     (edsl/register-entity!
       (edsl/create-entity-spec
+        "railgun_charge"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.1
+         :height 0.1
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 600
+                               :follow-owner? true
+                               :renderer-id "railgun-charge-glow"}}}))
+    (edsl/register-entity!
+      (edsl/create-entity-spec
         "intensify_effect"
         {:entity-kind :scripted-effect
          :category :misc

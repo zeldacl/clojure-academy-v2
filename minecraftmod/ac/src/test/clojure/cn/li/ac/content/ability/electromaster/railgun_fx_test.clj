@@ -4,15 +4,18 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.runtime :as client-runtime]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
         (railgun-fx/reset-fx-for-test!)
+        (railgun-fx/reset-charge-glows-for-test!)
         (f)
         (finally
           (railgun-fx/reset-fx-for-test!)
+          (railgun-fx/reset-charge-glows-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
@@ -123,6 +126,78 @@
         (is (seq (:ops plan)))
         (is (every? #(= :quad (:kind %)) (:ops plan))
             "no beam exists yet — the only ops should be the charge-hand quad")))))
+
+(deftest charge-start-spawns-glow-anchored-to-caster-test
+  (let [handlers* (atom {})
+        run-calls* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
+                                                      nil)
+                  client-bridge/run-client-effect! (fn [op payload]
+                                                      (swap! run-calls* conj [op payload])
+                                                      (when (= op :mcmod/spawn-scripted-effect-at-player)
+                                                        "entity-uuid-1"))]
+      (railgun-fx/init!)
+      ((get @handlers* :railgun/fx-charge-start) "ctx-glow" :railgun/fx-charge-start
+       {:mode :charge-start :source-player-id "caster-uuid"})
+      (is (= [[:mcmod/spawn-scripted-effect-at-player
+               {:effect-id "my_mod:railgun_charge" :owner-uuid "caster-uuid"}]]
+             @run-calls*)
+          "spawns anchored to the CASTER's uuid from the payload, not the local viewer"))))
+
+(deftest charge-start-without-source-player-id-does-not-spawn-test
+  (let [handlers* (atom {})
+        run-calls* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
+                                                      nil)
+                  client-bridge/run-client-effect! (fn [op payload]
+                                                      (swap! run-calls* conj [op payload])
+                                                      nil)]
+      (railgun-fx/init!)
+      ((get @handlers* :railgun/fx-charge-start) "ctx-glow" :railgun/fx-charge-start
+       {:mode :charge-start})
+      (is (empty? @run-calls*)))))
+
+(deftest charge-end-despawns-exactly-the-entity-charge-start-spawned-test
+  (let [handlers* (atom {})
+        run-calls* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
+                                                      nil)
+                  client-bridge/run-client-effect! (fn [op payload]
+                                                      (swap! run-calls* conj [op payload])
+                                                      (when (= op :mcmod/spawn-scripted-effect-at-player)
+                                                        "entity-uuid-2"))]
+      (railgun-fx/init!)
+      ((get @handlers* :railgun/fx-charge-start) "ctx-glow" :railgun/fx-charge-start
+       {:mode :charge-start :source-player-id "caster-uuid"})
+      ((get @handlers* :railgun/fx-charge-end) "ctx-glow" :railgun/fx-charge-end
+       {:mode :charge-end :source-player-id "caster-uuid"})
+      (is (= [:mcmod/spawn-scripted-effect-at-player :mcmod/remove-local-scripted-effect]
+             (mapv first @run-calls*)))
+      (is (= [:mcmod/remove-local-scripted-effect {:entity-uuid "entity-uuid-2"}]
+             (last @run-calls*))))))
+
+(deftest charge-end-without-a-prior-start-is-a-no-op-test
+  ;; Matches railgun.clj's abort handler comment: fx-charge-end fires
+  ;; unconditionally on abort even when no charge was ever active.
+  (let [handlers* (atom {})
+        run-calls* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler)
+                                                      nil)
+                  client-bridge/run-client-effect! (fn [op payload]
+                                                      (swap! run-calls* conj [op payload])
+                                                      nil)]
+      (railgun-fx/init!)
+      ((get @handlers* :railgun/fx-charge-end) "ctx-never-started" :railgun/fx-charge-end
+       {:mode :charge-end :source-player-id "caster-uuid"})
+      (is (empty? @run-calls*)))))
 
 (deftest charging-marker-expires-via-ttl-without-explicit-end-test
   (do

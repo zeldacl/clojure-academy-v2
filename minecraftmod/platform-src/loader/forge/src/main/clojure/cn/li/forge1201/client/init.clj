@@ -213,6 +213,10 @@
                             :mcmod/spawn-local-scripted-effect
                             (runtime-bridge/spawn-local-scripted-effect! (:effect-id payload))
 
+                            :mcmod/spawn-scripted-effect-at-player
+                            (runtime-bridge/spawn-scripted-effect-at-player!
+                              (:effect-id payload) (:owner-uuid payload))
+
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
 

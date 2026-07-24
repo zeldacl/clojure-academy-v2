@@ -2,7 +2,6 @@
   (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
@@ -13,7 +12,6 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [clojure.string :as str]))
 
-(def ^:private sound-id (modid/namespaced-path "vecmanip.directed_shock"))
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)
 
@@ -66,12 +64,17 @@
       (update state* :effect-state assoc owner-key*
               (merge base-meta {:stage :prepare :started-at (now-ms)}))
 
+      ;; The punch sound itself is queued by directed-shock-fx.clj's
+      ;; :immediate channel handler instead of here — that one is
+      ;; world-positioned at the caster's coordinates (matching original's
+      ;; unconditional, non-isLocal-gated ACSounds.playClient), so it plays
+      ;; correctly for owner and nearby alike. Queuing it here too would
+      ;; double it for the owner and mislocate it for bystanders (this
+      ;; hand-effect enqueue always resolves to the LOCAL viewer's own
+      ;; position, not the caster's).
       :perform
-      (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0})
-        (update state* :effect-state assoc owner-key*
-                (merge base-meta {:stage :punch :started-at (now-ms)})))
+      (update state* :effect-state assoc owner-key*
+              (merge base-meta {:stage :punch :started-at (now-ms)}))
 
       :end
       (if performed?

@@ -148,7 +148,10 @@
     (is (= [["w" "e1" 12.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= 1 (count @add-velocity-calls*)))
-    (is (= 1 (count @perform-calls*)))
+    (is (= 2 (count @perform-calls*)) "fx-perform fanned out to owner + nearby")
+    (is (= {:x 0.0 :y 1.62 :z 0.0}
+           (select-keys (get-in @perform-calls* [0 3]) [:x :y :z]))
+        "punch sound position matches the caster's eye position")
     (is (empty? @end-calls*))
     (is (empty? @terminate-calls*))
     (is (= [["p1" :directed-shock 40]] @cooldown-calls*))

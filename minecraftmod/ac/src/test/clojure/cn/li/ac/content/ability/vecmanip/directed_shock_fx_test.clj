@@ -56,15 +56,45 @@
               [:directed-shock "ctx-1" :directed-shock/fx-end {:mode :end :performed? false} :owner-key [:ctx "ctx-1"]]]
              @hand-enqueued*)))))
 
-(deftest enqueue-perform-plays-sound-once-test
-  (let [
-        sound-calls* (atom [])]
+(deftest enqueue-perform-does-not-play-sound-locally-test
+  ;; The punch sound is now queued by directed-shock-fx.clj's :immediate
+  ;; channel (world-positioned at the caster), not by this :hand enqueue —
+  ;; queuing it here too would double it for the caster and mislocate it for
+  ;; bystanders, since hand-effect enqueue always resolves to the local
+  ;; viewer's own position.
+  (let [sound-calls* (atom [])]
     (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload))]
       (arc-beam/enqueue-for-test! :directed-shock "ctx-1" :directed-shock/fx-perform {:mode :perform} {:runtime :hand})
+      (is (empty? @sound-calls*)))))
+
+(deftest immediate-perform-plays-world-positioned-sound-test
+  (let [handlers* (atom {})
+        sound-calls* (atom [])]
+    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler))
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sound-calls* conj payload))]
+      (dsfx/init!)
+      ((get @handlers* :directed-shock/fx-perform) "ctx-1" :directed-shock/fx-perform
+       {:x 1.0 :y 2.0 :z 3.0})
       (is (= 1 (count @sound-calls*)))
-      (is (= "my_mod:vecmanip.directed_shock"
-             (:sound-id (first @sound-calls*)))))))
+      (is (= {:sound-id "my_mod:vecmanip.directed_shock"
+              :volume 0.5 :pitch 1.0 :x 1.0 :y 2.0 :z 3.0}
+             (first @sound-calls*))))))
+
+(deftest immediate-perform-skips-sound-without-position-test
+  (let [handlers* (atom {})
+        sound-calls* (atom [])]
+    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                      (swap! handlers* assoc topic handler))
+                  client-sounds/queue-current-sound-effect! (fn [payload]
+                                                              (swap! sound-calls* conj payload))]
+      (dsfx/init!)
+      ((get @handlers* :directed-shock/fx-perform) "ctx-1" :directed-shock/fx-perform nil)
+      (is (empty? @sound-calls*)))))
 
 (deftest end-payload-respects-performed-flag-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]

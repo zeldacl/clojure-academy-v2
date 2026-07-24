@@ -39,6 +39,15 @@
 (defn spawn-local-scripted-effect! [effect-id]
   (ScriptedEffectSpawner/spawnLocal effect-id))
 
+(defn spawn-scripted-effect-at-player!
+  "Spawn a scripted effect anchored to `owner-uuid` (any currently-loaded
+  player, not just the local one) — the string UUID of the spawned entity is
+  returned so the caller can despawn it later via
+  remove-local-scripted-effect!. Used for effects that must appear at a
+  skill's caster for every nearby viewer, not just the caster's own screen."
+  [effect-id owner-uuid]
+  (ScriptedEffectSpawner/spawnAtPlayerWithUuid effect-id owner-uuid))
+
 (defn remove-local-scripted-effect! [entity-uuid]
   (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))
 

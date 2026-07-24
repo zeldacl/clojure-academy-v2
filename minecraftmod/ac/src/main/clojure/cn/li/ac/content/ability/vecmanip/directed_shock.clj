@@ -107,10 +107,19 @@
                 (when (motion-effects/entity-motion-available?)
                   (motion-effects/add-entity-velocity! world-id target-id
                                                 (:x impulse) (:y impulse) (:z impulse)))
-                (fx/send! ctx-id {:topic :directed-shock/fx-perform :mode :perform} nil {:target-id target-id
+                ;; Original's second MSG_GENERATE_EFFECT client listener plays
+                ;; the punch sound unconditionally (outside the isLocal guard
+                ;; that gates only the hand-punch animation) — a positional
+                ;; sound at the caster, audible to owner + nearby. The impact
+                ;; hand animation itself stays local via directed-shock-fx.clj's
+                ;; :hand channel below; :x/:y/:z here only drive the sound.
+                (fx/send-local-and-nearby! ctx-id {:topic :directed-shock/fx-perform :mode :perform} nil {:target-id target-id
                                                                                           :world-id world-id
                                                                                           :impulse impulse
-                                                                                          :knockback knockback})
+                                                                                          :knockback knockback
+                                                                                          :x (:x eye)
+                                                                                          :y (:y eye)
+                                                                                          :z (:z eye)})
                 (ctx-skill/replace-skill-state! ctx-id
                                                 (merge (:skill-state ctx-data)
                                                        {:performed? true
