@@ -73,7 +73,9 @@
 	[kind]
 	(case kind
 		:billboard-cross {:size 0.6
-											:color [180 220 255]}
+											:color-r 180
+											:color-g 220
+											:color-b 255}
 		:ring-lines {:rings 3
 								 :segments 16
 								 :radius-start 0.4

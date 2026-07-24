@@ -88,15 +88,21 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         switch (rendererKey) {
             case "ring-lines" -> renderRingLines(entity, partialTick, poseStack, bufferSource);
             case "polyline-arc" -> renderPolylineArc(entity, spec, rendererId, partialTick, poseStack, bufferSource);
-            case "billboard-cross" -> renderBillboardCross(entity, spec, partialTick, poseStack, bufferSource);
+            case "billboard-cross" -> renderBillboardCross(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             default -> throw new IllegalArgumentException("Unsupported renderer key for effect rendererId="
                     + rendererId + ": " + rendererKey);
         }
     }
 
+    private static final float BILLBOARD_CROSS_DEFAULT_SIZE = 0.6F;
+    private static final int BILLBOARD_CROSS_DEFAULT_R = 180;
+    private static final int BILLBOARD_CROSS_DEFAULT_G = 220;
+    private static final int BILLBOARD_CROSS_DEFAULT_B = 255;
+
     private void renderBillboardCross(T entity,
                                       ScriptedEffectSpec spec,
+                                      String rendererId,
                                       float partialTick,
                                       PoseStack poseStack,
                                       MultiBufferSource bufferSource) {
@@ -114,13 +120,16 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         VertexConsumer vc = bufferSource.getBuffer(RenderType.lines());
 
         int a = (int) (255 * alpha);
-        float size = 0.6F;
+        float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "size", BILLBOARD_CROSS_DEFAULT_SIZE));
+        int r = Mth.clamp(drawPlanParamInt(rendererId, "color-r", BILLBOARD_CROSS_DEFAULT_R), 0, 255);
+        int g = Mth.clamp(drawPlanParamInt(rendererId, "color-g", BILLBOARD_CROSS_DEFAULT_G), 0, 255);
+        int b = Mth.clamp(drawPlanParamInt(rendererId, "color-b", BILLBOARD_CROSS_DEFAULT_B), 0, 255);
 
-        vc.vertex(mat, -size, 0.0F, 0.0F).color(180, 220, 255, a).normal(0.0F, 1.0F, 0.0F).endVertex();
-        vc.vertex(mat, size, 0.0F, 0.0F).color(180, 220, 255, a).normal(0.0F, 1.0F, 0.0F).endVertex();
+        vc.vertex(mat, -size, 0.0F, 0.0F).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
+        vc.vertex(mat, size, 0.0F, 0.0F).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
 
-        vc.vertex(mat, 0.0F, -size, 0.0F).color(180, 220, 255, a).normal(0.0F, 1.0F, 0.0F).endVertex();
-        vc.vertex(mat, 0.0F, size, 0.0F).color(180, 220, 255, a).normal(0.0F, 1.0F, 0.0F).endVertex();
+        vc.vertex(mat, 0.0F, -size, 0.0F).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
+        vc.vertex(mat, 0.0F, size, 0.0F).color(r, g, b, a).normal(0.0F, 1.0F, 0.0F).endVertex();
 
         poseStack.popPose();
     }
