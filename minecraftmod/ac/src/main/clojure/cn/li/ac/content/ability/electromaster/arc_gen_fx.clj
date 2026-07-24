@@ -10,6 +10,9 @@
      :sound-id (modid/namespaced-path "em.arc_weak")
      :arc-life 10
      :arc-pattern :weak
+     ;; Original spawns EntityArc at the caster's eye and then renders it
+     ;; through ViewOptimize.fix, which shifts it into their hand.
+     :hand-origin? true
      :channels [{:topic :arc-gen/fx-perform :mode :perform
                  :level-payload-fn (fn [_ _ p]
                                      {:start (:start p)

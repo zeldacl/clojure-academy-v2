@@ -80,10 +80,15 @@
     :life-ratio        ??0.0 (just spawned) to 1.0 (about to die)
     :texture           ??override texture path (default: effects/arc.png)
     :wiggle-phase      ??current arc-patterns/wiggle-phase value
-    :effective-wiggle  ??this arc's arc-patterns/effective-wiggle-amount value"
-  [cam-pos vertices pattern {:keys [life-ratio texture wiggle-phase effective-wiggle]
+    :effective-wiggle  ??this arc's arc-patterns/effective-wiggle-amount value
+    :origin-offset     ??rigid world-space translation applied to the whole arc
+                         (the caller's ViewOptimize-style hand offset)"
+  [cam-pos vertices pattern {:keys [life-ratio texture wiggle-phase effective-wiggle origin-offset]
                              :or {life-ratio 0.5 wiggle-phase 0.0 effective-wiggle 0.0}}]
   (let [texture     (or texture default-beam-texture)
+        shift       (if origin-offset
+                      (fn [^V3 p] (vec3/v+ p origin-offset))
+                      identity)
         lr          (double life-ratio)
         outer-alpha (arc/life-fade-alpha 180 lr)
         inner-alpha (arc/life-fade-alpha 220 lr)
@@ -94,25 +99,24 @@
         width       (double (or (:width pattern) 0.1))
         core-ratio  (double (or (:core-ratio pattern) 0.45))
         core-width  (* width core-ratio)
-        ;; Single billboard axis for the entire arc (matching original:
-        ;; all segments share normal=(0,0,1) in local frame, then one
-        ;; ViewOptimize.fix rotation).  Computed from overall start→end
-        ;; direction at arc midpoint, avoiding the per-segment
-        ;; dir ∥ to-cam degenerate case for near-camera segments.
-        arc-start   (:pos (first vertices))
-        arc-end     (:pos (peek vertices))
-        arc-right   (beam-right-axis arc-start arc-end cam-pos)
         segment-count (dec (count vertices))
         seg-quads
         (mapcat (fn [i]
                   (let [v0 (nth vertices i)
                         v1 (nth vertices (inc i))
-                        seg-start (:pos v0)
-                        seg-end   (:pos v1)
+                        seg-start (shift (:pos v0))
+                        seg-end   (shift (:pos v1))
                         seg-t     (:u v0 0.0)
                         wiggle (* effective-wiggle (Math/sin (+ wiggle-phase (* seg-t 3.0))))
-                        outer-o (vec3/v* arc-right width)
-                        core-o  (vec3/v* arc-right core-width)
+                        ;; Per-segment billboard axis: widening a segment along
+                        ;; one arc-wide axis leaves every segment that happens to
+                        ;; run parallel to it edge-on (zero-width sliver). The
+                        ;; degenerate case this guards against — segment pointing
+                        ;; straight at the camera — is already handled by
+                        ;; beam-right-axis's fallback.
+                        right (beam-right-axis seg-start seg-end cam-pos)
+                        outer-o (vec3/v* right width)
+                        core-o  (vec3/v* right core-width)
                         p0 (vec3/v+ seg-start outer-o)
                         p1 (vec3/v- seg-start outer-o)
                         p2 (vec3/v- seg-end outer-o)
@@ -132,8 +136,8 @@
         fork-angle   (double (or (:fork-angle pattern) 0.5))
         fork-quads
         (when (pos? fork-count)
-          (let [start (:pos (first vertices))
-                end   (:pos (peek vertices))
+          (let [start (shift (:pos (first vertices)))
+                end   (shift (:pos (peek vertices)))
                 beam-vec (vec3/v- end start)
                 beam-len (vec3/vlen beam-vec)
                 dir (vec3/vnorm beam-vec)
@@ -161,17 +165,6 @@
                            (arc/pattern-color pattern :color-line (int (* line-alpha 0.5))))]))
                     (range n))))]
     (vec (concat seg-quads fork-quads))))
-
-(defn- arc-billboard-right
-  "Single billboard right-axis for the entire arc, matching original
-  AcademyCraft approach: normal = (0,0,1) in local frame, then
-  ViewOptimize.fix rotates the entity once.
-
-  Uses beam-right-axis on the overall arc direction from start→end,
-  computed at the arc midpoint (where dir and to-cam are not parallel)."
-  [^V3 arc-start ^V3 arc-end cam-pos]
-  (let [arc-mid (vec3/v* (vec3/v+ arc-start arc-end) 0.5)]
-    (beam-right-axis arc-start arc-end cam-pos)))
 
 (defn billboard-beam-ops
   "Build ability beam primitives matching original ArcPatterns visual style:

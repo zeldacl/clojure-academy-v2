@@ -128,11 +128,18 @@
                               :y (double (or (:hit-y hit-result) (:y hit-result) 0.0))
                               :z (double (or (:hit-z hit-result) (:z hit-result) 0.0))}))]
 
-          (fx/send! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
+          ;; Original's Context.sendToClient reaches the caster AND every
+          ;; player the context was linked to (25 blocks at cast time), so
+          ;; bystanders see the arc too; plain fx/send! here only reached the
+          ;; caster's own client.
+          (fx/send-local-and-nearby! ctx-id {:topic :arc-gen/fx-perform :mode :perform} nil
                     {:start eye
                      :end   (or hit-pos
                                 (geom/v+ eye (geom/v* look-vec range)))
-                     :hit-type hit-type})
+                     :hit-type hit-type
+                     ;; Lets the client tell "my own arc" (first-person view
+                     ;; offset) from a bystander's (third-person offset).
+                     :source-player-id player-id})
 
           (cond
             (= hit-type :entity)

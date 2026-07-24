@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.effects.rv3 :as v3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
@@ -79,6 +80,43 @@
       (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_weak" (:sound-id (first @sounds*)))))))
+
+(deftest hand-origin-shifts-arc-per-viewer-test
+  ;; Original spawns EntityArc at the caster's eye and lets ViewOptimize.fix
+  ;; translate it into their hand. Its isFirstPerson() gate needs both halves:
+  ;; only the caster looking through their own eyes gets the small offset;
+  ;; the moment a player model is on screen (their own in F5, or someone
+  ;; else's) the arc drops to that model's hand instead.
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]
+    (invoke-level-enqueue! "ctx-view" :arc-gen/fx-perform
+      {:mode :perform
+       :source-player-id "caster"
+       :start {:x 0.0 :y 64.0 :z 0.0}
+       :end {:x 0.0 :y 64.0 :z 10.0}})
+    (let [build-plan (:build-plan-fn
+                       (:level (arc-beam/build-spec {:effect-id :arc-gen
+                                                     :arc-life 10
+                                                     :arc-pattern :weak
+                                                     :hand-origin? true
+                                                     :channels []})))
+          cam {:x 5.0 :y 70.0 :z 5.0}
+          ;; ops per segment are [outer-quad inner-quad line]; the line's :p1 is
+          ;; the arc's first vertex, which midpoint displacement leaves anchored
+          ;; exactly on the (shifted) start.
+          arc-start-for (fn [view-ctx] (:p1 (nth (:ops (build-plan cam view-ctx 0 nil)) 2)))
+          ;; Beam runs along +Z, so local right is -X and local up is world up.
+          first-person-start (v3/v3 -0.2 63.75 -0.05)
+          third-person-start (v3/v3 -0.23 63.2 0.15)]
+      (is (= first-person-start
+             (arc-start-for {:player-uuid "caster" :first-person? true})))
+      (is (= third-person-start
+             (arc-start-for {:player-uuid "caster" :first-person? false}))
+          "caster in F5 sees their own model, so the arc must leave its hand")
+      (is (= third-person-start
+             (arc-start-for {:player-uuid "bystander" :first-person? true})))
+      (is (= first-person-start
+             (arc-start-for {:player-uuid "caster"}))
+          "no camera signal falls back to the vanilla default view"))))
 
 (deftest two-owners-keep-arc-gen-queues-independent-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [_] nil)]

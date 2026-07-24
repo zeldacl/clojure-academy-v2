@@ -91,12 +91,12 @@
         p1 (V3/add (V3/add center side) lift)
         p2 (V3/sub (V3/add center side) lift)
         p3 (V3/sub (V3/sub center side) lift)]
+    ;; ModRenderTypes/plasmaBody is a QUADS render type — 4 vertices per
+    ;; primitive, not a triangle pair (see level-renderer's emit-quad!).
     (emit-plasma-vertex! vc mat p0)
     (emit-plasma-vertex! vc mat p1)
     (emit-plasma-vertex! vc mat p2)
-    (emit-plasma-vertex! vc mat p2)
-    (emit-plasma-vertex! vc mat p3)
-    (emit-plasma-vertex! vc mat p0)))
+    (emit-plasma-vertex! vc mat p3)))
 
 (defn- render-plasma-op!
   [{:keys [^MultiBufferSource$BufferSource buffer-source mat camera-pos op]}]

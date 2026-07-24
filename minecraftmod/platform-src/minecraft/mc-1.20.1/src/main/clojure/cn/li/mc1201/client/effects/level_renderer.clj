@@ -3,6 +3,7 @@
   (:require [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.core BlockPos]
@@ -111,7 +112,22 @@
            (swap! (last-applied-walk-speed-atom) assoc owner-key spd)))
        (clear-owner-walk-speed! owner player)))))
 
+(defn- local-camera-first-person?
+  "True while the local camera is in first person (F5 not toggled out).
+
+  This is the port of the original's ViewOptimize.isFirstPerson gameSettings
+  half; effect code pairs it with an is-this-my-effect check on the uuid.
+  Both loaders' level-effect renderers call render-level-plan! below, so
+  reading it here from Minecraft's own options is all the wiring it needs."
+  []
+  (if-let [^Minecraft mc (Minecraft/getInstance)]
+    (.isFirstPerson (.getCameraType (.-options mc)))
+    true))
+
 (defn hand-center-pos
+  "Local player's hand position, plus the view context effect code needs to
+  recognise its own player's effects (`:player-uuid`) and which of the
+  original's two ViewOptimize offsets applies (`:first-person?`)."
   [^LocalPlayer player]
   (let [^Vec3 look (.getLookAngle player)
         yaw-rad (Math/toRadians (double (.getYRot player)))
@@ -121,6 +137,7 @@
         base-y (.getEyeY player)
         base-z (.getZ player)]
     {:player-uuid (str (.getUUID player))
+     :first-person? (local-camera-first-person?)
      :x (+ base-x (* (.-x look) 0.35) (* right-x 0.22))
      :y (+ base-y -0.22 (* (.-y look) 0.06))
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
@@ -222,13 +239,24 @@
         (.endVertex))))
 
 (defn- emit-quad!
+  "Emit ONE quad as exactly 4 vertices.
+
+  The buffer comes from RenderType/entityTranslucent, whose vertex mode is
+  QUADS: the builder slices the stream into primitives every 4 vertices,
+  ignoring where each op started. Emitting the 6-vertex two-triangle form
+  here pushed every following op out of phase with that grouping, so quads
+  got assembled from a mix of one op's trailing corners and the next op's
+  leading ones — the arc rendered as scattered garbage polygons instead of
+  ribbons.
+
+  p0/p1 are the two corners at the segment's start and p2/p3 at its end (see
+  render-util's beam quads), so `u` runs along the beam and `v` across its
+  width."
   [^VertexConsumer vc mat {:keys [p0 p1 p2 p3 u0 u1 v0 v1 color]}]
   (emit-quad-vertex! vc mat p0 u0 v0 color)
-  (emit-quad-vertex! vc mat p1 u1 v0 color)
+  (emit-quad-vertex! vc mat p1 u0 v1 color)
   (emit-quad-vertex! vc mat p2 u1 v1 color)
-  (emit-quad-vertex! vc mat p2 u1 v1 color)
-  (emit-quad-vertex! vc mat p3 u0 v1 color)
-  (emit-quad-vertex! vc mat p0 u0 v0 color))
+  (emit-quad-vertex! vc mat p3 u1 v0 color))
 
 (defn- sort-ops
   "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
@@ -259,8 +287,6 @@
         plan (when (power-runtime/client-level-effects-active?)
                (power-runtime/client-build-level-effect-plan
                  camera-pos (hand-center-pos player) tick (make-nearby-block-query-fn player)))]
-    (when owner
-      (apply-local-walk-speed-from-plan! owner player plan))
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))

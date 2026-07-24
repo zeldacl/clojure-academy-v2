@@ -148,18 +148,30 @@
   "Generate zigzag vertex path from `start` to `end` (both ^V3).
   Returns vector of {:pos ^V3 :u :v} entries forming the arc path.
 
+  Uses the original ArcFactory algorithm — recursive midpoint displacement.
+  Each pass splits every segment at its midpoint and pushes that midpoint by a
+  random distance (up to the current pass offset) in the plane perpendicular
+  to the beam, then halves the offset for the next pass. Both endpoints stay
+  anchored, so the bolt leaves the caster exactly at `start` and converges on
+  `end`, with the deviation concentrated in the middle.
+
+  This is what makes the result read as one bolt: sampling every vertex from
+  an independent full-amplitude distribution instead (the previous
+  implementation) produces uncorrelated neighbours — a hairball rather than a
+  path — and, because the deviation near `start` is then just as large as in
+  the middle, the first segments land far off the beam axis. Fired from the
+  eye that puts them outside the field of view entirely, leaving only the far
+  end of the arc (near the target) on screen.
+
   Deterministic given (start, end, pattern segments/amplitude, seed) — no
   camera/time dependence — so callers precompute this once when an arc is
   enqueued (its shape is fixed for the arc's lifetime) rather than every
   frame.
 
-  Each vertex is offset perpendicular to the beam direction by a pseudo-random
-  amount (deterministic via :seed) to create the classic lightning-bolt shape.
-  The amplitude controls how far vertices deviate.
-
-  Matching original EntityArc zigzag rendering:
-  - Segments subdivide the straight line into jagged sections
-  - Each vertex has UV coords (u=0.0-1.0 along beam, v=0.0-1.0 across width)"
+  `segments` is a target subdivision count, rounded up to the next power of
+  two to give the pass count. `amplitude` is the pass-0 midpoint offset as a
+  fraction of beam length (original: maxOffset 1.1 on its 20-block reference
+  arc). Each vertex has UV coords (u=0.0-1.0 along beam, v across width)."
   [^cn.li.mcmod.math.V3 start ^cn.li.mcmod.math.V3 end
    {:keys [segments amplitude seed]
     :or {segments 8 amplitude 0.15 seed 42}}]
@@ -170,22 +182,38 @@
         up (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 dir)) 0.99) v/unit-y v/unit-x)
         perp (v/vnorm (v/vcross dir up))
         perp2 (v/vnorm (v/vcross dir perp))
-        n (max 2 (int segments))]
-    (loop [i 0
-           vertices [{:pos start :u 0.0 :v 0.0}]]
-      (if (>= i n)
-        (conj vertices {:pos end :u 1.0 :v 0.0})
-        (let [t (/ (inc i) (inc (double n)))
-              pt (v/v+ start (v/v* end-start t))
-              ;; Deterministic pseudo-random offset based on seed + index
-              r1 (Math/sin (+ (* seed 12.9898) (* i 78.233)))
-              r2 (Math/cos (+ (* seed 45.1641) (* i 93.117)))
-              offset1 (* amplitude len (Math/sin (* r1 Math/PI)))
-              offset2 (* amplitude len 0.5 (Math/cos (* r2 Math/PI)))
-              offset (v/v+ (v/v* perp offset1) (v/v* perp2 offset2))
-              pt-offset (v/v+ pt offset)]
-          (recur (inc i)
-                 (conj vertices {:pos pt-offset :u t :v 0.0})))))))
+        passes (max 1 (int (Math/ceil (/ (Math/log (max 2.0 (double segments)))
+                                         (Math/log 2.0)))))
+        ;; One Random drawn in a fixed traversal order keeps the whole path
+        ;; reproducible from `seed` alone.
+        rng (java.util.Random. (long seed))
+        displace (fn [magnitude]
+                   ;; Same draw as the original: random direction across the
+                   ;; plane perpendicular to the beam, random radius within
+                   ;; this pass's offset.
+                   (let [theta (* 2.0 Math/PI (.nextDouble rng))
+                         r (* (double magnitude) (.nextDouble rng))]
+                     (v/v+ (v/v* perp (* r (Math/sin theta)))
+                           (v/v* perp2 (* r (Math/cos theta))))))]
+    ;; Points carry [t offset]: `t` walks the straight beam, `offset` stays
+    ;; perpendicular to it, so the path never doubles back along the axis.
+    (loop [pass 0
+           pts [[0.0 v/zero] [1.0 v/zero]]]
+      (if (>= pass passes)
+        (mapv (fn [[t off]]
+                {:pos (v/v+ (v/v+ start (v/v* end-start (double t))) off)
+                 :u (double t)
+                 :v 0.0})
+              pts)
+        (let [magnitude (* (double amplitude) len (Math/pow 0.5 pass))]
+          (recur (inc pass)
+                 (into [(first pts)]
+                       (mapcat (fn [[[t0 off0] [t1 off1]]]
+                                 (let [t-mid (* 0.5 (+ (double t0) (double t1)))
+                                       off-mid (v/v+ (v/v* (v/v+ off0 off1) 0.5)
+                                                     (displace magnitude))]
+                                   [[t-mid off-mid] [t1 off1]]))
+                               (partition 2 1 pts)))))))))
 
 ;; ============================================================================
 ;; L-system recursive arc generation (matching original ArcFactory)

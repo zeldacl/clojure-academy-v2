@@ -128,9 +128,39 @@
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
 
+;; ---------------------------------------------------------------------------
+;; Caster-hand origin (original LambdaLib2 ViewOptimize.fix)
+;; ---------------------------------------------------------------------------
+
+;; The original spawns EntityArc at the caster's eye, then translates the whole
+;; arc in its own local frame before drawing — [forward up right], applied
+;; after the GL matrix has been rotated to the arc's yaw/pitch. Which of the
+;; two sets applies is the original's isFirstPerson(): the caster's own arc
+;; seen through their own eyes gets the small one, everything else — the caster
+;; in F5, or anyone watching someone else cast, i.e. whenever a player model is
+;; on screen — gets the one that drops it to the model's hand.
+(def ^:private first-person-view-offset [-0.05 -0.25 0.2])
+(def ^:private third-person-view-offset [0.15 -0.8 0.23])
+
+(defn- local-frame-offset
+  "Resolve one [forward up right] offset triple against the arc's own axes."
+  [start end [forward-o up-o right-o]]
+  (let [start-v3 (rv3/map->v3 start)
+        end-v3 (rv3/map->v3 end)
+        forward (rv3/vnorm (rv3/v- end-v3 start-v3))
+        right-raw (rv3/vcross forward rv3/unit-y)
+        ;; Straight up/down leaves "right" undefined; any perpendicular does.
+        right (if (> (rv3/vlen right-raw) 1.0e-5)
+                (rv3/vnorm right-raw)
+                rv3/unit-x)
+        up (rv3/vnorm (rv3/vcross right forward))]
+    (rv3/v+ (rv3/v+ (rv3/v* forward forward-o)
+                    (rv3/v* up up-o))
+            (rv3/v* right right-o))))
+
 (defn- arc-item
   "Precompute the zigzag vertex path once per arc, at enqueue time."
-  [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type]}]
+  [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type hand-origin?]}]
   (let [pattern-key* (if is-aoe? :aoe pattern-key)
         pattern (arc-patterns/get-pattern pattern-key*)
         start-v3 (rv3/map->v3 start)
@@ -145,7 +175,12 @@
             :max-ttl arc-life
             :pattern-key pattern-key*
             :hit-type hit-type
-            :vertices vertices})))
+            :vertices vertices}
+           ;; Both candidates are resolved here because they depend only on the
+           ;; arc's direction; the viewer-dependent pick happens per frame.
+           (when hand-origin?
+             {:view-offset-own (local-frame-offset start end first-person-view-offset)
+              :view-offset-other (local-frame-offset start end third-person-view-offset)}))))
 
 (defn- play-sound!
   [{:keys [sound-id sound-volume sound-pitch]}]
@@ -183,7 +218,9 @@
         (do
           (play-sound! opts)
           (update-in store* [:arcs owner-key*] (fnil conj [])
-                     (arc-item base start end arc-life arc-pattern :hit-type hit-type)))
+                     (arc-item base start end arc-life arc-pattern
+                               :hit-type hit-type
+                               :hand-origin? (:hand-origin? opts))))
 
         :else store*)
 
@@ -206,24 +243,46 @@
                         [owner-key live]))))
             by-owner))))
 
+(defn- view-origin-offset
+  "Pick this viewer's ViewOptimize offset for one arc, or nil when the effect
+  didn't opt into hand origins.
+
+  `view-ctx` is hand-center-pos, which carries both halves of the original's
+  isFirstPerson() test: `:player-uuid` (the same signal the other fx-template
+  impls use to recognise their own player's effects) and `:first-person?`. Only
+  the caster looking through their own eyes gets the small offset — as soon as
+  a player model is on screen, theirs or someone else's, the arc has to drop to
+  its hand instead. A `view-ctx` with no `:first-person?` key is read as first
+  person, the vanilla default camera."
+  [view-ctx {:keys [source-player-id view-offset-own view-offset-other]}]
+  (when view-offset-own
+    (let [{:keys [player-uuid]} view-ctx]
+      (if (and (:first-person? view-ctx true)
+               player-uuid
+               source-player-id
+               (= (str player-uuid) (str source-player-id)))
+        view-offset-own
+        view-offset-other))))
+
 (defn- arc-ops
-  [cam-v3 wiggle-phase {:keys [vertices pattern-key ttl max-ttl]}]
+  [cam-v3 view-ctx wiggle-phase {:keys [vertices pattern-key ttl max-ttl] :as item}]
   (let [pattern (arc-patterns/get-pattern pattern-key)
         life-ratio (- 1.0 (/ (double ttl) (double (max 1 max-ttl))))]
     (ru/zigzag-arc-ops cam-v3 vertices pattern
       {:life-ratio life-ratio
        :wiggle-phase wiggle-phase
-       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
+       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)
+       :origin-offset (view-origin-offset view-ctx item)})))
 
 (defn- build-arc-plan
-  [opts camera-pos _hand-center-pos _tick]
+  [opts camera-pos hand-center-pos _tick]
   (let [effect-id (:effect-id opts)
         by-owner (:arcs (level-effects/effect-state-snapshot effect-id))]
     (when (seq by-owner)
       (let [cam-v3 (rv3/map->v3 camera-pos)
             wiggle-phase (arc-patterns/wiggle-phase)
             items (mapcat val by-owner)
-            ops (into [] (mapcat #(arc-ops cam-v3 wiggle-phase %)) items)]
+            ops (into [] (mapcat #(arc-ops cam-v3 hand-center-pos wiggle-phase %)) items)]
         (when (seq ops)
           {:ops ops})))))
 
@@ -401,7 +460,9 @@
   Required: `:effect-id`, `:channels`
   Runtime: `:runtime` — :level (default), :hand, :both, :none
   State: `:initial-state`, or `:level-initial-state` / `:hand-initial-state` for :both
-  Arc opts (default impl): `:sound-id`, `:arc-life`, `:arc-pattern`, `:aoe-points?`
+  Arc opts (default impl): `:sound-id`, `:arc-life`, `:arc-pattern`, `:aoe-points?`,
+  `:hand-origin?` (arc is cast from the player — shift it out of their eye into
+  their hand, as the original's ViewOptimize.fix does)
   Hand: `:transform-fn` — static fn or keyword dispatching effect-transform-fn
 
   Every :level/:both effect gets a :build-plan-fn wired to the
@@ -413,10 +474,11 @@
   [opts]
   (let [effect-id (:effect-id opts)
         runtime (or (:runtime opts) :level)
-        arc-opts (when (some opts [:sound-id :sound-volume :sound-pitch :arc-life :arc-pattern :aoe-points?])
+        arc-opts (when (some opts [:sound-id :sound-volume :sound-pitch :arc-life :arc-pattern
+                                   :aoe-points? :hand-origin?])
                    (merge {:effect-id effect-id :arc-pattern :weak :arc-life 10}
                           (select-keys opts [:effect-id :sound-id :sound-volume :sound-pitch
-                                             :arc-life :arc-pattern :aoe-points?])))
+                                             :arc-life :arc-pattern :aoe-points? :hand-origin?])))
         channels (normalize-channels (:channels opts))
         transform (or (:transform-fn opts)
                         (when (= runtime :hand)

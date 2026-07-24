@@ -57,8 +57,10 @@
                              nil)]
       (cb/apply-invoke arc/arc-gen-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
       (is (empty? @exp-calls*))
-      (is (= 1 (count @fx-calls*)))
-      (is (= :arc-gen/fx-perform (second (first @fx-calls*)))))))
+      ;; Owner + nearby bystanders, matching the original's sendToClient.
+      (is (= 2 (count @fx-calls*)))
+      (is (= [:arc-gen/fx-perform :arc-gen/fx-perform] (mapv second @fx-calls*)))
+      (is (= "p1" (:source-player-id (nth (first @fx-calls*) 2)))))))
 
 (deftest water-hit-rewards-fish-and-skips-ignite-test
   (let [ignite-calls* (atom [])
@@ -147,7 +149,7 @@
                              nil)]
       (cb/apply-invoke arc/arc-gen-perform! :player-id "p4" :ctx-id "ctx-4" :player-ref {:id "player-obj"} :exp 1.0)
       (is (empty? @spawn-calls*))
-      (is (= 1 (count @fx-calls*)))
+      (is (= 2 (count @fx-calls*)))
       (let [[_ _ payload] (first @fx-calls*)]
         (is (= {:x 10.0 :y 64.0 :z 20.0} (:start payload)))
         (is (= {:x 10.0 :y 64.0 :z 35.0} (:end payload)))))))
