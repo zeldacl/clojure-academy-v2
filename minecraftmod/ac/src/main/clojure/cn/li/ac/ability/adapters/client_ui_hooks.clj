@@ -20,7 +20,6 @@
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
             [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor-reactive]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
-            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.model.preset :as preset-data]
@@ -456,50 +455,6 @@
     {:active? (boolean ctx-data)
      :charge-ticks hold-ticks
      :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
-
-(defn- current-charging-visual-state
-  [player-uuid]
-  (current-charging-fx/current-state player-uuid))
-
-(defn- current-charging-overlay-elements
-  [player-uuid screen-width screen-height]
-  (let [{:keys [active? blending? is-item good? charge-ticks charge-ratio]} (current-charging-fx/current-state player-uuid)
-        visible? (or active? blending? (pos? (long (or charge-ticks 0))))]
-    (when visible?
-      (let [bar-width 140
-            bar-height 8
-            x (int (/ (- screen-width bar-width) 2))
-            y (- screen-height 34)
-            fill-width (max 2 (int (* bar-width (double (or charge-ratio 0.0)))))
-            accent (if good?
-                     {:r 90 :g 210 :b 255 :a 200}
-                     {:r 255 :g 190 :b 90 :a 200})
-            backdrop (if is-item
-                       {:r 12 :g 24 :b 48 :a 150}
-                       {:r 8 :g 18 :b 36 :a 150})]
-        [{:kind :fullscreen-fill
-          :color {:r 8 :g 18 :b 32 :a (if active? 110 55)}}
-         {:kind :fill
-          :x x :y y :w bar-width :h bar-height
-          :color backdrop}
-         {:kind :fill
-          :x x :y y :w fill-width :h bar-height
-          :color accent}
-         {:kind :text
-          :x (- (int (/ screen-width 2)) 55)
-          :y (- y 12)
-          :text (i18n/translate (if is-item "ac.current_charging.item" "ac.current_charging.block"))
-          :color {:r 255 :g 255 :b 255 :a 240}}
-         {:kind :fill
-          :x (- (int (/ screen-width 2)) 2)
-          :y (- (int (/ screen-height 2)) 8)
-          :w 4 :h 16
-          :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}
-         {:kind :fill
-          :x (- (int (/ screen-width 2)) 8)
-          :y (- (int (/ screen-height 2)) 2)
-          :w 16 :h 4
-          :color {:r 120 :g 220 :b 255 :a (if active? 200 120)}}]))))
 
 (defn- coin-qte-overlay-elements
   "Build golden coin-QTE timing window overlay elements.
@@ -973,7 +928,6 @@
                            :preset-indicators preset-indicators
                            :numbers-texts numbers-texts})
         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
-        current-charging-elements (current-charging-overlay-elements player-uuid screen-width screen-height)
         coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
         vm (scan-vm-contexts player-uuid)
         reflection-active? (:reflection-active? vm)
@@ -995,7 +949,7 @@
                      :intensity (double (or vec-reflection-intensity 1.0))})]
     {:elements (persistent!
                  (let [out (transient [])]
-                   (doseq [coll [base-elements current-charging-elements coin-qte-elements vm-wave]]
+                   (doseq [coll [base-elements coin-qte-elements vm-wave]]
                      (doseq [x coll] (conj! out x)))
                    (when crosshair (conj! out crosshair))
                    ;; Lazy: only build toast elements when toasts are active
@@ -1224,7 +1178,6 @@
        (case state-key
          :ac/charge-coin (charge-coin-visual-state (:player-uuid payload) (:now-ms payload))
          :ac/body-intensify-charge (body-intensify-visual-state (:player-uuid payload))
-         :ac/current-charging (current-charging-visual-state (:player-uuid payload))
          :ac.delegate-state/railgun
          (let [{:keys [active? coin-active?]}
                (charge-coin-visual-state (:player-uuid payload) (:now-ms payload))]

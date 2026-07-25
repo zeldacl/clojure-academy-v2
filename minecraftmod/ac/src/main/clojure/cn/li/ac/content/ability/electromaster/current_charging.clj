@@ -5,13 +5,12 @@
   Cost: overload lerp(65,48) on down; CP lerp(3,7)/tick while charging
   Exp: +0.0001 effective / +0.00003 ineffective per tick"
   (:require
-            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -19,8 +18,6 @@
 
 (def-skill-config-ops :current-charging)
 (def ^:private current-charging-skill-id :current-charging)
-(def ^:private surround-arc-entity-id (modid/namespaced-path "entity_surround_arc"))
-(def ^:private charging-arc-entity-id (modid/namespaced-path "entity_charging_arc"))
 
 (defn- targeting-range []
   (cfg-double :targeting.range))
@@ -37,9 +34,11 @@
   (when-let [fw-atom (fw/fw-atom)]
     (platform/call-adapter fw-atom :runtime-interop :get-block-entity-at world-id x y z)))
 
-(defn- player-entity [player-id]
-  (when-let [fw-atom (fw/fw-atom)]
-    (platform/call-adapter fw-atom :runtime-interop :get-player-entity player-id)))
+(defn- view->pos [view]
+  (when (map? view)
+    {:x (double (:x view))
+     :y (double (:y view))
+     :z (double (:z view))}))
 
 (defn- fx-payload [player-id payload]
   (cond-> (or payload {})
@@ -74,7 +73,8 @@
 
 (defn- end-and-terminate! [ctx-id is-item player-id]
   (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
-            (fx-payload player-id {:is-item (boolean is-item)}))
+            (fx-payload player-id {:is-item (boolean is-item)
+                                   :caster-pos (get-in (ctx-skill/get-context ctx-id) [:skill-state :caster-pos])}))
   (ctx-skill/clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
@@ -132,11 +132,9 @@
             :else {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}))))))
 
 (defn- charge-block-tick!
-  ;; player (the positional player-ref) is always nil here — server-tick-driven
-  ;; contexts never populate it (see context-manager's tick-context-entry!) — so
-  ;; the arc-spawn visual resolves its own player-entity server-side instead.
   [player-id ctx-id _player charge charge-ticks]
   (let [view (player-view player-id)
+        caster-pos (view->pos view)
         result (when view (charge-block-target! view charge))
         {:keys [effective? charged block-pos ray-end]}
         (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]
@@ -144,11 +142,9 @@
                                   (if effective?
                                     (cfg-double :progression.exp-effective)
                                     (cfg-double :progression.exp-ineffective)))
-    (when (and effective? (zero? (mod (long charge-ticks) 6)))
-      (when-let [player (player-entity player-id)]
-        (entity/player-spawn-entity-by-id! player charging-arc-entity-id 0.0)))
     (set-skill-state! ctx-id [:good?] (boolean effective?))
     (set-skill-state! ctx-id [:target] ray-end)
+    (set-skill-state! ctx-id [:caster-pos] caster-pos)
     (set-skill-state! ctx-id [:block-pos] block-pos)
     (set-skill-state! ctx-id [:charged] (double charged))
     (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
@@ -158,6 +154,7 @@
                            :charged (double charged)
                            :charge-ticks charge-ticks
                            :target ray-end
+                 :caster-pos caster-pos
                            :block-pos block-pos}))))
 
 (defn- current-charging-cost-fail!
@@ -168,7 +165,7 @@
     (end-and-terminate! ctx-id is-item player-id)))
 
 (defn- current-charging-down!
-  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player]
   (let [is-item (boolean (main-hand-item player-id))
         exp* (double (or exp 0.0))
         overload-floor (cfg-lerp :cost.down.overload exp*)]
@@ -180,15 +177,12 @@
                                      :charge-ticks 0
                                      :overload-floor overload-floor
                                      :target nil
+                                     :caster-pos (view->pos (player-view player-id))
                                      :block-pos nil
                                      :charged 0.0})
-    (when player
-      (entity/player-spawn-entity-by-id!
-       player
-       (if is-item (modid/namespaced-path "entity_surround_arc_thin") surround-arc-entity-id)
-       0.0))
     (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
-              (fx-payload player-id {:is-item is-item}))))
+              (fx-payload player-id {:is-item is-item
+                                     :caster-pos (view->pos (player-view player-id))}))))
 
 (defn- current-charging-tick!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player]
@@ -208,16 +202,12 @@
 (defn- current-charging-up!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [{:keys [skill-state player-uuid]} (ctx-skill/get-context ctx-id)]
-    (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
-              (fx-payload player-uuid {:is-item (boolean (:is-item skill-state))}))
-    (ctx-skill/clear-skill-state! ctx-id)))
+    (end-and-terminate! ctx-id (boolean (:is-item skill-state)) player-uuid)))
 
 (defn- current-charging-abort!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [{:keys [skill-state player-uuid]} (ctx-skill/get-context ctx-id)]
-    (fx/send! ctx-id {:topic :current-charging/fx-end :mode :end} nil
-              (fx-payload player-uuid {:is-item (boolean (:is-item skill-state))})))
-  (ctx-skill/clear-skill-state! ctx-id))
+    (end-and-terminate! ctx-id (boolean (:is-item skill-state)) player-uuid)))
 
 (declare current_charging_skill)
 

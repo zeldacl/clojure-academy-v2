@@ -4,14 +4,17 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
+(declare fx-snapshot)
+
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :current-charging
-     :runtime :hand
-     :initial-state (fn [] {:states {}})
-     :channels {:start {:topic :current-charging/fx-start :mode :start :targets [:hand]}
-                :update {:topic :current-charging/fx-update :mode :update :targets [:hand]}
-                :end {:topic :current-charging/fx-end :mode :end :targets [:hand]}}}))
+     :runtime :both
+     :level-initial-state (fn [] {:states {}})
+     :hand-initial-state (fn [] {:states {}})
+     :channels {:start {:topic :current-charging/fx-start :mode :start :targets [:hand :level]}
+                :update {:topic :current-charging/fx-update :mode :update :targets [:hand :level]}
+                :end {:topic :current-charging/fx-end :mode :end :targets [:hand :level]}}}))
 
 (arc-beam/def-arc-beam-fx :current-charging)
 
@@ -23,15 +26,32 @@
    :charge-ticks 0 :charge-ratio 0.0 :target nil :block-pos nil
    :charged 0.0 :started-at-ms 0 :ending-at-ms 0})
 
+(def ^:private blend-out-ms 200)
+(def ^:private active-stale-ms 500)
+
 (defn- current-store []
   (let [store (fx-snapshot)]
-    (if (contains? store :states) store (arc-beam/initial-state :current-charging))))
+    (cond
+      (contains? store :states)
+      store
+
+      (and (map? store) (or (:hand store) (:level store)))
+      {:states (merge (get-in store [:level :states] {})
+                      (get-in store [:hand :states] {}))}
+
+      :else
+      (arc-beam/initial-state :current-charging))))
 
 (defn- live-state?
   [st]
-  (or (:active? st)
-      (and (:blending? st)
-           (< (- (client-bridge/game-time-ms) (long (or (:ending-at-ms st) 0))) 200))))
+  (let [now-ms (client-bridge/game-time-ms)]
+    (or (and (:active? st)
+             (< (- now-ms (long (or (:updated-at-ms st)
+                                    (:started-at-ms st)
+                                    0)))
+                active-stale-ms))
+        (and (:blending? st)
+             (< (- now-ms (long (or (:ending-at-ms st) 0))) blend-out-ms)))))
 
 (defn- state-for-selector [store selector]
   (let [states (:states store)]
