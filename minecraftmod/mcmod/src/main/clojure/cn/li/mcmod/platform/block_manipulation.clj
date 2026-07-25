@@ -50,6 +50,10 @@
   [player-id world-id x y z]
   (call :can-break-block? player-id world-id x y z))
 
+(defn requires-high-tier-tool?
+  [world-id x y z]
+  (boolean (call :requires-high-tier-tool? world-id x y z)))
+
 (defn find-blocks-in-line
   [world-id x1 y1 z1 dx dy dz max-distance]
   (call :find-blocks-in-line world-id x1 y1 z1 dx dy dz max-distance))

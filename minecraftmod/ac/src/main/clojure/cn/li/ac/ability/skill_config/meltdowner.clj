@@ -67,26 +67,26 @@
    {:skill-id :meltdowner :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [15.0 7.0] :comment "Meltdowner cooldown endpoints multiplied by time-rate/base."}
    {:skill-id :meltdowner :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "Meltdowner exp gained per performed beam scaled by time-rate."}
 
-   {:skill-id :mine-ray-basic :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [8.0 12.0] :comment "MineRayBasic range."}
-   {:skill-id :mine-ray-basic :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.15 0.35] :comment "MineRayBasic break speed."}
-   {:skill-id :mine-ray-basic :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 40.0] :comment "MineRayBasic down-stage overload cost."}
-   {:skill-id :mine-ray-basic :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [12.0 8.0] :comment "MineRayBasic tick CP cost."}
-   {:skill-id :mine-ray-basic :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 5 :comment "MineRayBasic cooldown ticks."}
-   {:skill-id :mine-ray-basic :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "MineRayBasic exp per block broken."}
+   {:skill-id :mine-ray-basic :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 10.0 :comment "MineRayBasic range (flat, matching original — not exp-scaled)."}
+   {:skill-id :mine-ray-basic :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.2 0.4] :comment "MineRayBasic break speed."}
+   {:skill-id :mine-ray-basic :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [200.0 150.0] :comment "MineRayBasic down-stage overload cost."}
+   {:skill-id :mine-ray-basic :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [12.0 7.0] :comment "MineRayBasic tick CP cost."}
+   {:skill-id :mine-ray-basic :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [40.0 20.0] :comment "MineRayBasic cooldown ticks."}
+   {:skill-id :mine-ray-basic :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.0005 :comment "MineRayBasic exp per block broken."}
 
-   {:skill-id :mine-ray-expert :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [16.0 22.0] :comment "MineRayExpert range."}
-   {:skill-id :mine-ray-expert :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.4 0.8] :comment "MineRayExpert break speed."}
-   {:skill-id :mine-ray-expert :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [80.0 55.0] :comment "MineRayExpert down-stage overload cost."}
-   {:skill-id :mine-ray-expert :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [18.0 12.0] :comment "MineRayExpert tick CP cost."}
-   {:skill-id :mine-ray-expert :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 5 :comment "MineRayExpert cooldown ticks."}
-   {:skill-id :mine-ray-expert :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "MineRayExpert exp per block broken."}
+   {:skill-id :mine-ray-expert :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 20.0 :comment "MineRayExpert range (flat, matching original — not exp-scaled)."}
+   {:skill-id :mine-ray-expert :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.5 1.0] :comment "MineRayExpert break speed."}
+   {:skill-id :mine-ray-expert :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [300.0 200.0] :comment "MineRayExpert down-stage overload cost."}
+   {:skill-id :mine-ray-expert :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [25.0 15.0] :comment "MineRayExpert tick CP cost."}
+   {:skill-id :mine-ray-expert :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "MineRayExpert cooldown ticks."}
+   {:skill-id :mine-ray-expert :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.0003 :comment "MineRayExpert exp per block broken."}
 
-   {:skill-id :mine-ray-luck :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [16.0 22.0] :comment "MineRayLuck range."}
+   {:skill-id :mine-ray-luck :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 20.0 :comment "MineRayLuck range (flat, matching original — not exp-scaled)."}
    {:skill-id :mine-ray-luck :id :mining.break-speed :path "mining.break-speed" :section-suffix "mining" :type :double-list :min 0.0 :list-count 2 :default [0.5 1.0] :comment "MineRayLuck break speed."}
-   {:skill-id :mine-ray-luck :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [100.0 70.0] :comment "MineRayLuck down-stage overload cost."}
-   {:skill-id :mine-ray-luck :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [22.0 15.0] :comment "MineRayLuck tick CP cost."}
-   {:skill-id :mine-ray-luck :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 5 :comment "MineRayLuck cooldown ticks."}
-   {:skill-id :mine-ray-luck :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "MineRayLuck exp per block broken."}
+   {:skill-id :mine-ray-luck :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [350.0 300.0] :comment "MineRayLuck down-stage overload cost."}
+   {:skill-id :mine-ray-luck :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [50.0 35.0] :comment "MineRayLuck tick CP cost."}
+   {:skill-id :mine-ray-luck :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "MineRayLuck cooldown ticks."}
+   {:skill-id :mine-ray-luck :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.0003 :comment "MineRayLuck exp per block broken."}
 
   {:skill-id :ray-barrage :id :combat.damage.plain :path "combat.damage.plain" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [25.0 60.0] :comment "RayBarrage plain/direct branch damage endpoints."}
   {:skill-id :ray-barrage :id :combat.damage.scattered :path "combat.damage.scattered" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 18.0] :comment "RayBarrage scattered branch damage endpoints."}

@@ -23,6 +23,8 @@
                          (core/get-block-hardness (server-fn) world-id x y z))
    :can-break-block? (fn [player-id world-id x y z]
                        (boolean (core/can-break-block? (server-fn) player-id world-id x y z break-guard-fn)))
+   :requires-high-tier-tool? (fn [world-id x y z]
+                               (boolean (core/requires-high-tier-tool? (server-fn) world-id x y z)))
    :find-blocks-in-line (fn [world-id x1 y1 z1 dx dy dz max-distance]
                           (core/find-blocks-in-line (server-fn) world-id x1 y1 z1 dx dy dz max-distance))
    :liquid-block? (fn [world-id x y z]

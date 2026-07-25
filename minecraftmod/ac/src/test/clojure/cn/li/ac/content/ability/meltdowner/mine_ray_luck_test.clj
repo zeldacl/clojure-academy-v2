@@ -30,23 +30,28 @@
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
                   skill-config/lerp-double (fn [_skill-id field-id _exp]
                                              (case field-id
-                                               :targeting.range 16.0
                                                :mining.break-speed 1.0
                                                0.0))
+                  skill-config/lerp-int (fn [_skill-id field-id _exp]
+                                          (case field-id
+                                            :cooldown.ticks 60
+                                            0))
                   skill-config/tunable-double (fn [_skill-id field-id]
                                                 (case field-id
+                                                  :targeting.range 20.0
                                                   :progression.exp-block 0.002
                                                   0.0))
-                  base/mining-ray-tick! (fn [cfg evt]
-                                          (swap! calls* conj [cfg evt])
+                  base/mining-ray-tick! (fn [cfg & _]
+                                          (swap! calls* conj [cfg])
                                           nil)]
       (cb/apply-invoke luck/mine-ray-luck-tick! :player-id "p1" :ctx-id "ctx-1"))
     (is (= 1 (count @calls*)))
-    (is (= {:range 16.0
+    (is (= {:range 20.0
             :break-speed 1.0
             :skill-id :mine-ray-luck
             :fortune-level 3
-            :exp-block 0.002}
+            :exp-block 0.002
+            :cooldown-ticks 60}
            (ffirst @calls*)))))
 
 (deftest mine-ray-luck-breaks-block-with-fortune-level-test
@@ -56,7 +61,7 @@
         exp-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  fx/send! (fn [& _] nil)
+                  fx/send-local-and-nearby! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)
@@ -76,7 +81,7 @@
                               :skill-id :mine-ray-luck
                               :fortune-level 3
                               :exp-block 0.002}
-                             {:player-id "p1" :ctx-id "ctx-1"}))
+                             "ctx-1" "p1" :mine-ray-luck 0.0 true 0 nil nil))
     (is (= [["p1" "w" 1 64 2 true 3]] @break-calls*))
     (is (= [["p1" :mine-ray-luck 0.002]] @exp-calls*))
     (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
@@ -87,7 +92,7 @@
         (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.6}})]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
-                  fx/send! (fn [& _] nil)
+                  fx/send-local-and-nearby! (fn [& _] nil)
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
@@ -98,6 +103,6 @@
                               :skill-id :mine-ray-luck
                               :fortune-level 3
                               :exp-block 0.002}
-                             {:player-id "p1" :ctx-id "ctx-1"}))
+                             "ctx-1" "p1" :mine-ray-luck 0.0 true 0 nil nil))
     (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
            (:skill-state @ctx*)))))

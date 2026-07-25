@@ -15,6 +15,7 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer ServerLevel]
+           [net.minecraft.tags BlockTags]
            [net.minecraft.world.item ItemStack Items]
            [net.minecraft.world.item.enchantment Enchantments]
            [net.minecraft.world.level.block Block Blocks]))
@@ -151,6 +152,20 @@
         (and fluid-state (not (.isEmpty fluid-state)))))
     (catch Exception e
       (log/warn "Failed to check liquid block:" (ex-message e))
+      false)))
+
+(defn requires-high-tier-tool?
+  "True when the block at [x y z] needs a diamond-tier (or better) tool to
+  drop anything — used to gate low-tier ability-driven mining tools to
+  iron-tier-or-below blocks (matching a numeric harvestLevel cap)."
+  [^MinecraftServer server world-id x y z]
+  (try
+    (when-let [^ServerLevel level (get-level-by-id server world-id)]
+      (let [pos (BlockPos. (int x) (int y) (int z))
+            state (.getBlockState level pos)]
+        (boolean (.is state BlockTags/NEEDS_DIAMOND_TOOL))))
+    (catch Exception e
+      (log/warn "Failed to check block tool tier:" (ex-message e))
       false)))
 
 (defn farmland-block?

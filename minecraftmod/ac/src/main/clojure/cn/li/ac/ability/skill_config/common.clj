@@ -34,9 +34,12 @@
    {:id :jet-engine :category-id :meltdowner :level 4 :controllable? true}
    {:id :light-shield :category-id :meltdowner :level 2 :controllable? true}
    {:id :meltdowner :category-id :meltdowner :level 3 :controllable? true}
-   {:id :mine-ray-basic :category-id :meltdowner :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   ;; mine-ray-basic/expert/luck also route real costs through :cost +
+   ;; apply-cost! (no manual perform-resource! anywhere in mine_rays_base.clj)
+   ;; — same zero-cost bug as jet-engine/light-shield/meltdowner above.
+   {:id :mine-ray-basic :category-id :meltdowner :level 3 :controllable? true}
+   {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true}
+   {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true}
    {:id :rad-intensify :category-id :meltdowner :level 1 :controllable? false}
    {:id :ray-barrage :category-id :meltdowner :level 4 :controllable? false}
    {:id :scatter-bomb :category-id :meltdowner :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
