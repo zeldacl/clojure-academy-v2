@@ -97,16 +97,22 @@
      (let [ctx-map (if owner (ctx/get-context owner ctx-id) (ctx/get-context ctx-id))
          player-id (:player-uuid ctx-map)
          session-id (resolved-session-id owner)
+         _ (log/info "[CC-TRACE][SERVER][SET-INPUT-STATE-BEFORE]"
+                     {:ctx-id ctx-id :state state :player-id player-id :session-id session-id
+                      :prev-input-state (:input-state ctx-map)})
          _ (when (and player-id session-id)
              (command-rt/run-command-in-session!
               session-id
               player-id
               {:command :context-set-input-state
                :ctx-id (:id ctx-map)
-               :input-state state}))]
-     (if owner
-       (ctx/get-context owner ctx-id)
-       (ctx/get-context ctx-id)))))
+               :input-state state}))
+         result (if owner
+                  (ctx/get-context owner ctx-id)
+                  (ctx/get-context ctx-id))]
+     (log/info "[CC-TRACE][SERVER][SET-INPUT-STATE-AFTER]"
+               {:ctx-id ctx-id :requested state :actual (:input-state result)})
+     result)))
 
 (defn- apply-main-cooldown!
   ([ctx-map]
