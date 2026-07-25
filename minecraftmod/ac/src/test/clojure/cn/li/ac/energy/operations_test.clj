@@ -2,8 +2,9 @@
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.energy.operations :as op]
             [cn.li.ac.energy.service.item-manager :as item-manager]
-            [cn.li.ac.wireless.api :as wireless-api])
-  (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver]))
+            [cn.li.ac.wireless.api :as wireless-api]
+            [cn.li.ac.wireless.core.capability-lookup :as cap-lookup])
+  (:import [cn.li.acapi.wireless IWirelessNode IWirelessReceiver WirelessCapabilityKeys]))
 
 (deftest item-non-battery-path-test
   (with-redefs [item-manager/is-energy-item-supported? (constantly false)]
@@ -43,18 +44,26 @@
                (getNodeName [_] "n")
                (getPassword [_] "p")
                (getBlockPos [_] nil))]
-    (is (true? (op/is-node-supported? node)))
-    (is (false? (op/is-node-supported? :not-node)))
-    (is (= 100.0 (op/get-node-energy node)))
-    (op/set-node-energy! node 200.0)
-    (is (= 200.0 (op/get-node-energy node)))
-    (is (= 0.0 (op/charge-node node 10.0 false)))
-    (is (= 210.0 (op/get-node-energy node)))
-    (reset! state 80.0)
-    (is (= 50.0 (op/pull-from-node node 50.0 false)))
-    (is (= 30.0 (op/get-node-energy node)))
-    (is (= 100.0 (op/charge-node :bad 100.0 false)))
-    (is (= 0.0 (op/pull-from-node :bad 10.0 false)))))
+    ;; Real block entities are the generic ScriptedBlockEntity — is-node-supported?
+    ;; resolves the actual IWirelessNode impl via the capability registry
+    ;; (cn.li.ac.wireless.core.capability-lookup/tile-capability), not instance?
+    ;; on the raw tile. Mock that resolution here.
+    (with-redefs [cap-lookup/tile-capability
+                  (fn [tile cap-key]
+                    (when (and (= tile node) (= cap-key WirelessCapabilityKeys/NODE))
+                      node))]
+      (is (true? (op/is-node-supported? node)))
+      (is (false? (op/is-node-supported? :not-node)))
+      (is (= 100.0 (op/get-node-energy node)))
+      (op/set-node-energy! node 200.0)
+      (is (= 200.0 (op/get-node-energy node)))
+      (is (= 0.0 (op/charge-node node 10.0 false)))
+      (is (= 210.0 (op/get-node-energy node)))
+      (reset! state 80.0)
+      (is (= 50.0 (op/pull-from-node node 50.0 false)))
+      (is (= 30.0 (op/get-node-energy node)))
+      (is (= 100.0 (op/charge-node :bad 100.0 false)))
+      (is (= 0.0 (op/pull-from-node :bad 10.0 false))))))
 
 (deftest receiver-path-test
   (let [rec (reify IWirelessReceiver
@@ -62,12 +71,16 @@
               (injectEnergy [_ a] (* a 0.5))
               (pullEnergy [_ a] (* a 2.0))
               (getReceiverBandwidth [_] 10.0))]
-    (is (true? (op/is-receiver-supported? rec)))
-    (is (false? (op/is-receiver-supported? :x)))
-    (is (= 2.5 (op/charge-receiver rec 5.0)))
-    (is (= 5.0 (op/pull-from-receiver rec 2.5)))
-    (is (= 7.0 (op/charge-receiver :x 7.0)))
-    (is (= 0.0 (op/pull-from-receiver :x 3.0)))))
+    (with-redefs [cap-lookup/tile-capability
+                  (fn [tile cap-key]
+                    (when (and (= tile rec) (= cap-key WirelessCapabilityKeys/RECEIVER))
+                      rec))]
+      (is (true? (op/is-receiver-supported? rec)))
+      (is (false? (op/is-receiver-supported? :x)))
+      (is (= 2.5 (op/charge-receiver rec 5.0)))
+      (is (= 5.0 (op/pull-from-receiver rec 2.5)))
+      (is (= 7.0 (op/charge-receiver :x 7.0)))
+      (is (= 0.0 (op/pull-from-receiver :x 3.0))))))
 
 (deftest wireless-stub-fallback-test
   (testing "get-wireless-network returns nil on helper exception"

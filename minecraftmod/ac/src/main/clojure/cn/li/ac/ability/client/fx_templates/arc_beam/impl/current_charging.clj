@@ -324,18 +324,27 @@
               (mapcat
                 (fn [st]
                   (let [own? (own-state? st hand-center-pos)
-                        start (or (and own? hand-center-pos)
-                                  (:caster-pos st)
-                                  hand-center-pos)
+                        ;; Item-mode ring anchor: the local player's rendered
+                        ;; hand offset when it's our own effect (frame-smooth),
+                        ;; else the last synced caster-pos for bystanders.
+                        hand-pos (or (and own? hand-center-pos)
+                                     (:caster-pos st)
+                                     hand-center-pos)
+                        ;; Beam origin must be the pure eye position, matching
+                        ;; what the server's raycast actually aimed from
+                        ;; (current_charging.clj's player-view) — using the
+                        ;; hand-offset anchor here instead visibly skews the
+                        ;; beam away from the crosshair/target.
+                        caster-pos (:caster-pos st)
                         target (:target st)
                         ticks (long (or (:charge-ticks st) 0))
                         ratio (double (or (:charge-ratio st) 0.0))
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))]
                     (concat
-                      (when (and (not item?) (map? start) (map? target))
+                      (when (and (not item?) (map? caster-pos) (map? target))
                         (fx-beam/beam-ops cam-v
-                                          (rv3/map->v3 (dissoc start :player-uuid))
+                                          (rv3/map->v3 caster-pos)
                                           (rv3/map->v3 target)
                                           charging-beam-style))
                       ;; Matches original: the surround ring only ever
@@ -347,8 +356,8 @@
                       ;; Item mode has no beam/target at all — original
                       ;; wraps the surround ring around the PLAYER instead
                       ;; (new EntitySurroundArc(player)).
-                      (when (and item? (map? start))
-                        (caster-ring-ops cam-v (dissoc start :player-uuid) ticks)))))
+                      (when (and item? (map? hand-pos))
+                        (caster-ring-ops cam-v (dissoc hand-pos :player-uuid) ticks)))))
                 active-states))]
     (when (seq ops)
       {:ops ops})))
