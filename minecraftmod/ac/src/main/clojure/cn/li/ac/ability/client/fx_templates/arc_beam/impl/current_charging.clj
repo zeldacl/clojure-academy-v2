@@ -156,9 +156,24 @@
 
 (defn- tick-state!
   [store]
-  (if (contains? (or store {}) :states)
-    (or store {:states {}})
-    {:states {}}))
+  (let [store* (if (contains? (or store {}) :states)
+                 (or store {:states {}})
+                 {:states {}})
+        now-ms (now-ms)
+        states' (into {}
+                      (keep (fn [[owner-key st]]
+                              (cond
+                                (:active? st)
+                                [owner-key st]
+
+                                (and (:blending? st)
+                                     (< (- now-ms (long (or (:ending-at-ms st) 0))) 200))
+                                [owner-key st]
+
+                                :else
+                                nil)))
+                      (:states store*))]
+    (assoc store* :states states')))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:current-charging :hand] [_ _] {:states {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:current-charging :hand]

@@ -165,12 +165,12 @@
            (filter :draw?)
            (mapv (fn [{:keys [x y size tex-idx]}]
                    {:src (nth arc-frame-srcs tex-idx)
+                    :tint 0xFFFFFFFF
                     :x (int (- (+ hw (* hw (double x))) (/ size 2.0)))
                     :y (int (- (+ hh (* hh (double y))) (/ size 2.0)))
                     :w (int size)
                     :h (int size)
-                    :alpha alpha
-                    :tint nil}))))))
+                    :alpha alpha}))))))
 
 (defn- ease-in-out [t]
   (let [t (max 0.0 (min 1.0 (double t)))]
@@ -329,12 +329,13 @@
                       alpha (* 0.72 (ease-in-out t) fade-in fade-out pulse)
                       hs (/ s 2.0)]
                   {:src vm-wave-glow
+                   :tint tint
                    :x (int (- x hs))
                    :y (int (- y hs))
                    :w (int s)
                    :h (int s)
                    :alpha (double (max 0.0 (min 1.0 alpha)))
-                   :tint tint})))
+                   })))
          (filter #(pos? (:alpha %)))
          vec)))
 

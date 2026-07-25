@@ -27,19 +27,28 @@
   (let [store (fx-snapshot)]
     (if (contains? store :states) store (arc-beam/initial-state :current-charging))))
 
+(defn- live-state?
+  [st]
+  (or (:active? st)
+      (and (:blending? st)
+           (< (- (client-bridge/game-time-ms) (long (or (:ending-at-ms st) 0))) 200))))
+
 (defn- state-for-selector [store selector]
   (let [states (:states store)]
     (or (cond
-          (vector? selector) (get states selector)
+          (vector? selector)
+          (let [st (get states selector)]
+            (when (live-state? st) st))
           (some? selector)
           (some (fn [[_ st]]
                   (when (and (:source-player-id st)
-                             (= (str selector) (str (:source-player-id st))))
+                             (= (str selector) (str (:source-player-id st)))
+                             (live-state? st))
                     st))
                 states)
           :else
           (or (some (fn [[_ st]] (when (:active? st) st)) states)
-              (some (fn [[_ st]] (when (:blending? st) st)) states)))
+              (some (fn [[_ st]] (when (live-state? st) st)) states)))
         default-state)))
 
 (defn current-state [selector]
