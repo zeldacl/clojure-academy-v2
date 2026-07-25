@@ -309,16 +309,6 @@
   [camera-pos hand-center-pos tick]
   (let [store (:states (level-effects/effect-state-snapshot :current-charging))
         active-states (filter :active? (vals (or store {})))
-        _ (when (zero? (mod (long (or tick 0)) 20))
-            (log/info "[CC-TRACE][CLIENT][BUILD-PLAN]"
-                      {:store-size (count store)
-                       :active-count (count active-states)
-                       :hand-center-pos (some? hand-center-pos)
-                       :states (mapv (fn [st]
-                                       {:active? (:active? st) :is-item (:is-item st)
-                                        :good? (:good? st) :target (:target st)
-                                        :caster-pos (:caster-pos st)})
-                                     (vals (or store {})))}))
         cam-v (rv3/map->v3 camera-pos)
         ops (vec
               (mapcat
@@ -359,6 +349,13 @@
                       (when (and item? (map? hand-pos))
                         (caster-ring-ops cam-v (dissoc hand-pos :player-uuid) ticks)))))
                 active-states))]
+    (when (zero? (mod (long (or tick 0)) 20))
+      (log/info "[CC-TRACE][CLIENT][BUILD-PLAN]"
+                {:active-count (count active-states)
+                 :camera-pos camera-pos
+                 :cam-v (str cam-v)
+                 :ops-count (count ops)
+                 :first-op (first ops)}))
     (when (seq ops)
       {:ops ops})))
 
