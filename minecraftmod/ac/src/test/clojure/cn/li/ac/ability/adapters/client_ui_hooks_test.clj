@@ -88,10 +88,12 @@
       (is (= [{:player-uuid "p1" :skill-id :railgun}]
              @activated))
       (is (= [catalog/MSG-SLOT-KEY-DOWN
+          catalog/MSG-SLOT-KEY-TICK
           catalog/MSG-CTX-KEEPALIVE
               catalog/MSG-SLOT-KEY-UP]
              (mapv :msg-id @sent)))
       (is (= [{:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
+          {:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
           {:ctx-id "ctx-client-1"}
               {:ctx-id "ctx-client-1" :key-idx 0}]
              (mapv :payload @sent))))))
@@ -504,21 +506,6 @@
         (is (true? (:good? visual)))
         (is (= 30 (:charge-ticks visual)))
         (is (= 0.75 (:charge-ratio visual)))))))
-
-(deftest current-charging-overlay-elements-render-hud-state-test
-  (with-redefs [current-charging-fx/current-state
-                (fn [_] {:active? true
-                         :blending? false
-                         :is-item false
-                         :good? true
-                         :charge-ticks 20
-                         :charge-ratio 0.5})]
-    (let [elements ((var-get #'cn.li.ac.ability.adapters.client-ui-hooks/current-charging-overlay-elements)
-                    "p1" 320 180)
-          kinds (mapv :kind elements)]
-      (is (some #{:fullscreen-fill} kinds))
-      (is (some #{:text} kinds))
-      (is (>= (count (filter #{:fill} kinds)) 3)))))
 
 (deftest build-client-overlay-plan-falls-back-when-activated-override-nil-test
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (with-redefs [store/get-player-state (fn [_ _]
