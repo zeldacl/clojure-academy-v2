@@ -220,6 +220,18 @@
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
 
+                            :mcmod/start-loop-sound
+                            (sound/start-loop-sound! (:key payload) (:sound-id payload)
+                              (:volume payload) (:pitch payload)
+                              (:x payload) (:y payload) (:z payload))
+
+                            :mcmod/update-loop-sound-position
+                            (sound/update-loop-sound-position! (:key payload)
+                              (:x payload) (:y payload) (:z payload))
+
+                            :mcmod/stop-loop-sound
+                            (sound/stop-loop-sound! (:key payload))
+
                             (log/debug "Unhandled client effect key" effect-key)))
 	     :get-client-player #(.player (Minecraft/getInstance))
 	     :local-player-uuid mc-session/local-player-uuid

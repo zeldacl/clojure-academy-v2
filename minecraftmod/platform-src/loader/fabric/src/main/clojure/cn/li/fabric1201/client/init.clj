@@ -161,6 +161,21 @@
                      (.width (.-font mc) text)))
      :stop-all-media! (fn [player-uuid]
                         (sound/stop-all-media!))
+     :run-client-effect (fn [effect-key payload]
+                          (case effect-key
+                            :mcmod/start-loop-sound
+                            (sound/start-loop-sound! (:key payload) (:sound-id payload)
+                              (:volume payload) (:pitch payload)
+                              (:x payload) (:y payload) (:z payload))
+
+                            :mcmod/update-loop-sound-position
+                            (sound/update-loop-sound-position! (:key payload)
+                              (:x payload) (:y payload) (:z payload))
+
+                            :mcmod/stop-loop-sound
+                            (sound/stop-loop-sound! (:key payload))
+
+                            (log/debug "Unhandled client effect key" effect-key)))
      :is-glfw-key-down? (fn [key-code]
                           (try
                             (let [^Minecraft mc (Minecraft/getInstance)

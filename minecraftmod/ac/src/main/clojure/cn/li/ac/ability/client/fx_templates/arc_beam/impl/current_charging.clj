@@ -1,10 +1,8 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging
   (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
@@ -88,12 +86,37 @@
         [:source-player source-player-id])
       [:ctx ctx-id]))
 
+(def ^:private charge-loop-sound (modid/namespaced-path "em.charge_loop"))
+
 (defn- base-meta [owner-key ctx-id channel payload]
   {:owner-key owner-key
    :ctx-id ctx-id
    :channel channel
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
+
+(defn- start-loop-sound-at! [owner-key pos]
+  (let [{:keys [x y z]} (or pos {:x 0.0 :y 0.0 :z 0.0})]
+    (client-bridge/run-client-effect! :mcmod/start-loop-sound
+      {:key (str owner-key)
+       :sound-id charge-loop-sound
+       :volume 0.8
+       :pitch 1.0
+       :x (double (or x 0.0))
+       :y (double (or y 0.0))
+       :z (double (or z 0.0))})))
+
+(defn- update-loop-sound-position! [owner-key pos]
+  (when pos
+    (let [{:keys [x y z]} pos]
+      (client-bridge/run-client-effect! :mcmod/update-loop-sound-position
+        {:key (str owner-key)
+         :x (double (or x 0.0))
+         :y (double (or y 0.0))
+         :z (double (or z 0.0))}))))
+
+(defn- stop-loop-sound! [owner-key]
+  (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str owner-key)}))
 
 (defn- enqueue-state! [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :states)
@@ -103,15 +126,12 @@
         owner-key* (resolve-owner-key ctx-id channel owner-key payload*)]
     (case mode
       :start
-      (let [ts (now-ms)]
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound
-           :sound-id (modid/namespaced-path "em.charge_loop")
-           :volume 0.8
-           :pitch 1.0})
+      (let [ts (now-ms)
+            meta (base-meta owner-key* ctx-id channel payload*)]
+        (start-loop-sound-at! owner-key* (:caster-pos payload*))
         (assoc-in store* [:states owner-key*]
                   (merge default-state
-                         (base-meta owner-key* ctx-id channel payload*)
+                         meta
                          {:active? true
                           :blending? false
                           :is-item (boolean (:is-item payload*))
@@ -119,6 +139,7 @@
                           :charge-ticks 0
                           :charge-ratio 0.0
                           :target nil
+                          :caster-pos (:caster-pos payload*)
                           :block-pos nil
                           :charged 0.0
                           :started-at-ms ts
@@ -126,31 +147,36 @@
                           :updated-at-ms ts})))
 
       :update
-      (let [ts (now-ms)]
-        (update-in store* [:states owner-key*]
-                   (fn [state]
-                     (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
-                         (merge {:active? true
-                                 :blending? false
-                                 :updated-at-ms ts})
-                         (cond-> (contains? payload* :is-item)
-                           (assoc :is-item (boolean (:is-item payload*))))
-                         (cond-> (contains? payload* :good?)
-                           (assoc :good? (boolean (:good? payload*))))
-                         (cond-> (contains? payload* :charge-ticks)
-                           (assoc :charge-ticks (max 0 (long (:charge-ticks payload*)))
-                                  :charge-ratio (normalize-ratio (:charge-ticks payload*))))
-                         (cond-> (contains? payload* :target)
-                           (assoc :target (:target payload*)))
-                         (cond-> (contains? payload* :caster-pos)
-                           (assoc :caster-pos (:caster-pos payload*)))
-                         (cond-> (contains? payload* :block-pos)
-                           (assoc :block-pos (:block-pos payload*)))
-                         (cond-> (contains? payload* :charged)
-                           (assoc :charged (double (:charged payload*))))))))
+      (do
+        (update-loop-sound-position! owner-key* (:caster-pos payload*))
+        (let [ts (now-ms)]
+          (update-in store* [:states owner-key*]
+                     (fn [state]
+                       (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
+                           (merge {:active? true
+                                   :blending? false
+                                   :updated-at-ms ts})
+                           (cond-> (contains? payload* :is-item)
+                             (assoc :is-item (boolean (:is-item payload*))))
+                           (cond-> (contains? payload* :good?)
+                             (assoc :good? (boolean (:good? payload*))))
+                           (cond-> (contains? payload* :charge-ticks)
+                             (assoc :charge-ticks (max 0 (long (:charge-ticks payload*)))
+                                    :charge-ratio (normalize-ratio (:charge-ticks payload*))))
+                           (cond-> (contains? payload* :target)
+                             (assoc :target (:target payload*)))
+                           (cond-> (contains? payload* :caster-pos)
+                             (assoc :caster-pos (:caster-pos payload*)))
+                           (cond-> (contains? payload* :block-pos)
+                             (assoc :block-pos (:block-pos payload*)))
+                           (cond-> (contains? payload* :charged)
+                             (assoc :charged (double (:charged payload*)))))))))
 
       :end
-            (let [ts (now-ms)]
+      (let [ts (now-ms)]
+        ;; Sound is stopped by tick-state! once the blend window elapses,
+        ;; not here — this lets the loop linger through the same short
+        ;; fade the visual rings use instead of cutting off on key-up.
         (update-in store* [:states owner-key*]
              (fn [state]
                (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
@@ -174,19 +200,21 @@
         states' (into {}
                       (keep (fn [[owner-key st]]
                               (cond
-              (and (:active? st)
-                (< (- now-ms (long (or (:updated-at-ms st)
-                        (:started-at-ms st)
-                        0)))
-                active-stale-ms))
+                                (and (:active? st)
+                                     (< (- now-ms (long (or (:updated-at-ms st)
+                                                             (:started-at-ms st)
+                                                             0)))
+                                        active-stale-ms))
                                 [owner-key st]
 
                                 (and (:blending? st)
-                (< (- now-ms (long (or (:ending-at-ms st) 0))) blend-out-ms))
+                                     (< (- now-ms (long (or (:ending-at-ms st) 0))) blend-out-ms))
                                 [owner-key st]
 
                                 :else
-                                nil)))
+                                (do
+                                  (stop-loop-sound! owner-key)
+                                  nil))))
                       (:states store*))]
     (assoc store* :states states')))
 
@@ -197,47 +225,57 @@
    :inner-color {:r 225 :g 250 :b 255 :a 180}
    :line-color {:r 160 :g 238 :b 255 :a 140}})
 
+;; Matches original's EntitySurroundArc, which is built from small arc-
+;; textured strands, not a plain circle outline — reuse the same textured
+;; billboard-beam renderer as the main charging beam (fx-beam/beam-ops)
+;; instead of drawing debug line segments.
+(def ^:private ring-arc-style
+  {:width 0.05
+   :core-width 0.02
+   :outer-color {:r 150 :g 232 :b 255 :a 150}
+   :inner-color {:r 235 :g 252 :b 255 :a 200}
+   :line-color {:r 190 :g 244 :b 255 :a 170}})
+
 (defn- own-state?
   [st hand-center-pos]
   (or (nil? (:source-player-id st))
       (nil? (:player-uuid hand-center-pos))
       (= (str (:source-player-id st)) (str (:player-uuid hand-center-pos)))))
 
+(defn- ring-arc-ops
+  "Small arc-textured strands orbiting [cx,y,cz] at the given radius —
+  matches original's EntitySurroundArc look far better than a smooth line
+  circle: fewer, distinct segments with slight per-segment radius jitter so
+  they read as separate crackling arcs rather than a ring outline."
+  [cam-v cx y cz radius ticks segments style]
+  (vec
+    (for [idx (range segments)
+          :let [a0 (/ (* 2.0 Math/PI idx) segments)
+                a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                jitter (* 0.06 (Math/sin (+ (* 0.31 (double ticks)) (* idx 1.7))))
+                r0 (+ radius jitter)
+                r1 (+ radius (- jitter))
+                p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
+                p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]]
+      (fx-beam/beam-ops cam-v p0 p1 style))))
+
 (defn- target-ring-ops
-  [target ticks charge-ratio]
+  [cam-v target ticks charge-ratio]
   (let [base-radius (+ 0.45 (* 0.25 (double charge-ratio)))
         pulse (+ base-radius (* 0.07 (Math/sin (* 0.24 (double ticks)))))
         tx (double (:x target))
         y (+ (double (:y target)) 0.05)
-        tz (double (:z target))
-        segments 24
-        color {:r 204 :g 228 :b 255 :a 180}]
-    (vec
-      (for [idx (range segments)
-            :let [a0 (/ (* 2.0 Math/PI idx) segments)
-                  a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 (rv3/v3 (+ tx (* pulse (Math/cos a0))) y (+ tz (* pulse (Math/sin a0))))
-                  p1 (rv3/v3 (+ tx (* pulse (Math/cos a1))) y (+ tz (* pulse (Math/sin a1))))]]
-        (ru/line-op p0 p1 color)))))
+        tz (double (:z target))]
+    (ring-arc-ops cam-v tx y tz pulse ticks 10 ring-arc-style)))
 
-      (defn- caster-ring-ops
-        [caster-pos ticks thin?]
-        (let [radius (if thin? 0.45 0.65)
-          pulse (+ radius (* 0.08 (Math/sin (* 0.22 (double ticks)))))
-          cx (double (:x caster-pos))
-          y (+ (double (:y caster-pos)) 0.9)
-          cz (double (:z caster-pos))
-          segments (if thin? 16 20)
-          color (if thin?
-              {:r 198 :g 238 :b 255 :a 130}
-              {:r 170 :g 228 :b 255 :a 150})]
-          (vec
-        (for [idx (range segments)
-          :let [a0 (/ (* 2.0 Math/PI idx) segments)
-            a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-            p0 (rv3/v3 (+ cx (* pulse (Math/cos a0))) y (+ cz (* pulse (Math/sin a0))))
-            p1 (rv3/v3 (+ cx (* pulse (Math/cos a1))) y (+ cz (* pulse (Math/sin a1))))]]
-          (ru/line-op p0 p1 color)))))
+(defn- caster-ring-ops
+  [cam-v caster-pos ticks]
+  (let [radius 0.45
+        pulse (+ radius (* 0.08 (Math/sin (* 0.22 (double ticks)))))
+        cx (double (:x caster-pos))
+        y (+ (double (:y caster-pos)) 0.9)
+        cz (double (:z caster-pos))]
+    (ring-arc-ops cam-v cx y cz pulse ticks 8 ring-arc-style)))
 
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
@@ -251,8 +289,6 @@
                         start (or (and own? hand-center-pos)
                                   (:caster-pos st)
                                   hand-center-pos)
-                        caster-pos (or (:caster-pos st)
-                                       (some-> start (dissoc :player-uuid)))
                         target (:target st)
                         ticks (long (or (:charge-ticks st) 0))
                         ratio (double (or (:charge-ratio st) 0.0))
@@ -264,10 +300,17 @@
                                           (rv3/map->v3 (dissoc start :player-uuid))
                                           (rv3/map->v3 target)
                                           charging-beam-style))
+                      ;; Matches original: the surround ring only ever
+                      ;; appears around the TARGET block once it's a valid
+                      ;; energy receiver (block mode) — never around the
+                      ;; caster in block mode.
                       (when (and (not item?) good? (map? target))
-                        (target-ring-ops target ticks ratio))
-                      (when (map? caster-pos)
-                        (caster-ring-ops caster-pos ticks item?)))))
+                        (target-ring-ops cam-v target ticks ratio))
+                      ;; Item mode has no beam/target at all — original
+                      ;; wraps the surround ring around the PLAYER instead
+                      ;; (new EntitySurroundArc(player)).
+                      (when (and item? (map? start))
+                        (caster-ring-ops cam-v (dissoc start :player-uuid) ticks)))))
                 active-states))]
     (when (seq ops)
       {:ops ops})))

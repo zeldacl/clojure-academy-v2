@@ -9,7 +9,6 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
-            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- skill-actions []
@@ -79,6 +78,9 @@
         fx* (atom [])
         down! (get (skill-actions) :down!)]
     (with-redefs [current-charging/main-hand-item (fn [_] :stack)
+                  current-charging/player-view (fn [_] {:world-id "minecraft:overworld"
+                                                         :x 1.0 :y 65.0 :z 2.0
+                                                         :look-x 0.0 :look-y 0.0 :look-z 1.0})
                   current-charging/cfg-lerp (fn [_ _] 52.0)
                   ctx/get-context get-context
                   ctx/terminate-context! terminate-context!
@@ -96,10 +98,12 @@
             :charge-ticks 0
             :overload-floor 52.0
             :target nil
+            :caster-pos {:x 1.0 :y 65.0 :z 2.0}
             :block-pos nil
             :charged 0.0}
            (get-in @contexts* [ctx-id :skill-state])))
     (is (= [[ctx-id :current-charging/fx-start {:is-item true
+                                                :caster-pos {:x 1.0 :y 65.0 :z 2.0}
                                                 :source-player-id "p1"}]] @fx*))))
 
 (deftest tick-item-path-updates-state-exp-and-fx-test
@@ -152,7 +156,7 @@
               :source-player-id "p1"}]]
            @fx*))))
 
-(deftest tick-block-path-spawns-arc-on-sixth-tick-test
+(deftest tick-block-path-charges-and-tracks-target-and-caster-test
   (let [ctx-id "ctx-block"
         {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
                 clear-skill-state! terminate-context!]}
@@ -162,7 +166,6 @@
                                               :charge-ticks 5
                                               :overload-floor 50.0}})
         fx* (atom [])
-        spawned* (atom [])
         tick! (get (skill-actions) :tick!)]
     (with-redefs [current-charging/cfg-lerp (fn [_ _] 20.0)
                   current-charging/cfg-double (fn [k]
@@ -173,24 +176,15 @@
                   raycast/available? (constantly true)
                   raycast/raycast-blocks (fn [_ _ _ _ _ _ _ _]
                                             {:x 1 :y 2 :z 3 :distance 2.0})
-                  #'current-charging/block-entity-at (fn [_ _ _ _] :block-entity)
+                  current-charging/block-entity-at (fn [_ _ _ _] :block-entity)
                   energy/is-node-supported? (fn [_] true)
                   energy/charge-node (fn [_ charge _sim?] (- charge 8.0))
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
-                  #'current-charging/player-view (fn [_]
+                  current-charging/player-view (fn [_]
                                              {:world-id "minecraft:overworld"
                                               :x 0.0 :y 64.0 :z 0.0
                                               :look-x 1.0 :look-y 0.0 :look-z 0.0})
-                  ;; The dispatch pipeline's positional player-ref argument is
-                  ;; never populated on the tick path in production (see
-                  ;; context-manager's tick-context-entry!), so the arc spawn
-                  ;; resolves its own player entity via this bridge instead —
-                  ;; mock that bridge, not a fabricated :player-ref.
-                  #'current-charging/player-entity (fn [player-id] {:uuid player-id})
-                  entity/player-spawn-entity-by-id! (fn [player eid yaw]
-                                                      (swap! spawned* conj [player eid yaw])
-                                                      true)
                   ctx/get-context get-context
                   ctx/terminate-context! terminate-context!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -200,13 +194,16 @@
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
       (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id))
-    (is (= [[{:uuid "p1"} "my_mod:entity_charging_arc" 0.0]] @spawned*))
+    (is (= true (get-in @contexts* [ctx-id :skill-state :good?])))
+    (is (= {:x 0.0 :y 64.0 :z 0.0} (get-in @contexts* [ctx-id :skill-state :caster-pos])))
+    (is (= [1 2 3] (get-in @contexts* [ctx-id :skill-state :block-pos])))
     (is (= [[ctx-id :current-charging/fx-update
              {:is-item false
               :good? true
               :charged 8.0
               :charge-ticks 6
               :target {:x 2.0 :y 64.0 :z 0.0}
+              :caster-pos {:x 0.0 :y 64.0 :z 0.0}
               :block-pos [1 2 3]
               :source-player-id "p1"}]]
            @fx*))))
@@ -216,7 +213,7 @@
         terminated* (atom [])
         {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
                 clear-skill-state! terminate-context!]}
-        (context-mocks ctx-id {:skill-state {:is-item false}}
+        (context-mocks ctx-id {:skill-state {:is-item false :caster-pos {:x 1.0 :y 64.0 :z 2.0}}}
                        :terminate-calls* terminated*)
         fx* (atom [])
         cost-fail! (get (skill-actions) :cost-fail!)]
@@ -229,6 +226,6 @@
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
       (cb/apply-invoke cost-fail! :ctx-id ctx-id))
-    (is (= [[ctx-id :current-charging/fx-end {:is-item false}]] @fx*))
+    (is (= [[ctx-id :current-charging/fx-end {:is-item false :caster-pos {:x 1.0 :y 64.0 :z 2.0}}]] @fx*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (get-in @contexts* [ctx-id :skill-state])))))

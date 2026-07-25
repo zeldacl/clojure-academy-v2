@@ -1,23 +1,29 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]))
+            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
-  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload {:runtime :hand}))
+  ;; :runtime :both now (level+hand dual-track) — enqueue into both so
+  ;; current-state (which merges level+hand snapshots) sees the update.
+  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload))
 
 (defn- with-fresh-current-charging-fx-runtime [f]
-  (try
-    (hand-effects/reset-hand-effect-registry-for-test!)
-    (current-charging-fx/reset-fx-for-test!)
-    (current-charging-fx/init!)
-    (f)
-    (finally
-      (hand-effects/reset-hand-effect-registry-for-test!)
-      (current-charging-fx/reset-fx-for-test!))))
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session}
+    (fn []
+      (with-redefs [client-bridge/game-time-ms (constantly 1000)]
+        (try
+          (hand-effects/reset-hand-effect-registry-for-test!)
+          (current-charging-fx/reset-fx-for-test!)
+          (current-charging-fx/init!)
+          (f)
+          (finally
+            (hand-effects/reset-hand-effect-registry-for-test!)
+            (current-charging-fx/reset-fx-for-test!)))))))
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
 
@@ -59,15 +65,18 @@
              @hand-enqueued*)))))
 
 (deftest fx-state-updates-and-queues-loop-sound-test
-  (let [queued* (atom [])]
+  (let [effects* (atom [])]
     (current-charging-fx/reset-fx-for-test!)
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
-                                                              (swap! queued* conj payload)
-                                                              nil)]
+    (with-redefs [client-bridge/run-client-effect! (fn [effect-key payload]
+                                                       (swap! effects* conj [effect-key payload])
+                                                       nil)]
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-start {:mode :start :is-item true})
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (true? (:is-item (current-charging-fx/current-state [:ctx "ctx-1"]))))
-      (is (= 1 (count @queued*)))
+      ;; :runtime :both dispatches :start to both the level and hand tracks,
+      ;; each starting its own loop-sound instance.
+      (is (= 2 (count @effects*)))
+      (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-update
         {:mode :update
          :is-item true
@@ -85,11 +94,11 @@
       (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-1"])))))))
 
 (deftest two-owners-keep-current-charging-state-independent-test
-  (let [queued* (atom [])]
+  (let [effects* (atom [])]
     (current-charging-fx/reset-fx-for-test!)
-    (with-redefs [client-sounds/queue-current-sound-effect! (fn [payload]
-                                                              (swap! queued* conj payload)
-                                                              nil)]
+    (with-redefs [client-bridge/run-client-effect! (fn [effect-key payload]
+                                                       (swap! effects* conj [effect-key payload])
+                                                       nil)]
       (invoke-hand-enqueue! "ctx-a" :current-charging/fx-start {:mode :start :is-item false})
       (invoke-hand-enqueue! "ctx-b" :current-charging/fx-start {:mode :start :is-item true})
       (invoke-hand-enqueue! "ctx-a" :current-charging/fx-update {:mode :update :good? true :charge-ticks 10})
@@ -111,7 +120,9 @@
       (let [snapshot (current-charging-fx/fx-snapshot)]
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
-    (is (= 2 (count @queued*)))))
+    ;; 2 :start calls x 2 tracks (level+hand) = 4 loop-sound starts.
+    (is (= 4 (count @effects*)))
+    (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))))
 
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}

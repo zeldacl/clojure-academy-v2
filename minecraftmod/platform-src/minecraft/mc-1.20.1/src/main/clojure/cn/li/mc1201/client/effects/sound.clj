@@ -7,7 +7,8 @@
            [net.minecraft.client.sounds SoundManager]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.sounds SoundSource SoundEvent]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources ResourceLocation]
+           [cn.li.mc1201.client.audio LoopingSoundRegistry]))
 
 (defn- play-sound-effect
   [sound-cmd]
@@ -60,6 +61,29 @@
   []
   (when-let [^SoundManager sm (get-sound-manager)]
     (.stop sm SoundSource/PLAYERS)))
+
+;; -- True looping sounds (TickableSoundInstance-backed) --
+;; For skills that need a continuous, position-following, explicitly
+;; stoppable loop (e.g. current-charging's held-arc sound) rather than the
+;; fire-and-forget queue above, which can only ever play one-shot clips.
+
+(defn start-loop-sound!
+  "Start (or restart) a native-looping sound at [x y z], tracked by `key`
+  (any stringifiable value) so it can be repositioned or stopped later."
+  [key sound-id volume pitch x y z]
+  (LoopingSoundRegistry/start (str key) (str sound-id) (float volume) (float pitch)
+                               (double x) (double y) (double z))
+  nil)
+
+(defn update-loop-sound-position!
+  [key x y z]
+  (LoopingSoundRegistry/updatePosition (str key) (double x) (double y) (double z))
+  nil)
+
+(defn stop-loop-sound!
+  [key]
+  (LoopingSoundRegistry/stop (str key))
+  nil)
 
 (defn init!
   []
