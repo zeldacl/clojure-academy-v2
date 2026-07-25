@@ -1080,6 +1080,10 @@
        (let [slot-key (slot-context-key player-uuid key-idx)
              now-ms   (System/currentTimeMillis)
              last-ms  (get (slot-key-tick-ms-snapshot) slot-key 0)]
+         (log/info "[CC-TRACE][CLIENT][HOOK-TICK]"
+                   {:player-uuid (str player-uuid) :key-idx key-idx
+                    :gate-pass? (>= (- now-ms last-ms) 100)
+                    :existing-ctx-id (get (slot-context-ids-snapshot) slot-key)})
          (when (>= (- now-ms last-ms) 100)
            (.put slot-key-tick-ms slot-key now-ms)
            ;; MSG-SLOT-KEY-TICK actually dispatches the skill's :tick! action
