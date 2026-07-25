@@ -276,8 +276,10 @@
   :icon           "textures/abilities/meltdowner/skills/light_shield.png"
   :ui-position    [55 15]
   :ctrl-id        :light-shield
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
+  ;; Matches original's default.conf (empty light_shield{} override -> inherits
+  ;; the 1.0/1.0 default): declared :cost amounts are paid as-is, not zeroed.
+  :cp-consume-speed 1.0
+  :overload-consume-speed 1.0
   ;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp) — cooldown scales
   ;; with actual shield uptime, so this display estimate is 0 before the
   ;; shield has ever been held (ticks defaults to 0).

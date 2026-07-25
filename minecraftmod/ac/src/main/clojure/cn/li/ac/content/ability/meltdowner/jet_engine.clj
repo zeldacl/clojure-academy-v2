@@ -279,8 +279,10 @@
   :icon "textures/abilities/meltdowner/skills/jet_engine.png"
   :ui-position [170 32]
   :ctrl-id :jet-engine
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
+  ;; Matches original's default.conf (empty jet_engine{} override -> inherits
+  ;; the 1.0/1.0 default): declared :cost amounts are paid as-is, not zeroed.
+  :cp-consume-speed 1.0
+  :overload-consume-speed 1.0
   :pattern :release-cast
   :cooldown {:mode :manual}
   :input-policy {:terminate-on-key-up? false

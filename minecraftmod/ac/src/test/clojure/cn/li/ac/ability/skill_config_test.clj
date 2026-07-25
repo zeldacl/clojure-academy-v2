@@ -130,7 +130,10 @@
                                (count skill-config/field-definitions))
                             (count (get skill-config/skill-tunable-definitions-by-category
                                         :electromaster)))]
-      (is (= 20 (count (get skill-config/skill-tunable-definitions-by-skill :railgun))))
+      ;; 19, not 20: reflection.cp-consumption-per-damage was removed — original's
+      ;; attackReflect/ReflectEvent reflects for free (no CP check/cost), so the
+      ;; shared vec-reflection-interaction module no longer has a CP-cost knob.
+      (is (= 19 (count (get skill-config/skill-tunable-definitions-by-skill :railgun))))
       (is (= 10 (count (get skill-config/skill-tunable-definitions-by-skill :thunder-clap))))
       (is (= expected-count (count descriptors)))
       (is (= [60.0 110.0]

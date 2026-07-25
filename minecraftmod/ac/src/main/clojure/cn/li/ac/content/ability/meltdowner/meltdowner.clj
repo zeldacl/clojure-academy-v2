@@ -108,7 +108,7 @@
                  world-id
                  (:uuid hit)
                  (* (cfg-double :reflection.damage-multiplier)
-                    (cfg-lerp :combat.damage caster-exp))
+                    (cfg-lerp :reflection.base-damage caster-exp))
                  :magic)
             true))))))
 
@@ -129,8 +129,6 @@
       {:performed? false}
       (let [reflection (vec-reflect/build-reflection-callbacks
                          {:ctx-id ctx-id
-                          :caster-skill-id :meltdowner
-                          :cp-field-id :reflection.cp-per-damage
                           :reflect-shot-fn (fn [ctx-id* reflector-uuid]
                                              (perform-reflection-shot! ctx-id* reflector-uuid exp))})
             result (beam/execute-beam!
@@ -157,9 +155,13 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- meltdowner-on-down!
-  [ctx-id _player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
-    (let [overload-floor (cfg-lerp :cost.down.overload exp)]
+    ;; Matches original's overloadKeep = ctx.cpData.getOverload: snapshot the
+    ;; actual resulting overload stat post-consumption, not the raw cost delta
+    ;; — a player who already carried overload before activating must keep
+    ;; that base amount reflected in the floor.
+    (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
       (set-skill-state! ctx-id [:overload-floor] overload-floor))))
 
 (defn- meltdowner-on-tick!
@@ -221,8 +223,10 @@
   :icon            "textures/abilities/meltdowner/skills/meltdowner.png"
   :ui-position     [115 40]
   :ctrl-id         :meltdowner
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
+  ;; Matches original's default.conf (empty meltdowner{} override -> inherits
+  ;; the 1.0/1.0 default): declared :cost amounts are paid as-is, not zeroed.
+  :cp-consume-speed 1.0
+  :overload-consume-speed 1.0
   :cooldown-ticks (fn [{:keys [exp hold-ticks]}]
                     (let [exp* (double (or exp 0.0))
                           ct (long (or hold-ticks 20))

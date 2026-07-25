@@ -210,8 +210,6 @@
       (let [damage   (cfg-lerp :beam.damage exp)
             reflection (vec-reflect/build-reflection-callbacks
                          {:ctx-id ctx-id
-                          :caster-skill-id :railgun
-                          :cp-field-id :reflection.cp-consumption-per-damage
                           :reflect-shot-fn perform-reflection-shot!})
                 result   (beam/execute-beam!
                     (merge {:player-id       player-id

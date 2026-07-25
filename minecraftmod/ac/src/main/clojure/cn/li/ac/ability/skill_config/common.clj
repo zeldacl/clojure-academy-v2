@@ -24,9 +24,16 @@
 
    {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? false}
    {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :jet-engine :category-id :meltdowner :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :light-shield :category-id :meltdowner :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :meltdowner :category-id :meltdowner :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   ;; jet-engine/light-shield/meltdowner: no override -> field-level default
+   ;; 1.0/1.0 applies. jet-engine has no :cost block (fully manual
+   ;; perform-resource!, unaffected either way); light-shield and meltdowner
+   ;; DO route real costs through :cost + apply-cost!, and a 0.0 override here
+   ;; was silently zeroing those declared costs to nothing — original's
+   ;; default.conf has no per-skill override for any of the three, so this
+   ;; must inherit the 1.0/1.0 default like arc-gen/body-intensify/etc. do.
+   {:id :jet-engine :category-id :meltdowner :level 4 :controllable? true}
+   {:id :light-shield :category-id :meltdowner :level 2 :controllable? true}
+   {:id :meltdowner :category-id :meltdowner :level 3 :controllable? true}
    {:id :mine-ray-basic :category-id :meltdowner :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}

@@ -134,7 +134,7 @@
                                                   0.0))
                   skill-config/lerp-double (fn [_ field-id _]
                                              (case field-id
-                                               :combat.damage 40.0
+                                               :reflection.base-damage 40.0
                                                0.0))
                   raycast/available? (constantly true)
                   raycast/player-look-vector (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
