@@ -147,10 +147,9 @@
     (set-skill-state! ctx-id [:caster-pos] caster-pos)
     (set-skill-state! ctx-id [:block-pos] block-pos)
     (set-skill-state! ctx-id [:charged] (double charged))
-    (when (zero? (mod (long charge-ticks) 10))
-      (log/info "[CC-TRACE][SERVER][TICK]"
-                {:ctx-id ctx-id :view (some? view) :effective? effective?
-                 :ray-end ray-end :caster-pos caster-pos :block-pos block-pos}))
+    (log/info "[CC-TRACE][SERVER][TICK]"
+              {:ctx-id ctx-id :view (some? view) :effective? effective?
+               :ray-end ray-end :caster-pos caster-pos :block-pos block-pos})
     (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
               (fx-payload player-id
                           {:is-item false
@@ -197,8 +196,7 @@
           charge-ticks (next-charge-ticks! ctx-id)
           overload-floor (double (or (:overload-floor skill-state) 0.0))]
       (skill-effects/enforce-overload-floor! player-id overload-floor)
-      (when (zero? (mod (long charge-ticks) 20))
-        (log/debug "CurrentCharging tick"))
+      (log/info "[CC-TRACE][SERVER][CTX-TICK]" {:ctx-id ctx-id :is-item is-item :charge-ticks charge-ticks})
       (if is-item
         (charge-item-tick! player-id ctx-id exp charge charge-ticks)
         (charge-block-tick! player-id ctx-id player charge charge-ticks)))))
