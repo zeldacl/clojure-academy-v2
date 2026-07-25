@@ -236,12 +236,22 @@
                       (:states store*))]
     (assoc store* :states states')))
 
+(defn- argb
+  "Pack r/g/b/a byte components into the ARGB int level_renderer.clj's
+  color-int->channels expects — render-util's quad-op/line-op store :color
+  unmodified, so callers (not render-util) own this packing."
+  [r g b a]
+  (unchecked-int (bit-or (bit-shift-left (int a) 24)
+                         (bit-shift-left (int r) 16)
+                         (bit-shift-left (int g) 8)
+                         (int b))))
+
 (def ^:private charging-beam-style
   {:width 0.08
    :core-width 0.03
-   :outer-color {:r 108 :g 228 :b 255 :a 120}
-   :inner-color {:r 225 :g 250 :b 255 :a 180}
-   :line-color {:r 160 :g 238 :b 255 :a 140}})
+   :outer-color (argb 108 228 255 120)
+   :inner-color (argb 225 250 255 180)
+   :line-color (argb 160 238 255 140)})
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
 ;; textured strands, not a plain circle outline — reuse the same textured
@@ -250,9 +260,9 @@
 (def ^:private ring-arc-style
   {:width 0.05
    :core-width 0.02
-   :outer-color {:r 150 :g 232 :b 255 :a 150}
-   :inner-color {:r 235 :g 252 :b 255 :a 200}
-   :line-color {:r 190 :g 244 :b 255 :a 170}})
+   :outer-color (argb 150 232 255 150)
+   :inner-color (argb 235 252 255 200)
+   :line-color (argb 190 244 255 170)})
 
 (defn- own-state?
   [st hand-center-pos]
