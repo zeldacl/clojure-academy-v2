@@ -6,6 +6,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]))
 
 (defn- visual-max-ticks
@@ -95,28 +96,45 @@
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
 
+;; Runs synchronously inside the :current-charging fx-spec's dispatch
+;; doseq (fx_spec.clj channel-handler), which processes :targets in
+;; declared order ([:hand :level] here) with no per-target exception
+;; isolation — an uncaught throw here would abort that doseq before the
+;; :level track (the one build-plan reads for the beam/ring) ever gets its
+;; state update for this tick. Client-effect side calls must never be
+;; allowed to break the render-state pipeline, so every path is guarded.
+
 (defn- start-loop-sound-at! [owner-key pos]
-  (let [{:keys [x y z]} (or pos {:x 0.0 :y 0.0 :z 0.0})]
-    (client-bridge/run-client-effect! :mcmod/start-loop-sound
-      {:key (str owner-key)
-       :sound-id charge-loop-sound
-       :volume 0.8
-       :pitch 1.0
-       :x (double (or x 0.0))
-       :y (double (or y 0.0))
-       :z (double (or z 0.0))})))
+  (try
+    (let [{:keys [x y z]} (or pos {:x 0.0 :y 0.0 :z 0.0})]
+      (client-bridge/run-client-effect! :mcmod/start-loop-sound
+        {:key (str owner-key)
+         :sound-id charge-loop-sound
+         :volume 0.8
+         :pitch 1.0
+         :x (double (or x 0.0))
+         :y (double (or y 0.0))
+         :z (double (or z 0.0))}))
+    (catch Throwable e
+      (log/warn "current-charging: start-loop-sound-at! failed" e))))
 
 (defn- update-loop-sound-position! [owner-key pos]
   (when pos
-    (let [{:keys [x y z]} pos]
-      (client-bridge/run-client-effect! :mcmod/update-loop-sound-position
-        {:key (str owner-key)
-         :x (double (or x 0.0))
-         :y (double (or y 0.0))
-         :z (double (or z 0.0))}))))
+    (try
+      (let [{:keys [x y z]} pos]
+        (client-bridge/run-client-effect! :mcmod/update-loop-sound-position
+          {:key (str owner-key)
+           :x (double (or x 0.0))
+           :y (double (or y 0.0))
+           :z (double (or z 0.0))}))
+      (catch Throwable e
+        (log/warn "current-charging: update-loop-sound-position! failed" e)))))
 
 (defn- stop-loop-sound! [owner-key]
-  (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str owner-key)}))
+  (try
+    (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str owner-key)})
+    (catch Throwable e
+      (log/warn "current-charging: stop-loop-sound! failed" e))))
 
 (defn- enqueue-state! [store ctx-id channel owner-key payload]
   (let [store* (if (contains? (or store {}) :states)
@@ -278,9 +296,19 @@
     (ring-arc-ops cam-v cx y cz pulse ticks 8 ring-arc-style)))
 
 (defn- build-plan
-  [camera-pos hand-center-pos _tick]
+  [camera-pos hand-center-pos tick]
   (let [store (:states (level-effects/effect-state-snapshot :current-charging))
         active-states (filter :active? (vals (or store {})))
+        _ (when (zero? (mod (long (or tick 0)) 20))
+            (log/info "[CC-TRACE][CLIENT][BUILD-PLAN]"
+                      {:store-size (count store)
+                       :active-count (count active-states)
+                       :hand-center-pos (some? hand-center-pos)
+                       :states (mapv (fn [st]
+                                       {:active? (:active? st) :is-item (:is-item st)
+                                        :good? (:good? st) :target (:target st)
+                                        :caster-pos (:caster-pos st)})
+                                     (vals (or store {})))}))
         cam-v (rv3/map->v3 camera-pos)
         ops (vec
               (mapcat

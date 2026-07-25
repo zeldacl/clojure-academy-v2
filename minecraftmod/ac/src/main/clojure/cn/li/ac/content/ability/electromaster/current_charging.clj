@@ -147,6 +147,10 @@
     (set-skill-state! ctx-id [:caster-pos] caster-pos)
     (set-skill-state! ctx-id [:block-pos] block-pos)
     (set-skill-state! ctx-id [:charged] (double charged))
+    (when (zero? (mod (long charge-ticks) 10))
+      (log/info "[CC-TRACE][SERVER][TICK]"
+                {:ctx-id ctx-id :view (some? view) :effective? effective?
+                 :ray-end ray-end :caster-pos caster-pos :block-pos block-pos}))
     (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
               (fx-payload player-id
                           {:is-item false
