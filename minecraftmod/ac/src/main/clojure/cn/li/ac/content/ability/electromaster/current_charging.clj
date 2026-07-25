@@ -8,6 +8,7 @@
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
@@ -76,7 +77,15 @@
             (fx-payload player-id {:is-item (boolean is-item)
                                    :caster-pos (get-in (ctx-skill/get-context ctx-id) [:skill-state :caster-pos])}))
   (ctx-skill/clear-skill-state! ctx-id)
-  (ctx/terminate-context! ctx-id nil))
+  ;; Must pass the real notify callback, not nil: handle-key-up!/
+  ;; handle-key-abort! (context_state.clj) also call terminate-context!
+  ;; right after this skill callback returns, but terminate-context! only
+  ;; fires send-terminated-fn once (guarded on status not already
+  ;; :terminated) — whichever call transitions the status wins the
+  ;; notification. Passing nil here let this call win with no client
+  ;; notification, so the client's context list never learned the context
+  ;; ended, permanently blocking V (has-active-contexts? stayed true).
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
 
 (defn- charge-item-tick!
   [player-id ctx-id exp charge charge-ticks]
