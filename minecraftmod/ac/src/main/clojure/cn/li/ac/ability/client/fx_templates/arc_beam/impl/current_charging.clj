@@ -246,27 +246,23 @@
                          (bit-shift-left (int g) 8)
                          (int b))))
 
-;; TEMP DEBUG: maxed-out width/opacity to confirm whether ANY geometry
-;; reaches the screen at all, isolating "genuinely not rendering" from
-;; "rendering but too subtle" — revert to the real style once confirmed.
 (def ^:private charging-beam-style
-  {:width 0.5
-   :core-width 0.5
-   :outer-color (argb 255 255 255 255)
-   :inner-color (argb 255 255 255 255)
-   :line-color (argb 255 0 0 255)})
+  {:width 0.08
+   :core-width 0.03
+   :outer-color (argb 108 228 255 120)
+   :inner-color (argb 225 250 255 180)
+   :line-color (argb 160 238 255 140)})
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
 ;; textured strands, not a plain circle outline — reuse the same textured
 ;; billboard-beam renderer as the main charging beam (fx-beam/beam-ops)
 ;; instead of drawing debug line segments.
-;; TEMP DEBUG: same max-visibility override as charging-beam-style above.
 (def ^:private ring-arc-style
-  {:width 0.5
-   :core-width 0.5
-   :outer-color (argb 0 255 0 255)
-   :inner-color (argb 0 255 0 255)
-   :line-color (argb 255 0 0 255)})
+  {:width 0.05
+   :core-width 0.02
+   :outer-color (argb 150 232 255 150)
+   :inner-color (argb 235 252 255 200)
+   :line-color (argb 190 244 255 170)})
 
 (defn- own-state?
   [st hand-center-pos]
