@@ -195,4 +195,9 @@
 (defn init!
   []
   (ensure-damage-handler!)
+  ;; Matches original's Skill.expCustomized: rad-intensify's exp is always
+  ;; the synthetic max-CP-ratio formula, not a stored/accumulated value —
+  ;; wire it into the generic exp accessor so UI display etc. sees the same
+  ;; value the mark-rate calculation uses.
+  (skill-effects/register-custom-skill-exp! :rad-intensify rad/skill-exp)
   nil)

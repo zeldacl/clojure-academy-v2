@@ -51,6 +51,17 @@
   (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :skill-effects-session
                                                  :player-uuid "p-effects"}} (fn [] (is (map? (skill-effects/perform-resource! "p1" 1.0 1.0 false))))))
 
+(deftest register-custom-skill-exp-overrides-stored-value-test
+  ;; Matches original's Skill.expCustomized: a registered custom fn wins over
+  ;; the normal stored/accumulated exp for every read of that skill-id.
+  (store/set-player-state! :skill-effects-session "p-custom-exp" (store/fresh-player-state))
+  (skill-effects/register-custom-skill-exp! :custom-exp-test-skill (fn [_player-id] 0.42))
+  (runtime-hooks/with-client-ctx-fn
+    {:player-owner {:server-session-id :skill-effects-session :player-uuid "p-custom-exp"}}
+    (fn []
+      (is (= 0.42 (skill-effects/skill-exp "p-custom-exp" :custom-exp-test-skill)))
+      (is (= 0.0 (skill-effects/skill-exp "p-custom-exp" :some-other-unregistered-skill))))))
+
 (deftest skill-effects-session-resolution-still-fail-fast-test
   (runtime-hooks/with-client-ctx-fn {:player-owner nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"requires bound session-id"

@@ -8,9 +8,13 @@
 
 (def-skill-config-ops :rad-intensify)
 (defn skill-exp
+  "Matches original's overridden getSkillExp: clamp(0,1, maxCP / getInitCP(5)).
+  getInitCP(5) reads only the init_cp config list at level 5 — NOT
+  init_cp + add_cp (that sum is a different concept, the achievable ceiling
+  including skill-usage bonuses, which cfg/max-cp-for-level computes)."
   [player-id]
   (let [max-cp (double (or (skill-effects/player-path player-id [:resource-data :max-cp] 0.0) 0.0))
-        level5-cp (double (cfg/max-cp-for-level 5))]
+        level5-cp (double (cfg/get-init-cp 5))]
     (bal/clamp01
       (if (pos? level5-cp)
         (/ max-cp level5-cp)

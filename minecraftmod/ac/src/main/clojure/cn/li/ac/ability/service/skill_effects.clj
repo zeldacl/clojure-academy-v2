@@ -303,6 +303,18 @@
   ([session-id player-id path default]
    (get-in (runtime-player-state-in-session session-id player-id) path default)))
 
+;; Matches original's Skill.expCustomized: a skill can register a fn that
+;; computes its exp synthetically (e.g. RadIntensify's max-CP ratio) instead
+;; of reading the normal stored/accumulated value — applied everywhere exp
+;; for that skill is read (UI display, prerequisite checks, etc.), not just
+;; at the one call site that originally needed it.
+(defonce ^:private custom-skill-exp-fns (atom {}))
+
+(defn register-custom-skill-exp!
+  [skill-id f]
+  (swap! custom-skill-exp-fns assoc skill-id f)
+  nil)
+
 (defn skill-exp
   "Read clamped skill exp as double from ability-data."
   [player-id skill-id]
@@ -312,7 +324,9 @@
 
 (defn skill-exp-in-session!
   [session-id player-id skill-id]
-  (double (adata/get-skill-exp (:ability-data (runtime-player-state-in-session session-id player-id)) skill-id)))
+  (if-let [custom-fn (get @custom-skill-exp-fns skill-id)]
+    (double (custom-fn player-id))
+    (double (adata/get-skill-exp (:ability-data (runtime-player-state-in-session session-id player-id)) skill-id))))
 
 (defn current-cp
   "Read current CP from resource-data as double."
