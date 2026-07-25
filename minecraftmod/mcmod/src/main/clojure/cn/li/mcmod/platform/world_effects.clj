@@ -43,3 +43,7 @@
 (defn play-sound!
   [world-id x y z sound-id source volume pitch]
   (call :play-sound! world-id x y z sound-id source volume pitch))
+
+(defn trigger-silbarn-hit!
+  [world-id entity-uuid]
+  (boolean (call :trigger-silbarn-hit! world-id entity-uuid)))

@@ -97,7 +97,15 @@
                           (boolean (core/play-sound-in-level! level x y z sound-id source volume pitch))))
                       (catch Exception e
                         (log/warn "Failed to play world sound:" (ex-message e))
-                        false)))}))  ;; close fn, map, let, defn
+                        false)))
+     :trigger-silbarn-hit! (fn [world-id entity-uuid]
+                             (try
+                               (when-let [^MinecraftServer server (server-fn)]
+                                 (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                   (boolean (core/trigger-silbarn-hit-in-level! level entity-uuid get-entity-by-uuid-fn))))
+                               (catch Exception e
+                                 (log/warn "Failed to trigger silbarn hit:" (ex-message e))
+                                 false)))}))  ;; close fn, map, let, defn
 
 (defn install-world-effects!
   [world-effects label]

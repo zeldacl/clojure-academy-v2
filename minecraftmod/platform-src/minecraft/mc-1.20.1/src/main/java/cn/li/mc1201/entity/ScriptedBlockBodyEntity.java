@@ -124,6 +124,18 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
     }
 
+    /**
+     * Force an in-flight (not yet landed/collided) silbarn to detonate.
+     * Matches original's silbarn.postEvent(new CollideEvent(new RayTraceResult(silbarn)))
+     * — a synthetic collision result whose entityHit is the silbarn itself,
+     * which is why original always plays the "heavy" sound variant here.
+     */
+    public void forceSilbarnHit() {
+        if (isSilbarn()) {
+            markSilbarnHit(true);
+        }
+    }
+
     /** Mirrors original EntitySilbarn's client-synced hit flag, used by the client renderer to hide the model. */
     public boolean isSilbarnHit() {
         return this.entityData.get(DATA_SILBARN_HIT);

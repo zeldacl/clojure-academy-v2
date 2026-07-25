@@ -89,18 +89,13 @@
    {:skill-id :mine-ray-luck :id :progression.exp-block :path "progression.exp-block" :section-suffix "progression" :type :double :min 0.0 :default 0.0003 :comment "MineRayLuck exp per block broken."}
 
   {:skill-id :ray-barrage :id :combat.damage.plain :path "combat.damage.plain" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [25.0 60.0] :comment "RayBarrage plain/direct branch damage endpoints."}
-  {:skill-id :ray-barrage :id :combat.damage.scattered :path "combat.damage.scattered" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 18.0] :comment "RayBarrage scattered branch damage endpoints."}
-  {:skill-id :ray-barrage :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 22.0 :comment "RayBarrage forward detect range."}
-  {:skill-id :ray-barrage :id :scatter.target-radius :path "scatter.target-radius" :section-suffix "scatter" :type :double :min 0.0 :default 8.0 :comment "RayBarrage scattered target search radius around silbarn."}
-  {:skill-id :ray-barrage :id :scatter.count :path "scatter.count" :section-suffix "scatter" :type :int :min 1 :default 8 :comment "RayBarrage scattered beam count when silbarn branch triggers."}
-   {:skill-id :ray-barrage :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 0.3 :comment "RayBarrage beam radius."}
-   {:skill-id :ray-barrage :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "RayBarrage beam query radius."}
-   {:skill-id :ray-barrage :id :beam.step :path "beam.step" :section-suffix "beam" :type :double :min 0.001 :default 0.8 :comment "RayBarrage beam step."}
-   {:skill-id :ray-barrage :id :beam.max-distance :path "beam.max-distance" :section-suffix "beam" :type :double :min 0.0 :default 22.0 :comment "RayBarrage beam max distance."}
-   {:skill-id :ray-barrage :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [300.0 220.0] :comment "RayBarrage down-stage CP cost."}
-   {:skill-id :ray-barrage :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [130.0 100.0] :comment "RayBarrage down-stage overload cost."}
+  {:skill-id :ray-barrage :id :combat.damage.scattered :path "combat.damage.scattered" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [10.0 18.0] :comment "RayBarrage scattered branch (cone AOE) damage endpoints, per entity hit."}
+  {:skill-id :ray-barrage :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 20.0 :comment "RayBarrage forward detect range / plain-branch hitscan range / scattered-branch cone reach (all RAY_DIST=20 in original)."}
+  {:skill-id :ray-barrage :id :scatter.cone-angle-degrees :path "scatter.cone-angle-degrees" :section-suffix "scatter" :type :double :min 0.0 :max 360.0 :default 55.0 :comment "RayBarrage scattered-branch cone angle: yaw spans this value total (half each side), pitch spans this value on EACH side (double total) — matches original's single `range=55f` reused both ways."}
+   {:skill-id :ray-barrage :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [450.0 380.0] :comment "RayBarrage down-stage CP cost."}
+   {:skill-id :ray-barrage :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [300.0 140.0] :comment "RayBarrage down-stage overload cost."}
   {:skill-id :ray-barrage :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [100.0 40.0] :comment "RayBarrage cooldown ticks."}
-   {:skill-id :ray-barrage :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.003 :comment "RayBarrage exp gained when any beam hits."}
+   {:skill-id :ray-barrage :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "RayBarrage exp gained on every successful execution (unconditional — matches original's ctx.addSkillExp(.005f) firing regardless of whether anything was hit)."}
 
    {:skill-id :scatter-bomb :id :projectile.max-balls :path "projectile.max-balls" :section-suffix "projectile" :type :int :min 1 :default 6 :comment "ScatterBomb maximum accumulated balls."}
   {:skill-id :scatter-bomb :id :projectile.max-hold-ticks :path "projectile.max-hold-ticks" :section-suffix "projectile" :type :int :min 1 :default 80 :comment "ScatterBomb hold window tick cap for ball accumulation."}
@@ -122,5 +117,4 @@
 
 (def internal-tunable-definitions
   [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}
-   {:skill-id :ray-barrage :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "Internal FX beam visual distance."}
    {:skill-id :scatter-bomb :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 23.0 :comment "Internal FX beam visual distance."}])

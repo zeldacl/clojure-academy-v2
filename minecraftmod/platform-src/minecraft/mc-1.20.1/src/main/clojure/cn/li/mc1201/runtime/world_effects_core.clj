@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.runtime.world-effects-core
   "Shared Minecraft-side world effects helpers (no loader API imports)."
-  (:import [cn.li.mc1201.entity ScriptedEffectEntity]
+  (:import [cn.li.mc1201.entity ScriptedBlockBodyEntity ScriptedEffectEntity]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
@@ -135,6 +135,16 @@
             {:success? false})))
       (catch Exception _
         {:success? false}))))
+
+(defn trigger-silbarn-hit-in-level!
+  "Force an in-flight silbarn to detonate, matching original's
+  silbarn.postEvent(new CollideEvent(new RayTraceResult(silbarn))) — a
+  synthetic self-collision."
+  [^Level level entity-uuid get-entity-by-uuid-fn]
+  (when-let [entity (get-entity-by-uuid-fn level entity-uuid)]
+    (when (instance? ScriptedBlockBodyEntity entity)
+      (.forceSilbarnHit ^ScriptedBlockBodyEntity entity)
+      true)))
 
 (defn spawn-item-stack-at!
   "Spawn an ItemEntity in the world at the given position.
