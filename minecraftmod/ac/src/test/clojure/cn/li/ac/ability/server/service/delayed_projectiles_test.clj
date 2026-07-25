@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.server.service.delayed-projectiles-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
             [cn.li.ac.ability.service.runtime-store :as store]
@@ -123,9 +122,12 @@
 
 (deftest scatter-bomb-settlement-order-and-cleanup-test
   (let [calls (atom [])]
-    (with-redefs [beam/execute-beam! (fn [_ _]
-                       {:beam-result {:visual-distance 23.0
-                              :hit-uuids ["target-1"]}})
+    (with-redefs [raycast/available? (constantly true)
+                  entity-damage/available? (constantly true)
+                  raycast/raycast-entities (fn [& _] {:uuid "target-1"})
+                  entity-damage/apply-direct-damage! (fn [world-id target-id damage source-type opts]
+                                                        (swap! calls conj [:damage world-id target-id damage source-type opts])
+                                                        true)
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! calls conj [:mark player-id target-id fx-context])
                                            true)
@@ -139,28 +141,27 @@
        {:player-id "p1"
         :ctx-id "ctx-1"
         :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :origin {:x 1.0 :y 64.0 :z 2.0}
+        :dest {:x 1.0 :y 64.0 :z 17.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 1})
       (dp/schedule-scatter-bomb-beam!
        {:player-id "p1"
         :ctx-id "ctx-1"
         :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :origin {:x 1.0 :y 64.0 :z 2.0}
+        :dest {:x 1.0 :y 64.0 :z 17.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 2})
 
       (dp/tick-player! "p1")
-  (is (= 3 (count @calls)))
-      (is (= [:mark "p1" "target-1" {:ctx-id "ctx-1"}] (first @calls)))
+  (is (= 4 (count @calls)))
+      (is (= [:damage "w" "target-1" 7.0 :magic {:reset-invulnerable-time? true}] (first @calls)))
+      (is (= [:mark "p1" "target-1" {:ctx-id "ctx-1"}] (second @calls)))
       (is (= 1 (count (dp/pending-tasks-snapshot "p1"))))
 
       (dp/tick-player! "p1")
-  (is (= 6 (count @calls)))
+  (is (= 8 (count @calls)))
       (is (empty? (dp/pending-tasks-snapshot "p1"))))))
 
 (deftest pending-tasks-are-player-keyed-and-clearable-test
@@ -183,13 +184,14 @@
   (is (empty? (dp/pending-tasks-snapshot "p1")))
   (is (= 1 (count (dp/pending-tasks-snapshot "p2")))))
 
-(deftest scatter-bomb-settlement-uses-task-look-dir-test
+(deftest scatter-bomb-settlement-uses-task-origin-and-dest-test
   (let [run-op-inputs* (atom [])]
-    (with-redefs [beam/execute-beam! (fn [ctx _spec]
-                                       (swap! run-op-inputs* conj {:look-dir (:look-dir ctx)
-                                                                   :eye-pos (:eye-pos ctx)})
-                                       {:beam-result {:visual-distance 23.0
-                                                      :hit-uuids []}})
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/raycast-entities (fn [world-id sx sy sz dx dy dz max-dist]
+                                             (swap! run-op-inputs* conj {:origin {:x sx :y sy :z sz}
+                                                                         :dir {:x dx :y dy :z dz}
+                                                                         :max-dist max-dist})
+                                             nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]
@@ -197,33 +199,29 @@
        {:player-id "p1"
         :ctx-id "ctx-1"
         :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 1.0 :y 0.0 :z 0.0}
+        :origin {:x 1.0 :y 64.0 :z 2.0}
+        :dest {:x 11.0 :y 64.0 :z 2.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 1})
       (dp/schedule-scatter-bomb-beam!
        {:player-id "p1"
         :ctx-id "ctx-1"
         :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 0.0 :y 1.0 :z 0.0}
+        :origin {:x 1.0 :y 64.0 :z 2.0}
+        :dest {:x 1.0 :y 74.0 :z 2.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 1})
       (dp/tick-player! "p1")
-      (is (= [{:look-dir {:x 1.0 :y 0.0 :z 0.0}
-               :eye-pos {:x 1.0 :y 64.0 :z 2.0}}
-              {:look-dir {:x 0.0 :y 1.0 :z 0.0}
-               :eye-pos {:x 1.0 :y 64.0 :z 2.0}}]
+      (is (= [{:origin {:x 1.0 :y 64.0 :z 2.0} :dir {:x 1.0 :y 0.0 :z 0.0} :max-dist 10.0}
+              {:origin {:x 1.0 :y 64.0 :z 2.0} :dir {:x 0.0 :y 1.0 :z 0.0} :max-dist 10.0}]
              @run-op-inputs*)))))
 
 (deftest clear-player-tasks-prevents-later-execution-test
   (let [run-count* (atom 0)]
-    (with-redefs [beam/execute-beam! (fn [_ _]
-                                       (swap! run-count* inc)
-                                       {:beam-result {:visual-distance 23.0
-                                                      :hit-uuids []}})
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/raycast-entities (fn [& _]
+                                             (swap! run-count* inc)
+                                             nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]
@@ -231,10 +229,9 @@
        {:player-id "p1"
         :ctx-id "ctx-1"
         :world-id "w"
-        :eye {:x 1.0 :y 64.0 :z 2.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :origin {:x 1.0 :y 64.0 :z 2.0}
+        :dest {:x 1.0 :y 64.0 :z 17.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 1})
       (dp/clear-player-tasks! "p1")
       (dp/tick-player! "p1")

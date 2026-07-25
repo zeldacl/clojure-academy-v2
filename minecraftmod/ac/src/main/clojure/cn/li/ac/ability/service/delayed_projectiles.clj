@@ -4,7 +4,6 @@
   Pending tasks live in a server-thread-confined deadline scheduler and are
   never serialized into player state."
   (:require [cn.li.ac.ability.effects.geom :as geom]
-            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -106,10 +105,6 @@
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
 
-(defn- beam-param
-  [beam key default]
-  (double (or (get beam key) default)))
-
 (defn- run-electron-bomb-beam!
   "Matches original's callback: getDest(player)/eye are re-evaluated fresh at
   settle time (not the values captured when the skill was cast), so the
@@ -166,37 +161,36 @@
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
 (defn- run-scatter-bomb-beam!
-  [{:keys [player-id ctx-id world-id eye look-dir damage beam]}]
+  "Matches original's per-ball resolution: a precise point-to-point raycast
+  from the ball's (approximated) origin to its independently-randomized
+  destination, single-entity hit, with hurtResistantTime=-1 (reset-
+  invulnerable-time?) so multiple balls can all connect on the same target
+  within one release — not a radius/falloff beam."
+  [{:keys [player-id ctx-id world-id origin dest damage]}]
   (try
-    (let [result (beam/execute-beam!
-                  {:player-id player-id
-                   :ctx-id ctx-id
-                   :world-id world-id
-                   :eye-pos eye
-                   :look-dir look-dir}
-                  {:radius (beam-param beam :radius 0.3)
-                   :query-radius (beam-param beam :query-radius 20.0)
-                   :step (beam-param beam :step 0.8)
-                   :max-distance (beam-param beam :max-distance 25.0)
-                   :visual-distance (beam-param beam :visual-distance 23.0)
-                   :damage (double (or damage 0.0))
-                   :damage-type :magic
-                   :break-blocks? false
-                   :block-energy 0.0
-                   :fx-topic nil})
-            _ (doseq [target-id (or (get-in result [:beam-result :hit-uuids]) [])]
-              (md-damage/mark-target! player-id target-id {:ctx-id ctx-id}))
-          visual-distance (double (or (get-in result [:beam-result :visual-distance])
-                                      (beam-param beam :visual-distance 23.0)))
-          end-pos (geom/v+ eye (geom/v* (geom/vnorm look-dir) visual-distance))]
-      (ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
-        {:start eye
-         :end end-pos
-         :hit-distance visual-distance})
-      (ctx-mgr/push-channel-to-nearby-players! ctx-id :scatter-bomb/fx-beam
-        {:start eye
-         :end end-pos
-         :hit-distance visual-distance}))
+    (when (raycast/available?)
+      (let [ox (double (:x origin)) oy (double (:y origin)) oz (double (:z origin))
+            dx (- (double (:x dest)) ox)
+            dy (- (double (:y dest)) oy)
+            dz (- (double (:z dest)) oz)
+            dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+            dir  (if (pos? dist)
+                   {:x (/ dx dist) :y (/ dy dist) :z (/ dz dist)}
+                   {:x 0.0 :y 0.0 :z 1.0})
+            hit  (raycast/raycast-entities
+                   world-id ox oy oz
+                   (:x dir) (:y dir) (:z dir)
+                   (max 0.1 dist))
+            target-uuid (:uuid hit)]
+        (when (and target-uuid (entity-damage/available?))
+          (entity-damage/apply-direct-damage!
+            world-id target-uuid (double (or damage 0.0)) :magic
+            {:reset-invulnerable-time? true})
+          (md-damage/mark-target! player-id target-uuid {:ctx-id ctx-id}))
+        (ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
+          {:start origin :end dest})
+        (ctx-mgr/push-channel-to-nearby-players! ctx-id :scatter-bomb/fx-beam
+          {:start origin :end dest})))
     (catch Exception e
       (log/warn "Delayed ScatterBomb settle failed:" (ex-message e)))))
 

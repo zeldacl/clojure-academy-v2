@@ -97,24 +97,20 @@
   {:skill-id :ray-barrage :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [100.0 40.0] :comment "RayBarrage cooldown ticks."}
    {:skill-id :ray-barrage :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "RayBarrage exp gained on every successful execution (unconditional — matches original's ctx.addSkillExp(.005f) firing regardless of whether anything was hit)."}
 
-   {:skill-id :scatter-bomb :id :projectile.max-balls :path "projectile.max-balls" :section-suffix "projectile" :type :int :min 1 :default 6 :comment "ScatterBomb maximum accumulated balls."}
+   {:skill-id :scatter-bomb :id :projectile.max-balls :path "projectile.max-balls" :section-suffix "projectile" :type :int :min 1 :default 7 :comment "ScatterBomb maximum accumulated balls (ticks 20,30,...,80 step 10 = 7 spawns)."}
   {:skill-id :scatter-bomb :id :projectile.max-hold-ticks :path "projectile.max-hold-ticks" :section-suffix "projectile" :type :int :min 1 :default 80 :comment "ScatterBomb hold window tick cap for ball accumulation."}
    {:skill-id :scatter-bomb :id :projectile.spawn-interval-ticks :path "projectile.spawn-interval-ticks" :section-suffix "projectile" :type :int :min 1 :default 10 :comment "ScatterBomb ball spawn interval."}
    {:skill-id :scatter-bomb :id :projectile.spawn-start-tick :path "projectile.spawn-start-tick" :section-suffix "projectile" :type :int :min 0 :default 20 :comment "ScatterBomb first ball spawn tick."}
-   {:skill-id :scatter-bomb :id :projectile.cone-spread :path "projectile.cone-spread" :section-suffix "projectile" :type :double-list :min 0.0 :list-count 2 :default [0.3 0.8] :comment "ScatterBomb random cone spread [min,max]."}
-   {:skill-id :scatter-bomb :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [4.0 9.0] :comment "ScatterBomb beam damage."}
-   {:skill-id :scatter-bomb :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 0.3 :comment "ScatterBomb delayed beam radius."}
-   {:skill-id :scatter-bomb :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 20.0 :comment "ScatterBomb delayed beam query radius."}
-   {:skill-id :scatter-bomb :id :beam.step :path "beam.step" :section-suffix "beam" :type :double :min 0.001 :default 0.8 :comment "ScatterBomb delayed beam trace step."}
-   {:skill-id :scatter-bomb :id :beam.max-distance :path "beam.max-distance" :section-suffix "beam" :type :double :min 0.0 :default 25.0 :comment "ScatterBomb delayed beam max distance."}
+   {:skill-id :scatter-bomb :id :projectile.scatter-range :path "projectile.scatter-range" :section-suffix "projectile" :type :double :min 0.0 :default 15.0 :comment "ScatterBomb per-ball destination range (RAY_RANGE), used twice: base point along exact look, plus a randomly pitch/yaw-rotated offset."}
+   {:skill-id :scatter-bomb :id :projectile.scatter-angle-degrees :path "projectile.scatter-angle-degrees" :section-suffix "projectile" :type :double :min 0.0 :default 25.0 :comment "ScatterBomb per-ball random pitch/yaw rotation span (each axis independently randomized within +/- half this value)."}
+   {:skill-id :scatter-bomb :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [5.0 9.0] :comment "ScatterBomb per-ball damage."}
+   {:skill-id :scatter-bomb :id :targeting.auto-aim-exp-threshold :path "targeting.auto-aim-exp-threshold" :section-suffix "targeting" :type :double :min 0.0 :max 1.0 :default 0.5 :comment "ScatterBomb: above this skill exp, some balls auto-aim at nearby living entities."}
+   {:skill-id :scatter-bomb :id :targeting.auto-aim-radius :path "targeting.auto-aim-radius" :section-suffix "targeting" :type :double :min 0.0 :default 5.0 :comment "ScatterBomb auto-aim target search radius around the player."}
    {:skill-id :scatter-bomb :id :effect.anti-afk-tick :path "effect.anti-afk-tick" :section-suffix "effect" :type :int :min 1 :default 200 :comment "ScatterBomb anti-AFK self-damage tick."}
    {:skill-id :scatter-bomb :id :effect.anti-afk-damage :path "effect.anti-afk-damage" :section-suffix "effect" :type :double :min 0.0 :default 6.0 :comment "ScatterBomb anti-AFK self-damage amount."}
-   {:skill-id :scatter-bomb :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [150.0 120.0] :comment "ScatterBomb down-stage overload cost."}
-   {:skill-id :scatter-bomb :id :cost.overload-floor-scale :path "cost.overload-floor-scale" :section-suffix "cost" :type :double :min 0.0 :default 0.8 :comment "ScatterBomb overload floor scale from activation overload."}
-   {:skill-id :scatter-bomb :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [8.0 5.0] :comment "ScatterBomb tick CP cost."}
-   {:skill-id :scatter-bomb :id :cooldown.ticks-per-ball :path "cooldown.ticks-per-ball" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [30.0 15.0] :comment "ScatterBomb cooldown ticks per ball."}
-   {:skill-id :scatter-bomb :id :progression.exp-per-ball :path "progression.exp-per-ball" :section-suffix "progression" :type :double :min 0.0 :default 0.002 :comment "ScatterBomb exp gained per fired ball."}])
+   {:skill-id :scatter-bomb :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [80.0 60.0] :comment "ScatterBomb down-stage overload cost."}
+   {:skill-id :scatter-bomb :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [3.0 6.0] :comment "ScatterBomb tick CP cost (increases with exp in original)."}
+   {:skill-id :scatter-bomb :id :progression.exp-per-ball :path "progression.exp-per-ball" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "ScatterBomb exp gained per fired ball."}])
 
 (def internal-tunable-definitions
-  [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}
-   {:skill-id :scatter-bomb :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 23.0 :comment "Internal FX beam visual distance."}])
+  [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}])

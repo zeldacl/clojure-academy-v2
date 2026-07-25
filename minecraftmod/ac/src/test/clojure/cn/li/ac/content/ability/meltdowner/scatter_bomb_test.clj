@@ -13,7 +13,8 @@
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (defn- context-mocks
   [initial]
@@ -46,22 +47,19 @@
 
 (defn- stub-lerp-double [_skill-id field-id _exp]
   (case field-id
-    :cost.down.overload 150.0
-    :cost.tick.cp 8.0
+    :cost.down.overload 80.0
+    :cost.tick.cp 3.0
     :combat.damage 7.0
-    :cooldown.ticks-per-ball 30.0
     0.0))
 
 (defn- stub-tunable-double [_skill-id field-id]
   (case field-id
-    :cost.overload-floor-scale 0.8
     :effect.anti-afk-damage 6.0
-    :beam.radius 0.3
-    :beam.query-radius 20.0
-    :beam.step 0.8
-    :beam.max-distance 25.0
-    :beam.visual-distance 23.0
-    :progression.exp-per-ball 0.002
+    :progression.exp-per-ball 0.001
+    :targeting.auto-aim-exp-threshold 0.5
+    :targeting.auto-aim-radius 5.0
+    :projectile.scatter-range 15.0
+    :projectile.scatter-angle-degrees 25.0
     0.0))
 
 (defn- stub-tunable-int [_skill-id field-id]
@@ -69,7 +67,7 @@
     :effect.anti-afk-tick 200
     :projectile.max-hold-ticks 80
     :projectile.spawn-start-tick 20
-    :projectile.max-balls 6
+    :projectile.max-balls 7
     :projectile.spawn-interval-ticks 10
     0))
 
@@ -80,6 +78,8 @@
       #(with-redefs [skill-effects/skill-exp (fn [& _] 0.0)
                       skill-config/lerp-double stub-lerp-double
                       skill-config/tunable-double stub-tunable-double
+                      skill-effects/player-path (fn [_player-id path _default]
+                                                  (when (= path [:resource-data :cur-overload]) 120.0))
                       ctx/get-context get-context
                       ctx-skill/update-skill-state-root! update-skill-state-root!
                       ctx-skill/assoc-skill-state! assoc-skill-state!
@@ -148,7 +148,7 @@
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
                                                        true)]
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-afk" :player-ref {:id "player-obj"})))
-    (is (= [["w" "p1" 6.0 :magic]] @damage-calls*))
+    (is (= [["w" "p1" 6.0 :generic]] @damage-calls*))
     (is (= [["ctx-afk" nil]] @terminate-calls*))
     (is (= ["ctx-afk" :scatter-bomb/fx-end nil {:balls 2}] (last @messages*)))))
 
@@ -178,6 +178,8 @@
     (is (empty? @messages*))))
 
 (deftest scatter-bomb-up-schedules-delayed-beams-and-settles-rewards-test
+  ;; Matches original: no cooldown is ever set (ScatterBomb.scala never calls
+  ;; ctx.setCooldown), and exp is flat 0.001/ball.
   (let [{:keys [get-context send! messages*]}
         (context-mocks {:skill-state {:balls 3 :hold-ticks 50 :overload-floor 120.0}})
         scheduled* (atom [])
@@ -190,7 +192,6 @@
                   skill-config/lerp-double stub-lerp-double
                   skill-config/tunable-double stub-tunable-double
                   skill-config/tunable-int stub-tunable-int
-                  skill-config/tunable-double-list (fn [& _] [0.3 0.3])
                   skill-effects/add-skill-exp! (fn [& args]
                                                  (swap! exp-calls* conj args)
                                                  nil)
@@ -201,8 +202,8 @@
                   delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
                                                                     (swap! scheduled* conj task)
                                                                     nil)
-                  scatter/*scatter-direction-sampler* (fn [_]
-                                                        {:x 1.0 :y 0.0 :z 0.0})
+                  scatter/*scatter-dest-sampler* (fn [_eye _look-vec]
+                                                    {:x 5.0 :y 64.0 :z 12.0})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
@@ -210,13 +211,44 @@
          (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-3")))
 
     (is (= [15 16 17] (mapv :delay-ticks @scheduled*)))
-    (is (= [{:x 1.0 :y 0.0 :z 0.0}
-            {:x 1.0 :y 0.0 :z 0.0}
-            {:x 1.0 :y 0.0 :z 0.0}]
-           (mapv :look-dir @scheduled*)))
-    (is (= [["p1" :scatter-bomb 0.006]] @exp-calls*))
-    (is (= [["p1" :scatter-bomb 90]] @cooldown-calls*))
+    (is (every? #(= {:x 1.0 :y 64.0 :z 2.0} %) (mapv :origin @scheduled*)))
+    (is (every? #(= {:x 5.0 :y 64.0 :z 12.0} %) (mapv :dest @scheduled*)))
+    (is (= [["p1" :scatter-bomb 0.003]] @exp-calls*))
+    (is (empty? @cooldown-calls*))
     (is (= ["ctx-3" :scatter-bomb/fx-end nil {:balls 3}] (last @messages*)))))
+
+(deftest scatter-bomb-up-auto-aims-some-balls-above-exp-threshold-test
+  ;; Matches original: exp>0.5 redirects floor(balls*exp) balls to a random
+  ;; nearby living entity's eye position instead of the randomized cone dest.
+  (let [{:keys [get-context send!]}
+        (context-mocks {:skill-state {:balls 4 :hold-ticks 50 :overload-floor 120.0}})
+        scheduled* (atom [])]
+    (with-scatter-env
+      #(with-redefs [ctx/get-context get-context
+                  fx/send! send!
+                  skill-effects/skill-exp (fn [& _] 0.6)
+                  skill-config/lerp-double stub-lerp-double
+                  skill-config/tunable-double stub-tunable-double
+                  skill-config/tunable-int stub-tunable-int
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  delayed-projectiles/mdball-near-expire-delay (fn [] 15)
+                  delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
+                                                                    (swap! scheduled* conj task)
+                                                                    nil)
+                  scatter/*scatter-dest-sampler* (fn [_eye _look-vec]
+                                                    {:x 5.0 :y 64.0 :z 12.0})
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  raycast/available? (constantly true)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  world-effects/available? (constantly true)
+                  world-effects/find-entities-in-radius (fn [& _]
+                                                          [{:uuid "target-1" :x 3.0 :y 64.0 :z 3.0
+                                                            :eye-height 1.6 :living? true}])]
+         (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-auto" :exp 0.6)))
+    ;; floor(4 * 0.6) = 2 balls auto-aimed at the target's eye position.
+    (is (= 2 (count (filter #(= {:x 3.0 :y 65.6 :z 3.0} (:dest %)) @scheduled*))))
+    (is (= 2 (count (filter #(= {:x 5.0 :y 64.0 :z 12.0} (:dest %)) @scheduled*))))))
 
 (deftest scatter-bomb-cost-fail-sends-fx-end-test
   (let [{:keys [get-context send! messages*]}
