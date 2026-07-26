@@ -251,16 +251,19 @@
 ;; the caster's own sightline. :charging is the original's own named preset
 ;; for this skill ("chargingArc").
 (defn- zigzag-ops
-  [cam-v start end pattern seed]
-  (let [vertices (arc-patterns/generate-zigzag-segments start end
-                   {:segments (:segments pattern)
-                    :amplitude (:amplitude pattern)
-                    :seed seed})
-        life-ratio 0.5] ;; life-fade-alpha's flat full-brightness middle 60%
-    (ru/zigzag-arc-ops cam-v vertices pattern
-      {:life-ratio life-ratio
-       :wiggle-phase (arc-patterns/wiggle-phase)
-       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
+  ([cam-v start end pattern seed]
+   (zigzag-ops cam-v start end pattern seed nil))
+  ([cam-v start end pattern seed origin-offset]
+   (let [vertices (arc-patterns/generate-zigzag-segments start end
+                    {:segments (:segments pattern)
+                     :amplitude (:amplitude pattern)
+                     :seed seed})
+         life-ratio 0.5] ;; life-fade-alpha's flat full-brightness middle 60%
+     (ru/zigzag-arc-ops cam-v vertices pattern
+       {:life-ratio life-ratio
+        :wiggle-phase (arc-patterns/wiggle-phase)
+        :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)
+        :origin-offset origin-offset}))))
 
 ;; Original's own chargingArc config (ArcPatterns.java): branchFactor=0.3,
 ;; passes=5, width=0.1, maxOffset=1.2 on a 20-block reference length — i.e.
@@ -301,17 +304,25 @@
          :color-inner {:r 235 :g 252 :b 255}
          :color-line {:r 190 :g 244 :b 255}))
 
+;; Original's SubArc fixes its position/rotation once at spawn and holds
+;; them for its whole life (default 30 ticks, ~1.5s) — only the displayed
+;; pre-baked pattern and a visibility flicker change per-tick; it never
+;; re-randomizes position. All 6 sparks dying/respawning in lockstep every
+;; few ticks (an earlier version of this code did that every 5 ticks) reads
+;; as the whole cluster "jumping," not crackling. Match the ~30-tick hold,
+;; staggered per spark index so they don't refresh in lockstep.
+(def ^:private spark-life-ticks 30)
+
 (defn- surround-spark-ops
   "count small random-surface-point, random-direction sparks around
   [cx,y,cz] — see spark-count/spark-pattern above for why this replaced a
-  circular ring. Reseeded every ~5 ticks (not every tick) so sparks crackle
-  rather than jitter chaotically every frame, and not regenerated every
-  render frame either (same seed within that window)."
+  circular ring."
   [cam-v cx cy cz ticks pattern]
   (vec
     (mapcat
       (fn [idx]
-        (let [seed (+ (* 1000 idx) (long (quot ticks 5)))
+        (let [window (quot (+ ticks (* idx 5)) spark-life-ticks)
+              seed (+ (* 1000 idx) window)
               rng (java.util.Random. seed)
               ;; Random point on a unit cube's surface centered at [cx cy cz]:
               ;; pick one of 6 faces, then a uniform point on that face.
@@ -361,11 +372,18 @@
                         hand-pos (or (and own? hand-center-pos)
                                      (:caster-pos st)
                                      hand-center-pos)
-                        ;; Beam origin must be the pure eye position, matching
-                        ;; what the server's raycast actually aimed from
-                        ;; (current_charging.clj's player-view) — using the
-                        ;; hand-offset anchor here instead visibly skews the
-                        ;; beam away from the crosshair/target.
+                        ;; Beam vertex math still keys off the pure eye
+                        ;; position (matching the server's actual raycast
+                        ;; origin) — using hand-center-pos directly here
+                        ;; instead skews the whole path, not just its render
+                        ;; origin. The *visual* caster-side offset original
+                        ;; applies (LambdaLib2 ViewOptimize.fix, "the beam
+                        ;; must start from the hand") is a separate, purely
+                        ;; cosmetic rigid shift applied to the WHOLE arc
+                        ;; below via :origin-offset — original moves both
+                        ;; ends by the same amount rather than pinning the
+                        ;; far end to the exact target, so this is faithful,
+                        ;; not an approximation.
                         caster-pos (:caster-pos st)
                         target (:target st)
                         ticks (long (or (:charge-ticks st) 0))
@@ -376,7 +394,12 @@
                                                (rv3/map->v3 caster-pos)
                                                (rv3/map->v3 target)
                                                charging-beam-pattern
-                                               ticks))
+                                               ticks
+                                               (arc-beam/local-frame-offset
+                                                 caster-pos target
+                                                 (if own?
+                                                   arc-beam/first-person-view-offset
+                                                   arc-beam/third-person-view-offset))))
                         ;; Matches original: the surround sparks only ever
                         ;; appear around the TARGET block once it's a valid
                         ;; energy receiver (block mode) — never around the

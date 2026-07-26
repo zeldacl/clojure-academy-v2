@@ -139,10 +139,10 @@
 ;; seen through their own eyes gets the small one, everything else — the caster
 ;; in F5, or anyone watching someone else cast, i.e. whenever a player model is
 ;; on screen — gets the one that drops it to the model's hand.
-(def ^:private first-person-view-offset [-0.05 -0.25 0.2])
-(def ^:private third-person-view-offset [0.15 -0.8 0.23])
+(def first-person-view-offset [-0.05 -0.25 0.2])
+(def third-person-view-offset [0.15 -0.8 0.23])
 
-(defn- local-frame-offset
+(defn local-frame-offset
   "Resolve one [forward up right] offset triple against the arc's own axes."
   [start end [forward-o up-o right-o]]
   (let [start-v3 (rv3/map->v3 start)
