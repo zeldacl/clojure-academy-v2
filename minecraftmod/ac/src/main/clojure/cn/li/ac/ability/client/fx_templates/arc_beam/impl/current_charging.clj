@@ -319,13 +319,14 @@
 (def ^:private spark-life-ticks 30)
 
 ;; What actually reads as "jumping" in original is NOT the anchor moving —
-;; it's SubArc swapping which of 10 pre-baked jagged templates it displays
-;; (~30% chance/tick, i.e. a new one roughly every ~3 ticks), at the SAME
+;; it's SubArc swapping which of 10 pre-baked jagged templates it displays,
+;; via an independent ~30%-per-tick coin flip PER STRAND (not a shared
+;; fixed period — each spark decorrelated from the others), at the SAME
 ;; fixed anchor/direction. Reseeding just the zigzag displacement (not the
-;; start/end points) on a faster cycle than the anchor reproduces that: the
-;; spark stays rooted to the same surface point but its jagged shape
-;; visibly snaps to a different silhouette every few ticks.
-(def ^:private spark-shape-refresh-ticks 3)
+;; start/end points) reproduces that: the spark stays rooted to the same
+;; surface point but its jagged shape visibly snaps to a different
+;; silhouette every few ticks, on its own independent schedule.
+(def ^:private spark-shape-swap-chance 0.3)
 
 ;; SubArc.tick()'s independent on/off Markov chain (~40% off-chance when
 ;; lit, ~30% on-chance when dark) settles to ≈43% visible, re-rolled every
@@ -336,6 +337,23 @@
   [idx ticks]
   (< (.nextDouble (java.util.Random. (+ (* 7919 idx) (long ticks))))
      spark-visible-chance))
+
+(defn- spark-shape-tick
+  "The most recent tick <= ticks where spark idx's independent per-tick
+  swap-chance coin flip would have fired, found by scanning backward — this
+  makes 'which shape is currently displayed' a pure function of (idx,
+  ticks) with no persistent per-spark state to track, while still behaving
+  like original's per-tick coin flip: naturally decorrelated across sparks
+  (each idx has its own hash sequence) rather than synchronized on a fixed
+  period. Average gap between hits is ~1/0.3 ≈ 3.3 ticks, so the backward
+  scan is short in practice; bounded at ticks=0 regardless."
+  [idx ticks]
+  (loop [t (long ticks)]
+    (if (or (<= t 0)
+            (< (.nextDouble (java.util.Random. (+ (* 104729 idx) t)))
+               spark-shape-swap-chance))
+      t
+      (recur (dec t)))))
 
 (defn- surround-spark-ops
   "count small random-surface-point, random-direction sparks around
@@ -366,10 +384,10 @@
                 end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
                             (+ cy oy (* spark-length cos-phi))
                             (+ cz oz (* spark-length sin-phi (Math/sin theta))))
-                ;; Independent, faster cycle: only the jagged path reshapes,
-                ;; anchor/direction above stay put for the full life-window.
-                shape-window (quot ticks spark-shape-refresh-ticks)
-                shape-seed (+ (* 1000 idx) (* 31 shape-window))]
+                ;; Independent per-spark coin-flip cycle: only the jagged
+                ;; path reshapes, anchor/direction above stay put for the
+                ;; full life-window.
+                shape-seed (+ (* 1000 idx) (* 31 (spark-shape-tick idx ticks)))]
             (zigzag-ops cam-v start end pattern shape-seed))))
       (range spark-count))))
 
