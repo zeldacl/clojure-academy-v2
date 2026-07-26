@@ -1,8 +1,7 @@
 (ns cn.li.mc1201.client.effects.level-renderer
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mc1201.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -292,43 +291,27 @@
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
       (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
-        (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :sorted
-                                              :lines-count (count lines)
-                                              :quads-textures (mapv (fn [[t ops]] [t (count ops)]) quads)
-                                              :plasma-count (count plasma)
-                                              :camera-pos camera-pos})
-        (try
-          (.pushPose pose-stack)
-          (.translate pose-stack
-                      (double (- (:x camera-pos)))
-                      (double (- (:y camera-pos)))
-                      (double (- (:z camera-pos))))
-          (let [mat (.pose (.last pose-stack))]
-            (when (seq lines)
-              (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
-                (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :got-line-vc :vc (some? line-vc)})
-                (doseq [op lines]
-                  (emit-line! line-vc mat op))
-                (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :emitted-lines})))
-            (doseq [[texture texture-ops] quads]
-              (let [loc (ResourceLocation/tryParse texture)]
-                (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :quad-loc :texture texture :loc (str loc)})
-                (when loc
-                  (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
-                    (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :got-quad-vc :vc (some? quad-vc)})
-                    (doseq [op texture-ops]
-                      (emit-quad! quad-vc mat op))
-                    (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :emitted-quads :count (count texture-ops)})))))
-            (when (and render-plasma-op! (seq plasma))
-              (doseq [op plasma]
-                (render-plasma-op! {:buffer-source buffer-source
-                                    :mat mat
-                                    :camera-pos camera-pos
-                                    :op op})))
-            (.popPose pose-stack)
-            (.endBatch buffer-source)
-            (log/info "[CC-TRACE][RENDER-DEEP]" {:stage :done}))
-          (catch Throwable e
-            (log/error "[CC-TRACE][RENDER-DEEP] EXCEPTION" e)
-            (log/stacktrace "[CC-TRACE][RENDER-DEEP] EXCEPTION" e)))))
+        (.pushPose pose-stack)
+        (.translate pose-stack
+                    (double (- (:x camera-pos)))
+                    (double (- (:y camera-pos)))
+                    (double (- (:z camera-pos))))
+        (let [mat (.pose (.last pose-stack))]
+          (when (seq lines)
+            (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
+              (doseq [op lines]
+                (emit-line! line-vc mat op))))
+          (doseq [[texture texture-ops] quads]
+            (when-let [loc (ResourceLocation/tryParse texture)]
+              (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
+                (doseq [op texture-ops]
+                  (emit-quad! quad-vc mat op)))))
+          (when (and render-plasma-op! (seq plasma))
+            (doseq [op plasma]
+              (render-plasma-op! {:buffer-source buffer-source
+                                  :mat mat
+                                  :camera-pos camera-pos
+                                  :op op})))
+          (.popPose pose-stack)
+          (.endBatch buffer-source))))
     plan))

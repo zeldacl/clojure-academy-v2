@@ -268,10 +268,18 @@
         mid (vec3/v* (vec3/v+ start end) 0.5)
         to-cam (vec3/vnorm (vec3/v- cam-pos mid))
         raw (vec3/vcross dir to-cam)]
-    ;; Camera at start → to-cam ∥ dir → cross→0. Fall back to a
-    ;; camera-relative perpendicular instead of a fixed world axis
-    ;; that renders the beam edge-on and invisible.
-    (if (> (vec3/vlen raw) 1.0e-5)
+    ;; Camera at/near start → to-cam ~parallel dir → cross magnitude tiny.
+    ;; A first-person self-targeted beam (e.g. current-charging: caster's own
+    ;; eye to their own crosshair target) sits on-axis with the camera EVERY
+    ;; frame, not just as a rare edge case — and the synced start position
+    ;; lags the live camera by a frame or two, so `raw`'s magnitude is small
+    ;; but noise-dominated rather than exactly zero. The old 1.0e-5 threshold
+    ;; only matched near-exact parallelism, letting that noise pick an
+    ;; effectively random (often edge-on/invisible) right axis instead of
+    ;; ever reaching the stable world-up fallback below. 0.05 (~3 degrees)
+    ;; catches the whole near-degenerate band, where the fallback is not
+    ;; just a rescue but the more numerically stable choice anyway.
+    (if (> (vec3/vlen raw) 0.05)
       (vec3/vnorm raw)
       (let [perp (vec3/vcross vec3/unit-y dir)]
         (if (> (vec3/vlen perp) 1.0e-5)
