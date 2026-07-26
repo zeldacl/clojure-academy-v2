@@ -108,3 +108,40 @@
            (is (= 4 (count @fx-calls*)) "fx sent on both the miss and the success release, each fanned out to owner + nearby")))
       (finally
         (ctx/reset-contexts-for-test! context-registry-val)))))
+
+(deftest up-action-uses-current-ctx-hold-ticks-test
+  (let [up-fn (get-in body-intensify/body-intensify [:actions :up!])
+        applied* (atom [])
+        exp-calls* (atom [])
+        cooldown-calls* (atom [])
+        context-registry-val (ctx/snapshot-context-registry)
+        owner {:logical-side :server :server-session-id :test-session :player-uuid "p-same"}]
+    (try
+      (ctx/reset-contexts-for-test!)
+      (with-buff-config ["speed:3"]
+        #(with-redefs [potion-effects/available? (constantly true)
+                       potion-effects/apply-effect! (fn [& _] (swap! applied* conj :applied) true)
+                       skill-effects/add-skill-exp! (fn [player-id skill-id amount]
+                                                      (swap! exp-calls* conj [player-id skill-id amount]))
+                       skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
+                                                          (swap! cooldown-calls* conj [player-id skill-id ticks]))
+                       fx/send! (fn [& _] nil)]
+           (ctx/with-context-owner owner
+             ;; Stale/other context for same player below min threshold.
+             (ctx/register-context!
+              (assoc (ctx/new-server-context "p-same" :body-intensify "ctx-old" owner)
+                     :status ctx/STATUS-ALIVE))
+             (ctx-skill/update-skill-state-root! "ctx-old" identity {:hold-ticks 2})
+
+             ;; Current context at min threshold should perform.
+             (ctx/register-context!
+              (assoc (ctx/new-server-context "p-same" :body-intensify "ctx-new" owner)
+                     :status ctx/STATUS-ALIVE))
+             (ctx-skill/update-skill-state-root! "ctx-new" identity {:hold-ticks 10}))
+
+           (cb/apply-invoke up-fn :player-id "p-same" :ctx-id "ctx-new" :exp 0.5)
+           (is (pos? (count @applied*)) "current ctx-id hold-ticks controls perform gate")
+           (is (= [["p-same" :body-intensify 0.02]] @exp-calls*))
+           (is (= [["p-same" :body-intensify 25]] @cooldown-calls*))))
+      (finally
+        (ctx/reset-contexts-for-test! context-registry-val)))))

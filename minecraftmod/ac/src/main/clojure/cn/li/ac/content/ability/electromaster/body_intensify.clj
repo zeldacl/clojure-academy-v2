@@ -21,6 +21,9 @@
 (defn- max-time [] (cfg-int :charge.max-ticks))
 (defn- max-tolerant-time [] (cfg-int :charge.max-tolerant-ticks))
 
+(defn- now-ms []
+  (System/currentTimeMillis))
+
 (defn- parse-effect-entry [entry]
   (let [[effect-name amp-text] (str/split (str entry) #":" 2)
         effect-name (str/trim (or effect-name ""))]
@@ -54,15 +57,36 @@
 (defn- enforce-overload-floor! [player-id floor-value]
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
+(defn- same-player?
+  [a b]
+  (= (str a) (str b)))
+
 (defn- active-skill-ctx-data [player-id skill-id]
-  (some (fn [[_ctx-id ctx-data]]
-          (when (and (= (:player-uuid ctx-data) player-id)
-                     (= skill-id (:skill-id ctx-data)))
-            ctx-data))
-        (ctx/get-all-contexts)))
+  (->> (ctx/get-all-contexts)
+       vals
+       (filter (fn [ctx-data]
+                 (and (same-player? (:player-uuid ctx-data) player-id)
+                      (= skill-id (:skill-id ctx-data))
+                      (= :server (:logical-side ctx-data))
+                      (= ctx/STATUS-ALIVE (:status ctx-data)))))
+       ;; If a stale duplicate survives briefly, prefer the context with the
+       ;; largest tracked hold-tick count.
+       (sort-by (fn [ctx-data]
+                  (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
+                >)
+       first))
 
 (defn- stored-hold-ticks [player-id skill-id]
   (long (or (get-in (active-skill-ctx-data player-id skill-id) [:skill-state :hold-ticks]) 0)))
+
+(defn- stored-hold-ticks-by-ctx [ctx-id]
+  (let [skill-state (get-in (ctx-skill/get-context ctx-id) [:skill-state])
+        tracked (long (or (:hold-ticks skill-state) 0))
+        started-at-ms (long (or (:started-at-ms skill-state) 0))
+        elapsed-ticks (if (pos? started-at-ms)
+                        (max 0 (long (quot (- (now-ms) started-at-ms) 50)))
+                        0)]
+    (max tracked elapsed-ticks)))
 
 (defn- down-overload-cost [_player-id _skill-id exp]
   (cfg-lerp :cost.down.overload (double (or exp 0.0))))
@@ -115,9 +139,21 @@
   ;; EntityIntensifyEffect when performed? is true — bystanders need to see it.
   (fx/send-local-and-nearby! ctx-id {:topic :body-intensify/fx-end :mode :end} nil (end-payload ticks)))
 
+(defn- send-start-fx! [ctx-id]
+  ;; Original starts local charging feedback immediately when the context
+  ;; is made alive. Keep this owner-local in current architecture.
+  (fx/send! ctx-id {:topic :body-intensify/fx-start :mode :start} nil {}))
+
+(defn- body-intensify-down!
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (update-skill-state-root! ctx-id merge
+                            {:hold-ticks 0
+                             :started-at-ms (now-ms)})
+  (send-start-fx! ctx-id))
+
 (defn- body-intensify-cost-fail!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (send-end-fx! ctx-id (stored-hold-ticks player-id body-intensify-skill-id))
+  (send-end-fx! ctx-id (stored-hold-ticks-by-ctx ctx-id))
   (ctx/terminate-context! ctx-id nil))
 
 (defn- body-intensify-tick!
@@ -127,7 +163,7 @@
   self-tracks the charge duration in :skill-state instead of trusting the
   argument, matching railgun.clj/scatter_bomb.clj/mark_teleport.clj."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (let [ticks (inc (stored-hold-ticks player-id body-intensify-skill-id))]
+  (let [ticks (inc (stored-hold-ticks-by-ctx ctx-id))]
     (update-skill-state-root! ctx-id assoc :hold-ticks ticks)
     (enforce-overload-floor! player-id (cfg-lerp :cost.down.overload (double (or exp 0.0))))
     (when (>= ticks (max-tolerant-time))
@@ -136,7 +172,7 @@
 
 (defn- body-intensify-up!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (let [ticks (stored-hold-ticks player-id body-intensify-skill-id)]
+  (let [ticks (stored-hold-ticks-by-ctx ctx-id)]
     (when (>= ticks (min-time))
       (let [effective-tick (min ticks (max-time))
             exp*           (double (or exp 0.0))]
@@ -162,7 +198,8 @@
   :cost        {:down {:overload down-overload-cost}
                 :tick {:cp tick-cp-cost}}
   :actions
-  {:cost-fail! body-intensify-cost-fail!
+  {:down!      body-intensify-down!
+   :cost-fail! body-intensify-cost-fail!
    :tick!      body-intensify-tick!
    :up!        body-intensify-up!}
   :prerequisites [{:skill-id :arc-gen         :min-exp 1.0}

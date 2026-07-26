@@ -7,11 +7,20 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
+(def ^:private loop-sound-id (modid/namespaced-path "em.intensify_loop"))
 (def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
 (def ^:private intensify-effect-id "intensify_effect")
 
+(defn- on-fx-start
+  [_ctx-id _channel _payload]
+  (client-sounds/queue-current-sound-effect!
+   {:sound-id loop-sound-id :volume 0.55 :pitch 1.0 :loop true}))
+
 (defn- on-fx-end
   [ctx-id channel payload]
+  ;; Stop any charging loop started by fx-start before handling release.
+  (client-sounds/queue-current-sound-effect!
+   {:sound-id loop-sound-id :volume 0.0 :pitch 1.0 :stop true})
   (when (:performed? payload)
     (client-sounds/queue-current-sound-effect!
      {:sound-id activate-sound-id :volume 0.9 :pitch 1.0})
@@ -24,7 +33,10 @@
   (arc-beam/build-spec
     {:effect-id :body-intensify
      :runtime :none
-     :channels [{:topic :body-intensify/fx-end
+     :channels [{:topic :body-intensify/fx-start
+                 :targets [:immediate]
+                 :immediate-fn on-fx-start}
+                {:topic :body-intensify/fx-end
                  :targets [:immediate]
                  :immediate-fn on-fx-end}]}))
 
