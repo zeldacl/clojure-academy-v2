@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging
-  (:require [cn.li.ac.ability.client.effects.rv3 :as rv3]
+  (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
+            [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
@@ -236,35 +237,46 @@
                       (:states store*))]
     (assoc store* :states states')))
 
-;; zigzag-arc-ops (arc-gen's proven renderer) rather than the never-otherwise-
-;; exercised billboard-beam-ops: fed a 2-vertex [start end] "path" it draws
-;; exactly one straight segment — same quad/line primitives, confirmed
-;; working code path. life-ratio 0.5 sits in life-fade-alpha's flat full-
-;; brightness middle 60%, so colors below are never faded.
-(defn- straight-arc-ops
-  [cam-v start end pattern]
-  (ru/zigzag-arc-ops cam-v
-    [{:pos start :u 0.0} {:pos end :u 1.0}]
-    pattern
-    {:life-ratio 0.5}))
+;; A perfectly straight billboard beam is geometrically invisible whenever
+;; the camera looks straight down its own axis — exactly this skill's
+;; scenario, since the beam always runs from the caster's own eye to their
+;; own crosshair target, so camera direction ≈ beam direction every frame.
+;; A flat quad's width only reads as a face when it's angled toward the
+;; camera; end-on, its silhouette has zero screen-space width regardless of
+;; world-space width, color, or texture. Original AcademyCraft's own
+;; EntityArc/ArcPatterns never draws a smooth straight beam for exactly this
+;; reason — it's always a jagged zigzag path (arc-patterns/generate-zigzag-
+;; segments), whose per-segment sideways deviation guarantees some part of
+;; the arc is never edge-on, from any viewing angle including straight down
+;; the caster's own sightline. :charging is the original's own named preset
+;; for this skill ("chargingArc").
+(defn- zigzag-ops
+  [cam-v start end pattern seed]
+  (let [vertices (arc-patterns/generate-zigzag-segments start end
+                   {:segments (:segments pattern)
+                    :amplitude (:amplitude pattern)
+                    :seed seed})
+        life-ratio 0.5] ;; life-fade-alpha's flat full-brightness middle 60%
+    (ru/zigzag-arc-ops cam-v vertices pattern
+      {:life-ratio life-ratio
+       :wiggle-phase (arc-patterns/wiggle-phase)
+       :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
-(def ^:private charging-beam-pattern
-  {:width 0.08
-   :core-ratio 0.375
-   :color-outer {:r 108 :g 228 :b 255}
-   :color-inner {:r 225 :g 250 :b 255}
-   :color-line {:r 160 :g 238 :b 255}
-   :fork-count 0})
+(def ^:private charging-beam-pattern (arc-patterns/get-pattern :charging))
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
-;; textured strands, not a plain circle outline.
+;; textured strands, not a plain circle outline. Small amplitude (not 0):
+;; a flat ring strand can still land edge-on to the camera at some angles
+;; around the circle, same reasoning as the main beam above.
 (def ^:private ring-arc-pattern
-  {:width 0.05
-   :core-ratio 0.4
-   :color-outer {:r 150 :g 232 :b 255}
-   :color-inner {:r 235 :g 252 :b 255}
-   :color-line {:r 190 :g 244 :b 255}
-   :fork-count 0})
+  (assoc (arc-patterns/get-pattern :thin-continuous)
+         :width 0.05
+         :amplitude 0.15
+         :segments 3
+         :fork-count 0
+         :color-outer {:r 150 :g 232 :b 255}
+         :color-inner {:r 235 :g 252 :b 255}
+         :color-line {:r 190 :g 244 :b 255}))
 
 (defn- own-state?
   [st hand-center-pos]
@@ -287,7 +299,7 @@
                 r1 (+ radius (- jitter))
                 p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
                 p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]]
-      (straight-arc-ops cam-v p0 p1 pattern))))
+      (zigzag-ops cam-v p0 p1 pattern (+ (* 1000 idx) (long ticks))))))
 
 (defn- target-ring-ops
   [cam-v target ticks charge-ratio]
@@ -335,10 +347,11 @@
                         good? (boolean (:good? st))]
                     (concat
                       (when (and (not item?) (map? caster-pos) (map? target))
-                        (straight-arc-ops cam-v
-                                          (rv3/map->v3 caster-pos)
-                                          (rv3/map->v3 target)
-                                          charging-beam-pattern))
+                        (zigzag-ops cam-v
+                                    (rv3/map->v3 caster-pos)
+                                    (rv3/map->v3 target)
+                                    charging-beam-pattern
+                                    ticks))
                       ;; Matches original: the surround ring only ever
                       ;; appears around the TARGET block once it's a valid
                       ;; energy receiver (block mode) — never around the
