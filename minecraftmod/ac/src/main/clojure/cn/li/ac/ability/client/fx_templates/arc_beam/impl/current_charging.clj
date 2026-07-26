@@ -376,14 +376,33 @@
                              0 [0.5 u v]     1 [-0.5 u v]
                              2 [u 0.5 v]     3 [u -0.5 v]
                              4 [u v 0.5]     5 [u v -0.5])
+                [nx ny nz] (case face
+                             0 [1.0 0.0 0.0]  1 [-1.0 0.0 0.0]
+                             2 [0.0 1.0 0.0]  3 [0.0 -1.0 0.0]
+                             4 [0.0 0.0 1.0]  5 [0.0 0.0 -1.0])
                 start (rv3/v3 (+ cx ox) (+ cy oy) (+ cz oz))
-                ;; Uniform random direction on the sphere for the spark's reach.
+                ;; Uniform random direction on the sphere, then flipped into
+                ;; the outward hemisphere (relative to this face's normal) if
+                ;; it happened to point inward — original's SubArc rotation is
+                ;; unconstrained, but a spark reaching back into the block's
+                ;; own opaque geometry gets depth-tested away, reading as
+                ;; "buried, just a sliver poking out." A raw reflection is a
+                ;; slightly denser hemisphere near the pole, not a perfect
+                ;; cosine-weighted resample, but for a short decorative spark
+                ;; that's an invisible difference and guarantees visibility.
                 theta (* 2.0 Math/PI (.nextDouble rng))
                 cos-phi (- (* 2.0 (.nextDouble rng)) 1.0)
                 sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
-                end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
-                            (+ cy oy (* spark-length cos-phi))
-                            (+ cz oz (* spark-length sin-phi (Math/sin theta))))
+                raw-dx (* sin-phi (Math/cos theta))
+                raw-dy cos-phi
+                raw-dz (* sin-phi (Math/sin theta))
+                inward? (neg? (+ (* raw-dx nx) (* raw-dy ny) (* raw-dz nz)))
+                dx (if inward? (- raw-dx) raw-dx)
+                dy (if inward? (- raw-dy) raw-dy)
+                dz (if inward? (- raw-dz) raw-dz)
+                end (rv3/v3 (+ cx ox (* spark-length dx))
+                            (+ cy oy (* spark-length dy))
+                            (+ cz oz (* spark-length dz)))
                 ;; Independent per-spark coin-flip cycle: only the jagged
                 ;; path reshapes, anchor/direction above stay put for the
                 ;; full life-window.
