@@ -267,9 +267,13 @@
 ;; beam's length, but at current-charging's typical close range (a few
 ;; blocks) that fraction swings wide enough to read as scattered spokes
 ;; converging on the target rather than one coherent bolt from the caster.
-;; Toned down while keeping the rest of the preset (colors/forks/wiggle).
+;; :fork-count 2 also spawns random side-branches near the target, which at
+;; close range can itself look like several arcs converging from different
+;; angles — disabled for now (TEMP: testing whether that's the "shooting
+;; from all directions" report, not the zigzag itself) so the beam reads as
+;; one continuous bolt.
 (def ^:private charging-beam-pattern
-  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.1))
+  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.1 :fork-count 0))
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
 ;; textured strands, not a plain circle outline. Non-zero amplitude: a flat
@@ -335,6 +339,9 @@
   (let [store (:states (level-effects/effect-state-snapshot :current-charging))
         active-states (filter :active? (vals (or store {})))
         cam-v (rv3/map->v3 camera-pos)
+        trace? (zero? (mod (long (or tick 0)) 20))
+        beam-count* (atom 0)
+        ring-count* (atom 0)
         ops (vec
               (mapcat
                 (fn [st]
@@ -355,32 +362,35 @@
                         ticks (long (or (:charge-ticks st) 0))
                         ratio (double (or (:charge-ratio st) 0.0))
                         item? (boolean (:is-item st))
-                        good? (boolean (:good? st))]
-                    (concat
-                      (when (and (not item?) (map? caster-pos) (map? target))
-                        (zigzag-ops cam-v
-                                    (rv3/map->v3 caster-pos)
-                                    (rv3/map->v3 target)
-                                    charging-beam-pattern
-                                    ticks))
-                      ;; Matches original: the surround ring only ever
-                      ;; appears around the TARGET block once it's a valid
-                      ;; energy receiver (block mode) — never around the
-                      ;; caster in block mode.
-                      (when (and (not item?) good? (map? target))
-                        (target-ring-ops cam-v target ticks ratio))
-                      ;; Item mode has no beam/target at all — original
-                      ;; wraps the surround ring around the PLAYER instead
-                      ;; (new EntitySurroundArc(player)).
-                      (when (and item? (map? hand-pos))
-                        (caster-ring-ops cam-v (dissoc hand-pos :player-uuid) ticks)))))
+                        good? (boolean (:good? st))
+                        beam-ops (when (and (not item?) (map? caster-pos) (map? target))
+                                   (zigzag-ops cam-v
+                                               (rv3/map->v3 caster-pos)
+                                               (rv3/map->v3 target)
+                                               charging-beam-pattern
+                                               ticks))
+                        ;; Matches original: the surround ring only ever
+                        ;; appears around the TARGET block once it's a valid
+                        ;; energy receiver (block mode) — never around the
+                        ;; caster in block mode.
+                        ring-ops (when (and (not item?) good? (map? target))
+                                   (target-ring-ops cam-v target ticks ratio))
+                        ;; Item mode has no beam/target at all — original
+                        ;; wraps the surround ring around the PLAYER instead
+                        ;; (new EntitySurroundArc(player)).
+                        item-ring-ops (when (and item? (map? hand-pos))
+                                        (caster-ring-ops cam-v (dissoc hand-pos :player-uuid) ticks))]
+                    (when trace?
+                      (swap! beam-count* + (count beam-ops))
+                      (swap! ring-count* + (count ring-ops) (count item-ring-ops)))
+                    (concat beam-ops ring-ops item-ring-ops)))
                 active-states))]
-    (when (zero? (mod (long (or tick 0)) 20))
+    (when trace?
       (log/info "[CC-TRACE][CLIENT][BUILD-PLAN]"
                 {:active-count (count active-states)
-                 :camera-pos camera-pos
-                 :cam-v (str cam-v)
                  :ops-count (count ops)
+                 :beam-ops @beam-count*
+                 :ring-ops @ring-count*
                  :first-op (first ops)}))
     (when (seq ops)
       {:ops ops})))
