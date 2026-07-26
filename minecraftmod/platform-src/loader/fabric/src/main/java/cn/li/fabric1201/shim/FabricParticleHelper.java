@@ -17,7 +17,7 @@ public final class FabricParticleHelper {
 
     public static SimpleParticleType registerParticle(String namespace, String path, boolean alwaysShow) {
         SimpleParticleType type = FabricParticleTypes.simple(alwaysShow);
-        Registry.register(BuiltInRegistries.PARTICLE_TYPE, new ResourceLocation(namespace, path), type);
+        Registry.register(BuiltInRegistries.PARTICLE_TYPE, ResourceLocation.fromNamespaceAndPath(namespace, path), type);
         return type;
     }
 }

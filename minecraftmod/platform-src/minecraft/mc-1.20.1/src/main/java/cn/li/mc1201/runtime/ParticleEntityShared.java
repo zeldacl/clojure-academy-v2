@@ -22,8 +22,8 @@ public final class ParticleEntityShared {
         if (particleType != null && !particleType.isEmpty()) {
             try {
                 ResourceLocation id = particleType.contains(":")
-                        ? ResourceLocation.parse(particleType)
-                        : new ResourceLocation(ModId.ID, particleType.replace('-', '_'));
+                    ? ResourceLocation.parse(particleType)
+                    : ResourceLocation.fromNamespaceAndPath(ModId.ID, particleType.replace('-', '_'));
                 ParticleType<?> dynamicType = BuiltInRegistries.PARTICLE_TYPE.get(id);
                 if (dynamicType instanceof ParticleOptions options) {
                     return options;

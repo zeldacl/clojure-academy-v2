@@ -23,7 +23,7 @@ public final class MsdfFontManager {
     private static final Logger LOGGER = LogManager.getLogger();
 
     public static final ResourceLocation SHADOW_FONT_ID =
-            new ResourceLocation(ModId.ID, "msdf_shadow");
+            ResourceLocation.fromNamespaceAndPath(ModId.ID, "msdf_shadow");
 
     public static final float DESIGN_PIXEL_HEIGHT = 32.0f;
     public static final float CGUI_BASE_HEIGHT = 32.0f;

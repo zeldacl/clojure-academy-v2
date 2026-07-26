@@ -29,8 +29,8 @@ public final class LoopingSoundRegistry {
         }
         int sep = soundId.indexOf(':');
         ResourceLocation loc = sep < 0
-                ? new ResourceLocation("minecraft", soundId)
-                : new ResourceLocation(soundId.substring(0, sep), soundId.substring(sep + 1));
+            ? ResourceLocation.fromNamespaceAndPath("minecraft", soundId)
+            : ResourceLocation.fromNamespaceAndPath(soundId.substring(0, sep), soundId.substring(sep + 1));
         SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(loc);
         if (event == null) {
             return;

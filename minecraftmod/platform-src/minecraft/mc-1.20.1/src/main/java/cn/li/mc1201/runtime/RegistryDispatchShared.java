@@ -14,12 +14,12 @@ public final class RegistryDispatchShared {
     }
 
     public static Block registerBlock(String namespace, String path, Block instance) {
-        ResourceLocation id = new ResourceLocation(namespace, path);
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
         return Registry.register(BuiltInRegistries.BLOCK, id, instance);
     }
 
     public static Item registerItem(String namespace, String path, Item instance) {
-        ResourceLocation id = new ResourceLocation(namespace, path);
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
         return Registry.register(BuiltInRegistries.ITEM, id, instance);
     }
 }

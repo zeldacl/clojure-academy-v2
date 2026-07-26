@@ -95,14 +95,14 @@ public final class FabricBootstrapHelper {
     }
 
     public static Block registerBlock(String modId, String id, Block block) {
-        return Registry.register(BuiltInRegistries.BLOCK, new ResourceLocation(modId, id), block);
+        return Registry.register(BuiltInRegistries.BLOCK, ResourceLocation.fromNamespaceAndPath(modId, id), block);
     }
 
     public static Item registerItem(String modId, String id, Item item) {
-        return Registry.register(BuiltInRegistries.ITEM, new ResourceLocation(modId, id), item);
+        return Registry.register(BuiltInRegistries.ITEM, ResourceLocation.fromNamespaceAndPath(modId, id), item);
     }
 
     public static BlockEntityType<?> registerBlockEntityType(String modId, String id, BlockEntityType<?> type) {
-        return Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, new ResourceLocation(modId, id), type);
+        return Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(modId, id), type);
     }
 }

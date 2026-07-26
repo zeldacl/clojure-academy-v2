@@ -116,7 +116,7 @@ public final class ForgeClientRenderRegistry {
     }
 
     public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(cn.li.mcmod.ModId.ID, "silbarn_frag"));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
         if (fragTypeRaw instanceof SimpleParticleType spt) {
             event.registerSpriteSet(spt, SilbarnFragParticle.Provider::new);
         }
@@ -125,7 +125,7 @@ public final class ForgeClientRenderRegistry {
     public static void registerShaders(RegisterShadersEvent event) throws IOException {
         event.registerShader(
             new ShaderInstance(event.getResourceProvider(),
-                new ResourceLocation(MyMod1201.MODID, "plasma_body"),
+                ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "plasma_body"),
                 ModRenderTypes.PLASMA_BODY_FORMAT),
             shader -> {
                 plasmaBodyShader = shader;
@@ -135,7 +135,7 @@ public final class ForgeClientRenderRegistry {
         try {
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(MyMod1201.MODID, "msdf_text"),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "msdf_text"),
                     MsdfRenderTypes.MSDF_TEXT_FORMAT),
                 shader -> {
                     MsdfRenderTypes.setMsdfShader(shader);
@@ -154,7 +154,7 @@ public final class ForgeClientRenderRegistry {
             // Skill progress ring shader (radial wipe effect)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(MyMod1201.MODID, "skill_progbar"),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "skill_progbar"),
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     skillProgbarShader = shader;
@@ -163,7 +163,7 @@ public final class ForgeClientRenderRegistry {
             // Grayscale shader (for unlearned content icons)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(MyMod1201.MODID, "mono"),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "mono"),
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     monoShader = shader;
@@ -172,7 +172,7 @@ public final class ForgeClientRenderRegistry {
             // CPBar overload shader (scroll + highlight pulse effect)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(MyMod1201.MODID, "cpbar_overload"),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "cpbar_overload"),
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     cpbarOverloadShader = shader;
@@ -181,7 +181,7 @@ public final class ForgeClientRenderRegistry {
             // Alpha discard shader (for depth masking in content tree nodes)
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),
-                    new ResourceLocation(MyMod1201.MODID, "alpha_discard"),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "alpha_discard"),
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     alphaDiscardShader = shader;

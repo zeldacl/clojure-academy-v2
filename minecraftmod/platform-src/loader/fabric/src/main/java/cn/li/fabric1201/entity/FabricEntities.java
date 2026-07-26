@@ -84,7 +84,7 @@ public final class FabricEntities {
 
         private static <E extends net.minecraft.world.entity.Entity> void registerEntityType(
             String id, EntityType<E> entityType) {
-        ResourceLocation location = new ResourceLocation(MOD_ID, id);
+        ResourceLocation location = ResourceLocation.fromNamespaceAndPath(MOD_ID, id);
         @SuppressWarnings("unchecked")
         EntityType<E> registered = (EntityType<E>) Registry.register(
                 BuiltInRegistries.ENTITY_TYPE,

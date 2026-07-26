@@ -19,7 +19,7 @@ import net.minecraft.util.GsonHelper;
  */
 public class ModCustomTrigger extends SimpleCriterionTrigger<ModCustomTrigger.TriggerInstance> {
 
-    public static final ResourceLocation ID = new ResourceLocation(ModId.ID, "custom");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(ModId.ID, "custom");
 
     @Override
     public ResourceLocation getId() {

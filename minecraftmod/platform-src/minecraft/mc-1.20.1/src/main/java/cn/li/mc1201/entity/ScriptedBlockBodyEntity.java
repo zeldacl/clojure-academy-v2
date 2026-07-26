@@ -101,7 +101,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(new ResourceLocation(cn.li.mcmod.ModId.ID, "silbarn_frag"));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
         if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
             return;
         }

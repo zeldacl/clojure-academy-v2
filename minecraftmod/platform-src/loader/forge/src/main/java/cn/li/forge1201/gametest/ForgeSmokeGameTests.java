@@ -33,7 +33,7 @@ public final class ForgeSmokeGameTests {
 
     @GameTest(templateNamespace = "minecraft", template = "empty", batch = "platform_smoke")
     public static void neutralFeatureRegistered(GameTestHelper helper) {
-        helper.assertTrue(BuiltInRegistries.FEATURE.containsKey(new ResourceLocation(MODID, "configurable_pool")),
+        helper.assertTrue(BuiltInRegistries.FEATURE.containsKey(ResourceLocation.fromNamespaceAndPath(MODID, "configurable_pool")),
             "Expected neutral configurable_pool feature to be registered");
         helper.succeed();
     }

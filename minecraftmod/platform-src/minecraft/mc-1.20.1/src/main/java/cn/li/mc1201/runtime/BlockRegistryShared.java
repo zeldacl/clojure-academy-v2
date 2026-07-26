@@ -28,7 +28,7 @@ public final class BlockRegistryShared {
             if (namespace == null || namespace.isEmpty() || path == null || path.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = new ResourceLocation(namespace, path);
+            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
             return BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
         } catch (Exception ignored) {
             return null;

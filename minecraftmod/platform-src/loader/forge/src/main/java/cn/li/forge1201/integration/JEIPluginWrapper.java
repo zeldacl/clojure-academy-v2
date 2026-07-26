@@ -19,7 +19,7 @@ import net.minecraft.resources.ResourceLocation;
  */
 @JeiPlugin
 public class JEIPluginWrapper implements IModPlugin {
-    private static final ResourceLocation PLUGIN_UID = new ResourceLocation(MyMod1201.MODID, "content_plugin");
+    private static final ResourceLocation PLUGIN_UID = ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "content_plugin");
 
     private IModPlugin clojurePlugin;
 
