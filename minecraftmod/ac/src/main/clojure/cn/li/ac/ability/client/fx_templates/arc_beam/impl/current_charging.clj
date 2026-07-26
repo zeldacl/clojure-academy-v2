@@ -392,9 +392,18 @@
       (range spark-count))))
 
 (defn- target-spark-ops
-  [cam-v target ticks]
-  (surround-spark-ops cam-v (double (:x target)) (double (:y target)) (double (:z target))
-                       ticks spark-pattern))
+  "block-pos is the block's [x y z] minimum-corner integer coordinates
+  (Minecraft convention) — CubePointFactory in original samples the surface
+  of the BLOCK's own bounding box, centered at block-pos + 0.5 in each axis,
+  not the raycast surface-hit point (`target`): treating a point already ON
+  the surface as a cube's center put roughly half the sparks floating past
+  the block into open air and the other half embedded inside its solid
+  volume, reading as sparks buried in the block with only a sliver poking
+  out."
+  [cam-v block-pos ticks]
+  (let [[bx by bz] block-pos]
+    (surround-spark-ops cam-v (+ (double bx) 0.5) (+ (double by) 0.5) (+ (double bz) 0.5)
+                         ticks spark-pattern)))
 
 (defn- caster-spark-ops
   [cam-v caster-pos ticks]
@@ -433,6 +442,7 @@
                         ;; not an approximation.
                         caster-pos (:caster-pos st)
                         target (:target st)
+                        block-pos (:block-pos st)
                         ticks (long (or (:charge-ticks st) 0))
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))
@@ -451,8 +461,9 @@
                         ;; appear around the TARGET block once it's a valid
                         ;; energy receiver (block mode) — never around the
                         ;; caster in block mode.
-                        ring-ops (when (and (not item?) good? (map? target))
-                                   (target-spark-ops cam-v target ticks))
+                        ring-ops (when (and (not item?) good?
+                                            (sequential? block-pos) (= 3 (count block-pos)))
+                                   (target-spark-ops cam-v block-pos ticks))
                         ;; Item mode has no beam/target at all — original
                         ;; wraps the surround sparks around the PLAYER
                         ;; instead (new EntitySurroundArc(player)).
