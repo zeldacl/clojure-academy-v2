@@ -306,15 +306,22 @@
   they read as separate crackling arcs rather than a ring outline."
   [cam-v cx y cz radius ticks segments pattern]
   (vec
-    (for [idx (range segments)
-          :let [a0 (/ (* 2.0 Math/PI idx) segments)
-                a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                jitter (* 0.06 (Math/sin (+ (* 0.31 (double ticks)) (* idx 1.7))))
-                r0 (+ radius jitter)
-                r1 (+ radius (- jitter))
-                p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
-                p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]]
-      (zigzag-ops cam-v p0 p1 pattern (+ (* 1000 idx) (long ticks))))))
+    (mapcat
+      (fn [idx]
+        (let [a0 (/ (* 2.0 Math/PI idx) segments)
+              a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+              jitter (* 0.06 (Math/sin (+ (* 0.31 (double ticks)) (* idx 1.7))))
+              r0 (+ radius jitter)
+              r1 (+ radius (- jitter))
+              p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
+              p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]
+          ;; zigzag-ops returns a vector of several op-maps per call (quads +
+          ;; line) — a bare `for` here would collect one such vector per
+          ;; segment instead of flattening them, silently dropping every
+          ;; ring op at render time (:kind lookup on a vector, not a map,
+          ;; returns nil and falls through sort-ops' case). mapcat flattens.
+          (zigzag-ops cam-v p0 p1 pattern (+ (* 1000 idx) (long ticks)))))
+      (range segments))))
 
 (defn- target-ring-ops
   [cam-v target ticks charge-ratio]
