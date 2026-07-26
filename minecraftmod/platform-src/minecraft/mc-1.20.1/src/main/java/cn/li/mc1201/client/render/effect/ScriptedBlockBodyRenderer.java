@@ -49,7 +49,7 @@ public final class ScriptedBlockBodyRenderer<T extends Entity> extends EntityRen
 
     private static BlockState resolveBlockState(String blockId) {
         try {
-            ResourceLocation loc = new ResourceLocation(blockId);
+            ResourceLocation loc = ResourceLocation.parse(blockId);
             Block block = BuiltInRegistries.BLOCK.get(loc);
             if (block == null) return null;
             return block.defaultBlockState();

@@ -90,7 +90,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         silbarnDespawnCountdown = SILBARN_DESPAWN_DELAY_TICKS;
         this.entityData.set(DATA_SILBARN_HIT, true);
         SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(
-            new ResourceLocation(heavy ? SOUND_SILBARN_HEAVY : SOUND_SILBARN_LIGHT));
+            ResourceLocation.parse(heavy ? SOUND_SILBARN_HEAVY : SOUND_SILBARN_LIGHT));
         if (sound != null) {
             this.playSound(sound, 0.5F, 1.0F);
         }
@@ -284,7 +284,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     private BlockState resolveSyncedBlockState() {
         try {
-            ResourceLocation blockId = new ResourceLocation(getSyncedBlockId());
+            ResourceLocation blockId = ResourceLocation.parse(getSyncedBlockId());
             Block block = BuiltInRegistries.BLOCK.get(blockId);
             return block == null ? null : block.defaultBlockState();
         } catch (Exception ignored) {
@@ -295,7 +295,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     @Override
     protected Item getDefaultItem() {
         try {
-            ResourceLocation blockId = new ResourceLocation(getSyncedBlockId());
+            ResourceLocation blockId = ResourceLocation.parse(getSyncedBlockId());
             Item item = BuiltInRegistries.ITEM.get(blockId);
             return item == null ? Items.AIR : item;
         } catch (Exception ignored) {

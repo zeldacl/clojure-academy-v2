@@ -21,7 +21,7 @@ final class ClojureNetworkChannel {
         }
 
         channel = NetworkRegistry.newSimpleChannel(
-            new ResourceLocation("my_mod:gui_rpc"),
+            ResourceLocation.parse("my_mod:gui_rpc"),
             () -> PROTOCOL_VERSION,
             PROTOCOL_VERSION::equals,
             PROTOCOL_VERSION::equals

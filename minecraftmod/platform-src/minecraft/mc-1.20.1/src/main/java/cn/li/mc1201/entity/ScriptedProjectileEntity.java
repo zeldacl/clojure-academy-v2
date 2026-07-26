@@ -53,7 +53,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         }
         ResourceLocation itemId;
         try {
-            itemId = new ResourceLocation(spec.getDefaultItemId());
+            itemId = ResourceLocation.parse(spec.getDefaultItemId());
         } catch (Exception ignored) {
             return Items.AIR;
         }

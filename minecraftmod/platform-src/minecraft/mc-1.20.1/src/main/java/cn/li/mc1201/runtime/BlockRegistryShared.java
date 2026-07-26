@@ -15,7 +15,7 @@ public final class BlockRegistryShared {
             if (blockId == null || blockId.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = new ResourceLocation(blockId);
+            ResourceLocation id = ResourceLocation.parse(blockId);
             Block block = BuiltInRegistries.BLOCK.get(id);
             return block == Blocks.AIR ? null : block;
         } catch (Exception ignored) {

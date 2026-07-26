@@ -20,7 +20,7 @@ public final class ItemRegistryShared {
             if (itemId == null || itemId.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = new ResourceLocation(itemId);
+            ResourceLocation id = ResourceLocation.parse(itemId);
             Item item = BuiltInRegistries.ITEM.get(id);
             return item == Items.AIR ? null : item;
         } catch (Exception ignored) {

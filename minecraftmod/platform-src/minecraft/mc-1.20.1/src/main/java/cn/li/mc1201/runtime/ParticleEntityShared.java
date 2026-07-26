@@ -22,7 +22,7 @@ public final class ParticleEntityShared {
         if (particleType != null && !particleType.isEmpty()) {
             try {
                 ResourceLocation id = particleType.contains(":")
-                        ? new ResourceLocation(particleType)
+                        ? ResourceLocation.parse(particleType)
                         : new ResourceLocation(ModId.ID, particleType.replace('-', '_'));
                 ParticleType<?> dynamicType = BuiltInRegistries.PARTICLE_TYPE.get(id);
                 if (dynamicType instanceof ParticleOptions options) {
@@ -60,7 +60,7 @@ public final class ParticleEntityShared {
         }
         EntityType<?> type;
         try {
-            type = BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(entityId));
+            type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(entityId));
         } catch (Exception ignored) {
             return false;
         }
@@ -103,7 +103,7 @@ public final class ParticleEntityShared {
         }
         EntityType<?> type;
         try {
-            type = BuiltInRegistries.ENTITY_TYPE.get(new ResourceLocation(entityId));
+            type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(entityId));
         } catch (Exception ignored) {
             return null;
         }

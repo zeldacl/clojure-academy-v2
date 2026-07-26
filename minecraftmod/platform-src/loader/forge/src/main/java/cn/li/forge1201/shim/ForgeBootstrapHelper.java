@@ -157,9 +157,9 @@ public final class ForgeBootstrapHelper {
             .supportsBoating(supportsBoating);
         return new ForgeFlowingFluidType(
             props,
-            new ResourceLocation(stillTexture),
-            new ResourceLocation(flowingTexture),
-            overlayTexture == null ? null : new ResourceLocation(overlayTexture),
+            ResourceLocation.parse(stillTexture),
+            ResourceLocation.parse(flowingTexture),
+            overlayTexture == null ? null : ResourceLocation.parse(overlayTexture),
             tintColor
         );
     }

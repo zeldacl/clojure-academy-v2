@@ -26,7 +26,7 @@ public final class FabricLootInjectionHelper {
             return;
         }
 
-        Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId));
+        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
         if (item == null) {
             return;
         }

@@ -26,7 +26,7 @@ public final class LootInjectionHelper {
             return;
         }
 
-        Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(itemId));
+        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
         if (item == null) {
             return;
         }

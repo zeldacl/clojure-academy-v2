@@ -37,7 +37,7 @@ public class ModFeatures {
         ClojureInterop.requireNamespace("cn.li.mcmod.worldgen");
         Object result = ClojureInterop.invoke("cn.li.mcmod.worldgen", "get-pool-fill-block-id");
         String blockId = result instanceof String s ? s : null;
-        Block block = blockId != null ? BuiltInRegistries.BLOCK.get(new ResourceLocation(blockId)) : null;
+        Block block = blockId != null ? BuiltInRegistries.BLOCK.get(ResourceLocation.parse(blockId)) : null;
         return block != null ? block : Blocks.WATER;
     };
 
