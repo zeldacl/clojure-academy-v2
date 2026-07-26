@@ -3,13 +3,14 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
-  ;; :runtime :both now (level+hand dual-track) — enqueue into both so
-  ;; current-state (which merges level+hand snapshots) sees the update.
+  ;; :runtime :level (single track, world-space beam/ring rendering only —
+  ;; the hand track never had a visual for this skill).
   (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload))
 
 (defn- with-fresh-current-charging-fx-runtime [f]
@@ -29,32 +30,32 @@
 
 (deftest init-registers-current-charging-fx-channels-test
   (let [registered-topics* (atom #{})
-        registered-hand* (atom nil)]
-    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
-                                                       (reset! registered-hand* [effect-id effect-map])
-                                                       nil)
-                  hand-effects/reset-hand-effect-state-for-test! (fn [& _] nil)
+        registered-level* (atom nil)]
+    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+                                                          (reset! registered-level* [effect-id effect-map])
+                                                          nil)
+                  level-effects/reset-level-effect-state-for-test! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
                                                       (swap! registered-topics* conj topic)
                                                       nil)]
       (current-charging-fx/init!)
-      (is (= :current-charging (first @registered-hand*)))
+      (is (= :current-charging (first @registered-level*)))
       (is (= #{:current-charging/fx-start
                :current-charging/fx-update
                :current-charging/fx-end}
              @registered-topics*)))))
 
-(deftest fx-handler-routes-through-hand-effects-test
+(deftest fx-handler-routes-through-level-effects-test
   (let [handlers* (atom {})
-        hand-enqueued* (atom [])]
-    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
-                  hand-effects/reset-hand-effect-state-for-test! (fn [& _] nil)
+        level-enqueued* (atom [])]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  level-effects/reset-level-effect-state-for-test! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                      (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts))
-                                                      nil)]
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                                                        (swap! level-enqueued* conj (into [effect-id ctx-id channel payload] opts))
+                                                        nil)]
       (current-charging-fx/init!)
       ((get @handlers* :current-charging/fx-start) "ctx-1" :current-charging/fx-start {:is-item true})
       ((get @handlers* :current-charging/fx-update) "ctx-1" :current-charging/fx-update {:good? true :charge-ticks 20})
@@ -62,7 +63,7 @@
       (is (= [[:current-charging "ctx-1" :current-charging/fx-start {:mode :start :is-item true} :owner-key [:ctx "ctx-1"]]
               [:current-charging "ctx-1" :current-charging/fx-update {:mode :update :good? true :charge-ticks 20} :owner-key [:ctx "ctx-1"]]
               [:current-charging "ctx-1" :current-charging/fx-end {:mode :end :is-item true} :owner-key [:ctx "ctx-1"]]]
-             @hand-enqueued*)))))
+             @level-enqueued*)))))
 
 (deftest fx-state-updates-and-queues-loop-sound-test
   (let [effects* (atom [])]
@@ -73,9 +74,7 @@
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-start {:mode :start :is-item true})
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (true? (:is-item (current-charging-fx/current-state [:ctx "ctx-1"]))))
-      ;; :runtime :both dispatches :start to both the level and hand tracks,
-      ;; each starting its own loop-sound instance.
-      (is (= 2 (count @effects*)))
+      (is (= 1 (count @effects*)))
       (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-update
         {:mode :update
@@ -120,8 +119,8 @@
       (let [snapshot (current-charging-fx/fx-snapshot)]
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
-    ;; 2 :start calls x 2 tracks (level+hand) = 4 loop-sound starts.
-    (is (= 4 (count @effects*)))
+    ;; 2 :start calls x 1 track (level only) = 2 loop-sound starts.
+    (is (= 2 (count @effects*)))
     (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))))
 
 (deftest fx-snapshot-default-without-registered-state-test

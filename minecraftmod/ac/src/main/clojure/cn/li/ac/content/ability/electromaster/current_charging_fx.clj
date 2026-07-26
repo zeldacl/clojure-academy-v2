@@ -9,12 +9,11 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :current-charging
-     :runtime :both
+     :runtime :level
      :level-initial-state (fn [] {:states {}})
-     :hand-initial-state (fn [] {:states {}})
-     :channels {:start {:topic :current-charging/fx-start :mode :start :targets [:hand :level]}
-                :update {:topic :current-charging/fx-update :mode :update :targets [:hand :level]}
-                :end {:topic :current-charging/fx-end :mode :end :targets [:hand :level]}}}))
+     :channels {:start {:topic :current-charging/fx-start :mode :start :targets [:level]}
+                :update {:topic :current-charging/fx-update :mode :update :targets [:level]}
+                :end {:topic :current-charging/fx-end :mode :end :targets [:level]}}}))
 
 (arc-beam/def-arc-beam-fx :current-charging)
 

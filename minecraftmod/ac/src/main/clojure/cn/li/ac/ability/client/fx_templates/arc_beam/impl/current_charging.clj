@@ -361,10 +361,6 @@
     (when (seq ops)
       {:ops ops})))
 
-(defmethod arc-beam/effect-initial-state [:current-charging :hand] [_ _] {:states {}})
-(defmethod arc-beam/effect-enqueue-state! [:current-charging :hand]
-  [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod arc-beam/effect-tick-state! [:current-charging :hand] [_ _ store] (tick-state! store))
 (defmethod arc-beam/effect-initial-state [:current-charging :level] [_ _] {:states {}})
 (defmethod arc-beam/effect-enqueue-state! [:current-charging :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
