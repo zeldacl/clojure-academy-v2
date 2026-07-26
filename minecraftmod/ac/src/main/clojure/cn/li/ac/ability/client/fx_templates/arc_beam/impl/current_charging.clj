@@ -262,17 +262,28 @@
        :wiggle-phase (arc-patterns/wiggle-phase)
        :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
-(def ^:private charging-beam-pattern (arc-patterns/get-pattern :charging))
+;; :charging's own amplitude (0.3) is calibrated for the original's long-
+;; range arcs — proportional to length, so it's still a fraction of THIS
+;; beam's length, but at current-charging's typical close range (a few
+;; blocks) that fraction swings wide enough to read as scattered spokes
+;; converging on the target rather than one coherent bolt from the caster.
+;; Toned down while keeping the rest of the preset (colors/forks/wiggle).
+(def ^:private charging-beam-pattern
+  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.1))
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
-;; textured strands, not a plain circle outline. Small amplitude (not 0):
-;; a flat ring strand can still land edge-on to the camera at some angles
-;; around the circle, same reasoning as the main beam above.
+;; textured strands, not a plain circle outline. Non-zero amplitude: a flat
+;; ring strand can land edge-on to the camera the same way the main beam
+;; did — worse, the ring's whole plane is horizontal, so when the player
+;; looks roughly level at the target (the common case), most strands are
+;; near-edge-on simultaneously, not just one or two. Needs enough
+;; amplitude/segments to reliably break that alignment despite each strand
+;; being short.
 (def ^:private ring-arc-pattern
   (assoc (arc-patterns/get-pattern :thin-continuous)
          :width 0.05
-         :amplitude 0.15
-         :segments 3
+         :amplitude 0.35
+         :segments 4
          :fork-count 0
          :color-outer {:r 150 :g 232 :b 255}
          :color-inner {:r 235 :g 252 :b 255}
