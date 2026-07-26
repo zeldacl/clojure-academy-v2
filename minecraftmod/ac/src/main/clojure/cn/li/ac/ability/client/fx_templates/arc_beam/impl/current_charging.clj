@@ -289,14 +289,19 @@
 ;; position on that face) and pointing in a fully random 3D direction — small
 ;; sparks stuck to the surface, not strands tangent to a circle around it.
 (def ^:private spark-count 6)
-(def ^:private spark-length 0.35)
+;; Original generates NORMAL-type templates at width=0.3, length 3-4 blocks,
+;; then draws them scaled 0.3x (SubArcHandler.drawAll) — i.e. actual on-screen
+;; width ≈0.09, length ≈0.9-1.2. An earlier version of this code used length
+;; 0.35 directly (no scale step), reading as a stubby blob instead of a
+;; recognizable short arc.
+(def ^:private spark-length 1.0)
 
 ;; Original's surround-arc template config (ArcFactory via EntitySurroundArc):
 ;; maxOffset=0.8 over a [3,4]-block generation length ≈ 0.8/3.5 fraction,
 ;; passes=3. segments 6 → passes = ceil(log2(6)) = 3, matching.
 (def ^:private spark-pattern
   (assoc (arc-patterns/get-pattern :thin-continuous)
-         :width 0.05
+         :width 0.09
          :amplitude 0.23
          :segments 6
          :fork-count 0
@@ -304,14 +309,27 @@
          :color-inner {:r 235 :g 252 :b 255}
          :color-line {:r 190 :g 244 :b 255}))
 
-;; Original's SubArc fixes its position/rotation once at spawn and holds
-;; them for its whole life (default 30 ticks, ~1.5s) — only the displayed
-;; pre-baked pattern and a visibility flicker change per-tick; it never
-;; re-randomizes position. All 6 sparks dying/respawning in lockstep every
-;; few ticks (an earlier version of this code did that every 5 ticks) reads
-;; as the whole cluster "jumping," not crackling. Match the ~30-tick hold,
-;; staggered per spark index so they don't refresh in lockstep.
+;; Original's SubArc fixes its position/rotation once at spawn and holds it
+;; for its whole life (default 30 ticks, ~1.5s) — position never
+;; re-randomizes mid-life. Staggered per spark index so the 6 don't
+;; respawn in lockstep.
 (def ^:private spark-life-ticks 30)
+
+;; Original's per-tick crackle comes from an independent Markov on/off
+;; flicker per SubArc (SubArc.tick(): ~40% chance to turn off when on, ~30%
+;; to turn on when off — steady-state ≈43% visible), re-rolled every tick,
+;; layered on TOP of the fixed 30-tick position hold above. Without this,
+;; sparks read as steady little arcs that occasionally reposition rather
+;; than actively sparking. This port has no persistent per-spark state to
+;; run a true Markov chain against, so each tick draws a fresh
+;; deterministic pseudo-random visibility roll instead — same ~43% duty
+;; cycle, changing every tick like the original.
+(def ^:private spark-visible-chance 0.43)
+
+(defn- spark-visible?
+  [idx ticks]
+  (< (.nextDouble (java.util.Random. (+ (* 7919 idx) (long ticks))))
+     spark-visible-chance))
 
 (defn- surround-spark-ops
   "count small random-surface-point, random-direction sparks around
@@ -321,27 +339,28 @@
   (vec
     (mapcat
       (fn [idx]
-        (let [window (quot (+ ticks (* idx 5)) spark-life-ticks)
-              seed (+ (* 1000 idx) window)
-              rng (java.util.Random. seed)
-              ;; Random point on a unit cube's surface centered at [cx cy cz]:
-              ;; pick one of 6 faces, then a uniform point on that face.
-              face (.nextInt rng 6)
-              u (- (.nextDouble rng) 0.5)
-              v (- (.nextDouble rng) 0.5)
-              [ox oy oz] (case face
-                           0 [0.5 u v]     1 [-0.5 u v]
-                           2 [u 0.5 v]     3 [u -0.5 v]
-                           4 [u v 0.5]     5 [u v -0.5])
-              start (rv3/v3 (+ cx ox) (+ cy oy) (+ cz oz))
-              ;; Uniform random direction on the sphere for the spark's reach.
-              theta (* 2.0 Math/PI (.nextDouble rng))
-              cos-phi (- (* 2.0 (.nextDouble rng)) 1.0)
-              sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
-              end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
-                          (+ cy oy (* spark-length cos-phi))
-                          (+ cz oz (* spark-length sin-phi (Math/sin theta))))]
-          (zigzag-ops cam-v start end pattern (+ seed 1))))
+        (when (spark-visible? idx ticks)
+          (let [window (quot (+ ticks (* idx 5)) spark-life-ticks)
+                seed (+ (* 1000 idx) window)
+                rng (java.util.Random. seed)
+                ;; Random point on a unit cube's surface centered at [cx cy cz]:
+                ;; pick one of 6 faces, then a uniform point on that face.
+                face (.nextInt rng 6)
+                u (- (.nextDouble rng) 0.5)
+                v (- (.nextDouble rng) 0.5)
+                [ox oy oz] (case face
+                             0 [0.5 u v]     1 [-0.5 u v]
+                             2 [u 0.5 v]     3 [u -0.5 v]
+                             4 [u v 0.5]     5 [u v -0.5])
+                start (rv3/v3 (+ cx ox) (+ cy oy) (+ cz oz))
+                ;; Uniform random direction on the sphere for the spark's reach.
+                theta (* 2.0 Math/PI (.nextDouble rng))
+                cos-phi (- (* 2.0 (.nextDouble rng)) 1.0)
+                sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
+                end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
+                            (+ cy oy (* spark-length cos-phi))
+                            (+ cz oz (* spark-length sin-phi (Math/sin theta))))]
+            (zigzag-ops cam-v start end pattern (+ seed 1)))))
       (range spark-count))))
 
 (defn- target-spark-ops
