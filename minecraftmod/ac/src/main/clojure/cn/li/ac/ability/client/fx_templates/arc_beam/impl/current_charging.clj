@@ -309,21 +309,27 @@
          :color-inner {:r 235 :g 252 :b 255}
          :color-line {:r 190 :g 244 :b 255}))
 
-;; Original's SubArc fixes its position/rotation once at spawn and holds it
-;; for its whole life (default 30 ticks, ~1.5s) — position never
-;; re-randomizes mid-life. Staggered per spark index so the 6 don't
-;; respawn in lockstep.
+;; Original's SubArc.life = 30 ticks (~1.5s, with slight per-tick-increment
+;; jitter): the ANCHOR (surface point + overall direction) is fixed for the
+;; whole life, never repositioned mid-life. Regeneration is a single batch
+;; for the whole pool (SubArcHandler only regenerates once ALL 6 have died),
+;; not staggered per-strand — approximated here as one shared window so all
+;; 6 anchors move together, each still landing at its own independent random
+;; point.
 (def ^:private spark-life-ticks 30)
 
-;; Original's per-tick crackle comes from an independent Markov on/off
-;; flicker per SubArc (SubArc.tick(): ~40% chance to turn off when on, ~30%
-;; to turn on when off — steady-state ≈43% visible), re-rolled every tick,
-;; layered on TOP of the fixed 30-tick position hold above. Without this,
-;; sparks read as steady little arcs that occasionally reposition rather
-;; than actively sparking. This port has no persistent per-spark state to
-;; run a true Markov chain against, so each tick draws a fresh
-;; deterministic pseudo-random visibility roll instead — same ~43% duty
-;; cycle, changing every tick like the original.
+;; What actually reads as "jumping" in original is NOT the anchor moving —
+;; it's SubArc swapping which of 10 pre-baked jagged templates it displays
+;; (~30% chance/tick, i.e. a new one roughly every ~3 ticks), at the SAME
+;; fixed anchor/direction. Reseeding just the zigzag displacement (not the
+;; start/end points) on a faster cycle than the anchor reproduces that: the
+;; spark stays rooted to the same surface point but its jagged shape
+;; visibly snaps to a different silhouette every few ticks.
+(def ^:private spark-shape-refresh-ticks 3)
+
+;; SubArc.tick()'s independent on/off Markov chain (~40% off-chance when
+;; lit, ~30% on-chance when dark) settles to ≈43% visible, re-rolled every
+;; tick — layered on top of the anchor/shape cycles above for extra crackle.
 (def ^:private spark-visible-chance 0.43)
 
 (defn- spark-visible?
@@ -340,9 +346,9 @@
     (mapcat
       (fn [idx]
         (when (spark-visible? idx ticks)
-          (let [window (quot (+ ticks (* idx 5)) spark-life-ticks)
-                seed (+ (* 1000 idx) window)
-                rng (java.util.Random. seed)
+          (let [life-window (quot ticks spark-life-ticks)
+                anchor-seed (+ (* 1000 idx) life-window)
+                rng (java.util.Random. anchor-seed)
                 ;; Random point on a unit cube's surface centered at [cx cy cz]:
                 ;; pick one of 6 faces, then a uniform point on that face.
                 face (.nextInt rng 6)
@@ -359,8 +365,12 @@
                 sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
                 end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
                             (+ cy oy (* spark-length cos-phi))
-                            (+ cz oz (* spark-length sin-phi (Math/sin theta))))]
-            (zigzag-ops cam-v start end pattern (+ seed 1)))))
+                            (+ cz oz (* spark-length sin-phi (Math/sin theta))))
+                ;; Independent, faster cycle: only the jagged path reshapes,
+                ;; anchor/direction above stay put for the full life-window.
+                shape-window (quot ticks spark-shape-refresh-ticks)
+                shape-seed (+ (* 1000 idx) (* 31 shape-window))]
+            (zigzag-ops cam-v start end pattern shape-seed))))
       (range spark-count))))
 
 (defn- target-spark-ops
