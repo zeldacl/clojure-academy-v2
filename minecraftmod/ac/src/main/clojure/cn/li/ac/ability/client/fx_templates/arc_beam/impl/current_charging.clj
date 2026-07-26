@@ -262,36 +262,16 @@
        :wiggle-phase (arc-patterns/wiggle-phase)
        :effective-wiggle (arc-patterns/effective-wiggle-amount pattern life-ratio)})))
 
-;; :charging's own amplitude (0.3) is calibrated for the original's long-
-;; range arcs — proportional to length, so it's still a fraction of THIS
-;; beam's length, but at current-charging's typical close range (a few
-;; blocks) that fraction swings wide enough to read as scattered spokes
-;; converging on the target rather than one coherent bolt from the caster.
-;; :fork-count 2 also spawns random side-branches near the target, which at
-;; close range can itself look like several arcs converging from different
-;; angles — disabled for now (TEMP: testing whether that's the "shooting
-;; from all directions" report, not the zigzag itself) so the beam reads as
-;; one continuous bolt.
+;; Original's own chargingArc config (ArcPatterns.java): branchFactor=0.3,
+;; passes=5, width=0.1, maxOffset=1.2 on a 20-block reference length — i.e.
+;; amplitude as a FRACTION of length is 1.2/20 = 0.06, not this framework's
+;; :charging preset default of 0.3 (a port-local guess that was never
+;; actually checked against the original numbers, and is ~5x too large —
+;; that's what made the bolt look scattered rather than a coherent zigzag).
+;; segments 20 → generate-zigzag-segments' passes = ceil(log2(20)) = 5,
+;; matching the original's passes exactly.
 (def ^:private charging-beam-pattern
-  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.1 :fork-count 0))
-
-;; Matches original's EntitySurroundArc, which is built from small arc-
-;; textured strands, not a plain circle outline. Non-zero amplitude: a flat
-;; ring strand can land edge-on to the camera the same way the main beam
-;; did — worse, the ring's whole plane is horizontal, so when the player
-;; looks roughly level at the target (the common case), most strands are
-;; near-edge-on simultaneously, not just one or two. Needs enough
-;; amplitude/segments to reliably break that alignment despite each strand
-;; being short.
-(def ^:private ring-arc-pattern
-  (assoc (arc-patterns/get-pattern :thin-continuous)
-         :width 0.05
-         :amplitude 0.35
-         :segments 4
-         :fork-count 0
-         :color-outer {:r 150 :g 232 :b 255}
-         :color-inner {:r 235 :g 252 :b 255}
-         :color-line {:r 190 :g 244 :b 255}))
+  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.06 :segments 20 :fork-count 0))
 
 (defn- own-state?
   [st hand-center-pos]
@@ -299,47 +279,69 @@
       (nil? (:player-uuid hand-center-pos))
       (= (str (:source-player-id st)) (str (:player-uuid hand-center-pos)))))
 
-(defn- ring-arc-ops
-  "Small arc-textured strands orbiting [cx,y,cz] at the given radius —
-  matches original's EntitySurroundArc look far better than a smooth line
-  circle: fewer, distinct segments with slight per-segment radius jitter so
-  they read as separate crackling arcs rather than a ring outline."
-  [cam-v cx y cz radius ticks segments pattern]
+;; Original's EntitySurroundArc is NOT a ring/circle at all (confirmed
+;; against CubePointFactory + SubArc in the original source): CurrentCharging
+;; spawns `count`=6 short independent arcs, each anchored at a uniformly
+;; random point on the target's bounding-box surface (random face, random
+;; position on that face) and pointing in a fully random 3D direction — small
+;; sparks stuck to the surface, not strands tangent to a circle around it.
+(def ^:private spark-count 6)
+(def ^:private spark-length 0.35)
+
+;; Original's surround-arc template config (ArcFactory via EntitySurroundArc):
+;; maxOffset=0.8 over a [3,4]-block generation length ≈ 0.8/3.5 fraction,
+;; passes=3. segments 6 → passes = ceil(log2(6)) = 3, matching.
+(def ^:private spark-pattern
+  (assoc (arc-patterns/get-pattern :thin-continuous)
+         :width 0.05
+         :amplitude 0.23
+         :segments 6
+         :fork-count 0
+         :color-outer {:r 150 :g 232 :b 255}
+         :color-inner {:r 235 :g 252 :b 255}
+         :color-line {:r 190 :g 244 :b 255}))
+
+(defn- surround-spark-ops
+  "count small random-surface-point, random-direction sparks around
+  [cx,y,cz] — see spark-count/spark-pattern above for why this replaced a
+  circular ring. Reseeded every ~5 ticks (not every tick) so sparks crackle
+  rather than jitter chaotically every frame, and not regenerated every
+  render frame either (same seed within that window)."
+  [cam-v cx cy cz ticks pattern]
   (vec
     (mapcat
       (fn [idx]
-        (let [a0 (/ (* 2.0 Math/PI idx) segments)
-              a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-              jitter (* 0.06 (Math/sin (+ (* 0.31 (double ticks)) (* idx 1.7))))
-              r0 (+ radius jitter)
-              r1 (+ radius (- jitter))
-              p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
-              p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]
-          ;; zigzag-ops returns a vector of several op-maps per call (quads +
-          ;; line) — a bare `for` here would collect one such vector per
-          ;; segment instead of flattening them, silently dropping every
-          ;; ring op at render time (:kind lookup on a vector, not a map,
-          ;; returns nil and falls through sort-ops' case). mapcat flattens.
-          (zigzag-ops cam-v p0 p1 pattern (+ (* 1000 idx) (long ticks)))))
-      (range segments))))
+        (let [seed (+ (* 1000 idx) (long (quot ticks 5)))
+              rng (java.util.Random. seed)
+              ;; Random point on a unit cube's surface centered at [cx cy cz]:
+              ;; pick one of 6 faces, then a uniform point on that face.
+              face (.nextInt rng 6)
+              u (- (.nextDouble rng) 0.5)
+              v (- (.nextDouble rng) 0.5)
+              [ox oy oz] (case face
+                           0 [0.5 u v]     1 [-0.5 u v]
+                           2 [u 0.5 v]     3 [u -0.5 v]
+                           4 [u v 0.5]     5 [u v -0.5])
+              start (rv3/v3 (+ cx ox) (+ cy oy) (+ cz oz))
+              ;; Uniform random direction on the sphere for the spark's reach.
+              theta (* 2.0 Math/PI (.nextDouble rng))
+              cos-phi (- (* 2.0 (.nextDouble rng)) 1.0)
+              sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
+              end (rv3/v3 (+ cx ox (* spark-length sin-phi (Math/cos theta)))
+                          (+ cy oy (* spark-length cos-phi))
+                          (+ cz oz (* spark-length sin-phi (Math/sin theta))))]
+          (zigzag-ops cam-v start end pattern (+ seed 1))))
+      (range spark-count))))
 
-(defn- target-ring-ops
-  [cam-v target ticks charge-ratio]
-  (let [base-radius (+ 0.45 (* 0.25 (double charge-ratio)))
-        pulse (+ base-radius (* 0.07 (Math/sin (* 0.24 (double ticks)))))
-        tx (double (:x target))
-        y (+ (double (:y target)) 0.05)
-        tz (double (:z target))]
-    (ring-arc-ops cam-v tx y tz pulse ticks 10 ring-arc-pattern)))
+(defn- target-spark-ops
+  [cam-v target ticks]
+  (surround-spark-ops cam-v (double (:x target)) (double (:y target)) (double (:z target))
+                       ticks spark-pattern))
 
-(defn- caster-ring-ops
+(defn- caster-spark-ops
   [cam-v caster-pos ticks]
-  (let [radius 0.45
-        pulse (+ radius (* 0.08 (Math/sin (* 0.22 (double ticks)))))
-        cx (double (:x caster-pos))
-        y (+ (double (:y caster-pos)) 0.9)
-        cz (double (:z caster-pos))]
-    (ring-arc-ops cam-v cx y cz pulse ticks 8 ring-arc-pattern)))
+  (surround-spark-ops cam-v (double (:x caster-pos)) (+ (double (:y caster-pos)) 0.9) (double (:z caster-pos))
+                       ticks spark-pattern))
 
 (defn- build-plan
   [camera-pos hand-center-pos tick]
@@ -367,7 +369,6 @@
                         caster-pos (:caster-pos st)
                         target (:target st)
                         ticks (long (or (:charge-ticks st) 0))
-                        ratio (double (or (:charge-ratio st) 0.0))
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))
                         beam-ops (when (and (not item?) (map? caster-pos) (map? target))
@@ -376,17 +377,17 @@
                                                (rv3/map->v3 target)
                                                charging-beam-pattern
                                                ticks))
-                        ;; Matches original: the surround ring only ever
-                        ;; appears around the TARGET block once it's a valid
+                        ;; Matches original: the surround sparks only ever
+                        ;; appear around the TARGET block once it's a valid
                         ;; energy receiver (block mode) — never around the
                         ;; caster in block mode.
                         ring-ops (when (and (not item?) good? (map? target))
-                                   (target-ring-ops cam-v target ticks ratio))
+                                   (target-spark-ops cam-v target ticks))
                         ;; Item mode has no beam/target at all — original
-                        ;; wraps the surround ring around the PLAYER instead
-                        ;; (new EntitySurroundArc(player)).
+                        ;; wraps the surround sparks around the PLAYER
+                        ;; instead (new EntitySurroundArc(player)).
                         item-ring-ops (when (and item? (map? hand-pos))
-                                        (caster-ring-ops cam-v (dissoc hand-pos :player-uuid) ticks))]
+                                        (caster-spark-ops cam-v (dissoc hand-pos :player-uuid) ticks))]
                     (when trace?
                       (swap! beam-count* + (count beam-ops))
                       (swap! ring-count* + (count ring-ops) (count item-ring-ops)))
