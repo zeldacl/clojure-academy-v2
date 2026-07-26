@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging
-  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.rv3 :as rv3]
+  (:require [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
@@ -236,33 +236,35 @@
                       (:states store*))]
     (assoc store* :states states')))
 
-(defn- argb
-  "Pack r/g/b/a byte components into the ARGB int level_renderer.clj's
-  color-int->channels expects — render-util's quad-op/line-op store :color
-  unmodified, so callers (not render-util) own this packing."
-  [r g b a]
-  (unchecked-int (bit-or (bit-shift-left (int a) 24)
-                         (bit-shift-left (int r) 16)
-                         (bit-shift-left (int g) 8)
-                         (int b))))
+;; zigzag-arc-ops (arc-gen's proven renderer) rather than the never-otherwise-
+;; exercised billboard-beam-ops: fed a 2-vertex [start end] "path" it draws
+;; exactly one straight segment — same quad/line primitives, confirmed
+;; working code path. life-ratio 0.5 sits in life-fade-alpha's flat full-
+;; brightness middle 60%, so colors below are never faded.
+(defn- straight-arc-ops
+  [cam-v start end pattern]
+  (ru/zigzag-arc-ops cam-v
+    [{:pos start :u 0.0} {:pos end :u 1.0}]
+    pattern
+    {:life-ratio 0.5}))
 
-(def ^:private charging-beam-style
+(def ^:private charging-beam-pattern
   {:width 0.08
-   :core-width 0.03
-   :outer-color (argb 108 228 255 120)
-   :inner-color (argb 225 250 255 180)
-   :line-color (argb 160 238 255 140)})
+   :core-ratio 0.375
+   :color-outer {:r 108 :g 228 :b 255}
+   :color-inner {:r 225 :g 250 :b 255}
+   :color-line {:r 160 :g 238 :b 255}
+   :fork-count 0})
 
 ;; Matches original's EntitySurroundArc, which is built from small arc-
-;; textured strands, not a plain circle outline — reuse the same textured
-;; billboard-beam renderer as the main charging beam (fx-beam/beam-ops)
-;; instead of drawing debug line segments.
-(def ^:private ring-arc-style
+;; textured strands, not a plain circle outline.
+(def ^:private ring-arc-pattern
   {:width 0.05
-   :core-width 0.02
-   :outer-color (argb 150 232 255 150)
-   :inner-color (argb 235 252 255 200)
-   :line-color (argb 190 244 255 170)})
+   :core-ratio 0.4
+   :color-outer {:r 150 :g 232 :b 255}
+   :color-inner {:r 235 :g 252 :b 255}
+   :color-line {:r 190 :g 244 :b 255}
+   :fork-count 0})
 
 (defn- own-state?
   [st hand-center-pos]
@@ -275,7 +277,7 @@
   matches original's EntitySurroundArc look far better than a smooth line
   circle: fewer, distinct segments with slight per-segment radius jitter so
   they read as separate crackling arcs rather than a ring outline."
-  [cam-v cx y cz radius ticks segments style]
+  [cam-v cx y cz radius ticks segments pattern]
   (vec
     (for [idx (range segments)
           :let [a0 (/ (* 2.0 Math/PI idx) segments)
@@ -285,7 +287,7 @@
                 r1 (+ radius (- jitter))
                 p0 (rv3/v3 (+ cx (* r0 (Math/cos a0))) y (+ cz (* r0 (Math/sin a0))))
                 p1 (rv3/v3 (+ cx (* r1 (Math/cos a1))) y (+ cz (* r1 (Math/sin a1))))]]
-      (fx-beam/beam-ops cam-v p0 p1 style))))
+      (straight-arc-ops cam-v p0 p1 pattern))))
 
 (defn- target-ring-ops
   [cam-v target ticks charge-ratio]
@@ -294,7 +296,7 @@
         tx (double (:x target))
         y (+ (double (:y target)) 0.05)
         tz (double (:z target))]
-    (ring-arc-ops cam-v tx y tz pulse ticks 10 ring-arc-style)))
+    (ring-arc-ops cam-v tx y tz pulse ticks 10 ring-arc-pattern)))
 
 (defn- caster-ring-ops
   [cam-v caster-pos ticks]
@@ -303,7 +305,7 @@
         cx (double (:x caster-pos))
         y (+ (double (:y caster-pos)) 0.9)
         cz (double (:z caster-pos))]
-    (ring-arc-ops cam-v cx y cz pulse ticks 8 ring-arc-style)))
+    (ring-arc-ops cam-v cx y cz pulse ticks 8 ring-arc-pattern)))
 
 (defn- build-plan
   [camera-pos hand-center-pos tick]
@@ -333,10 +335,10 @@
                         good? (boolean (:good? st))]
                     (concat
                       (when (and (not item?) (map? caster-pos) (map? target))
-                        (fx-beam/beam-ops cam-v
+                        (straight-arc-ops cam-v
                                           (rv3/map->v3 caster-pos)
                                           (rv3/map->v3 target)
-                                          charging-beam-style))
+                                          charging-beam-pattern))
                       ;; Matches original: the surround ring only ever
                       ;; appears around the TARGET block once it's a valid
                       ;; energy receiver (block mode) — never around the
