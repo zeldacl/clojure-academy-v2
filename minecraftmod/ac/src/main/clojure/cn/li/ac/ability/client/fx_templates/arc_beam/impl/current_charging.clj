@@ -358,14 +358,18 @@
 (defn- surround-spark-ops
   "count small random-surface-point, random-direction sparks around
   [cx,y,cz] — see spark-count/spark-pattern above for why this replaced a
-  circular ring."
-  [cam-v cx cy cz ticks pattern]
+  circular ring. `salt` distinguishes one cast from another (e.g. the
+  caster's exact position at cast time) — ticks alone resets to 0 on every
+  new cast, so without it every cast under spark-life-ticks long would
+  reroll from the exact same seed and land on the exact same 6 spots every
+  time, reading as fixed placement rather than random."
+  [cam-v cx cy cz ticks pattern salt]
   (vec
     (mapcat
       (fn [idx]
         (when (spark-visible? idx ticks)
           (let [life-window (quot ticks spark-life-ticks)
-                anchor-seed (+ (* 1000 idx) life-window)
+                anchor-seed (+ (* 1000 idx) life-window (* 31 (long salt)))
                 rng (java.util.Random. anchor-seed)
                 ;; Random point on a unit cube's surface centered at [cx cy cz]:
                 ;; pick one of 6 faces, then a uniform point on that face.
@@ -419,15 +423,15 @@
   the block into open air and the other half embedded inside its solid
   volume, reading as sparks buried in the block with only a sliver poking
   out."
-  [cam-v block-pos ticks]
+  [cam-v block-pos ticks salt]
   (let [[bx by bz] block-pos]
     (surround-spark-ops cam-v (+ (double bx) 0.5) (+ (double by) 0.5) (+ (double bz) 0.5)
-                         ticks spark-pattern)))
+                         ticks spark-pattern salt)))
 
 (defn- caster-spark-ops
-  [cam-v caster-pos ticks]
+  [cam-v caster-pos ticks salt]
   (surround-spark-ops cam-v (double (:x caster-pos)) (+ (double (:y caster-pos)) 0.9) (double (:z caster-pos))
-                       ticks spark-pattern))
+                       ticks spark-pattern salt))
 
 (defn- build-plan
   [camera-pos hand-center-pos tick]
@@ -480,14 +484,19 @@
                         ;; appear around the TARGET block once it's a valid
                         ;; energy receiver (block mode) — never around the
                         ;; caster in block mode.
+                        ;; Distinguishes this cast from any other (ticks
+                        ;; alone resets to 0 every cast, so without this
+                        ;; every short-enough cast would reroll from the
+                        ;; exact same seed and land on the exact same spots).
+                        cast-salt (long (or (:started-at-ms st) 0))
                         ring-ops (when (and (not item?) good?
                                             (sequential? block-pos) (= 3 (count block-pos)))
-                                   (target-spark-ops cam-v block-pos ticks))
+                                   (target-spark-ops cam-v block-pos ticks cast-salt))
                         ;; Item mode has no beam/target at all — original
                         ;; wraps the surround sparks around the PLAYER
                         ;; instead (new EntitySurroundArc(player)).
                         item-ring-ops (when (and item? (map? hand-pos))
-                                        (caster-spark-ops cam-v (dissoc hand-pos :player-uuid) ticks))]
+                                        (caster-spark-ops cam-v (dissoc hand-pos :player-uuid) ticks cast-salt))]
                     (when trace?
                       (swap! beam-count* + (count beam-ops))
                       (swap! ring-count* + (count ring-ops) (count item-ring-ops)))
