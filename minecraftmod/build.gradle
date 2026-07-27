@@ -442,6 +442,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoTargetHardcoding",
               "verifyBuildProfiles",
               "verifyTargetBuildEntrypoints",
+              "verifySingleApiBoundary",
               "verifyRepositoryHygiene"
 }
 
@@ -501,5 +502,23 @@ tasks.register("verifyTargetBuildEntrypoints") {
             }
         }
         if (!problems.isEmpty()) throw new GradleException("Invalid target build entrypoints:\n" + problems.join("\n"))
+    }
+}
+
+tasks.register("verifySingleApiBoundary") {
+    group = "verification"
+    description = "Verify the repository exposes one API project and platform builds consume its output."
+    doLast {
+        def settingsText = file("settings.gradle").text
+        if ((settingsText =~ /include\s+[\"']api[\"']/).count != 1) {
+            throw new GradleException("settings.gradle must include exactly one api project")
+        }
+        def buildLogicText = file("build-logic/platform-target.gradle").text
+        if (buildLogicText.contains("api/src/main/java")) {
+            throw new GradleException("platform build must not inject api source files")
+        }
+        if (!buildLogicText.contains('project(":api")')) {
+            throw new GradleException("platform build must consume the :api project artifact")
+        }
     }
 }
