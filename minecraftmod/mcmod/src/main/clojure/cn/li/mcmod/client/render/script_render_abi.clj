@@ -10,6 +10,8 @@
 
 (def ^:private builtin-kinds
 	#{:billboard-cross
+	  :animated-billboard
+	  :spinning-double-sided
 	  :ring-lines
 	  :polyline-arc
 	  :wire-box
@@ -76,6 +78,19 @@
 											:color-r 180
 											:color-g 220
 											:color-b 255}
+		:animated-billboard {:texture-prefix ""
+											 :frame-count 1
+											 :frame-ms 50.0
+											 :half-size 0.5
+											 :offset-y 0.0
+											 :offset-z 0.0}
+		:spinning-double-sided {:front-texture ""
+													 :back-texture ""
+													 :scale 0.3
+													 :offset-x -0.63
+													 :offset-y 1.0
+													 :offset-z 0.3
+													 :rotation-period-ms 300.0}
 		:ring-lines {:rings 3
 								 :segments 16
 								 :radius-start 0.4
@@ -118,7 +133,8 @@
 	 :state {:depth-test :default
 					 :blend :alpha
 					 :cull :default
-					 :layer (if (#{:billboard-cross :ray-composite :ray-composite-lite} kind)
+					 :layer (if (#{:billboard-cross :animated-billboard :spinning-double-sided
+									 :ray-composite :ray-composite-lite} kind)
 										:translucent
 										:lines)}
 	 :anim {}
@@ -178,6 +194,31 @@
 			(do
 				(assert-number-in-range! pid :half-size (get params :half-size) 0.0 64.0)
 				(assert-number-in-range! pid :alpha (get params :alpha) 0 255))
+
+			:animated-billboard
+			(do
+				(assert! (string? (get params :texture-prefix))
+								 "Animated billboard texture-prefix must be a string"
+								 {:id pid :field :texture-prefix
+								  :value (get params :texture-prefix)})
+				(assert-number-in-range! pid :frame-count (get params :frame-count) 1 1024)
+				(assert-number-in-range! pid :frame-ms (get params :frame-ms) 1.0 60000.0)
+				(assert-number-in-range! pid :half-size (get params :half-size) 0.0 64.0))
+
+			:spinning-double-sided
+			(do
+				(assert! (string? (get params :front-texture))
+								 "Spinning double-sided front-texture must be a string"
+								 {:id pid :field :front-texture
+								  :value (get params :front-texture)})
+				(assert! (string? (get params :back-texture))
+								 "Spinning double-sided back-texture must be a string"
+								 {:id pid :field :back-texture
+								  :value (get params :back-texture)})
+				(assert-number-in-range! pid :scale (get params :scale) 0.0 64.0)
+				(assert-number-in-range! pid :rotation-period-ms
+														 (get params :rotation-period-ms)
+														 1.0 60000.0))
 
 			(:ray-composite :ray-composite-lite)
 			(do

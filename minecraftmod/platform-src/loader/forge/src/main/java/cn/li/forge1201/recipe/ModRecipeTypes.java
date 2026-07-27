@@ -25,27 +25,27 @@ public final class ModRecipeTypes {
     public static final DeferredRegister<RecipeSerializer<?>> RECIPE_SERIALIZERS =
         DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.RECIPE_SERIALIZERS, MyMod1201.MODID);
 
-    public static final RegistryObject<RecipeType<ImagFusorRecipe>> IMAG_FUSOR_TYPE =
-        RECIPE_TYPES.register("imag_fusor", () -> new RecipeType<ImagFusorRecipe>() {
+    public static final RegistryObject<RecipeType<ContentRecipe>> CONTENT_PROCESS_TYPE =
+        RECIPE_TYPES.register("content_process", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":imag_fusor";
+                return MyMod1201.MODID + ":content_process";
             }
         });
 
-    public static final RegistryObject<RecipeType<MetalFormerRecipe>> METAL_FORMER_TYPE =
-        RECIPE_TYPES.register("metal_former", () -> new RecipeType<MetalFormerRecipe>() {
+    public static final RegistryObject<RecipeType<ContentRecipe>> CONTENT_MODE_TYPE =
+        RECIPE_TYPES.register("content_mode", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":metal_former";
+                return MyMod1201.MODID + ":content_mode";
             }
         });
 
-    public static final RegistryObject<RecipeSerializer<ImagFusorRecipe>> IMAG_FUSOR_SERIALIZER =
-        RECIPE_SERIALIZERS.register("imag_fusor", () -> new ImagFusorRecipe.Serializer());
+    public static final RegistryObject<RecipeSerializer<ContentRecipe>> CONTENT_PROCESS_SERIALIZER =
+        RECIPE_SERIALIZERS.register("content_process", () -> new ContentRecipe.Serializer("process"));
 
-    public static final RegistryObject<RecipeSerializer<MetalFormerRecipe>> METAL_FORMER_SERIALIZER =
-        RECIPE_SERIALIZERS.register("metal_former", () -> new MetalFormerRecipe.Serializer());
+    public static final RegistryObject<RecipeSerializer<ContentRecipe>> CONTENT_MODE_SERIALIZER =
+        RECIPE_SERIALIZERS.register("content_mode", () -> new ContentRecipe.Serializer("mode"));
 
     /**
      * Register both DeferredRegisters with the mod event bus.

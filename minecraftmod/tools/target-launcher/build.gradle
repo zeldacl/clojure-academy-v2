@@ -1,0 +1,21 @@
+plugins {
+    id "application"
+}
+
+application {
+    mainClass = "cn.li.tools.TargetGradleLauncher"
+}
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+tasks.register("testLauncher", JavaExec) {
+    group = "verification"
+    description = "Run dependency-free regression tests for target catalog parsing."
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "cn.li.tools.TargetGradleLauncherTest"
+}
+
+check.dependsOn testLauncher

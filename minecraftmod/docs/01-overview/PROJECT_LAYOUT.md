@@ -16,7 +16,7 @@ platform-src/
     fabric/
   test-support/
 
-platform-target/
+platform/
 platform-catalog.json
 build-logic/
 ```
@@ -28,13 +28,13 @@ build-logic/
 | `:api` | 对外 Java API 与互操作接口�?|
 | `:mcmod` | DSL、协议、生命周期、平台抽象和不依�?Minecraft 类的运行契约�?|
 | `:ac` | AcademyCraft 内容与领域逻辑�?|
-| `:platform` | 唯一平台工程；通过 `-PplatformTarget=<target-id>` 选择具体目标�?|
+| `:platform` | 唯一平台工程；通过 `scripts/target-gradle.ps1 <target-id>` 选择具体目标�?|
 
 ## 平台源码组件
 
 | 目录 | 职责 |
 |------|------|
-| `platform-src/common/` | �?Loader 无关的平台通用代码�?|
+| `platform-src/minecraft + platform-src/loader/` | �?Loader 无关的平台通用代码�?|
 | `platform-src/minecraft/mc-1.20.1/` | Minecraft API 通用适配�?|
 | `platform-src/minecraft/mc-1.20.1/` | Minecraft 1.20.1 专属差异�?|
 | `platform-src/loader/forge/` | Forge lifecycle、entrypoint、metadata、注册、client/datagen glue�?|
@@ -52,6 +52,6 @@ build-logic/
 
 ```powershell
 .\gradlew.bat verifyCurrentPlatforms
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 ```

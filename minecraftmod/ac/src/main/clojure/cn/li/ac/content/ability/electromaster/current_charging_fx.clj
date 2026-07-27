@@ -25,7 +25,6 @@
    :charge-ticks 0 :charge-ratio 0.0 :target nil :block-pos nil
    :charged 0.0 :started-at-ms 0 :ending-at-ms 0})
 
-(def ^:private blend-out-ms 200)
 (def ^:private active-stale-ms 500)
 
 (defn- current-store []
@@ -44,13 +43,11 @@
 (defn- live-state?
   [st]
   (let [now-ms (client-bridge/game-time-ms)]
-    (or (and (:active? st)
-             (< (- now-ms (long (or (:updated-at-ms st)
-                                    (:started-at-ms st)
-                                    0)))
-                active-stale-ms))
-        (and (:blending? st)
-             (< (- now-ms (long (or (:ending-at-ms st) 0))) blend-out-ms)))))
+    (and (:active? st)
+         (< (- now-ms (long (or (:updated-at-ms st)
+                                (:started-at-ms st)
+                                0)))
+            active-stale-ms))))
 
 (defn- state-for-selector [store selector]
   (let [states (:states store)]

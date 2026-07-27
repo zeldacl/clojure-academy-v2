@@ -6,8 +6,8 @@ Script rendering code crosses `ac`, `mcmod`, Minecraft-version components and Lo
 
 ```powershell
 .\gradlew.bat :ac:compileClojure :mcmod:compileClojure
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 .\gradlew.bat verifyCurrentPlatforms
 ```
 

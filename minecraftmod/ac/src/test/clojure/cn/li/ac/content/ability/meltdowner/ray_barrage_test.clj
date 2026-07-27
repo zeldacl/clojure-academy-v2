@@ -152,7 +152,7 @@
                                                           [{:uuid "enemy-front" :x 0.0 :y 64.0 :z 10.0 :eye-height 1.6}
                                                            {:uuid "enemy-behind" :x 0.0 :y 64.0 :z -10.0 :eye-height 1.6}
                                                            {:uuid "silbarn-1" :x 0.0 :y 64.0 :z 15.0 :eye-height 0.2}])
-                  world-effects/trigger-silbarn-hit! (fn [world-id uuid]
+                  world-effects/trigger-behavior-hit! (fn [world-id uuid]
                                                        (swap! trigger-calls* conj [world-id uuid])
                                                        true)
                   entity-damage/available? (constantly true)
@@ -193,7 +193,7 @@
                                                :is-hit true
                                                :x 0.0 :y 64.0 :z 10.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  world-effects/trigger-silbarn-hit! (fn [& args]
+                  world-effects/trigger-behavior-hit! (fn [& args]
                                                        (swap! trigger-calls* conj args)
                                                        true)
                   entity-damage/available? (constantly true)

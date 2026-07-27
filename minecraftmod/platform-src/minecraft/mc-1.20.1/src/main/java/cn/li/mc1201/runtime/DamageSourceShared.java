@@ -1,6 +1,7 @@
 package cn.li.mc1201.runtime;
 
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 
 /**
@@ -32,5 +33,18 @@ public final class DamageSourceShared {
             default -> "generic";
         };
         return resolve(level, kind);
+    }
+
+    /**
+     * Resolve a source that may need an attacking entity. AcademyCraft's
+     * SkillDamageSource is an EntityDamageSource owned by the caster; on
+     * modern Minecraft, playerAttack is the matching armor-respecting,
+     * attacker-attributed vanilla source.
+     */
+    public static DamageSource resolveKeyword(Level level, Object sourceType, Object attacker) {
+        if (level != null && ":skill".equals(String.valueOf(sourceType)) && attacker instanceof Player player) {
+            return level.damageSources().playerAttack(player);
+        }
+        return resolveKeyword(level, sourceType);
     }
 }

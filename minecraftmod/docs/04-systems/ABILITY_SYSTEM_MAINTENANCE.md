@@ -51,6 +51,6 @@ Context 读取通过 `context-dispatcher`、`context-skill-state`、`context-pro
 能力改动涉及平台事件时，再按目标编译：
 
 ```powershell
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 ```

@@ -57,7 +57,6 @@
  "cn.li.fabric1201.runtime.entity-damage"
  "cn.li.fabric1201.runtime.entity-motion"
  "cn.li.fabric1201.runtime.entity-query"
- "cn.li.fabric1201.runtime.item-handler"
  "cn.li.fabric1201.runtime.player-motion"
  "cn.li.fabric1201.runtime.world-effects"
  "cn.li.fabric1201.setup.content-registration"

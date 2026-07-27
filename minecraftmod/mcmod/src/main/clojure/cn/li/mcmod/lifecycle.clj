@@ -18,8 +18,9 @@
 (defn- default-lifecycle-state
   "Return the initial lifecycle state map."
   []
-  {:content-init-fn nil
-   :runtime-content-activation-fn nil
+  {:content-init-fns []
+   :runtime-content-activation-fns []
+   :world-tick-fns []
    :datagen-metadata-init-fns []
    :client-init-fns []
    :client-init-done? false
@@ -66,16 +67,16 @@
 
 (defn register-content-init!
   "Register content init function (fn [] ...).
-   Called by content modules via ContentInitBootstrap SPI.
+   Called by content modules declared in generated suite metadata.
    The function will be executed by platform adapters via run-content-init!."
   [init-fn]
-  (update-lifecycle! assoc :content-init-fn init-fn)
+  (update-lifecycle! update :content-init-fns conj init-fn)
   nil)
 
 (defn run-content-init!
   "Run registered content init function, if present."
   []
-  (when-let [f (:content-init-fn (lifecycle-state))]
+  (doseq [f (:content-init-fns (lifecycle-state))]
     (f)))
 
 ;; ============================================================================
@@ -88,14 +89,22 @@
    through this hook so platform adapters do not reference content
    namespaces directly."
   [activate-fn]
-  (update-lifecycle! assoc :runtime-content-activation-fn activate-fn)
+  (update-lifecycle! update :runtime-content-activation-fns conj activate-fn)
   nil)
 
 (defn run-runtime-content-activation!
   "Run registered runtime content activation function, if present."
   []
-  (when-let [f (:runtime-content-activation-fn (lifecycle-state))]
+  (doseq [f (:runtime-content-activation-fns (lifecycle-state))]
     (f)))
+
+(defn register-world-tick! [tick-fn]
+  (update-lifecycle! update :world-tick-fns conj tick-fn)
+  nil)
+
+(defn run-world-tick! [world]
+  (doseq [f (:world-tick-fns (lifecycle-state))]
+    (f world)))
 
 ;; ============================================================================
 ;; Datagen Metadata Init

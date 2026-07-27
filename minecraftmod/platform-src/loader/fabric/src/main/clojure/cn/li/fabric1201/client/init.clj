@@ -11,7 +11,6 @@
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.mcmod.client.render.init :as render-init]
-            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.fabric1201.adapter.gui-registry :as gui-registry]
             [cn.li.fabric1201.client.overlay-renderer :as overlay-renderer]
@@ -86,10 +85,6 @@
 (defn register-scripted-block-entity-renderers!
   "Attach a single universal BlockEntity renderer to all scripted tile types."
   []
-  ;; Keep parity with Forge fallback behavior when renderer callbacks have not populated yet.
-  (when (empty? (tesr-api/scripted-renderers-snapshot))
-    (render-init/register-default-renderer-init-fns!)
-    (render-init/register-all-renderers!))
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (when-let [be-type (mod/get-registered-block-entity-type tile-id)]
       (FabricClientHelper/registerBlockEntityRenderer
@@ -103,12 +98,9 @@
   "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
-    (if-let [widget (widget-registry/create-widget arg payload)]
+    (let [widget (widget-registry/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
-      (throw (ex-info "No reactive screen widget registered"
-                      {:screen-key arg
-                       :payload payload})))))
+        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
 
 (defn- open-reactive-screen-handler [& args]
   (apply reactive-host/open-reactive-screen! args))

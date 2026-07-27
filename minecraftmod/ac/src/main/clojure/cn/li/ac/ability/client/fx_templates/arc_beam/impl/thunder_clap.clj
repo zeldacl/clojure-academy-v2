@@ -15,7 +15,7 @@
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :impacts {}})
+  (let [store* (or store {:effect-state {} :tails {} :impacts {}})
         {:keys [mode ticks charge-ratio target caster-pos performed? source-player-id world-id]} (or payload {})
         owner-key* (or owner-key [:ctx ctx-id])
         base-meta {:owner-key owner-key*
@@ -66,7 +66,14 @@
           next-store))
 
       :end
-      (let [next-store (update store* :effect-state dissoc owner-key*)]
+      (let [without-active (update store* :effect-state dissoc owner-key*)
+            ;; Original kills the caster-only ripple immediately but delays
+            ;; EntitySurroundArc removal by 10 ticks.
+            next-store (if current-st
+                         (assoc-in without-active [:tails owner-key*]
+                                   (merge base-meta current-st
+                                          {:active? false :ttl 10}))
+                         without-active)]
         (if (and (map? target) performed?)
           (update-in next-store [:impacts owner-key*] (fnil conj [])
                      (merge base-meta
@@ -80,7 +87,7 @@
 
 (defn- tick-state!
   [store]
-  (let [store* (or store {:effect-state {} :impacts {}})]
+  (let [store* (or store {:effect-state {} :tails {} :impacts {}})]
     (-> store*
         (update :effect-state
           (fn [states]
@@ -89,6 +96,16 @@
                           (when (:active? st)
                             [owner-key (update st :ticks (fnil inc 0))])))
                   states)))
+        (update :tails
+          (fn [tails]
+            (into {}
+                  (keep (fn [[owner-key st]]
+                          (let [next-ttl (dec (long (or (:ttl st) 0)))]
+                            (when (pos? next-ttl)
+                              [owner-key (assoc st
+                                                :ttl next-ttl
+                                                :ticks (inc (long (or (:ticks st) 0))))]))))
+                  tails)))
         (update :impacts
           (fn [by-owner]
             (into {}
@@ -167,7 +184,7 @@
       (= (str (:source-player-id st)) (str (:player-uuid hand-center-pos)))))
 
 (defn- build-plan [_camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state impacts]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :thunder-clap)
+  (let [{:keys [effect-state tails impacts]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :thunder-clap)
         active-states (filter :active? (vals effect-state))
         own-tc (some #(when (own-state? % hand-center-pos) %) active-states)
         ;; The surround arc is broadcast and public (matches original's
@@ -191,13 +208,19 @@
                      (when (and own? (map? (:target st)))
                        (target-mark-ops (:target st) ticks ratio)))))
                active-states))
+        tail-ops
+        (vec
+          (mapcat (fn [st]
+                    (when-let [center (:caster-pos st)]
+                      (surround-ops center (long (or (:ticks st) 0)))))
+                  (vals tails)))
         impact-render-ops (vec (mapcat impact-ops (mapcat val impacts)))
         ws (when own-tc (local-walk-speed (:ticks own-tc)))]
-    (when (or (seq charge-ops) (seq impact-render-ops) ws)
-      {:ops (vec (concat charge-ops impact-render-ops))
+    (when (or (seq charge-ops) (seq tail-ops) (seq impact-render-ops) ws)
+      {:ops (vec (concat charge-ops tail-ops impact-render-ops))
        :local-walk-speed ws})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:thunder-clap :level] [_ _] {:effect-state {} :impacts {}})
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:thunder-clap :level] [_ _] {:effect-state {} :tails {} :impacts {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:thunder-clap :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:thunder-clap :level] [_ _ store] (tick-state! store))
@@ -205,4 +228,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :thunder-clap [_ store owner-key]
-  (-> store (update :effect-state dissoc owner-key) (update :impacts dissoc owner-key)))
+  (-> store
+      (update :effect-state dissoc owner-key)
+      (update :tails dissoc owner-key)
+      (update :impacts dissoc owner-key)))

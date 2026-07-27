@@ -16,8 +16,8 @@ Fabric 维护支持的含义：
 
 - Minecraft 版本差异：`platform-src/minecraft/mc-1.20.1/`
 - Loader 差异：`platform-src/loader/forge/`、`platform-src/loader/fabric/`
-- 通用平台逻辑：`platform-src/common/`
-- 构建目标输出：`platform-target/build/`
+- 通用平台逻辑：`platform-src/minecraft + platform-src/loader/`
+- 构建目标输出：`platform/build/targets/<target-id>/platform/`
 
 ## 禁止�?
 - 不新�?`forge-1.20.1/`、`fabric-1.20.1/`、`mc-1.20.1/` 这类根目录�?- 不使用平�?SPI、ServiceLoader bootstrap、task alias �?pass-through namespace�?- 不用 target id 字符串解�?loader/version；行为只能来�?`platform-catalog.json` 的显式字段�?- 不新增真�?NeoForge / Minecraft 26.1 支持，除非先完成新的 catalog 目标设计与验证�?

@@ -5,7 +5,7 @@
   - Raycast to metal blocks/entities
   - Accelerate player toward target with smooth interpolation
   - Energy and progression values are read from ability skill config
-  - Low exp requires strong metal blocks only; high exp unlocks weak metal blocks
+  - Accept both normal and weak metal blocks, matching the original's effective check
   - Visual: Arc with wiggle animation
   - Audio: Looping ambient sound
   - Resets fall damage on completion
@@ -15,14 +15,16 @@
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.motion :as motion-op]
             [cn.li.ac.ability.effects.state :as state-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.motion :as motion-effects]
-            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :mag-movement)
@@ -46,18 +48,16 @@
 (defn- is-metal-block? [block-id]
   (let [id      (normalize-id block-id)
         normal? (ability-config/is-normal-metal-block? id)
-    weak?   (ability-config/is-weak-metal-block? id)]
-  ;; Source parity: MagMovement accepts any configured metal block.
-  ;; The weak-metal exp threshold is intentionally a no-op for this skill.
-  (boolean (and id (or normal? weak?)))))
+        weak?   (ability-config/is-weak-metal-block? id)]
+    ;; Source parity: the original's exp < 0.6 branch calls isMetalBlock,
+    ;; which already includes weak metal, so the threshold has no effect.
+    (boolean (and id (or normal? weak?)))))
 
 (defn- is-metal-entity? [entity-type]
   (ability-config/is-metal-entity? (normalize-id entity-type)))
 
 (defn- player-pos [player-id]
-  (get (skill-effects/get-player-state player-id)
-       :position
-       {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0}))
+  (geom/body-pos player-id))
 
 (defn- set-skill-state!
   [ctx-id k v]
@@ -73,54 +73,84 @@
         (- (double from) accel)))))
 
 (defn- update-entity-target
-  [{:keys [target-world-id target-entity-uuid target-x target-y target-z] :as skill-state}]
-  (if-not (and (world-effects/available?) target-entity-uuid)
-    nil
-    (let [candidates (world-effects/find-entities-in-radius
-                       (or target-world-id "minecraft:overworld")
-                       (double target-x) (double target-y) (double target-z)
-                       (cfg-double :targeting.target-update-radius))
-          matched (some #(when (= (:uuid %) target-entity-uuid) %) candidates)]
-      (when matched
+  [{:keys [target-world-id target-entity-uuid] :as skill-state}]
+  (when (and target-world-id target-entity-uuid)
+    ;; EntityTarget in the original holds the entity reference directly, so it
+    ;; keeps following the target regardless of how far it moves in one tick.
+    (when-let [position (motion-effects/entity-position target-world-id
+                                                        target-entity-uuid)]
+      (when (not= false (:alive? position))
         (assoc skill-state
-               :target-x (double (:x matched))
-               :target-y (+ (double (:y matched))
-                            (double (or (:eye-height matched) default-eye-height)))
-               :target-z (double (:z matched)))))))
+               :target-x (double (:x position))
+               :target-y (+ (double (:y position))
+                             (double (or (:eye-height position)
+                                         default-eye-height)))
+               :target-z (double (:z position)))))))
+
+(defn- hit-distance
+  [hit]
+  (if (number? (:distance hit))
+    (double (:distance hit))
+    Double/POSITIVE_INFINITY))
+
+(defn- nearest-target-hit
+  "Match LambdaLib2 Raytrace.traceLiving: trace all collidable entities, not
+  only LivingEntity, exclude the caster, and let an entity win equal-distance
+  ties."
+  [player-id world-id eye look]
+  (let [range      (cfg-double :targeting.range)
+        block-hit  (raycast/raycast-blocks
+                     world-id
+                     (:x eye) (:y eye) (:z eye)
+                     (double (:x look))
+                     (double (:y look))
+                     (double (:z look))
+                     range)
+        entity-hit (raycast/raycast-from-player player-id range false)]
+    (cond
+      (and entity-hit
+           (<= (hit-distance entity-hit) (hit-distance block-hit)))
+      (assoc entity-hit :hit-type :entity)
+
+      block-hit
+      (assoc block-hit :hit-type :block)
+
+      :else nil)))
 
 (defn- resolve-target [player-id]
   (when-let [look (when (raycast/available?)
-                    (raycast/player-look-vector player-id))]
+                     (raycast/player-look-vector player-id))]
     (let [eye      (geom/eye-pos player-id)
           world-id (geom/world-id-of player-id)
-          hit      (raycast/raycast-combined
-                                             world-id
-                                             (:x eye) (:y eye) (:z eye)
-                                             (double (:x look))
-                                             (double (:y look))
-                                             (double (:z look))
-                                             (cfg-double :targeting.range))]
+          hit      (nearest-target-hit player-id world-id eye look)]
       (case (:hit-type hit)
         :block
         (let [block-id (normalize-id (:block-id hit))]
           (when (is-metal-block? block-id)
             {:target-kind     :block
              :target-world-id world-id
-             :target-x        (double (:x hit))
-             :target-y        (double (:y hit))
-             :target-z        (double (:z hit))
+             :target-x        (double (or (:hit-x hit) (:x hit)))
+             :target-y        (double (or (:hit-y hit) (:y hit)))
+             :target-z        (double (or (:hit-z hit) (:z hit)))
              :target-block-id block-id}))
         :entity
-        (let [entity-type (normalize-id (:type hit))]
-          (when (is-metal-entity? entity-type)
+        (let [entity-uuid (or (:entity-id hit) (:uuid hit))
+              live-entity (when entity-uuid
+                            (motion-effects/entity-position world-id entity-uuid))
+              entity-type (normalize-id (or (:type live-entity) (:type hit)))
+              position    (or live-entity hit)]
+          (when (and entity-uuid
+                     (not= false (:alive? position))
+                     (is-metal-entity? entity-type))
             {:target-kind        :entity
              :target-world-id    world-id
-             :target-entity-uuid (:uuid hit)
+             :target-entity-uuid entity-uuid
              :target-entity-type entity-type
-             :target-x           (double (:x hit))
-             :target-y           (+ (double (:y hit))
-                                    (double (or (:eye-height hit) default-eye-height)))
-             :target-z           (double (:z hit))}))
+             :target-x           (double (:x position))
+             :target-y           (+ (double (:y position))
+                                     (double (or (:eye-height position)
+                                                 default-eye-height)))
+             :target-z           (double (:z position))}))
         nil))))
 
 (defn- active-skill-ctx-data [player-id skill-id]
@@ -134,18 +164,46 @@
 ;; Cost fn (tick CP is conditional on having a target)
 ;; ---------------------------------------------------------------------------
 
+(defn- player-creative?
+  [player-id]
+  (try
+    (boolean
+      (when-let [fw-atom (fw/fw-atom)]
+        (when (platform/get-adapter fw-atom :runtime-interop)
+          (when-let [player (platform/call-adapter
+                             fw-atom
+                             :runtime-interop
+                             :get-player-entity
+                             player-id)]
+            (entity/player-creative? player)))))
+    (catch Exception _
+      false)))
+
 (defn- tick-cp-cost [player-id _skill-id exp]
-  (if-let [ctx-data (active-skill-ctx-data player-id mag-movement-skill-id)]
-    (if (get-in ctx-data [:skill-state :has-target])
-      (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
-      0.0)
-    0.0))
+  (if (player-creative? player-id)
+    0.0
+    (if-let [ctx-data (active-skill-ctx-data player-id mag-movement-skill-id)]
+      (let [skill-state (:skill-state ctx-data)
+            live-target? (and (:has-target skill-state)
+                              (or (not= :entity (:target-kind skill-state))
+                                  (some? (update-entity-target skill-state))))]
+        (if live-target?
+          (cfg-lerp :cost.tick.cp (double (or exp 0.0)))
+          0.0))
+      0.0)))
 
-(defn- down-overload-cost [_player-id _skill-id exp]
-  (cfg-lerp :cost.down.overload (double (or exp 0.0))))
+(defn- down-overload-cost [player-id _skill-id exp]
+  (if (player-creative? player-id)
+    0.0
+    (cfg-lerp :cost.down.overload (double (or exp 0.0)))))
 
-(defn- cost-creative? [_player-id _skill-id _exp]
-  false)
+(defn- current-overload
+  [player-id fallback]
+  (double
+    (or (get-in (skill-effects/get-player-state player-id)
+                [:resource-data :cur-overload])
+        fallback
+        0.0)))
 
 ;; ---------------------------------------------------------------------------
 ;; Actions
@@ -160,7 +218,6 @@
       (when should-finalize?
         (set-skill-state! ctx-id [:finalized?] true)
         (when (and grant-exp?
-                   (:has-target skill-state)
                    (number? (:start-x skill-state))
                    (number? (:start-y skill-state))
                    (number? (:start-z skill-state)))
@@ -188,17 +245,20 @@
       (let [velocity-now (when (motion-effects/player-motion-available?)
                            (motion-effects/player-velocity player-id))]
         (ctx-skill/replace-skill-state! ctx-id
-               (merge target-state
-                 {:has-target true
-                  :finalized? false
-                  :movement-ticks 0
-                  :overload-floor (cfg-lerp :cost.down.overload (double (or exp 0.0)))
-                  :start-x (double (:x state-pos))
-                  :start-y (double (:y state-pos))
+          (merge target-state
+                  {:has-target true
+                   :finalized? false
+                   :movement-ticks 0
+                   :overload-floor (current-overload
+                                     player-id
+                                     (cfg-lerp :cost.down.overload
+                                               (double (or exp 0.0))))
+                   :start-x (double (:x state-pos))
+                   :start-y (double (:y state-pos))
                   :start-z (double (:z state-pos))
-                  :motion-x (double (or (:x velocity-now) 0.0))
-                  :motion-y (double (or (:y velocity-now) 0.0))
-                  :motion-z (double (or (:z velocity-now) 0.0))}))
+                   :motion-x (double (or (:x velocity-now) 0.0))
+                   :motion-y (double (or (:y velocity-now) 0.0))
+                   :motion-z (double (or (:z velocity-now) 0.0))}))
         ;; Original's s_onEffectStart/s_onEffectUpdate both use sendToClient
         ;; (owner + nearby) — the arc + loop sound are ordinary world FX, not
         ;; gated to isLocal like MineDetect's overlay.
@@ -209,9 +269,17 @@
                             :z (double target-z)}})
         (log/debug "MagMovement started" (:target-kind target-state)))
       (do
-        (ctx-skill/replace-skill-state! ctx-id {:has-target false :finalized? false})
+        (ctx-skill/replace-skill-state!
+          ctx-id
+          {:has-target false
+           :finalized? false
+           :start-x (double (:x state-pos))
+           :start-y (double (:y state-pos))
+           :start-z (double (:z state-pos))})
         (log/debug "MagMovement: no valid magnetic target")
-        (finalize-and-terminate! ctx-id player-id {:grant-exp? false})))))
+        ;; MovementContext.s_onEnd always calls getExpIncr, so even an invalid
+        ;; target grants the original minimum 0.005 experience.
+        (finalize-and-terminate! ctx-id player-id {:grant-exp? true})))))
 
 (defn- on-tick!
   [ctx-id player-id skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -301,14 +369,10 @@
   :icon            "textures/abilities/electromaster/skills/mag_movement.png"
   :ui-position     [137 35]
   :ctrl-id         :mag-movement
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
   :pattern         :hold-channel
   :cooldown        {:mode :manual}
-  :cost {:down {:overload   down-overload-cost
-                :creative?  cost-creative?}
-         :tick {:cp         tick-cp-cost
-                :creative?  cost-creative?}}
+  :cost {:down {:overload down-overload-cost}
+         :tick {:cp tick-cp-cost}}
   :actions {:down!  on-down!
             :tick!  on-tick!
             :up!    on-up!

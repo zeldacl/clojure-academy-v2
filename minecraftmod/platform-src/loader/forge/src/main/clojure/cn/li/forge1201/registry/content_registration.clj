@@ -111,7 +111,8 @@
       (double (or (:damage block-body) 0.0))
       (not (false? (:place-when-collide? block-body)))
       (str (or (:renderer-id block-body) "block-body"))
-      (name (or (:hook block-body) :none))))
+      (name (or (:hook block-body) :none))
+      (name (or (:behavior block-body) :none))))
   nil)
 
 (defn- has-block-state-properties?

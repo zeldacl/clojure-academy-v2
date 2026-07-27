@@ -84,7 +84,7 @@ tasks.register("verifyNoLegacyArchitecture") {
     group = "verification"
     description = "Fail if deleted platform-module architecture returns."
     doLast {
-        def forbiddenDirs = ["mc-1.20.1", "forge-1.20.1", "fabric-1.20.1", "test-support"]
+        def forbiddenDirs = ["mc-1.20.1", "forge-1.20.1", "fabric-1.20.1", "test-support", "platform-target"]
             .collect { rootProject.file(it) }
             .findAll { it.exists() }
         if (!forbiddenDirs.isEmpty()) {
@@ -191,11 +191,26 @@ tasks.register("verifyPlatformCatalog") {
     doLast {
         def catalog = rootProject.ext.platformCatalog()
         def components = catalog.components ?: [:]
+        def profiles = catalog.buildProfiles ?: [:]
         def problems = []
+        if ((catalog.javaBaseline ?: 0) as int < 17) {
+            problems << "javaBaseline must be at least 17 because api uses Java 17 language/library features"
+        }
+        if (profiles.isEmpty()) {
+            problems << "catalog has no buildProfiles"
+        }
+        profiles.each { profileId, profile ->
+            if (!profile.gradleVersion || !profile.gradleJvmVersion || !profile.wrapper) {
+                problems << "buildProfile ${profileId} must declare gradleVersion, gradleJvmVersion and wrapper"
+            }
+        }
         if (components.isEmpty()) {
             problems << "catalog has no components"
         }
         components.each { id, component ->
+            if (id.toString().toLowerCase().startsWith("ac-") || component.content) {
+                problems << "platform component ${id} must not bind a content module to a concrete platform"
+            }
             ["source", "tests", "aotManifest"].each { key ->
                 if (component[key]) {
                     def componentPath = file(component[key].toString())
@@ -206,6 +221,30 @@ tasks.register("verifyPlatformCatalog") {
             }
         }
         catalog.targets.each { targetId, target ->
+            ["buildProfile", "gradleJvmVersion", "compileJavaVersion", "runtimeJavaVersion"].each { key ->
+                if (!target[key]) problems << "${targetId} missing ${key}"
+            }
+            (target.contentModules ?: []).each { module ->
+                ["id", "namespace", "function"].each { key ->
+                    if (!module[key]) problems << "${targetId} content module missing ${key}"
+                }
+            }
+            (target.contentProjects ?: []).each { projectId ->
+                if (!rootProject.findProject(":${projectId}")) problems << "${targetId} references unknown content project ${projectId}"
+            }
+            if (target.buildProfile && !profiles.containsKey(target.buildProfile.toString())) {
+                problems << "${targetId} references unknown buildProfile ${target.buildProfile}"
+            }
+            if (target.buildProfile && profiles[target.buildProfile.toString()] &&
+                target.gradleJvmVersion as int != (profiles[target.buildProfile.toString()].gradleJvmVersion ?: 0) as int) {
+                problems << "${targetId} gradleJvmVersion does not match buildProfile ${target.buildProfile}"
+            }
+            if ((target.compileJavaVersion ?: 0) as int < (catalog.javaBaseline ?: 17) as int) {
+                problems << "${targetId} compileJavaVersion is below javaBaseline"
+            }
+            if ((target.runtimeJavaVersion ?: 0) as int < (target.compileJavaVersion ?: 17) as int) {
+                problems << "${targetId} runtimeJavaVersion is below compileJavaVersion"
+            }
             (target.sourceComponents ?: []).each { componentId ->
                 def component = components[componentId.toString()]
                 if (component == null) {
@@ -284,7 +323,7 @@ tasks.register("verifyNoTargetHardcoding") {
         }
         def filesToScan = [file("settings.gradle"), file("build.gradle")] +
             fileTree("build-logic") { include "**/*.gradle" }.files +
-            fileTree("platform-target") { include "**/*.gradle" }.files
+            fileTree("platform") { include "**/*.gradle" }.files
         def forbidden = [
             legacyCatalogName,
             "project(':forge-" + "1.20.1')",
@@ -312,7 +351,7 @@ tasks.register("verifyNoTargetHardcoding") {
             fileTree("mcmod") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("ac") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("platform-src") { include "**/*.java", "**/*.clj", "**/*.gradle" },
-            fileTree("platform-target") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("platform") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("build-logic") { include "**/*.gradle" }
         ).files.findAll { File f ->
             !f.toPath().any { it.toString() in ["build", ".gradle"] }
@@ -363,7 +402,7 @@ tasks.register("compareDatagenParityManifests") {
         def problems = []
         targetsByGroup.each { group, entries ->
             def manifests = entries.collectEntries { id, target ->
-                def manifest = file("platform-target/build/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
+                def manifest = file("build/targets/${id}/platform/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
                 manifest.isFile() ? [(id): new JsonSlurper().parse(manifest)] : [:]
             }
             if (manifests.size() < 2) {
@@ -404,5 +443,85 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoDuplicateCapabilities",
               "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",
+              "verifyBuildProfiles",
+              "verifyTargetBuildEntrypoints",
+              "verifySingleApiBoundary",
               "verifyRepositoryHygiene"
+}
+
+tasks.register("verifySyntheticNeoForgeTarget") {
+    group = "verification"
+    description = "Validate the synthetic Minecraft 26.1 + NeoForge target model without building it."
+    doLast {
+        def fixture = new JsonSlurper().parse(rootProject.file("platform-catalog-fixtures.json"))
+        def target = fixture.targets["neoforge-26.1-synthetic"]
+        if (!target || target.loader != "neoforge" || target.minecraftVersion != "26.1") {
+            throw new GradleException("Synthetic NeoForge 26.1 fixture is incomplete")
+        }
+        if (!fixture.buildProfiles[target.buildProfile]?.fixture) {
+            throw new GradleException("Synthetic target must route through an isolated fixture build profile")
+        }
+        ["platform-src/minecraft/mc-26.1-synthetic", "platform-src/loader/neoforge-26.1-synthetic"].each { path ->
+            if (file(path).exists()) throw new GradleException("Synthetic target must not add production source: ${path}")
+        }
+    }
+}
+
+tasks.register("verifyBuildProfiles") {
+    group = "verification"
+    description = "Validate Gradle wrapper/profile isolation rules."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def wrapperText = file("gradle/wrapper/gradle-wrapper.properties").text
+        def rootVersion = (wrapperText =~ /gradle-([0-9.]+)-bin\.zip/).find() ?
+            ((wrapperText =~ /gradle-([0-9.]+)-bin\.zip/)[0][1]) : null
+        def problems = []
+        (catalog.buildProfiles ?: [:]).each { profileId, profile ->
+            if (profile.wrapper == "root" && profile.gradleVersion.toString() != rootVersion) {
+                problems << "${profileId}: declared Gradle ${profile.gradleVersion} but root wrapper is ${rootVersion}"
+            }
+            if (profile.wrapper != "root" && !profile.fixture && !file(profile.wrapper.toString()).exists()) {
+                problems << "${profileId}: missing isolated wrapper ${profile.wrapper}"
+            }
+        }
+        if (!problems.isEmpty()) throw new GradleException("Invalid build profiles:\n" + problems.join("\n"))
+    }
+}
+
+tasks.register("verifyTargetBuildEntrypoints") {
+    group = "verification"
+    description = "Verify all supported OS target-build frontends share the launcher contract."
+    doLast {
+        def scripts = ["scripts/target-gradle.ps1", "scripts/target-gradle.cmd", "scripts/target-gradle.sh"]
+        def problems = []
+        scripts.each { path ->
+            def script = file(path)
+            if (!script.isFile()) {
+                problems << "missing target build entrypoint ${path}"
+            } else {
+                def text = script.text
+                if (!text.contains("target-launcher")) problems << "${path} does not invoke target-launcher"
+                if (text.contains("--stacktrace")) problems << "${path} must not append --stacktrace"
+            }
+        }
+        if (!problems.isEmpty()) throw new GradleException("Invalid target build entrypoints:\n" + problems.join("\n"))
+    }
+}
+
+tasks.register("verifySingleApiBoundary") {
+    group = "verification"
+    description = "Verify the repository exposes one API project and platform builds consume its output."
+    doLast {
+        def settingsText = file("settings.gradle").text
+        if ((settingsText =~ /include\s+[\"']api[\"']/).count != 1) {
+            throw new GradleException("settings.gradle must include exactly one api project")
+        }
+        def buildLogicText = file("build-logic/platform-target.gradle").text
+        if (buildLogicText.contains("api/src/main/java")) {
+            throw new GradleException("platform build must not inject api source files")
+        }
+        if (!buildLogicText.contains('project(":api")')) {
+            throw new GradleException("platform build must consume the :api project artifact")
+        }
+    }
 }

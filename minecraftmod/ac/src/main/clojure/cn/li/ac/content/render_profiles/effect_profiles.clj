@@ -2,7 +2,8 @@
   "AC-owned ScriptRender profile definitions.
 
   Keeps renderer semantics in AC while execution stays in mc1201 runtime."
-  (:require [cn.li.mcmod.runtime.install :as install]
+  (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.runtime.install :as install]
 	    [cn.li.mcmod.client.render.script-render-abi :as script-abi]
 	    [cn.li.mcmod.client.render.script-render-registry :as script-registry]))
 
@@ -110,18 +111,35 @@
                :wiggle-amp 0.6 :wiggle-freq 8.0
                :color-a [140 220 255] :color-b [240 250 255]}}
 
-       ;; Railgun charge-hand glow. Matching original RailgunHandEffect's
-     ;; arc-burst billboard sequence at the caster's hand — simplified to a
-     ;; billboard-cross here since it needs to be a world-anchored entity
-     ;; (follow-owner?, see entities/all.clj's railgun_charge spec) rather
-     ;; than a hand-runtime effect, so every nearby player sees it too.
-     ;; Orange to read as an energy/arc glow, distinct from the pale default.
+     ;; RailgunHandEffect: arc_burst/0..39, one frame per 40 ms.
      {:id "railgun-charge-glow"
-      :kind :billboard-cross
+      :kind :animated-billboard
       :state {:layer :translucent
               :blend :alpha}
-      :params {:size 0.5
-               :color-r 236 :color-g 170 :color-b 93}}
+      :params {:texture-prefix
+               (modid/namespaced-path "textures/effects/arc_burst/")
+               :frame-count 40
+               :frame-ms 40.0
+               :half-size 0.5
+               :offset-y 0.8
+               :offset-z -1.0}}
+
+     ;; EntityCoinThrowing/RendererCoinThrowing: two-sided coin, player-relative
+     ;; offset, 0.3 scale and a 300 ms full rotation around a per-entity axis.
+     {:id "railgun-coin"
+      :kind :spinning-double-sided
+      :state {:layer :translucent
+              :blend :alpha
+              :cull :off}
+      :params {:front-texture
+               (modid/namespaced-path "textures/item/coin_front.png")
+               :back-texture
+               (modid/namespaced-path "textures/item/coin_back.png")
+               :scale 0.3
+               :offset-x -0.63
+               :offset-y 1.0
+               :offset-z 0.3
+               :rotation-period-ms 300.0}}
 
    {:id "ray-composite"
       :kind :ray-composite

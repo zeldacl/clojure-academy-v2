@@ -144,7 +144,7 @@
       (let [templates
             (vec
              (for [_ (range default-num-templates)
-                   :let [length (+ 1.0 (* (rand) 1.0))]] ;; spacing 1-2
+                   :let [length (+ 2.0 (rand))]]
                (generate-arc-segments length
                  default-arc-width default-max-offset
                  default-passes default-branch-factor default-width-shrink)))]
@@ -199,25 +199,40 @@
   [camera-pos beam style]
   (let [templates (ensure-templates)
         {:keys [start end ttl max-ttl]} beam
-        ;; Arcs alive until tick 30 (max-ttl - 20)
-        alive? (> ttl (- max-ttl 20))
-        num-templates (count templates)]
-    (when (and alive? (seq templates))
+        ;; EntityRailgunFX clears its arc templates at age 30 ticks.
+        alive? (> ttl (- max-ttl 30))
+        num-templates (count templates)
+        beam-length (v-length (v- end start))]
+    (when (and alive? (seq templates) (> beam-length 1.0e-5))
       (let [direction (v-normalize (v- end start))
-            beam-length (v-length (v- end start))
-            spacing 1.5
-            arc-count (max 1 (int (/ beam-length spacing)))]
-        (mapcat (fn [idx]
-                  (let [t (* (double idx) (/ beam-length (max 1 (dec arc-count))))
-                        world-pos (v+ start (v* direction t))
+            candidate (if (< (Math/abs (.-y ^cn.li.mcmod.math.V3 direction)) 0.9)
+                        vec3/unit-y
+                        vec3/unit-x)
+            right (v-normalize (v-cross candidate direction))
+            up (v-normalize (v-cross direction right))
+            placements (or (:arc-placements beam)
+                           [{:distance 1.0 :theta 0.0 :radius 0.1}])]
+        (mapcat (fn [idx {:keys [distance theta radius]}]
+                  (let [radial (v+ (v* right (* radius (Math/sin theta)))
+                                   (v* up (* radius (Math/cos theta))))
+                        world-pos (v+ start
+                                     (v+ (v* direction distance) radial))
                         ;; template is a list of segment-lists (main trunk +
                         ;; branches, per generate-arc-segments) — flatten to
                         ;; the flat segment list segment->quads expects.
                         template (nth templates (mod idx num-templates))]
-                    (map (fn [quad] (-> quad
-                                      (assoc :p0 (v+ (:p0 quad) world-pos))
-                                      (assoc :p1 (v+ (:p1 quad) world-pos))
-                                      (assoc :p2 (v+ (:p2 quad) world-pos))
-                                      (assoc :p3 (v+ (:p3 quad) world-pos))))
+                    (map (fn [quad]
+                           (let [to-world
+                                 (fn [^cn.li.mcmod.math.V3 p]
+                                   (v+ world-pos
+                                       (v+ (v* direction (.-x p))
+                                           (v+ (v* right (.-y p))
+                                               (v* up (.-z p))))))]
+                             (-> quad
+                                 (assoc :p0 (to-world (:p0 quad)))
+                                 (assoc :p1 (to-world (:p1 quad)))
+                                 (assoc :p2 (to-world (:p2 quad)))
+                                 (assoc :p3 (to-world (:p3 quad))))))
                          (segment->quads (apply concat template)))))
-                (range arc-count))))))
+                (range)
+                placements)))))

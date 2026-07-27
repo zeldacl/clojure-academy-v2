@@ -7,11 +7,9 @@
 
 (def ^:private charge-glow-effect-id (modid/namespaced-path "railgun_charge"))
 
-;; ctx-id -> spawned railgun_charge entity uuid, so fx-charge-end can despawn
-;; the exact entity fx-charge-start spawned on THIS client. Deliberately
-;; outside the arc-beam :level state store (that one is pure/replayable;
-;; spawning a real client entity is a side effect that must happen exactly
-;; once per start/end pair, not be replayed on state recompute).
+;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
+;; as charging ends. The separate hand animation remains a full 1.6-second
+;; one-shot, matching the original RailgunHandEffect.
 (defonce ^:private active-glows* (atom {}))
 
 (defn reset-charge-glows-for-test! []
@@ -41,7 +39,7 @@
                 ;; :level target is the idle-gating marker — see
                 ;; impl/railgun_shot.clj and content/railgun.clj's
                 ;; send-charge-start!/-update!/-end!. :immediate spawns/
-                ;; despawns the world-anchored charge glow (railgun_charge,
+                ;; despawns the world-anchored charge effect (railgun_charge,
                 ;; entities/all.clj), keyed by :source-player-id so every
                 ;; recipient's client anchors it to the CASTER, not
                 ;; themselves — this is what makes it visible to bystanders,

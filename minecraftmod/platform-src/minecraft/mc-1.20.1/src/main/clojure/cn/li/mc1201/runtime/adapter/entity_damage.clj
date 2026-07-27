@@ -61,7 +61,9 @@
             (if-let [entity (get-entity-by-uuid level entity-uuid)]
               (if (and (living? entity) (not (pvp-blocked? entity)))
                 (let [^LivingEntity living entity
-                      dmg-source (core/resolve-damage-source level source-type)]
+                      attacker (when-let [attacker-uuid (:attacker-uuid opts)]
+                                 (get-entity-by-uuid level attacker-uuid))
+                      dmg-source (core/resolve-damage-source level source-type attacker)]
                   (when (:reset-invulnerable-time? opts)
                     (set! (.-invulnerableTime living) (int 0)))
                   (apply-hurt! living dmg-source (float damage))

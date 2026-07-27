@@ -382,20 +382,27 @@
      (item-actions/on-item-action! action player-uuid payload))
 
    :build-item-use-plan
-   (fn [_player-uuid item-id _activated? _side]
+   (fn [_player-uuid item-id activated? _side]
      (when-let [action (item-actions/resolve-item-action item-id)]
-       (let [entity-spawn (item-actions/get-item-entity-spawn item-id)
-             domain-payload (if (= action :railgun-coin-throw)
+       (let [railgun-coin? (= action :railgun-coin-throw)
+             entity-spawn (item-actions/get-item-entity-spawn item-id)
+             domain-payload (if railgun-coin?
                               {:timestamp-ms (System/currentTimeMillis)}
                               {})
-             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
-                                     {:kind :domain-action :action action :payload domain-payload}]
+             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}]
+                              (or (not railgun-coin?) activated?)
+                              (conj {:kind :domain-action :action action :payload domain-payload})
+
                               entity-spawn (conj {:kind :spawn-scripted-effect
                                                   :entity-id (:entity-id entity-spawn)
+                                                  :unique-per-owner?
+                                                  (boolean (:unique-per-owner? entity-spawn))
                                                   :speed (double (or (:speed entity-spawn) 0.0))}))]
          {:server-actions server-actions
-          :client-actions [{:kind :notify-local-effect
-                            :event-key :ac/charge-coin-throw}]
+          :client-actions (if (and railgun-coin? (not activated?))
+                            []
+                            [{:kind :notify-local-effect
+                              :event-key :ac/charge-coin-throw}])
           :consume? true})))
 
    :compute-aoe-damage
@@ -413,6 +420,4 @@
    :compute-reflected-damage
    (fn [current-damage]
      (entity-damage-runtime/compute-reflected-damage current-damage))})
-
-
 

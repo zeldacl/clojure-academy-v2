@@ -1,4 +1,4 @@
-;; Runtime Clojure namespace manifest for -PreleaseAot builds.
+;; Runtime Clojure namespace manifest for the single platform AOT build.
 ;;
 ;; Generated baseline (2026-07-17): full main-sourceSet namespace set, no
 ;; exclusions. An initial attempt to exclude datagen/** was reverted after
@@ -8,7 +8,7 @@
 ;; datagen.metadata -- datagen is not cleanly separable from the runtime
 ;; require graph in this codebase without a source-level bootstrap split
 ;; (out of scope here). This manifest currently exists for drift detection
-;; only (verifyAotManifest) -- it does not yet reduce -PreleaseAot's compiled
+;; only (verifyAotManifest); it is consumed by the unified platform AOT task.
 ;; namespace set below "everything". A future pass could shrink it by
 ;; computing genuine require-graph reachability from real entry points
 ;; instead of a directory-name heuristic.
@@ -129,6 +129,7 @@
  "cn.li.mcmod.spi.entity-render-registry"
  "cn.li.mcmod.spi.key-scheme-provider"
  "cn.li.mcmod.spi.keybinding-registry"
+ "cn.li.mcmod.spi.entity-behavior-registry"
  "cn.li.mcmod.ui.anim"
  "cn.li.mcmod.ui.core"
  "cn.li.mcmod.ui.dsl"

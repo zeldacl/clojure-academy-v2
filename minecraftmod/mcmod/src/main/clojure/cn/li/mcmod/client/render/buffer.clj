@@ -38,7 +38,7 @@
   ((require-buffer-fn (buffer-op :cutout-no-cull) :cutout-no-cull) buffer-source texture))
 
 (defn triangle-vertex-order []
-  (or (buffer-op :triangle-vertex-order) [0 1 2]))
+  ((require-buffer-fn (buffer-op :triangle-vertex-order) :triangle-vertex-order)))
 
 (defn submit-vertex [vertex-consumer pose-stack x y z r g b a u v overlay uv2 nx ny nz]
   (let [submit-fn (or (buffer-op :submit-vertex)

@@ -7,7 +7,7 @@
 
 (defn- tile-id-for [tile]
   (or (try (platform-be/get-tile-id tile) (catch Exception _ nil))
-      (when-let [block-id (try (platform-be/be-get-block-id tile) (catch Exception _ nil))]
+      (when-let [block-id (try (platform-be/get-block-id tile) (catch Exception _ nil))]
         (tdsl/get-tile-id-for-block block-id))))
 
 (defn tile-capability

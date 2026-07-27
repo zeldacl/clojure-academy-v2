@@ -20,7 +20,13 @@
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :position-ops])))
 (defn current-ops            [] (get-in @(fw/fw-atom) [:platform :position-ops]))
 
-(defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
+(defn- call [k & args]
+  (let [ops (current-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required position operation is not installed"
+                      {:operation k :installed (keys ops)})))
+    (apply f args)))
 
 (defn pos-x       [p]    (call :pos-x p))
 (defn pos-y       [p]    (call :pos-y p))

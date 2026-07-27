@@ -1,5 +1,5 @@
 (ns cn.li.mc1201.gui.screen.impl
-  "Shared reactive screen construction and fallback behavior.
+  "Shared reactive screen construction.
 
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
@@ -7,10 +7,8 @@
             [cn.li.mc1201.gui.reactive.host-container :as reactive-host]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.registry :as gui-reg]
-            [cn.li.mcmod.runtime.owner :as runtime-owner]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
-           [net.minecraft.client.gui GuiGraphics]))
+            [cn.li.mcmod.runtime.owner :as runtime-owner])
+  )
 
 ;; Vanilla AbstractContainerScreen defaults (MC 1.20.1 inventory GUI size).
 (def default-image-width 176)
@@ -59,42 +57,16 @@
     (throw (ex-info "CGUI screen requires canonical client owner on menu container"
                     {:menu menu}))))
 
-(defn fallback-container-screen
-  [menu player-inventory title]
-  (doto (DelegatingCGuiContainerScreen. menu player-inventory title)
-    (.withRenderBg (fn [^DelegatingCGuiContainerScreen s ^GuiGraphics gg _partial _mx _my]
-      (let [left (.getGuiLeft s)
-            top (.getGuiTop s)
-            right (+ left (.getXSize s))
-            bottom (+ top (.getYSize s))]
-        (.fill gg left top right bottom (unchecked-int 0xC0101010))
-        (.fill gg left top right bottom (unchecked-int 0xD0101010)))))))
-
-(defn create-screen-or-fallback
-  [gui-id menu player-inventory title factory-fn-kw {:keys [on-render-tail!]}]
-  (let [factory-fn (when factory-fn-kw
-                     (try
-                       (gui-reg/get-screen-factory-fn factory-fn-kw)
-                       (catch Exception e
-                         (log/error "[SCREEN-FACTORY] Screen factory not registered for" factory-fn-kw ":" (.getMessage e))
-                         (log/stacktrace "[SCREEN-FACTORY] Stacktrace for screen factory lookup" e)
-                         nil)))]
-    (if factory-fn
-      (try
-        (let [screen-data (client-session/with-current-client-owner
-                            #(factory-fn menu player-inventory title))]
-          (if (reactive-container-screen? screen-data)
-            (reactive-host/create-tech-ui-container-screen
-              (assoc screen-data :minecraft-container menu :screen-title (str title) :player-inventory player-inventory))
-            (throw (ex-info "Screen factory must return reactive container screen data"
-                            {:gui-id gui-id
-                             :factory-fn-kw factory-fn-kw
-                             :returned-type (some-> screen-data type str)
-                             :returned-type-key (:type screen-data)}))))
-        (catch Throwable e
-          (log/error "[SCREEN-FACTORY] Error creating reactive screen for GUI ID" gui-id ":" (.getMessage e))
-          (log/stacktrace "[SCREEN-FACTORY] Stacktrace for screen creation" e)
-          (fallback-container-screen menu player-inventory title)))
-      (do
-        (log/error "[SCREEN-FACTORY] Missing factory function, using fallback screen. gui-id=" gui-id "factory-fn-kw=" factory-fn-kw)
-        (fallback-container-screen menu player-inventory title)))))
+(defn create-screen!
+  [gui-id menu player-inventory title factory-fn-kw _options]
+  (let [factory-fn (gui-reg/get-screen-factory-fn factory-fn-kw)
+        screen-data (client-session/with-current-client-owner
+                      #(factory-fn menu player-inventory title))]
+    (when-not (reactive-container-screen? screen-data)
+      (throw (ex-info "Screen factory must return reactive container screen data"
+                      {:gui-id gui-id
+                       :factory-fn-kw factory-fn-kw
+                       :returned-type (some-> screen-data type str)
+                       :returned-type-key (:type screen-data)})))
+    (reactive-host/create-tech-ui-container-screen
+      (assoc screen-data :minecraft-container menu :screen-title (str title) :player-inventory player-inventory))))

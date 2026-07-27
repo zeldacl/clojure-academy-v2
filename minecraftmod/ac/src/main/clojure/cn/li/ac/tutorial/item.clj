@@ -21,7 +21,7 @@
       ;; No raytrace guard needed — Forge's event chain naturally prevents
       ;; double-open: RightClickBlock fires first; if a block handler consumes
       ;; it (AC blocks) or vanilla Block.use succeeds (chests etc.), useItem is
-      ;; set to DENY and RightClickItem never fires.  The tutorial GUI only
+      ;; set to DENY and the item-use callback is not entered.  The tutorial GUI only
       ;; opens when the block interaction is PASS (dirt, air, etc.).
       (when (= side :client)
         (terminal-actions/open-tutorial! player))

@@ -10,8 +10,8 @@
             [cn.li.mc1201.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
-            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
@@ -107,7 +107,7 @@
                         :tick-sync! runtime-sync/tick-sync!
                         :send-sync-fn runtime-network/send-sync-to-client!
                         :world-tick! (fn [_runtime level]
-                                       (wireless-world/on-world-tick level))}]
+                                       (lifecycle/run-world-tick! level))}]
     (lifecycle-event-binding/register-lifecycle-listeners!
       {:on-player-login on-player-login
        :on-player-logout on-player-logout

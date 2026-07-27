@@ -20,8 +20,9 @@
                                                  :tile-kinds {} :hooks {} :handlers {}
                                                  :commands {} :energy {} :providers {}
                                                  :keybinds {} :messages {} :integrations {}}
-                                      :service {:lifecycle {:content-init-fn nil
-                                                            :runtime-content-activation-fn nil
+                                      :service {:lifecycle {:content-init-fns []
+                                                            :runtime-content-activation-fns []
+                                                            :world-tick-fns []
                                                             :datagen-metadata-init-fns []
                                                             :client-init-fns []
                                                             :post-spi-client-init-fns []}}

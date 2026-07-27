@@ -28,7 +28,7 @@ api   mcmod
 
 ```powershell
 .\gradlew.bat verifyCurrentPlatforms
-.\gradlew.bat :platform:runServer "-PplatformTarget=forge-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
 ```
 
 服务器验证重点：

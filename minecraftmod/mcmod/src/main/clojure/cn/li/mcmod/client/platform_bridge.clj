@@ -4,8 +4,16 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn- bridge-op [k & args]
+(defn- bridge-op-optional [k & args]
   (when-let [f (get-in @(fw/fw-atom) [:platform :client-bridge k])]
+    (apply f args)))
+
+(defn- bridge-op [k & args]
+  (let [ops (get-in @(fw/fw-atom) [:platform :client-bridge])
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required client bridge operation is not installed"
+                      {:operation k :installed (keys ops)})))
     (apply f args)))
 
 (defn install-client-bridge!
@@ -65,6 +73,6 @@
 (defn open-reactive-screen!      [& args] (apply bridge-op :open-reactive-screen args))
 
 (defn call-adapter
-  "Look up and call any bridge function by key. Returns nil if not found."
+  "Look up and call an optional bridge function by key."
   [k & args]
-  (apply bridge-op k args))
+  (apply bridge-op-optional k args))

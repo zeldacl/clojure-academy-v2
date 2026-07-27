@@ -1,7 +1,6 @@
 (ns cn.li.fabric1201.runtime.adapters.registry
   "Declarative runtime adapter install registry for Fabric."
   (:require [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
-            [cn.li.fabric1201.runtime.item-handler :as runtime-item-handler]
             [cn.li.fabric1201.runtime.player-motion :as runtime-player-motion]
             [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]
             [cn.li.fabric1201.runtime.entity-motion :as runtime-entity-motion]
@@ -22,7 +21,6 @@
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
-   (adapter-registry/step :item-handler runtime-item-handler/init!)
    (adapter-registry/step :player-motion
                           #(when-let [fw-atom (fw/fw-atom)]
                              (platform/install-adapter!

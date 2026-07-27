@@ -82,7 +82,8 @@
 
 (defn build-recipes!
   "Emit all supported vanilla recipes through Minecraft recipe builders.
-  Returns the emitted count. Custom recipe types (ImagFusor, MetalFormer)
+  Returns the emitted count. Content-specific recipe types are supplied by
+  loader/content components through the provider registry.
   are handled by the loader-specific provider (recipe-provider-custom)."
   [^Consumer writer]
   (let [recipes (recipe-core/load-recipes)]

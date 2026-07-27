@@ -61,6 +61,11 @@ public final class ScriptedEffectSpec {
         return value instanceof Number number ? number.intValue() : defaultValue;
     }
 
+    public String getStringParam(String key, String defaultValue) {
+        Object value = hookParams.get(key);
+        return value instanceof String string ? string : defaultValue;
+    }
+
     public double[] getDoubleArrayParam(String key, double[] defaultValue) {
         Object value = hookParams.get(key);
         if (!(value instanceof List<?> list) || list.isEmpty()) {

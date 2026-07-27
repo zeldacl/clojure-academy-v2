@@ -17,6 +17,5 @@ rootProject.name = "clojure-minecraft-mod"
 include "api"
 include "mcmod"
 include "ac"
-include "platform-target"
-
-project(":platform-target").name = "platform"
+include "platform"
+include "tools:target-launcher"

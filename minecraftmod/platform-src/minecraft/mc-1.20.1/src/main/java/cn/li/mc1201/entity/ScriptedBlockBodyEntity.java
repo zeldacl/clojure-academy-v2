@@ -1,6 +1,7 @@
 package cn.li.mc1201.entity;
 
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
+import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -30,14 +31,13 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     private static final String NBT_DAMAGE = "BlockBodyDamage";
     private static final String NBT_PLACE_WHEN_COLLIDE = "BlockBodyPlaceWhenCollide";
 
-    /** Matches original EntitySilbarn: zero gravity for the first 50 ticks, then settles to the configured value. */
-    private static final String HOOK_SILBARN = "silbarn";
-    private static final int SILBARN_GRAVITY_DELAY_TICKS = 50;
-    private static final int SILBARN_DESPAWN_DELAY_TICKS = 10;
-    private static final String SOUND_SILBARN_HEAVY = cn.li.mcmod.ModId.ID + ":entity.silbarn_heavy";
-    private static final String SOUND_SILBARN_LIGHT = cn.li.mcmod.ModId.ID + ":entity.silbarn_light";
+    private static final String IMPACT_DETONATION = "impact-detonation";
+    private static final String BEHAVIOR_REGISTRY_NS = "cn.li.mcmod.spi.entity-behavior-registry";
 
-    private int silbarnDespawnCountdown = -1;
+    static {
+        ClojureInterop.requireNamespace(BEHAVIOR_REGISTRY_NS);
+    }
+    private int behaviorDespawnCountdown = -1;
 
     private static final EntityDataAccessor<String> DATA_BLOCK_ID =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.STRING);
@@ -47,7 +47,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> DATA_PLACE_WHEN_COLLIDE =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<Boolean> DATA_SILBARN_HIT =
+    private static final EntityDataAccessor<Boolean> DATA_BEHAVIOR_HIT =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.BOOLEAN);
 
     private boolean syncedFieldsInitialized;
@@ -63,49 +63,51 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         this.entityData.define(DATA_GRAVITY, 0.05F);
         this.entityData.define(DATA_DAMAGE, 0.0F);
         this.entityData.define(DATA_PLACE_WHEN_COLLIDE, false);
-        this.entityData.define(DATA_SILBARN_HIT, false);
+        this.entityData.define(DATA_BEHAVIOR_HIT, false);
     }
 
     @Override
     public void tick() {
         ensureSyncedFields();
         super.tick();
-        if (silbarnDespawnCountdown > 0) {
-            silbarnDespawnCountdown--;
-            if (silbarnDespawnCountdown == 0 && !this.level().isClientSide) {
+        if (behaviorDespawnCountdown > 0) {
+            behaviorDespawnCountdown--;
+            if (behaviorDespawnCountdown == 0 && !this.level().isClientSide) {
                 this.discard();
             }
         }
     }
 
-    private boolean isSilbarn() {
+    private boolean hasImpactDetonationBehavior() {
         ScriptedBlockBodySpec spec = getBlockBodySpec();
-        return spec != null && HOOK_SILBARN.equals(spec.getHookId());
+        return spec != null && IMPACT_DETONATION.equals(spec.getBehaviorId());
     }
 
-    private void markSilbarnHit(boolean heavy) {
-        if (silbarnDespawnCountdown >= 0 || this.level().isClientSide) {
+    private void markBehaviorHit(boolean heavy) {
+        if (behaviorDespawnCountdown >= 0 || this.level().isClientSide) {
             return;
         }
-        silbarnDespawnCountdown = SILBARN_DESPAWN_DELAY_TICKS;
-        this.entityData.set(DATA_SILBARN_HIT, true);
-        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(
-            ResourceLocation.parse(heavy ? SOUND_SILBARN_HEAVY : SOUND_SILBARN_LIGHT));
+        behaviorDespawnCountdown = 10;
+        this.entityData.set(DATA_BEHAVIOR_HIT, true);
+        String soundPath = behaviorValue(heavy ? "heavy-sound" : "light-sound", "");
+        String soundId = cn.li.mcmod.ModId.ID + ":" + soundPath;
+        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.parse(soundId));
         if (sound != null) {
             this.playSound(sound, 0.5F, 1.0F);
         }
-        spawnSilbarnFragParticles();
+        spawnBehaviorParticles();
     }
 
-    private void spawnSilbarnFragParticles() {
+    private void spawnBehaviorParticles() {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
+        String particlePath = behaviorValue("particle", "");
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, particlePath));
         if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
             return;
         }
-        // Matches original EntitySilbarn#spawnEffects: 18-27 fragments in random sphere distribution
+        // Content behavior supplies the particle; generic adapter preserves the sphere distribution.
         int n = 18 + this.random.nextInt(10);
         for (int i = 0; i < n; i++) {
             double vel = 0.08 + this.random.nextDouble() * 0.10;
@@ -125,20 +127,19 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     }
 
     /**
-     * Force an in-flight (not yet landed/collided) silbarn to detonate.
-     * Matches original's silbarn.postEvent(new CollideEvent(new RayTraceResult(silbarn)))
-     * — a synthetic collision result whose entityHit is the silbarn itself,
+     * Force an in-flight behavior-driven entity to detonate.
+     * This models a synthetic collision result whose entityHit is the entity itself,
      * which is why original always plays the "heavy" sound variant here.
      */
-    public void forceSilbarnHit() {
-        if (isSilbarn()) {
-            markSilbarnHit(true);
+    public void forceBehaviorHit() {
+        if (hasImpactDetonationBehavior()) {
+            markBehaviorHit(true);
         }
     }
 
-    /** Mirrors original EntitySilbarn's client-synced hit flag, used by the client renderer to hide the model. */
-    public boolean isSilbarnHit() {
-        return this.entityData.get(DATA_SILBARN_HIT);
+    /** Client-synced behavior hit flag, used by the renderer to hide the model. */
+    public boolean isBehaviorHit() {
+        return this.entityData.get(DATA_BEHAVIOR_HIT);
     }
 
     private void ensureSyncedFields() {
@@ -188,7 +189,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     @Override
     protected float getGravity() {
-        if (isSilbarn() && this.tickCount < SILBARN_GRAVITY_DELAY_TICKS) {
+        if (hasImpactDetonationBehavior() && this.tickCount < 50) {
             return 0.0F;
         }
         return getSyncedGravity();
@@ -196,7 +197,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     @Override
     public boolean isPickable() {
-        return isSilbarn() || super.isPickable();
+        return hasImpactDetonationBehavior() || super.isPickable();
     }
 
     @Override
@@ -210,9 +211,9 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (target == owner) {
             return;
         }
-        if (isSilbarn()) {
-            boolean heavy = target instanceof ScriptedBlockBodyEntity other && other.isSilbarn();
-            markSilbarnHit(heavy);
+        if (hasImpactDetonationBehavior()) {
+            boolean heavy = target instanceof ScriptedBlockBodyEntity other && other.hasImpactDetonationBehavior();
+            markBehaviorHit(heavy);
             return;
         }
         float damage = getSyncedDamage();
@@ -226,8 +227,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     protected void onHit(HitResult result) {
         super.onHit(result);
         if (result.getType() == HitResult.Type.BLOCK) {
-            if (isSilbarn()) {
-                markSilbarnHit(false);
+            if (hasImpactDetonationBehavior()) {
+                markBehaviorHit(false);
             } else if (isSyncedPlaceWhenCollide() && !this.level().isClientSide) {
                 placeSyncedBlockOnHit((BlockHitResult) result);
             }
@@ -292,6 +293,15 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
     }
 
+    private String behaviorValue(String key, String fallback) {
+        try {
+            Object value = ClojureInterop.invoke(BEHAVIOR_REGISTRY_NS, "value", IMPACT_DETONATION, key, fallback);
+            return value == null ? fallback : String.valueOf(value);
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
     @Override
     protected Item getDefaultItem() {
         try {
@@ -328,8 +338,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (tag.contains(NBT_PLACE_WHEN_COLLIDE)) {
             this.entityData.set(DATA_PLACE_WHEN_COLLIDE, tag.getBoolean(NBT_PLACE_WHEN_COLLIDE));
         }
-        if (isSilbarn()) {
-            // Matches original EntitySilbarn#readEntityFromNBT: never survives a save/reload.
+        if (hasImpactDetonationBehavior()) {
+            // Impact-detonation entities intentionally do not survive a save/reload.
             this.discard();
         }
     }

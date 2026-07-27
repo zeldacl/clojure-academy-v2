@@ -6,6 +6,7 @@
   resolve-params calling them prematurely:
     :reflect-can-fn  (fn [uuid incoming-damage] -> bool)  called to check each candidate
     :reflect-shot-fn (fn [uuid incoming-damage] -> bool?) called when reflection triggers, returns hit?
+    :damage-transform-fn (fn [uuid raw-damage] -> damage) applies skill/global modifiers
   incoming-damage is the (falloff-scaled) damage that candidate would have
   taken had it not reflected — matches cn.li.ac.content.ability.shared.vec-reflection-interaction's
   2-arg (fn [target-player-uuid incoming-damage] ...) contract."
@@ -94,26 +95,45 @@
                     bz       (geom/floor-int (:z pos))
                     hardness (block-manip/get-block-hardness
                                                              world-id bx by bz)]
-                (if (or (nil? hardness) (neg? (double hardness)))
+                (cond
+                  ;; An absent hardness result is treated like empty space. More
+                  ;; importantly, a real air block has hardness 0 and must not
+                  ;; consume the whole line's energy.
+                  (nil? hardness)
                   (recur (+ travel 1.0) remaining)
-                  (if (and (pos? (double hardness))
-                           (<= (double hardness) remaining)
-                           (block-manip/can-break-block?
-                                                         player-id world-id bx by bz))
-                    (do
-                      (block-manip/break-block!
-                                                player-id world-id bx by bz (< (rand) 0.05))
-                      (when (< (rand) 0.05)
-                        (let [[ox oy oz] (rand-nth neighbor-offsets)
-                              nx         (+ bx (int ox))
-                              ny         (+ by (int oy))
-                              nz         (+ bz (int oz))]
-                          (when (block-manip/can-break-block?
-                                                              player-id world-id nx ny nz)
-                            (block-manip/break-block!
-                                                      player-id world-id nx ny nz false))))
-                      (recur (+ travel 1.0) (- remaining (double hardness))))
-                    (recur (+ travel 1.0) 0.0)))))))))))
+
+                  ;; Upstream turns unbreakable blocks (negative hardness) into
+                  ;; an effectively infinite energy cost, stopping this ray.
+                  (neg? (double hardness))
+                  nil
+
+                  ;; Zero-hardness blocks cost no energy. Air is skipped; a
+                  ;; tangible zero-hardness block is still removed when allowed.
+                  (zero? (double hardness))
+                  (if (nil? (block-manip/get-block world-id bx by bz))
+                    (recur (+ travel 1.0) remaining)
+                    (when (block-manip/can-break-block? player-id world-id bx by bz)
+                      (block-manip/break-block! player-id world-id bx by bz (< (rand) 0.05))
+                      (recur (+ travel 1.0) remaining)))
+
+                  (and (<= (double hardness) remaining)
+                       (block-manip/can-break-block? player-id world-id bx by bz))
+                  (do
+                    (block-manip/break-block!
+                      player-id world-id bx by bz (< (rand) 0.05))
+                    (when (< (rand) 0.05)
+                      (let [[ox oy oz] (rand-nth neighbor-offsets)
+                            nx         (+ bx (int ox))
+                            ny         (+ by (int oy))
+                            nz         (+ bz (int oz))]
+                        (when (block-manip/can-break-block?
+                                player-id world-id nx ny nz)
+                          (block-manip/break-block!
+                            player-id world-id nx ny nz false))))
+                    (recur (+ travel 1.0) (- remaining (double hardness))))
+
+                  :else
+                  nil)))))))))
 
 (defn execute-beam!
   "Execute beam logic and return evt enriched with :beam-result.
@@ -131,7 +151,8 @@
         look-dy       (or (:dy look) (:y look))
         look-dz       (or (:dz look) (:z look))
         reflect-can?  (:reflect-can-fn evt)
-        reflect-shot! (:reflect-shot-fn evt)]
+        reflect-shot! (:reflect-shot-fn evt)
+        transform-damage (:damage-transform-fn evt)]
     (if-not look
       (assoc evt :beam-result {:performed? false})
       (let [dir      (geom/vnorm {:x (double (or look-dx 0.0))
@@ -152,19 +173,25 @@
                 (reduced acc)
                 (let [radial     (double radial-dist)
                       factor     (+ 0.2 (* 0.8 (- 1.0 (/ (min md (max 0.0 radial)) md))))
-                      scaled-dmg (* dmg factor)]
+                      raw-dmg    (* dmg factor)
+                      scaled-dmg (double (if transform-damage
+                                           (transform-damage uuid raw-dmg)
+                                           raw-dmg))]
                   (if (and reflect-can? (reflect-can? uuid scaled-dmg))
                     (let [dist (geom/vdist trace {:x x :y y :z z})]
-                      ;; Always flag reflection-hit? = true when a reflector is found
-                      ;; (mirrors original: hitEntity = true unconditionally in the callback).
-                      (when reflect-shot! (reflect-shot! uuid scaled-dmg))
+                      ;; The original awards the larger 0.01 exp only when the
+                      ;; reflector's secondary ray actually hits an entity.
+                      ;; Merely intercepting the main beam is not a hit.
+                      (let [reflected-hit? (boolean
+                                             (when reflect-shot!
+                                               (reflect-shot! uuid scaled-dmg)))]
                       (reduced {:stop?               true
                                 :reflection-distance dist
-                                :reflection-hit?     true
+                                :reflection-hit?     reflected-hit?
                                 :normal-hit-count    normal-hit-count
-                                :hit-uuids           hit-uuids}))
+                                :hit-uuids           hit-uuids})))
                     (do
-                      (when (and (pos? dmg) (entity-damage/available?))
+                      (when (and (pos? scaled-dmg) (entity-damage/available?))
                         (entity-damage/apply-direct-damage!
                                                             world-id uuid
                                                             scaled-dmg

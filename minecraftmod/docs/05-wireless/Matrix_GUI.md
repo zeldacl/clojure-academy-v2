@@ -17,4 +17,4 @@ Wireless Matrix GUI is an `ac` business GUI. It shares the same GUI protocol, XM
 - Use `cn.li.ac.wireless.api` for topology and snapshot access.
 - Keep presenter formatting in `ac`.
 - Keep Loader code limited to registration and network/menu glue.
-- Keep generated resources under `platform-target/build/`, not source directories.
+- Keep generated resources under `platform/build/targets/<target-id>/platform/`, not source directories.

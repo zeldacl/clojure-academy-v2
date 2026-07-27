@@ -4,7 +4,7 @@
 (def skill-tunable-definitions
   [{:skill-id :railgun :id :qte.coin-window-ms :path "qte.coin-window-ms" :section-suffix "qte" :type :int :min 1 :default 1000 :comment "Railgun coin QTE window duration in milliseconds."}
    {:skill-id :railgun :id :qte.coin-active-threshold :path "qte.coin-active-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "Railgun coin QTE progress threshold at which the window becomes active."}
-   {:skill-id :railgun :id :qte.coin-perform-threshold :path "qte.coin-perform-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.7 :comment "Railgun coin QTE progress threshold required to fire immediately."}
+   {:skill-id :railgun :id :qte.coin-perform-threshold :path "qte.coin-perform-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.7 :comment "Railgun coin QTE progress value that must be strictly exceeded to fire immediately."}
    {:skill-id :railgun :id :charge.item-charge-ticks :path "charge.item-charge-ticks" :section-suffix "charge" :type :int :min 1 :default 20 :comment "Ticks required for the iron-item charge fallback path."}
    {:skill-id :railgun :id :beam.radius :path "beam.radius" :section-suffix "beam" :type :double :min 0.0 :default 2.0 :comment "Railgun beam collision radius."}
    {:skill-id :railgun :id :beam.query-radius :path "beam.query-radius" :section-suffix "beam" :type :double :min 0.0 :default 50.0 :comment "Entity query radius used by the railgun beam operation. Must be >= beam.max-distance or straight-line-distant entities on-axis are never fetched, silently truncating the beam's effective range."}
@@ -19,12 +19,12 @@
    {:skill-id :railgun :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [200.0 450.0] :comment "Railgun item-charge tick-stage CP cost lerp endpoints."}
    {:skill-id :railgun :id :cost.tick.overload :path "cost.tick.overload" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [180.0 120.0] :comment "Railgun item-charge tick-stage overload cost lerp endpoints."}
    {:skill-id :railgun :id :cooldown.manual-ticks :path "cooldown.manual-ticks" :section-suffix "cooldown" :type :double-list :min 1.0 :list-count 2 :default [300.0 160.0] :comment "Railgun manual cooldown lerp endpoints applied after a successful shot."}
-   {:skill-id :railgun :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "Railgun skill exp gained when the shot hits nothing (miss)."}
-   {:skill-id :railgun :id :progression.exp-reflection-hit :path "progression.exp-reflection-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.01 :comment "Railgun skill exp gained when any entity is hit (normal or reflection)."}
+   {:skill-id :railgun :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "Railgun skill exp gained unless the reflected secondary shot hits an entity."}
+   {:skill-id :railgun :id :progression.exp-reflection-hit :path "progression.exp-reflection-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.01 :comment "Railgun skill exp gained only when the reflected secondary shot hits an entity."}
 
    {:skill-id :thunder-clap :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 40.0 :comment "ThunderClap aim raycast range."}
    {:skill-id :thunder-clap :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "Minimum held ticks required for ThunderClap to perform."}
-   {:skill-id :thunder-clap :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 60 :comment "Reference maximum charge ticks used by ThunderClap FX and overcharge scaling."}
+   {:skill-id :thunder-clap :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 60 :comment "Maximum ThunderClap charge ticks before the strike auto-releases."}
    {:skill-id :thunder-clap :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [390.0 252.0] :comment "ThunderClap down-stage overload cost lerp endpoints."}
    {:skill-id :thunder-clap :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [18.0 25.0] :comment "ThunderClap tick-stage CP cost lerp endpoints while the charge is within min-ticks."}
    {:skill-id :thunder-clap :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [36.0 72.0] :comment "ThunderClap base damage lerp endpoints."}
@@ -82,8 +82,7 @@
 
    {:skill-id :mag-movement :id :movement.acceleration :path "movement.acceleration" :section-suffix "movement" :type :double :min 0.0 :default 0.08 :comment "MagMovement smooth acceleration step."}
    {:skill-id :mag-movement :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 25.0 :comment "MagMovement target raycast range."}
-   {:skill-id :mag-movement :id :targeting.weak-metal-exp-threshold :path "targeting.weak-metal-exp-threshold" :section-suffix "targeting" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "MagMovement exp threshold for weak metal targeting."}
-   {:skill-id :mag-movement :id :targeting.target-update-radius :path "targeting.target-update-radius" :section-suffix "targeting" :type :double :min 0.0 :default 4.0 :comment "MagMovement entity target refresh radius."}
+   {:skill-id :mag-movement :id :targeting.weak-metal-exp-threshold :path "targeting.weak-metal-exp-threshold" :section-suffix "targeting" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "Legacy MagMovement threshold constant; original effective metal check accepts weak metal at every exp level."}
    {:skill-id :mag-movement :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "MagMovement down-stage overload cost lerp endpoints."}
    {:skill-id :mag-movement :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [15.0 8.0] :comment "MagMovement tick-stage CP cost lerp endpoints."}
    {:skill-id :mag-movement :id :progression.exp-min :path "progression.exp-min" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "MagMovement minimum exp gained on completion."}

@@ -19,7 +19,7 @@ platform-src/
     fabric/
   test-support/
 
-platform-target/
+platform/
 platform-catalog.json
 build-logic/
 ```

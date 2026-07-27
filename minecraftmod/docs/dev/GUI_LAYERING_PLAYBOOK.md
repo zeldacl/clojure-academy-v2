@@ -20,6 +20,6 @@ Use this when adding or changing GUI code.
 - Use selected target compile to verify Loader-specific changes.
 
 ```powershell
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 ```

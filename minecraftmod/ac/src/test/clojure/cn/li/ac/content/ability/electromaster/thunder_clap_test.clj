@@ -1,12 +1,15 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
+            [cn.li.ac.ability.registry.event :as ability-event]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-            [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.content.ability.electromaster.thunder-clap :as thunder-clap]))
 
 (def ^:private spec thunder-clap/thunder-clap)
@@ -50,8 +53,8 @@
                                                    (swap! exp-calls* conj args))
                     world-op/execute-spawn-lightning! (fn [_evt _params]
                                                         (swap! run-ops* conj [:spawn-lightning]))
-                    damage-op/execute-damage-aoe! (fn [_evt params]
-                                                    (swap! run-ops* conj [:damage-aoe params]))]
+                    thunder-clap/execute-thunder-clap-aoe! (fn [_evt radius amount]
+                                                             (swap! run-ops* conj [:damage-aoe radius amount]))]
         (seed-charge-context! owner "p1" "ctx-short" {:hold-ticks 20
                                                        :performed? false
                                                        :hit-pos {:x 1.0 :y 2.0 :z 3.0}})
@@ -104,8 +107,8 @@
                                                    (swap! exp-calls* conj args))
                     world-op/execute-spawn-lightning! (fn [evt params]
                                                         (swap! run-ops* conj [:spawn-lightning evt params]))
-                    damage-op/execute-damage-aoe! (fn [evt params]
-                                                    (swap! run-ops* conj [:damage-aoe evt params]))]
+                    thunder-clap/execute-thunder-clap-aoe! (fn [evt radius amount]
+                                                             (swap! run-ops* conj [:damage-aoe evt radius amount]))]
         (seed-charge-context! owner "p1" "ctx-hit" {:hold-ticks 50
                                                      :performed? false
                                                      :hit-pos {:x 8.0 :y 64.0 :z 8.0}})
@@ -130,13 +133,11 @@
               :world-id "world-1"
               :hit-pos {:x 8.0 :y 64.0 :z 8.0}
               :exp 0.5}
-             {:center :hit-pos
-              :radius 22.5
-              :amount 55.800000000000004
-              :damage-type :lightning}]]
+             22.5
+             55.800000000000004]]
                  @run-ops*))
           (is (= [["p1" :thunder-clap 400]] @cooldown-calls*))
-          (is (= [["p1" :thunder-clap 0.003]] @exp-calls*))
+          (is (= [["p1" :thunder-clap 0.003 1.0]] @exp-calls*))
           (is (= {:performed? true
                   :charge-ticks 50
                   :ticks 50
@@ -144,3 +145,99 @@
                   :target {:x 8.0 :y 64.0 :z 8.0}
                   :caster-pos {:x 0.0 :y 65.62 :z 0.0}}
                  (end-payload-fn {:ctx-id "ctx-hit" :player-id "p1" :hold-ticks 50}))))))))
+
+(deftest thunder-clap-targeting-ignores-entities-like-original-test
+  (let [raycast-calls* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-blocks (fn [& args]
+                                           (swap! raycast-calls* conj args)
+                                           {:hit-type :block
+                                            :hit-x 3.0 :hit-y 66.0 :hit-z 9.0})
+                  raycast/raycast-combined (fn [& _]
+                                             (throw (AssertionError. "combined/entity raycast must not be used")))
+                  geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})
+                  geom/world-id-of (fn [_] "world-1")
+                  thunder-clap/targeting-range (constantly 40.0)]
+      (is (= {:x 3.0 :y 66.0 :z 9.0}
+             (#'thunder-clap/resolve-raycast-target "p1")))
+      (is (= [["world-1" 1.0 65.0 2.0 0.0 0.0 1.0 40.0]]
+             @raycast-calls*)))))
+
+(deftest thunder-clap-aoe-applies-original-scaling-and-attribution-test
+  (let [calc-calls* (atom [])
+        damage-calls* (atom [])
+        evt {:player-id "caster"
+             :world-id "world-1"
+             :hit-pos {:x 0.0 :y 0.0 :z 0.0}}]
+    (with-redefs [world-effects/available? (constantly true)
+                  world-effects/find-entities-in-radius
+                  (fn [& _]
+                    [{:uuid "caster" :x 0.0 :y 0.0 :z 0.0}
+                     {:uuid "center" :x 0.0 :y 0.0 :z 0.0}
+                     {:uuid "half" :x 5.0 :y 0.0 :z 0.0}])
+                  entity-damage/available? (constantly true)
+                  entity-damage/apply-direct-damage!
+                  (fn [& args]
+                    (swap! damage-calls* conj args)
+                    true)
+                  ability-event/fire-calc-event!
+                  (fn [event-type value extra]
+                    (swap! calc-calls* conj [event-type value extra])
+                    (+ value 1.0))
+                  skill-effects/scale-damage (fn [_ value] (* 2.0 value))]
+      (is (= 2 (#'thunder-clap/execute-thunder-clap-aoe! evt 10.0 100.0))))
+    (is (= [[ability-event/CALC-SKILL-ATTACK
+             100.0
+             {:player-id "caster" :target-id "center" :skill-id :thunder-clap}]
+            [ability-event/CALC-SKILL-ATTACK
+             50.0
+             {:player-id "caster" :target-id "half" :skill-id :thunder-clap}]]
+           @calc-calls*))
+    (is (= [["world-1" "center" 202.0 :skill
+             {:attacker-uuid "caster" :skill-id :thunder-clap}]
+            ["world-1" "half" 102.0 :skill
+             {:attacker-uuid "caster" :skill-id :thunder-clap}]]
+           @damage-calls*))))
+
+(deftest thunder-clap-auto-performs-at-maximum-charge-test
+  (let [tick-fn (get-in spec [:actions :tick!])
+        owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}
+        perform-calls* (atom [])
+        fx-calls* (atom [])]
+    (seed-charge-context! owner "p1" "ctx-max" {:hold-ticks 59
+                                                 :performed? false
+                                                 :hit-pos {:x 4.0 :y 64.0 :z 4.0}})
+    (with-redefs [thunder-clap/max-ticks (constantly 60)
+                  thunder-clap/refresh-hit-pos! (fn [& _] nil)
+                  thunder-clap/perform-thunder-clap!
+                  (fn [& args] (swap! perform-calls* conj args))
+                  thunder-clap/emit-thunder-clap-fx!
+                  (fn [stage evt] (swap! fx-calls* conj [stage evt]))]
+      (ctx/with-context-owner owner
+        (cb/apply-invoke tick-fn :player-id "p1" :ctx-id "ctx-max" :exp 0.75))
+      (is (= 60 (get-in (ctx/get-context owner "ctx-max") [:skill-state :hold-ticks])))
+      (is (= [["ctx-max" "p1" 0.75 60]] @perform-calls*))
+      (is (= :terminated (:status (ctx/get-context owner "ctx-max"))))
+      (is (= [[:update {:ctx-id "ctx-max" :player-id "p1" :hold-ticks 60}]]
+             @fx-calls*)))))
+
+(deftest thunder-clap-minimum-tick-cost-failure-still-performs-test
+  (let [cost-fail-fn (get-in spec [:actions :cost-fail!])
+        owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}
+        perform-calls* (atom [])]
+    (seed-charge-context! owner "p1" "ctx-min-fail" {:hold-ticks 40
+                                                      :performed? false
+                                                      :hit-pos {:x 4.0 :y 64.0 :z 4.0}})
+    (with-redefs [thunder-clap/min-ticks (constantly 40)
+                  thunder-clap/perform-thunder-clap!
+                  (fn [& args] (swap! perform-calls* conj args))]
+      (ctx/with-context-owner owner
+        (cb/apply-invoke cost-fail-fn
+                         :player-id "p1"
+                         :ctx-id "ctx-min-fail"
+                         :exp 0.25
+                         :cost-ok? false
+                         :cost-stage :tick))
+      (is (= [["ctx-min-fail" "p1" 0.25 40]] @perform-calls*))
+      (is (= :terminated (:status (ctx/get-context owner "ctx-min-fail")))))))

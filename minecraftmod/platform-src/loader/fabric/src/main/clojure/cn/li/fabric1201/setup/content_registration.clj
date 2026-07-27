@@ -7,12 +7,15 @@
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.protocol.metadata :as metadata]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.block.blockstate-properties :as bsp])
+            [cn.li.mc1201.block.blockstate-properties :as bsp]
+            [cn.li.mc1201.runtime.item-callback :as item-callback]
+            [cn.li.mc1201.item.spec :as item-spec])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.block IScriptedBlock]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
-           [net.minecraft.world.item Item Item$Properties]))
+           [cn.li.mc1201.item NbtBarItem ScriptedItem]
+           [net.minecraft.world.item Item$Properties]))
 
 (defn- metadata-call
   "Call metadata function `f` with `args`. Returns nil if `f` is nil."
@@ -96,8 +99,15 @@
             ((:swap-state! registered-block-entities) #(assoc % tile-id registered))))))))
 
 (defn- create-standalone-item
-  [_item-spec]
-  (Item. (Item$Properties.)))
+  [item-spec]
+  (let [props (Item$Properties.)
+        {:keys [energy-item? enchantability tooltip-lines current-key max-key default-max bar-color]}
+        (item-spec/standalone-values item-spec)
+        no-owner (fn [_player _side f] (f))
+        callback (item-callback/build "Fabric" no-owner)]
+    (if energy-item?
+      (NbtBarItem. props current-key max-key default-max bar-color callback)
+      (ScriptedItem. props enchantability tooltip-lines callback))))
 
 (defn register-all-items!
   [{:keys [registered-items registered-blocks]}]
@@ -203,7 +213,8 @@
                (double (or (:damage block-body) 0.0))
                (not (false? (:place-when-collide? block-body)))
                (edsl/resolve-render-profile-key entity-spec :block-body "block-body")
-               (name (or (:hook block-body) :none)))]
+               (name (or (:hook block-body) :none))
+               (name (or (:behavior block-body) :none)))]
     (FabricScriptedEntityAccess/registerScriptedBlockBodySpec
       (str registry-name)
       spec))

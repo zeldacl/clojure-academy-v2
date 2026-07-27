@@ -12,12 +12,28 @@
 
 (defn install-item-ops!
   [ops-map _label]
-  (when-let [fw-atom (fw/fw-atom)] (swap! fw-atom assoc-in [:platform :item-ops] ops-map)) nil)
+  (let [missing (seq (remove (set (keys ops-map)) item-ops-keys))]
+    (when missing
+      (throw (ex-info "Item ops missing required operations"
+                      {:missing missing
+                       :installed (keys ops-map)})))
+    (when-let [fw-atom (fw/fw-atom)]
+      (swap! fw-atom assoc-in [:platform :item-ops] ops-map))
+    nil))
 
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :item-ops])))
 (defn current-ops         [] (get-in @(fw/fw-atom) [:platform :item-ops]))
 
-(defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
+(defn- call
+  "Invoke a required item operation; missing installation is a configuration error."
+  [k & args]
+  (let [ops (current-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required item operation is not installed"
+                      {:operation k
+                       :installed (keys ops)})))
+    (apply f args)))
 
 ;; ItemStack access API
 (defn empty?            [stack]        (call :item-is-empty? stack))

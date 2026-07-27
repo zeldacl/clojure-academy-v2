@@ -32,8 +32,9 @@
   (log/error prefix "Failed to open GUI:" (.getMessage ^Throwable e))
   (log/error prefix "Exception:" e))
 
-(defn open-player-menu-with-fallback!
+(defn open-player-menu!
   "Open a player menu via the platform-injected loader-specific implementation."
   [player factory]
-  (when-let [fw-atom (fw/fw-atom)]
+  (let [fw-atom (or (fw/fw-atom)
+                    (throw (ex-info "Framework is not initialized for GUI open" {})))]
     (platform/call-adapter fw-atom :gui-open :open-player-menu! player factory)))

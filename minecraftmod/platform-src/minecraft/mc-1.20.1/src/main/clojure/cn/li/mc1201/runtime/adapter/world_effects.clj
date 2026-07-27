@@ -98,13 +98,13 @@
                       (catch Exception e
                         (log/warn "Failed to play world sound:" (ex-message e))
                         false)))
-     :trigger-silbarn-hit! (fn [world-id entity-uuid]
+     :trigger-behavior-hit! (fn [world-id entity-uuid]
                              (try
                                (when-let [^MinecraftServer server (server-fn)]
                                  (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                   (boolean (core/trigger-silbarn-hit-in-level! level entity-uuid get-entity-by-uuid-fn))))
+                                   (boolean (core/trigger-behavior-hit-in-level! level entity-uuid get-entity-by-uuid-fn))))
                                (catch Exception e
-                                 (log/warn "Failed to trigger silbarn hit:" (ex-message e))
+                                 (log/warn "Failed to trigger behavior hit:" (ex-message e))
                                  false)))}))  ;; close fn, map, let, defn
 
 (defn install-world-effects!

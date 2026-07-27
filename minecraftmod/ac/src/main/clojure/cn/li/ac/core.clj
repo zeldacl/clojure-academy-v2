@@ -2,9 +2,11 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.spi.entity-render-registry :as entity-render-registry]
+            [cn.li.mcmod.spi.entity-behavior-registry :as entity-behavior-registry]
             [cn.li.ac.bootstrap :as ac-bootstrap]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
+            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.ac.media.external-scan :as media-external-scan]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.client.install-effect-reactive :as install-effect-reactive]
@@ -53,6 +55,13 @@
   ;; hardcoding AC namespace strings.
   (entity-render-registry/register-entity-render-ns!
     "silbarn" "cn.li.ac.content.entities.silbarn-render")
+  (entity-behavior-registry/register-behavior!
+    :impact-detonation
+    {:gravity-delay-ticks 50
+     :despawn-delay-ticks 10
+     :heavy-sound "entity.silbarn_heavy"
+     :light-sound "entity.silbarn_light"
+     :particle "silbarn_frag"})
   ;; cn.li.ac.terminal.client.actions/install-ui-hooks!
   (terminal-actions/install-ui-hooks!)
   ;; Push handler for terminal install-effect (moved out of shell to break circular dep)
@@ -68,14 +77,15 @@
   (ac-bootstrap/register-post-spi-init!)
   (lifecycle/register-content-init! #'init)
   (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
+  (lifecycle/register-world-tick! wireless-world/on-world-tick)
   (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
   (lifecycle/register-client-init! init-client-renderers))
 
 (defn register-lifecycle-hooks!
   "Register AC lifecycle hooks with mcmod.
 
-  This is the explicit bootstrap entrypoint used by ServiceLoader and fallback
-  content discovery. Requiring this namespace alone must not mutate lifecycle
+  This is the entrypoint named by generated suite metadata.
+  Requiring this namespace alone must not mutate lifecycle
   state."
   []
   (let [should-register?

@@ -45,7 +45,12 @@
   (when entity
     {:x (.getX entity)
      :y (.getY entity)
-     :z (.getZ entity)}))
+     :z (.getZ entity)
+     :eye-height (.getEyeHeight entity)
+     :type (.. entity getType getDescriptionId)
+     ;; EntityTarget.alive in the original is !Entity.isDead. isRemoved is the
+     ;; direct modern equivalent; health alone must not end tracking early.
+     :alive? (not (.isRemoved entity))}))
 
 (defn power-creeper-for-entity!
   [^ServerLevel level ^Entity entity]

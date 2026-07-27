@@ -37,8 +37,8 @@ final class ScriptedRenderAccess {
         return invokeString(entity, "getSyncedBlockId", "minecraft:stone");
     }
 
-    static boolean isSilbarnHit(Entity entity) {
-        return invokeBoolean(entity, "isSilbarnHit", false);
+    static boolean isBehaviorHit(Entity entity) {
+        return invokeBoolean(entity, "isBehaviorHit", false);
     }
 
     private static boolean invokeBoolean(Object target, String methodName, boolean defaultValue) {

@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.mag-movement-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
@@ -67,7 +68,17 @@
 (deftest pattern-is-hold-channel-and-cost-fail-present-test
   (let [spec (skill-def)]
     (is (= :hold-channel (:pattern spec)))
-    (is (fn? (get-in spec [:actions :cost-fail!])))))
+    (is (fn? (get-in spec [:actions :cost-fail!])))
+    (is (= 1.0 (skill-config/cp-consume-speed :mag-movement)))
+    (is (= 1.0 (skill-config/overload-consume-speed :mag-movement)))))
+
+(deftest creative-mode-matches-original-resource-bypass-test
+  (let [spec (skill-def)
+        down-overload (get-in spec [:cost :down :overload])
+        tick-cp (get-in spec [:cost :tick :cp])]
+    (with-redefs [mag-movement/player-creative? (constantly true)]
+      (is (zero? (down-overload "p1" :mag-movement 0.5)))
+      (is (zero? (tick-cp "p1" :mag-movement 0.5))))))
 
 (deftest cost-fail-down-finalizes-without-exp-test
   (let [ctx-id "ctx-down-fail"
@@ -96,7 +107,7 @@
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
 
-(deftest down-no-target-terminates-without-exp-test
+(deftest down-no-target-terminates-with-original-min-exp-test
   (let [ctx-id "ctx-no-target"
         terminated* (atom [])
         {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
@@ -108,6 +119,11 @@
     (with-mag-env
       #(with-redefs [mag-movement/resolve-target (fn [_] nil)
                     mag-movement/player-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                    mag-movement/cfg-double (fn [k]
+                                              (case k
+                                                :progression.exp-min 0.005
+                                                :progression.exp-distance-scale 0.0011
+                                                0.0))
                     ctx/get-context get-context
                     ctx/terminate-context! terminate-context!
                     ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -119,7 +135,7 @@
                                                    (swap! exp* conj args)
                                                    nil)]
          (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.4)))
-    (is (empty? @exp*))
+    (is (= [["p1" :mag-movement 0.005]] @exp*))
     (is (= [[ctx-id :mag-movement/fx-end :end nil] [ctx-id :mag-movement/fx-end :end nil]] @calls*))
     (is (= [ctx-id] @terminated*))
     (is (nil? (:skill-state @ctx*)))))
@@ -154,7 +170,6 @@
                                                :progression.exp-min 0.005
                                                :progression.exp-distance-scale 0.0011
                                                :movement.acceleration 0.08
-                                               :targeting.target-update-radius 4.0
                                                0.0))
                     ctx/get-context get-context
                     ctx/terminate-context! terminate-context!
@@ -206,7 +221,6 @@
                                              (case k
                                                :progression.exp-min 0.005
                                                :progression.exp-distance-scale 0.0011
-                                               :targeting.target-update-radius 4.0
                                                0.0))
                     ctx/get-context get-context
                     ctx/terminate-context! terminate-context!
@@ -227,19 +241,21 @@
 
 (deftest resolve-target-uses-hit-vec-and-eye-height-test
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
-                mag-movement/is-metal-entity? (fn [_] true)
-                raycast/available? (constantly true)
-                raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
-                geom/world-id-of (fn [_] "w")
-                mag-movement/cfg-double (fn [k]
-                                          (case k
-                                            :targeting.range 25.0
-                                            0.0))
-                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _]
-                                           {:hit-type :block
-                                            :block-id "minecraft:iron_block"
-                                            :x 1.25 :y 2.5 :z 3.75})]
+                 mag-movement/is-metal-entity? (fn [_] true)
+                 raycast/available? (constantly true)
+                 raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
+                 geom/world-id-of (fn [_] "w")
+                 mag-movement/cfg-double (fn [k]
+                                           (case k
+                                             :targeting.range 25.0
+                                             0.0))
+                 raycast/raycast-blocks (fn [_ _ _ _ _ _ _ _]
+                                          {:block-id "minecraft:iron_block"
+                                           :x 1.0 :y 2.0 :z 3.0
+                                           :hit-x 1.25 :hit-y 2.5 :hit-z 3.75
+                                           :distance 4.0})
+                 raycast/raycast-from-player (fn [_ _ _] nil)]
     (is (= {:target-kind :block
             :target-world-id "w"
             :target-x 1.25
@@ -248,21 +264,31 @@
             :target-block-id "minecraft:iron_block"}
            (@#'cn.li.ac.content.ability.electromaster.mag-movement/resolve-target "p1"))))
   (with-redefs [mag-movement/is-metal-block? (fn [_] true)
-                mag-movement/is-metal-entity? (fn [_] true)
-                raycast/available? (constantly true)
-                raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
-                geom/world-id-of (fn [_] "w")
-                mag-movement/cfg-double (fn [k]
-                                          (case k
-                                            :targeting.range 25.0
-                                            0.0))
-                raycast/raycast-combined (fn [_ _ _ _ _ _ _ _]
-                                           {:hit-type :entity
-                                            :type "minecraft:iron_golem"
-                                            :uuid "e-1"
-                                            :x 4.0 :y 5.0 :z 6.0
-                                            :eye-height 1.9})]
+                 mag-movement/is-metal-entity? (fn [_] true)
+                 raycast/available? (constantly true)
+                 raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                 geom/eye-pos (fn [_] {:x 10.0 :y 20.0 :z 30.0})
+                 geom/world-id-of (fn [_] "w")
+                 mag-movement/cfg-double (fn [k]
+                                           (case k
+                                             :targeting.range 25.0
+                                             0.0))
+                 raycast/raycast-blocks (fn [_ _ _ _ _ _ _ _]
+                                          {:block-id "minecraft:iron_block"
+                                           :x 7.0 :y 8.0 :z 9.0
+                                           :hit-x 7.5 :hit-y 8.5 :hit-z 9.5
+                                           :distance 4.0})
+                 raycast/raycast-from-player (fn [_ _ living-only?]
+                                               (is (false? living-only?))
+                                               {:entity-id "e-1"
+                                                :distance 4.0})
+                 motion-op/entity-position (fn [world-id entity-uuid]
+                                             (is (= "w" world-id))
+                                             (is (= "e-1" entity-uuid))
+                                             {:x 4.0 :y 5.0 :z 6.0
+                                              :eye-height 1.9
+                                              :type "entity.minecraft.iron_golem"
+                                              :alive? true})]
     (is (= {:target-kind :entity
             :target-world-id "w"
             :target-entity-uuid "e-1"
@@ -270,7 +296,57 @@
             :target-x 4.0
             :target-y 6.9
             :target-z 6.0}
-           (@#'cn.li.ac.content.ability.electromaster.mag-movement/resolve-target "p1")))))
+            (@#'cn.li.ac.content.ability.electromaster.mag-movement/resolve-target "p1")))))
+
+(deftest entity-target-refresh-tracks-uuid-without-radius-cutoff-test
+  (let [calls* (atom [])
+        skill-state {:target-kind :entity
+                     :target-world-id "w"
+                     :target-entity-uuid "e-1"
+                     :target-x 1.0
+                     :target-y 2.0
+                     :target-z 3.0}]
+    (with-redefs [motion-op/entity-position
+                  (fn [world-id entity-uuid]
+                    (swap! calls* conj [world-id entity-uuid])
+                    {:x 101.0 :y 50.0 :z -80.0
+                     :eye-height 2.0
+                     :alive? true})]
+      (is (= (assoc skill-state
+                    :target-x 101.0
+                    :target-y 52.0
+                    :target-z -80.0)
+             (@#'cn.li.ac.content.ability.electromaster.mag-movement/update-entity-target
+               skill-state))))
+    (is (= [["w" "e-1"]] @calls*))))
+
+(deftest down-captures-post-cost-overload-as-recovery-floor-test
+  (let [ctx-id "ctx-overload-floor"
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks {})
+        {:keys [send!]} (fx-mocks/capture-fx-send!)
+        down! (get (skill-actions) :down!)]
+    (with-mag-env
+      #(with-redefs [mag-movement/resolve-target
+                     (fn [_]
+                       {:target-kind :block
+                        :target-world-id "w"
+                        :target-x 1.0 :target-y 2.0 :target-z 3.0
+                        :target-block-id "minecraft:iron_block"})
+                     mag-movement/player-pos (fn [_] {:x 0.0 :y 1.0 :z 2.0})
+                     mag-movement/cfg-lerp (fn [_ _] 45.0)
+                     motion-op/player-motion-available? (constantly false)
+                     skill-effects/get-player-state
+                     (fn [_] {:resource-data {:cur-overload 77.0}})
+                     ctx/get-context get-context
+                     ctx/terminate-context! terminate-context!
+                     ctx-skill/update-skill-state-root! update-skill-state-root!
+                     ctx-skill/assoc-skill-state! assoc-skill-state!
+                     ctx-skill/clear-skill-state! clear-skill-state!
+                     fx/send! send!]
+         (cb/apply-invoke down! :ctx-id ctx-id :player-id "p1" :exp 0.5)))
+    (is (= 77.0 (get-in @ctx* [:skill-state :overload-floor])))))
 
 (deftest up-then-abort-does-not-double-finalize-test
   (let [ctx-id "ctx-up-abort"

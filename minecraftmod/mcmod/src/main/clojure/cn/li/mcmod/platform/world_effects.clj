@@ -11,7 +11,11 @@
 
 (defn- call
   [k & args]
-  (when-let [f (get (current) k)]
+  (let [ops (current)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required world-effects operation is not installed"
+                      {:operation k :installed (keys ops)})))
     (apply f args)))
 
 (defn spawn-lightning!
@@ -44,6 +48,6 @@
   [world-id x y z sound-id source volume pitch]
   (call :play-sound! world-id x y z sound-id source volume pitch))
 
-(defn trigger-silbarn-hit!
+(defn trigger-behavior-hit!
   [world-id entity-uuid]
-  (boolean (call :trigger-silbarn-hit! world-id entity-uuid)))
+  (boolean (call :trigger-behavior-hit! world-id entity-uuid)))

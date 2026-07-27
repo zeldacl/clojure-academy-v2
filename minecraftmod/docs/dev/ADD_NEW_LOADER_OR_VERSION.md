@@ -60,7 +60,7 @@ Use a synthetic fixture when validating architecture only:
 
 For each real supported target:
 
-1. `cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=<target-id>"`
+1. `cmd /c .\gradlew.bat :platform:compileJava :platform:compileClojure `scripts/target-gradle.ps1 <target-id>``
 2. Datagen task for that target, when applicable.
 3. Target artifact task, when applicable.
 4. `cmd /c .\gradlew.bat verifyCurrentPlatforms`

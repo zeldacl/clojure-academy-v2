@@ -9,20 +9,19 @@ import net.minecraft.client.particle.TextureSheetParticle;
 import net.minecraft.core.particles.SimpleParticleType;
 
 /**
- * Metal-fragment particle for entity_silbarn impact burst.
+ * Generic fragment particle for a behavior-driven impact burst.
  *
- * Matches original EntitySilbarn#spawnEffects:
- *   texture  entities/silbarn_frag
+ * Texture and registration are supplied by the content module.
  *   size     0.1
  *   gravity  0.03
  *   rotation each tick: roll += sin(phi) * 25 deg where phi is per-particle random
  *   lifetime ~60 ticks (not specified in original; chosen to let gravity do its work)
  */
-public final class SilbarnFragParticle extends TextureSheetParticle {
+public final class BehaviorFragParticle extends TextureSheetParticle {
 
     private final float rollSpeed;
 
-    SilbarnFragParticle(ClientLevel level, double x, double y, double z,
+    BehaviorFragParticle(ClientLevel level, double x, double y, double z,
                         double vx, double vy, double vz, SpriteSet spriteSet) {
         super(level, x, y, z, vx, vy, vz);
         this.setSprite(spriteSet.get(this.random));
@@ -58,7 +57,7 @@ public final class SilbarnFragParticle extends TextureSheetParticle {
         public Particle createParticle(SimpleParticleType type, ClientLevel level,
                                        double x, double y, double z,
                                        double vx, double vy, double vz) {
-            return new SilbarnFragParticle(level, x, y, z, vx, vy, vz, this.spriteSet);
+            return new BehaviorFragParticle(level, x, y, z, vx, vy, vz, this.spriteSet);
         }
     }
 }

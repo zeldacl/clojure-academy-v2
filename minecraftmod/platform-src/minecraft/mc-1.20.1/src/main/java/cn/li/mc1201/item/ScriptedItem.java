@@ -39,7 +39,6 @@ public class ScriptedItem extends Item {
                 (InteractionResultHolder<ItemStack>) holder;
             return typed;
         }
-        // No callback or callback returned non-standard — fall through to vanilla.
         throw new IllegalStateException("ScriptedItem use callback must return InteractionResultHolder");
     }
 

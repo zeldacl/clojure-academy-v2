@@ -9,6 +9,15 @@
   []
   (get-in @(fw/fw-atom) [:platform :entity-damage]))
 
+(defn- call
+  [k & args]
+  (let [ops (current)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required entity-damage operation is not installed"
+                      {:operation k :installed (keys ops)})))
+    (apply f args)))
+
 (defn install-pvp-gate!
   [pred]
   (when-let [fw-atom (fw/fw-atom)]
@@ -29,15 +38,12 @@
   ([world-id entity-uuid damage source-type]
    (apply-direct-damage! world-id entity-uuid damage source-type nil))
   ([world-id entity-uuid damage source-type opts]
-   (when-let [f (get-in @(fw/fw-atom) [:platform :entity-damage :apply-direct-damage!])]
-     (f world-id entity-uuid damage source-type opts))))
+   (call :apply-direct-damage! world-id entity-uuid damage source-type opts)))
 
 (defn apply-aoe-damage!
   [world-id x y z radius damage source-type falloff?]
-  (when-let [f (get-in @(fw/fw-atom) [:platform :entity-damage :apply-aoe-damage!])]
-    (f world-id x y z radius damage source-type falloff?)))
+  (call :apply-aoe-damage! world-id x y z radius damage source-type falloff?))
 
 (defn apply-reflection-damage!
   [world-id entity-uuid damage source-type reflection-count max-reflections]
-  (when-let [f (get-in @(fw/fw-atom) [:platform :entity-damage :apply-reflection-damage!])]
-    (f world-id entity-uuid damage source-type reflection-count max-reflections)))
+  (call :apply-reflection-damage! world-id entity-uuid damage source-type reflection-count max-reflections))

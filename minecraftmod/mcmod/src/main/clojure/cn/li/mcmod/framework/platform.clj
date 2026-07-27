@@ -43,17 +43,20 @@
   [fw adapter-key]
   (boolean (get-in @fw [:platform adapter-key])))
 
-(defn call-adapter
-  "Look up a function from a platform adapter and call it with args.
-
-   Returns nil if the adapter or function key is not found.
-   This is the primary runtime dispatch mechanism replacing protocol method calls.
-
-   Args:
-     fw          — framework atom instance
-     adapter-key — keyword identifying the adapter
-     fn-key      — keyword identifying the function within the adapter
-     args        — arguments to pass to the function"
+(defn call-adapter-optional
+  "Call an optional adapter operation, returning nil when it is unavailable."
   [fw adapter-key fn-key & args]
   (when-let [f (get-in @fw [:platform adapter-key fn-key])]
+    (apply f args)))
+
+(defn call-adapter
+  "Call a required adapter operation and fail when it is unavailable."
+  [fw adapter-key fn-key & args]
+  (let [adapter (get-in @fw [:platform adapter-key])
+        f (get adapter fn-key)]
+    (when-not f
+      (throw (ex-info "Required platform adapter operation is not installed"
+                      {:adapter adapter-key
+                       :operation fn-key
+                       :installed (keys adapter)})))
     (apply f args)))

@@ -31,7 +31,7 @@
 	(when-let [fw-atom (fw/fw-atom)]
 		(when event
 			(try
-				(platform/call-adapter fw-atom :event-bus :fire! event)
+							(platform/call-adapter-optional fw-atom :event-bus :fire! event)
 				(catch Exception e
 					(log/warn "Event dispatch failed:" (ex-message e)))))))
 

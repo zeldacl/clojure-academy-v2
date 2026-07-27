@@ -27,6 +27,6 @@ Do not duplicate the same contract in multiple packages. If a contract moves, up
 ```powershell
 .\gradlew.bat verifyCurrentPlatforms
 .\gradlew.bat :ac:compileClojure :mcmod:compileClojure
-.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 ```

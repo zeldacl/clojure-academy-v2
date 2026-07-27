@@ -188,15 +188,17 @@ public final class RaycastShared {
 
         if (livingOnly) {
             for (LivingEntity entity : player.serverLevel().getEntitiesOfClass(LivingEntity.class, searchBox)) {
-                nearestDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
-                if (nearestDistance != Double.MAX_VALUE) {
+                double candidateDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
+                if (candidateDistance < nearestDistance) {
+                    nearestDistance = candidateDistance;
                     nearest = buildEntityHitMap(entity, eyePos, end, nearestDistance);
                 }
             }
         } else {
             for (Entity entity : player.serverLevel().getEntitiesOfClass(Entity.class, searchBox)) {
-                nearestDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
-                if (nearestDistance != Double.MAX_VALUE) {
+                double candidateDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
+                if (candidateDistance < nearestDistance) {
+                    nearestDistance = candidateDistance;
                     nearest = buildEntityHitMap(entity, eyePos, end, nearestDistance);
                 }
             }
@@ -226,11 +228,11 @@ public final class RaycastShared {
     }
 
     private static double updateNearestPlayerHit(ServerPlayer player, Vec3 start, Vec3 end, Entity entity, double currentNearest) {
-        if (entity == player) {
+        if (entity == player || !entity.isPickable()) {
             return currentNearest;
         }
 
-        Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+        Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
 
         if (optionalHit.isEmpty()) {
             return currentNearest;
@@ -241,7 +243,7 @@ public final class RaycastShared {
     }
 
     private static Map<String, Object> buildEntityHitMap(Entity entity, Vec3 start, Vec3 end, double nearestDistance) {
-        Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
+        Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
 
         if (optionalHit.isEmpty()) {
             return null;
@@ -258,6 +260,7 @@ public final class RaycastShared {
         hit.put("x", entity.position().x);
         hit.put("y", entity.position().y);
         hit.put("z", entity.position().z);
+        hit.put("eye-height", entity.getEyeHeight());
         hit.put("distance", distance);
         return hit;
     }

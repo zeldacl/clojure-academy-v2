@@ -7,8 +7,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.util.log :as log]
-            [clojure.string :as str]))
+            [cn.li.mcmod.util.log :as log]))
 
 (defn- visual-max-ticks
   "Read the visual-max-ticks for current-charging from skill config.
@@ -32,7 +31,6 @@
   :ending-at-ms 0
   :updated-at-ms 0})
 
-(def ^:private blend-out-ms 200)
 (def ^:private active-stale-ms 500)
 
 
@@ -111,7 +109,7 @@
       (client-bridge/run-client-effect! :mcmod/start-loop-sound
         {:key (str owner-key)
          :sound-id charge-loop-sound
-         :volume 0.8
+         :volume 0.3
          :pitch 1.0
          :x (double (or x 0.0))
          :y (double (or y 0.0))
@@ -192,21 +190,9 @@
                              (assoc :charged (double (:charged payload*)))))))))
 
       :end
-      (let [ts (now-ms)]
-        ;; Sound is stopped by tick-state! once the blend window elapses,
-        ;; not here — this lets the loop linger through the same short
-        ;; fade the visual rings use instead of cutting off on key-up.
-        (update-in store* [:states owner-key*]
-             (fn [state]
-               (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
-             (merge {:active? false
-               :blending? true
-               :is-item (boolean (:is-item payload*))
-               :charge-ticks 0
-               :charge-ratio 0.0
-               :ending-at-ms ts
-               :updated-at-ms ts})
-             (assoc :good? false)))))
+      (do
+        (stop-loop-sound! owner-key*)
+        (update store* :states dissoc owner-key*))
 
       store*)))
 
@@ -224,10 +210,6 @@
                                                              (:started-at-ms st)
                                                              0)))
                                         active-stale-ms))
-                                [owner-key st]
-
-                                (and (:blending? st)
-                                     (< (- now-ms (long (or (:ending-at-ms st) 0))) blend-out-ms))
                                 [owner-key st]
 
                                 :else
@@ -274,7 +256,15 @@
 ;; segments 20 → generate-zigzag-segments' passes = ceil(log2(20)) = 5,
 ;; matching the original's passes exactly.
 (def ^:private charging-beam-pattern
-  (assoc (arc-patterns/get-pattern :charging) :amplitude 0.06 :segments 20 :fork-count 0))
+  (assoc (arc-patterns/get-pattern :charging)
+         :amplitude 0.06
+         :segments 20
+         :width 0.1
+         ;; ArcFactory branches are short descendants of a local segment,
+         ;; not long secondary bolts spanning most of the main beam.
+         :fork-count 2
+         :fork-length 0.08
+         :fork-angle 0.17))
 
 (defn- own-state?
   [st hand-center-pos]
@@ -308,6 +298,14 @@
          :color-outer {:r 150 :g 232 :b 255}
          :color-inner {:r 235 :g 252 :b 255}
          :color-line {:r 190 :g 244 :b 255}))
+
+;; Item mode uses EntitySurroundArc.THIN upstream: four 1.5-2.0 block
+;; templates rendered at scale 0.3 (0.45-0.6 actual length), width 0.06.
+(def ^:private item-spark-count 4)
+(def ^:private item-spark-pattern
+  (assoc spark-pattern
+         :width 0.06
+         :amplitude 0.46))
 
 ;; Original's SubArc.life = 30 ticks (~1.5s, with slight per-tick-increment
 ;; jitter): the ANCHOR (surface point + overall direction) is fixed for the
@@ -433,24 +431,121 @@
   (surround-spark-ops cam-v (double (:x caster-pos)) (+ (double (:y caster-pos)) 0.9) (double (:z caster-pos))
                        ticks spark-pattern salt))
 
+(defn- rotate-y
+  [[x y z] yaw-rad]
+  (let [c (Math/cos yaw-rad)
+        s (Math/sin yaw-rad)]
+    [(+ (* x c) (* z s))
+     y
+     (+ (* (- x) s) (* z c))]))
+
+(defn- upstream-surround-spark-ops
+  "Port EntitySurroundArc/SubArc geometry.
+
+   The generated arc is centered on its cube-surface anchor (SubArcHandler
+   translates by -template.length/2), points in an unconstrained random 3D
+   direction, and uses mode-specific cube dimensions/template sizes."
+  [cam-v {:keys [x y z width height depth yaw-rad]}
+   count* length-lo length-hi ticks pattern salt]
+  (vec
+   (mapcat
+    (fn [idx]
+      (when (spark-visible? idx ticks)
+        (let [life-window (quot ticks spark-life-ticks)
+              anchor-seed (+ (* 1000 idx) life-window (* 31 (long salt)))
+              rng (java.util.Random. anchor-seed)
+              hw (* 0.5 (double width))
+              hh (* 0.5 (double height))
+              hd (* 0.5 (double depth))
+              face (.nextInt rng 6)
+              u (- (* 2.0 (.nextDouble rng)) 1.0)
+              v (- (* 2.0 (.nextDouble rng)) 1.0)
+              local-anchor (case face
+                             0 [hw (* u hh) (* v hd)]
+                             1 [(- hw) (* u hh) (* v hd)]
+                             2 [(* u hw) hh (* v hd)]
+                             3 [(* u hw) (- hh) (* v hd)]
+                             4 [(* u hw) (* v hh) hd]
+                             5 [(* u hw) (* v hh) (- hd)])
+              [ax ay az] (rotate-y local-anchor (double (or yaw-rad 0.0)))
+              theta (* 2.0 Math/PI (.nextDouble rng))
+              cos-phi (- (* 2.0 (.nextDouble rng)) 1.0)
+              sin-phi (Math/sqrt (max 0.0 (- 1.0 (* cos-phi cos-phi))))
+              direction (rotate-y [(* sin-phi (Math/cos theta))
+                                   cos-phi
+                                   (* sin-phi (Math/sin theta))]
+                                  (double (or yaw-rad 0.0)))
+              [dx dy dz] direction
+              shape-tick (spark-shape-tick idx ticks)
+              length-rng (java.util.Random. (+ (* 65537 idx) (* 31 shape-tick)))
+              arc-length (+ (double length-lo)
+                            (* (.nextDouble length-rng)
+                               (- (double length-hi) (double length-lo))))
+              half-length (* 0.5 arc-length)
+              anchor-x (+ (double x) ax)
+              anchor-y (+ (double y) ay)
+              anchor-z (+ (double z) az)
+              start (rv3/v3 (- anchor-x (* half-length dx))
+                            (- anchor-y (* half-length dy))
+                            (- anchor-z (* half-length dz)))
+              end (rv3/v3 (+ anchor-x (* half-length dx))
+                          (+ anchor-y (* half-length dy))
+                          (+ anchor-z (* half-length dz)))
+              shape-seed (+ (* 1000 idx) (* 31 shape-tick))]
+          (zigzag-ops cam-v start end pattern shape-seed))))
+    (range count*))))
+
+(defn- upstream-target-spark-ops
+  [cam-v block-pos ticks salt]
+  (let [[bx by bz] block-pos]
+    (upstream-surround-spark-ops
+     cam-v
+     {:x (+ (double bx) 0.5)
+      :y (+ (double by) 0.5)
+      :z (+ (double bz) 0.5)
+      :width 1.0 :height 1.0 :depth 1.0}
+     spark-count 0.9 1.2 ticks spark-pattern salt)))
+
+(defn- item-body
+  [own? view-pos caster-pos]
+  (let [width (double (or (:player-width view-pos) 0.6))
+        height (double (or (:player-height view-pos) 1.8))
+        feet-x (if (and own? (number? (:player-x view-pos)))
+                 (double (:player-x view-pos))
+                 (double (:x caster-pos)))
+        feet-y (if (and own? (number? (:player-y view-pos)))
+                 (double (:player-y view-pos))
+                 (- (double (:y caster-pos)) 1.62))
+        feet-z (if (and own? (number? (:player-z view-pos)))
+                 (double (:player-z view-pos))
+                 (double (:z caster-pos)))]
+    {:x feet-x
+     :y (+ feet-y (* 0.5 height))
+     :z feet-z
+     :width (* 1.3 width)
+     :height (* 1.3 height)
+     :depth (* 1.3 width)
+     :yaw-rad (double (or (:player-yaw-rad view-pos) 0.0))}))
+
+(defn- upstream-item-spark-ops
+  [cam-v body ticks salt]
+  (upstream-surround-spark-ops
+   cam-v body item-spark-count 0.45 0.6 ticks item-spark-pattern salt))
+
+(defn- beam-visible?
+  [ticks salt]
+  (< (.nextDouble (java.util.Random. (+ (long ticks) (* 17 (long salt)))))
+     0.8))
+
 (defn- build-plan
-  [camera-pos hand-center-pos tick]
+  [camera-pos hand-center-pos _tick]
   (let [store (:states (level-effects/effect-state-snapshot :current-charging))
         active-states (filter :active? (vals (or store {})))
         cam-v (rv3/map->v3 camera-pos)
-        trace? (zero? (mod (long (or tick 0)) 20))
-        beam-count* (atom 0)
-        ring-count* (atom 0)
         ops (vec
               (mapcat
                 (fn [st]
                   (let [own? (own-state? st hand-center-pos)
-                        ;; Item-mode ring anchor: the local player's rendered
-                        ;; hand offset when it's our own effect (frame-smooth),
-                        ;; else the last synced caster-pos for bystanders.
-                        hand-pos (or (and own? hand-center-pos)
-                                     (:caster-pos st)
-                                     hand-center-pos)
                         ;; Beam vertex math still keys off the pure eye
                         ;; position (matching the server's actual raycast
                         ;; origin) — using hand-center-pos directly here
@@ -469,7 +564,11 @@
                         ticks (long (or (:charge-ticks st) 0))
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))
-                        beam-ops (when (and (not item?) (map? caster-pos) (map? target))
+                        cast-salt (long (or (:started-at-ms st) 0))
+                        beam-ops (when (and (not item?)
+                                            (map? caster-pos)
+                                            (map? target)
+                                            (beam-visible? ticks cast-salt))
                                    (zigzag-ops cam-v
                                                (rv3/map->v3 caster-pos)
                                                (rv3/map->v3 target)
@@ -488,27 +587,21 @@
                         ;; alone resets to 0 every cast, so without this
                         ;; every short-enough cast would reroll from the
                         ;; exact same seed and land on the exact same spots).
-                        cast-salt (long (or (:started-at-ms st) 0))
                         ring-ops (when (and (not item?) good?
                                             (sequential? block-pos) (= 3 (count block-pos)))
-                                   (target-spark-ops cam-v block-pos ticks cast-salt))
+                                    (upstream-target-spark-ops cam-v block-pos ticks cast-salt))
                         ;; Item mode has no beam/target at all — original
                         ;; wraps the surround sparks around the PLAYER
                         ;; instead (new EntitySurroundArc(player)).
-                        item-ring-ops (when (and item? (map? hand-pos))
-                                        (caster-spark-ops cam-v (dissoc hand-pos :player-uuid) ticks cast-salt))]
-                    (when trace?
-                      (swap! beam-count* + (count beam-ops))
-                      (swap! ring-count* + (count ring-ops) (count item-ring-ops)))
+                        item-ring-ops
+                        (when (and item? (map? caster-pos))
+                          (upstream-item-spark-ops
+                           cam-v
+                           (item-body own? hand-center-pos caster-pos)
+                           ticks
+                           cast-salt))]
                     (concat beam-ops ring-ops item-ring-ops)))
                 active-states))]
-    (when trace?
-      (log/info "[CC-TRACE][CLIENT][BUILD-PLAN]"
-                {:active-count (count active-states)
-                 :ops-count (count ops)
-                 :beam-ops @beam-count*
-                 :ring-ops @ring-count*
-                 :first-op (first ops)}))
     (when (seq ops)
       {:ops ops})))
 

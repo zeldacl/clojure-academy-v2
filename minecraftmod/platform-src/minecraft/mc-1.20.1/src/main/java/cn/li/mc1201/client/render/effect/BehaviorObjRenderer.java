@@ -1,6 +1,7 @@
 package cn.li.mc1201.client.render.effect;
 
 import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -10,18 +11,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 
 /**
- * Custom OBJ-model renderer for entity_silbarn, matching the upstream
- * EntitySilbarn$RenderSibarn (spinning shard, hidden once hit).
+ * Generic OBJ-model renderer for a behavior-driven block-body entity.
  *
  * <p>The render namespace is resolved at render time from the neutral
  * {@code cn.li.mcmod.spi.entity-render-registry} (registered by content
  * modules during client init). This avoids hardcoding an AC namespace
  * in the shared Minecraft layer.</p>
  */
-public final class SilbarnObjRenderer<T extends Entity> extends EntityRenderer<T> {
+public final class BehaviorObjRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final String REGISTRY_NS = "cn.li.mcmod.spi.entity-render-registry";
-    private static final String HOOK_ID = "silbarn";
-
     /** Cached after first successful resolution. */
     private static volatile String renderNamespace = null;
 
@@ -33,16 +31,18 @@ public final class SilbarnObjRenderer<T extends Entity> extends EntityRenderer<T
         }
     }
 
-    public SilbarnObjRenderer(EntityRendererProvider.Context context) {
+    public BehaviorObjRenderer(EntityRendererProvider.Context context) {
         super(context);
     }
 
-    private static String resolveRenderNamespace() {
+    private String resolveRenderNamespace(T entity) {
         if (renderNamespace != null) {
             return renderNamespace;
         }
         try {
-            Object result = ClojureInterop.invoke(REGISTRY_NS, "get-entity-render-ns", HOOK_ID);
+            var spec = ScriptedEntitySpecAccess.getScriptedBlockBodySpec(entity.getType());
+            String hookId = spec == null ? "" : spec.getHookId();
+            Object result = ClojureInterop.invoke(REGISTRY_NS, "get-entity-render-ns", hookId);
             if (result instanceof String) {
                 String ns = (String) result;
                 ClojureInterop.requireNamespace(ns);
@@ -59,11 +59,11 @@ public final class SilbarnObjRenderer<T extends Entity> extends EntityRenderer<T
     public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
-        String ns = resolveRenderNamespace();
+        String ns = resolveRenderNamespace(entity);
         if (ns == null) {
             return; // render namespace not yet registered — skip rendering
         }
-        boolean hit = ScriptedRenderAccess.isSilbarnHit(entity);
+        boolean hit = ScriptedRenderAccess.isBehaviorHit(entity);
         ClojureInterop.invoke(
             ns,
             "render!",

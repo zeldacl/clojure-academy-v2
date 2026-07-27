@@ -44,8 +44,7 @@
 
 (defn create-widget
   [widget-key payload]
-  (if-let [factory-fn (get (widget-factories-snapshot) widget-key)]
-    (factory-fn payload)
-    (do
-      (log/warn "UI widget factory not registered" {:widget-key widget-key})
-      nil)))
+  (let [factory-fn (or (get (widget-factories-snapshot) widget-key)
+                       (throw (ex-info "UI widget factory not registered"
+                                       {:widget-key widget-key})))]
+    (factory-fn payload)))

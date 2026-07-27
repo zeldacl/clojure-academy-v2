@@ -82,6 +82,8 @@
                                                          :x 1.0 :y 65.0 :z 2.0
                                                          :look-x 0.0 :look-y 0.0 :look-z 1.0})
                   current-charging/cfg-lerp (fn [_ _] 52.0)
+                  skill-effects/get-player-state
+                  (fn [_] {:resource-data {:cur-overload 82.0}})
                   ctx/get-context get-context
                   ctx/terminate-context! terminate-context!
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -96,7 +98,7 @@
             :good? false
             :exp 0.4
             :charge-ticks 0
-            :overload-floor 52.0
+            :overload-floor 82.0
             :target nil
             :caster-pos {:x 1.0 :y 65.0 :z 2.0}
             :block-pos nil
@@ -131,6 +133,8 @@
                   energy/charge-energy-to-item (fn [stack amt sim?]
                                                 (swap! charge* conj [stack amt sim?])
                                                 nil)
+                  current-charging/player-view
+                  (fn [_] {:x 4.0 :y 65.0 :z 6.0})
                   skill-effects/add-skill-exp! (fn [pid sid amount]
                                                  (swap! exp* conj [pid sid amount])
                                                  nil)
@@ -153,8 +157,42 @@
     (is (= [["p1" 40.0]] @floor*))
     (is (= [[ctx-id :current-charging/fx-update
              {:is-item true :good? true :charge-ticks 1 :exp 0.5
+              :caster-pos {:x 4.0 :y 65.0 :z 6.0}
               :source-player-id "p1"}]]
            @fx*))))
+
+(deftest item-mode-does-not-charge-when-cp-payment-fails-test
+  (let [ctx-id "ctx-item-cost-fail"
+        {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks ctx-id {:skill-state {:mode :item
+                                              :is-item true
+                                              :exp 0.5
+                                              :charge-ticks 0
+                                              :overload-floor 40.0}})
+        charged* (atom [])
+        exp* (atom [])
+        fx* (atom [])
+        tick! (get (skill-actions) :tick!)]
+    (with-redefs [current-charging/cfg-lerp (fn [_ _] 30.0)
+                  current-charging/main-hand-item (fn [_] :stack)
+                  energy/charge-energy-to-item (fn [& args] (swap! charged* conj args))
+                  skill-effects/add-skill-exp! (fn [& args] (swap! exp* conj args))
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  ctx/get-context get-context
+                  ctx/terminate-context! terminate-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! (fn [& args] (swap! fx* conj args))]
+      (cb/apply-invoke tick!
+                       :player-id "p1"
+                       :ctx-id ctx-id
+                       :cost-ok? false))
+    (is (= 1 (get-in @contexts* [ctx-id :skill-state :charge-ticks])))
+    (is (empty? @charged*))
+    (is (empty? @exp*))
+    (is (empty? @fx*))))
 
 (deftest tick-block-path-charges-and-tracks-target-and-caster-test
   (let [ctx-id "ctx-block"
@@ -176,6 +214,7 @@
                   raycast/available? (constantly true)
                   raycast/raycast-blocks (fn [_ _ _ _ _ _ _ _]
                                             {:x 1 :y 2 :z 3 :distance 2.0})
+                  raycast/raycast-from-player (fn [& _] nil)
                   current-charging/block-entity-at (fn [_ _ _ _] :block-entity)
                   energy/is-node-supported? (fn [_] true)
                   energy/charge-node (fn [_ charge _sim?] (- charge 8.0))
@@ -193,7 +232,11 @@
                   fx/send! (fn [id entry _evt payload]
                              (swap! fx* conj [id (:topic entry) payload])
                              nil)]
-      (cb/apply-invoke tick! :player-id "p1" :ctx-id ctx-id))
+      ;; Upstream block mode charges before checking this tick's CP result.
+      (cb/apply-invoke tick!
+                       :player-id "p1"
+                       :ctx-id ctx-id
+                       :cost-ok? false))
     (is (= true (get-in @contexts* [ctx-id :skill-state :good?])))
     (is (= {:x 0.0 :y 64.0 :z 0.0} (get-in @contexts* [ctx-id :skill-state :caster-pos])))
     (is (= [1 2 3] (get-in @contexts* [ctx-id :skill-state :block-pos])))
@@ -207,6 +250,70 @@
               :block-pos [1 2 3]
               :source-player-id "p1"}]]
            @fx*))))
+
+(deftest entity-hit-obstructs-block-charging-without-taking-damage-test
+  (let [ctx-id "ctx-entity-obstruction"
+        {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks ctx-id {:skill-state {:mode :block
+                                              :is-item false
+                                              :exp 0.5
+                                              :charge-ticks 0
+                                              :overload-floor 50.0}})
+        block-lookups* (atom [])
+        charges* (atom [])
+        exp* (atom [])
+        fx* (atom [])
+        tick! (get (skill-actions) :tick!)]
+    (with-redefs [current-charging/cfg-lerp (fn [_ _] 20.0)
+                  current-charging/cfg-double
+                  (fn [k]
+                    (case k
+                      :targeting.range 15.0
+                      :progression.exp-effective 0.0001
+                      :progression.exp-ineffective 0.00003
+                      0.0))
+                  current-charging/player-view
+                  (fn [_] {:world-id "minecraft:overworld"
+                           :x 0.0 :y 64.0 :z 0.0
+                           :look-x 1.0 :look-y 0.0 :look-z 0.0})
+                  raycast/available? (constantly true)
+                  raycast/raycast-blocks
+                  (fn [& _] {:x 5 :y 64 :z 0 :distance 5.0
+                             :hit-x 5.0 :hit-y 64.0 :hit-z 0.0})
+                  raycast/raycast-from-player
+                  (fn [& _] {:entity-id 42 :distance 2.0
+                             :x 2.4 :y 64.0 :z 0.0
+                             :hit-x 2.0 :hit-y 64.0 :hit-z 0.0
+                             :eye-height 1.62})
+                  current-charging/block-entity-at
+                  (fn [& args] (swap! block-lookups* conj args) :block-entity)
+                  energy/charge-node (fn [& args] (swap! charges* conj args) 0.0)
+                  energy/charge-receiver (fn [& args] (swap! charges* conj args) 0.0)
+                  skill-effects/add-skill-exp! (fn [& args] (swap! exp* conj args))
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  ctx/get-context get-context
+                  ctx/terminate-context! terminate-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! (fn [id entry _evt payload]
+                             (swap! fx* conj [id (:topic entry) payload]))]
+      (cb/apply-invoke tick!
+                       :player-id "p1"
+                       :ctx-id ctx-id
+                       :cost-ok? false))
+    ;; Block mode performs its charge/exp attempt before the failed CP payment
+    ;; ends the context. The nearer entity only obstructs the ray.
+    (is (empty? @block-lookups*))
+    (is (empty? @charges*))
+    (is (= [["p1" :current-charging 3.0E-5]] @exp*))
+    (is (false? (get-in @contexts* [ctx-id :skill-state :good?])))
+    (is (nil? (get-in @contexts* [ctx-id :skill-state :block-pos])))
+    (is (= {:x 2.4 :y 65.62 :z 0.0}
+           (get-in @contexts* [ctx-id :skill-state :target])))
+    (is (= {:x 2.4 :y 65.62 :z 0.0}
+           (get-in (first @fx*) [2 :target])))))
 
 (deftest cost-fail-sends-end-and-terminates-test
   (let [ctx-id "ctx-fail"

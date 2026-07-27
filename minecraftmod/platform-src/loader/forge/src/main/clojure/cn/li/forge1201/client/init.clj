@@ -26,7 +26,6 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
-            [cn.li.ac.content.ability-client :as ability-client]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
@@ -148,13 +147,15 @@
   `BlockEntityRenderers.register` from client setup."
   [^EntityRenderersEvent$RegisterRenderers evt]
   (ensure-client-render-platform-for-ber!)
+  ;; Forge may dispatch this event before FMLClientSetup.  Run the same
+  ;; canonical content renderer initialization used by client setup so the
+  ;; registry is populated before BER registration.
+  (render-init/register-default-renderer-init-fns!)
+  (render-init/register-all-renderers!)
   (log/info "RegisterRenderers - attaching scripted block entity renderers")
-  ;; `FMLClientSetupEvent` work is often enqueued; this event can run first. Populate
-  ;; scripted TESR callbacks only when still empty (no duplicate when order is normal).
   (when (empty? (tesr-api/scripted-renderers-snapshot))
-    (log/info "RegisterRenderers - scripted registry empty; running renderer init (event-order fallback)")
-    (render-init/register-default-renderer-init-fns!)
-    (render-init/register-all-renderers!))
+    (throw (IllegalStateException.
+            "Scripted renderer registry is empty before RegisterRenderers event")))
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
       (when (some tesr-api/get-scripted-tile-renderer block-ids)
@@ -169,12 +170,9 @@
   "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
-    (if-let [widget (widget-registry/create-widget arg payload)]
+    (let [widget (widget-registry/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
-      (throw (ex-info "No reactive screen widget registered"
-                      {:screen-key arg
-                       :payload payload})))))
+        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
 
 (defn- open-reactive-screen-handler [& args]
   (apply reactive-host/open-reactive-screen! args))
@@ -393,8 +391,8 @@
   (gui-screen-impl/init-client!)
   (i18n/install-client-i18n!)
 
-  ;; Register discovered client FX channels (arc-gen, railgun, etc.)
-  (ability-client/init-client-fx!)
+  ;; Run content-owned client initialization without naming a concrete suite.
+  (lifecycle/run-client-init!)
   ;; Then register renderers
   (register-renderers)
   (register-fluid-render-layers!)

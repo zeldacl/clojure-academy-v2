@@ -563,19 +563,6 @@
       (send-with-client-owner! player-uuid catalog/MSG-CTX-KEEPALIVE {:ctx-id ctx-id})
       ctx-id)))
 
-(defn- send-slot-key-tick-message!
-  "Like send-slot-key-message! but never auto-creates a context via
-  context-id-for-slot! — a tick that outraces or outlives its context
-  (already ended, or arriving before key-down's context registration)
-  must not spuriously reactivate one; only key-down creates."
-  [player-uuid key-idx]
-  (let [slot-key (slot-context-key player-uuid key-idx)]
-    (when-let [ctx-id (get (slot-context-ids-snapshot) slot-key)]
-      (when-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
-        (send-with-client-owner! player-uuid catalog/MSG-SLOT-KEY-TICK
-                                  {:ctx-id ctx-id :skill-id skill-id :key-idx key-idx})
-        ctx-id))))
-
 (defn- send-slot-key-up-message!
   [player-uuid key-idx]
   (let [slot-key (slot-context-key player-uuid key-idx)]
@@ -1080,18 +1067,12 @@
        (let [slot-key (slot-context-key player-uuid key-idx)
              now-ms   (System/currentTimeMillis)
              last-ms  (get (slot-key-tick-ms-snapshot) slot-key 0)]
-         (log/info "[CC-TRACE][CLIENT][HOOK-TICK]"
-                   {:player-uuid (str player-uuid) :key-idx key-idx
-                    :gate-pass? (>= (- now-ms last-ms) 100)
-                    :existing-ctx-id (get (slot-context-ids-snapshot) slot-key)})
          (when (>= (- now-ms last-ms) 100)
            (.put slot-key-tick-ms slot-key now-ms)
-           ;; MSG-SLOT-KEY-TICK actually dispatches the skill's :tick! action
-           ;; server-side (input_handler.clj handle-key-tick-skill); the
-           ;; keepalive-only send introduced alongside slot-abort handling
-           ;; refreshes the context deadline but never triggers :tick!, so
-           ;; every hold-channel skill silently stopped ticking. Send both.
-           (send-slot-key-tick-message! player-uuid key-idx)
+           ;; Active contexts are advanced authoritatively by
+           ;; context-manager/tick-player-contexts! once per server tick.
+           ;; Sending MSG-SLOT-KEY-TICK here as well double-dispatched costs
+           ;; and effects (20 server ticks + client network ticks).
            (send-slot-keepalive! player-uuid key-idx))))
 
      :client-on-slot-key-up!

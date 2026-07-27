@@ -14,10 +14,6 @@
   []
   (boolean (get-in @(fw/fw-atom) [:platform :content-actions])))
 
-(defn- action-op [k & args]
-  (when-let [f (get-in @(fw/fw-atom) [:platform :content-actions k])]
-    (apply f args)))
-
 ;; ============================================================================
 ;; Client tick hooks
 ;; ============================================================================
