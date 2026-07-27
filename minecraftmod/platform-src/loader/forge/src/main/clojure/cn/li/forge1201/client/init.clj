@@ -169,12 +169,9 @@
   "Dispatch open-screen to a registered reactive widget factory."
   [arg payload]
   (when (keyword? arg)
-    (if-let [widget (widget-registry/create-widget arg payload)]
+    (let [widget (widget-registry/create-widget arg payload)]
       (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)})
-      (throw (ex-info "No reactive screen widget registered"
-                      {:screen-key arg
-                       :payload payload})))))
+        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
 
 (defn- open-reactive-screen-handler [& args]
   (apply reactive-host/open-reactive-screen! args))
