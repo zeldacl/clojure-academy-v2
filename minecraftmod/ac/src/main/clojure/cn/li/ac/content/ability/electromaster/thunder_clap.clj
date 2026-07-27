@@ -10,24 +10,22 @@
   Exp: 0.003 per use"
   (:require
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.registry.event :as ability-event]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.damage :as damage-op]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def-skill-config-ops :thunder-clap)
 (defn- min-ticks [] (cfg-int :charge.min-ticks))
 (defn- max-ticks [] (cfg-int :charge.max-ticks))
 (defn- targeting-range [] (cfg-double :targeting.range))
-
-(defn- charge-window-span []
-  (max 1 (- (max-ticks) (min-ticks))))
 
 (defn- compute-overcharge-ratio
   "Matching original: lerp(1.0, 1.2, (ticks - 40) / 60.0).
@@ -55,16 +53,17 @@
         look (when (raycast/available?)
                (raycast/player-look-vector player-id))
         hit (when (and (raycast/available?) look)
-              (raycast/raycast-combined
-                                        world-id
-                                        (:x eye) (:y eye) (:z eye)
-                                        (double (or (:x look) 0.0))
-                                        (double (or (:y look) 0.0))
-                                        (double (or (:z look) 1.0))
-                                        (double range)))]
-    (case (if hit (attack/hit-kind hit) :miss)
-      :entity (attack/entity-impact-point hit)
-      :block (attack/block-impact-point hit)
+              ;; Original uses traceLiving(..., EntitySelectors.nothing()):
+              ;; entities are deliberately ignored and only blocks stop the ray.
+              (raycast/raycast-blocks
+                world-id
+                (:x eye) (:y eye) (:z eye)
+                (double (or (:x look) 0.0))
+                (double (or (:y look) 0.0))
+                (double (or (:z look) 1.0))
+                (double range)))]
+    (if (= :block (attack/hit-kind hit))
+      (attack/block-impact-point hit)
       (resolve-fallback-target player-id))))
 
 (defn- current-target
@@ -102,6 +101,49 @@
   (update-skill-state-root! ctx-id merge
                             (merge {:performed? (boolean performed?)} extra-state))
   (boolean performed?))
+
+(defn- performed?
+  [ctx-id]
+  (boolean (get-in (ctx-skill/get-context ctx-id) [:skill-state :performed?])))
+
+(defn- scaled-target-damage
+  "Match AbilityContext.attack: apply the per-target SkillAttack calculation
+  after range falloff, then global and per-skill damage scaling."
+  [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+    (skill-registry/get-skill :thunder-clap)
+    (ability-event/fire-calc-event!
+      ability-event/CALC-SKILL-ATTACK
+      raw-damage
+      {:player-id player-id
+       :target-id target-id
+       :skill-id :thunder-clap})))
+
+(defn- execute-thunder-clap-aoe!
+  "Apply original attackRange semantics: caster exclusion, linear distance
+  falloff, target-specific SkillAttack modifiers, skill/global scaling, and
+  an attacker-attributed skill damage source."
+  [{:keys [player-id world-id hit-pos]} radius amount]
+  (if-not (entity-damage/available?)
+    0
+    (reduce
+      (fn [hit-count {:keys [uuid x y z]}]
+        (let [dx (- (double x) (double (:x hit-pos)))
+              dy (- (double y) (double (:y hit-pos)))
+              dz (- (double z) (double (:z hit-pos)))
+              distance (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+              raw-damage (* (double amount)
+                            (bal/falloff-linear distance radius))
+              final-damage (scaled-target-damage player-id uuid raw-damage)]
+          (if (and (> final-damage 0.0)
+                   (entity-damage/apply-direct-damage!
+                     world-id uuid final-damage :skill
+                     {:attacker-uuid player-id
+                      :skill-id :thunder-clap}))
+            (inc hit-count)
+            hit-count)))
+      0
+      (attack/aoe-victims world-id hit-pos radius #{player-id}))))
 
 (defn- end-payload
   [{:keys [ctx-id player-id hold-ticks]}]
@@ -144,18 +186,55 @@
   (refresh-hit-pos! ctx-id player-id)
   (emit-thunder-clap-fx! :start {:ctx-id ctx-id :player-id player-id}))
 
+(declare perform-thunder-clap!)
+
 (defn- thunder-clap-tick!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (let [ticks (inc (stored-hold-ticks player-id :thunder-clap))]
     (update-skill-state-root! ctx-id assoc :hold-ticks ticks)
     (refresh-hit-pos! ctx-id player-id)
-    (emit-thunder-clap-fx! :update {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})))
+    (emit-thunder-clap-fx! :update {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
+    ;; Original sends MSG_END to itself on MAX_TICKS and performs immediately,
+    ;; even while the player is still holding the key.
+    (when (>= ticks (max-ticks))
+      (perform-thunder-clap! ctx-id player-id exp ticks)
+      (ctx/terminate-context! ctx-id nil))))
 
 (defn- thunder-clap-abort!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (mark-performed! ctx-id false)
   (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
                                :hold-ticks (stored-hold-ticks player-id :thunder-clap)}))
+
+(defn- perform-thunder-clap!
+  [ctx-id player-id exp ticks]
+  (when-not (performed? ctx-id)
+    (let [hit-pos  (current-target ctx-id player-id)
+          world-id (geom/world-id-of player-id)
+          exp*     (bal/clamp01 (double (or exp 0.0)))
+          mult     (cfg-lerp :combat.overcharge-multiplier
+                             (compute-overcharge-ratio ticks))
+          dmg      (* (cfg-lerp :combat.damage exp*) mult)
+          radius   (cfg-lerp :combat.aoe-radius exp*)
+          cooldown (max 1 (int (* (double ticks)
+                                   (cfg-lerp :cooldown.ticks-per-hold exp*))))
+          skill-spec (skill-registry/get-skill :thunder-clap)
+          evt {:player-id player-id :ctx-id ctx-id :world-id world-id
+               :hit-pos hit-pos :exp exp*}]
+      ;; Matches EntityLightningBolt(..., effectOnly=true): flash and thunder
+      ;; only. Combat damage is the separate attackRange equivalent below.
+      (world-op/execute-spawn-lightning! evt {:at :hit-pos :visual-only? true})
+      (execute-thunder-clap-aoe! evt radius dmg)
+      (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
+      (skill-effects/add-skill-exp! player-id :thunder-clap
+                                    (cfg-double :progression.exp-use)
+                                    (double (or (:exp-incr-speed skill-spec) 1.0)))
+      (mark-performed! ctx-id true :final-target hit-pos)
+      (ability-event/fire-ability-event!
+        (ability-event/make-skill-perform-event player-id :thunder-clap))
+      (emit-thunder-clap-fx! :perform {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
+      (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
+      true)))
 
 (defn- thunder-clap-up!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -164,40 +243,19 @@
       (do
         (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
         (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id :hold-ticks ticks}))
-      (let [hit-pos  (current-target ctx-id player-id)
-            world-id (geom/world-id-of player-id)
-            exp*     (bal/clamp01 (double (or exp 0.0)))
-            mult     (cfg-lerp :combat.overcharge-multiplier
-                               (compute-overcharge-ratio ticks))
-            dmg      (* (cfg-lerp :combat.damage exp*) mult)
-            radius   (cfg-lerp :combat.aoe-radius exp*)
-            cooldown (max 1 (int (* (double ticks)
-                                     (cfg-lerp :cooldown.ticks-per-hold exp*))))]
-        (let [evt {:player-id player-id :ctx-id ctx-id :world-id world-id
-                   :hit-pos hit-pos :exp exp*}]
-          ;; visual-only: matches original's EntityLightningBolt(..., effectOnly=true)
-          ;; — flash + thunder sound only. Damage comes entirely from
-          ;; execute-damage-aoe! below, matching original's separate
-          ;; ctx.attackRange call; a real bolt would double up on vanilla's
-          ;; own incidental damage/fire/creeper-charging.
-          (world-op/execute-spawn-lightning! evt {:at :hit-pos :visual-only? true})
-          (damage-op/execute-damage-aoe! evt {:center      :hit-pos
-                                              :radius      radius
-                                              :amount      dmg
-                                              :damage-type :lightning}))
-        (skill-effects/set-main-cooldown! player-id :thunder-clap cooldown)
-        (skill-effects/add-skill-exp! player-id :thunder-clap
-                                      (cfg-double :progression.exp-use))
-        (mark-performed! ctx-id true :final-target hit-pos)
-        (emit-thunder-clap-fx! :perform {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
-        (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})))))
+      (perform-thunder-clap! ctx-id player-id exp ticks))))
 
 (defn- thunder-clap-cost-fail!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
-  (mark-performed! ctx-id false)
-  (when (= cost-stage :tick)
-    (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
-                                 :hold-ticks (stored-hold-ticks player-id :thunder-clap)}))
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (let [ticks (stored-hold-ticks player-id :thunder-clap)]
+    ;; Upstream increments before payment. A failure exactly on MIN_TICKS
+    ;; therefore still reaches s_onEnd with a valid charge and strikes.
+    (if (and (= cost-stage :tick) (>= ticks (min-ticks)))
+      (perform-thunder-clap! ctx-id player-id exp ticks)
+      (do
+        (mark-performed! ctx-id false)
+        (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
+                                     :hold-ticks ticks}))))
   (ctx/terminate-context! ctx-id nil))
 
 (defskill thunder-clap

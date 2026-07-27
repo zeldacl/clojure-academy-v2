@@ -8,6 +8,7 @@
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
+        (thunder-clap-fx/init!)
         (thunder-clap-fx/reset-fx-for-test!)
         (f)
         (finally
@@ -48,14 +49,19 @@
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
-                                                        (swap! enqueued* conj [effect-id ctx-id channel payload opts])
+                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & {:keys [owner-key]}]
+                                                        (swap! enqueued* conj
+                                                               [effect-id payload
+                                                                {:ctx-id ctx-id
+                                                                 :channel channel
+                                                                 :owner-key owner-key}])
                                                         nil)]
       (thunder-clap-fx/init!)
       ((get @handlers* :thunder-clap/fx-start) "ctx-tc" :thunder-clap/fx-start {:source-player-id "player-a"})
       ((get @handlers* :thunder-clap/fx-update) "ctx-tc" :thunder-clap/fx-update {:ticks 5
                                                     :charge-ratio 0.5
                                                     :target {:x 1.0 :y 64.0 :z 1.0}
+                                                    :caster-pos {:x 2.0 :y 65.0 :z 2.0}
                                                     :source-player-id "player-a"})
       ((get @handlers* :thunder-clap/fx-perform) "ctx-tc" :thunder-clap/fx-perform {:performed? true
                                                      :charge-ticks 6
@@ -68,29 +74,21 @@
                                                  :target {:x 1.0 :y 64.0 :z 1.0}
                                                  :source-player-id "player-a"})
       (is (= [[:thunder-clap {:source-player-id "player-a"
-                              :mode :start
-                              :owner-key [:ctx "ctx-tc"]
-                              :ctx-id "ctx-tc"
-                              :channel :thunder-clap/fx-start}
+                              :mode :start}
                {:ctx-id "ctx-tc"
                 :channel :thunder-clap/fx-start
                 :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :update
-                              :owner-key [:ctx "ctx-tc"]
-                              :ctx-id "ctx-tc"
-                              :channel :thunder-clap/fx-update
                               :ticks 5
                               :charge-ratio 0.5
+                              :caster-pos {:x 2.0 :y 65.0 :z 2.0}
                               :target {:x 1.0 :y 64.0 :z 1.0}}
                {:ctx-id "ctx-tc"
                 :channel :thunder-clap/fx-update
                 :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :perform
-                              :owner-key [:ctx "ctx-tc"]
-                              :ctx-id "ctx-tc"
-                              :channel :thunder-clap/fx-perform
                               :performed? true
                               :charge-ticks 6
                               :ticks 6
@@ -101,9 +99,6 @@
                 :owner-key [:ctx "ctx-tc"]}]
               [:thunder-clap {:source-player-id "player-a"
                               :mode :end
-                              :owner-key [:ctx "ctx-tc"]
-                              :ctx-id "ctx-tc"
-                              :channel :thunder-clap/fx-end
                               :performed? true
                               :charge-ticks 6
                               :ticks 6
@@ -135,6 +130,7 @@
                                             :source-player-id "player-a"})
     (let [snapshot (thunder-clap-fx/fx-snapshot)]
       (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
+      (is (some? (get-in snapshot [:tails [:ctx "ctx-a"]])))
       (is (some? (get-in snapshot [:impacts [:ctx "ctx-a"]]))))))
 
 (deftest perform-spawns-short-impact-ops-test
@@ -148,8 +144,5 @@
     (let [plan (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (seq (:ops plan))))
     (level-effects/update-effect-state! :thunder-clap
-      (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store))
-      nil)
+      (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store)))
     (is (seq (:ops (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
-
-

@@ -24,7 +24,7 @@
 
    {:skill-id :thunder-clap :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 40.0 :comment "ThunderClap aim raycast range."}
    {:skill-id :thunder-clap :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "Minimum held ticks required for ThunderClap to perform."}
-   {:skill-id :thunder-clap :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 60 :comment "Reference maximum charge ticks used by ThunderClap FX and overcharge scaling."}
+   {:skill-id :thunder-clap :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 60 :comment "Maximum ThunderClap charge ticks before the strike auto-releases."}
    {:skill-id :thunder-clap :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [390.0 252.0] :comment "ThunderClap down-stage overload cost lerp endpoints."}
    {:skill-id :thunder-clap :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [18.0 25.0] :comment "ThunderClap tick-stage CP cost lerp endpoints while the charge is within min-ticks."}
    {:skill-id :thunder-clap :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [36.0 72.0] :comment "ThunderClap base damage lerp endpoints."}

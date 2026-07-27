@@ -11,9 +11,12 @@
 
 (defn resolve-damage-source
   "Resolve level.damageSources().<kind>() via shared Java accessor."
-  [^Level level source-type]
-  (when level
-    (DamageSourceShared/resolveKeyword level source-type)))
+  ([^Level level source-type]
+   (when level
+     (DamageSourceShared/resolveKeyword level source-type)))
+  ([^Level level source-type attacker]
+   (when level
+     (DamageSourceShared/resolveKeyword level source-type attacker))))
 
 (defn entity-pos-map
   [^LivingEntity entity]

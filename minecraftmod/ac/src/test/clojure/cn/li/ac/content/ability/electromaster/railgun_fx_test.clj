@@ -76,7 +76,9 @@
       (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store)))
     (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (some? plan))
-      (is (seq (:ops plan))))
+      (is (seq (:ops plan)))
+      (is (= 13 (count (filter #(= :line (:kind %)) (:ops plan))))
+          "enhanced center highlight plus 12-segment endpoint ring remain layered on the beam"))
     (is (= 1 (count (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx "ctx-main"]))))))
 
 (deftest two-owners-keep-railgun-beams-independent-test
@@ -161,7 +163,7 @@
        {:mode :charge-start})
       (is (empty? @run-calls*)))))
 
-(deftest charge-end-does-not-cut-off-one-shot-charge-animation-test
+(deftest charge-end-clears-enhanced-world-glow-without-affecting-hand-animation-test
   (let [handlers* (atom {})
         run-calls* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
@@ -177,8 +179,12 @@
        {:mode :charge-start :source-player-id "caster-uuid"})
       ((get @handlers* :railgun/fx-charge-end) "ctx-glow" :railgun/fx-charge-end
        {:mode :charge-end :source-player-id "caster-uuid"})
-      (is (= [:mcmod/spawn-scripted-effect-at-player]
-             (mapv first @run-calls*))))))
+      (is (= [:mcmod/spawn-scripted-effect-at-player
+              :mcmod/remove-local-scripted-effect]
+             (mapv first @run-calls*)))
+      (is (= [:mcmod/remove-local-scripted-effect
+              {:entity-uuid "entity-uuid-2"}]
+             (last @run-calls*))))))
 
 (deftest charge-end-without-a-prior-start-is-a-no-op-test
   ;; Matches railgun.clj's abort handler comment: fx-charge-end fires

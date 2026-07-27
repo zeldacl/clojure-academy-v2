@@ -7,8 +7,9 @@
 
 (def ^:private charge-glow-effect-id (modid/namespaced-path "railgun_charge"))
 
-;; Tracks one-shot charge entities for tests/owner cleanup. The original
-;; RailgunHandEffect runs its full 1.6 seconds even if charging ends early.
+;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
+;; as charging ends. The separate hand animation remains a full 1.6-second
+;; one-shot, matching the original RailgunHandEffect.
 (defonce ^:private active-glows* (atom {}))
 
 (defn reset-charge-glows-for-test! []
@@ -23,9 +24,11 @@
       (swap! active-glows* assoc ctx-id entity-uuid))))
 
 (defn- on-charge-end! [ctx-id _channel _payload]
-  ;; Do not despawn: RailgunHandEffect is a one-shot animation, not a live
-  ;; charge-state indicator. The 32-tick entity lifetime removes it naturally.
-  (swap! active-glows* dissoc ctx-id))
+  (when-let [entity-uuid (get @active-glows* ctx-id)]
+    (client-bridge/run-client-effect!
+      :mcmod/remove-local-scripted-effect
+      {:entity-uuid entity-uuid})
+    (swap! active-glows* dissoc ctx-id)))
 
 (def ^:private spec
   (arc-beam/build-spec
@@ -35,8 +38,8 @@
                 :reflect {:topic :railgun/fx-reflect}
                 ;; :level target is the idle-gating marker — see
                 ;; impl/railgun_shot.clj and content/railgun.clj's
-                ;; send-charge-start!/-update!/-end!. :immediate spawns the
-                ;; self-expiring world-anchored charge effect (railgun_charge,
+                ;; send-charge-start!/-update!/-end!. :immediate spawns/
+                ;; despawns the world-anchored charge effect (railgun_charge,
                 ;; entities/all.clj), keyed by :source-player-id so every
                 ;; recipient's client anchors it to the CASTER, not
                 ;; themselves — this is what makes it visible to bystanders,

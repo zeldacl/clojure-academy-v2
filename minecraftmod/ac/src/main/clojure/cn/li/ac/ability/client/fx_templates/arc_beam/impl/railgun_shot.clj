@@ -26,7 +26,11 @@
    :outer-rgb   {:r 236 :g 170 :b 93}
    :outer-alpha (fn [_ life] (* 60.0 (fade-out-factor life)))
    :inner-rgb   {:r 241 :g 240 :b 222}
-   :inner-alpha (fn [_ life] (* 200.0 (fade-out-factor life)))})
+   :inner-alpha (fn [_ life] (* 200.0 (fade-out-factor life)))
+   ;; Retain the port's enhanced cyan center highlight in addition to the
+   ;; original inner/outer cylinders.
+   :line-rgb    {:r 165 :g 230 :b 255}
+   :line-alpha  (fn [_ life] (+ 40.0 (* 120.0 (fade-out-factor life))))})
 
 
 
@@ -177,6 +181,27 @@
          (glow-quad glow-tile-texture cap-start-end cap-end-start right color)
          (glow-quad glow-end-texture cap-end-start glow-end right color)]))))
 
+(defn- impact-ring-ops [^V3 end ttl max-ttl]
+  ;; Enhanced port effect: expanding cyan ring at the shot endpoint. It is
+  ;; deliberately additive to the original beam visuals, not a gameplay hit
+  ;; indicator, so reflected and unobstructed shots can render it as well.
+  (let [life (/ (double ttl) (double (max 1 max-ttl)))
+        radius (+ 0.12 (* 0.22 (- 1.0 life)))
+        color (ru/with-alpha {:r 188 :g 252 :b 238} (+ 20 (* 160 life)))
+        segments 12
+        ex (.-x end) ey (.-y end) ez (.-z end)]
+    (vec
+      (for [idx (range segments)
+            :let [t0 (/ (* 2.0 Math/PI idx) segments)
+                  t1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                  p0 (vec3/v3 (+ ex (* radius (Math/cos t0)))
+                              ey
+                              (+ ez (* radius (Math/sin t0))))
+                  p1 (vec3/v3 (+ ex (* radius (Math/cos t1)))
+                              ey
+                              (+ ez (* radius (Math/sin t1))))]]
+        (ru/line-op p0 p1 color)))))
+
 (defn- charge-hand-ops [^V3 hand-center charge-state]
   (let [elapsed-ms (* 50.0 (- (double (:max-ttl charge-state))
                               (double (:ttl charge-state))))
@@ -221,7 +246,9 @@
                               (arc-fx/railgun-arc-ops cam-v beam {})
                               (railgun-glow-ops cam-v visible)
                               (fx-beam/fading-beam-ops
-                                cam-v visible railgun-beam-style))))
+                                cam-v visible railgun-beam-style)
+                              (impact-ring-ops
+                                (:end beam) (:ttl beam) (:max-ttl beam)))))
                           beams)
         charge-plan (if (and hand-center-pos charge-state)
                       (charge-hand-ops
