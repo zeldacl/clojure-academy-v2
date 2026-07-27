@@ -76,7 +76,7 @@
    :y (+ start-y 14)})
 
 ;; ============================================================================
-;; Histogram constructors (compatible with old API)
+;; Histogram constructors
 ;; ============================================================================
 
 (defn hist-energy [color]

@@ -1,5 +1,5 @@
 (ns cn.li.mc1201.gui.screen.impl
-  "Shared reactive screen construction and fallback behavior.
+  "Shared reactive screen construction.
 
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
