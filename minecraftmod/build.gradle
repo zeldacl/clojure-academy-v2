@@ -227,6 +227,10 @@ tasks.register("verifyPlatformCatalog") {
             if (target.buildProfile && !profiles.containsKey(target.buildProfile.toString())) {
                 problems << "${targetId} references unknown buildProfile ${target.buildProfile}"
             }
+            if (target.buildProfile && profiles[target.buildProfile.toString()] &&
+                target.gradleJvmVersion as int != (profiles[target.buildProfile.toString()].gradleJvmVersion ?: 0) as int) {
+                problems << "${targetId} gradleJvmVersion does not match buildProfile ${target.buildProfile}"
+            }
             if ((target.compileJavaVersion ?: 0) as int < (catalog.javaBaseline ?: 17) as int) {
                 problems << "${targetId} compileJavaVersion is below javaBaseline"
             }
