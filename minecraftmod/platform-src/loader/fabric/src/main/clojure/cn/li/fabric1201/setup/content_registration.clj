@@ -7,12 +7,14 @@
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.protocol.metadata :as metadata]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.block.blockstate-properties :as bsp])
+            [cn.li.mc1201.block.blockstate-properties :as bsp]
+            [cn.li.mc1201.runtime.item-callback :as item-callback])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.block IScriptedBlock]
            [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
-           [net.minecraft.world.item Item Item$Properties]))
+           [cn.li.mc1201.item NbtBarItem ScriptedItem]
+           [net.minecraft.world.item Item$Properties]))
 
 (defn- metadata-call
   "Call metadata function `f` with `args`. Returns nil if `f` is nil."
@@ -96,8 +98,20 @@
             ((:swap-state! registered-block-entities) #(assoc % tile-id registered))))))))
 
 (defn- create-standalone-item
-  [_item-spec]
-  (Item. (Item$Properties.)))
+  [item-spec]
+  (let [props (Item$Properties.)
+        energy-item? (true? (get-in item-spec [:properties :energy-item?]))
+        enchantability (int (or (:enchantability item-spec) 0))
+        tooltip-lines (mapv str (or (get-in item-spec [:properties :tooltip]) []))
+        current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
+        max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
+        default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
+        bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))
+        no-owner (fn [_player _side f] (f))
+        callback (item-callback/build "Fabric" no-owner)]
+    (if energy-item?
+      (NbtBarItem. props current-key max-key default-max bar-color callback)
+      (ScriptedItem. props enchantability tooltip-lines callback))))
 
 (defn register-all-items!
   [{:keys [registered-items registered-blocks]}]

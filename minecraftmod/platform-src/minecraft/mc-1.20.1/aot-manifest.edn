@@ -139,6 +139,8 @@
  "cn.li.mc1201.runtime.event.safe-handler"
  "cn.li.mc1201.runtime.interop-core"
  "cn.li.mc1201.runtime.item-handler-core"
+ "cn.li.mc1201.runtime.item-callback"
+ "cn.li.mc1201.runtime.item-callback"
  "cn.li.mc1201.runtime.lifecycle-core"
  "cn.li.mc1201.runtime.named-position-store-core"
  "cn.li.mc1201.runtime.native-nbt"
