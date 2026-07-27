@@ -10,14 +10,14 @@ Use this checklist when adding or changing a platform target.
 
 ## Source placement
 
-- [ ] Shared platform logic goes to `platform-src/common/`.
+- [ ] Shared platform logic goes to `platform-src/minecraft + platform-src/loader/`.
 - [ ] Minecraft API logic goes to `platform-src/minecraft/mc-1.20.1/` or `platform-src/minecraft/version/<version>/`.
 - [ ] Loader lifecycle and metadata go to `platform-src/loader/<loader>/`.
 
 ## Verification
 
 - [ ] `.\gradlew.bat verifyCurrentPlatforms`
-- [ ] `.\gradlew.bat :platform:compileJava :platform:compileClojure "-PplatformTarget=<target-id>"`
+- [ ] `.\gradlew.bat :platform:compileJava :platform:compileClojure `scripts/target-gradle.ps1 <target-id>``
 - [ ] DataGen manifest generated when the target supports datagen.
 - [ ] Capability owners are unique.
 

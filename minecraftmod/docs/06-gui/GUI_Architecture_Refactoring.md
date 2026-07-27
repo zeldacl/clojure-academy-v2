@@ -34,6 +34,6 @@ GUI 分为纯协议、业务定义、Minecraft 版本适配和 Loader glue 四�
 
 ```powershell
 .\gradlew.bat verifyCurrentPlatforms
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=fabric-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
+.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
 ```

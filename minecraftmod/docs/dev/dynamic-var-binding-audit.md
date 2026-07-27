@@ -1,6 +1,6 @@
 # Dynamic Var Binding Audit
 
-Audit target: `mcmod`, `ac`, `platform-src/common`, `platform-src/minecraft/*`, and `platform-src/loader/*` main sources.
+Audit target: `mcmod`, `ac`, `platform-src/minecraft + platform-src/loader`, `platform-src/minecraft/*`, and `platform-src/loader/*` main sources.
 
 ## Rule
 

@@ -22,5 +22,5 @@ The GUI should access wireless state through `cn.li.ac.wireless.api` and present
 
 ```powershell
 .\gradlew.bat :ac:test
-.\gradlew.bat :platform:compileClojure "-PplatformTarget=forge-1.20.1"
+.`\\scripts\\target-gradle.ps1 forge-1.20.1`
 ```
