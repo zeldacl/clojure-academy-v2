@@ -441,6 +441,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",
               "verifyBuildProfiles",
+              "verifyTargetBuildEntrypoints",
               "verifyRepositoryHygiene"
 }
 
@@ -480,5 +481,25 @@ tasks.register("verifyBuildProfiles") {
             }
         }
         if (!problems.isEmpty()) throw new GradleException("Invalid build profiles:\n" + problems.join("\n"))
+    }
+}
+
+tasks.register("verifyTargetBuildEntrypoints") {
+    group = "verification"
+    description = "Verify all supported OS target-build frontends share the launcher contract."
+    doLast {
+        def scripts = ["scripts/target-gradle.ps1", "scripts/target-gradle.cmd", "scripts/target-gradle.sh"]
+        def problems = []
+        scripts.each { path ->
+            def script = file(path)
+            if (!script.isFile()) {
+                problems << "missing target build entrypoint ${path}"
+            } else {
+                def text = script.text
+                if (!text.contains("target-launcher")) problems << "${path} does not invoke target-launcher"
+                if (text.contains("--stacktrace")) problems << "${path} must not append --stacktrace"
+            }
+        }
+        if (!problems.isEmpty()) throw new GradleException("Invalid target build entrypoints:\n" + problems.join("\n"))
     }
 }
