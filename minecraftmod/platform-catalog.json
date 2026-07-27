@@ -6,7 +6,6 @@
     "loom-1.13-gradle-8.8": {
       "gradleVersion": "8.8",
       "wrapper": "root",
-      "wrapper": "root",
       "gradleJvmVersion": 17,
       "loomVersion": "1.13.467",
       "clojurephantVersion": "0.9.1",
@@ -20,6 +19,13 @@
       "source": "platform-src/minecraft/mc-1.20.1/src/main",
       "aotManifest": "platform-src/minecraft/mc-1.20.1/aot-manifest.edn"
     },
+    "ac-minecraft-1.20.1": {
+      "kind": "content-platform",
+      "content": "ac",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/content/ac/minecraft/mc-1.20.1/src/main",
+      "aotManifest": "platform-src/content/ac/minecraft/mc-1.20.1/aot-manifest.edn"
+    },
     "forge-1.20.1": {
       "kind": "loader",
       "loader": "forge",
@@ -28,6 +34,14 @@
       "tests": "platform-src/loader/forge/src/test",
       "aotManifest": "platform-src/loader/forge/aot-manifest.edn",
       "runtimeAotEntrypoint": "cn.li.forge1201.mod"
+    },
+    "ac-forge-1.20.1": {
+      "kind": "content-platform",
+      "content": "ac",
+      "loader": "forge",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/content/ac/loader/forge/src/main",
+      "aotManifest": "platform-src/content/ac/loader/forge/aot-manifest.edn"
     },
     "fabric-1.20.1": {
       "kind": "loader",
@@ -74,10 +88,11 @@
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
       "contentProjects": ["ac"],
-      "contentProjects": ["ac"],
       "sourceComponents": [
         "minecraft-1.20.1",
+        "ac-minecraft-1.20.1",
         "forge-1.20.1"
+        ,"ac-forge-1.20.1"
       ],
       "testComponents": [
         "platform-test-support",
@@ -135,9 +150,9 @@
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
       "contentProjects": ["ac"],
-      "contentProjects": ["ac"],
       "sourceComponents": [
         "minecraft-1.20.1",
+        "ac-minecraft-1.20.1",
         "fabric-1.20.1"
       ],
       "testComponents": [
