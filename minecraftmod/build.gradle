@@ -208,6 +208,9 @@ tasks.register("verifyPlatformCatalog") {
             problems << "catalog has no components"
         }
         components.each { id, component ->
+            if (id.toString().toLowerCase().startsWith("ac-") || component.content) {
+                problems << "platform component ${id} must not bind a content module to a concrete platform"
+            }
             ["source", "tests", "aotManifest"].each { key ->
                 if (component[key]) {
                     def componentPath = file(component[key].toString())
