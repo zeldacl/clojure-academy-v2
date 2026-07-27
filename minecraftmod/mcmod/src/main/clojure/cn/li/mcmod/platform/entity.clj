@@ -11,7 +11,8 @@
     :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
     :player-drop-main-hand-item-at! :player-count-item-by-id :player-consume-item-by-id!
     :player-give-item-stack! :player-spawn-entity-by-id! :player-spawn-tracked-entity-by-id!
-    :player-raytrace-block :player-get-container-menu})
+    :player-raytrace-block :player-get-container-menu
+    :inventory-get-player :menu-get-container-id})
 
 (defn install-entity-ops!
   [ops-map _label]
