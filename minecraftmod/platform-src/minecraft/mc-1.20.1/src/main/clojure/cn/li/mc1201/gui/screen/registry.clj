@@ -12,7 +12,7 @@
   to the shared screen construction / fallback path."
   [gui-id factory-fn-kw screen-opts]
   (fn [menu player-inventory title]
-    (screen-core/create-screen-or-fallback
+    (screen-core/create-screen!
      gui-id
      menu
      player-inventory
