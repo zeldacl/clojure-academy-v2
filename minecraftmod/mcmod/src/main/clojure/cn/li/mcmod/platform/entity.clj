@@ -25,7 +25,13 @@
 (defn available? [] (boolean (get-in @(fw/fw-atom) [:platform :entity-ops])))
 (defn current-ops           [] (get-in @(fw/fw-atom) [:platform :entity-ops]))
 
-(defn- call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
+(defn- call [k & args]
+  (let [ops (current-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required entity operation is not installed"
+                      {:operation k :installed (keys ops)})))
+    (apply f args)))
 
 (defn entity-distance-to-sqr [e x y z] (call :entity-distance-to-sqr e x y z))
 (defn entity-get-x           [e]       (call :entity-get-x e))
@@ -57,8 +63,7 @@
 
 ;; Entity type ID lookup (was protocol method with [world-id entity-uuid] arity)
 (defn get-type-id [world-id entity-uuid]
-  (when-let [f (get (current-ops) :entity-get-type-id-fn)]
-    (f world-id entity-uuid)))
+  (call :entity-get-type-id-fn world-id entity-uuid))
 
 ;; Entity type ID — separate path
 (defn install-entity-type-id-fn! [f _label]

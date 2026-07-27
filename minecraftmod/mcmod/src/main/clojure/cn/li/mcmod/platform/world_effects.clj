@@ -11,7 +11,11 @@
 
 (defn- call
   [k & args]
-  (when-let [f (get (current) k)]
+  (let [ops (current)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required world-effects operation is not installed"
+                      {:operation k :installed (keys ops)})))
     (apply f args)))
 
 (defn spawn-lightning!
