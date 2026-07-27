@@ -221,6 +221,9 @@ tasks.register("verifyPlatformCatalog") {
                     if (!module[key]) problems << "${targetId} content module missing ${key}"
                 }
             }
+            (target.contentProjects ?: []).each { projectId ->
+                if (!rootProject.findProject(":${projectId}")) problems << "${targetId} references unknown content project ${projectId}"
+            }
             if (target.buildProfile && !profiles.containsKey(target.buildProfile.toString())) {
                 problems << "${targetId} references unknown buildProfile ${target.buildProfile}"
             }

@@ -99,10 +99,14 @@ tasks.withType(JavaExec).configureEach {
 
 if (target.loader != "none") {
     evaluationDependsOn(":mcmod")
-    evaluationDependsOn(":ac")
 
     def mcmodProject = project(":mcmod")
-    def acProject = project(":ac")
+    def contentProjectIds = (target.contentProjects ?: []).collect { it.toString() }
+    if (contentProjectIds.isEmpty()) {
+        throw new GradleException("Target '${targetId}' must declare contentProjects")
+    }
+    contentProjectIds.each { evaluationDependsOn(":${it}") }
+    def contentProjects = contentProjectIds.collect { project(":${it}") }
     def releaseAot = rootProject.hasProperty("releaseAot")
     def sourceComponentIds = target.sourceComponents.collect { it.toString() }
     def testComponentIds = (target.testComponents ?: []).collect { it.toString() }
@@ -188,7 +192,7 @@ if (target.loader != "none") {
     dependencies {
         compileOnly mcmodProject.sourceSets.main.output
         runtimeOnly mcmodProject.sourceSets.main.output
-        runtimeOnly acProject.sourceSets.main.output
+        contentProjects.each { contentProject -> runtimeOnly contentProject.sourceSets.main.output }
         clojureRuntimeLibraries.each { dependencyNotation ->
             implementation dependencyNotation
         }
@@ -226,7 +230,7 @@ if (target.loader != "none") {
     }
 
     tasks.named("compileJava").configure {
-        dependsOn acProject.tasks.named("classes")
+        contentProjects.each { contentProject -> dependsOn contentProject.tasks.named("classes") }
         dependsOn mcmodProject.tasks.named("classes")
     }
 
@@ -250,10 +254,8 @@ if (target.loader != "none") {
 
     def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
         componentDir(component, "clojure")
-    } + [
-        mcmodProject.file("src/main/clojure"),
-        acProject.file("src/main/clojure")
-    ])
+    } + [mcmodProject.file("src/main/clojure")] +
+        contentProjects.collect { it.file("src/main/clojure") })
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
     def platformRuntimeAotDir = layout.buildDirectory.dir("clojure/platform-aot/main")
@@ -367,7 +369,7 @@ if (target.loader != "none") {
         dependsOn generatePlatformAotScript
         dependsOn tasks.named("compileJava")
         dependsOn mcmodProject.tasks.named("compileClojure")
-        dependsOn acProject.tasks.named("compileClojure")
+        contentProjects.each { contentProject -> dependsOn contentProject.tasks.named("compileClojure") }
         inputs.files platformAotManifests
         inputs.files sourceComponents.collect { component -> componentDir(component, "clojure") }
         outputs.dir platformRuntimeAotDir
@@ -375,9 +377,12 @@ if (target.loader != "none") {
             configurations.runtimeClasspath +
             files(platformJavaClasses) +
             files(sourceComponents.collect { component -> componentDir(component, "clojure") }) +
-            files(mcmodProject.file("src/main/clojure"), acProject.file("src/main/clojure")) +
-            files(mcmodProject.layout.buildDirectory.dir("clojure/main"), acProject.layout.buildDirectory.dir("clojure/main")) +
-            files(mcmodProject.layout.buildDirectory.dir("classes/java/main"), acProject.layout.buildDirectory.dir("classes/java/main"))
+            files(mcmodProject.file("src/main/clojure")) +
+            files(contentProjects.collect { it.file("src/main/clojure") }) +
+            files(mcmodProject.layout.buildDirectory.dir("clojure/main")) +
+            files(contentProjects.collect { it.layout.buildDirectory.dir("clojure/main") }) +
+            files(mcmodProject.layout.buildDirectory.dir("classes/java/main")) +
+            files(contentProjects.collect { it.layout.buildDirectory.dir("classes/java/main") })
         mainClass = "clojure.main"
         doFirst {
             delete platformRuntimeAotDir
@@ -533,10 +538,14 @@ if (target.loader != "none") {
     }
 
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
-    configurePackagedRuntimeProject(acProject, "Ac")
+    def contentCopyTasks = contentProjects.collect { contentProject ->
+        def label = contentProject.name.replaceAll(/[^A-Za-z0-9]/, "_").capitalize()
+        configurePackagedRuntimeProject(contentProject, label)
+        tasks.named("copy${label}RuntimeClassesToPlatformOutput")
+    }
     compilePlatformClojureAot.configure {
         mustRunAfter tasks.named("copyMcmodRuntimeClassesToPlatformOutput")
-        mustRunAfter tasks.named("copyAcRuntimeClassesToPlatformOutput")
+        contentCopyTasks.each { mustRunAfter it }
     }
 
     def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {

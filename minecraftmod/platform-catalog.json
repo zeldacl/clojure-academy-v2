@@ -71,6 +71,8 @@
       "contentModules": [
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
+      "contentProjects": ["ac"],
+      "contentProjects": ["ac"],
       "sourceComponents": [
         "minecraft-1.20.1",
         "forge-1.20.1"
@@ -130,6 +132,8 @@
       "contentModules": [
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
+      "contentProjects": ["ac"],
+      "contentProjects": ["ac"],
       "sourceComponents": [
         "minecraft-1.20.1",
         "fabric-1.20.1"
