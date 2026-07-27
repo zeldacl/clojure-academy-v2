@@ -44,7 +44,6 @@
  "cn.li.fabric1201.integration.events"
  "cn.li.fabric1201.integration.events.block"
  "cn.li.fabric1201.integration.events.interact"
- "cn.li.fabric1201.integration.events.lifecycle"
  "cn.li.fabric1201.integration.events.loot"
  "cn.li.fabric1201.integration.side"
  "cn.li.fabric1201.mod"

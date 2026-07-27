@@ -43,6 +43,14 @@
       "source": "platform-src/content/ac/loader/forge/src/main",
       "aotManifest": "platform-src/content/ac/loader/forge/aot-manifest.edn"
     },
+    "ac-fabric-1.20.1": {
+      "kind": "content-platform",
+      "content": "ac",
+      "loader": "fabric",
+      "minecraftVersion": "1.20.1",
+      "source": "platform-src/content/ac/loader/fabric/src/main",
+      "aotManifest": "platform-src/content/ac/loader/fabric/aot-manifest.edn"
+    },
     "fabric-1.20.1": {
       "kind": "loader",
       "loader": "fabric",
@@ -153,7 +161,8 @@
       "sourceComponents": [
         "minecraft-1.20.1",
         "ac-minecraft-1.20.1",
-        "fabric-1.20.1"
+        "fabric-1.20.1",
+        "ac-fabric-1.20.1"
       ],
       "testComponents": [
         "platform-test-support"
