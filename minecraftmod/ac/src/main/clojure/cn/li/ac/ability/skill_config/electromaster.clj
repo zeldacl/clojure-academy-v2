@@ -82,8 +82,7 @@
 
    {:skill-id :mag-movement :id :movement.acceleration :path "movement.acceleration" :section-suffix "movement" :type :double :min 0.0 :default 0.08 :comment "MagMovement smooth acceleration step."}
    {:skill-id :mag-movement :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double :min 0.0 :default 25.0 :comment "MagMovement target raycast range."}
-   {:skill-id :mag-movement :id :targeting.weak-metal-exp-threshold :path "targeting.weak-metal-exp-threshold" :section-suffix "targeting" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "MagMovement exp threshold for weak metal targeting."}
-   {:skill-id :mag-movement :id :targeting.target-update-radius :path "targeting.target-update-radius" :section-suffix "targeting" :type :double :min 0.0 :default 4.0 :comment "MagMovement entity target refresh radius."}
+   {:skill-id :mag-movement :id :targeting.weak-metal-exp-threshold :path "targeting.weak-metal-exp-threshold" :section-suffix "targeting" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "Legacy MagMovement threshold constant; original effective metal check accepts weak metal at every exp level."}
    {:skill-id :mag-movement :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "MagMovement down-stage overload cost lerp endpoints."}
    {:skill-id :mag-movement :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [15.0 8.0] :comment "MagMovement tick-stage CP cost lerp endpoints."}
    {:skill-id :mag-movement :id :progression.exp-min :path "progression.exp-min" :section-suffix "progression" :type :double :min 0.0 :default 0.005 :comment "MagMovement minimum exp gained on completion."}
