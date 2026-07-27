@@ -74,19 +74,12 @@
            (call-log :warn "sync-to-client! failed:" (ex-message e))
            (log/stacktrace "sync-to-client! failed" e)))))
 
-(defn be-get-block-id [be]
+(defn get-block-id [be]
   (when be
     (try (be-op :be-get-block-id be)
          (catch Exception e
            (call-log :warn "be-get-block-id failed:" (ex-message e))
            (log/stacktrace "be-get-block-id failed" e) nil))))
-
-(defn get-block-id [be]
-  (when be
-    (try (be-op :be-get-block-id be)
-         (catch Exception e
-           (call-log :warn "get-block-id failed:" (ex-message e))
-           (log/stacktrace "get-block-id failed" e) nil))))
 
 (defn get-tile-id [be]
   (when be
