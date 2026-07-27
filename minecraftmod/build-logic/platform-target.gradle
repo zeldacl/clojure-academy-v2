@@ -113,7 +113,6 @@ if (target.loader != "none") {
     }
     contentProjectIds.each { evaluationDependsOn(":${it}") }
     def contentProjects = contentProjectIds.collect { project(":${it}") }
-    def releaseAot = rootProject.hasProperty("releaseAot")
     def sourceComponentIds = target.sourceComponents.collect { it.toString() }
     def testComponentIds = (target.testComponents ?: []).collect { it.toString() }
     def sourceComponents = sourceComponentIds.collect { componentSourceRoot(it) }
@@ -247,17 +246,6 @@ if (target.loader != "none") {
     tasks.named("compileClojure").configure { task ->
         dependsOn "compileJava"
         classpath.from(files(platformJavaClasses))
-        if (rootProject.hasProperty("releaseAot")) {
-            def runtimeNamespaces = new LinkedHashSet<String>()
-            platformAotManifests.findAll { it.isFile() }.each { File manifest ->
-                manifest.readLines().collect { it.trim() }.findAll { line ->
-                    line ==~ /^"[^"]+"$/
-                }.each { line ->
-                    runtimeNamespaces << line.substring(1, line.length() - 1)
-                }
-            }
-            task.namespaces.set(runtimeNamespaces)
-        }
     }
 
     def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
@@ -285,9 +273,7 @@ if (target.loader != "none") {
         }
         runtimeNamespaces
     }
-    def platformRuntimeAotNamespaces = {
-        releaseAot ? platformAotNamespaces() : platformEntrypointNamespaces()
-    }
+    def platformRuntimeAotNamespaces = { platformAotNamespaces() }
     def deleteAotNamespaceClasses = { File outputRoot, Collection<String> namespaces ->
         namespaces.each { namespaceName ->
             def namespacePath = namespaceName.replace(".", "/")
@@ -340,7 +326,6 @@ if (target.loader != "none") {
     def generatePlatformAotScript = tasks.register("generatePlatformAotScript") {
         inputs.files platformAotManifests
         inputs.property "platformTarget", target.id
-        inputs.property "releaseAot", releaseAot
         outputs.file platformAotScript
         doLast {
             def namespaces = platformRuntimeAotNamespaces()
@@ -460,11 +445,9 @@ if (target.loader != "none") {
 
     def configurePackagedRuntimeProject = { Project contentProject, String label ->
         def javaClasses = contentProject.layout.buildDirectory.dir("classes/java/main")
-        def clojureClasses = contentProject.layout.buildDirectory.dir(releaseAot ? "clojure/main-stripped" : "clojure/main")
+        def clojureClasses = contentProject.layout.buildDirectory.dir("clojure/main")
         def resources = contentProject.layout.buildDirectory.dir("resources/main")
-        def packagingDeps = releaseAot
-            ? [contentProject.tasks.named("classes"), contentProject.tasks.named("stripAotLvt")]
-            : [contentProject.tasks.named("classes")]
+        def packagingDeps = [contentProject.tasks.named("classes")]
 
         tasks.named("jar", Jar).configure {
             dependsOn packagingDeps
