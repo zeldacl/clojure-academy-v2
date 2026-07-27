@@ -40,6 +40,7 @@
  "cn.li.forge1201.datagen.lang-provider"
  "cn.li.forge1201.datagen.provider-factory"
  "cn.li.forge1201.datagen.recipe-provider"
+ "cn.li.forge1201.datagen.recipe-provider-custom"
  "cn.li.forge1201.datagen.setup"
  "cn.li.forge1201.datagen.worldgen-provider"
  "cn.li.forge1201.gui.init"

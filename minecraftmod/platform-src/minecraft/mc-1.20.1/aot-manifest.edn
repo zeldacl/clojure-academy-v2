@@ -125,6 +125,8 @@
  "cn.li.mc1201.runtime.accessor-registry-render"
  "cn.li.mc1201.runtime.accessor-registry-world"
  "cn.li.mc1201.runtime.adapter-registry"
+ "cn.li.mc1201.runtime.adapter.world-effects"
+ "cn.li.mc1201.runtime.adapter.world-effects"
  "cn.li.mc1201.runtime.adapter.block-manipulation"
  "cn.li.mc1201.runtime.adapter.entity-damage"
  "cn.li.mc1201.runtime.block-manipulation-core"
@@ -158,4 +160,5 @@
  "cn.li.mc1201.runtime.sync-codec"
  "cn.li.mc1201.runtime.sync-core"
  "cn.li.mc1201.runtime.teleportation-core"
+ "cn.li.mc1201.runtime.world-effects-core"
 ]
