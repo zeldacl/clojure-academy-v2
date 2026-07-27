@@ -149,12 +149,9 @@
   [^EntityRenderersEvent$RegisterRenderers evt]
   (ensure-client-render-platform-for-ber!)
   (log/info "RegisterRenderers - attaching scripted block entity renderers")
-  ;; `FMLClientSetupEvent` work is often enqueued; this event can run first. Populate
-  ;; scripted TESR callbacks only when still empty (no duplicate when order is normal).
   (when (empty? (tesr-api/scripted-renderers-snapshot))
-    (log/info "RegisterRenderers - scripted registry empty; running renderer init (event-order fallback)")
-    (render-init/register-default-renderer-init-fns!)
-    (render-init/register-all-renderers!))
+    (throw (IllegalStateException.
+            "Scripted renderer registry is empty before RegisterRenderers event")))
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (let [block-ids (or (seq (registry-metadata/get-tile-block-ids tile-id)) [tile-id])]
       (when (some tesr-api/get-scripted-tile-renderer block-ids)
