@@ -63,7 +63,7 @@ public final class SilbarnObjRenderer<T extends Entity> extends EntityRenderer<T
         if (ns == null) {
             return; // render namespace not yet registered — skip rendering
         }
-        boolean hit = ScriptedRenderAccess.isSilbarnHit(entity);
+        boolean hit = ScriptedRenderAccess.isBehaviorHit(entity);
         ClojureInterop.invoke(
             ns,
             "render!",

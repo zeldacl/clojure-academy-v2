@@ -314,10 +314,11 @@ public final class ModEntities {
                                                      double damage,
                                                      boolean placeWhenCollide,
                                                      String rendererId,
-                                                     String hookId) {
+                                                     String hookId,
+                                                     String behaviorId) {
         SCRIPTED_BLOCK_BODY_SPECS.put(
                 registryName,
-                new ScriptedBlockBodySpec(defaultBlockId, gravity, damage, placeWhenCollide, rendererId, hookId)
+                new ScriptedBlockBodySpec(defaultBlockId, gravity, damage, placeWhenCollide, rendererId, hookId, behaviorId)
         );
     }
 

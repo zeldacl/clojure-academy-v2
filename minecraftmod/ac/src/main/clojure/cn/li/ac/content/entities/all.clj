@@ -550,7 +550,8 @@
                                    :damage 0.0
                                    :place-when-collide? false
                                    :renderer-id "block-body"
-                                   :hook :silbarn}}}))
+                                   :hook :silbarn
+                                   :behavior :impact-detonation}}}))
 
     ;; Minimal scripted-mob for bundle pipeline /summon smoke (dev only).
     (edsl/register-entity!

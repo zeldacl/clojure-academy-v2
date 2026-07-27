@@ -213,7 +213,8 @@
                (double (or (:damage block-body) 0.0))
                (not (false? (:place-when-collide? block-body)))
                (edsl/resolve-render-profile-key entity-spec :block-body "block-body")
-               (name (or (:hook block-body) :none)))]
+               (name (or (:hook block-body) :none))
+               (name (or (:behavior block-body) :none)))]
     (FabricScriptedEntityAccess/registerScriptedBlockBodySpec
       (str registry-name)
       spec))

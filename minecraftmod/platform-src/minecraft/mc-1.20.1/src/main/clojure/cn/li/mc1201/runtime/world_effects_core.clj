@@ -143,7 +143,7 @@
   [^Level level entity-uuid get-entity-by-uuid-fn]
   (when-let [entity (get-entity-by-uuid-fn level entity-uuid)]
     (when (instance? ScriptedBlockBodyEntity entity)
-      (.forceSilbarnHit ^ScriptedBlockBodyEntity entity)
+      (.forceBehaviorHit ^ScriptedBlockBodyEntity entity)
       true)))
 
 (defn spawn-item-stack-at!

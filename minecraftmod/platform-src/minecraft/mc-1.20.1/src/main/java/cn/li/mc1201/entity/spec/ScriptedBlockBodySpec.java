@@ -7,19 +7,22 @@ public final class ScriptedBlockBodySpec {
     private final boolean placeWhenCollide;
     private final String rendererId;
     private final String hookId;
+    private final String behaviorId;
 
     public ScriptedBlockBodySpec(String defaultBlockId,
                                  double gravity,
                                  double damage,
                                  boolean placeWhenCollide,
                                  String rendererId,
-                                 String hookId) {
+                                 String hookId,
+                                 String behaviorId) {
         this.defaultBlockId = defaultBlockId == null ? "minecraft:stone" : defaultBlockId;
         this.gravity = gravity;
         this.damage = damage;
         this.placeWhenCollide = placeWhenCollide;
         this.rendererId = rendererId == null ? "" : rendererId;
         this.hookId = hookId == null ? "" : hookId;
+        this.behaviorId = behaviorId == null ? "" : behaviorId;
     }
 
     public String getDefaultBlockId() {
@@ -44,5 +47,9 @@ public final class ScriptedBlockBodySpec {
 
     public String getHookId() {
         return hookId;
+    }
+
+    public String getBehaviorId() {
+        return behaviorId;
     }
 }
