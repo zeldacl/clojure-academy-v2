@@ -40,6 +40,7 @@
               cp-fn (get-in spec [:cost :down :cp])
               overload-fn (get-in spec [:cost :down :overload])
               cooldown-fn (:cooldown-ticks spec)]
+          (is (true? (:controllable? spec)))
           (is (fn? cp-fn))
           (is (fn? overload-fn))
           (is (fn? cooldown-fn))

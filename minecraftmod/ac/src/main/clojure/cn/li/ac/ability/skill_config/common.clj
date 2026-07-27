@@ -17,9 +17,9 @@
    {:id :current-charging :category-id :electromaster :level 1 :controllable? true}
    {:id :mag-manip :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :mag-movement :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-  {:id :mine-detect :category-id :electromaster :level 3 :controllable? false}
+  {:id :mine-detect :category-id :electromaster :level 3 :controllable? true}
    {:id :railgun :category-id :electromaster :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? false}
+  {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? true}
    {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
 
    {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? false}
