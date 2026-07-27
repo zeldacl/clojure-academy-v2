@@ -98,8 +98,10 @@ tasks.withType(JavaExec).configureEach {
 }
 
 if (target.loader != "none") {
+    evaluationDependsOn(":api")
     evaluationDependsOn(":mcmod")
 
+    def apiProject = project(":api")
     def mcmodProject = project(":mcmod")
     def contentProjectIds = (target.contentProjects ?: []).collect { it.toString() }
     if (contentProjectIds.isEmpty()) {
@@ -124,7 +126,6 @@ if (target.loader != "none") {
 
     sourceSets {
         main {
-            java.srcDir rootProject.file("api/src/main/java")
             sourceComponents.each { component ->
                 java.srcDir componentDir(component, "java")
                 clojure.srcDir componentDir(component, "clojure")
@@ -190,6 +191,8 @@ if (target.loader != "none") {
     ]
 
     dependencies {
+        compileOnly apiProject.sourceSets.main.output
+        runtimeOnly apiProject.sourceSets.main.output
         compileOnly mcmodProject.sourceSets.main.output
         runtimeOnly mcmodProject.sourceSets.main.output
         contentProjects.each { contentProject -> runtimeOnly contentProject.sourceSets.main.output }
@@ -230,6 +233,7 @@ if (target.loader != "none") {
     }
 
     tasks.named("compileJava").configure {
+        dependsOn apiProject.tasks.named("classes")
         contentProjects.each { contentProject -> dependsOn contentProject.tasks.named("classes") }
         dependsOn mcmodProject.tasks.named("classes")
     }
@@ -381,7 +385,7 @@ if (target.loader != "none") {
             files(contentProjects.collect { it.file("src/main/clojure") }) +
             files(mcmodProject.layout.buildDirectory.dir("clojure/main")) +
             files(contentProjects.collect { it.layout.buildDirectory.dir("clojure/main") }) +
-            files(mcmodProject.layout.buildDirectory.dir("classes/java/main")) +
+        files(mcmodProject.layout.buildDirectory.dir("classes/java/main")) +
             files(contentProjects.collect { it.layout.buildDirectory.dir("classes/java/main") })
         mainClass = "clojure.main"
         doFirst {
@@ -537,6 +541,7 @@ if (target.loader != "none") {
         }
     }
 
+    configurePackagedRuntimeProject(apiProject, "Api")
     configurePackagedRuntimeProject(mcmodProject, "Mcmod")
     def contentCopyTasks = contentProjects.collect { contentProject ->
         def label = contentProject.name.replaceAll(/[^A-Za-z0-9]/, "_").capitalize()
@@ -544,6 +549,7 @@ if (target.loader != "none") {
         tasks.named("copy${label}RuntimeClassesToPlatformOutput")
     }
     compilePlatformClojureAot.configure {
+        mustRunAfter tasks.named("copyApiRuntimeClassesToPlatformOutput")
         mustRunAfter tasks.named("copyMcmodRuntimeClassesToPlatformOutput")
         contentCopyTasks.each { mustRunAfter it }
     }
