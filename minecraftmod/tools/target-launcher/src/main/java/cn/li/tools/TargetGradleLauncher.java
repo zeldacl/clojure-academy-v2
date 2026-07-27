@@ -26,6 +26,8 @@ public final class TargetGradleLauncher {
             throw new IllegalArgumentException("Build profile wrapper is missing for target " + target + ": " + wrapper);
         }
         command.add(wrapper.toString());
+        command.add("--gradle-user-home");
+        command.add(root.resolve("build/gradle-home").resolve(target).toString());
         command.add(":platform:build");
         command.add("-PplatformTarget=" + target);
         for (int i = start; i < args.length; i++) command.add(args[i]);
