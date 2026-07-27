@@ -47,18 +47,26 @@
       (lifecycle/run-client-init!)
       (is (= 2 @called)))))
 
-(deftest latest-registration-wins-test
+(deftest multiple-content-modules-are-retained-test
   (reset-state!)
   (let [called (atom [])]
     (lifecycle/register-content-init! #(swap! called conj :first))
     (lifecycle/register-content-init! #(swap! called conj :second))
     (lifecycle/run-content-init!)
-    (is (= [:second] @called)))
+    (is (= [:first :second] @called)))
   (let [called (atom [])]
     (lifecycle/register-runtime-content-activation! #(swap! called conj :first))
     (lifecycle/register-runtime-content-activation! #(swap! called conj :second))
     (lifecycle/run-runtime-content-activation!)
-    (is (= [:second] @called))))
+    (is (= [:first :second] @called))))
+
+(deftest world-tick-registration-test
+  (reset-state!)
+  (let [called (atom [])]
+    (lifecycle/register-world-tick! #(swap! called conj [:ac %]))
+    (lifecycle/register-world-tick! #(swap! called conj [:bc %]))
+    (lifecycle/run-world-tick! :world)
+    (is (= [[:ac :world] [:bc :world]] @called))))
 
 (deftest content-and-runtime-exception-propagation-test
   (reset-state!)

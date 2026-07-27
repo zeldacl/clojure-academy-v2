@@ -18,5 +18,6 @@ include "api"
 include "mcmod"
 include "ac"
 include "platform-target"
+include "tools:target-launcher"
 
 project(":platform-target").name = "platform"

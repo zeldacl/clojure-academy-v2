@@ -191,7 +191,14 @@ tasks.register("verifyPlatformCatalog") {
     doLast {
         def catalog = rootProject.ext.platformCatalog()
         def components = catalog.components ?: [:]
+        def profiles = catalog.buildProfiles ?: [:]
         def problems = []
+        if ((catalog.javaBaseline ?: 0) as int < 17) {
+            problems << "javaBaseline must be at least 17 because api uses Java 17 language/library features"
+        }
+        if (profiles.isEmpty()) {
+            problems << "catalog has no buildProfiles"
+        }
         if (components.isEmpty()) {
             problems << "catalog has no components"
         }
@@ -206,6 +213,23 @@ tasks.register("verifyPlatformCatalog") {
             }
         }
         catalog.targets.each { targetId, target ->
+            ["buildProfile", "gradleJvmVersion", "compileJavaVersion", "runtimeJavaVersion"].each { key ->
+                if (!target[key]) problems << "${targetId} missing ${key}"
+            }
+            (target.contentModules ?: []).each { module ->
+                ["id", "namespace", "function"].each { key ->
+                    if (!module[key]) problems << "${targetId} content module missing ${key}"
+                }
+            }
+            if (target.buildProfile && !profiles.containsKey(target.buildProfile.toString())) {
+                problems << "${targetId} references unknown buildProfile ${target.buildProfile}"
+            }
+            if ((target.compileJavaVersion ?: 0) as int < (catalog.javaBaseline ?: 17) as int) {
+                problems << "${targetId} compileJavaVersion is below javaBaseline"
+            }
+            if ((target.runtimeJavaVersion ?: 0) as int < (target.compileJavaVersion ?: 17) as int) {
+                problems << "${targetId} runtimeJavaVersion is below compileJavaVersion"
+            }
             (target.sourceComponents ?: []).each { componentId ->
                 def component = components[componentId.toString()]
                 if (component == null) {
@@ -405,4 +429,22 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",
               "verifyRepositoryHygiene"
+}
+
+tasks.register("verifySyntheticNeoForgeTarget") {
+    group = "verification"
+    description = "Validate the synthetic Minecraft 26.1 + NeoForge target model without building it."
+    doLast {
+        def fixture = new JsonSlurper().parse(rootProject.file("platform-catalog-fixtures.json"))
+        def target = fixture.targets["neoforge-26.1-synthetic"]
+        if (!target || target.loader != "neoforge" || target.minecraftVersion != "26.1") {
+            throw new GradleException("Synthetic NeoForge 26.1 fixture is incomplete")
+        }
+        if (!fixture.buildProfiles[target.buildProfile]?.fixture) {
+            throw new GradleException("Synthetic target must route through an isolated fixture build profile")
+        }
+        ["platform-src/minecraft/mc-26.1-synthetic", "platform-src/loader/neoforge-26.1-synthetic"].each { path ->
+            if (file(path).exists()) throw new GradleException("Synthetic target must not add production source: ${path}")
+        }
+    }
 }

@@ -11,9 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
-import cn.li.mc1201.client.particle.SilbarnFragParticle;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.ScriptedMarkerEntity;
@@ -24,8 +22,6 @@ import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
-import net.minecraft.core.particles.SimpleParticleType;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.minecraftforge.client.event.EntityRenderersEvent;
@@ -98,11 +94,7 @@ public final class ForgeClientRenderRegistry {
             ScriptedBlockBodySpec spec = ModEntities.getScriptedBlockBodySpec(registryName);
             String rendererId = spec == null ? "block-body" : spec.getRendererId();
             if ("block-body".equals(rendererId)) {
-                if (spec != null && "silbarn".equals(spec.getHookId())) {
-                    event.registerEntityRenderer(blockBodyType, SilbarnObjRenderer::new);
-                } else {
-                    event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
-                }
+                event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
             }
         }
 
@@ -116,10 +108,7 @@ public final class ForgeClientRenderRegistry {
     }
 
     public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
-        if (fragTypeRaw instanceof SimpleParticleType spt) {
-            event.registerSpriteSet(spt, SilbarnFragParticle.Provider::new);
-        }
+        // Content modules register their own particle providers during client init.
     }
 
     public static void registerShaders(RegisterShadersEvent event) throws IOException {

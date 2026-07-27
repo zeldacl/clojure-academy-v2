@@ -8,20 +8,15 @@ import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
-import cn.li.mc1201.client.particle.SilbarnFragParticle;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.client.render.effect.SilbarnObjRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
-import net.fabricmc.fabric.api.client.particle.v1.ParticleFactoryRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
-import net.minecraft.core.particles.SimpleParticleType;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 
@@ -57,10 +52,7 @@ public final class FabricClientRenderSetup {
     }
 
     public static void registerParticleProviders() {
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
-        if (fragTypeRaw instanceof SimpleParticleType spt) {
-            ParticleFactoryRegistry.getInstance().register(spt, SilbarnFragParticle.Provider::new);
-        }
+        // Content modules register their own particle providers during client init.
     }
 
     public static void registerEntityRenderers() {
@@ -131,11 +123,7 @@ public final class FabricClientRenderSetup {
                 : blockBodySpec.getRendererId();
 
         if ("block-body".equals(rendererId)) {
-            if (blockBodySpec != null && "silbarn".equals(blockBodySpec.getHookId())) {
-                FabricClientHelper.registerEntityRenderer(blockBodyType, SilbarnObjRenderer::new);
-            } else {
-                FabricClientHelper.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
-            }
+            FabricClientHelper.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
         }
     }
 

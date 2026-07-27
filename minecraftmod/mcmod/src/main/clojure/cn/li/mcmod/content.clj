@@ -1,38 +1,34 @@
 (ns cn.li.mcmod.content
-  "Helpers for triggering shared game content initialization via content SPI."
-  (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mcmod.content.spi ContentInitBootstraps]))
+  "Explicit suite content registration driven by generated target metadata."
+  (:require [cn.li.platform.target :as target]))
 
-(defn register-content!
-  "Register a shared content module through the ServiceLoader SPI.
+(defn- require-resolve! [namespace-name symbol-name]
+  (let [ns-sym (symbol namespace-name) var-sym (symbol symbol-name)]
+    (require ns-sym)
+    (or (ns-resolve ns-sym var-sym)
+        (throw (ex-info "Content entrypoint missing"
+                        {:namespace namespace-name :symbol symbol-name})))))
 
-  Content modules provide a ContentInitBootstrap implementation that explicitly
-  registers lifecycle hooks into mcmod when discovered. The content id is supplied by the
-  platform/datagen caller so mcmod stays content-agnostic."
-  [content-id]
-  (try
-    (when-not (ContentInitBootstraps/register (str content-id))
-      (println (str "[" modid/mod-id "] WARNING: no content bootstrap found for " content-id)))
-    (catch Throwable t
-      (println (str "[" modid/mod-id "] WARNING: ContentInitBootstraps/register(" content-id ") failed:")
-               (ex-message t))
-      nil))
+(defn register-content! [content-module]
+  "Register one content module from generated {:id :namespace :function} metadata."
+  (let [{:keys [namespace function]} content-module]
+    (when-not (and namespace function)
+      (throw (ex-info "Invalid content module metadata" {:module content-module})))
+    ((require-resolve! namespace function)))
   nil)
 
+(defn- declared-content-modules []
+  (try (:content-modules (target/current-target!))
+       (catch clojure.lang.ExceptionInfo _ [])))
+
 (defn available-content-ids
-  "Return content ids visible through the ContentInitBootstrap ServiceLoader."
+  "Return content ids declared by the selected target metadata."
   []
-  (vec (ContentInitBootstraps/availableContentIds)))
+  (mapv :id (declared-content-modules)))
 
 (defn register-all-content!
-  "Best-effort registration of every content module discovered through ServiceLoader."
+  "Register every content module declared by the selected target metadata."
   []
-  (try
-    (let [registered (long (ContentInitBootstraps/registerAll))]
-      (when (zero? registered)
-        (println (str "[" modid/mod-id "] WARNING: no content bootstrap providers found"))))
-    (catch Throwable t
-      (log/warn "ContentInitBootstraps/registerAll() failed:" (ex-message t))
-      (log/stacktrace "ContentInitBootstraps/registerAll()" t)))
+  (doseq [content-module (declared-content-modules)]
+    (register-content! content-module))
   nil)

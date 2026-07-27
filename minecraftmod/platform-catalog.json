@@ -1,11 +1,17 @@
 {
+  "schemaVersion": 2,
   "defaultTarget": "forge-1.20.1",
+  "javaBaseline": 17,
+  "buildProfiles": {
+    "loom-1.13-gradle-8.8": {
+      "gradleVersion": "8.8",
+      "gradleJvmVersion": 17,
+      "loomVersion": "1.13.467",
+      "clojurephantVersion": "0.9.1",
+      "shadowVersion": "8.1.1"
+    }
+  },
   "components": {
-    "platform-common": {
-      "kind": "common",
-      "source": "platform-src/common/src/main",
-      "aotManifest": "platform-src/common/aot-manifest.edn"
-    },
     "minecraft-1.20.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.20.1",
@@ -39,7 +45,11 @@
       "id": "core",
       "loader": "none",
       "minecraftVersion": null,
-      "javaVersion": 17,
+      "buildProfile": "loom-1.13-gradle-8.8",
+      "gradleJvmVersion": 17,
+      "compileJavaVersion": 17,
+      "runtimeJavaVersion": 17,
+      "contentModules": [],
       "sourceComponents": [],
       "testComponents": [],
       "capabilities": [],
@@ -54,9 +64,14 @@
       "id": "forge-1.20.1",
       "loader": "forge",
       "minecraftVersion": "1.20.1",
-      "javaVersion": 17,
+      "buildProfile": "loom-1.13-gradle-8.8",
+      "gradleJvmVersion": 17,
+      "compileJavaVersion": 17,
+      "runtimeJavaVersion": 17,
+      "contentModules": [
+        {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
+      ],
       "sourceComponents": [
-        "platform-common",
         "minecraft-1.20.1",
         "forge-1.20.1"
       ],
@@ -108,9 +123,14 @@
       "id": "fabric-1.20.1",
       "loader": "fabric",
       "minecraftVersion": "1.20.1",
-      "javaVersion": 17,
+      "buildProfile": "loom-1.13-gradle-8.8",
+      "gradleJvmVersion": 17,
+      "compileJavaVersion": 17,
+      "runtimeJavaVersion": 17,
+      "contentModules": [
+        {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
+      ],
       "sourceComponents": [
-        "platform-common",
         "minecraft-1.20.1",
         "fabric-1.20.1"
       ],

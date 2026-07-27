@@ -80,9 +80,20 @@ def collectClojureNamespaces = { Collection<File> dirs ->
     result
 }
 
+def compileJavaVersion = (target.compileJavaVersion ?: target.javaVersion ?: catalog.javaBaseline ?: 17) as int
+def gradleJvmVersion = (target.gradleJvmVersion ?: compileJavaVersion) as int
+def runtimeJavaVersion = (target.runtimeJavaVersion ?: compileJavaVersion) as int
+if (compileJavaVersion < (catalog.javaBaseline ?: 17) as int) {
+    throw new GradleException("${targetId}: compileJavaVersion must be >= catalog.javaBaseline")
+}
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of((target.javaVersion ?: 17) as int)
+        languageVersion = JavaLanguageVersion.of(compileJavaVersion)
+    }
+}
+tasks.withType(JavaExec).configureEach {
+    javaLauncher = javaToolchains.launcherFor {
+        languageVersion = JavaLanguageVersion.of(runtimeJavaVersion)
     }
 }
 

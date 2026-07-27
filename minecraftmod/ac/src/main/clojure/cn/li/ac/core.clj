@@ -5,6 +5,7 @@
             [cn.li.ac.bootstrap :as ac-bootstrap]
             [cn.li.ac.core.init :as core-init]
             [cn.li.ac.core.content-loader :as content-loader]
+            [cn.li.ac.wireless.data.world :as wireless-world]
             [cn.li.ac.media.external-scan :as media-external-scan]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.client.install-effect-reactive :as install-effect-reactive]
@@ -68,13 +69,14 @@
   (ac-bootstrap/register-post-spi-init!)
   (lifecycle/register-content-init! #'init)
   (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
+  (lifecycle/register-world-tick! wireless-world/on-world-tick)
   (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
   (lifecycle/register-client-init! init-client-renderers))
 
 (defn register-lifecycle-hooks!
   "Register AC lifecycle hooks with mcmod.
 
-  This is the explicit bootstrap entrypoint used by the content ServiceLoader.
+  This is the entrypoint named by generated suite metadata.
   Requiring this namespace alone must not mutate lifecycle
   state."
   []

@@ -26,7 +26,6 @@
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.session :as mc-session]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
-            [cn.li.ac.content.ability-client :as ability-client]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
@@ -392,8 +391,8 @@
   (gui-screen-impl/init-client!)
   (i18n/install-client-i18n!)
 
-  ;; Register discovered client FX channels (arc-gen, railgun, etc.)
-  (ability-client/init-client-fx!)
+  ;; Run content-owned client initialization without naming a concrete suite.
+  (lifecycle/run-client-init!)
   ;; Then register renderers
   (register-renderers)
   (register-fluid-render-layers!)

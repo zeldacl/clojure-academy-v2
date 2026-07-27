@@ -56,8 +56,8 @@
 
 (defn register-post-spi-init!
   "Register AC keybinding init as a post-SPI client callback. Called from
-  cn.li.ac.core's lifecycle-hook registration (the real ServiceLoader-driven
-  content-init entrypoint) — not at namespace load. framework-once! makes
+  cn.li.ac.core's lifecycle-hook registration (the generated suite metadata
+  entrypoint) — not at namespace load. framework-once! makes
   this idempotent across repeated calls within one Framework lifetime."
   []
   (install/framework-once! ::register-post-spi-init
