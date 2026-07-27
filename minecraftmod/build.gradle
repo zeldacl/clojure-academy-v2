@@ -84,7 +84,7 @@ tasks.register("verifyNoLegacyArchitecture") {
     group = "verification"
     description = "Fail if deleted platform-module architecture returns."
     doLast {
-        def forbiddenDirs = ["mc-1.20.1", "forge-1.20.1", "fabric-1.20.1", "test-support"]
+        def forbiddenDirs = ["mc-1.20.1", "forge-1.20.1", "fabric-1.20.1", "test-support", "platform-target"]
             .collect { rootProject.file(it) }
             .findAll { it.exists() }
         if (!forbiddenDirs.isEmpty()) {
@@ -320,7 +320,7 @@ tasks.register("verifyNoTargetHardcoding") {
         }
         def filesToScan = [file("settings.gradle"), file("build.gradle")] +
             fileTree("build-logic") { include "**/*.gradle" }.files +
-            fileTree("platform-target") { include "**/*.gradle" }.files
+            fileTree("platform") { include "**/*.gradle" }.files
         def forbidden = [
             legacyCatalogName,
             "project(':forge-" + "1.20.1')",
@@ -348,7 +348,7 @@ tasks.register("verifyNoTargetHardcoding") {
             fileTree("mcmod") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("ac") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("platform-src") { include "**/*.java", "**/*.clj", "**/*.gradle" },
-            fileTree("platform-target") { include "**/*.java", "**/*.clj", "**/*.gradle" },
+            fileTree("platform") { include "**/*.java", "**/*.clj", "**/*.gradle" },
             fileTree("build-logic") { include "**/*.gradle" }
         ).files.findAll { File f ->
             !f.toPath().any { it.toString() in ["build", ".gradle"] }
@@ -399,7 +399,7 @@ tasks.register("compareDatagenParityManifests") {
         def problems = []
         targetsByGroup.each { group, entries ->
             def manifests = entries.collectEntries { id, target ->
-                def manifest = file("platform-target/build/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
+                def manifest = file("platform/build/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
                 manifest.isFile() ? [(id): new JsonSlurper().parse(manifest)] : [:]
             }
             if (manifests.size() < 2) {
