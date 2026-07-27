@@ -1,7 +1,8 @@
 (ns cn.li.forge1201.registry.item-properties
   "Forge-specific item property assembly and native item callback wiring."
   (:require [cn.li.forge1201.runtime.owner :as runtime-owner]
-            [cn.li.mc1201.runtime.item-callback :as item-callback])
+            [cn.li.mc1201.runtime.item-callback :as item-callback]
+            [cn.li.mc1201.item.spec :as item-spec])
   (:import [net.minecraft.world.food FoodProperties$Builder]
            [net.minecraft.world.item Item Item$Properties Rarity]
            [cn.li.mc1201.item NbtBarItem ScriptedItem]))
@@ -40,13 +41,8 @@
   ^Item
   [item-spec]
   (let [props (apply-item-properties (Item$Properties.) item-spec)
-        energy-item? (true? (get-in item-spec [:properties :energy-item?]))
-        enchantability (int (or (:enchantability item-spec) 0))
-        tooltip-lines (mapv str (or (get-in item-spec [:properties :tooltip]) []))
-        current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
-        max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
-        default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
-        bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))
+        {:keys [energy-item? enchantability tooltip-lines current-key max-key default-max bar-color]}
+        (item-spec/standalone-values item-spec)
         callback (item-callback/build "Forge" runtime-owner/with-player-owner)]
     (if energy-item?
       (NbtBarItem. props current-key max-key default-max bar-color callback)

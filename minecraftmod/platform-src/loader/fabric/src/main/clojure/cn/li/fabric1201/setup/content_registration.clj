@@ -8,7 +8,8 @@
             [cn.li.mcmod.protocol.metadata :as metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.block.blockstate-properties :as bsp]
-            [cn.li.mc1201.runtime.item-callback :as item-callback])
+            [cn.li.mc1201.runtime.item-callback :as item-callback]
+            [cn.li.mc1201.item.spec :as item-spec])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.block IScriptedBlock]
@@ -100,13 +101,8 @@
 (defn- create-standalone-item
   [item-spec]
   (let [props (Item$Properties.)
-        energy-item? (true? (get-in item-spec [:properties :energy-item?]))
-        enchantability (int (or (:enchantability item-spec) 0))
-        tooltip-lines (mapv str (or (get-in item-spec [:properties :tooltip]) []))
-        current-key (str (or (get-in item-spec [:properties :bar-current-key]) "energy"))
-        max-key (str (or (get-in item-spec [:properties :bar-max-key]) "maxEnergy"))
-        default-max (double (or (get-in item-spec [:properties :energy-capacity]) 1.0))
-        bar-color (int (or (get-in item-spec [:properties :energy-bar-color]) 0x00E5FF))
+        {:keys [energy-item? enchantability tooltip-lines current-key max-key default-max bar-color]}
+        (item-spec/standalone-values item-spec)
         no-owner (fn [_player _side f] (f))
         callback (item-callback/build "Fabric" no-owner)]
     (if energy-item?
