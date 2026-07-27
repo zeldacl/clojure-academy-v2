@@ -184,7 +184,7 @@
           (cond
             silbarn-ready?
             (do
-              (world-effects/trigger-silbarn-hit! world-id (str (:uuid front-hit)))
+              (world-effects/trigger-behavior-hit! world-id (str (:uuid front-hit)))
               (send-preray-fx! ctx-id eye front-hit true)
               (send-barrage-fx! ctx-id front-hit)
               (let [targets (cone-scatter-targets world-id player-id (str (:uuid front-hit)) eye look-dir)]

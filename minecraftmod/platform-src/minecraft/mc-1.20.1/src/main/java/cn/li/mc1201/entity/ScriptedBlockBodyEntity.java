@@ -1,6 +1,7 @@
 package cn.li.mc1201.entity;
 
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
+import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -31,6 +32,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     private static final String NBT_PLACE_WHEN_COLLIDE = "BlockBodyPlaceWhenCollide";
 
     private static final String IMPACT_DETONATION = "impact-detonation";
+    private static final String BEHAVIOR_REGISTRY_NS = "cn.li.mcmod.spi.entity-behavior-registry";
+
+    static {
+        ClojureInterop.requireNamespace(BEHAVIOR_REGISTRY_NS);
+    }
     private int behaviorDespawnCountdown = -1;
 
     private static final EntityDataAccessor<String> DATA_BLOCK_ID =
@@ -83,7 +89,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
         behaviorDespawnCountdown = 10;
         this.entityData.set(DATA_BEHAVIOR_HIT, true);
-        String soundId = cn.li.mcmod.ModId.ID + (heavy ? ":entity.silbarn_heavy" : ":entity.silbarn_light");
+        String soundPath = behaviorValue(heavy ? "heavy-sound" : "light-sound", "");
+        String soundId = cn.li.mcmod.ModId.ID + ":" + soundPath;
         SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.parse(soundId));
         if (sound != null) {
             this.playSound(sound, 0.5F, 1.0F);
@@ -95,11 +102,12 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (!(this.level() instanceof ServerLevel serverLevel)) {
             return;
         }
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "silbarn_frag"));
+        String particlePath = behaviorValue("particle", "");
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, particlePath));
         if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
             return;
         }
-        // Matches original EntitySilbarn#spawnEffects: 18-27 fragments in random sphere distribution
+        // Content behavior supplies the particle; generic adapter preserves the sphere distribution.
         int n = 18 + this.random.nextInt(10);
         for (int i = 0; i < n; i++) {
             double vel = 0.08 + this.random.nextDouble() * 0.10;
@@ -119,9 +127,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     }
 
     /**
-     * Force an in-flight (not yet landed/collided) silbarn to detonate.
-     * Matches original's silbarn.postEvent(new CollideEvent(new RayTraceResult(silbarn)))
-     * — a synthetic collision result whose entityHit is the silbarn itself,
+     * Force an in-flight behavior-driven entity to detonate.
+     * This models a synthetic collision result whose entityHit is the entity itself,
      * which is why original always plays the "heavy" sound variant here.
      */
     public void forceBehaviorHit() {
@@ -130,7 +137,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
     }
 
-    /** Mirrors original EntitySilbarn's client-synced hit flag, used by the client renderer to hide the model. */
+    /** Client-synced behavior hit flag, used by the renderer to hide the model. */
     public boolean isBehaviorHit() {
         return this.entityData.get(DATA_BEHAVIOR_HIT);
     }
@@ -286,6 +293,15 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
     }
 
+    private String behaviorValue(String key, String fallback) {
+        try {
+            Object value = ClojureInterop.invoke(BEHAVIOR_REGISTRY_NS, "value", IMPACT_DETONATION, key, fallback);
+            return value == null ? fallback : String.valueOf(value);
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
     @Override
     protected Item getDefaultItem() {
         try {
@@ -323,7 +339,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             this.entityData.set(DATA_PLACE_WHEN_COLLIDE, tag.getBoolean(NBT_PLACE_WHEN_COLLIDE));
         }
         if (hasImpactDetonationBehavior()) {
-            // Matches original EntitySilbarn#readEntityFromNBT: never survives a save/reload.
+            // Impact-detonation entities intentionally do not survive a save/reload.
             this.discard();
         }
     }

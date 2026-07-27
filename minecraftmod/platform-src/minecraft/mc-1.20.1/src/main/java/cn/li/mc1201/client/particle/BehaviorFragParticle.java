@@ -11,8 +11,7 @@ import net.minecraft.core.particles.SimpleParticleType;
 /**
  * Generic fragment particle for a behavior-driven impact burst.
  *
- * Matches original EntitySilbarn#spawnEffects:
- *   texture  entities/silbarn_frag
+ * Texture and registration are supplied by the content module.
  *   size     0.1
  *   gravity  0.03
  *   rotation each tick: roll += sin(phi) * 25 deg where phi is per-particle random
