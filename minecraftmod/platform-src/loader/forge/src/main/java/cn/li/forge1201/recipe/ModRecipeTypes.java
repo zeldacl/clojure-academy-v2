@@ -26,26 +26,26 @@ public final class ModRecipeTypes {
         DeferredRegister.create(net.minecraftforge.registries.ForgeRegistries.RECIPE_SERIALIZERS, MyMod1201.MODID);
 
     public static final RegistryObject<RecipeType<ContentRecipe>> CONTENT_PROCESS_TYPE =
-        RECIPE_TYPES.register("imag_fusor", () -> new RecipeType<ContentRecipe>() {
+        RECIPE_TYPES.register("content_process", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":imag_fusor";
+                return MyMod1201.MODID + ":content_process";
             }
         });
 
     public static final RegistryObject<RecipeType<ContentRecipe>> CONTENT_MODE_TYPE =
-        RECIPE_TYPES.register("metal_former", () -> new RecipeType<ContentRecipe>() {
+        RECIPE_TYPES.register("content_mode", () -> new RecipeType<ContentRecipe>() {
             @Override
             public String toString() {
-                return MyMod1201.MODID + ":metal_former";
+                return MyMod1201.MODID + ":content_mode";
             }
         });
 
     public static final RegistryObject<RecipeSerializer<ContentRecipe>> CONTENT_PROCESS_SERIALIZER =
-        RECIPE_SERIALIZERS.register("imag_fusor", () -> new ContentRecipe.Serializer("process"));
+        RECIPE_SERIALIZERS.register("content_process", () -> new ContentRecipe.Serializer("process"));
 
     public static final RegistryObject<RecipeSerializer<ContentRecipe>> CONTENT_MODE_SERIALIZER =
-        RECIPE_SERIALIZERS.register("metal_former", () -> new ContentRecipe.Serializer("mode"));
+        RECIPE_SERIALIZERS.register("content_mode", () -> new ContentRecipe.Serializer("mode"));
 
     /**
      * Register both DeferredRegisters with the mod event bus.

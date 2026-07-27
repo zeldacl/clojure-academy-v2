@@ -1,5 +1,5 @@
 (ns cn.li.forge1201.datagen.recipe-provider-custom
-  "Forge-specific custom recipe emission (ImagFusor, MetalFormer).
+  "Forge-specific custom recipe emission.
 
   These custom RecipeTypes are registered via ModRecipeTypes (Forge loader
   Java layer).  Their emission logic lives here — NOT in mc-1.20.1 — to
@@ -58,9 +58,9 @@
   Each emitter is a 1-arg fn [recipe]; the writer is captured in a closure
   to match emit-recipes!'s calling convention."
   [^Consumer writer]
-  {:imag-fusor (fn [recipe]
+  {:custom-process (fn [recipe]
                  (emit-custom-recipe! writer recipe
                    (.get ModRecipeTypes/CONTENT_PROCESS_SERIALIZER)))
-   :metal-former (fn [recipe]
+   :custom-mode (fn [recipe]
                    (emit-custom-recipe! writer recipe
                      (.get ModRecipeTypes/CONTENT_MODE_SERIALIZER)))})

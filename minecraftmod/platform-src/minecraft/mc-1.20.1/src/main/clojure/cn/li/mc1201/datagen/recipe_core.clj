@@ -68,17 +68,17 @@
     (> (int (:count output 1)) 1)
     (assoc :count (int (:count output 1)))))
 
-(defn imag-fusor-json
+(defn process-recipe-json
   [recipe]
-  {:type (str modid/mod-id ":imag_fusor")
+  {:type (str modid/mod-id ":content_process")
    :input (ingredient-json (:input recipe))
    :output (machine-output-json (:output recipe))
    :consume_liquid (int (or (:consume-liquid recipe) 0))
    :craft_time (int (or (:time recipe) 200))})
 
-(defn metal-former-json
+(defn mode-recipe-json
   [recipe]
-  {:type (str modid/mod-id ":metal_former")
+  {:type (str modid/mod-id ":content_mode")
    :input (ingredient-json (:input recipe))
    :output (machine-output-json (:output recipe))
    :mode (:mode recipe)})
@@ -89,8 +89,8 @@
     :shaped (shaped-json recipe)
     :shapeless (shapeless-json recipe)
     (:smelting :blasting :smoking :campfire-cooking) (cooking-json recipe)
-    :imag-fusor (imag-fusor-json recipe)
-    :metal-former (metal-former-json recipe)
+    :custom-process (process-recipe-json recipe)
+    :custom-mode (mode-recipe-json recipe)
     (throw (ex-info "Unsupported recipe type" {:type (:type recipe) :recipe recipe}))))
 
 (defn emit-recipes!

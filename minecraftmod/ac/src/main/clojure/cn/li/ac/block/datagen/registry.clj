@@ -36,9 +36,9 @@
   (let [existing (metadata/get-recipes)
         if-recipes (->> (imag-fusor.recipes/recipes-snapshot)
                         (filter datagen-compatible?)
-                        (tag-machine-recipes :imag-fusor))
+                        (tag-machine-recipes :custom-process))
         mf-recipes (->> (metal-former.recipes/recipes-snapshot)
                         (filter datagen-compatible?)
-                        (tag-machine-recipes :metal-former))]
+                        (tag-machine-recipes :custom-mode))]
     (metadata/set-recipes! (concat existing if-recipes mf-recipes)))
   nil)
