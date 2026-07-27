@@ -9,7 +9,7 @@
   "Return a platform-neutral screen creator fn.
 
   The returned function accepts `(menu player-inventory title)` and delegates
-  to the shared screen construction / fallback path."
+  to the shared screen construction path."
   [gui-id factory-fn-kw screen-opts]
   (fn [menu player-inventory title]
     (screen-core/create-screen!

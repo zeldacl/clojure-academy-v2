@@ -74,8 +74,8 @@
 (defn register-lifecycle-hooks!
   "Register AC lifecycle hooks with mcmod.
 
-  This is the explicit bootstrap entrypoint used by ServiceLoader and fallback
-  content discovery. Requiring this namespace alone must not mutate lifecycle
+  This is the explicit bootstrap entrypoint used by the content ServiceLoader.
+  Requiring this namespace alone must not mutate lifecycle
   state."
   []
   (let [should-register?
