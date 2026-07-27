@@ -663,6 +663,12 @@ if (target.loader != "none") {
         dependsOn remapInputTask
     }
 
+    def rootProj = project.rootProject
+    def modId = rootProj.findProperty("mod_id")
+    def forgeResources = project.file("platform-src/loader/forge/src/main/resources").absolutePath
+    def acResources = project(":ac").file("src/main/resources").absolutePath
+    def datagenPath = generatedDatagenResources.get().asFile.absolutePath
+
     loom {
         runs {
             client {
@@ -675,7 +681,7 @@ if (target.loader != "none") {
                 configName = "${target.id} Server"
                 runDir = "run/${target.id}/server"
                 if (target.loader == "forge") {
-                    property "forge.enabledGameTestNamespaces", "${rootProject.findProperty("mod_id")},minecraft"
+                    property "forge.enabledGameTestNamespaces", "${modId},minecraft"
                 }
             }
             if (target.loader == "forge") {
@@ -683,10 +689,10 @@ if (target.loader != "none") {
                     data()
                     configName = "${target.id} Data"
                     runDir = "run/${target.id}/data"
-                    programArgs "--mod", rootProject.findProperty("mod_id"), "--all",
+                    programArgs "--mod", modId, "--all",
                         "--output", generatedDatagenResources.get().asFile.absolutePath,
-                        "--existing", rootProject.file("platform-src/loader/forge/src/main/resources").absolutePath,
-                        "--existing", project(":ac").file("src/main/resources").absolutePath
+                        "--existing", forgeResources,
+                        "--existing", acResources
                 }
             } else if (target.loader == "fabric") {
                 datagen {
