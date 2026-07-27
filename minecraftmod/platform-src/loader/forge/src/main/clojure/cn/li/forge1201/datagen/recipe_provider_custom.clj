@@ -60,7 +60,7 @@
   [^Consumer writer]
   {:imag-fusor (fn [recipe]
                  (emit-custom-recipe! writer recipe
-                   (.get ModRecipeTypes/IMAG_FUSOR_SERIALIZER)))
+                   (.get ModRecipeTypes/CONTENT_PROCESS_SERIALIZER)))
    :metal-former (fn [recipe]
                    (emit-custom-recipe! writer recipe
-                     (.get ModRecipeTypes/METAL_FORMER_SERIALIZER)))})
+                     (.get ModRecipeTypes/CONTENT_MODE_SERIALIZER)))})
