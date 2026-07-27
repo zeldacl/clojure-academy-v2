@@ -199,6 +199,11 @@ tasks.register("verifyPlatformCatalog") {
         if (profiles.isEmpty()) {
             problems << "catalog has no buildProfiles"
         }
+        profiles.each { profileId, profile ->
+            if (!profile.gradleVersion || !profile.gradleJvmVersion || !profile.wrapper) {
+                problems << "buildProfile ${profileId} must declare gradleVersion, gradleJvmVersion and wrapper"
+            }
+        }
         if (components.isEmpty()) {
             problems << "catalog has no components"
         }

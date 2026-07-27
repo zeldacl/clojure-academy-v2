@@ -5,6 +5,8 @@
   "buildProfiles": {
     "loom-1.13-gradle-8.8": {
       "gradleVersion": "8.8",
+      "wrapper": "root",
+      "wrapper": "root",
       "gradleJvmVersion": 17,
       "loomVersion": "1.13.467",
       "clojurephantVersion": "0.9.1",
