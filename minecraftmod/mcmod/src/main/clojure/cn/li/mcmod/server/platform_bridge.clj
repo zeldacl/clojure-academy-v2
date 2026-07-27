@@ -5,8 +5,16 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.util.log :as log]))
 
-(defn- bridge-op [k & args]
+(defn- bridge-op-optional [k & args]
   (when-let [f (get-in @(fw/fw-atom) [:platform :server-bridge k])]
+    (apply f args)))
+
+(defn- bridge-op [k & args]
+  (let [ops (get-in @(fw/fw-atom) [:platform :server-bridge])
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required server bridge operation is not installed"
+                      {:operation k :installed (keys ops)})))
     (apply f args)))
 
 (defn install-server-bridge!
@@ -23,7 +31,7 @@
 
 (defn send-to-client!
   [player-uuid message-key payload]
-  (or (bridge-op :send-to-client! player-uuid message-key payload)
+  (or (bridge-op-optional :send-to-client! player-uuid message-key payload)
       (log/debug "Server bridge send-to-client! not available")))
 
 (defn spawn-item-stack-at!
