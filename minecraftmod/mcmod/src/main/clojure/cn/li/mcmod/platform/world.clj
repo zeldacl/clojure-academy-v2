@@ -37,8 +37,20 @@
 (defn current-ops          [] (get-in @(fw/fw-atom) [:platform :world-ops]))
 (defn current-block-state-ops [] (get-in @(fw/fw-atom) [:platform :block-state-ops]))
 
-(defn- world-call [k & args] (when-let [f (get (current-ops) k)] (apply f args)))
-(defn- bs-call [k & args] (when-let [f (get (current-block-state-ops) k)] (apply f args)))
+(defn- world-call [k & args]
+  (let [ops (current-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required world operation is not installed"
+                      {:operation k :installed (keys ops)})))
+    (apply f args)))
+(defn- bs-call [k & args]
+  (let [ops (current-block-state-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required block-state operation is not installed"
+                      {:operation k :installed (keys ops)})))
+    (apply f args)))
 
 ;; World access API.
 (defn get-tile-entity    [w pos]       (world-call :world-get-tile-entity w pos))

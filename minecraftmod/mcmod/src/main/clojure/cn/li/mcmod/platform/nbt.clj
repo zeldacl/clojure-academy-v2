@@ -38,7 +38,11 @@
 
 ;; Helper
 (defn- call [k & args]
-  (when-let [f (get (current-ops) k)]
+  (let [ops (current-ops)
+        f (get ops k)]
+    (when-not f
+      (throw (ex-info "Required NBT operation is not installed"
+                      {:operation k :installed (keys ops)})))
     (apply f args)))
 
 ;; CompoundTag access API
