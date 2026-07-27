@@ -7,11 +7,39 @@
             [cn.li.mcmod.hooks.core :as hooks-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.core.registries BuiltInRegistries]
+  (:import [cn.li.mc1201.entity ScriptedEffectEntity]
+           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world InteractionHand]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]))
+
+(defn- same-effect-type?
+  [expected-id ^ScriptedEffectEntity effect]
+  (when-let [registry-id (.getKey BuiltInRegistries/ENTITY_TYPE (.getType effect))]
+    (let [expected (str expected-id)
+          actual (str registry-id)]
+      (or (= expected actual)
+          (= expected (.getPath registry-id))))))
+
+(defn- unique-effect-active?
+  [^Player player plan side]
+  (when (= side :server)
+    (some
+      (fn [action]
+        (when (and (= :spawn-scripted-effect (:kind action))
+                   (:unique-per-owner? action))
+          (let [owner-uuid (.getUUID player)
+                effects (.getEntitiesOfClass
+                          (.level player)
+                          ScriptedEffectEntity
+                          (.inflate (.getBoundingBox player) 32.0))]
+            (boolean
+              (some (fn [^ScriptedEffectEntity effect]
+                      (and (= owner-uuid (.getOwnerUuid effect))
+                           (same-effect-type? (:entity-id action) effect)))
+                    effects)))))
+      (:server-actions plan))))
 
 (defn get-item-id
   [^ItemStack stack]
@@ -127,7 +155,13 @@
     (let [player-uuid (str (.getUUID player))
           item-id (get-item-id stack)
           runtime-activated? (hooks-core/runtime-activated? player-uuid)
-          plan (hooks-core/build-item-use-plan player-uuid item-id runtime-activated? side)]
+          requested-plan (hooks-core/build-item-use-plan player-uuid item-id runtime-activated? side)
+          ;; ItemCoin refuses a second throw while this player's first coin is
+          ;; still airborne. Preflight before consume/domain/spawn keeps that
+          ;; behavior atomic on the authoritative server.
+          plan (if (unique-effect-active? player requested-plan side)
+                 nil
+                 requested-plan)]
       (dispatch-dsl-item-use! player item-id hand stack side)
       (run-plan-actions! player hand stack side player-uuid plan opts)
       {:consume? (or (:consume? plan)

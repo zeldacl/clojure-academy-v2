@@ -37,7 +37,7 @@
          :height 0.1
          :client-tracking-range 64
          :update-interval 1
-         :properties {:effect {:life-ticks 600
+         :properties {:effect {:life-ticks 32
                                :follow-owner? true
                                :renderer-id "railgun-charge-glow"}}}))
     (edsl/register-entity!
@@ -110,6 +110,7 @@
                                :hook :vertical-ballistic
                                :hook-params {:gravity 0.06
                                              :init-vel 0.92
+                                             :return-item-id (modid/namespaced-path "coin")
                                              :on-landed-fn
                                              ;; Ticks (and thus this callback) run on every
                                              ;; nearby client, not just the thrower's — only
@@ -122,7 +123,8 @@
                                                (when (and (tutorial-config/heads-or-tails-enabled?)
                                                           (= owner-player (bridge/get-client-player)))
                                                  (bridge/send-system-message! owner-player
-                                                   (str "heads_or_tails." modid/MOD-ID "." (rand-int 2)))))}}}}))
+                                                   (str "heads_or_tails." modid/MOD-ID "." (rand-int 2)))))}
+                               :renderer-id "railgun-coin"}}}))
 
     ;; Ray family (Forge adapter shells + renderer-id dispatch).
     (edsl/register-entity!
@@ -291,7 +293,7 @@
          :properties {:ray {:life-ticks 50
                             :length 15.0
                             :blend-in-ms 150.0
-                            :blend-out-ms 800.0
+                            :blend-out-ms 1000.0
                             :inner-width 0.09
                             :outer-width 0.13
                             :glow-width 1.1

@@ -204,6 +204,16 @@
                 (get-in (get-draw-plan renderer-id) [:params k]))]
     (int (if (number? value) value default-value))))
 
+(defn draw-plan-param-string
+  [renderer-id param-key default-value]
+  (let [k (cond
+            (keyword? param-key) param-key
+            (string? param-key) (keyword param-key)
+            :else nil)
+        value (when (and k (some? renderer-id))
+                (get-in (get-draw-plan renderer-id) [:params k]))]
+    (if (string? value) value default-value)))
+
 (defn use-scripted-renderer?
   [renderer-id render-kind]
   (let [{:keys [renderer-overrides]} (script-render-runtime-state-snapshot)

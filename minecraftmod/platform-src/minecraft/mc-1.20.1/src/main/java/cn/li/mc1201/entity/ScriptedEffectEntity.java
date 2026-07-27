@@ -5,11 +5,15 @@ import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import clojure.lang.IFn;
 
@@ -106,6 +110,30 @@ public class ScriptedEffectEntity extends Entity {
         return v;
     }
 
+    private void returnLandingItem(ScriptedEffectSpec spec, Player owner) {
+        if (level().isClientSide() || owner == null || owner.getAbilities().instabuild) {
+            return;
+        }
+
+        String itemId = spec.getStringParam("return-item-id", "");
+        ResourceLocation resourceLocation = ResourceLocation.tryParse(itemId);
+        if (resourceLocation == null) {
+            return;
+        }
+
+        Item item = BuiltInRegistries.ITEM.getOptional(resourceLocation).orElse(null);
+        if (item == null) {
+            return;
+        }
+
+        ItemStack returned = new ItemStack(item);
+        if (owner.getMainHandItem().isEmpty()) {
+            owner.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, returned);
+        } else if (!owner.getInventory().add(returned)) {
+            owner.drop(returned, false);
+        }
+    }
+
     private boolean tickVerticalBallisticMotion(ScriptedEffectSpec spec, Player owner) {
         if (owner == null) {
             this.ballisticStateInitialized = false;
@@ -131,6 +159,7 @@ public class ScriptedEffectEntity extends Entity {
 
         if ((this.ballisticCurrentY < owner.getY() && this.ballisticVelY < 0.0D) || this.tickCount > BALLISTIC_MAX_LIFE) {
             this.ballisticStateInitialized = false;
+            returnLandingItem(spec, owner);
             // Client-side-only cosmetic callback (matches upstream EntityCoinThrowing's
             // `getEntityWorld().isRemote` check) — e.g. the "heads or tails" flavor
             // message registered as entity_coin_throwing's :on-landed-fn hook-param.
@@ -181,6 +210,8 @@ public class ScriptedEffectEntity extends Entity {
         Player owner = ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
         if ((spec == null || spec.isFollowOwner()) && owner != null) {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
+            setYRot(owner.getYRot());
+            setXRot(owner.getXRot());
         }
 
         boolean discardedByMotionProfile = false;
@@ -232,6 +263,10 @@ public class ScriptedEffectEntity extends Entity {
 
     public Player getOwnerPlayer() {
         return ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
+    }
+
+    public UUID getOwnerUuid() {
+        return ownerUuid;
     }
 
     public void setOwnerPlayer(Player owner) {

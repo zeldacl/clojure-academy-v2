@@ -3,7 +3,6 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
@@ -57,16 +56,14 @@
                                                :start {:x 0.0 :y 64.0 :z 0.0}
                                                :end {:x 8.0 :y 64.0 :z 0.0}
                                                :world-id "minecraft:overworld"})
-      (is (= [[:railgun-shot {:mode :block-hit
-                              :owner-key [:ctx "ctx-rail"]
-                              :ctx-id "ctx-rail"
-                              :channel :railgun/fx-shot
-                              :start {:x 0.0 :y 64.0 :z 0.0}
-                              :end {:x 8.0 :y 64.0 :z 0.0}
-                              :world-id "minecraft:overworld"}
-               {:ctx-id "ctx-rail"
-                :channel :railgun/fx-shot
-                :owner-key [:ctx "ctx-rail"]}]]
+      (is (= [[:railgun-shot
+               "ctx-rail"
+               :railgun/fx-shot
+               {:mode :block-hit
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 8.0 :y 64.0 :z 0.0}
+                :world-id "minecraft:overworld"}
+               '(:owner-key [:ctx "ctx-rail"])]]
              @enqueued*)))))
 
 (deftest enqueue-perform-adds-beam-and-builds-plan-test
@@ -74,6 +71,9 @@
     (arc-beam/enqueue-for-test! :railgun-shot "ctx-main" :railgun/fx-shot {:start {:x 0.0 :y 64.0 :z 0.0}
                                            :end {:x 3.0 :y 64.0 :z 3.0}
                                            :hit-distance 18.0})
+    ;; Upstream beam length blends from zero over its first 150 ms.
+    (level-effects/update-effect-state! :railgun-shot
+      (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store)))
     (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (some? plan))
       (is (seq (:ops plan))))
@@ -97,7 +97,7 @@
   (is (= {:beam-effects {} :charging {}}
          (railgun-fx/fx-snapshot))))
 
-(deftest charging-lifecycle-populates-and-clears-the-idle-gating-marker-test
+(deftest charging-lifecycle-keeps-one-shot-animation-after-charge-end-test
   ;; :charging is a pure idle-gating marker (see impl/railgun_shot.clj):
   ;; before this fix, no level-effect state existed during the charge-only
   ;; window (no beam yet), so level-effects' idle-gating suppressed build-plan
@@ -113,19 +113,19 @@
     (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"]))
 
     (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-end {:mode :charge-end})
-    (is (not (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"])))
-    (is (empty? (:charging (railgun-fx/fx-snapshot))))))
+    (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"])
+        "upstream RailgunHandEffect continues its full 1.6-second animation")))
 
 (deftest charge-hand-visual-renders-once-charging-marker-is-live-test
-  (with-redefs [client-runtime/railgun-charge-visual-state
-                (fn [_player-uuid _now-ms]
-                  {:active? true :charge-start-ms 0 :charge-ratio 0.5 :coin-active? false})]
-    (let [hand {:x 1.0 :y 65.0 :z 1.0 :player-uuid "p1"}]
-      (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-start {:mode :charge-start})
-      (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} hand 0)]
-        (is (seq (:ops plan)))
-        (is (every? #(= :quad (:kind %)) (:ops plan))
-            "no beam exists yet — the only ops should be the charge-hand quad")))))
+  (let [hand {:x 1.0 :y 65.0 :z 1.0 :player-uuid "p1"}]
+    (arc-beam/enqueue-for-test!
+      :railgun-shot "ctx-charge" :railgun/fx-charge-start
+      {:mode :charge-start :source-player-id "p1"})
+    (let [plan (arc-beam/effect-build-plan
+                 :railgun-shot {:x 0.0 :y 65.0 :z 0.0} hand 0)]
+      (is (seq (:ops plan)))
+      (is (every? #(= :quad (:kind %)) (:ops plan))
+          "no beam exists yet — the only ops should be the charge-hand quad"))))
 
 (deftest charge-start-spawns-glow-anchored-to-caster-test
   (let [handlers* (atom {})
@@ -161,7 +161,7 @@
        {:mode :charge-start})
       (is (empty? @run-calls*)))))
 
-(deftest charge-end-despawns-exactly-the-entity-charge-start-spawned-test
+(deftest charge-end-does-not-cut-off-one-shot-charge-animation-test
   (let [handlers* (atom {})
         run-calls* (atom [])]
     (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
@@ -177,10 +177,8 @@
        {:mode :charge-start :source-player-id "caster-uuid"})
       ((get @handlers* :railgun/fx-charge-end) "ctx-glow" :railgun/fx-charge-end
        {:mode :charge-end :source-player-id "caster-uuid"})
-      (is (= [:mcmod/spawn-scripted-effect-at-player :mcmod/remove-local-scripted-effect]
-             (mapv first @run-calls*)))
-      (is (= [:mcmod/remove-local-scripted-effect {:entity-uuid "entity-uuid-2"}]
-             (last @run-calls*))))))
+      (is (= [:mcmod/spawn-scripted-effect-at-player]
+             (mapv first @run-calls*))))))
 
 (deftest charge-end-without-a-prior-start-is-a-no-op-test
   ;; Matches railgun.clj's abort handler comment: fx-charge-end fires
@@ -203,7 +201,7 @@
   (do
     (arc-beam/enqueue-for-test! :railgun-shot "ctx-stale" :railgun/fx-charge-start {:mode :charge-start})
     (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"]))
-    (dotimes [_ 8]
+    (dotimes [_ 32]
       (level-effects/update-effect-state! :railgun-shot
         (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store))))
     (is (not (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"])))))

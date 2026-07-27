@@ -4,15 +4,21 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import org.joml.Matrix4f;
+import org.joml.Matrix3f;
+import org.joml.Quaternionf;
 
 public final class ScriptedEffectBillboardRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final String SCRIPT_RENDER_RUNTIME_NS = "cn.li.mc1201.client.render.script-render-runtime";
@@ -76,6 +82,17 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         return value instanceof Number number ? number.intValue() : defaultValue;
     }
 
+    private static String drawPlanParamString(String rendererId, String paramKey, String defaultValue) {
+        Object value = ClojureInterop.invoke(
+                SCRIPT_RENDER_RUNTIME_NS,
+                "draw-plan-param-string",
+                rendererId,
+                paramKey,
+                defaultValue
+        );
+        return value instanceof String string ? string : defaultValue;
+    }
+
     @Override
     public void render(T entity, float entityYaw, float partialTick,
                        PoseStack poseStack, MultiBufferSource bufferSource, int packedLight) {
@@ -89,6 +106,9 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
             case "ring-lines" -> renderRingLines(entity, partialTick, poseStack, bufferSource);
             case "polyline-arc" -> renderPolylineArc(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "billboard-cross" -> renderBillboardCross(entity, spec, rendererId, partialTick, poseStack, bufferSource);
+            case "animated-billboard" -> renderAnimatedBillboard(entity, rendererId, partialTick, poseStack, bufferSource);
+            case "spinning-double-sided" -> renderSpinningDoubleSided(
+                    entity, rendererId, partialTick, poseStack, bufferSource, packedLight);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             default -> throw new IllegalArgumentException("Unsupported renderer key for effect rendererId="
                     + rendererId + ": " + rendererKey);
@@ -99,6 +119,151 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     private static final int BILLBOARD_CROSS_DEFAULT_R = 180;
     private static final int BILLBOARD_CROSS_DEFAULT_G = 220;
     private static final int BILLBOARD_CROSS_DEFAULT_B = 255;
+
+    private void renderSpinningDoubleSided(T entity,
+                                           String rendererId,
+                                           float partialTick,
+                                           PoseStack poseStack,
+                                           MultiBufferSource bufferSource,
+                                           int packedLight) {
+        String frontId = drawPlanParamString(rendererId, "front-texture", "");
+        String backId = drawPlanParamString(rendererId, "back-texture", "");
+        ResourceLocation frontTexture = ResourceLocation.tryParse(frontId);
+        ResourceLocation backTexture = ResourceLocation.tryParse(backId);
+        if (frontTexture == null || backTexture == null) {
+            return;
+        }
+
+        Player owner = entity instanceof ScriptedEffectEntity effect ? effect.getOwnerPlayer() : null;
+        if (owner != null && entity.getY() < owner.getY()) {
+            return;
+        }
+
+        float scale = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", 0.3F));
+        float offsetX = drawPlanParamFloat(rendererId, "offset-x", -0.63F);
+        float offsetY = drawPlanParamFloat(rendererId, "offset-y", 1.0F);
+        float offsetZ = drawPlanParamFloat(rendererId, "offset-z", 0.3F);
+        float periodMs = Math.max(1.0F, drawPlanParamFloat(rendererId, "rotation-period-ms", 300.0F));
+        float ageMs = (ScriptedRenderAccess.getAgeTicks(entity) + partialTick) * 50.0F;
+        float rotation = (ageMs % periodMs) * ((float) (Math.PI * 2.0) / periodMs);
+
+        float seed = entity.getId() * 0.7548777F;
+        float axisX = 0.1F + Mth.abs(Mth.sin(seed * 1.7F));
+        float axisY = Mth.abs(Mth.sin(seed * 2.3F + 0.7F));
+        float axisZ = Mth.abs(Mth.cos(seed * 1.1F + 0.2F));
+        float axisLength = Mth.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ);
+        axisX /= axisLength;
+        axisY /= axisLength;
+        axisZ /= axisLength;
+
+        float ownerYaw = owner == null ? entity.getYRot() : owner.yBodyRot;
+        boolean firstPersonOwner = owner != null
+                && owner == Minecraft.getInstance().player
+                && Minecraft.getInstance().options.getCameraType().isFirstPerson();
+        if (firstPersonOwner) {
+            ownerYaw = owner.getYRot();
+        }
+
+        poseStack.pushPose();
+        poseStack.mulPose(Axis.YP.rotationDegrees(-ownerYaw));
+        poseStack.translate(offsetX, offsetY, offsetZ);
+        poseStack.scale(scale, scale, scale);
+        poseStack.translate(0.5F, 0.5F, 0.0F);
+        poseStack.mulPose(new Quaternionf().rotationAxis(rotation, axisX, axisY, axisZ));
+        poseStack.translate(-0.5F, -0.5F, 0.0F);
+
+        drawCoinFace(poseStack, bufferSource, frontTexture, packedLight, 0.03125F, false);
+        drawCoinFace(poseStack, bufferSource, backTexture, packedLight, -0.03125F, true);
+        poseStack.popPose();
+    }
+
+    private static void drawCoinFace(PoseStack poseStack,
+                                     MultiBufferSource bufferSource,
+                                     ResourceLocation texture,
+                                     int packedLight,
+                                     float z,
+                                     boolean reverse) {
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat = pose.pose();
+        Matrix3f normal = pose.normal();
+        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityCutoutNoCull(texture));
+        float normalZ = reverse ? -1.0F : 1.0F;
+
+        if (!reverse) {
+            coinVertex(vc, mat, normal, 0.0F, 0.0F, z, 0.0F, 1.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 1.0F, 0.0F, z, 1.0F, 1.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 1.0F, 1.0F, z, 1.0F, 0.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 0.0F, 1.0F, z, 0.0F, 0.0F, packedLight, normalZ);
+        } else {
+            coinVertex(vc, mat, normal, 1.0F, 0.0F, z, 0.0F, 1.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 0.0F, 0.0F, z, 1.0F, 1.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 0.0F, 1.0F, z, 1.0F, 0.0F, packedLight, normalZ);
+            coinVertex(vc, mat, normal, 1.0F, 1.0F, z, 0.0F, 0.0F, packedLight, normalZ);
+        }
+    }
+
+    private static void coinVertex(VertexConsumer vc,
+                                   Matrix4f mat,
+                                   Matrix3f normal,
+                                   float x,
+                                   float y,
+                                   float z,
+                                   float u,
+                                   float v,
+                                   int packedLight,
+                                   float normalZ) {
+        vc.vertex(mat, x, y, z).color(255, 255, 255, 255)
+                .uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(packedLight)
+                .normal(normal, 0.0F, 0.0F, normalZ).endVertex();
+    }
+
+    private void renderAnimatedBillboard(T entity,
+                                         String rendererId,
+                                         float partialTick,
+                                         PoseStack poseStack,
+                                         MultiBufferSource bufferSource) {
+        String prefix = drawPlanParamString(rendererId, "texture-prefix", "");
+        int frameCount = Math.max(1, drawPlanParamInt(rendererId, "frame-count", 1));
+        float frameMs = Math.max(1.0F, drawPlanParamFloat(rendererId, "frame-ms", 50.0F));
+        float ageMs = (ScriptedRenderAccess.getAgeTicks(entity) + partialTick) * 50.0F;
+        int frame = Mth.clamp((int) (ageMs / frameMs), 0, frameCount - 1);
+        ResourceLocation texture = ResourceLocation.tryParse(prefix + frame + ".png");
+        if (texture == null) {
+            return;
+        }
+
+        float halfSize = Math.max(0.01F, drawPlanParamFloat(rendererId, "half-size", 0.5F));
+        float offsetY = drawPlanParamFloat(rendererId, "offset-y", 0.0F);
+        float offsetZ = drawPlanParamFloat(rendererId, "offset-z", 0.0F);
+        float yaw = -entity.getYRot() * ((float) Math.PI / 180.0F);
+
+        poseStack.pushPose();
+        poseStack.mulPose(Axis.YP.rotation(yaw));
+        poseStack.translate(0.0F, offsetY, offsetZ);
+        poseStack.mulPose(Axis.YP.rotation(-yaw));
+        poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
+
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat = pose.pose();
+        Matrix3f normal = pose.normal();
+        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
+        int fullBright = 0x00F000F0;
+
+        vc.vertex(mat, -halfSize, -halfSize, 0.0F).color(255, 255, 255, 255)
+                .uv(0.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, halfSize, -halfSize, 0.0F).color(255, 255, 255, 255)
+                .uv(1.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, halfSize, halfSize, 0.0F).color(255, 255, 255, 255)
+                .uv(1.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, -halfSize, halfSize, 0.0F).color(255, 255, 255, 255)
+                .uv(0.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+
+        poseStack.popPose();
+    }
 
     private void renderBillboardCross(T entity,
                                       ScriptedEffectSpec spec,

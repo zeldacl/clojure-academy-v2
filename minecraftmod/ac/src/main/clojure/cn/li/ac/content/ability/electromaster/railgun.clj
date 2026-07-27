@@ -11,8 +11,10 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -44,6 +46,19 @@
 (defn- railgun-cooldown-ticks [exp]
   (cfg-lerp-int :cooldown.manual-ticks exp))
 
+(defn- railgun-damage
+  "Apply the global/per-skill scaling and SkillAttack calc event used by the
+  original Context.attack path."
+  [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+    (skill-registry/get-skill :railgun)
+    (ability-event/fire-calc-event!
+      ability-event/CALC-SKILL-ATTACK
+      raw-damage
+      {:player-id player-id
+       :target-id target-id
+       :skill-id :railgun})))
+
 ;; ---------------------------------------------------------------------------
 ;; Player / item helpers
 ;; ---------------------------------------------------------------------------
@@ -64,6 +79,8 @@
   [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
 
+(declare active-railgun-ctx-id send-coin-charge-start!)
+
 (defn register-coin-throw!
   "Register a railgun coin throw state.
   Called from the platform item-action hook when a coin is used in ability mode.
@@ -80,6 +97,16 @@
                                        :charge-ticks 0})))
     ;; New coin throw resets one-shot judgement lock.
     (skill-effects/clear-railgun-coin-judged! player-id)
+    (when-let [ctx-id (active-railgun-ctx-id player-id)]
+      ;; Upstream broadcasts the one-shot RailgunHandEffect for coin throws.
+      (send-coin-charge-start! ctx-id player-id)
+      (when (world-effects/available?)
+        (when-let [pos (geom/eye-pos player-id)]
+          (when-let [world-id (geom/world-id-of player-id)]
+            (world-effects/play-sound!
+              world-id (:x pos) (:y pos) (:z pos)
+              (modid/namespaced-path "entity.flipcoin")
+              :players 0.5 1.0)))))
     true))
 
 (def ^:private coin-entity-registry-id (modid/namespaced-path "entity_coin_throwing"))
@@ -167,30 +194,37 @@
             look-x (double (or (:x look-vec) 0.0))
             look-y (double (or (:y look-vec) 0.0))
             look-z (double (or (:z look-vec) 1.0))
-            hit (raycast/raycast-entities
-                                          world-id
-                                          (:x start-pos) (:y start-pos) (:z start-pos)
-                                          look-x look-y look-z
-                                          max-distance)
-            ;; raycast-entities never sets :hit-type (that key only appears
-            ;; on raycast-combined results) — a real hit is just non-nil,
-            ;; identified by :uuid.
-            hit-uuid    (:uuid hit)
-            actual-dist (if hit-uuid
-                          (double (or (:distance hit) max-distance))
-                          max-distance)
+            entity-hit (raycast/raycast-from-player
+                         reflector-player-id max-distance true)
+            block-hit  (raycast/raycast-blocks
+                         world-id
+                         (:x start-pos) (:y start-pos) (:z start-pos)
+                         look-x look-y look-z
+                         max-distance)
+            entity-dist (double (or (:distance entity-hit)
+                                    Double/POSITIVE_INFINITY))
+            block-dist  (double (or (:distance block-hit)
+                                    Double/POSITIVE_INFINITY))
+            hit-uuid    (when (< entity-dist block-dist)
+                          (or (:uuid entity-hit) (:entity-id entity-hit)))
+            attacker-id (or (:player-uuid (ctx-skill/get-context ctx-id))
+                            reflector-player-id)
             dir         {:x look-x :y look-y :z look-z}
-            end-pos     (geom/v+ start-pos (geom/v* dir actual-dist))]
+            end-pos     (geom/v+ start-pos (geom/v* dir max-distance))]
         ;; Original's reflectServer uses NetworkMessage.sendToAllAround (owner
         ;; + 20-block radius) for the reflected beam — a world-space shot,
         ;; visible to anyone nearby, not just the caster.
         (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-reflect :mode :reflect} nil {:start        start-pos
                                   :end          end-pos
-                                  :hit-distance actual-dist})
+                                  :hit-distance max-distance})
         (when (and hit-uuid (entity-damage/available?))
           (entity-damage/apply-direct-damage!
                                               world-id hit-uuid
-                                              (reflection-damage) :generic)
+                                              (railgun-damage
+                                                attacker-id
+                                                hit-uuid
+                                                (reflection-damage))
+                                              :generic)
           true)))))
 
 ;; ---------------------------------------------------------------------------
@@ -224,6 +258,9 @@
                      :max-distance    (cfg-double :beam.max-distance)
                      :visual-distance (cfg-double :beam.visual-distance)
                      :damage          damage
+                     :damage-transform-fn
+                     (fn [target-id raw-damage]
+                       (railgun-damage player-id target-id raw-damage))
                      :damage-type     :generic
                      :break-blocks?   true
                      :block-energy    (cfg-lerp :beam.block-energy exp)
@@ -313,17 +350,31 @@
 ;;    spawns their own copy anchored to the CASTER, not themselves.
 ;; ---------------------------------------------------------------------------
 
-(defn- send-charge-start! [ctx-id player-id]
+(defn- send-coin-charge-start! [ctx-id player-id]
   (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-start :mode :charge-start} nil
             {:source-player-id player-id}))
 
+(defn- send-charge-start! [ctx-id player-id]
+  ;; Item fallback's RailgunHandEffect is local-only in the original.
+  (fx/send! ctx-id {:topic :railgun/fx-charge-start
+                    :mode :charge-start
+                    :to :client}
+            nil
+            {:source-player-id player-id}))
+
 (defn- send-charge-update! [ctx-id player-id charge-ticks-left]
-  (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-update :mode :charge-update} nil
+  (fx/send! ctx-id {:topic :railgun/fx-charge-update
+                    :mode :charge-update
+                    :to :client}
+            nil
             {:source-player-id player-id
              :charge-ticks-left (long charge-ticks-left)}))
 
 (defn- send-charge-end! [ctx-id player-id]
-  (fx/send-local-and-nearby! ctx-id {:topic :railgun/fx-charge-end :mode :charge-end} nil
+  (fx/send! ctx-id {:topic :railgun/fx-charge-end
+                    :mode :charge-end
+                    :to :client}
+            nil
             {:source-player-id player-id}))
 
 ;; ---------------------------------------------------------------------------
@@ -468,6 +519,10 @@
   (item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
   (item-actions/register-item-action! (modid/namespaced-path "coin") :railgun-coin-throw)
   (item-actions/register-action-handler! :railgun-coin-throw register-coin-throw!)
-  (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
-  (item-actions/register-item-entity-spawn! (modid/namespaced-path "coin") {:entity-id "entity_coin_throwing" :speed 0.0})
+  (item-actions/register-item-entity-spawn!
+    "ac:coin"
+    {:entity-id "entity_coin_throwing" :speed 0.0 :unique-per-owner? true})
+  (item-actions/register-item-entity-spawn!
+    (modid/namespaced-path "coin")
+    {:entity-id "entity_coin_throwing" :speed 0.0 :unique-per-owner? true})
   nil)

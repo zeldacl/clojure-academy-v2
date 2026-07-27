@@ -3,11 +3,13 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.effects.beam :as beam]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.content.ability.electromaster.railgun :as railgun]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
@@ -96,6 +98,41 @@
     (is (true? (:active? perform)))
     (is (true? (:perform? perform)))))
 
+(deftest reflected-shot-excludes-reflector-and-respects-blocks-test
+  (let [damage-calls* (atom [])
+        fx-calls* (atom [])]
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/player-look-vector
+                  (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                  raycast/raycast-from-player
+                  (fn [player-id distance living-only?]
+                    (is (= "reflector" player-id))
+                    (is (= 15.0 distance))
+                    (is (true? living-only?))
+                    {:entity-id "target" :distance 5.0})
+                  raycast/raycast-blocks
+                  (fn [& _] {:distance 3.0})
+                  geom/eye-pos (fn [_] {:x 1.0 :y 2.0 :z 3.0})
+                  geom/world-id-of (fn [_] "w1")
+                  entity-damage/available? (constantly true)
+                  entity-damage/apply-direct-damage!
+                  (fn [& args] (swap! damage-calls* conj args))
+                  fx/send-local-and-nearby!
+                  (fn [& args] (swap! fx-calls* conj args))
+                  railgun/reflection-distance (constantly 15.0)
+                  railgun/reflection-damage (constantly 14.0)]
+      (is (nil? (#'railgun/perform-reflection-shot! "ctx" "reflector")))
+      (is (empty? @damage-calls*))
+      (is (= {:x 16.0 :y 2.0 :z 3.0}
+             (:end (last (first @fx-calls*)))))
+
+      (with-redefs [raycast/raycast-blocks (fn [& _] nil)
+                    railgun/railgun-damage
+                    (fn [_player _target raw] raw)]
+        (is (true? (#'railgun/perform-reflection-shot! "ctx" "reflector")))
+        (is (= ["w1" "target" 14.0 :generic]
+               (vec (first @damage-calls*))))))))
+
 (deftest read-coin-qte-status-skips-already-judged-coin-test
   (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
   (railgun/register-coin-throw! "p1" {:timestamp-ms 42})
@@ -110,4 +147,3 @@
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))
       (is (false? (:perform? status))))))
-
