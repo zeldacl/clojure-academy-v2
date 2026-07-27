@@ -148,6 +148,11 @@
   `BlockEntityRenderers.register` from client setup."
   [^EntityRenderersEvent$RegisterRenderers evt]
   (ensure-client-render-platform-for-ber!)
+  ;; Forge may dispatch this event before FMLClientSetup.  Run the same
+  ;; canonical content renderer initialization used by client setup so the
+  ;; registry is populated before BER registration.
+  (render-init/register-default-renderer-init-fns!)
+  (render-init/register-all-renderers!)
   (log/info "RegisterRenderers - attaching scripted block entity renderers")
   (when (empty? (tesr-api/scripted-renderers-snapshot))
     (throw (IllegalStateException.
