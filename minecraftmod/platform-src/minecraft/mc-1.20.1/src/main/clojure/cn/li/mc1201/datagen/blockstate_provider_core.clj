@@ -60,13 +60,10 @@
 
 (defn block-model-spec
   [model-name]
-  (if-let [cube-config (or (blockstate-def/get-model-cube-texture-config model-name)
-                           (when (= model-name "metal_former")
-                             (blockstate-def/get-model-cube-texture-config "metal_former_north")))]
+  (if-let [cube-config (blockstate-def/get-model-cube-texture-config model-name)]
     {:kind :cube
      :textures cube-config
-     :particle (when (= model-name "metal_former")
-                 (:north cube-config))}
+     :particle (:north cube-config)}
     (if-let [texture-config (blockstate-def/get-model-texture-config model-name)]
       {:kind :cube
        :textures {:down (:vert texture-config)
