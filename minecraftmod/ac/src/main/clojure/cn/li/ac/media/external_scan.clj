@@ -17,7 +17,7 @@
   (try
     (catalog/reset-external-media!)
     (doseq [{:keys [id source length-secs]} (or (when-let [fw-atom (fw/fw-atom)]
-                                                  (platform/call-adapter fw-atom :media-library :scan-external-tracks!))
+                                                  (platform/call-adapter-optional fw-atom :media-library :scan-external-tracks!))
                                                 [])]
       (catalog/register-external-media!
         {:id (keyword id)
