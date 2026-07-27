@@ -734,22 +734,16 @@
 
 (defn- update-charging-layer! [r snapshot sw sh]
   (if-let [ch (:charging snapshot)]
-    (let [{:keys [dim-a mask-alpha bar label crosshair]} ch
-          {:keys [x y w h fill-w backdrop accent]} bar
-          {:keys [cx cy active?]} crosshair
-          mark-a (if active? 200 120)]
+    (let [{:keys [dim-a mask-alpha]} ch]
       (set-visible! r :charging-layer true)
       (set-box-rgba! r :charging-dim {:r 8 :g 18 :b 32 :a dim-a})
       (ui/set-prop! r :charging-mask :alpha (double (or mask-alpha 0.0)))
-      (set-box-at! r :charging-bar-bg x y w h backdrop)
-      (set-box-at! r :charging-bar-fill x y fill-w h accent)
-      (when-let [^INode lbl (ui/node r :charging-label)]
-        (.setX lbl (double (:x label)))
-        (.setY lbl (double (:y label)))
-        (ui/set-node-prop! r lbl :text (str (:text label)))
-        (ui/set-node-prop! r lbl :color (rgba-map->argb (:color label))))
-      (set-box-at! r :charging-mark-v (- cx 2) (- cy 8) 4 16 {:r 120 :g 220 :b 255 :a mark-a})
-      (set-box-at! r :charging-mark-h (- cx 8) (- cy 2) 16 4 {:r 120 :g 220 :b 255 :a mark-a}))
+      ;; AcademyCraft's CurrentChargingHUD belongs to BodyIntensify and only
+      ;; renders the dim/mask plus arc sprites. The progress bar, label and
+      ;; crosshair were port-only additions and must stay hidden.
+      (doseq [node-id [:charging-bar-bg :charging-bar-fill :charging-label
+                       :charging-mark-v :charging-mark-h]]
+        (set-visible! r node-id false)))
     (do
       (set-visible! r :charging-layer false)
       (ui/set-prop! r :charging-mask :alpha 0.0))))

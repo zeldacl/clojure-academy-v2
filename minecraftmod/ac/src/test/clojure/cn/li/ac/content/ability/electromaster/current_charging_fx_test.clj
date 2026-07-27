@@ -76,6 +76,7 @@
       (is (true? (:is-item (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (is (= 1 (count @effects*)))
       (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))
+      (is (= 0.3 (get-in @effects* [0 1 :volume])))
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-update
         {:mode :update
          :is-item true
@@ -90,7 +91,10 @@
       (is (= [1 2 3] (:block-pos (current-charging-fx/current-state [:ctx "ctx-1"]))))
       (invoke-hand-enqueue! "ctx-1" :current-charging/fx-end {:mode :end :is-item true})
       (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-1"]))))
-      (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-1"])))))))
+      (is (nil? (get-in (current-charging-fx/fx-snapshot)
+                        [:states [:ctx "ctx-1"]])))
+      (is (= :mcmod/stop-loop-sound (first (last @effects*))))
+      (is (= 2 (count @effects*))))))
 
 (deftest two-owners-keep-current-charging-state-independent-test
   (let [effects* (atom [])]
@@ -113,15 +117,19 @@
         (is (= 0.75 (:charge-ratio state-b))))
       (invoke-hand-enqueue! "ctx-a" :current-charging/fx-end {:mode :end :is-item false})
       (is (false? (:active? (current-charging-fx/current-state [:ctx "ctx-a"]))))
-      (is (true? (:blending? (current-charging-fx/current-state [:ctx "ctx-a"]))))
+      (is (nil? (get-in (current-charging-fx/fx-snapshot)
+                        [:states [:ctx "ctx-a"]])))
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-b"]))))
       (current-charging-fx/clear-fx-owner! [:ctx "ctx-a"])
       (let [snapshot (current-charging-fx/fx-snapshot)]
         (is (nil? (get (:states snapshot) [:ctx "ctx-a"])))
         (is (= 30 (:charge-ticks (get (:states snapshot) [:ctx "ctx-b"]))))))
-    ;; 2 :start calls x 1 track (level only) = 2 loop-sound starts.
-    (is (= 2 (count @effects*)))
-    (is (every? #(= :mcmod/start-loop-sound (first %)) @effects*))))
+    ;; Two starts plus the ended owner's immediate stop.
+    (is (= 3 (count @effects*)))
+    (is (= [:mcmod/start-loop-sound
+            :mcmod/start-loop-sound
+            :mcmod/stop-loop-sound]
+           (mapv first @effects*)))))
 
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}

@@ -6,8 +6,7 @@
 						[cn.li.ac.ability.service.context-manager :as ctx-mgr]
 						[cn.li.ac.ability.service.context-dispatcher :as ctx]
 						[cn.li.ac.ability.service.context-state :as ctx-rt]
-						[cn.li.ac.ability.server.handlers.common :as handlers-common]
-						[cn.li.mcmod.util.log :as log]))
+						[cn.li.ac.ability.server.handlers.common :as handlers-common]))
 
 (defn- valid-ctx-id?
 	[ctx-id]
@@ -62,10 +61,6 @@
 
 (defn- dispatch-active-input!
 	[ctx-id payload player dispatch-fn]
-	(let [resolved (resolve-owned-alive-context ctx-id player)]
-		(log/info "[CC-TRACE][SERVER][DISPATCH-ACTIVE-INPUT]"
-							{:ctx-id ctx-id :ok? (:ok? resolved) :reason (:reason resolved)
-							 :input-state (when (:ok? resolved) (:input-state (:ctx resolved)))}))
 	(when-let [owner (refresh-owned-alive-context! ctx-id player)]
 		(if (= ctx-rt/INPUT-ACTIVE (:input-state (ctx/get-context owner ctx-id)))
 			(dispatch-fn owner ctx-id (assoc payload :player player) ctx-mgr/send-terminated-context!)
@@ -78,7 +73,6 @@
 
 (defn handle-key-tick-skill
 	[{:keys [ctx-id] :as payload} player]
-	(log/info "[CC-TRACE][SERVER][MSG-ARRIVED]" {:ctx-id ctx-id :payload payload})
 	(dispatch-active-input! ctx-id payload player ctx-rt/handle-key-tick!))
 
 (defn handle-key-up-skill

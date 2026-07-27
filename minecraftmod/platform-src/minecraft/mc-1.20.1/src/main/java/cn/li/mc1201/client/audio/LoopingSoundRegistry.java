@@ -36,7 +36,7 @@ public final class LoopingSoundRegistry {
             return;
         }
         PositionalLoopSoundInstance instance =
-                new PositionalLoopSoundInstance(event, SoundSource.PLAYERS, volume, pitch, x, y, z);
+                new PositionalLoopSoundInstance(event, SoundSource.AMBIENT, volume, pitch, x, y, z);
         ACTIVE.put(key, instance);
         mc.getSoundManager().play(instance);
     }

@@ -14,8 +14,7 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (def-skill-config-ops :current-charging)
 (def ^:private current-charging-skill-id :current-charging)
@@ -64,6 +63,14 @@
 (defn- down-overload-cost [_player-id _skill-id exp]
   (cfg-lerp :cost.down.overload (double (or exp 0.0))))
 
+(defn- current-overload
+  [player-id fallback]
+  (double
+   (or (get-in (skill-effects/get-player-state player-id)
+               [:resource-data :cur-overload])
+       fallback
+       0.0)))
+
 (defn- tick-cp-cost [player-id _skill-id exp]
   (if-let [ctx-id (active-ctx-id player-id current-charging-skill-id)]
     (let [state (:skill-state (ctx-skill/get-context ctx-id))]
@@ -92,7 +99,8 @@
   (let [stack (main-hand-item player-id)]
     (if (nil? stack)
       (end-and-terminate! ctx-id true player-id)
-      (let [effective? (energy/is-energy-item-supported? stack)]
+      (let [effective? (energy/is-energy-item-supported? stack)
+            caster-pos (view->pos (player-view player-id))]
         (when effective?
           (energy/charge-energy-to-item stack charge false))
         (skill-effects/add-skill-exp! player-id current-charging-skill-id
@@ -105,46 +113,113 @@
                               {:is-item true
                                :good? (boolean effective?)
                                :charge-ticks charge-ticks
-                               :exp exp}))))))
+                               :exp exp
+                               :caster-pos caster-pos}))))))
+
+(defn- hit-distance
+  [hit]
+  (when (number? (:distance hit))
+    (double (:distance hit))))
+
+(defn- view-end
+  [view distance]
+  {:x (+ (double (:x view)) (* (double (:look-x view)) (double distance)))
+   :y (+ (double (:y view)) (* (double (:look-y view)) (double distance)))
+   :z (+ (double (:z view)) (* (double (:look-z view)) (double distance)))})
+
+(defn- block-impact-point
+  [view hit]
+  (if (every? number? [(:hit-x hit) (:hit-y hit) (:hit-z hit)])
+    {:x (double (:hit-x hit))
+     :y (double (:hit-y hit))
+     :z (double (:hit-z hit))}
+    (view-end view (or (hit-distance hit) (targeting-range)))))
+
+(defn- entity-impact-point
+  [view hit]
+  (cond
+    ;; LambdaLib2 returns RayTraceResult(entity), whose hitVec is the
+    ;; entity's position rather than the AABB intercept. CurrentCharging then
+    ;; adds the entity eye height to that position for the visual endpoint.
+    (every? number? [(:x hit) (:y hit) (:z hit)])
+    {:x (double (:x hit))
+     :y (+ (double (:y hit))
+           (double (or (:eye-height hit) 0.0)))
+     :z (double (:z hit))}
+
+    (every? number? [(:hit-x hit) (:hit-y hit) (:hit-z hit)])
+    {:x (double (:hit-x hit))
+     :y (+ (double (:hit-y hit))
+           (double (or (:eye-height hit) 0.0)))
+     :z (double (:hit-z hit))}
+
+    :else
+    (view-end view (or (hit-distance hit) (targeting-range)))))
+
+(defn- nearest-view-hit
+  "Match LambdaLib2 Raytrace.traceLiving: trace blocks and collidable
+   entities, exclude the caster, and let an entity win equal-distance ties."
+  [player-id view]
+  (when (raycast/available?)
+    (let [world-id (or (:world-id view) "minecraft:overworld")
+          range (targeting-range)
+          block-hit (raycast/raycast-blocks
+                     world-id
+                     (double (:x view)) (double (:y view)) (double (:z view))
+                     (double (:look-x view)) (double (:look-y view)) (double (:look-z view))
+                     range)
+          entity-hit (raycast/raycast-from-player player-id range false)
+          block-distance (or (hit-distance block-hit) Double/POSITIVE_INFINITY)
+          entity-distance (or (hit-distance entity-hit) Double/POSITIVE_INFINITY)]
+      (cond
+        (and entity-hit (<= entity-distance block-distance))
+        {:hit-type :entity
+         :hit entity-hit
+         :target (entity-impact-point view entity-hit)}
+
+        block-hit
+        {:hit-type :block
+         :hit block-hit
+         :target (block-impact-point view block-hit)}
+
+        :else
+        {:hit-type :miss
+         :hit nil
+         :target (view-end view range)}))))
 
 (defn- charge-block-target!
-  "Raycast for a block from player view and charge any energy receiver/node."
-  [view charge]
+  "Trace exactly like the original skill: a nearer entity blocks charging,
+   while the beam still terminates on that entity. Only block hits can charge."
+  [player-id view charge]
   (let [world-id (or (:world-id view) "minecraft:overworld")
-        hit (when (raycast/available?)
-              (raycast/raycast-blocks
-               world-id
-               (double (:x view)) (double (:y view)) (double (:z view))
-               (double (:look-x view)) (double (:look-y view)) (double (:look-z view))
-               (targeting-range)))
-        dist (when (and hit (number? (:distance hit))) (double (:distance hit)))
-        ray-end {:x (+ (:x view) (* (:look-x view) (or dist (targeting-range))))
-                 :y (+ (:y view) (* (:look-y view) (or dist (targeting-range))))
-                 :z (+ (:z view) (* (:look-z view) (or dist (targeting-range))))}]
-    (if-not hit
-      {:effective? false :charged 0.0 :block-pos nil :ray-end ray-end}
+        {:keys [hit-type hit target]}
+        (or (nearest-view-hit player-id view)
+            {:hit-type :miss :hit nil :target (view-end view (targeting-range))})]
+    (if (not= :block hit-type)
+      {:effective? false :charged 0.0 :block-pos nil :ray-end target}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
             be (block-entity-at world-id bx by bz)]
         (if-not be
-          {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}
+          {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end target}
           (cond
             (energy/is-node-supported? be)
             {:effective? true
              :charged (max 0.0 (- (double charge) (double (energy/charge-node be charge true))))
-             :block-pos [bx by bz] :ray-end ray-end}
+             :block-pos [bx by bz] :ray-end target}
 
             (energy/is-receiver-supported? be)
             {:effective? true
              :charged (max 0.0 (- (double charge) (double (energy/charge-receiver be charge))))
-             :block-pos [bx by bz] :ray-end ray-end}
+             :block-pos [bx by bz] :ray-end target}
 
-            :else {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end ray-end}))))))
+            :else
+            {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end target}))))))
 
 (defn- charge-block-tick!
   [player-id ctx-id _player charge charge-ticks]
   (let [view (player-view player-id)
         caster-pos (view->pos view)
-        result (when view (charge-block-target! view charge))
+        result (when view (charge-block-target! player-id view charge))
         {:keys [effective? charged block-pos ray-end]}
         (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]
     (skill-effects/add-skill-exp! player-id current-charging-skill-id
@@ -156,9 +231,6 @@
     (set-skill-state! ctx-id [:caster-pos] caster-pos)
     (set-skill-state! ctx-id [:block-pos] block-pos)
     (set-skill-state! ctx-id [:charged] (double charged))
-    (log/info "[CC-TRACE][SERVER][TICK]"
-              {:ctx-id ctx-id :view (some? view) :effective? effective?
-               :ray-end ray-end :caster-pos caster-pos :block-pos block-pos})
     (fx/send! ctx-id {:topic :current-charging/fx-update :mode :update} nil
               (fx-payload player-id
                           {:is-item false
@@ -166,7 +238,7 @@
                            :charged (double charged)
                            :charge-ticks charge-ticks
                            :target ray-end
-                 :caster-pos caster-pos
+                           :caster-pos caster-pos
                            :block-pos block-pos}))))
 
 (defn- current-charging-cost-fail!
@@ -180,7 +252,10 @@
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player]
   (let [is-item (boolean (main-hand-item player-id))
         exp* (double (or exp 0.0))
-        overload-floor (cfg-lerp :cost.down.overload exp*)]
+        overload-cost (cfg-lerp :cost.down.overload exp*)
+        ;; Upstream stores cpData.getOverload *after* the activation cost,
+        ;; preserving any overload the player already had.
+        overload-floor (current-overload player-id overload-cost)]
     (ctx-skill/replace-skill-state! ctx-id
                                     {:mode (if is-item :item :block)
                                      :is-item is-item
@@ -197,7 +272,7 @@
                                      :caster-pos (view->pos (player-view player-id))}))))
 
 (defn- current-charging-tick!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player]
   (when-let [skill-state (:skill-state (ctx-skill/get-context ctx-id))]
     (let [is-item (boolean (:is-item skill-state))
           exp (double (or (:exp skill-state) 0.0))
@@ -205,9 +280,16 @@
           charge-ticks (next-charge-ticks! ctx-id)
           overload-floor (double (or (:overload-floor skill-state) 0.0))]
       (skill-effects/enforce-overload-floor! player-id overload-floor)
-      (log/info "[CC-TRACE][SERVER][CTX-TICK]" {:ctx-id ctx-id :is-item is-item :charge-ticks charge-ticks})
-      (if is-item
+      ;; Original ordering differs by mode:
+      ;; - item: pay CP first, then charge only on success;
+      ;; - block: charge/award exp first, then a failed payment ends the cast.
+      ;; context-state invokes this callback even when the generic cost failed,
+      ;; followed by :cost-fail!, so branch on cost-ok? only for item mode.
+      (cond
+        (and is-item cost-ok?)
         (charge-item-tick! player-id ctx-id exp charge charge-ticks)
+
+        (not is-item)
         (charge-block-tick! player-id ctx-id player charge charge-ticks)))))
 
 (defn- current-charging-up!

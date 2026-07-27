@@ -12,11 +12,9 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.client.toast :as toast]
-            [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
-            [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.i18n :as i18n])
+            [cn.li.mcmod.client.platform-bridge :as bridge])
   (:import [java.util ArrayList HashMap]))
 
 (def ^:private vm-wave-glow (modid/asset-path "textures" "effects/glow_circle.png"))
@@ -24,6 +22,12 @@
 
 (defn- owner-key [player-uuid]
   (read-model/owner-key {:player-uuid player-uuid} nil))
+
+(defn- body-intensify-charge-state
+  [player-uuid]
+  (or (bridge/call-adapter :client-visual-state :ac/body-intensify-charge
+                           {:player-uuid player-uuid})
+      {:active? false :charge-ticks 0 :charge-ratio 0.0}))
 
 (defonce ^:private ^HashMap vm-waves-by-owner (HashMap.))
 (defonce ^:private ^HashMap vm-wave-spawn-by-owner (HashMap.))
@@ -86,7 +90,7 @@
    from BodyIntensify) — a denser burst (10-15 arcs, phi 0.6-1, life 25 ticks)."
   [player-uuid]
   (let [ok (owner-key player-uuid)
-        {:keys [active? blending? charge-ticks good?]} (current-charging-fx/current-state player-uuid)
+        {:keys [active? blending? charge-ticks good?]} (body-intensify-charge-state player-uuid)
         charging? (or active? blending? (pos? (long (or charge-ticks 0))))
         prior-active? (boolean (.get arc-prior-active-by-owner ok))
         ^ArrayList particles (.get arc-particles-by-owner ok)]
@@ -156,7 +160,7 @@
   [player-uuid screen-w screen-h]
   (let [ok (owner-key player-uuid)
         ^ArrayList particles (.get arc-particles-by-owner ok)
-        blending? (boolean (:blending? (current-charging-fx/current-state player-uuid)))
+        blending? (boolean (:blending? (body-intensify-charge-state player-uuid)))
         alpha (if blending? 0.4 0.3)
         hw (/ (double screen-w) 2.0)
         hh (/ (double screen-h) 2.0)]
@@ -184,36 +188,18 @@
                            {:player-uuid player-uuid :now-ms now-ms})
       {:active? false :coin-active? false :coin-progress 0.0}))
 
-(defn- build-charging-layer [player-uuid screen-w screen-h now-ms]
+(defn- build-charging-layer [player-uuid _screen-w _screen-h now-ms]
   (let [ok (owner-key player-uuid)
-        {:keys [active? blending? is-item good? charge-ticks charge-ratio]}
-        (current-charging-fx/current-state player-uuid)
+        {:keys [active? blending? charge-ticks]}
+        (body-intensify-charge-state player-uuid)
         charging? (or active? blending? (pos? (long (or charge-ticks 0))))
         session (update-charging-fade-session! ok charging? blending? now-ms)
         visible? (or charging? session)]
     (when visible?
-      (let [mask-alpha (charging-mask-alpha session now-ms)
-            bar-width 140
-            bar-height 8
-            x (int (/ (- screen-w bar-width) 2))
-            y (- screen-h 34)
-            fill-width (max 2 (int (* bar-width (double (or charge-ratio 0.0)))))
-            cx (int (/ screen-w 2))
-            cy (int (/ screen-h 2))]
+      (let [mask-alpha (charging-mask-alpha session now-ms)]
         {;; Upstream CurrentChargingHUD: black mask alpha = 0.1*mAlpha.
          :dim-a (int (* 0.1 mask-alpha 255.0))
-         :mask-alpha mask-alpha
-         :bar {:x x :y y :w bar-width :h bar-height :fill-w fill-width
-               :backdrop (if is-item
-                            {:r 12 :g 24 :b 48 :a 150}
-                            {:r 8 :g 18 :b 36 :a 150})
-               :accent (if good?
-                         {:r 90 :g 210 :b 255 :a 200}
-                         {:r 255 :g 190 :b 90 :a 200})}
-         :label {:x (- cx 55) :y (- y 12)
-                 :text (i18n/translate (if is-item "ac.current_charging.item" "ac.current_charging.block"))
-                 :color {:r 255 :g 255 :b 255 :a 240}}
-         :crosshair {:cx cx :cy cy :active? (boolean active?)}}))))
+         :mask-alpha mask-alpha}))))
 
 (defn- build-coin-qte-layer [player-uuid screen-w screen-h now-ms]
   (let [coin-state (coin-qte-visual-state player-uuid now-ms)]

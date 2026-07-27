@@ -88,13 +88,11 @@
       (is (= [{:player-uuid "p1" :skill-id :railgun}]
              @activated))
       (is (= [catalog/MSG-SLOT-KEY-DOWN
-          catalog/MSG-SLOT-KEY-TICK
-          catalog/MSG-CTX-KEEPALIVE
+              catalog/MSG-CTX-KEEPALIVE
               catalog/MSG-SLOT-KEY-UP]
              (mapv :msg-id @sent)))
       (is (= [{:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
-          {:ctx-id "ctx-client-1" :skill-id :railgun :key-idx 0}
-          {:ctx-id "ctx-client-1"}
+              {:ctx-id "ctx-client-1"}
               {:ctx-id "ctx-client-1" :key-idx 0}]
              (mapv :payload @sent))))))
 

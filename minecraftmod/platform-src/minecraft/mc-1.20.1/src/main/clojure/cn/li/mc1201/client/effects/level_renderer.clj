@@ -138,6 +138,12 @@
         base-z (.getZ player)]
     {:player-uuid (str (.getUUID player))
      :first-person? (local-camera-first-person?)
+     :player-x base-x
+     :player-y (.getY player)
+     :player-z base-z
+     :player-width (.getBbWidth player)
+     :player-height (.getBbHeight player)
+     :player-yaw-rad yaw-rad
      :x (+ base-x (* (.-x look) 0.35) (* right-x 0.22))
      :y (+ base-y -0.22 (* (.-y look) 0.06))
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
