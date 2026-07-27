@@ -440,6 +440,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoDuplicateCapabilities",
               "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",
+              "verifyBuildProfiles",
               "verifyRepositoryHygiene"
 }
 
@@ -458,5 +459,26 @@ tasks.register("verifySyntheticNeoForgeTarget") {
         ["platform-src/minecraft/mc-26.1-synthetic", "platform-src/loader/neoforge-26.1-synthetic"].each { path ->
             if (file(path).exists()) throw new GradleException("Synthetic target must not add production source: ${path}")
         }
+    }
+}
+
+tasks.register("verifyBuildProfiles") {
+    group = "verification"
+    description = "Validate Gradle wrapper/profile isolation rules."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def wrapperText = file("gradle/wrapper/gradle-wrapper.properties").text
+        def rootVersion = (wrapperText =~ /gradle-([0-9.]+)-bin\.zip/).find() ?
+            ((wrapperText =~ /gradle-([0-9.]+)-bin\.zip/)[0][1]) : null
+        def problems = []
+        (catalog.buildProfiles ?: [:]).each { profileId, profile ->
+            if (profile.wrapper == "root" && profile.gradleVersion.toString() != rootVersion) {
+                problems << "${profileId}: declared Gradle ${profile.gradleVersion} but root wrapper is ${rootVersion}"
+            }
+            if (profile.wrapper != "root" && !profile.fixture && !file(profile.wrapper.toString()).exists()) {
+                problems << "${profileId}: missing isolated wrapper ${profile.wrapper}"
+            }
+        }
+        if (!problems.isEmpty()) throw new GradleException("Invalid build profiles:\n" + problems.join("\n"))
     }
 }
