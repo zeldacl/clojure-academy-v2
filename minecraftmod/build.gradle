@@ -399,7 +399,7 @@ tasks.register("compareDatagenParityManifests") {
         def problems = []
         targetsByGroup.each { group, entries ->
             def manifests = entries.collectEntries { id, target ->
-                def manifest = file("platform/build/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
+                def manifest = file("build/targets/${id}/platform/generated/datagen/${id}/META-INF/academy-datagen-hashes.json")
                 manifest.isFile() ? [(id): new JsonSlurper().parse(manifest)] : [:]
             }
             if (manifests.size() < 2) {

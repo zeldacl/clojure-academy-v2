@@ -29,6 +29,10 @@ if (target.loader == "none") {
     apply plugin: "com.github.johnrengelman.shadow"
 }
 
+// Every target owns an isolated output tree so alternating Forge/Fabric or
+// Minecraft versions cannot reuse stale remapped/AOT classes.
+layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("targets/${target.id}/platform"))
+
 def componentDir = { String component, String child ->
     rootProject.file("${component}/${child}")
 }
