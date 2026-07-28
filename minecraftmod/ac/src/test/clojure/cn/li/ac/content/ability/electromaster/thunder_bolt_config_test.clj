@@ -33,9 +33,9 @@
       (fn []
         (ability-content/init-ability-content!)
         (seed-electromaster-config!
-          {(skill-config/config-key :thunder-bolt :cost.down.cp) [100.0 220.0]
+          {(skill-config/config-key :thunder-bolt :cost.down.cp) [101.0 220.0]
            (skill-config/config-key :thunder-bolt :cost.down.overload) [10.0 40.0]
-           (skill-config/config-key :thunder-bolt :cooldown.ticks) [90.0 30.0]})
+           (skill-config/config-key :thunder-bolt :cooldown.ticks) [91.0 30.0]})
         (let [spec (skill-registry/get-skill :thunder-bolt)
               cp-fn (get-in spec [:cost :down :cp])
               overload-fn (get-in spec [:cost :down :overload])
@@ -43,6 +43,8 @@
           (is (fn? cp-fn))
           (is (fn? overload-fn))
           (is (fn? cooldown-fn))
-          (is (= 160.0 (cp-fn {:exp 0.5})))
+          (is (= 160.0 (double (cp-fn {:exp 0.5})))
+              "original truncates fractional CP cost")
           (is (= 25.0 (overload-fn {:exp 0.5})))
-          (is (= 60.0 (double (cooldown-fn {:exp 0.5})))))))))
+          (is (= 60.0 (double (cooldown-fn {:exp 0.5})))
+              "original Float#toInt truncates cooldown instead of rounding"))))))

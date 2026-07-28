@@ -86,8 +86,20 @@
   [excluded entity]
   (contains? excluded (:uuid entity)))
 
+(defn- within-radius?
+  [center radius {:keys [x y z]}]
+  (let [dx (- (double (or x 0.0)) (double (:x center)))
+        dy (- (double (or y 0.0)) (double (:y center)))
+        dz (- (double (or z 0.0)) (double (:z center)))
+        radius* (double radius)]
+    (<= (+ (* dx dx) (* dy dy) (* dz dz))
+        (* radius* radius*))))
+
 (defn aoe-victims
-  "Entities within radius of center, excluding uuids in excluded."
+  "Entities within the spherical radius of center, excluding uuids in excluded.
+
+  The platform query is AABB-backed, so retain the original AcademyCraft
+  EntitySelectors.within distance check here."
   [world-id center radius excluded]
   (if-not (world-effects/available?)
     []
@@ -98,6 +110,7 @@
            (double (:z center))
            (double radius))
          (remove (partial entity-in-excluded-set? excluded))
+         (filter (partial within-radius? center radius))
          vec)))
 
 (defn apply-flat-aoe-damage!

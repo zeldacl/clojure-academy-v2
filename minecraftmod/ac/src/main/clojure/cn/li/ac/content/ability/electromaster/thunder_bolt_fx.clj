@@ -12,6 +12,7 @@
      :arc-life 20
      :arc-pattern :strong
      :aoe-points? true
+     :hand-origin? true
      :channels [{:topic :thunder-bolt/fx-perform :mode :perform}]}))
 
 (arc-beam/def-arc-beam-fx :thunder-bolt-strike)

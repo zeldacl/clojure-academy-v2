@@ -195,7 +195,7 @@
   [opts store ctx-id channel owner-key payload]
   (let [store* (ensure-arc-store store)
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start end hit-type aoe-points]} (or payload {})
+        {:keys [mode start end hit-type aoe-origin aoe-points]} (or payload {})
         base (base-meta owner-key* ctx-id channel payload)
         arc-life (long (or (:arc-life opts) 10))
         arc-pattern (:arc-pattern opts :weak)]
@@ -203,12 +203,14 @@
       :perform
       (cond
         (and (:aoe-points? opts) start end)
-        (let [main-arcs (vec (repeat 3 (arc-item base start end arc-life arc-pattern)))
+        (let [aoe-start (if (map? aoe-origin) aoe-origin end)
+              main-arcs (vec (repeat 3 (arc-item base start end arc-life arc-pattern
+                                                  :hand-origin? (:hand-origin? opts))))
               aoe-arcs (->> aoe-points
                             (keep (fn [pt]
                                     (when (map? pt)
                                       (let [life (+ 15 (rand-int 11))]
-                                        (arc-item base end pt life arc-pattern :is-aoe? true)))))
+                                        (arc-item base aoe-start pt life arc-pattern :is-aoe? true)))))
                             vec)
               store** (update-in store* [:arcs owner-key*] (fnil into []) (into main-arcs aoe-arcs))]
           (play-sound! opts)

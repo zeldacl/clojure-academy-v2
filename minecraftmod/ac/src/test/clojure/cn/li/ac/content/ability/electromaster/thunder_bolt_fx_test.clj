@@ -4,11 +4,13 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx]))
+            [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx])
+  (:import [cn.li.mcmod.math V3]))
 
 (defn- reset-fixture [f]
   (try
         (level-effects/reset-level-effect-registry-for-test!)
+        (tb-fx/init!)
         (tb-fx/reset-fx-for-test!)
         (f)
         (finally
@@ -51,17 +53,17 @@
       (tb-fx/init!)
       ((get @handlers* :thunder-bolt/fx-perform) "ctx-1" :thunder-bolt/fx-perform {:start {:x 0.0 :y 64.0 :z 0.0}
                                                     :end {:x 1.0 :y 65.0 :z 1.0}
+                                                    :aoe-origin {:x 0.5 :y 65.0 :z 0.5}
                                                     :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]})
       (is (= [[:thunder-bolt-strike
-               {:owner-key [:ctx "ctx-1"]
-                :ctx-id "ctx-1"
-                :channel :thunder-bolt/fx-perform
+               "ctx-1"
+               :thunder-bolt/fx-perform
+               {:mode :perform
                 :start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 1.0 :y 65.0 :z 1.0}
+                :aoe-origin {:x 0.5 :y 65.0 :z 0.5}
                 :aoe-points [{:x 2.0 :y 65.0 :z 1.0}]}
-               {:ctx-id "ctx-1"
-                :channel :thunder-bolt/fx-perform
-                :owner-key [:ctx "ctx-1"]}]]
+               '(:owner-key [:ctx "ctx-1"])]]
              @enqueued*)))))
 
 (deftest enqueue-main-and-aoe-arcs-tick-and-build-plan-test
@@ -72,11 +74,20 @@
                                                                nil)
                   rand-int (fn [_] 0)]
       (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-main" :thunder-bolt/fx-perform
-               {:start {:x 0.0 :y 64.0 :z 0.0}
+               {:mode :perform
+                :start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 3.0 :y 64.0 :z 3.0}
+                :aoe-origin {:x 10.0 :y 70.0 :z 10.0}
                 :aoe-points [{:x 4.0 :y 64.0 :z 2.0}
                              {:x 2.0 :y 64.0 :z 4.0}]})
-      (is (= 5 (count (get (:arcs (tb-fx/fx-snapshot)) [:ctx "ctx-main"]))))
+      (let [arcs (get (:arcs (tb-fx/fx-snapshot)) [:ctx "ctx-main"])
+            ^V3 aoe-start (-> arcs (nth 3) :vertices first :pos)]
+        (is (= 5 (count arcs)))
+        (is (every? :view-offset-own (take 3 arcs))
+            "the three player-fired main arcs retain original ViewOptimize offsets")
+        (is (= [10.0 70.0 10.0]
+               [(.-x aoe-start) (.-y aoe-start) (.-z aoe-start)])
+            "AOE arcs start at AttackData.point, not at the full-range main endpoint"))
       (is (= 1 (count @sounds*)))
       (is (= "my_mod:em.arc_strong" (:sound-id (first @sounds*))))
       (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
@@ -93,11 +104,13 @@
                                                                (swap! sounds* conj (last args))
                                                                nil)]
       (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-a" :thunder-bolt/fx-perform
-               {:start {:x 0.0 :y 64.0 :z 0.0}
+               {:mode :perform
+                :start {:x 0.0 :y 64.0 :z 0.0}
                 :end {:x 3.0 :y 64.0 :z 3.0}
                 :aoe-points []})
       (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-b" :thunder-bolt/fx-perform
-               {:start {:x 10.0 :y 64.0 :z 0.0}
+               {:mode :perform
+                :start {:x 10.0 :y 64.0 :z 0.0}
                 :end {:x 13.0 :y 64.0 :z 3.0}
                 :aoe-points []})
       (let [snapshot (tb-fx/fx-snapshot)]
