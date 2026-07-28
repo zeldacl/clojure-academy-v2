@@ -37,12 +37,10 @@
     (cond
       (nil? id) nil
       (str/includes? id ":") id
-      (str/starts-with? id "block.minecraft.")
-      (str "minecraft:" (subs id (count "block.minecraft.")))
-      (str/starts-with? id "item.minecraft.")
-      (str "minecraft:" (subs id (count "item.minecraft.")))
-      (str/starts-with? id "entity.minecraft.")
-      (str "minecraft:" (subs id (count "entity.minecraft.")))
+      (re-matches #"(?:block|item|entity)\.[^.]+\..+" id)
+      (let [[_ namespace path]
+            (re-matches #"(?:block|item|entity)\.([^.]+)\.(.+)" id)]
+        (str namespace ":" path))
       :else id)))
 
 (defn- is-metal-block? [block-id]

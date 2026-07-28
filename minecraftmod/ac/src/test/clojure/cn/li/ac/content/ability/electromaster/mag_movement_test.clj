@@ -65,6 +65,12 @@
 (defn- with-mag-env [f]
   (skill-ctx/with-server-skill-context f))
 
+(deftest description-ids-normalize-for-vanilla-and-mod-entities-test
+  (is (= "minecraft:iron_block"
+         (#'mag-movement/normalize-id "block.minecraft.iron_block")))
+  (is (= "my_mod:entity_mag_hook"
+         (#'mag-movement/normalize-id "entity.my_mod.entity_mag_hook"))))
+
 (deftest pattern-is-hold-channel-and-cost-fail-present-test
   (let [spec (skill-def)]
     (is (= :hold-channel (:pattern spec)))
