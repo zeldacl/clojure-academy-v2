@@ -356,6 +356,12 @@ if (target.loader != "none") {
         // later run cannot observe a partial AOT class graph.
         outputs.upToDateWhen { false }
         doFirst {
+            // compileClojure also sees classes/java/main for platform Java
+            // interop. That directory receives copied AOT classes after each
+            // run, so remove the old platform classes before Clojure starts
+            // resolving requires; otherwise it can load a stale __init class
+            // whose sibling function classes were already replaced.
+            deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
             delete clojureAotDir
         }
     }
