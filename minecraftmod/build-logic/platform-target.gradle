@@ -228,12 +228,23 @@ if (target.loader != "none") {
         "org.clojure:core.specs.alpha:0.2.62"
     ]
 
+    // Do not put SourceSetOutput on platform configurations: it is built by
+    // the sibling project's aggregate `classes` task. The explicit task
+    // dependencies below prepare these directories for compile and run work.
+    def runtimeClassOutput = { Project runtimeProject ->
+        def outputDirs = [runtimeProject.layout.buildDirectory.dir("classes/java/main")]
+        if (runtimeProject.tasks.findByName("compileClojure") != null) {
+            outputDirs << runtimeProject.layout.buildDirectory.dir("clojure/main")
+        }
+        files(outputDirs)
+    }
+
     dependencies {
-        compileOnly apiProject.sourceSets.main.output
-        runtimeOnly apiProject.sourceSets.main.output
-        compileOnly mcmodProject.sourceSets.main.output
-        runtimeOnly mcmodProject.sourceSets.main.output
-        contentProjects.each { contentProject -> runtimeOnly contentProject.sourceSets.main.output }
+        compileOnly runtimeClassOutput(apiProject)
+        runtimeOnly runtimeClassOutput(apiProject)
+        compileOnly runtimeClassOutput(mcmodProject)
+        runtimeOnly runtimeClassOutput(mcmodProject)
+        contentProjects.each { contentProject -> runtimeOnly runtimeClassOutput(contentProject) }
         clojureRuntimeLibraries.each { dependencyNotation ->
             implementation dependencyNotation
         }
@@ -270,10 +281,22 @@ if (target.loader != "none") {
         }
     }
 
+    // A platform compile needs the runtime class outputs of its sibling
+    // projects, not their aggregate `classes` lifecycle task. In particular,
+    // `classes` also brings Clojure verification work into every run task.
+    def runtimeClassTasks = { Project runtimeProject ->
+        def result = [runtimeProject.tasks.named("compileJava")]
+        def compileClojure = runtimeProject.tasks.findByName("compileClojure")
+        if (compileClojure != null) {
+            result << compileClojure
+        }
+        result
+    }
+
     tasks.named("compileJava").configure {
-        dependsOn apiProject.tasks.named("classes")
-        contentProjects.each { contentProject -> dependsOn contentProject.tasks.named("classes") }
-        dependsOn mcmodProject.tasks.named("classes")
+        dependsOn runtimeClassTasks(apiProject)
+        contentProjects.each { contentProject -> dependsOn runtimeClassTasks(contentProject) }
+        dependsOn runtimeClassTasks(mcmodProject)
     }
 
     def platformJavaClasses = tasks.named("compileJava").flatMap { it.destinationDirectory }
@@ -503,6 +526,7 @@ if (target.loader != "none") {
         def clojureClasses = contentProject.layout.buildDirectory.dir("clojure/main")
         def resources = contentProject.layout.buildDirectory.dir("resources/main")
         def packagingDeps = [contentProject.tasks.named("classes")]
+        def runtimeClassDependencies = runtimeClassTasks(contentProject)
 
         tasks.named("jar", Jar).configure {
             dependsOn packagingDeps
@@ -542,7 +566,7 @@ if (target.loader != "none") {
         }
 
         def copyTask = tasks.register("copy${label}RuntimeClassesToPlatformOutput", Copy) {
-            dependsOn packagingDeps
+            dependsOn runtimeClassDependencies
             group = "build"
             description = "Mirror ${label} runtime classes into the selected platform target output."
             mustRunAfter tasks.named("compileJava")
