@@ -356,6 +356,11 @@ if (target.loader != "none") {
     def compilePlatformClojureAot = tasks.register("compilePlatformClojureAot", JavaExec) {
         group = "build"
         description = "Compile selected platform Clojure namespaces to AOT classes for the active target."
+        // This is a build-time compiler process, so it runs on the Gradle JDK
+        // rather than the Minecraft runtime JDK.
+        javaLauncher = javaToolchains.launcherFor {
+            languageVersion = JavaLanguageVersion.of(gradleJvmVersion)
+        }
         // Clojure AOT assigns synthetic closure class ids from compiler state.
         // Reusing a previous output can leave a parent class referring to a
         // closure class that is absent on the next run (typically after the
