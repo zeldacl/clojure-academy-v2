@@ -2,12 +2,16 @@ plugins {
     id 'java-library' // 仅使用标准 Java 插件
 }
 
-// 强制 API 模块使用最低版本（例如 Java 8 或 17），以确保最大的兼容性
+// 使用 JDK21 编译，同时将 API 字节码固定为 Java17。
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17) 
+        languageVersion = JavaLanguageVersion.of(21)
     }
     withSourcesJar() // 必须导出源码包，方便第三方开发者查看接口注释
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
 }
 
 dependencies {
