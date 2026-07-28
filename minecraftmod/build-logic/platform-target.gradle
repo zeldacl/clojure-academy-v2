@@ -86,7 +86,9 @@ def collectClojureNamespaces = { Collection<File> dirs ->
 
 def compileJavaVersion = (target.compileJavaVersion ?: target.javaVersion ?: catalog.javaBaseline ?: 17) as int
 def gradleJvmVersion = (target.gradleJvmVersion ?: 21) as int
-def runtimeJavaVersion = (target.runtimeJavaVersion ?: compileJavaVersion) as int
+// Every Gradle-side and runtime Java process uses the Gradle JDK. The
+// compileJavaVersion only controls emitted bytecode via options.release.
+def runtimeJavaVersion = (target.runtimeJavaVersion ?: gradleJvmVersion) as int
 if (compileJavaVersion < (catalog.javaBaseline ?: 17) as int) {
     throw new GradleException("${targetId}: compileJavaVersion must be >= catalog.javaBaseline")
 }

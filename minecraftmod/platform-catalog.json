@@ -49,7 +49,7 @@
       "buildProfile": "loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
-      "runtimeJavaVersion": 17,
+      "runtimeJavaVersion": 21,
       "contentModules": [],
       "sourceComponents": [],
       "testComponents": [],
@@ -68,7 +68,7 @@
       "buildProfile": "loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
-      "runtimeJavaVersion": 17,
+      "runtimeJavaVersion": 21,
       "contentModules": [
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
@@ -128,7 +128,7 @@
       "buildProfile": "loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
-      "runtimeJavaVersion": 17,
+      "runtimeJavaVersion": 21,
       "contentModules": [
         {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
       ],
