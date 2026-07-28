@@ -70,9 +70,27 @@
 	 [:output result-schema]
 	 [:mode [:enum "plate" "incise" "etch" "refine"]]])
 
+(def custom-process-recipe-schema
+  [:map
+   [:id non-blank-string-schema]
+   [:type [:= :custom-process]]
+   [:input ingredient-schema]
+   [:output result-schema]
+   [:consume-liquid {:optional true} [:and int? [:>= 0]]]
+   [:time {:optional true} [:and int? [:>= 1]]]])
+
+(def custom-mode-recipe-schema
+  [:map
+   [:id non-blank-string-schema]
+   [:type [:= :custom-mode]]
+   [:input ingredient-schema]
+   [:output result-schema]
+   [:mode [:enum "plate" "incise" "etch" "refine"]]])
+
 (def recipe-schema
 	[:or shaped-recipe-schema shapeless-recipe-schema smelting-recipe-schema
-	     imag-fusor-recipe-schema metal-former-recipe-schema])
+	     imag-fusor-recipe-schema metal-former-recipe-schema
+     custom-process-recipe-schema custom-mode-recipe-schema])
 
 (def recipes-schema
 	[:sequential recipe-schema])
