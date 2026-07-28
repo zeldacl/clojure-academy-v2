@@ -44,8 +44,11 @@ subprojects {
     plugins.withType(JavaPlugin) {
         java {
             toolchain {
-                languageVersion = JavaLanguageVersion.of(17)
+                languageVersion = JavaLanguageVersion.of(21)
             }
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.release = 17
         }
         tasks.withType(Jar).configureEach {
             exclude "**/*.clj", "**/*.cljc"

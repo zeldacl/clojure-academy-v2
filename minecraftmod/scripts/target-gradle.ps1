@@ -6,9 +6,9 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 if ([string]::IsNullOrWhiteSpace($Target)) { $Target = 'forge-1.20.1' }
-$javaHome = $env:MC_JAVA_HOME_17
+$javaHome = $env:MC_JAVA_HOME_21
 if ([string]::IsNullOrWhiteSpace($javaHome)) { $javaHome = $env:JAVA_HOME }
-if ([string]::IsNullOrWhiteSpace($javaHome)) { throw 'Set MC_JAVA_HOME_17 (bootstrap) or JAVA_HOME.' }
+if ([string]::IsNullOrWhiteSpace($javaHome)) { throw 'Set MC_JAVA_HOME_21 (bootstrap) or JAVA_HOME.' }
 $java = Join-Path $javaHome 'bin\java.exe'
 if (!(Test-Path -LiteralPath $java)) { throw "Java executable not found: $java" }
 Push-Location $root

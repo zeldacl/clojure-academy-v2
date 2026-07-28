@@ -19,7 +19,7 @@ public final class TargetGradleLauncherTest {
                   "buildProfiles": {
                     "profile-17": {
                       "wrapper": "root",
-                      "gradleJvmVersion": 17
+                      "gradleJvmVersion": 21
                     }
                   },
                   "components": {
@@ -32,7 +32,7 @@ public final class TargetGradleLauncherTest {
                     "forge-1.20.1": {
                       "id": "forge-1.20.1",
                       "buildProfile": "profile-17",
-                      "gradleJvmVersion": 17,
+                      "gradleJvmVersion": 21,
                       "artifact": {
                         "classifier": "forge-1.20.1"
                       }
@@ -43,7 +43,7 @@ public final class TargetGradleLauncherTest {
 
         TargetGradleLauncher.TargetModel model =
                 TargetGradleLauncher.targetModelFromJson(json, "forge-1.20.1");
-        assertEquals(17, model.gradleJvmVersion(), "gradle JVM version");
+        assertEquals(21, model.gradleJvmVersion(), "gradle JVM version");
         assertEquals("root", model.wrapper(), "wrapper");
     }
 
@@ -56,7 +56,7 @@ public final class TargetGradleLauncherTest {
                   "targets": {
                     "nested-only": {
                       "buildProfile": "profile-17",
-                      "metadata": {"gradleJvmVersion": 17}
+                      "metadata": {"gradleJvmVersion": 21}
                     }
                   }
                 }

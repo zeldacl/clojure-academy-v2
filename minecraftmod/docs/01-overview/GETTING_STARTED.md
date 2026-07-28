@@ -4,7 +4,7 @@
 
 ## 环境
 
-- Java 17
+- 编译环境 JDK 21；目标字节码 Java 17
 - Gradle Wrapper：`gradlew.bat` / `gradlew`
 
 ## 常用任务（Windows）

@@ -6,7 +6,7 @@
     "loom-1.13-gradle-8.8": {
       "gradleVersion": "8.8",
       "wrapper": "root",
-      "gradleJvmVersion": 17,
+      "gradleJvmVersion": 21,
       "loomVersion": "1.13.467",
       "clojurephantVersion": "0.9.1",
       "shadowVersion": "8.1.1"
@@ -47,7 +47,7 @@
       "loader": "none",
       "minecraftVersion": null,
       "buildProfile": "loom-1.13-gradle-8.8",
-      "gradleJvmVersion": 17,
+      "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 17,
       "contentModules": [],
@@ -66,7 +66,7 @@
       "loader": "forge",
       "minecraftVersion": "1.20.1",
       "buildProfile": "loom-1.13-gradle-8.8",
-      "gradleJvmVersion": 17,
+      "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 17,
       "contentModules": [
@@ -126,7 +126,7 @@
       "loader": "fabric",
       "minecraftVersion": "1.20.1",
       "buildProfile": "loom-1.13-gradle-8.8",
-      "gradleJvmVersion": 17,
+      "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 17,
       "contentModules": [
