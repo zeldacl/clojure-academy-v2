@@ -51,18 +51,22 @@
      the cyan→green→pink gradient
    - overloaded flag triggers CPU pulse highlight (cpbar_overload shader approximation)"
   [model now-ms]
-  (let [{:keys [cur max fine]} (:overload model)
+  (let [{:keys [cur max overloaded recovering]} (:overload model)
+        overloaded? (boolean overloaded)
         percent (if (and max (pos? max)) (/ cur max) 0.0)
         scroll-offset (scroll-offset-for-now now-ms)]
     {:type :overload-bar
      :x 8 :y 22
      :width 100 :height 10
      :percent (+ 0.0 percent)
-     :overloaded (not fine)
+     ;; :overloaded gates the "drawOverload" visual (isOverloaded, post-cap phase);
+     ;; :recovering gates cant-use dimming (isOverloadRecovering, whole !fine tail).
+     :overloaded overloaded?
+     :recovering (boolean recovering)
      :scroll-offset scroll-offset
-     :bg-texture (if fine
-                   (modid/asset-path "textures" "guis/cpbar/back_normal.png")
-                   (modid/asset-path "textures" "guis/cpbar/back_overload.png"))
+     :bg-texture (if overloaded?
+                   (modid/asset-path "textures" "guis/cpbar/back_overload.png")
+                   (modid/asset-path "textures" "guis/cpbar/back_normal.png"))
      :fg-texture (modid/asset-path "textures" "guis/cpbar/front_overload.png")}))
 
 (defn build-skill-slot-shape
@@ -180,7 +184,9 @@
   "CP/OL numeric readout (hold V to show, fades in/out), based on wall-clock
    now-ms — only non-nil while showing or within the ~600ms fade-out window."
   [hud-model showing-numbers? last-show-value-change-ms now-ms]
-  (when hud-model
+  ;; Upstream CPBar: when isOverloaded(), the CP/OL readout alpha is forced to 0
+  ;; (numbers hidden entirely) — the overload visual owns the bar area instead.
+  (when (and hud-model (not (get-in hud-model [:overload :overloaded])))
     (let [last-change (long (or last-show-value-change-ms 0))
           dt (- (long now-ms) last-change)
           alpha (if showing-numbers?

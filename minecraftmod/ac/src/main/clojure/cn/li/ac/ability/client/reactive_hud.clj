@@ -353,9 +353,17 @@
           cat (when category-id (category/get-category category-id))]
       {:cp {:cur (double (or (:cur-cp resource-data) 0.0))
             :max (double (or (:max-cp resource-data) 1.0))}
-       :overload {:cur (double (or (:cur-overload resource-data) 0.0))
-                  :max (double (or (:max-overload resource-data) 1.0))
-                  :fine (boolean (get resource-data :overload-fine true))}
+       :overload (let [fine? (boolean (get resource-data :overload-fine true))
+                       until-recover (long (or (:until-overload-recover resource-data) 0))]
+                   {:cur (double (or (:cur-overload resource-data) 0.0))
+                    :max (double (or (:max-overload resource-data) 1.0))
+                    :fine fine?
+                    ;; Upstream CPData.isOverloaded() = !overloadFine && untilOverloadRecover>0
+                    ;; (the dramatic post-cap phase: drawOverload visual, hidden numbers).
+                    :overloaded (and (not fine?) (pos? until-recover))
+                    ;; Upstream CPData.isOverloadRecovering() = !overloadFine — stays true
+                    ;; through the subsequent decay phase (drawNormal visual, dimmed CP fill).
+                    :recovering (not fine?)})
        :active-slots (vec (preset-data/get-active-slots preset-data-map))
        :activated activated?
        :category-id category-id
@@ -381,7 +389,10 @@
   (let [category-id (:category-id ability-data)
         cat (when category-id (category/get-category category-id))
         cat-color (:color cat)
-        overloaded? (not (get resource-data :overload-fine true))]
+        ;; Match CPBar.isOverloaded() — the red overload cue belongs to the
+        ;; post-cap phase only, not the whole !overloadFine recovery tail.
+        overloaded? (and (not (get resource-data :overload-fine true))
+                         (pos? (long (or (:until-overload-recover resource-data) 0))))]
     (cond
       overloaded? {:r 0.82 :g 0.08 :b 0.08 :a 0.65}
       (and activated? cat-color) {:r (double (nth cat-color 0))

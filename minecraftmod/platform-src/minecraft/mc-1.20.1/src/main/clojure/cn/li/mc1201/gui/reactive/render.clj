@@ -356,7 +356,19 @@
         scroll   (.getDSlot node 3)                      ;; :scroll-offset
         raw-alpha (.getDSlot node 4)                     ;; :alpha (0.0 = unset → default 1.0)
         fill-alpha (if (pos? raw-alpha) raw-alpha 1.0)
-        filled-w (int (* percent w))
+        ;; :fill-remap [base span] — upstream CPBar.drawCPBar does
+        ;; prog = base + prog*span (0.16 + prog*0.8) so the CP fill keeps a
+        ;; 16% minimum sliver and tops out at 96% (never reaching the diagonal
+        ;; tip). This remaps only the fill EXTENT; the gradient color below still
+        ;; samples the RAW percent (upstream calls autoLerp BEFORE this remap).
+        remap    (get (.getStaticProps node) :fill-remap)
+        fill-pct (if remap
+                   (+ (double (nth remap 0)) (* percent (double (nth remap 1))))
+                   percent)
+        ;; :anchor :right — upstream CPBar fixes the bar's RIGHT edge (at the
+        ;; icon side) and grows the fill leftward; default is left-anchored.
+        anchor-right? (= :right (get (.getStaticProps node) :anchor))
+        filled-w (int (* fill-pct w))
         ix (unchecked-int x) iy (unchecked-int y)
         iw (unchecked-int w) ih (unchecked-int (+ y h))
         ^ResourceLocation bg-rl    (.getOSlot node 8)
@@ -415,12 +427,20 @@
     ;; ---- upstream autoLerp: multi-stop color lerp (bands nil → white/no tint) ----
     (when (and fg-rl (pos? filled-w))
       (let [t       (double (max 0.0 (min 1.0 percent)))
-            bar-end (int (+ x filled-w))
             [r g b] (sample-progress-color bands t)]
-        (if (and cutout-x0 cutout-w (pos? cutout-w))
-          (do (draw-trap! ix       (min bar-end cutout-x0) r g b fill-alpha)
-              (draw-trap! cutout-x1 (min bar-end         iw) r g b fill-alpha))
-          (draw-trap! ix (min bar-end iw) r g b fill-alpha))))
+        (if anchor-right?
+          ;; Right-anchored (upstream drawCPBar): fixed right edge = node right,
+          ;; fill grows leftward. Draw ONE trapezoid all the way to the right edge
+          ;; (under the icon, which the icon overlay below redraws on top) so the
+          ;; diagonal never degenerates on the thin sliver beside the icon.
+          (let [bar-right (int (+ x w))
+                bar-start (int (- bar-right filled-w))]
+            (draw-trap! (max ix bar-start) bar-right r g b fill-alpha))
+          (let [bar-end (int (+ x filled-w))]
+            (if (and cutout-x0 cutout-w (pos? cutout-w))
+              (do (draw-trap! ix       (min bar-end cutout-x0) r g b fill-alpha)
+                  (draw-trap! cutout-x1 (min bar-end         iw) r g b fill-alpha))
+              (draw-trap! ix (min bar-end iw) r g b fill-alpha))))))
     ;; ---- icon overlay ----
     (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
       (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))

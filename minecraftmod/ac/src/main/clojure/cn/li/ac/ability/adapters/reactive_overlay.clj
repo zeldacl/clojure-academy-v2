@@ -281,8 +281,12 @@
         ;; - overloaded (drawOverload): animated scrolling front_overload.png —
         ;;   :overload-bar, NO color-stops (its own texture already carries the
         ;;   cyan→green→pink gradient; tinting it would double-color it).
+        ;;   Upstream drawNormal preview lives in the thin mid-band (X0=0,Y0=21,
+        ;;   W=943,H=104 → ×0.2), while drawOverload fills the WHOLE frame
+        ;;   (x0=30,y=0,W=914,H=147 → ×0.2 = +6,+0,183,29) — so the two lanes
+        ;;   have DIFFERENT geometry, matching upstream.
         (dsl/box {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 0 :h 21 :fill 0x00DFDFDF :visible? false})
-        (dsl/progress {:id :overload-bar :x bar-x :y (+ bar-y 4) :w (- bar-w 4) :h 21
+        (dsl/progress {:id :overload-bar :x (+ bar-x 6) :y bar-y :w (- bar-w 10) :h bar-h
                        :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")
                        :scroll-offset 0.0 :visible? false})
         ;; CP fill (diagonal cut + icon overlay). Consumption-hint "release" cue
@@ -295,11 +299,16 @@
                        :corner 0.852
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
+                       ;; upstream drawCPBar: prog = 0.16 + prog*0.8 (min sliver, max 96%)
+                       :fill-remap [0.16 0.8]
+                       :anchor :right    ;; upstream fixes the right (icon-side) edge
                        :visible? false})
         (dsl/progress {:id :cp-bar :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
                        :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
+                       :fill-remap [0.16 0.8]    ;; upstream drawCPBar prog = 0.16 + prog*0.8
+                       :anchor :right            ;; upstream fixes the right (icon-side) edge
                        :icon-src ""     ;; set per-frame to category icon
                        :icon-cutout {:x-offset 161 :w 16 :y-offset 0 :h 17}})
         ;; Overload highlight (pulsing overlay when overloaded)
@@ -384,7 +393,8 @@
     (let [counts (int-array [-1 -1 -1 -1 -1])]
       (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
       (rt/put-user-signal! r :overlay-count-cache counts)
-      (rt/put-user-signal! r :overlay-flag-cache (boolean-array 2)))
+      ;; [0]=overloaded bg switch  [1]=overload highlight visible  [2]=low? CP-fill dim
+      (rt/put-user-signal! r :overlay-flag-cache (boolean-array 3)))
     (let [b (sig/bind! bg-smooth bg-mask write-vignette-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
     ;; CP bar: solid bar shows predicted-after-cost level when a consumption
@@ -635,7 +645,7 @@
         ;; populated while activated), so the remaining condition is just
         ;; overloaded? || interfered? — one player-wide value for the frame,
         ;; not per-slot.
-        cant-use-ability? (boolean (or (:overloaded (:overload-bar snapshot))
+        cant-use-ability? (boolean (or (:recovering (:overload-bar snapshot))
                                        (:interfered? snapshot)))]
     ;; Re-anchor every frame: upstream KeyHintUI is vertically centred on the
     ;; right screen edge (halign CENTER), so its position tracks window resize.
@@ -975,14 +985,25 @@
                               (if overloaded?
                                 (modid/asset-path "textures" "guis/cpbar/back_overload.png")
                                 (modid/asset-path "textures" "guis/cpbar/back_normal.png"))))))
-          ;; Overload highlight — only toggle visibility on state change
+          ;; Overload highlight — upstream draws TEX_OVERLOAD_HIGHLIGHT only inside
+          ;; drawOverload (isOverloaded), so gate it on :overloaded alone, not on a
+          ;; near-full overload threshold. Only toggle visibility on state change.
           (when-let [^booleans flags (rt/user-signal r :overlay-flag-cache)]
-            (let [ol-pct      (double (or (:percent (:overload-bar snapshot)) 0.0))
-                  overloaded? (boolean (:overloaded (:overload-bar snapshot)))
-                  should-show (or overloaded? (> ol-pct 0.8))]
-              (when (not= (aget flags 1) should-show)
-                (aset-boolean flags 1 should-show)
-                (set-visible! r :overload-highlight should-show))))
+            (let [overloaded? (boolean (:overloaded (:overload-bar snapshot)))]
+              (when (not= (aget flags 1) overloaded?)
+                (aset-boolean flags 1 overloaded?)
+                (set-visible! r :overload-highlight overloaded?))))
+          ;; CP fill "low" dim — upstream drawCPBar(prog, low) does mAlpha*=0.3
+          ;; whenever the player cant use abilities (interfering || overload-
+          ;; recovering). Consumption-hint release never overlaps this state
+          ;; (both interference and recovery block ability use), so only the
+          ;; solid :cp-bar needs dimming here. Toggle on state change only.
+          (when-let [^booleans flags (rt/user-signal r :overlay-flag-cache)]
+            (let [low? (boolean (or (:recovering (:overload-bar snapshot))
+                                    (:interfered? snapshot)))]
+              (when (not= (aget flags 2) low?)
+                (aset-boolean flags 2 low?)
+                (ui/set-prop! r :cp-bar :alpha (if low? 0.3 1.0)))))
           (update-activation-indicator! r snapshot)
           (update-overload-lane! r snapshot sw)
           (update-numbers! r snapshot)
