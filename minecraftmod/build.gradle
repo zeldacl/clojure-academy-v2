@@ -27,6 +27,17 @@ allprojects {
 subprojects {
     plugins.withId("dev.clojurephant.clojure") {
         local.ClojurephantFlushFix.configure(project)
+        // Every Clojure-bearing module is a runtime module. Keep the AOT
+        // policy here so new modules cannot accidentally ship source-only or
+        // partially AOT-compiled namespaces.
+        clojure {
+            builds {
+                main {
+                    aotAll()
+                    reflection = "fail"
+                }
+            }
+        }
         tasks.matching { task -> task.metaClass.hasProperty(task, "forkOptions") != null }.configureEach { task ->
             if (!task.forkOptions.memoryMaximumSize) {
                 task.forkOptions.memoryMaximumSize = "1536m"

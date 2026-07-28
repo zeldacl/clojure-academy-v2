@@ -9,15 +9,6 @@ tasks.named('compileJava').configure {
     dependsOn project(':mcmod').tasks.named('compileClojure')
 }
 
-clojure {
-    builds {
-        main {
-            aotAll()
-            reflection = 'fail'
-        }
-    }
-}
-
 // 反射拦截器
 tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' }.configureEach {
     forkOptions.jvmArgs += ['-Dclojure.compile.warn-on-reflection=true']

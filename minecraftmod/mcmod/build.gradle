@@ -40,15 +40,6 @@ def generateModId = tasks.register('generateModId') {
 sourceSets.main.java.srcDir(generatedModConfigDir)
 tasks.named('compileJava').configure { dependsOn generateModId }
 
-clojure {
-    builds {
-        main {
-            aotAll()
-            reflection = 'fail'
-        }
-    }
-}
-
 // 反射拦截器
 tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' }.configureEach {
     forkOptions.jvmArgs += ['-Dclojure.compile.warn-on-reflection=true']
