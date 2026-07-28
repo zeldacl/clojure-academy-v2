@@ -50,6 +50,13 @@
   "Run content-owned client renderer initialization.
   Called by mcmod during client initialization."
   []
+  ;; Register ability FX channels/runtimes before any context-channel push can
+  ;; arrive. This bootstrap used to exist only in tests, leaving the production
+  ;; FX registry empty: held skills still ran on the server, but their client
+  ;; beam/sound start events had no handler.
+  ;; Resolve lazily so the client-only FX graph is never loaded while the
+  ;; dedicated server requires this shared lifecycle namespace.
+  ((requiring-resolve 'cn.li.ac.content.ability-client/init-client-fx!))
   ;; Register entity render namespaces into the neutral mcmod registry
   ;; so that Minecraft-version Java renderer classes can resolve them without
   ;; hardcoding AC namespace strings.
@@ -91,7 +98,7 @@
   (let [should-register?
         (if-let [fw-atom (fw/fw-atom)]
           (let [k guard-path]
-            (when (nil? (get-in @fw-atom k))
+            (when-not (true? (get-in @fw-atom k))
               (swap! fw-atom assoc-in k true)
               true))
           true)]
