@@ -43,6 +43,5 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `verifyNoLegacyArchitecture`
 - `verifyNoThinForwarders`
 - `verifyNoDuplicateCapabilities`
-- `verifyNoUnusedNamespaces`
 - `verifyNoTargetHardcoding`
 - `verifyRepositoryHygiene`

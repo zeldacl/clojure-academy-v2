@@ -16,8 +16,7 @@
     "minecraft-1.20.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.20.1",
-      "source": "platform-src/minecraft/mc-1.20.1/src/main",
-      "aotManifest": "platform-src/minecraft/mc-1.20.1/aot-manifest.edn"
+      "source": "platform-src/minecraft/mc-1.20.1/src/main"
     },
     "forge-1.20.1": {
       "kind": "loader",
@@ -25,7 +24,6 @@
       "minecraftVersion": "1.20.1",
       "source": "platform-src/loader/forge/src/main",
       "tests": "platform-src/loader/forge/src/test",
-      "aotManifest": "platform-src/loader/forge/aot-manifest.edn",
       "runtimeAotEntrypoint": "cn.li.forge1201.mod"
     },
     "fabric-1.20.1": {
@@ -33,7 +31,6 @@
       "loader": "fabric",
       "minecraftVersion": "1.20.1",
       "source": "platform-src/loader/fabric/src/main",
-      "aotManifest": "platform-src/loader/fabric/aot-manifest.edn",
       "runtimeAotEntrypoint": "cn.li.fabric1201.mod"
     },
     "platform-test-support": {

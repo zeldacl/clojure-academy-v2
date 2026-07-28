@@ -26,7 +26,6 @@ Rules:
 platform-src/minecraft/version/<mc-component>/
   src/main/clojure/...
   src/main/java/...
-  aot-manifest.edn
 ```
 
 Rules:

@@ -32,7 +32,7 @@
 
 ## 验证顺序
 
-1. `verifyCurrentPlatforms`：确认架构门禁、重复 capability owner、AOT manifest drift、target 硬编码和 platform-src 生成残留没有回归。
+1. `verifyCurrentPlatforms`：确认架构门禁、重复 capability owner、target 硬编码和 platform-src 生成残留没有回归；AOT 命名空间在构建时直接从源文件导出。
 2. 按修改范围运行单 target 编译；不要在 Gradle 子工程名里表达 loader/version。
 3. 跨 loader 对照由 CI matrix 分别调用 `:platform` 完成；DataGen 对照使用各 target 生成的 hash manifest。
 

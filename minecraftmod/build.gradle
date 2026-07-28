@@ -61,28 +61,6 @@ ext.platformCatalog = {
     new JsonSlurper().parse(rootProject.file("platform-catalog.json"))
 }
 
-ext.cljNamespaceFromFile = { File root, File file ->
-    root.toPath()
-        .relativize(file.toPath())
-        .toString()
-        .replace("\\", "/")
-        .replaceAll(/\.clj$/, "")
-        .replace("/", ".")
-        .replace("_", "-")
-}
-
-ext.collectClojureNamespaces = { Collection<File> dirs ->
-    def result = new TreeSet<String>()
-    dirs.each { File dir ->
-        if (dir.isDirectory()) {
-            fileTree(dir) { include "**/*.clj" }.files.each { File file ->
-                result << rootProject.ext.cljNamespaceFromFile(dir, file)
-            }
-        }
-    }
-    result
-}
-
 tasks.register("verifyNoLegacyArchitecture") {
     group = "verification"
     description = "Fail if deleted platform-module architecture returns."
@@ -214,7 +192,7 @@ tasks.register("verifyPlatformCatalog") {
             if (id.toString().toLowerCase().startsWith("ac-") || component.content) {
                 problems << "platform component ${id} must not bind a content module to a concrete platform"
             }
-            ["source", "tests", "aotManifest"].each { key ->
+            ["source", "tests"].each { key ->
                 if (component[key]) {
                     def componentPath = file(component[key].toString())
                     if (!componentPath.exists()) {
@@ -275,38 +253,6 @@ tasks.register("verifyPlatformCatalog") {
         }
         if (!problems.isEmpty()) {
             throw new GradleException("Invalid platform catalog:\n" + problems.join("\n"))
-        }
-    }
-}
-
-tasks.register("verifyNoUnusedNamespaces") {
-    group = "verification"
-    description = "Verify platform AOT manifests match current source namespaces."
-    doLast {
-        def checks = (rootProject.ext.platformCatalog().components ?: [:]).collect { id, component ->
-            component.aotManifest ? [
-                name: id,
-                dir: file("${component.source}/clojure"),
-                manifest: file(component.aotManifest.toString())
-            ] : null
-        }.findAll { it != null }
-        def problems = []
-        checks.each { check ->
-            def manifestText = check.manifest.isFile() ? check.manifest.text : "[]"
-            def manifest = manifestText.readLines().collect { it.trim() }.findAll { line ->
-                line ==~ /^"[^"]+"$/
-            }.collect { line ->
-                line.substring(1, line.length() - 1)
-            } as Set
-            def source = rootProject.ext.collectClojureNamespaces([check.dir]) as Set
-            def missing = source - manifest
-            def stale = manifest - source
-            if (!missing.isEmpty() || !stale.isEmpty()) {
-                problems << "${check.name}: missing=${missing.sort()} stale=${stale.sort()}"
-            }
-        }
-        if (!problems.isEmpty()) {
-            throw new GradleException("AOT namespace manifest drift:\n" + problems.join("\n"))
         }
     }
 }
@@ -444,7 +390,6 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNoCompatibilityResidues",
               "verifyPlatformCatalog",
               "verifyNoDuplicateCapabilities",
-              "verifyNoUnusedNamespaces",
               "verifyNoTargetHardcoding",
               "verifyBuildProfiles",
               "verifyTargetBuildEntrypoints",

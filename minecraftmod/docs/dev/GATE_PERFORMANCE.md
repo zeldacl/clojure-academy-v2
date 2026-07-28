@@ -4,7 +4,7 @@ This document keeps the verification set small and predictable.
 
 | Gate | Scope | Command |
 |------|-------|---------|
-| Architecture | repository layout, target catalog, AOT manifests, residue guards | `.\gradlew.bat verifyCurrentPlatforms` |
+| Architecture | repository layout, target catalog, source-derived AOT inputs, residue guards | `.\gradlew.bat verifyCurrentPlatforms` |
 | Core unit tests | `ac` / `mcmod` platform-neutral tests | `.\gradlew.bat :ac:test :mcmod:test` |
 | Forge target compile | Forge source components | `.`\\scripts\\target-gradle.ps1 forge-1.20.1`` |
 | Fabric target compile | Fabric source components | `.`\\scripts\\target-gradle.ps1 fabric-1.20.1`` |
