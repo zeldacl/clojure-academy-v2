@@ -44,6 +44,19 @@ sourceSets {
     }
 }
 
+if (target.loader == "forge") {
+    def forgeModClassRoots = [
+        layout.buildDirectory.dir("classes/java/main"),
+        layout.buildDirectory.dir("clojure/main"),
+        layout.buildDirectory.dir("resources/main")
+    ]
+    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }
+        .configureEach {
+            def roots = forgeModClassRoots.collect { "main%%${it.get().asFile.absolutePath}" }
+            environment "MOD_CLASSES", roots.join(";")
+        }
+}
+
 def componentDir = { String component, String child ->
     rootProject.file("${component}/${child}")
 }
@@ -177,6 +190,12 @@ if (target.loader != "none") {
     if (target.loader == "forge") {
         loom {
             forge {}
+            mods {
+                main {
+                    modFiles.setFrom([])
+                    sourceSet("main")
+                }
+            }
         }
     }
 
