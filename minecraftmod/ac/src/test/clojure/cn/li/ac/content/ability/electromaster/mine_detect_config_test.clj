@@ -47,7 +47,7 @@
         (let [spec (skill-registry/get-skill :mine-detect)
               player-id "mine-detect-config-player"]
           (is (= 3 (:level spec)))
-          (is (false? (:controllable? spec)))
+          (is (true? (:controllable? spec)))
           (is (= 1500.0 ((get-in spec [:cost :down :cp]) {:player-id player-id})))
           (is (= 200.0 ((get-in spec [:cost :down :overload]) {:player-id player-id})))
           (is (= 900 (skill-config/lerp-int :mine-detect :cooldown.ticks 0.0)))

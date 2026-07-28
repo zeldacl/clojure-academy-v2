@@ -297,6 +297,12 @@
 (defn- build-selector! [^UiRt r page-idx slot-idx mx my]
   (clear-selector! r)
   (let [owner (cached-owner r)
+        _diag (when owner
+                (try
+                  (when-let [snapshot (logic/selector-debug-snapshot owner)]
+                    (log/info "Preset selector snapshot" snapshot))
+                  (catch Throwable t
+                    (log/warn "Preset selector snapshot failed" t))))
         rd (when owner (logic/build-preset-editor-render-data owner))
         available (vec (:available-skills rd))
         ;; Items: -1 = remove (matching upstream cancel button), then skills

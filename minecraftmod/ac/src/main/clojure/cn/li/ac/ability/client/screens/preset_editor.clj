@@ -131,6 +131,45 @@
                                   :ctrl-id (or (:ctrl-id s) (spec-skill-id s))})
                                available-for-preset)})))))
 
+(defn selector-debug-snapshot
+  "Return a compact diagnostic map for selector filtering.
+   Used only for runtime troubleshooting of missing skills in preset editor."
+  [owner]
+  (let [state (editor-state-snapshot owner)
+        owner-key (editor-owner-key owner)]
+    (when-let [_player-uuid (:player-uuid state)]
+      (when-let [player-state (and owner-key (get-editor-player-state owner-key))]
+        (let [ability-data (:ability-data player-state)
+              preset-data (:preset-data player-state)
+              category-id (:category-id ability-data)
+              learned (:learned-skills ability-data #{})
+              slots-data (:slots preset-data {})
+              current-preset (:selected-preset state)
+              all-skills (if category-id
+                           (vec (skill-query/get-skills-for-category category-id))
+                           [])
+              learned-skills (vec (filter #(adata/is-learned? ability-data (spec-skill-id %)) all-skills))
+              controllable-skills (vec (filter #(and (:enabled %) (:controllable? %)) learned-skills))
+              assigned-ids (assigned-ctrl-ids slots-data current-preset)
+              available-for-preset (vec (remove #(contains? assigned-ids (:ctrl-id %)) controllable-skills))]
+          {:category-id category-id
+           :selected-preset current-preset
+           :active-preset (:active-preset preset-data 0)
+           :learned-ids (vec (sort (map name learned)))
+           :slots (into {}
+                        (for [idx (range 4)]
+                          [idx (get slots-data [current-preset idx])]))
+           :assigned-ctrl-ids (vec (sort (map name assigned-ids)))
+           :all-skills (mapv (fn [s]
+                               {:id (spec-skill-id s)
+                                :ctrl-id (:ctrl-id s)
+                                :enabled (:enabled s)
+                                :controllable? (:controllable? s)})
+                             all-skills)
+           :learned-visible-ids (vec (sort (map (comp name spec-skill-id) learned-skills)))
+           :controllable-visible-ids (vec (sort (map (comp name spec-skill-id) controllable-skills)))
+           :available-skill-ids (vec (sort (map (comp name spec-skill-id) available-for-preset)))})))))
+
 ;; ============================================================================
 ;; Event Handlers
 ;; ============================================================================
