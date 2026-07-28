@@ -270,15 +270,6 @@ if (target.loader != "none") {
         }
     }
 
-    clojure {
-        builds {
-            main {
-                aotAll()
-                reflection = "fail"
-            }
-        }
-    }
-
     // A platform compile needs the runtime class outputs of its sibling
     // projects, not their aggregate `classes` lifecycle task. In particular,
     // `classes` also brings Clojure verification work into every run task.
