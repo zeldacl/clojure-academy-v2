@@ -23,18 +23,27 @@ public final class TargetGradleLauncher {
         if (!Files.isRegularFile(wrapper)) {
             throw new IllegalArgumentException("Build profile wrapper is missing for target " + target + ": " + wrapper);
         }
-        List<String> gradleArgs = new ArrayList<>();
-        gradleArgs.add("--gradle-user-home");
-        gradleArgs.add(root.resolve("build/gradle-home").resolve(target).toString());
-        gradleArgs.add(":platform:build");
-        gradleArgs.add("-PplatformTarget=" + target);
-        for (int i = start; i < args.length; i++) gradleArgs.add(args[i]);
+        List<String> gradleArgs = gradleArguments(root, target, args, start);
         List<String> command = wrapperCommand(
                 wrapper, gradleArgs, isWindows(), System.getenv("ComSpec"));
         ProcessBuilder process = new ProcessBuilder(command).directory(root.toFile()).inheritIO();
         process.environment().put("JAVA_HOME", javaHome);
         int exit = process.start().waitFor();
         System.exit(exit);
+    }
+
+    static List<String> gradleArguments(Path root, String target, String[] args, int start) {
+        List<String> gradleArgs = new ArrayList<>();
+        gradleArgs.add("--gradle-user-home");
+        gradleArgs.add(root.resolve("build/gradle-home").resolve(target).toString());
+        gradleArgs.add("-PplatformTarget=" + target);
+        boolean hasRequestedTask = false;
+        for (int i = start; i < args.length; i++) {
+            gradleArgs.add(args[i]);
+            if (!args[i].startsWith("-")) hasRequestedTask = true;
+        }
+        if (!hasRequestedTask) gradleArgs.add(":platform:build");
+        return gradleArgs;
     }
 
     static List<String> wrapperCommand(

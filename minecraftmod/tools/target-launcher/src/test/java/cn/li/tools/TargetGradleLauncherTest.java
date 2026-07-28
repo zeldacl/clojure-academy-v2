@@ -10,6 +10,8 @@ public final class TargetGradleLauncherTest {
         onlyDirectTargetFieldsAreAccepted();
         unknownTargetIsRejected();
         windowsBatchWrapperUsesCommandProcessor();
+        requestedTaskDoesNotAddPlatformBuild();
+        optionsOnlyDefaultToPlatformBuild();
         System.out.println("TargetGradleLauncher regression tests passed.");
     }
 
@@ -98,6 +100,42 @@ public final class TargetGradleLauncherTest {
                         "-PplatformTarget=forge-1.20.1"),
                 command,
                 "Windows wrapper command");
+    }
+
+    private static void requestedTaskDoesNotAddPlatformBuild() {
+        List<String> arguments = TargetGradleLauncher.gradleArguments(
+                Path.of("C:\\repo"),
+                "forge-1.20.1",
+                new String[] {"forge-1.20.1", ":platform:runData", "--dry-run"},
+                1);
+
+        assertEquals(
+                List.of(
+                        "--gradle-user-home",
+                        "C:\\repo\\build\\gradle-home\\forge-1.20.1",
+                        "-PplatformTarget=forge-1.20.1",
+                        ":platform:runData",
+                        "--dry-run"),
+                arguments,
+                "requested task arguments");
+    }
+
+    private static void optionsOnlyDefaultToPlatformBuild() {
+        List<String> arguments = TargetGradleLauncher.gradleArguments(
+                Path.of("C:\\repo"),
+                "forge-1.20.1",
+                new String[] {"forge-1.20.1", "--dry-run"},
+                1);
+
+        assertEquals(
+                List.of(
+                        "--gradle-user-home",
+                        "C:\\repo\\build\\gradle-home\\forge-1.20.1",
+                        "-PplatformTarget=forge-1.20.1",
+                        "--dry-run",
+                        ":platform:build"),
+                arguments,
+                "default build arguments");
     }
 
     private static void assertEquals(Object expected, Object actual, String label) {

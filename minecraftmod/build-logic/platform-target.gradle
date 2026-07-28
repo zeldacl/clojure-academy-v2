@@ -458,6 +458,21 @@ if (target.loader != "none") {
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
         dependsOn copyClojureClassesToJavaOutput
     }
+
+    // Loom's default run classpath is sourceSets.main.runtimeClasspath, whose
+    // output is built by the aggregate `classes` task. That unnecessarily
+    // pulls checkClojure and, through Loom's lifecycle wiring, publication
+    // work into every runClient/runData invocation. Runtime tasks only need
+    // the target output prepared above plus resolved runtime dependencies.
+    def platformRuntimeLaunchClasspath = files(
+        layout.buildDirectory.dir("classes/java/main"),
+        layout.buildDirectory.dir("resources/main"),
+        configurations.runtimeClasspath
+    )
+    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
+        setClasspath(platformRuntimeLaunchClasspath)
+    }
+
     tasks.named("compileTestClojure").configure {
         dependsOn tasks.named("classes")
         classpath.from(platformClojureSourceClasspath)
