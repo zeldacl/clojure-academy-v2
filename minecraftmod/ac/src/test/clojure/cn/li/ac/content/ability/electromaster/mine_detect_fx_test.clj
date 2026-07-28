@@ -30,9 +30,9 @@
 
 (defn- invoke-enqueue!
   [ctx-id channel payload]
-  (do
-    (level-effects/update-effect-state! :mine-detect
-      (fn [store] (arc-beam/enqueue-for-test! :mine-detect ctx-id channel payload)))))
+  ;; enqueue-for-test! owns the level-effect state update. Wrapping it in
+  ;; another update writes its nil return back into the store.
+  (arc-beam/enqueue-for-test! :mine-detect ctx-id channel payload))
 
 (defn- invoke-tick! []
   (level-effects/update-effect-state! :mine-detect
@@ -88,7 +88,12 @@
         (is (= 100 (:life-ticks st)))
         (is (= 5 (:rescan-interval st))))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:em.minedetect" (:sound-id (first @sounds*)))))))
+      (is (= {:type :sound
+              :sound-id "my_mod:em.minedetect"
+              :source :ambient
+              :volume 0.5
+              :pitch 1.0}
+             (first @sounds*))))))
 
 (deftest tick-expires-effect-at-life-cap-test
   (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
@@ -105,16 +110,21 @@
         query-count* (atom 0)
         query-fn (fn [_x _y _z _radius _predicate]
                    (swap! query-count* inc)
-                   [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore"}
-                    {:x 2 :y 60 :z 2 :block-id "minecraft:diamond_ore"}])
+                   [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore" :harvest-level 0}
+                    {:x 2 :y 60 :z 2 :block-id "minecraft:iron_ore" :harvest-level 1}
+                    {:x 3 :y 60 :z 3 :block-id "minecraft:diamond_ore" :harvest-level 2}
+                    {:x 4 :y 60 :z 4 :block-id "example:hard_ore" :harvest-level 3}])
         hand-center {:x 0.0 :y 64.0 :z 0.0}]
     (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
       {:mode :perform :range 24.0 :advanced? true :life-ticks 100 :rescan-interval 5})
     (let [plan0 (arc-beam/effect-build-plan :mine-detect nil hand-center 0 query-fn)
-          colors (set (map :color (:ops plan0)))]
+          colors (set (map #(select-keys (:color %) [:r :g :b]) (:ops plan0)))]
       (is (seq (:ops plan0)))
       (is (= 1 @query-count*))
-      (is (>= (count colors) 2)))
+      (is (= #{{:r 161 :g 181 :b 188}
+               {:r 87 :g 231 :b 248}
+               {:r 97 :g 204 :b 94}}
+             colors)))
 
     (dotimes [_ 4] (invoke-tick!))
     (arc-beam/effect-build-plan :mine-detect nil hand-center 1 query-fn)
@@ -135,6 +145,23 @@
           colors (set (map :color (:ops plan)))]
       (is (seq (:ops plan)))
       (is (= 1 (count colors))))))
+
+(deftest build-plan-scans-from-player-feet-and-accepts-tagged-mod-ores-test
+  (let [query* (atom nil)
+        query-fn (fn [x y z radius predicate]
+                   (reset! query* [x y z radius])
+                   (if (predicate "example:crystal_cluster" {:ore-tagged? true})
+                     [{:x 11 :y 60 :z -3
+                       :block-id "example:crystal_cluster"
+                       :harvest-level 2}]
+                     []))
+        view-pos {:player-x 10.25 :player-y 59.0 :player-z -3.5
+                  :x 10.75 :y 60.5 :z -3.0}]
+    (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
+      {:mode :perform :range 24.0 :advanced? true :life-ticks 100 :rescan-interval 5})
+    (let [plan (arc-beam/effect-build-plan :mine-detect nil view-pos 0 query-fn)]
+      (is (seq (:ops plan)))
+      (is (= [10.25 59.0 -3.5 24.0] @query*)))))
 
 (deftest two-owners-keep-mine-detect-state-independent-test
   (invoke-enqueue! "ctx-a" :mine-detect/fx-perform

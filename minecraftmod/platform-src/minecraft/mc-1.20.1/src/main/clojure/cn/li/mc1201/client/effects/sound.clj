@@ -10,13 +10,28 @@
            [net.minecraft.resources ResourceLocation]
            [cn.li.mc1201.client.audio LoopingSoundRegistry]))
 
+(def ^:private sound-source-map
+  {:ambient SoundSource/AMBIENT
+   :blocks SoundSource/BLOCKS
+   :hostile SoundSource/HOSTILE
+   :master SoundSource/MASTER
+   :music SoundSource/MUSIC
+   :neutral SoundSource/NEUTRAL
+   :players SoundSource/PLAYERS
+   :records SoundSource/RECORDS
+   :weather SoundSource/WEATHER})
+
+(defn- resolve-sound-source
+  [source]
+  (get sound-source-map source SoundSource/PLAYERS))
+
 (defn- play-sound-effect
   [sound-cmd]
   (try
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [player (.player mc)]
         (when-let [level (.level player)]
-          (let [{:keys [sound-id volume pitch x y z]} sound-cmd
+          (let [{:keys [sound-id source volume pitch x y z]} sound-cmd
                 sound-loc (ResourceLocation. ^String sound-id)
                 pos-x (or x (.getX player))
                 pos-y (or y (.getY player))
@@ -25,7 +40,7 @@
             (when sound-event
               (.playLocalSound level pos-x pos-y pos-z
                                sound-event
-                               SoundSource/PLAYERS
+                               (resolve-sound-source source)
                                (float volume)
                                (float pitch)
                                false))))))

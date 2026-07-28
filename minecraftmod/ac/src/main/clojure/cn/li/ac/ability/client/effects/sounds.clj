@@ -7,6 +7,7 @@
 ;; Sound effect command structure
 ;; {:type :sound
 ;;  :sound-id string (e.g., "minecraft:entity.experience_orb.pickup")
+;;  :source keyword (optional, defaults to :players)
 ;;  :volume float
 ;;  :pitch float
 ;;  :x :y :z position (optional, defaults to player position)}

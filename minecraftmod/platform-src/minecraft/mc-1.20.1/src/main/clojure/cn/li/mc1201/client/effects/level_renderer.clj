@@ -4,14 +4,13 @@
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [net.minecraft.client Minecraft]
-           [net.minecraft.client.multiplayer ClientLevel]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.core BlockPos]
-           [net.minecraft.core.registries BuiltInRegistries]
+           [net.minecraft.core.registries BuiltInRegistries Registries]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]
            [net.minecraft.client.renderer.texture OverlayTexture]
            [net.minecraft.resources ResourceLocation]
-           [net.minecraft.tags BlockTags]
+           [net.minecraft.tags BlockTags TagKey]
            [net.minecraft.world.entity.player Abilities]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState]
@@ -20,6 +19,15 @@
 
 (def ^:private full-bright-uv2 15728880)
 (def ^:private default-walk-speed 0.1)
+(def ^:private conventional-ore-tags*
+  ;; Forge 1.20.1 and Fabric's common convention use different root ore tags.
+  ;; Checking both recreates the original OreDictionary "ore" lookup without
+  ;; importing either loader API into the shared Minecraft layer. Delay their
+  ;; construction because touching Registries/BLOCK during AOT compilation
+  ;; triggers Minecraft's bootstrap guard.
+  (delay
+    [(TagKey/create Registries/BLOCK (ResourceLocation. "forge:ores"))
+     (TagKey/create Registries/BLOCK (ResourceLocation. "c:ores"))]))
 
 (defn create-level-renderer-runtime
   []
@@ -148,63 +156,87 @@
      :y (+ base-y -0.22 (* (.-y look) 0.06))
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
 
-(defn- block-id-at
-  [^ClientLevel level bx by bz]
-  (let [pos (BlockPos. (int bx) (int by) (int bz))
-        ^BlockState block-state (.getBlockState level pos)
-        ^Block block (.getBlock block-state)
+(defn- block-id-for-state
+  [^BlockState block-state]
+  (let [^Block block (.getBlock block-state)
         key (.getKey BuiltInRegistries/BLOCK block)]
     (when key (str key))))
 
-(defn- harvest-level-at
-  [^ClientLevel level bx by bz]
-  (let [pos (BlockPos. (int bx) (int by) (int bz))
-        ^BlockState block-state (.getBlockState level pos)]
-    (cond
-      (.is block-state BlockTags/NEEDS_DIAMOND_TOOL) 3
-      (.is block-state BlockTags/NEEDS_IRON_TOOL) 2
-      (.is block-state BlockTags/NEEDS_STONE_TOOL) 1
-      :else 0)))
+(defn- harvest-level-for-state
+  [^BlockState block-state]
+  (cond
+    (.is block-state BlockTags/NEEDS_DIAMOND_TOOL) 3
+    (.is block-state BlockTags/NEEDS_IRON_TOOL) 2
+    (.is block-state BlockTags/NEEDS_STONE_TOOL) 1
+    :else 0))
+
+(defn- conventionally-tagged-ore?
+  [^BlockState block-state]
+  (boolean
+    (some (fn [^TagKey tag-key]
+            (.is block-state tag-key))
+          @conventional-ore-tags*)))
+
+(defn- block-predicate-matches?
+  [block-predicate block-id metadata]
+  (try
+    (boolean (block-predicate block-id metadata))
+    (catch clojure.lang.ArityException _
+      ;; Preserve the original one-argument nearby-block query contract for
+      ;; effects that do not consume platform metadata.
+      (boolean (block-predicate block-id)))))
 
 (defn- make-nearby-block-query-fn
   [^LocalPlayer player]
   (fn [x y z radius block-predicate]
     (try
       (let [level (.level player)
-            base-x (int (Math/floor (double x)))
-            base-y (int (Math/floor (double y)))
-            base-z (int (Math/floor (double z)))
-            r (int (Math/ceil (double radius)))]
-        (if (or (nil? level) (<= r 0))
+            x* (double x)
+            y* (double y)
+            z* (double z)
+            radius* (double radius)
+            radius-sq (* radius* radius*)
+            min-x (int (Math/floor (- x* radius*)))
+            min-y (int (Math/floor (- y* radius*)))
+            min-z (int (Math/floor (- z* radius*)))
+            max-x (int (Math/ceil (+ x* radius*)))
+            max-y (int (Math/ceil (+ y* radius*)))
+            max-z (int (Math/ceil (+ z* radius*)))]
+        (if (or (nil? level) (not (pos? radius*)))
           []
-          (loop [dx (- r)
+          (loop [bx min-x
                  acc []]
-            (if (> dx r)
+            (if (> bx max-x)
               acc
-              (recur (inc dx)
-                     (loop [dy (- r)
+              (recur (inc bx)
+                     (loop [by min-y
                             acc2 acc]
-                       (if (> dy r)
+                       (if (> by max-y)
                          acc2
-                         (recur (inc dy)
-                                (loop [dz (- r)
+                         (recur (inc by)
+                                (loop [bz min-z
                                        acc3 acc2]
-                                  (if (> dz r)
+                                  (if (> bz max-z)
                                     acc3
-                                    (let [dist (Math/sqrt (double (+ (* dx dx) (* dy dy) (* dz dz))))]
-                                      (if (> dist (double radius))
-                                        (recur (inc dz) acc3)
-                                        (let [bx (+ base-x dx)
-                                              by (+ base-y dy)
-                                              bz (+ base-z dz)
-                                              block-id (block-id-at level bx by bz)]
-                                          (if (and block-id (block-predicate block-id))
-                                            (recur (inc dz) (conj acc3 {:x bx
-                                                                        :y by
-                                                                        :z bz
-                                                                        :block-id block-id
-                                                                        :harvest-level (harvest-level-at level bx by bz)}))
-                                            (recur (inc dz) acc3)))))))))))))))
+                                    (let [dx (- (double bx) x*)
+                                          dy (- (double by) y*)
+                                          dz (- (double bz) z*)
+                                          dist-sq (+ (* dx dx) (* dy dy) (* dz dz))]
+                                      (if (> dist-sq radius-sq)
+                                        (recur (inc bz) acc3)
+                                        (let [pos (BlockPos. bx by bz)
+                                              ^BlockState block-state (.getBlockState level pos)
+                                              block-id (block-id-for-state block-state)
+                                              metadata {:ore-tagged? (conventionally-tagged-ore? block-state)}]
+                                          (if (and block-id
+                                                   (block-predicate-matches? block-predicate block-id metadata))
+                                            (recur (inc bz)
+                                                   (conj acc3 {:x bx
+                                                               :y by
+                                                               :z bz
+                                                               :block-id block-id
+                                                               :harvest-level (harvest-level-for-state block-state)}))
+                                            (recur (inc bz) acc3)))))))))))))))
       (catch Exception _
         []))))
 

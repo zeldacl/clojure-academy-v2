@@ -11,12 +11,15 @@
 (deftest perform-sends-minimal-activation-payload-and-awards-exp-test
   (testing "MineDetect now sends a compact activation payload instead of a scanned ore snapshot"
     (let [{:keys [calls* send!]} (fx-mocks/capture-fx-send!)
-          potion* (atom [])]
-      (with-redefs [skill-effects/skill-exp (fn [_ _] 0.6)
+          potion* (atom [])
+          cooldown-exp* (atom nil)]
+      (with-redefs [skill-effects/skill-exp (fn [_ _] 0.608)
                     skill-config/lerp-double (fn [_ field-id exp]
                                                (case field-id
                                                  :targeting.range 24.0
-                                                 :cooldown.ticks 600.0
+                                                 :cooldown.ticks (do
+                                                                   (reset! cooldown-exp* exp)
+                                                                   596.75)
                                                  0.0))
                     skill-config/tunable-double (fn [_ field-id]
                                                   (case field-id
@@ -42,7 +45,10 @@
                     potion-effects/apply-effect! (fn [& args]
                                                            (swap! potion* conj args)
                                                            nil)]
-        (cb/apply-invoke mine-detect/mine-detect-perform! :player-id "mine-detect-player" :ctx-id "ctx-1"))
+        (cb/apply-invoke mine-detect/mine-detect-perform!
+                         :player-id "mine-detect-player"
+                         :ctx-id "ctx-1"
+                         :exp 0.6))
       (is (= ["ctx-1" :mine-detect/fx-perform :perform
               {:life-ticks 100
                :rescan-interval 5
@@ -51,5 +57,22 @@
              (first @calls*)))
       (is (= [["mine-detect-player" :blindness 100 0]
               [:exp "mine-detect-player" :mine-detect 0.008]
-              [:cooldown "mine-detect-player" :mine-detect 600]]
-             @potion*)))))
+              [:cooldown "mine-detect-player" :mine-detect 596]]
+             @potion*))
+      (is (= 0.608 @cooldown-exp*)))))
+
+(deftest failed-resource-consumption-does-not-perform-test
+  (let [{:keys [calls* send!]} (fx-mocks/capture-fx-send!)
+        effects* (atom [])]
+    (with-redefs [fx/send! send!
+                  potion-effects/available? (constantly true)
+                  potion-effects/apply-effect! (fn [& args] (swap! effects* conj [:potion args]))
+                  skill-effects/add-skill-exp! (fn [& args] (swap! effects* conj [:exp args]))
+                  skill-effects/set-main-cooldown! (fn [& args] (swap! effects* conj [:cooldown args]))]
+      (cb/apply-invoke mine-detect/mine-detect-perform!
+                       :player-id "mine-detect-player"
+                       :ctx-id "ctx-cost-fail"
+                       :exp 0.6
+                       :cost-ok? false))
+    (is (empty? @calls*))
+    (is (empty? @effects*))))

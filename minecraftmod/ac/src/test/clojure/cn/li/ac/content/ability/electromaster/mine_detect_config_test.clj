@@ -50,6 +50,8 @@
           (is (true? (:controllable? spec)))
           (is (= 1500.0 ((get-in spec [:cost :down :cp]) {:player-id player-id})))
           (is (= 200.0 ((get-in spec [:cost :down :overload]) {:player-id player-id})))
+          (is (= 899 ((:cooldown-ticks spec)
+                       {:player-id player-id :skill-id :mine-detect :exp 0.001})))
           (is (= 900 (skill-config/lerp-int :mine-detect :cooldown.ticks 0.0)))
           (is (= 0.008 (skill-config/tunable-double :mine-detect :progression.exp-cast))))))))
 

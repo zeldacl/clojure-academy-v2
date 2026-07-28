@@ -1,16 +1,8 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]))
 
@@ -20,6 +12,7 @@
 (def ^:private default-life-ticks 100)
 (def ^:private default-rescan-interval 5)
 (def ^:private max-client-range 28.0)
+(def ^:private max-ore-results 8400)
 
 (def ^:private default-ore-color
   {:r 220 :g 235 :b 255 :a 185})
@@ -32,11 +25,16 @@
    2 {:r 97  :g 204 :b 94  :a 210}    ;; harvest level 2 → tier 3 (original index 3)
    3 {:r 235 :g 109 :b 84  :a 225}})   ;; harvest level 3 → tier 4 (original index 4)
 
-(defn- ore-block-id?
-  [block-id]
-  (and (string? block-id)
-       (or (str/includes? block-id "_ore")
-           (str/includes? block-id "ancient_debris"))))
+(defn- ore-block?
+  ([block-id]
+   (ore-block? block-id nil))
+  ([block-id {:keys [ore-tagged?]}]
+   (and (string? block-id)
+        (or ore-tagged?
+            (str/includes? block-id "_ore")
+            ;; Modern equivalent of a rare mineral block; retained as an
+            ;; enhanced 1.20-era extension.
+            (str/includes? block-id "ancient_debris")))))
 
 (defn- clamped-range
   [range]
@@ -109,14 +107,22 @@
       (>= (- (long ticks) (long last-rescan-tick))
           (long (max 1 (or rescan-interval default-rescan-interval))))))
 
+(defn- player-position
+  "Use the local player's feet position, matching HandlerEntity.posX/Y/Z.
+  The :x/:y/:z fallback keeps the renderer contract compatible with callers
+  that only provide the historic hand-center coordinates."
+  [view-pos]
+  {:x (double (or (:player-x view-pos) (:x view-pos) 0.0))
+   :y (double (or (:player-y view-pos) (:y view-pos) 64.0))
+   :z (double (or (:player-z view-pos) (:z view-pos) 0.0))})
+
 (defn- rescan-ores
-  [{:keys [range]} hand-center-pos query-fn]
-  (if (and (fn? query-fn) (map? hand-center-pos))
-      (let [origin-x (double (or (:x hand-center-pos) 0.0))
-            origin-y (double (or (:y hand-center-pos) 64.0))
-            origin-z (double (or (:z hand-center-pos) 0.0))
+  [{:keys [range]} view-pos query-fn]
+  (if (and (fn? query-fn) (map? view-pos))
+      (let [{origin-x :x origin-y :y origin-z :z} (player-position view-pos)
             r (clamped-range range)]
-        (->> (query-fn origin-x origin-y origin-z r ore-block-id?)
+        (->> (query-fn origin-x origin-y origin-z r ore-block?)
+             (take max-ore-results)
              (map (fn [block]
                     {:x (int (:x block))
                      :y (int (:y block))
@@ -132,7 +138,8 @@
   (client-sounds/queue-current-sound-effect!
     {:type :sound
      :sound-id (modid/namespaced-path "em.minedetect")
-     :volume 0.8
+     :source :ambient
+     :volume 0.5
      :pitch 1.0})
   {:owner-key owner-key
    :ctx-id ctx-id
@@ -205,11 +212,12 @@
                                      [owner-key st]))
                                  (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)))]
     (maybe-refresh-ores! owner-key hand-center-pos query-fn)
-    (let [{:keys [ores advanced? range]} (get (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)) owner-key)
+    (let [player-pos (player-position hand-center-pos)
+          {:keys [ores advanced? range]} (get (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mine-detect)) owner-key)
           ops (into []
                     (mapcat (fn [{:keys [x y z] :as ore}]
                               (let [base-color (ore-color ore advanced?)
-                                    color (faded-color base-color hand-center-pos
+                                    color (faded-color base-color player-pos
                                                        x y z range)]
                                 (block-highlight-ops x y z color))))
                     ores)]
