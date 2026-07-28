@@ -33,6 +33,17 @@ if (target.loader == "none") {
 // Minecraft versions cannot reuse stale remapped/AOT classes.
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("targets/${target.id}/platform"))
 
+// Loom derives Forge's MOD_CLASSES from the main source-set outputs. Bind
+// those outputs explicitly after selecting the target-local build directory;
+// otherwise Gradle can retain the pre-target `platform/build` and IDE
+// `platform/out/production` directories in the launch classpath.
+sourceSets {
+    main {
+        java.destinationDirectory = layout.buildDirectory.dir("classes/java/main")
+        resources.destinationDirectory = layout.buildDirectory.dir("resources/main")
+    }
+}
+
 def componentDir = { String component, String child ->
     rootProject.file("${component}/${child}")
 }
