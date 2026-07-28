@@ -33,9 +33,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     private static final String IMPACT_DETONATION = "impact-detonation";
     private static final String BEHAVIOR_REGISTRY_NS = "cn.li.mcmod.spi.entity-behavior-registry";
+    private static final String ENTITY_DAMAGE_NS = "cn.li.mcmod.platform.entity-damage";
 
     static {
         ClojureInterop.requireNamespace(BEHAVIOR_REGISTRY_NS);
+        ClojureInterop.requireNamespace(ENTITY_DAMAGE_NS);
     }
     private int behaviorDespawnCountdown = -1;
 
@@ -168,6 +170,25 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         return normalizeBlockId(this.entityData.get(DATA_BLOCK_ID));
     }
 
+    /**
+     * Override the per-instance rendered/placed block after creation.
+     *
+     * <p>MagManip captures arbitrary configured metal blocks, while the
+     * registry spec can only provide a fallback block. Initialize the other
+     * spec-backed fields first so setting the block id cannot accidentally
+     * leave damage, gravity, or placement at their constructor defaults.</p>
+     */
+    public void setSyncedBlockId(String blockId) {
+        ensureSyncedFields();
+        this.entityData.set(DATA_BLOCK_ID, normalizeBlockId(blockId));
+    }
+
+    /** Enable or disable block placement for this individual in-flight body. */
+    public void setPlaceWhenCollide(boolean placeWhenCollide) {
+        ensureSyncedFields();
+        this.entityData.set(DATA_PLACE_WHEN_COLLIDE, placeWhenCollide);
+    }
+
     private float getSyncedGravity() {
         ensureSyncedFields();
         return Math.max(0.0F, this.entityData.get(DATA_GRAVITY));
@@ -185,6 +206,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     public ScriptedBlockBodySpec getBlockBodySpec() {
         return ScriptedEntitySpecAccess.getScriptedBlockBodySpec(this.getType());
+    }
+
+    private boolean isMagManipBlockBody() {
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        return spec != null && "magmanip-block".equals(spec.getHookId());
     }
 
     @Override
@@ -218,8 +244,38 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
         float damage = getSyncedDamage();
         if (damage > 0.0F) {
-            DamageSource source = this.damageSources().thrown(this, owner == null ? this : owner);
-            target.hurt(source, damage);
+            Object handled = dispatchBehaviorDamage(owner, target, damage);
+            if (handled == null) {
+                DamageSource source = this.damageSources().thrown(this, owner == null ? this : owner);
+                target.hurt(source, damage);
+            }
+        }
+    }
+
+    /**
+     * Give content-owned block-body behaviors a chance to route collision
+     * damage through their ability pipeline. A null return means no handler
+     * exists and preserves the generic thrown-damage fallback.
+     */
+    private Object dispatchBehaviorDamage(Entity owner, Entity target, float damage) {
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        if (spec == null || spec.getBehaviorId().isBlank()) {
+            return null;
+        }
+        try {
+            String worldId = this.level().dimension().location().toString();
+            String ownerId = owner == null ? null : owner.getStringUUID();
+            return ClojureInterop.invoke(
+                    ENTITY_DAMAGE_NS,
+                    "handle-scripted-block-body-hit!",
+                    spec.getBehaviorId(),
+                    worldId,
+                    ownerId,
+                    target.getStringUUID(),
+                    (double) damage
+            );
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
@@ -237,10 +293,11 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     /**
      * Matches original EntityBlock's CollideEvent handler: try the hit
-     * block position, then the face-adjacent position, then the 26
-     * surrounding neighbors, placing the synced block wherever the first
-     * replaceable position is found. Discards (block is lost) if none of
-     * those are replaceable — matches original's "EntityBlock Lost" fallback.
+     * block position, then the face-adjacent position, then surrounding
+     * neighbors (the original's eight diagonal candidates for MagManip),
+     * placing the synced block wherever the first replaceable position is
+     * found. Discards (block is lost) if none are replaceable, matching the
+     * original's "EntityBlock Lost" fallback.
      */
     private void placeSyncedBlockOnHit(BlockHitResult result) {
         Level level = this.level();
@@ -261,10 +318,16 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             this.discard();
             return;
         }
+        boolean magManip = isMagManipBlockBody();
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) {
+                    // Original EntityBlock checks only the eight diagonal
+                    // neighbors. Preserve the broader modern fallback for
+                    // unrelated block bodies, but match it for MagManip.
+                    if (magManip
+                            ? (dx == 0 || dy == 0 || dz == 0)
+                            : (dx == 0 && dy == 0 && dz == 0)) {
                         continue;
                     }
                     BlockPos candidate = origin.offset(dx, dy, dz);
@@ -274,6 +337,19 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
                         return;
                     }
                 }
+            }
+        }
+        if (magManip) {
+            // Original fallback walks outward along the collided face for up
+            // to ten checks when the local candidates are all occupied.
+            BlockPos candidate = origin;
+            for (int remaining = 10; remaining > 0; remaining--) {
+                if (canReplace(level, candidate)) {
+                    level.setBlock(candidate, state, 3);
+                    this.discard();
+                    return;
+                }
+                candidate = candidate.relative(result.getDirection());
             }
         }
         this.discard();
@@ -338,8 +414,9 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (tag.contains(NBT_PLACE_WHEN_COLLIDE)) {
             this.entityData.set(DATA_PLACE_WHEN_COLLIDE, tag.getBoolean(NBT_PLACE_WHEN_COLLIDE));
         }
-        if (hasImpactDetonationBehavior()) {
-            // Impact-detonation entities intentionally do not survive a save/reload.
+        if (hasImpactDetonationBehavior() || isMagManipBlockBody()) {
+            // Both original entity types intentionally do not survive a
+            // save/reload.
             this.discard();
         }
     }

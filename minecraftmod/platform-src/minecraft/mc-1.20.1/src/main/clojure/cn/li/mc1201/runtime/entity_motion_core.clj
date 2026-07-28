@@ -2,7 +2,8 @@
   "Shared Minecraft-side entity motion helpers (no loader API imports)."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.runtime WorldEntityShared]
+  (:import [cn.li.mc1201.entity ScriptedBlockBodyEntity]
+           [cn.li.mc1201.runtime WorldEntityShared]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
@@ -25,6 +26,27 @@
                          (+ (.z current) (double z)))
       (set! (.-hurtMarked entity) true)
       true)))
+
+(defn set-position-for-entity!
+  [^Entity entity x y z]
+  (when entity
+    (.setPos entity (double x) (double y) (double z))
+    (set! (.-hurtMarked entity) true)
+    true))
+
+(defn set-block-id-for-entity!
+  [^Entity entity block-id]
+  (when (instance? ScriptedBlockBodyEntity entity)
+    (.setSyncedBlockId ^ScriptedBlockBodyEntity entity (str block-id))
+    true))
+
+(defn set-place-when-collide-for-entity!
+  [^Entity entity place-when-collide?]
+  (when (instance? ScriptedBlockBodyEntity entity)
+    (.setPlaceWhenCollide ^ScriptedBlockBodyEntity
+                          entity
+                          (boolean place-when-collide?))
+    true))
 
 (defn discard-entity!
   [^Entity entity]
@@ -85,6 +107,15 @@
                     (boolean (set-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
    :add-velocity! (fn [world-id entity-uuid x y z]
                     (boolean (add-velocity-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
+   :set-position! (fn [world-id entity-uuid x y z]
+                    (boolean (set-position-for-entity! (resolve-entity (get-server) world-id entity-uuid) x y z)))
+   :set-block-id! (fn [world-id entity-uuid block-id]
+                    (boolean (set-block-id-for-entity! (resolve-entity (get-server) world-id entity-uuid) block-id)))
+   :set-place-when-collide! (fn [world-id entity-uuid place-when-collide?]
+                              (boolean
+                                (set-place-when-collide-for-entity!
+                                  (resolve-entity (get-server) world-id entity-uuid)
+                                  place-when-collide?)))
    :discard-entity! (fn [world-id entity-uuid]
                       (boolean (discard-entity! (resolve-entity (get-server) world-id entity-uuid))))
    :get-velocity (fn [world-id entity-uuid]

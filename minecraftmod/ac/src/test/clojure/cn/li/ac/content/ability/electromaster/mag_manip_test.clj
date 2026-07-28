@@ -21,6 +21,53 @@
 (defn- mk-context-store [ctx-id seed]
   (atom {ctx-id seed}))
 
+(deftest start-holding-configures-captured-block-body-test
+  (let [ctx-id "ctx-configure"
+        contexts* (mk-context-store ctx-id {})
+        block-calls* (atom [])
+        position-calls* (atom [])]
+    (with-redefs [mag-manip/hold-focus (fn [_]
+                                        {:x 4.0 :y 5.0 :z 6.0})
+                  entity/player-spawn-tracked-entity-by-id!
+                  (fn [_player _entity-id _speed] "entity-uuid")
+                  motion/entity-motion-available? (constantly true)
+                  motion/set-block-body-block-id!
+                  (fn [& args]
+                    (swap! block-calls* conj args)
+                    true)
+                  motion/set-entity-position!
+                  (fn [& args]
+                    (swap! position-calls* conj args)
+                    true)
+                  ctx/get-context (fn
+                                    ([id] (get @contexts* id))
+                                    ([_owner id] (get @contexts* id)))
+                  ctx-skill/update-skill-state-root!
+                  (fn [id f & args]
+                    (swap! contexts* update id
+                           (fn [context]
+                             (assoc context :skill-state
+                                    (if (and (= f identity) (= 1 (count args)))
+                                      (first args)
+                                      (apply f (or (:skill-state context) {}) args)))))
+                    nil)
+                  fx/send! (fn [& _] nil)]
+      (is (true?
+            (mag-manip/start-holding!
+              ctx-id "p1" {:player true}
+              {:block-id "minecraft:iron_block"
+               :from-world? true
+               :world-id "w"
+               :source-x 1
+               :source-y 2
+               :source-z 3}))))
+    (is (= [["w" "entity-uuid" "minecraft:iron_block"]]
+           @block-calls*))
+    (is (= [["w" "entity-uuid" 1.5 2.5 3.5]]
+           @position-calls*))
+    (is (= "entity-uuid"
+           (get-in @contexts* [ctx-id :skill-state :entity-uuid])))))
+
 (deftest down-world-capture-requires-successful-break-test
   (let [ctx-id "ctx-world"
         contexts* (mk-context-store ctx-id {})
@@ -64,6 +111,7 @@
                                                                 :from-hand? true
                                                                 :from-world? false}}})
         give-calls* (atom [])
+        place-calls* (atom [])
         velocity-calls* (atom [])
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         up! (get (skill-actions) :up!)]
@@ -75,6 +123,12 @@
                                                    (swap! give-calls* conj [player stack])
                                                    true)
                   motion/entity-motion-available? (fn [] true)
+                  motion/entity-position (fn [_world-id _uuid]
+                                           {:x 10.0 :y 0.0 :z 10.0})
+                  motion/set-block-body-place-when-collide!
+                  (fn [& args]
+                    (swap! place-calls* conj args)
+                    true)
                   motion/set-entity-velocity! (fn [& args]
                                                  (swap! velocity-calls* conj args)
                                                  true)
@@ -92,6 +146,7 @@
                   fx/send! send!]
       (cb/apply-invoke up! :player-id "p1" :ctx-id ctx-id :player-ref {:id "p"} :cost-ok? true))
     (is (= 0 (count @give-calls*)))
+    (is (= [["w" "uuid-1" true]] @place-calls*))
     (is (= 0 (count @velocity-calls*)))
     (is (= :too-far (get-in @contexts* [ctx-id :skill-state :mode])))
     (is (= [[ctx-id :mag-manip/fx-end :end {:reason :too-far}]]
@@ -102,6 +157,8 @@
         contexts* (mk-context-store ctx-id
                                     {:skill-state {:mode :holding
                                                    :focus {:x 1.0 :y 2.0 :z 3.0}
+                                                   :entity-uuid "uuid-success"
+                                                   :world-id "w"
                                                    :held-block {:block-id "minecraft:iron_block"
                                                                 :from-world? true
                                                                 :world-id "w"
@@ -113,6 +170,11 @@
                   mag-manip/max-hold-distance-sq (fn [] 100.0)
                   skill-effects/player-path (fn [& _] {:x 1.0 :y 2.0 :z 3.0})
                   mag-manip/look-dir (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  motion/entity-motion-available? (fn [] true)
+                  motion/entity-position (fn [_world-id _uuid]
+                                           {:x 1.0 :y 2.0 :z 3.0})
+                  motion/set-block-body-place-when-collide! (fn [& _] true)
+                  motion/set-entity-velocity! (fn [& _] true)
                   skill-effects/set-main-cooldown! (fn [pid sid ticks]
                                                      (swap! cooldown* conj [pid sid ticks])
                                                      nil)
@@ -158,6 +220,7 @@
                   mag-manip/look-dir (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   motion/entity-motion-available? (fn [] true)
                   motion/entity-position (fn [_world-id _uuid] {:x 1.0 :y 2.0 :z 3.0})
+                  motion/set-block-body-place-when-collide! (fn [& _] true)
                   motion/set-entity-velocity! (fn [world-id entity-uuid x y z]
                                                  (swap! velocity-calls* conj
                                                         {:world-id world-id :entity-uuid entity-uuid

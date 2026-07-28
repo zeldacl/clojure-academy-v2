@@ -12,7 +12,9 @@
   block placement both come from the entity's own real collision (see
   ScriptedBlockBodyEntity.onHitEntity/onHit), not from instant hit-scan math."
   (:require
-            [cn.li.ac.config.modid :as modid] [clojure.string :as str]
+            [cn.li.ac.config.modid :as modid]
+            [clojure.string :as str]
+            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -22,6 +24,7 @@
             [cn.li.ac.ability.effects.motion :as motion]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
                         [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -32,30 +35,35 @@
 (def ^:private mag-manip-skill-id :mag-manip)
 (def ^:private tracked-block-body-entity-id (modid/namespaced-path "entity_magmanip_block_body"))
 
-(defn- strong-metal-blocks []
-  (set (map str/lower-case
-            (skill-config/tunable-string-list mag-manip-skill-id
-                                              :targeting.strong-metal-blocks))))
-
-(defn- weak-metal-hints []
-  (map str/lower-case
-       (skill-config/tunable-string-list mag-manip-skill-id
-                                         :targeting.weak-metal-keywords)))
-
 (defn- max-hold-distance-sq []
   (let [distance (cfg-double :targeting.max-hold-distance)]
     (* distance distance)))
 
 ;; --- Domain helpers ---
 
-;; Matches original CatElectromaster#isMetalBlock: two fixed lists, no
-;; progression gate on either.
+(defn- normalize-block-id [block-id]
+  (let [id (some-> block-id str str/lower-case)]
+    (cond
+      (nil? id) nil
+      (str/includes? id ":") id
+      (re-matches #"(?:block|item)\.[^.]+\..+" id)
+      (let [[_ namespace path]
+            (re-matches #"(?:block|item)\.([^.]+)\.(.+)" id)]
+        (str namespace ":" path))
+      :else id)))
+
+(defn- accepted-metal-blocks []
+  (->> (concat (ability-config/get-normal-metal-blocks)
+               (ability-config/get-weak-metal-blocks))
+       (keep normalize-block-id)
+       distinct
+       vec))
+
+;; Original delegates to CatElectromaster#isMetalBlock, whose normal and weak
+;; sets are shared by every magnetic skill and both apply without an exp gate.
 (defn- metal-block-id? [block-id]
-  (let [id (some-> block-id str/lower-case)]
-    (boolean
-      (and id
-           (or (contains? (strong-metal-blocks) id)
-               (some #(str/includes? id %) (weak-metal-hints)))))))
+  (boolean
+    (some-> block-id normalize-block-id ability-config/is-metal-block?)))
 
 (defn- look-dir [player-id]
   (when-let [look (when (raycast/available?)
@@ -88,16 +96,47 @@
 
 ;; --- Block-manipulation helpers ---
 
+(defn- restore-captured-block!
+  [{:keys [from-world? source-x source-y source-z block-id world-id]}]
+  (when (and from-world?
+             world-id
+             block-id
+             (number? source-x)
+             (number? source-y)
+             (number? source-z))
+    (let [x (int source-x)
+          y (int source-y)
+          z (int source-z)
+          current (block-manip/get-block world-id x y z)]
+      (when (or (nil? current) (= "minecraft:air" current))
+        (block-manip/set-block! world-id x y z block-id)))))
+
+(defn- restore-consumed-item!
+  [player {:keys [from-hand? creative? block-id]}]
+  (when (and from-hand?
+             (not creative?)
+             player
+             (string? block-id))
+    (when-let [stack (pitem/stack-by-id block-id 1)]
+      (entity/player-give-item-stack! player stack))))
+
+(defn- roll-back-failed-spawn!
+  [player held-block]
+  (restore-captured-block! held-block)
+  (restore-consumed-item! player held-block)
+  nil)
+
 (defn- pick-up-target-block [player-id]
   (when (and (raycast/available?) (block-manip/available?))
     (when-let [dir (look-dir player-id)]
       (let [start (geom/eye-pos player-id)
             world-id (geom/world-id-of player-id)
-            hit (raycast/raycast-blocks
-                                        world-id
-                                        (:x start) (:y start) (:z start)
-                                        (:x dir) (:y dir) (:z dir)
-                                        (cfg-double :targeting.grab-range))]
+            hit (raycast/raycast-blocks-matching
+                  world-id
+                  (:x start) (:y start) (:z start)
+                  (:x dir) (:y dir) (:z dir)
+                  (cfg-double :targeting.grab-range)
+                  (accepted-metal-blocks))]
         (when hit
           (let [bx (int (or (:x hit) 0))
                 by (int (or (:y hit) 0))
@@ -116,13 +155,28 @@
 
 ;; --- Cost helpers ---
 
+(defn- held-entity-position
+  [{:keys [world-id entity-uuid]}]
+  (when (and world-id entity-uuid (motion/entity-motion-available?))
+    (motion/entity-position world-id entity-uuid)))
+
+(defn- release-held-entity!
+  "Match setPlaceFromServer(true): once homing ends, the body falls and places
+  its captured block on the next block collision."
+  [{:keys [world-id entity-uuid]}]
+  (when (and world-id entity-uuid (motion/entity-motion-available?))
+    (motion/set-block-body-place-when-collide!
+      world-id entity-uuid true)))
+
 (defn- holding-nearby? [player-id ctx-id]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
-        (let [focus (or (:focus ss) (hold-focus player-id))
-                pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})]
-                  (< (geom/vdist-sq pos focus) (max-hold-distance-sq)))))))
+        (when-let [entity-pos (held-entity-position ss)]
+          (let [player-pos (skill-effects/player-path
+                             player-id :position {:x 0.0 :y 0.0 :z 0.0})]
+            (< (geom/vdist-sq player-pos entity-pos)
+               (max-hold-distance-sq))))))))
 
 (defn- active-ctx-id [player-id skill-id]
   (some (fn [[ctx-id ctx-data]]
@@ -145,8 +199,11 @@
       0.0)
     0.0))
 
-(defn- cost-creative? [_player-id _skill-id _exp]
-  false)
+(defn- cost-creative? [player-id _skill-id _exp]
+  (if-let [ctx-id (active-ctx-id player-id mag-manip-skill-id)]
+    (boolean
+      (get-in (ctx-skill/get-context ctx-id) [:skill-state :creative?]))
+    false))
 
 ;; --- Action hooks ---
 
@@ -159,18 +216,43 @@
   (let [focus (hold-focus player-id)
         entity-uuid (when player
                       (entity/player-spawn-tracked-entity-by-id!
-                        player tracked-block-body-entity-id 0.0))]
-    (ctx-skill/replace-skill-state! ctx-id
-                           {:fired false
-                            :mode :holding
-                            :hold-ticks 0
-                            :held-block held-block
-                            :focus focus
-                            :entity-uuid entity-uuid
-                            :world-id (:world-id held-block)})
-    (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
-              {:focus focus
-               :block-id (:block-id held-block)})))
+                        player tracked-block-body-entity-id 0.0))
+        world-id (:world-id held-block)
+        configured? (and entity-uuid
+                         world-id
+                         (motion/entity-motion-available?)
+                         (motion/set-block-body-block-id!
+                           world-id entity-uuid (:block-id held-block)))]
+    (if configured?
+      (do
+        (when (:from-world? held-block)
+          (motion/set-entity-position!
+            world-id entity-uuid
+            (+ 0.5 (double (:source-x held-block)))
+            (+ 0.5 (double (:source-y held-block)))
+            (+ 0.5 (double (:source-z held-block)))))
+        (ctx-skill/replace-skill-state!
+          ctx-id
+          {:fired false
+           :mode :holding
+           :hold-ticks 0
+           :held-block held-block
+           :focus focus
+           :entity-uuid entity-uuid
+           :world-id world-id
+           :creative? (boolean (:creative? held-block))})
+        (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
+                  {:focus focus
+                   :block-id (:block-id held-block)})
+        true)
+      (do
+        (when (and entity-uuid world-id (motion/entity-motion-available?))
+          (motion/discard-entity! world-id entity-uuid))
+        (roll-back-failed-spawn! player held-block)
+        (ctx-skill/replace-skill-state!
+          ctx-id {:fired false :mode :spawn-failed})
+        (ctx/terminate-context! ctx-id nil)
+        false))))
 
 ;; Original s_makeAlive: check hand item first, fallback to raycast world block,
 ;; if neither found store :no-target mode.
@@ -184,32 +266,40 @@
             consumed? (or creative?
                           (and player (entity/player-consume-main-hand-item! player 1)))]
         (if consumed?
-          (start-holding! ctx-id player-id player {:block-id hand-item-id
-                                            :from-world? false
-                                            :from-hand? true
-                                            :world-id world-id})
-          (ctx-skill/replace-skill-state! ctx-id
-                                 {:fired false
-                                  :mode :capture-failed})))
+          (start-holding! ctx-id player-id player
+                          {:block-id (normalize-block-id hand-item-id)
+                           :from-world? false
+                           :from-hand? true
+                           :creative? creative?
+                           :world-id world-id})
+          (do
+            (ctx-skill/replace-skill-state!
+              ctx-id {:fired false :mode :capture-failed})
+            (ctx/terminate-context! ctx-id nil))))
       (if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id)]
         (let [can-break? (block-manip/can-break-block? player-id world-id x y z)
               broken? (and can-break?
                            (block-manip/break-block! player-id world-id x y z false))]
           (if broken?
-            (start-holding! ctx-id player-id player {:block-id block-id
-                                              :from-world? true
-                                              :world-id world-id
-                                              :source-x x
-                                              :source-y y
-                                              :source-z z})
+            (start-holding! ctx-id player-id player
+                            {:block-id (normalize-block-id block-id)
+                             :from-world? true
+                             :creative? (boolean
+                                          (and player
+                                               (entity/player-creative? player)))
+                             :world-id world-id
+                             :source-x x
+                             :source-y y
+                             :source-z z})
             (do
               (log/debug "MagManip capture failed" {:world-id world-id :x x :y y :z z :block-id block-id})
-              (ctx-skill/replace-skill-state! ctx-id
-                                     {:fired false
-                                      :mode :capture-failed}))))
-        (ctx-skill/replace-skill-state! ctx-id
-                               {:fired false
-                                :mode :no-target})))))
+              (ctx-skill/replace-skill-state!
+                ctx-id {:fired false :mode :capture-failed})
+              (ctx/terminate-context! ctx-id nil))))
+        (do
+          (ctx-skill/replace-skill-state!
+            ctx-id {:fired false :mode :no-target})
+          (ctx/terminate-context! ctx-id nil))))))
 
 ;; Original s_tick: update hold position (both ends ran updateMoveTo() every
 ;; tick) — here the server pushes fresh homing velocity to the real entity
@@ -239,6 +329,35 @@
 ;; On failure (too far / no resource) the entity is simply no longer homed —
 ;; it falls under its own gravity and self-places wherever it lands, matching
 ;; original's ActNothing fallback (no rollback to the player).
+(defn- throw-target
+  [player-id world-id dir]
+  (let [range (cfg-double :targeting.throw-range)
+        eye (geom/eye-pos player-id)
+        body (skill-effects/player-path
+               player-id :position {:x 0.0 :y 0.0 :z 0.0})
+        hit (when (raycast/available?)
+              (raycast/raycast-combined
+                world-id
+                (:x eye) (:y eye) (:z eye)
+                (:x dir) (:y dir) (:z dir)
+                range))
+        end (case (:hit-type hit)
+              :entity
+              {:x (double (or (:x hit) (:hit-x hit) 0.0))
+               :y (+ (double (or (:y hit) (:hit-y hit) 0.0))
+                     (* 0.6 (double (or (:eye-height hit) 0.0))))
+               :z (double (or (:z hit) (:hit-z hit) 0.0))}
+
+              :block
+              {:x (double (or (:hit-x hit) (:x hit) 0.0))
+               :y (double (or (:hit-y hit) (:y hit) 0.0))
+               :z (double (or (:hit-z hit) (:z hit) 0.0))}
+
+              ;; LambdaLib2 getLookingPos falls back from the player's body
+              ;; position, even though its hit trace begins at the eyes.
+              (geom/v+ body (geom/v* dir range)))]
+    {:hit hit :end end}))
+
 (defn- on-up
   [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
@@ -249,10 +368,23 @@
       (if-not (and (= :holding (:mode ss)) held-block)
         (ctx-skill/replace-skill-state! ctx-id
                                (assoc ss :fired false :mode :idle))
-        (let [focus (or (:focus ss) (hold-focus player-id))
-              pos (skill-effects/player-path player-id :position {:x 0.0 :y 0.0 :z 0.0})
-              too-far? (>= (geom/vdist-sq pos focus) (max-hold-distance-sq))]
+        (let [entity-pos (held-entity-position ss)
+              player-pos (skill-effects/player-path
+                           player-id :position {:x 0.0 :y 0.0 :z 0.0})
+              too-far? (and entity-pos
+                            (>= (geom/vdist-sq player-pos entity-pos)
+                                (max-hold-distance-sq)))]
+          ;; Original enables placement before checking distance/resources, so
+          ;; every non-throw outcome still lets the released body fall/settle.
+          (release-held-entity! ss)
           (cond
+            (nil? entity-pos)
+            (do
+              (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil
+                        {:reason :entity-missing})
+              (ctx-skill/replace-skill-state!
+                ctx-id (assoc ss :fired false :mode :entity-missing)))
+
             too-far?
             (do
               (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :too-far})
@@ -267,26 +399,16 @@
 
             :else
             (let [dir (or (look-dir player-id) {:x 0.0 :y 0.0 :z 1.0})
-                  hit (when (raycast/available?)
-                        (raycast/raycast-combined
-                                                  world-id
-                                                  (:x focus) (:y focus) (:z focus)
-                                                  (:x dir) (:y dir) (:z dir)
-                                                  (cfg-double :targeting.throw-range)))
-                  end (if hit
-                        {:x (double (:x hit)) :y (double (:y hit)) :z (double (:z hit))}
-                        (geom/v+ focus (geom/v* dir (cfg-double :targeting.throw-range))))
+                  {:keys [hit end]} (throw-target player-id world-id dir)
                   speed (cfg-lerp :movement.throw-speed exp)
-                  entity-pos (when (and entity-uuid world-id) (motion/entity-position world-id entity-uuid))
-                  throw-origin (or entity-pos focus)
-                  delta (geom/v- end throw-origin)
+                  delta (geom/v- end entity-pos)
                   throw-dir (if (pos? (geom/vlen delta)) (geom/vnorm delta) dir)]
               (when (and entity-uuid world-id (motion/entity-motion-available?))
                 (let [vel (geom/v* throw-dir speed)]
                   (motion/set-entity-velocity! world-id entity-uuid (:x vel) (:y vel) (:z vel))))
 
               (fx/send! ctx-id {:topic :mag-manip/fx-throw :mode :throw} nil
-                        {:start throw-origin
+                        {:start entity-pos
                          :end end
                          :hit-type (:hit-type hit)
                          :block-id (:block-id held-block)})
@@ -307,8 +429,11 @@
 (defn- on-abort
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-    (when (get-in ctx-data [:skill-state :held-block])
-      (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil {:reason :abort}))
+    (when-let [skill-state (:skill-state ctx-data)]
+      (when (:held-block skill-state)
+        (release-held-entity! skill-state)
+        (fx/send! ctx-id {:topic :mag-manip/fx-end :mode :end} nil
+                  {:reason :abort})))
     (ctx-skill/clear-skill-state! ctx-id)))
 
 ;; --- Skill definition ---

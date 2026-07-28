@@ -21,6 +21,16 @@
                        (catch Exception e
                          (log/warn "Failed to raycast blocks:" (ex-message e))
                          nil)))
+   :raycast-blocks-matching (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance accepted-block-ids]
+                              (try
+                                (rn/normalize-bridge-map
+                                  (RaycastShared/raycastBlocksMatching
+                                    (resolve-level (get-server) world-id)
+                                    start-x start-y start-z dir-x dir-y dir-z max-distance
+                                    accepted-block-ids))
+                                (catch Exception e
+                                  (log/warn "Failed to raycast matching blocks:" (ex-message e))
+                                  nil)))
    :raycast-entities (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
                        (try
                          (rn/normalize-bridge-map

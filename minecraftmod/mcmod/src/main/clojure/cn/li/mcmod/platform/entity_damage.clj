@@ -30,6 +30,30 @@
     (boolean (pred))
     true))
 
+(defn install-scripted-block-body-hit-handler!
+  "Install a content-owned collision damage handler for one scripted
+  block-body behavior. The handler receives
+  [world-id attacker-uuid target-uuid raw-damage]."
+  [behavior-id handler]
+  (when-let [fw-atom (fw/fw-atom)]
+    (swap! fw-atom assoc-in
+           [:platform :scripted-block-body-hit-handlers (name behavior-id)]
+           handler))
+  nil)
+
+(defn handle-scripted-block-body-hit!
+  "Dispatch a scripted block-body collision. Returns nil when no content
+  handler is installed, allowing the entity to use its generic fallback.
+  Any non-nil result means the collision was handled, including false when a
+  permission gate deliberately rejected the hit."
+  [behavior-id world-id attacker-uuid target-uuid raw-damage]
+  (when-let [handler (get-in @(fw/fw-atom)
+                             [:platform
+                              :scripted-block-body-hit-handlers
+                              (name behavior-id)])]
+    (boolean
+      (handler world-id attacker-uuid target-uuid (double raw-damage)))))
+
 (defn apply-direct-damage!
   "opts (optional) supports :reset-invulnerable-time? — when true, clears the
   target's post-hit invulnerability window before applying damage, for

@@ -1,10 +1,15 @@
 package cn.li.mc1201.runtime;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -55,6 +60,70 @@ public final class RaycastShared {
         hit.put("face", result.getDirection().getSerializedName());
         hit.put("distance", start.distanceTo(result.getLocation()));
         return hit;
+    }
+
+    /**
+     * Trace only blocks whose registry ids are accepted, allowing the ray to
+     * pass through every other block. This matches LambdaLib2's filtered block
+     * selector used by AcademyCraft's MagManip acquisition trace.
+     */
+    public static Map<String, Object> raycastBlocksMatching(
+            ServerLevel level,
+            double startX,
+            double startY,
+            double startZ,
+            double dirX,
+            double dirY,
+            double dirZ,
+            double maxDistance,
+            Collection<?> acceptedBlockIds) {
+        if (level == null || acceptedBlockIds == null || acceptedBlockIds.isEmpty() || maxDistance < 0.0D) {
+            return null;
+        }
+        Set<String> accepted = new HashSet<>();
+        for (Object id : acceptedBlockIds) {
+            if (id != null) {
+                accepted.add(String.valueOf(id).toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        Vec3 rawDirection = new Vec3(dirX, dirY, dirZ);
+        if (rawDirection.lengthSqr() < 1.0E-12D) {
+            return null;
+        }
+        Vec3 start = new Vec3(startX, startY, startZ);
+        Vec3 end = start.add(rawDirection.normalize().scale(maxDistance));
+        int steps = Math.max(1, (int) Math.ceil(maxDistance * 32.0D));
+        BlockPos previous = null;
+        for (int index = 0; index <= steps; index++) {
+            double fraction = (double) index / (double) steps;
+            Vec3 sample = start.lerp(end, fraction);
+            BlockPos pos = BlockPos.containing(sample);
+            if (pos.equals(previous)) {
+                continue;
+            }
+            previous = pos;
+            BlockState state = level.getBlockState(pos);
+            String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+            if (!accepted.contains(blockId.toLowerCase(java.util.Locale.ROOT))) {
+                continue;
+            }
+            BlockHitResult result = state.getShape(level, pos).clip(start, end, pos);
+            if (result == null || result.getType() != HitResult.Type.BLOCK) {
+                continue;
+            }
+            Map<String, Object> hit = new LinkedHashMap<>();
+            hit.put("x", pos.getX());
+            hit.put("y", pos.getY());
+            hit.put("z", pos.getZ());
+            hit.put("hit-x", result.getLocation().x);
+            hit.put("hit-y", result.getLocation().y);
+            hit.put("hit-z", result.getLocation().z);
+            hit.put("block-id", blockId);
+            hit.put("face", result.getDirection().getSerializedName());
+            hit.put("distance", start.distanceTo(result.getLocation()));
+            return hit;
+        }
+        return null;
     }
 
     public static Map<String, Object> raycastEntities(

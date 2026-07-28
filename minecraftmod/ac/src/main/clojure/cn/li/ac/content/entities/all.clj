@@ -529,14 +529,17 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:block-body {:default-block-id "minecraft:stone"
-                                   :gravity 0.02
+                                   :gravity 0.04
                                    ;; Matches original's new MagManipEntityBlock(player, 10) — hardcoded,
                                    ;; not exp-scaled (the original's exp-lerp'd damage field was declared
                                    ;; but never actually passed to the entity).
                                    :damage 10.0
-                                   :place-when-collide? true
+                                   ;; Original keeps placement disabled while
+                                   ;; held and enables it only on release/abort.
+                                   :place-when-collide? false
                                    :renderer-id "block-body"
-                                   :hook :magmanip-block}}}))
+                                   :hook :magmanip-block
+                                   :behavior :mag-manip-damage}}}))
 
     (edsl/register-entity!
       (edsl/create-entity-spec

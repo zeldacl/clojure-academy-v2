@@ -66,6 +66,28 @@
      (platform/call-adapter fw-atom :entity-motion :add-velocity!
                             world-id entity-uuid x y z))))
 
+(defn set-entity-position!
+  [world-id entity-uuid x y z]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :set-position!
+                            world-id entity-uuid x y z))))
+
+(defn set-block-body-block-id!
+  [world-id entity-uuid block-id]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :set-block-id!
+                            world-id entity-uuid block-id))))
+
+(defn set-block-body-place-when-collide!
+  [world-id entity-uuid place-when-collide?]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :set-place-when-collide!
+                            world-id entity-uuid
+                            (boolean place-when-collide?)))))
+
 (defn discard-entity!
   [world-id entity-uuid]
   (boolean

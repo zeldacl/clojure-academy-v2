@@ -22,6 +22,12 @@
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-blocks world-id sx sy sz dx dy dz max-dist))
 
+(defn raycast-blocks-matching
+  "Trace through non-matching blocks and return the first accepted block hit."
+  [world-id sx sy sz dx dy dz max-dist accepted-block-ids]
+  (call :raycast-blocks-matching
+        world-id sx sy sz dx dy dz max-dist accepted-block-ids))
+
 (defn raycast-entities
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-entities world-id sx sy sz dx dy dz max-dist))
