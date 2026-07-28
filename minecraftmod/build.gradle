@@ -2,7 +2,7 @@ import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 
 plugins {
-    id "dev.architectury.loom" version "1.13.467" apply false
+    id "dev.architectury.loom" version "1.13.469" apply false
     id "dev.clojurephant.clojure" version "0.9.1" apply false
     id "com.github.johnrengelman.shadow" version "8.1.1" apply false
 }
