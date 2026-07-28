@@ -251,6 +251,14 @@
 (defn- current-charging-down!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player]
   (let [is-item (boolean (main-hand-item player-id))
+        view (player-view player-id)
+        caster-pos (view->pos view)
+        ;; Upstream creates the held EntityArc as soon as EFFECT_START is
+        ;; received, before the first context tick updates its endpoint.
+        ;; Seed our arc with the same 15-block look endpoint so the start
+        ;; packet alone is sufficient to render it.
+        target (when (and (not is-item) (map? view))
+                 (view-end view (targeting-range)))
         exp* (double (or exp 0.0))
         overload-cost (cfg-lerp :cost.down.overload exp*)
         ;; Upstream stores cpData.getOverload *after* the activation cost,
@@ -263,13 +271,14 @@
                                      :exp exp*
                                      :charge-ticks 0
                                      :overload-floor overload-floor
-                                     :target nil
-                                     :caster-pos (view->pos (player-view player-id))
+                                     :target target
+                                     :caster-pos caster-pos
                                      :block-pos nil
                                      :charged 0.0})
     (fx/send! ctx-id {:topic :current-charging/fx-start :mode :start} nil
               (fx-payload player-id {:is-item is-item
-                                     :caster-pos (view->pos (player-view player-id))}))))
+                                     :target target
+                                     :caster-pos caster-pos}))))
 
 (defn- current-charging-tick!
   [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player]

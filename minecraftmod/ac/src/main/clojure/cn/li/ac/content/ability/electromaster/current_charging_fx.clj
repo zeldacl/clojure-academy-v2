@@ -1,8 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx
   (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.ac.ability.skill-config :as skill-config]))
 
 (declare fx-snapshot)
 
@@ -25,8 +24,6 @@
    :charge-ticks 0 :charge-ratio 0.0 :target nil :block-pos nil
    :charged 0.0 :started-at-ms 0 :ending-at-ms 0})
 
-(def ^:private active-stale-ms 500)
-
 (defn- current-store []
   (let [store (fx-snapshot)]
     (cond
@@ -42,12 +39,9 @@
 
 (defn- live-state?
   [st]
-  (let [now-ms (client-bridge/game-time-ms)]
-    (and (:active? st)
-         (< (- now-ms (long (or (:updated-at-ms st)
-                                (:started-at-ms st)
-                                0)))
-            active-stale-ms))))
+  ;; The active state is owned by the skill context and ends explicitly with
+  ;; :current-charging/fx-end, matching upstream's held EntityArc lifetime.
+  (boolean (:active? st)))
 
 (defn- state-for-selector [store selector]
   (let [states (:states store)]

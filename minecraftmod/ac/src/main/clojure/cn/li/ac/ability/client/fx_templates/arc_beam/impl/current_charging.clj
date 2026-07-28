@@ -31,16 +31,6 @@
   :ending-at-ms 0
   :updated-at-ms 0})
 
-(def ^:private active-stale-ms 500)
-
-
-
-
-
-
-
-
-
 (defn- current-store []
   (let [store (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :current-charging)]
     (if (contains? store :states)
@@ -155,7 +145,7 @@
                           :good? false
                           :charge-ticks 0
                           :charge-ratio 0.0
-                          :target nil
+                          :target (:target payload*)
                           :caster-pos (:caster-pos payload*)
                           :block-pos nil
                           :charged 0.0
@@ -198,26 +188,14 @@
 
 (defn- tick-state!
   [store]
-  (let [store* (if (contains? (or store {}) :states)
-                 (or store {:states {}})
-                 {:states {}})
-        now-ms (now-ms)
-        states' (into {}
-                      (keep (fn [[owner-key st]]
-                              (cond
-                                (and (:active? st)
-                                     (< (- now-ms (long (or (:updated-at-ms st)
-                                                             (:started-at-ms st)
-                                                             0)))
-                                        active-stale-ms))
-                                [owner-key st]
-
-                                :else
-                                (do
-                                  (stop-loop-sound! owner-key)
-                                  nil))))
-                      (:states store*))]
-    (assoc store* :states states')))
+  ;; CurrentCharging is a held effect. Upstream gives its arc/surround
+  ;; entities a very long life and destroys them only on EFFECT_END; it
+  ;; never treats a delayed tick packet as the end of a cast. The previous
+  ;; 500 ms stale timeout removed both the beam state and loop sound during
+  ;; an otherwise-active cast.
+  (if (contains? (or store {}) :states)
+    store
+    {:states {}}))
 
 ;; A perfectly straight billboard beam is geometrically invisible whenever
 ;; the camera looks straight down its own axis — exactly this skill's
@@ -613,4 +591,8 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod arc-beam/effect-clear-owner! :current-charging [_ store owner-key]
-  (assoc store :states (dissoc (:states store) owner-key)))
+  (when (contains? (or (:states store) {}) owner-key)
+    (stop-loop-sound! owner-key))
+  (assoc (or store {:states {}})
+         :states
+         (dissoc (or (:states store) {}) owner-key)))

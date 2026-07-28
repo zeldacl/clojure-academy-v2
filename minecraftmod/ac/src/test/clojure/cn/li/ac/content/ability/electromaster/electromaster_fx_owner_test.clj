@@ -4,13 +4,17 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
-            [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
+            [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- invoke-mag-enqueue! [ctx-id channel payload]
   (arc-beam/enqueue-for-test! :mag-manip ctx-id channel payload {:runtime :hand}))
 
 (defn- invoke-charging-enqueue! [ctx-id channel payload]
-  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload {:runtime :hand}))
+  ;; CurrentCharging is a world-space beam/surround effect and therefore
+  ;; owns one :level track; do not route this ownership test through the
+  ;; obsolete hand track.
+  (arc-beam/enqueue-for-test! :current-charging ctx-id channel payload))
 
 (defn- reset-fixture [f]
   (try
@@ -30,7 +34,9 @@
 (deftest electromaster-fx-keep-state-per-owner-test
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "electromaster-owner-test"})
                 client-sounds/queue-current-sound-effect! (fn [& _] nil)
-                client-sounds/queue-sound-effect! (fn [& _] nil)]
+                client-sounds/queue-sound-effect! (fn [& _] nil)
+                client-bridge/game-time-ms (constantly 1000)
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (invoke-mag-enqueue! "ctx-a" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})
     (invoke-mag-enqueue! "ctx-b" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:gold_block"})
     (invoke-mag-enqueue! "ctx-a" :mag-manip/fx-hold {:mode :hold-loop :block-id "minecraft:copper_block"})

@@ -96,6 +96,40 @@
       (is (= :mcmod/stop-loop-sound (first (last @effects*))))
       (is (= 2 (count @effects*))))))
 
+(deftest block-start-is-immediately-visible-and-lives-until-explicit-cleanup-test
+  (let [effects* (atom [])
+        now-ms* (atom 1000)
+        target {:x 1.0 :y 65.0 :z 17.0}]
+    (current-charging-fx/reset-fx-for-test!)
+    (with-redefs [client-bridge/game-time-ms #(deref now-ms*)
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! effects* conj [effect-key payload])
+                                                     nil)]
+      (invoke-hand-enqueue! "ctx-block" :current-charging/fx-start
+        {:mode :start
+         :is-item false
+         :caster-pos {:x 1.0 :y 65.0 :z 2.0}
+         :target target})
+      (is (= target
+             (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
+      (is (= :mcmod/start-loop-sound (ffirst @effects*)))
+      (is (= "my_mod:em.charge_loop" (get-in @effects* [0 1 :sound-id])))
+
+      ;; No update packet arrives for two seconds. A held upstream effect
+      ;; remains alive; only an explicit end/owner cleanup may remove it.
+      (reset! now-ms* 3000)
+      (level-effects/tick-level-effects!)
+      (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-block"]))))
+      (is (= target
+             (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
+      (is (= 1 (count @effects*)))
+
+      (current-charging-fx/clear-fx-owner! [:ctx "ctx-block"])
+      (is (nil? (get-in (current-charging-fx/fx-snapshot)
+                        [:states [:ctx "ctx-block"]])))
+      (is (= [:mcmod/start-loop-sound :mcmod/stop-loop-sound]
+             (mapv first @effects*))))))
+
 (deftest two-owners-keep-current-charging-state-independent-test
   (let [effects* (atom [])]
     (current-charging-fx/reset-fx-for-test!)

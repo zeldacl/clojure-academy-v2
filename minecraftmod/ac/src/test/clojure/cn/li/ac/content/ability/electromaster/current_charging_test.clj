@@ -105,8 +105,43 @@
             :charged 0.0}
            (get-in @contexts* [ctx-id :skill-state])))
     (is (= [[ctx-id :current-charging/fx-start {:is-item true
+                                                :target nil
                                                 :caster-pos {:x 1.0 :y 65.0 :z 2.0}
                                                 :source-player-id "p1"}]] @fx*))))
+
+(deftest block-down-seeds-visible-arc-endpoint-test
+  (let [ctx-id "ctx-block-start"
+        {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state! terminate-context!]}
+        (context-mocks ctx-id {})
+        fx* (atom [])
+        down! (get (skill-actions) :down!)]
+    (with-redefs [current-charging/main-hand-item (constantly nil)
+                  current-charging/player-view
+                  (constantly {:world-id "minecraft:overworld"
+                               :x 1.0 :y 65.0 :z 2.0
+                               :look-x 0.0 :look-y 0.0 :look-z 1.0})
+                  current-charging/cfg-lerp (fn [_ _] 52.0)
+                  current-charging/cfg-double (constantly 15.0)
+                  skill-effects/get-player-state
+                  (constantly {:resource-data {:cur-overload 82.0}})
+                  ctx/get-context get-context
+                  ctx/terminate-context! terminate-context!
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! (fn [id entry _evt payload]
+                             (swap! fx* conj [id (:topic entry) payload])
+                             nil)]
+      (cb/apply-invoke down! :player-id "p1" :ctx-id ctx-id :exp 0.4))
+    (let [target {:x 1.0 :y 65.0 :z 17.0}]
+      (is (= target (get-in @contexts* [ctx-id :skill-state :target])))
+      (is (= [[ctx-id :current-charging/fx-start
+               {:is-item false
+                :target target
+                :caster-pos {:x 1.0 :y 65.0 :z 2.0}
+                :source-player-id "p1"}]]
+             @fx*)))))
 
 (deftest tick-item-path-updates-state-exp-and-fx-test
   (let [ctx-id "ctx-item"
