@@ -27,15 +27,43 @@ allprojects {
 subprojects {
     plugins.withId("dev.clojurephant.clojure") {
         local.ClojurephantFlushFix.configure(project)
-        // Every Clojure-bearing module is a runtime module. Keep the AOT
-        // policy here so new modules cannot accidentally ship source-only or
-        // partially AOT-compiled namespaces.
-        clojure {
-            builds {
-                main {
-                    aotAll()
-                    checkAll()
-                    reflection = "fail"
+        // Platform source roots are selected dynamically from the catalog.
+        // Configure after their sourceSets are complete, otherwise aotAll()
+        // snapshots an empty namespace set for :platform.
+        afterEvaluate {
+            // Every Clojure-bearing module is a runtime module. Keep the AOT
+            // policy here so new modules cannot accidentally ship source-only
+            // or partially AOT-compiled namespaces.
+            clojure {
+                builds {
+                    main {
+                        aotAll()
+                        checkAll()
+                        reflection = "fail"
+                    }
+                }
+            }
+
+            tasks.named("compileClojure").configure { task ->
+                doLast {
+                    def sourceRoots = sourceSets.main.clojure.srcDirs.findAll { it.isDirectory() }
+                    def missingAotClasses = sourceRoots.collectMany { File sourceRoot ->
+                        fileTree(sourceRoot) { include "**/*.clj" }.files.collect { File sourceFile ->
+                            def namespaceName = sourceRoot.toPath()
+                                .relativize(sourceFile.toPath())
+                                .toString()
+                                .replace("\\", "/")
+                                .replaceAll(/\.clj$/, "")
+                                .replace("/", ".")
+                                .replace("_", "-")
+                            def outputDirectory = layout.buildDirectory.dir("clojure/main").get().asFile
+                            [namespaceName, new File(outputDirectory, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")]
+                        }
+                    }.findAll { namespaceAndClass -> !namespaceAndClass[1].isFile() }
+                    if (!missingAotClasses.isEmpty()) {
+                        throw new GradleException("Full AOT output is incomplete for ${project.path}: " +
+                            missingAotClasses.collect { it[0] }.sort())
+                    }
                 }
             }
         }
