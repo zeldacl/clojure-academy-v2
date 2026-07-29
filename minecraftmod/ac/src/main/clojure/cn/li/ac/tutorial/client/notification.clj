@@ -10,7 +10,8 @@
 
   Rendered via overlay element builder (same pipeline as toast.clj).
   Called from client-state/apply-sync! when new tutorial activations arrive."
-  (:require [cn.li.ac.config.modid :as modid]
+  (:require [cn.li.ac.config.gameplay :as gameplay]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.tutorial.content :as tutorial-content]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.framework :as fw]
@@ -176,7 +177,9 @@
                                          notifs)]
                        (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))))]
     (when-let [layout (build-notification-layout screen-width screen-height now-ms)]
-      [(-> (:bg layout) (assoc :kind :blit-texture :texture (:src (:bg layout))) (dissoc :src))
-       (-> (:icon layout) (assoc :kind :blit-texture :texture (:src (:icon layout))) (dissoc :src))
-       (assoc (:title layout) :kind :text)
-       (assoc (:content layout) :kind :text)])))
+      (let [[dx dy] (gameplay/hud-position :notification)
+            offset #(-> % (update :x + dx) (update :y + dy))]
+        [(-> (:bg layout) offset (assoc :kind :blit-texture :texture (:src (:bg layout))) (dissoc :src))
+         (-> (:icon layout) offset (assoc :kind :blit-texture :texture (:src (:icon layout))) (dissoc :src))
+         (-> (:title layout) offset (assoc :kind :text))
+         (-> (:content layout) offset (assoc :kind :text))]))))

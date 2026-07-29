@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.reactive-overlay
   "Reactive HUD overlay — native node tree + signals; no build-client-overlay-plan."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -23,6 +24,9 @@
 ;; (transparent gray → tan → red), each stop's alpha (0-255) included.
 (def ^:private overload-preview-stops
   [[0.0 10 223 223 223] [0.55 35 240 212 157] [1.0 80 245 100 100]])
+(def ^:private overload-preview-color-stops
+  ;; Same stops without alpha, consumed by the generic progress renderer.
+  [[0.0 223 223 223] [0.55 240 212 157] [1.0 245 100 100]])
 
 (defn- sample-argb-stops
   "3-stop [pos a r g b] lerp (upstream autoLerp, extended with alpha) for the
@@ -231,7 +235,10 @@
   (dsl/text {:id :line :text "" :color 0xFFFFFFFF}))
 
 (defn- build-overlay-spec [sw sh]
-  (let [bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
+  (let [[cp-dx cp-dy] (gameplay/hud-position :cpbar)
+        [key-dx key-dy] (gameplay/hud-position :keyhint)
+        [notif-dx notif-dy] (gameplay/hud-position :notification)
+        bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
         bar-y 12
         bar-w 193           ;; 964 * 0.2
         bar-h 29]           ;; 147 * 0.2
@@ -267,17 +274,19 @@
       ;; (GL11.glTranslated inside CPBar's own FrameEvent) to ONLY this
       ;; widget's own draw — not the whole HUD. Wrapped in one group so
       ;; apply-jitter! can offset just this subtree (see update-overlay-signals!).
-      (dsl/group {:id :cpbar-jitter-group :x 0 :y 0 :w sw :h sh}
+      (dsl/group {:id :cpbar-jitter-group :x cp-dx :y cp-dy :w sw :h sh}
         ;; Bar frame background (full bar, switches on overload)
         (dsl/image {:id :cpbar-bg :x bar-x :y bar-y :w bar-w :h bar-h
-                    :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")})
+                    :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
+                    :alpha 0.8})
         ;; Overload fill (behind CP fill, scroll-animated)
         ;; Overload bar: upstream draws two DIFFERENT visuals depending on state
         ;; (only one visible at a time, toggled per-frame in update-overload-lane!):
         ;; - not overloaded (drawNormal, the common case): mask.png tinted by a
         ;;   3-stop gradient, growing from the RIGHT edge, no scroll/animation —
-        ;;   :overload-preview below (plain box; mask.png is itself a flat white
-        ;;   rect, so a tinted box is pixel-equivalent without a texture sample).
+        ;;   :overload-preview below. It samples mask.png rather than substituting
+        ;;   a solid rectangle: the original mask has a long alpha feather on its
+        ;;   left edge, which is visible at medium/high overload.
         ;; - overloaded (drawOverload): animated scrolling front_overload.png —
         ;;   :overload-bar, NO color-stops (its own texture already carries the
         ;;   cyan→green→pink gradient; tinting it would double-color it).
@@ -285,10 +294,22 @@
         ;;   W=943,H=104 → ×0.2), while drawOverload fills the WHOLE frame
         ;;   (x0=30,y=0,W=914,H=147 → ×0.2 = +6,+0,183,29) — so the two lanes
         ;;   have DIFFERENT geometry, matching upstream.
-        (dsl/box {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 0 :h 21 :fill 0x00DFDFDF :visible? false})
-        (dsl/progress {:id :overload-bar :x (+ bar-x 6) :y bar-y :w (- bar-w 10) :h bar-h
-                       :fg-src (modid/asset-path "textures" "guis/cpbar/front_overload.png")
-                       :scroll-offset 0.0 :visible? false})
+        (dsl/progress {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 189 :h 21
+                       :fg-src (modid/asset-path "textures" "guis/cpbar/mask.png")
+                       :color-stops overload-preview-color-stops
+                       :uv-region [0.0 (/ 21.0 147.0) (/ 943.0 964.0) (/ 125.0 147.0)]
+                       :anchor :right :visible? false})
+        ;; Forge uses the original two-sampler mask shader. Other loaders keep
+        ;; the same full-width overload layer through renderer's texture fallback.
+        (dsl/shader-progress
+          {:id :overload-bar :x (+ bar-x 6) :y bar-y :w (- bar-w 10) :h bar-h
+           :shader-props
+           {:shader-id :cpbar-overload
+            :texture-0 (modid/asset-path "textures" "guis/cpbar/front_overload.png")
+            :texture-1 (modid/asset-path "textures" "guis/cpbar/mask.png")
+            :uv-region [(/ 30.0 974.0) 0.0 (/ 944.0 974.0) 1.0]
+            :highlight-alpha 0.0}
+           :visible? false})
         ;; CP fill (diagonal cut + icon overlay). Consumption-hint "release" cue
         ;; (upstream CPBar: mAlpha*=0.2+0.1*(1+sin(t/80)) ghost of the CURRENT
         ;; level drawn first, then the PREDICTED post-cost level drawn solid on
@@ -299,6 +320,8 @@
                        :corner 0.852
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
+                       :uv-region [(/ 47.0 964.0) (/ 30.0 147.0)
+                                   (/ 930.0 964.0) (/ 114.0 147.0)]
                        ;; upstream drawCPBar: prog = 0.16 + prog*0.8 (min sliver, max 96%)
                        :fill-remap [0.16 0.8]
                        :anchor :right    ;; upstream fixes the right (icon-side) edge
@@ -307,6 +330,8 @@
                        :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
+                       :uv-region [(/ 47.0 964.0) (/ 30.0 147.0)
+                                   (/ 930.0 964.0) (/ 114.0 147.0)]
                        :fill-remap [0.16 0.8]    ;; upstream drawCPBar prog = 0.16 + prog*0.8
                        :anchor :right            ;; upstream fixes the right (icon-side) edge
                        :icon-src ""     ;; set per-frame to category icon
@@ -337,11 +362,12 @@
       ;; centred on the right screen edge — see skill-slot-anchor) =====
       (let [[ax ay] (skill-slot-anchor sw sh)]
         (dsl/list-node {:id :skill-slots :spacing 0 :w 320 :h 400 :scale skill-slot-scale
-                        :x ax :y ay
+                        :x (+ ax key-dx) :y (+ ay key-dy)
                         :template (skill-slot-template)}))
       (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
       (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
-      (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
+      (dsl/group {:id :tutorial-notif :x notif-dx :y notif-dy
+                  :w sw :h 200 :visible? false}
         (dsl/image {:id :tut-bg :x 0 :y 15 :w 129 :h 43 :src "" :alpha 0.0})
         (dsl/image {:id :tut-icon :w 83 :h 83 :src "" :alpha 0.0})
         (dsl/text {:id :tut-title :text "" :color 0xFFFFFFFF})
@@ -361,12 +387,24 @@
         bg-target (sig/signal-o [0.0 0.0 0.0 0.0])
         cp-target (sig/signal-d 0.0)
         cp-predicted-target (sig/signal-d 0.0)
+        cp-hint-active (sig/signal-d 0.0)
+        cp-low-mult (sig/signal-d 1.0)
         ol-target (sig/signal-d 0.0)
         ol-scroll (sig/signal-d 0.0)
         bg-smooth (anim/smoothed-color bg-target clock)
         cp-smooth (anim/smoothed cp-target clock 2.0)
         cp-predicted-smooth (anim/smoothed cp-predicted-target clock 2.0)
         ol-smooth (anim/smoothed ol-target clock 2.0)
+        ;; CPBar bypasses bufferedCP while a consumption provider is alive:
+        ;; both live and predicted layers snap to their current values.
+        cp-display (sig/computed-d
+                     [cp-hint-active cp-target cp-smooth]
+                     (fn [hint-active target smooth]
+                       (double (if (pos? (double hint-active)) target smooth))))
+        cp-predicted-display (sig/computed-d
+                               [cp-hint-active cp-predicted-target cp-predicted-smooth]
+                               (fn [hint-active target smooth]
+                                 (double (if (pos? (double hint-active)) target smooth))))
         ;; Upstream CPBar.drawOverload highlight: color4d(1,1,1, 0.3+0.35*(sin(time/200)+1))
         ;; → alpha in [0.3,1.0], period = 2π*200ms ≈ 1257ms (anim/breathe takes a
         ;; full-cycle period in ms, so this matches the upstream pulse speed).
@@ -374,6 +412,10 @@
         ;; Upstream consumption-hint ghost: mAlpha *= 0.2+0.1*(1+sin(t/80)) →
         ;; alpha in [0.2,0.4], period = 2π*80ms ≈ 502.65ms.
         cp-ghost-alpha (anim/breathe clock 502.65 0.2 0.4)
+        cp-ghost-display-alpha
+        (sig/computed-d [cp-ghost-alpha cp-low-mult]
+                        (fn [pulse low-mult]
+                          (* (double pulse) (double low-mult))))
         jitter-x (anim/jitter-offset clock 0)
         jitter-y (anim/jitter-offset clock 1)
         ^INode bg-mask (ui/node r :bg-mask)]
@@ -384,6 +426,8 @@
     (rt/put-user-signal! r :bg-target bg-target)
     (rt/put-user-signal! r :cp-target cp-target)
     (rt/put-user-signal! r :cp-predicted-target cp-predicted-target)
+    (rt/put-user-signal! r :cp-hint-active cp-hint-active)
+    (rt/put-user-signal! r :cp-low-mult cp-low-mult)
     (rt/put-user-signal! r :ol-target ol-target)
     (rt/put-user-signal! r :ol-scroll ol-scroll)
     (rt/put-user-signal! r :hl-alpha hl-alpha)
@@ -393,20 +437,22 @@
     (let [counts (int-array [-1 -1 -1 -1 -1])]
       (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
       (rt/put-user-signal! r :overlay-count-cache counts)
-      ;; [0]=overloaded bg switch  [1]=overload highlight visible  [2]=low? CP-fill dim
-      (rt/put-user-signal! r :overlay-flag-cache (boolean-array 3)))
+      ;; [0]=overloaded bg switch  [1]=overload highlight visible
+      (rt/put-user-signal! r :overlay-flag-cache (boolean-array 2)))
     (let [b (sig/bind! bg-smooth bg-mask write-vignette-from-rgba-o! (rt/get-dirty-bindings-q r))]
       (rt/register-binding! r (.getIdx bg-mask) b))
     ;; CP bar: solid bar shows predicted-after-cost level when a consumption
     ;; hint is active, else the plain current level (see update-cp-lane!).
     ;; Ghost bar always tracks the plain current level, pulsing, shown only
     ;; while a hint is active.
-    (ui/bind! r :cp-bar :progress cp-predicted-smooth)
-    (ui/bind! r :cp-bar-ghost :progress cp-smooth)
-    (ui/bind! r :cp-bar-ghost :alpha cp-ghost-alpha)
-    ;; Overload bar: progress + scroll offset
-    (ui/bind! r :overload-bar :progress      ol-smooth)
-    (ui/bind! r :overload-bar :scroll-offset ol-scroll)
+    (ui/bind! r :cp-bar :progress cp-predicted-display)
+    (ui/bind! r :cp-bar :alpha cp-low-mult)
+    (ui/bind! r :cp-bar-ghost :progress cp-display)
+    (ui/bind! r :cp-bar-ghost :alpha cp-ghost-display-alpha)
+    ;; Normal preview balances at 2 units/second. The overloaded shader always
+    ;; draws its complete layer and uses :progress as texture-scroll phase.
+    (ui/bind! r :overload-preview :progress ol-smooth)
+    (ui/bind! r :overload-bar :progress ol-scroll)
     ;; Overload highlight: breathing alpha
     (ui/bind! r :overload-highlight :alpha hl-alpha)
     ;; Activation-key hint glow border: static geometry matching
@@ -452,26 +498,21 @@
 (defn- set-visible! [r id visible?]
   (set-node-visible! r (ui/node r id) visible?))
 
-(defn- update-overload-lane! [r snapshot sw]
+(defn- update-overload-lane! [r snapshot _sw]
   ;; Upstream drawNormal vs drawOverload: only one of these two visuals is
   ;; ever on screen. Not overloaded (the common case) → :overload-preview,
-  ;; a plain box tinted by the 3-stop overrideColors gradient growing from
-  ;; the right edge. Overloaded → :overload-bar, the scrolling
+  ;; the feathered mask texture tinted by the 3-stop overrideColors gradient
+  ;; growing from the right edge. Overloaded → :overload-bar, the scrolling
   ;; front_overload.png texture (already bound to ol-smooth/ol-scroll).
   (let [activated? (boolean (:activated? snapshot))
         ob (:overload-bar snapshot)
         overloaded? (boolean (:overloaded ob))
-        ol-pct (double (Math/max 0.0 (Math/min 1.0 (double (or (:percent ob) 0.0)))))
-        bar-x (- sw 205)
-        bar-y 12
-        preview-w (- 193.0 4.0)]
+        ol-pct (double (Math/max 0.0 (Math/min 1.0 (double (or (:percent ob) 0.0)))))]
     (set-visible! r :overload-bar (and activated? overloaded?))
     (set-visible! r :overload-preview (and activated? (not overloaded?)))
     (when (and activated? (not overloaded?))
-      (let [fill-w (* preview-w ol-pct)
-            fx (- (+ bar-x preview-w) fill-w)
-            [a rr gg bb] (sample-argb-stops overload-preview-stops ol-pct)]
-        (set-box-at! r :overload-preview fx (+ bar-y 4) fill-w 21 {:r rr :g gg :b bb :a a})))))
+      (let [[a _rr _gg _bb] (sample-argb-stops overload-preview-stops ol-pct)]
+        (ui/set-prop! r :overload-preview :alpha (/ (double a) 255.0))))))
 
 (defn- update-activation-indicator! [r snapshot]
   (let [ind       (:activation-indicator snapshot)
@@ -961,6 +1002,8 @@
           ;; is shown only while the hint is active.
           (let [hint-pct (:hint-percent (:cp-bar snapshot))
                 cur-pct (double (or (:percent (:cp-bar snapshot)) 0.0))]
+            (when-let [cp-hint-active (rt/user-signal r :cp-hint-active)]
+              (sig/sset-d! cp-hint-active (if (some? hint-pct) 1.0 0.0)))
             (when-let [cp-predicted-target (rt/user-signal r :cp-predicted-target)]
               (sig/sset-d! cp-predicted-target (if (:activated? snapshot)
                                                  (double (or hint-pct cur-pct))
@@ -993,17 +1036,12 @@
               (when (not= (aget flags 1) overloaded?)
                 (aset-boolean flags 1 overloaded?)
                 (set-visible! r :overload-highlight overloaded?))))
-          ;; CP fill "low" dim — upstream drawCPBar(prog, low) does mAlpha*=0.3
-          ;; whenever the player cant use abilities (interfering || overload-
-          ;; recovering). Consumption-hint release never overlaps this state
-          ;; (both interference and recovery block ability use), so only the
-          ;; solid :cp-bar needs dimming here. Toggle on state change only.
-          (when-let [^booleans flags (rt/user-signal r :overlay-flag-cache)]
+          ;; The original passes `low` to every CP draw, including both
+          ;; consumption-hint layers.
+          (when-let [cp-low-mult (rt/user-signal r :cp-low-mult)]
             (let [low? (boolean (or (:recovering (:overload-bar snapshot))
                                     (:interfered? snapshot)))]
-              (when (not= (aget flags 2) low?)
-                (aset-boolean flags 2 low?)
-                (ui/set-prop! r :cp-bar :alpha (if low? 0.3 1.0)))))
+              (sig/sset-d! cp-low-mult (if low? 0.3 1.0))))
           (update-activation-indicator! r snapshot)
           (update-overload-lane! r snapshot sw)
           (update-numbers! r snapshot)

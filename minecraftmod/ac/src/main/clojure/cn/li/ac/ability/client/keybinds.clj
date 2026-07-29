@@ -15,6 +15,8 @@
             [cn.li.ac.ability.client.input-processor :as processor]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
+            [cn.li.ac.config.gameplay :as gameplay-config]
+            [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log])
@@ -439,9 +441,20 @@
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for each key."
   [key-state-fn]
-  ;; Poll skill keys (Z, X, C, V)
-  (doseq [idx (range 4)]
-    (on-skill-key-event idx (key-state-fn [:slot idx])))
+  ;; Frequency Transmitter's pass-on stage owns the mouse buttons just like
+  ;; upstream ControlOverrider; ordinary ability-slot input is suppressed.
+  (if-let [player-uuid (get-client-player-uuid)]
+    (if (freq-transmitter/overlay-active? player-uuid)
+      (freq-transmitter/tick-overlay-input! player-uuid
+                                            (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
+      (doseq [idx (range 4)]
+        (on-skill-key-event idx
+          (key-state-fn [:raw (gameplay-config/input-key
+                                (keyword (str "ability-key-" idx)))]))))
+    (doseq [idx (range 4)]
+      (on-skill-key-event idx
+        (key-state-fn [:raw (gameplay-config/input-key
+                              (keyword (str "ability-key-" idx)))]))))
 
   ;; Poll movement keys (W/A/S/D)
   (doseq [movement-key movement-keys]
@@ -453,7 +466,8 @@
   ;; skill-tree has no upstream key at all (upstream only reaches it via the
   ;; terminal app); it lives on :secondary/M as a rewrite-only convenience
   ;; that doesn't collide with any upstream binding.
-  (on-gui-key-event :preset-editor (key-state-fn [:screen :primary]))
+  (on-gui-key-event :preset-editor
+                    (key-state-fn [:raw (gameplay-config/input-key :edit-preset-key)]))
   (on-gui-key-event :skill-tree (key-state-fn [:screen :secondary])))
 
 (defn reset-all-keys!

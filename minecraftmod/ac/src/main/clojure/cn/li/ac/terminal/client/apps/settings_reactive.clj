@@ -5,6 +5,7 @@
             [cn.li.ac.tutorial.config :as tutorial-config]
             [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.terminal.client.apps.ui-customize-reactive :as ui-customize]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcmod.framework :as fw]
@@ -43,20 +44,23 @@
    {:key :heads-or-tails :prop-id "headsOrTails"  :category "generic" :get tutorial-config/heads-or-tails-enabled?  :domain config-common/tutorial-domain :sp-only? false}
    {:key :use-mouse-wheel :prop-id "useMouseWheel" :category "generic" :get gameplay-config/use-mouse-wheel-enabled? :domain config-common/gameplay-domain :sp-only? false}])
 
-;; input-id -> upstream registered keybind name (ClientHandler.KEY_SWITCH_PRESET
-;; / KEY_ACTIVATE_ABILITY, DebugConsole "debug_console", TerminalUI
-;; "open_data_terminal") — same "settings.<modid>.prop.<id>" translation ids.
-(def ^:private keybind-prop-id
-  {:content/cycle-selection      "switch_preset"
-   :content/toggle-primary-state "ability_activation"
-   :content/toggle-debug-overlay "debug_console"
-   :content/toggle-terminal      "open_data_terminal"})
+(def ^:private upstream-key-rows
+  [{:source :settings :config-key :ability-key-0 :prop-id "ability_0" :default-code -100}
+   {:source :settings :config-key :ability-key-1 :prop-id "ability_1" :default-code -99}
+   {:source :settings :config-key :ability-key-2 :prop-id "ability_2" :default-code 82}
+   {:source :settings :config-key :ability-key-3 :prop-id "ability_3" :default-code 70}
+   {:source :bridge :input-id :content/cycle-selection :prop-id "switch_preset" :default-code 67}
+   {:source :settings :config-key :edit-preset-key :prop-id "edit_preset" :default-code 78}
+   {:source :bridge :input-id :content/toggle-primary-state :prop-id "ability_activation" :default-code 86}
+   {:source :bridge :input-id :content/toggle-debug-overlay :prop-id "debug_console" :default-code 293}
+   {:source :bridge :input-id :content/toggle-terminal :prop-id "open_data_terminal" :default-code 342}])
 
 ;; Fallback display names for the 4 registered GLFW key codes when the
 ;; platform bridge can't supply a live localized name (Fabric — see
 ;; :keybind-get-key-name below).
 (def ^:private glfw-key-names
-  {67 "C" 86 "V" 293 "F4" 342 "Left Alt"})
+  {-100 "MOUSE 1" -99 "MOUSE 2"
+   67 "C" 70 "F" 78 "N" 82 "R" 86 "V" 293 "F4" 342 "Left Alt"})
 
 (defn- persist! [domain key value]
   (config-reg/set-config-value! domain key value)
@@ -75,12 +79,11 @@
   (or (i18n/translate (settings-i18n (str "cat." cat)))
       cat))
 
-(defn- keybind-label [input-id]
-  (let [prop-id (get keybind-prop-id input-id (name input-id))]
-    (or (i18n/translate (settings-i18n (str "prop." prop-id))) prop-id)))
+(defn- prop-label [prop-id]
+  (or (i18n/translate (settings-i18n (str "prop." prop-id))) prop-id))
 
 (defn- hide-row-sections! [^INode item]
-  (doseq [id ["cathead-line" "cathead-text" "checkbox-row" "key-row"]]
+  (doseq [id ["cathead-line" "cathead-text" "checkbox-row" "key-row" "callback-row"]]
     (when-let [^INode n (ui/item-node item id)]
       (.setVisible n false))))
 
@@ -113,48 +116,80 @@
   (boolean (bridge/call-adapter :keybind-rebind-supported?)))
 
 (defn- default-key-name [key-code]
-  (get glfw-key-names key-code (str "KEY_" key-code)))
+  (or (bridge/call-adapter :settings-key-name key-code)
+      (get glfw-key-names key-code)
+      (str "KEY_" key-code)))
 
-(defn- current-key-name [input-id default-code]
-  (or (bridge/call-adapter :keybind-get-key-name input-id)
-      (default-key-name default-code)))
+(defn- current-key-code [{:keys [source input-id config-key default-code]}]
+  (if (= source :settings)
+    (gameplay-config/input-key config-key)
+    (or (bridge/call-adapter :keybind-get-key-code input-id) default-code)))
 
-(defn- wire-key-binding-item! [r item {:keys [input-id config]}]
+(defn- current-key-name [{:keys [source input-id] :as row}]
+  (if (= source :bridge)
+    (or (bridge/call-adapter :keybind-get-key-name input-id)
+        (default-key-name (current-key-code row)))
+    (default-key-name (current-key-code row))))
+
+(defn- binding-editable? [{:keys [source]}]
+  (or (= source :settings) (rebind-supported?)))
+
+(defn- persist-binding! [{:keys [source input-id config-key]} key-code]
+  (if (= source :settings)
+    (persist! config-common/gameplay-domain config-key (int key-code))
+    (bridge/call-adapter :keybind-set-key! input-id (int key-code))))
+
+(defn- wire-key-binding-item! [r item {:keys [prop-id] :as row}]
   (show-only! item :key-row)
-  (let [default-code (get-in config [:key-mapping :key])
-        editable? (rebind-supported?)
-        key-text (sig/signal-o (current-key-name input-id default-code))
+  (let [editable? (binding-editable? row)
+        key-text (sig/signal-o (current-key-name row))
         recording? (atom false)
         ^INode key-val (ui/item-node item :key-value)
         writer (slot-write/resolve-sig-writer (get node/kinds :text) :text)
-        b (sig/bind! key-text key-val writer (rt/get-dirty-bindings-q r))]
-    (ui/set-node-prop! r (ui/item-node item :key-label) :text (keybind-label input-id))
+        b (sig/bind! key-text key-val writer (rt/get-dirty-bindings-q r))
+        finish! (fn [key-code]
+                  (reset! recording? false)
+                  (ui/set-node-prop! r key-val :color 0xFFFFFFFF)
+                  (when-not (= 256 (int key-code))
+                    (persist-binding! row key-code))
+                  (sig/sset-o! key-text (current-key-name row)))]
+    (ui/set-node-prop! r (ui/item-node item :key-label) :text (prop-label prop-id))
     (rt/register-binding! r (.getIdx key-val) b)
     (when editable?
       (rt/register-event! r (.getIdx key-val) :left-click
-        (fn [_ _ _]
-          (reset! recording? true)
-          (sig/sset-o! key-text "PRESS...")))
+        (fn [_ _ evt]
+          (if @recording?
+            (finish! (- (int (:button evt)) 100))
+            (do
+              (reset! recording? true)
+              (ui/set-node-prop! r key-val :color 0xC8FB8525)
+              (sig/sset-o! key-text "PRESS")))))
       (rt/register-event! r (.getIdx key-val) :key
         (fn [_ _ evt]
-          (when @recording?
-            (reset! recording? false)
-            (let [key-code (:key-code evt)]
-              (bridge/call-adapter :keybind-set-key! input-id key-code)
-              (sig/sset-o! key-text (current-key-name input-id default-code)))))))))
+          (when (and @recording? (not= 0 (:action evt)))
+            (finish! (:key-code evt))))))))
+
+(defn- wire-callback-item! [r item {:keys [prop-id action]}]
+  (show-only! item :callback-row)
+  (ui/set-node-prop! r (ui/item-node item :callback-label) :text (prop-label prop-id))
+  (rt/register-event! r (.getIdx ^INode (ui/item-node item :callback-button)) :left-click
+    (fn [_ _ _] (action))))
 
 (defn- all-settings-rows []
-  (into []
-    (concat
-      (mapcat (fn [[cat cat-props]]
-                (cons {:type :cathead :label cat}
-                      (map #(assoc % :type :checkbox) cat-props)))
-              (group-by :category props))
-      (let [keybinds (kb-registry/get-all-keybinding-configs)]
-        (when (seq keybinds)
-          (cons {:type :cathead :label "keys"}
-                (map (fn [[input-id config]] {:type :key-binding :input-id input-id :config config})
-                     keybinds)))))))
+  (let [singleplayer? (boolean (bridge/call-adapter :singleplayer?))
+        generic (filter #(or (not (:sp-only? %)) singleplayer?) props)
+        registered (kb-registry/get-all-keybinding-configs)
+        keys (filter (fn [{:keys [source input-id]}]
+                       (or (= source :settings) (contains? registered input-id)))
+                     upstream-key-rows)]
+    (vec
+      (concat
+        [{:type :cathead :label "generic"}]
+        (map #(assoc % :type :checkbox) generic)
+        [{:type :cathead :label "keys"}]
+        (map #(assoc % :type :key-binding) keys)
+        [{:type :cathead :label "misc"}
+         {:type :callback :prop-id "edit_ui" :action ui-customize/open!}]))))
 
 (defn- populate-settings-list! [r rows]
   (ui/list-set! r "settings-list" rows
@@ -164,6 +199,7 @@
         :checkbox (do (update-checkbox-item! rt item row ((:get row)))
                       (wire-checkbox-click! rt item row))
         :key-binding (wire-key-binding-item! rt item row)
+        :callback (wire-callback-item! rt item row)
         nil))))
 
 (defn- sync-scrollbar-thumb! [r progress]

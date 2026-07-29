@@ -17,15 +17,21 @@
   "Build a DelegatingScreen hosting a reactive UiRt.
    Optional on-close runs before runtime dispose (screen removed / ESC).
    Supports :on-pre-render and :on-post-render hooks for custom rendering
-   (e.g. terminal 3D perspective + cursor overlay)."
+   (e.g. terminal 3D perspective + cursor overlay), plus optional raw
+   key/mouse-release callbacks for interfaces whose interaction is not based
+   on ordinary screen-space hit testing."
   ([^UiRt rt title] (create-reactive-screen rt title nil))
-  ([^UiRt rt title {:keys [on-close on-pre-render on-post-render] :as opts}]
+  ([^UiRt rt title
+    {:keys [on-close on-pre-render on-post-render on-key-pressed
+            on-mouse-released render-background?]
+     :as opts}]
   (doto (DelegatingScreen.
           (Component/literal ^String title)
           ;; render
           (fn render-cb [^DelegatingScreen this ^GuiGraphics gg mx my pt]
             (perf/frame-start!)
-            (.renderBackground this gg)
+            (when (not= false render-background?)
+              (.renderBackground this gg))
             (clock/tick! rt pt)
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)
@@ -38,8 +44,15 @@
               (log/info stats)))
           ;; keyPressed — ESC always closes regardless of focus state
           (fn key-cb [^net.minecraft.client.gui.screens.Screen this key-code scan-code modifiers]
-            (if (= (long key-code) 256)
+            (cond
+              (= (long key-code) 256)
               (do (.onClose this) true)
+
+              (and on-key-pressed
+                   (boolean (on-key-pressed this key-code scan-code modifiers)))
+              true
+
+              :else
               (input/handle-key-pressed rt key-code scan-code modifiers)))
           ;; charTyped
           (fn char-cb [_this code-point modifiers]
@@ -53,7 +66,10 @@
             (input/handle-removed rt)))
     (.withMouseReleased
       (fn release-cb [^DelegatingScreen this mx my button]
-        (input/handle-mouse-released rt (.-leftOffset this) (.-topOffset this) mx my button)))
+        (if (and on-mouse-released
+                 (boolean (on-mouse-released this mx my button)))
+          true
+          (input/handle-mouse-released rt (.-leftOffset this) (.-topOffset this) mx my button))))
     (.withMouseDragged
       (fn drag-cb [^DelegatingScreen this mx my button dx dy]
         (input/handle-mouse-dragged rt (.-leftOffset this) (.-topOffset this) mx my button dx dy)))

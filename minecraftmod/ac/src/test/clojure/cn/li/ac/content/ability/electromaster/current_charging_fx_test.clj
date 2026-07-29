@@ -186,6 +186,61 @@
             :mcmod/stop-loop-sound]
            (mapv first @effects*)))))
 
+(deftest effective-block-plan-emits-surround-arcs-test
+  (invoke-hand-enqueue! "ctx-block-ring" :current-charging/fx-start
+    {:mode :start
+     :is-item false
+     :caster-pos {:x 0.5 :y 65.62 :z 0.5}
+     :target {:x 0.5 :y 64.5 :z 10.0}})
+  (invoke-hand-enqueue! "ctx-block-ring" :current-charging/fx-update
+    {:mode :update
+     :is-item false
+     :good? true
+     :charge-ticks 1
+     :caster-pos {:x 0.5 :y 65.62 :z 0.5}
+     :target {:x 0.5 :y 64.5 :z 10.0}
+     :block-pos [0 64 10]})
+  (let [parts*
+        (reduce
+         (fn [parts tick]
+           (level-effects/tick-level-effects!)
+           (let [plan (level-effects/build-level-effect-plan
+                       {:x 0.5 :y 65.62 :z 0.5}
+                       {:player-uuid "local-player"}
+                       tick
+                       (fn [& _] []))]
+             (into parts (keep :effect-part (:ops plan)))))
+         #{}
+         (range 1 13))]
+    (is (contains? parts* :current-charging/beam))
+    (is (contains? parts* :current-charging/surround))))
+
+(deftest item-plan-emits-thin-surround-arcs-without-beam-test
+  (invoke-hand-enqueue! "ctx-item-ring" :current-charging/fx-start
+    {:mode :start
+     :is-item true
+     :caster-pos {:x 2.0 :y 65.62 :z 2.0}})
+  (let [parts*
+        (reduce
+         (fn [parts tick]
+           (level-effects/tick-level-effects!)
+           (let [plan (level-effects/build-level-effect-plan
+                       {:x 2.0 :y 65.62 :z -2.0}
+                       {:player-uuid "local-player"
+                        :player-x 2.0
+                        :player-y 64.0
+                        :player-z 2.0
+                        :player-width 0.6
+                        :player-height 1.8
+                        :player-yaw-rad 0.0}
+                       tick
+                       (fn [& _] []))]
+             (into parts (keep :effect-part (:ops plan)))))
+         #{}
+         (range 1 13))]
+    (is (not (contains? parts* :current-charging/beam)))
+    (is (contains? parts* :current-charging/surround))))
+
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}
          (current-charging-fx/fx-snapshot)))

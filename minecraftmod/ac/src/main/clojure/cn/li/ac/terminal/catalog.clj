@@ -1,6 +1,7 @@
 (ns cn.li.ac.terminal.catalog
   "Immutable terminal app catalog and pure queries (server-safe metadata only)."
-  (:require [cn.li.ac.config.modid :as modid]))
+  (:require [clojure.string :as str]
+            [cn.li.ac.config.modid :as modid]))
 
 (def apps
   [{:id :skill-tree
@@ -68,15 +69,29 @@
       (nth icons idx))
     (:icon app)))
 
+(defn app-name-key
+  "Return the original AcademyCraft-style localization key for an app."
+  [app]
+  (str "app." modid/MOD-ID "."
+       (str/replace (name (:id app)) "-" "_")))
+
+(defn installed-apps-in-display-order
+  "Resolve installed ids to catalog entries without losing AppRegistry order.
+   Player persistence intentionally uses a set, but TerminalUI always rendered
+   the AppRegistry enumeration order rather than a hash-set iteration order."
+  [installed-ids]
+  (let [installed (into #{} (map keyword) installed-ids)]
+    (->> apps
+         (filter #(contains? installed (:id %)))
+         vec)))
+
 (defn app-count
   []
   (count apps))
 
 (defn ordered-apps
   []
-  (->> apps
-       (sort-by (fn [app]
-                  [(str (or (:category app) ""))
-                   (str (or (:name app) ""))
-                   (str (or (:id app) ""))]))
-       vec))
+  ;; `apps` is the explicit AppRegistry/display order. Do not sort by category:
+  ;; the terminal grid has no categories and upstream preserves registration
+  ;; order for both placement and selection.
+  (vec apps))

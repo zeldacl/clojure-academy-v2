@@ -6,8 +6,18 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- ability-key-label [idx]
+  (let [key-code (gameplay/input-key (keyword (str "ability-key-" idx)))]
+    (case key-code
+      -100 :mouse-left
+      -99 :mouse-right
+      (or (bridge/call-adapter :settings-key-name key-code)
+          (str "KEY_" key-code)))))
 
 (defn build-cp-bar-render-data
   "Build CP bar render data matching original AcademyCraft CPBar:
@@ -91,7 +101,7 @@
              ;; MOUSE_RIGHT, R, F. Mouse slots carry a keyword (no text glyph
              ;; upstream draws a mouse icon instead — see KeyHintUI.drawSingle
              ;; TEX_MOUSE_L/TEX_MOUSE_R); keyboard slots carry the key name.
-             :key-label (nth [:mouse-left :mouse-right "R" "F"] idx)
+             :key-label (ability-key-label idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))
@@ -199,7 +209,8 @@
 
 (defn build-numbers-texts-data
   "CP/OL numeric readout (hold V to show, fades in/out), based on wall-clock
-   now-ms — only non-nil while showing or within the ~600ms fade-out window."
+   now-ms — only non-nil while showing or within the original 300ms fade-out
+   window."
   [hud-model showing-numbers? last-show-value-change-ms now-ms]
   ;; Upstream CPBar: when isOverloaded(), the CP/OL readout alpha is forced to 0
   ;; (numbers hidden entirely) — the overload visual owns the bar area instead.
@@ -212,11 +223,14 @@
                         (< dt 200) 0.0
                         (< dt 600) (/ (+ 0.0 (- dt 200)) 400.0)
                         :else 1.0)
-                  ;; Fade out: 600ms linear decay from full to transparent
+                  ;; Upstream CPBar.stopDisplayNumbers + draw-data branch:
+                  ;; release after a real hold fades from 1 -> 0 over 300ms.
                   (cond (zero? last-change) 0.0
-                        (< dt 600) (- 1.0 (/ (+ 0.0 dt) 600.0))
+                        (< dt 300) (- 1.0 (/ (+ 0.0 dt) 300.0))
                         :else 0.0))
-          a (int (* 255.0 alpha))]
+          ;; Original FontOption alpha is 0.6 * mAlpha * transition alpha;
+          ;; this builder supplies the steady-state 0.6 factor.
+          a (int (* 255.0 0.6 alpha))]
       (when (pos? alpha)
         [{:kind :text
           :text (str "CP " (int (get-in hud-model [:cp :cur])) "/" (int (get-in hud-model [:cp :max])))

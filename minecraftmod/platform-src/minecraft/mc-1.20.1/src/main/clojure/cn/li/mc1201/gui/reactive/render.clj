@@ -362,6 +362,11 @@
         ;; tip). This remaps only the fill EXTENT; the gradient color below still
         ;; samples the RAW percent (upstream calls autoLerp BEFORE this remap).
         remap    (get (.getStaticProps node) :fill-remap)
+        uv-region (get (.getStaticProps node) :uv-region)
+        u0       (double (if uv-region (nth uv-region 0) 0.0))
+        v0       (double (if uv-region (nth uv-region 1) 0.0))
+        u1       (double (if uv-region (nth uv-region 2) 1.0))
+        v1       (double (if uv-region (nth uv-region 3) 1.0))
         fill-pct (if remap
                    (+ (double (nth remap 0)) (* percent (double (nth remap 1))))
                    percent)
@@ -395,7 +400,7 @@
                                    (float (/ (double g) 255.0))
                                    (float (/ (double b) 255.0))
                                    (float (or a 1.0)))]
-            (if (pos? diag-tan)
+            (if (or (pos? diag-tan) uv-region)
               (let [^PoseStack ps (.pose gg)
                     ^Matrix4f pose (.pose (.last ps))
                     ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))
@@ -405,15 +410,19 @@
                     y1   (float ih)
                     x0b  (float (+ seg-start (* diag-tan h)))  ;; bottom-left offset
                     u-at (fn [^double sx]
-                           (float (/ (- sx (double ix)) (double iw))))]
+                           (float (+ u0 scroll
+                                     (* (/ (- sx (double ix)) (double iw))
+                                        (- u1 u0)))))]
                 (RenderSystem/setShaderTexture 0 fg-rl)
                 (RenderSystem/setShader GameRenderer/getPositionTexShader)
+                (RenderSystem/enableBlend)
+                (RenderSystem/defaultBlendFunc)
                 (apply-color!)  ;; AFTER setShader
                 (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-                (.vertex bb pose x0  y0 0.0)  (.uv bb (u-at x0)  0.0)  (.endVertex bb)
-                (.vertex bb pose x0b y1 0.0)  (.uv bb (u-at x0b) 1.0)  (.endVertex bb)
-                (.vertex bb pose x1  y1 0.0)  (.uv bb (u-at x1)  1.0)  (.endVertex bb)
-                (.vertex bb pose x1  y0 0.0)  (.uv bb (u-at x1)  0.0)  (.endVertex bb)
+                (.vertex bb pose x0  y0 0.0)  (.uv bb (u-at x0)  (float v0))  (.endVertex bb)
+                (.vertex bb pose x0b y1 0.0)  (.uv bb (u-at x0b) (float v1))  (.endVertex bb)
+                (.vertex bb pose x1  y1 0.0)  (.uv bb (u-at x1)  (float v1))  (.endVertex bb)
+                (.vertex bb pose x1  y0 0.0)  (.uv bb (u-at x1)  (float v0))  (.endVertex bb)
                 (BufferUploader/drawWithShader (.end bb)))
               ;; Rectangular fill: existing scissor+blit path
               (let [uoff (float (* scroll iw))]
@@ -459,13 +468,30 @@
         shader-id (or (:shader-id props) :ring-progbar)
         ^ResourceLocation tex-0 (resolve-tex-loc (or (:texture-0 props) (:tex-0 props)))
         ^ResourceLocation tex-1 (resolve-tex-loc (or (:texture-1 props) (:tex-1 props)))
-        ^ShaderInstance si (platform-bridge/resolve-shader shader-id)]
-    (when (and si tex-0 tex-1)
+        ^ShaderInstance si (platform-bridge/resolve-shader shader-id)
+        uv-region (:uv-region props)
+        u0 (float (if uv-region (nth uv-region 0) 0.0))
+        v0 (float (if uv-region (nth uv-region 1) 0.0))
+        u1 (float (if uv-region (nth uv-region 2) 1.0))
+        v1 (float (if uv-region (nth uv-region 3) 1.0))]
+    (when tex-0
       (try
-        (.setSampler si "TexSampler0" tex-0)
-        (.setSampler si "TexSampler1" tex-1)
-        (RenderSystem/setShader (StaticShaderSupplier. si))
-        (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
+        (if (and si tex-1)
+          (do
+            (.setSampler si "TexSampler0" tex-0)
+            (.setSampler si "TexSampler1" tex-1)
+            (RenderSystem/setShader (StaticShaderSupplier. si))
+            (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
+            (when-let [u (.safeGetUniform si "ScrollOffset")] (.set u progress))
+            (when-let [u (.safeGetUniform si "HighlightAlpha")]
+              (.set u (float (or (:highlight-alpha props) 0.0)))))
+          (do
+            ;; Loader without this optional shader: retain the full overload
+            ;; texture instead of dropping the state visual entirely.
+            (RenderSystem/setShaderTexture 0 tex-0)
+            (RenderSystem/setShader GameRenderer/getPositionTexShader)))
+        (RenderSystem/enableBlend)
+        (RenderSystem/defaultBlendFunc)
         (let [x (float (node-abs-x node)) y (float (node-abs-y node))
               x2 (float (+ (node-abs-x node) (scaled-w node)))
               y2 (float (+ (node-abs-y node) (scaled-h node)))
@@ -475,12 +501,12 @@
               ^Tesselator tess (Tesselator/getInstance)
               ^BufferBuilder bb (.getBuilder tess)]
           (RenderSystem/setShaderTexture (int 0) tex-0)
-          (RenderSystem/setShaderTexture (int 1) tex-1)
+          (when tex-1 (RenderSystem/setShaderTexture (int 1) tex-1))
           (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (.vertex bb pose-matrix x y2 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y2 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
-          (.vertex bb pose-matrix x y 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix x y2 0.0) (.uv bb u0 v1) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y2 0.0) (.uv bb u1 v1) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y 0.0) (.uv bb u1 v0) (.endVertex bb)
+          (.vertex bb pose-matrix x y 0.0) (.uv bb u0 v0) (.endVertex bb)
           (BufferUploader/drawWithShader (.end bb)))
         (RenderSystem/setShader (StaticShaderSupplier. nil))
         (catch Exception e

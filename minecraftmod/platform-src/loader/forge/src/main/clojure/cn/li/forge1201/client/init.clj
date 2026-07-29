@@ -249,6 +249,8 @@
 	                                  {:client-session-id "" :player-uuid (str player-uuid)}
 	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+       :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
+       :settings-key-name key-scheme-core/key-display-name
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
        :get-mouse-pos (fn []
                         (let [^net.minecraft.client.Minecraft mc (Minecraft/getInstance)
@@ -272,9 +274,10 @@
                        (.width (.-font mc) text)))
        :resolve-shader (fn [shader-name]
                          (case shader-name
-                           :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
-                           :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
-                           :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
+                            :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
+                            :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
+                            :cpbar-overload (cn.li.forge1201.client.render.ModShaders/getCpbarOverloadShader)
+                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
                            nil))
        :get-window-size (fn []
                          (let [^Minecraft mc (Minecraft/getInstance)
@@ -316,6 +319,7 @@
        ;; keyboard_init.clj comment). Rows still render read-only on Fabric.
        :keybind-rebind-supported?  (constantly true)
        :keybind-get-key-name       key-mapping-adapter/get-key-display-name
+       :keybind-get-key-code       key-mapping-adapter/get-key-code
        :keybind-set-key!           key-mapping-adapter/set-key-mapping-key!}))
 
 (defn- install-client-owner-hooks!

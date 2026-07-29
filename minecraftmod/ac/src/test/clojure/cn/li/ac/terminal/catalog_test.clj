@@ -19,4 +19,10 @@
   (is (catalog/app-exists? :about))
   (is (false? (catalog/app-exists? :missing)))
   (is (= :about (:id (catalog/app-by-id :about))))
-  (is (= 6 (count (catalog/ordered-apps)))))
+  (is (= catalog/apps (catalog/ordered-apps)))
+  (is (= [:skill-tree :tutorial :about]
+         (mapv :id
+               (catalog/installed-apps-in-display-order
+                 #{:about :tutorial :skill-tree}))))
+  (is (= "app.my_mod.freq_transmitter"
+         (catalog/app-name-key (catalog/app-by-id :freq-transmitter)))))

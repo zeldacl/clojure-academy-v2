@@ -527,7 +527,7 @@
         entries (tut-registry/all-tutorials)
         ;; FIXME: forced true for testing — revert to
         ;; (client-state/first-open? player-uuid)
-        first-open? true
+        first-open? (client-state/first-open? player-uuid)
         r (rt/create-runtime)
         ui-state {:current-tut-id (atom nil)
                   :scroll-y (atom 0.0)

@@ -18,6 +18,14 @@
   []
   (ExternalOggPlayer/stop))
 
+(defn pause!
+  []
+  (ExternalOggPlayer/pause))
+
+(defn resume!
+  []
+  (ExternalOggPlayer/resume))
+
 (defn set-volume!
   [volume]
   (ExternalOggPlayer/setVolume (float volume)))
@@ -25,6 +33,12 @@
 (defn playing?
   []
   (ExternalOggPlayer/isPlaying))
+
+(defn playback-state
+  []
+  {:status (keyword (ExternalOggPlayer/getPlaybackState))
+   :elapsed-secs (double (ExternalOggPlayer/getElapsedSeconds))
+   :volume (double (ExternalOggPlayer/getVolume))})
 
 ;; ============================================================================
 ;; External track discovery — <gameDir>/acmedia/source/*.ogg (same folder
@@ -64,8 +78,11 @@
       :media-playback
       {:play! play!
        :stop! stop!
+       :pause! pause!
+       :resume! resume!
        :set-volume! set-volume!
-       :playing? playing?})
+       :playing? playing?
+       :state playback-state})
     (platform/install-adapter!
       fw-atom
       :media-library

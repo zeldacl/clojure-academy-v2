@@ -36,6 +36,34 @@
     (is (= "my_mod:textures/guis/cpbar/cp.png" (:fg-texture data)))
     (is (nil? (:bar-color data)))))
 
+(deftest cp-bar-consumption-hint-reports-original-and-predicted-levels-test
+  (let [data (hud/build-cp-bar-render-data
+              {:cp {:cur 80.0 :max 100.0}
+               :consumption-hint 25.0})]
+    (is (= 0.8 (:percent data)))
+    (is (= 0.55 (:hint-percent data)))))
+
+(deftest numbers-readout-release-fades-for-original-300ms-test
+  (let [model {:cp {:cur 80.0 :max 100.0}
+               :overload {:cur 20.0 :max 100.0 :overloaded false}}
+        halfway (hud/build-numbers-texts-data model false 1000 1150)]
+    (is (= 76 (get-in halfway [0 :color :a])))
+    (is (nil? (hud/build-numbers-texts-data model false 1000 1300)))))
+
+(deftest overload-render-data-separates-cap-flash-from-recovery-tail-test
+  (let [cap (hud/build-overload-bar-render-data
+             {:overload {:cur 100.0 :max 100.0 :overloaded true :recovering true}}
+             1000)
+        tail (hud/build-overload-bar-render-data
+              {:overload {:cur 60.0 :max 100.0 :overloaded false :recovering true}}
+              1000)]
+    (is (true? (:overloaded cap)))
+    (is (true? (:recovering cap)))
+    (is (= "my_mod:textures/guis/cpbar/back_overload.png" (:bg-texture cap)))
+    (is (false? (:overloaded tail)))
+    (is (true? (:recovering tail)))
+    (is (= "my_mod:textures/guis/cpbar/back_normal.png" (:bg-texture tail)))))
+
 (deftest build-skill-slot-render-data-resolves-skill-id-spec-and-icon-test
   (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [])
                 skill-query/get-skill-by-controllable (fn [_ _] :railgun)
