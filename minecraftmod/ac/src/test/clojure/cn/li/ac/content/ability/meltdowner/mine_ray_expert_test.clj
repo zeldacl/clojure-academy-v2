@@ -27,5 +27,6 @@
                                           nil)]
       (cb/apply-invoke expert/mine-ray-expert-tick! :player-id "p1" :ctx-id "ctx-1"))
     (is (= 1 (count @calls*)))
-    (is (= {:range 20.0 :break-speed 0.4 :skill-id :mine-ray-expert :exp-block 0.001 :cooldown-ticks 60}
+    (is (= {:range 20.0 :break-speed 0.4 :skill-id :mine-ray-expert :exp-block 0.001
+            :tool-tier-capped? false :fortune-level 0 :cooldown-ticks 60}
           (ffirst @calls*)))))

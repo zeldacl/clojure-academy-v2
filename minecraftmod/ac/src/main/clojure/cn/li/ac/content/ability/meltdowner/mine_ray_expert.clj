@@ -36,6 +36,9 @@
      :break-speed    (cfg-lerp :mining.break-speed exp)
      :skill-id       mine-ray-expert-skill-id
      :exp-block      (cfg-double :progression.exp-block)
+     ;; Original harvestLevel=5 is effectively uncapped.
+     :tool-tier-capped? false
+     :fortune-level  0
      :cooldown-ticks (cooldown-ticks-for exp)}))
 
 ;; ---------------------------------------------------------------------------
