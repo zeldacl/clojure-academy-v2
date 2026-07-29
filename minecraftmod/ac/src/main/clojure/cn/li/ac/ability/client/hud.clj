@@ -6,8 +6,18 @@
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
             [cn.li.ac.ability.client.delegate-state :as dstate]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
+
+(defn- ability-key-label [idx]
+  (let [key-code (gameplay/input-key (keyword (str "ability-key-" idx)))]
+    (case key-code
+      -100 :mouse-left
+      -99 :mouse-right
+      (or (bridge/call-adapter :settings-key-name key-code)
+          (str "KEY_" key-code)))))
 
 (defn build-cp-bar-render-data
   "Build CP bar render data matching original AcademyCraft CPBar:
@@ -91,7 +101,7 @@
              ;; MOUSE_RIGHT, R, F. Mouse slots carry a keyword (no text glyph
              ;; upstream draws a mouse icon instead — see KeyHintUI.drawSingle
              ;; TEX_MOUSE_L/TEX_MOUSE_R); keyboard slots carry the key name.
-             :key-label (nth [:mouse-left :mouse-right "R" "F"] idx)
+             :key-label (ability-key-label idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))

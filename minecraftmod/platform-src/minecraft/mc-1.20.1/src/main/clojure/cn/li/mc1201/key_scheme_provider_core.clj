@@ -6,7 +6,8 @@
    mc-1.20.1 layer."
   (:require [cn.li.mcmod.util.log :as log]
             )
-  (:import [net.minecraft.client Minecraft]))
+  (:import [com.mojang.blaze3d.platform InputConstants$Type]
+           [net.minecraft.client Minecraft]))
 
 (defn ^:private get-window-handle
   "Get current Minecraft GLFW window handle."
@@ -46,6 +47,16 @@
 (def ^:private mouse-button-keywords
   {:mouse-left 0    ;; GLFW_MOUSE_BUTTON_LEFT
    :mouse-right 1}) ;; GLFW_MOUSE_BUTTON_RIGHT
+
+(defn key-display-name
+  "Localized display name for the integer convention used by AC Settings."
+  [key-code]
+  (case (int key-code)
+    -100 "MOUSE 1"
+    -99 "MOUSE 2"
+    (.getString
+      (.getDisplayName
+        (.getOrCreate InputConstants$Type/KEYSYM (int key-code))))))
 
 (def ^:private impl
   {:is-key-down?

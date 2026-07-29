@@ -1,18 +1,15 @@
 (ns cn.li.ac.terminal.client.apps.media-reactive
-  "Complete reactive replacement for media.clj — real track list + playback,
-  matching upstream MediaGui/MediaBackend as closely as the simplified
-  playback engine and list-templating framework allow:
-  - play/stop only, no true pause/seek (framework :media-playback adapter)
-  - external tracks' name/desc are NOT click-to-edit in this pass — the
-    list-templating mechanism (cn.li.mcmod.ui.core/list-set!) rebuilds every
-    row from one shared static XML template, so a row can't carry its own
-    per-instance editable-field state the way freq_transmitter_reactive's
-    hand-built (non-templated) rows do. Follow-up if this matters in practice."
-  (:require [cn.li.ac.config.modid :as modid]
+  "Reactive AcademyCraft Media Player.
+
+   Implements the upstream play/pause/resume/stop controls, live OpenAL
+   position, volume and list scrolling, editable external-track metadata,
+   and the small always-on HUD readout while a track is active."
+  (:require [cn.li.ac.config.gameplay :as gameplay]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.media.catalog :as catalog]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
@@ -20,14 +17,10 @@
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.xml :as ui-xml])
-  (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcmod.ui.node INode]))
+  (:import [cn.li.mcmod.ui.node INode]
+           [cn.li.mcmod.uipojo.runtime UiRt]))
 
-;; Ad-hoc app message id — matches cn.li.ac.media.network/media-get-state-msg
-;; (kept as a local literal rather than a cross-side require, matching the
-;; freq-transmitter app's established convention).
 (def ^:private media-get-state-msg 1010)
-
 (def ^:private row-h 60.0)
 (def ^:private visible-h 302.0)
 (def ^:private thumb-min-y 169.0)
@@ -38,38 +31,44 @@
 (def ^:private vol-travel (- vol-max-x vol-min-x))
 (def ^:private progress-full-w 554.0)
 
-(def ^:private t-play (modid/asset-path "textures" "guis/apps/media_player/play.png"))
-(def ^:private t-pause (modid/asset-path "textures" "guis/apps/media_player/pause.png"))
+(def ^:private t-play
+  (modid/asset-path "textures" "guis/apps/media_player/play.png"))
+(def ^:private t-pause
+  (modid/asset-path "textures" "guis/apps/media_player/pause.png"))
+(def ^:private t-no-media
+  (modid/asset-path "textures" "guis/icons/icon_nomedia.png"))
 
-;; ============================================================================
-;; Track list
-;; ============================================================================
+(defonce ^:private playback-session
+  (atom {:current nil :last-track nil}))
 
-(defn- wire-track->local
-  [{:keys [id name desc external?]}]
+(defn- wire-track->local [{:keys [id name desc external?]}]
   {:id (keyword id) :name name :desc desc :external? (boolean external?)
    :source nil :length-secs 0.0})
 
 (defn- all-tracks [state]
-  ;; External tracks are inherently client-local (each player's own machine),
-  ;; scanned directly from disk; only internal-track *acquisition* is
-  ;; server-authoritative (see cn.li.ac.media.acquire).
-  (into (vec (catalog/external-medias))
+  (into (->> (catalog/external-medias)
+             (sort-by (comp name :id))
+             vec)
         (map wire-track->local (:granted-internal @state))))
 
 (defn- fetch-granted! [state rebuild!]
   (net-client/send-to-server media-get-state-msg {}
     (fn [response]
-      (swap! state assoc :granted-internal (if (:success response) (:medias response) []))
+      (swap! state assoc :granted-internal
+             (if (:success response) (:medias response) []))
       (rebuild!))))
-
-;; ============================================================================
-;; Playback
-;; ============================================================================
 
 (defn- media-playback-call [fn-key & args]
   (when-let [fw-atom (fw/fw-atom)]
     (apply platform/call-adapter fw-atom :media-playback fn-key args)))
+
+(defn- playback-state []
+  (or (media-playback-call :state)
+      {:status :stopped :elapsed-secs 0.0 :volume 1.0}))
+
+(defn- display-time [secs]
+  (let [total (max 0 (long (or secs 0.0)))]
+    (format "%02d:%02d" (quot total 60) (rem total 60))))
 
 (defn- write-progress-fill! [^INode fill-node progress]
   (let [w (* progress-full-w (max 0.0 (min 1.0 (double progress))))]
@@ -77,130 +76,181 @@
       (.setW fill-node w)
       (.setFlag fill-node node/FLAG-LAYOUT-DIRTY))))
 
+(defn- current-track []
+  (:current @playback-session))
+
 (defn- update-now-playing-display! [^UiRt r state]
-  (let [{:keys [current elapsed-ms progress-fill-node]} @state
-        playing? (boolean current)
-        length (double (or (:length-secs current) 0.0))
-        elapsed-secs (if playing? (min length (/ (double (or elapsed-ms 0)) 1000.0)) 0.0)
-        progress (if (pos? length) (/ elapsed-secs length) 0.0)]
-    (ui/set-prop! r :title :text (if current (:name current) ""))
-    (ui/set-prop! r :play_time :text (catalog/display-length (if playing? elapsed-secs 0.0)))
-    (when progress-fill-node (write-progress-fill! progress-fill-node progress))
-    (ui/set-prop! r :pop :src (if playing? t-pause t-play))))
+  (let [{:keys [status elapsed-secs]} (playback-state)
+        current (current-track)
+        ended? (and current (= status :stopped))]
+    (when ended?
+      (swap! playback-session assoc :current nil))
+    (let [current (current-track)
+          paused? (= status :paused)
+          length (double (or (:length-secs current) 0.0))
+          elapsed (if current (min (max 0.0 elapsed-secs)
+                                   (if (pos? length) length elapsed-secs))
+                    0.0)
+          progress (if (pos? length) (/ elapsed length) 0.0)]
+      (ui/set-prop! r :title :text (or (:name current) ""))
+      (ui/set-prop! r :play_time :text (display-time elapsed))
+      (when-let [^INode fill (:progress-fill-node @state)]
+        (write-progress-fill! fill progress))
+      (ui/set-prop! r :pop :src (if (or (nil? current) paused?) t-play t-pause)))))
 
 (defn- stop! [^UiRt r state]
   (media-playback-call :stop!)
-  (swap! state assoc :current nil :play-start-ms 0 :elapsed-ms 0)
+  (swap! playback-session assoc :current nil)
   (update-now-playing-display! r state))
 
 (defn- play! [^UiRt r state track]
-  (if-let [source (:source track)]
-    (do
-      (media-playback-call :play! source (double (:volume @state 1.0)))
-      (swap! state assoc :current track :play-start-ms (System/currentTimeMillis) :elapsed-ms 0)
-      (update-now-playing-display! r state))
-    ;; Internal track with no bundled audio in this build — nothing to play.
-    (swap! state assoc :current nil)))
+  (when-let [source (:source track)]
+    (media-playback-call :play! source (double (:volume @state 1.0)))
+    (swap! playback-session assoc :current track :last-track track)
+    (update-now-playing-display! r state)))
 
-(defn- toggle-play-pause! [^UiRt r state rebuild!]
-  (if (:current @state)
-    (stop! r state)
-    (if-let [t (:last-track @state)]
-      (play! r state t)
-      (let [tracks (all-tracks state)]
-        (when (seq tracks) (play! r state (first tracks))))))
-  (rebuild!))
+(defn- toggle-play-pause! [^UiRt r state]
+  (let [{:keys [status]} (playback-state)]
+    (cond
+      (= status :playing) (media-playback-call :pause!)
+      (= status :paused) (media-playback-call :resume!)
+      :else (when-let [track (or (:last-track @playback-session)
+                                 (first (filter :source (all-tracks state))))]
+              (play! r state track))))
+  (update-now-playing-display! r state))
 
-;; ============================================================================
-;; List rows
-;; ============================================================================
+(defn- edit-track-field! [track field value]
+  (when (:external? track)
+    (catalog/update-external-media! (:id track) {field value})))
 
-(defn- wire-track-row! [^UiRt r state rebuild! item track]
-  (let [^INode title (ui/item-node item :title)
-        ^INode time-n (ui/item-node item :time)
-        ^INode desc (ui/item-node item :desc)
-        ^INode edit-name (ui/item-node item :btn_edit_name)
-        ^INode edit-desc (ui/item-node item :btn_edit_desc)]
-    (ui/set-node-prop! r title :text (:name track))
-    (ui/set-node-prop! r desc :text (:desc track))
-    (ui/set-node-prop! r time-n :text (catalog/display-length (:length-secs track)))
-    ;; Click-to-edit is not wired in this pass (see namespace docstring) —
-    ;; keep the icons hidden rather than presenting a non-functional affordance.
-    (when edit-name (.setVisible edit-name false))
-    (when edit-desc (.setVisible edit-desc false))
+(defn- build-row! [^UiRt r state item idx track]
+  (rt/clear-children! r item)
+  (let [prefix (str "media-" idx "-")
+        id #(keyword (str prefix %))
+        title-id (id "title")
+        desc-id (id "desc")
+        edit-name-id (id "edit-name")
+        edit-desc-id (id "edit-desc")
+        external? (:external? track)
+        child (fn [spec] (rt/build-child! r spec item))
+        ^INode title
+        (child {:kind :text
+                :props {:id title-id :x 65.0 :y 1.0 :w 300.0 :h 30.0
+                        :text (:name track) :font-size 35.0 :color 0xBBFFFFFF
+                        :editable? external?}})
+        ^INode desc
+        (child {:kind :text
+                :props {:id desc-id :x 66.1 :y 29.0 :w 300.0 :h 23.0
+                        :text (:desc track) :font-size 27.0 :color 0xEEFFFFFF
+                        :editable? external?}})]
+    (child {:kind :image
+            :props {:id (id "icon") :x 4.0 :y 5.0 :w 50.0 :h 50.0
+                    :src (or (:cover track) t-no-media)}})
+    (child {:kind :text
+            :props {:id (id "time") :x 478.0 :y 0.0 :w 70.0 :h 30.0
+                    :text (catalog/display-length (:length-secs track))
+                    :font-size 28.0 :align :right :color 0xB9FFFFFF}})
+    (when external?
+      (child {:kind :image
+              :props {:id edit-name-id :x 368.0 :y 7.1 :w 20.0 :h 20.0
+                      :src (modid/asset-path "textures" "guis/icons/edit.png")
+                      :alpha 0.4}})
+      (child {:kind :image
+              :props {:id edit-desc-id :x 368.0 :y 35.2 :w 20.0 :h 20.0
+                      :src (modid/asset-path "textures" "guis/icons/edit.png")
+                      :alpha 0.4}})
+      (events/on! r edit-name-id :left-click
+                  (fn [_ _ _] (events/gain-focus! r (.getIdx title))))
+      (events/on! r edit-desc-id :left-click
+                  (fn [_ _ _] (events/gain-focus! r (.getIdx desc))))
+      (doseq [[^INode n field] [[title :name] [desc :desc]]]
+        (rt/register-event! r (.getIdx n) :confirm-input
+                            (fn [_ _ evt]
+                              (edit-track-field! track field (:value evt))
+                              (events/remove-focus! r)))
+        (rt/register-event! r (.getIdx n) :lost-focus
+                            (fn [_ node _]
+                              (edit-track-field! track field (.getOSlot ^INode node 0))))))
     (rt/register-event! r (.getIdx ^INode item) :left-click
-      (fn [_ _ _]
-        (swap! state assoc :last-track track)
-        (play! r state track)
-        (rebuild!)))))
+                        (fn [_ _ _]
+                          (let [latest (or (catalog/media-by-id (:id track)) track)]
+                            (play! r state latest))))))
 
-(defn- rebuild-list! [^UiRt r state rebuild!]
-  (let [tracks (all-tracks state)]
-    (ui/list-set! r "media-list" tracks
-      (fn [rt item track] (wire-track-row! rt state rebuild! item track)))))
+(defn- rebuild-list! [^UiRt r state]
+  (ui/list-set! r "media-list" (all-tracks state)
+                (fn [rt item track]
+                  (let [idx (quot (long (.getY ^INode item)) (long row-h))]
+                    (build-row! rt state item idx track)))))
 
-;; ============================================================================
-;; Scrollbar / volume drag
-;; ============================================================================
+(defn- set-scroll! [^UiRt r state new-px]
+  (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h) visible-h))
+        px (max 0.0 (min max-scroll (double new-px)))
+        progress (if (pos? max-scroll) (/ px max-scroll) 0.0)
+        ^INode thumb (rt/node-by-id r :scroll_bar)]
+    (swap! state assoc :scroll-px px)
+    (ui/set-prop! r :media-list :scroll-offset px)
+    (.setY thumb (+ thumb-min-y (* progress thumb-travel)))
+    (.setFlag thumb node/FLAG-LAYOUT-DIRTY)))
 
 (defn- attach-scrollbar! [^UiRt r state]
-  (let [drag-start-y (atom thumb-min-y)]
-    (events/on! r :scroll_bar :mouse-scroll
-      (fn [_ _ evt]
-        (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h) visible-h))
-              current (:scroll-px @state 0.0)
-              new-px (max 0.0 (min max-scroll (- current (* (:delta evt) 10.0))))]
-          (swap! state assoc :scroll-px new-px)
-          (ui/set-prop! r :media-list :scroll-offset new-px))))
+  (let [drag-start-y (atom thumb-min-y)
+        scroll-handler (fn [_ _ evt]
+                         (set-scroll! r state
+                                      (- (:scroll-px @state)
+                                         (* (double (:delta evt 0.0)) 10.0))))]
+    (events/on! r :scroll_bar :mouse-scroll scroll-handler)
+    (events/on! r :area :mouse-scroll scroll-handler)
     (events/on! r :scroll_bar :drag-start
-      (fn [_ _ _] (reset! drag-start-y (.getY ^INode (rt/node-by-id r :scroll_bar)))))
+                (fn [_ ^INode n _] (reset! drag-start-y (.getY n))))
     (events/on! r :scroll_bar :drag
-      (fn [_ _ evt]
-        (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h) visible-h))
-              new-y (max thumb-min-y (min thumb-max-y (+ @drag-start-y (double (:dy evt)))))
-              progress (/ (- new-y thumb-min-y) thumb-travel)
-              new-px (* progress max-scroll)]
-          (swap! state assoc :scroll-px new-px)
-          (ui/set-prop! r :media-list :scroll-offset new-px))))))
+                (fn [_ _ evt]
+                  (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h)
+                                                visible-h))
+                        new-y (max thumb-min-y
+                                   (min thumb-max-y
+                                        (+ @drag-start-y (double (:dy evt)))))
+                        progress (/ (- new-y thumb-min-y) thumb-travel)]
+                    (set-scroll! r state (* progress max-scroll)))))))
 
 (defn- attach-volume-drag! [^UiRt r state]
   (let [drag-start-x (atom vol-min-x)]
     (events/on! r :volume_bar :drag-start
-      (fn [_ _ _] (reset! drag-start-x (.getX ^INode (rt/node-by-id r :volume_bar)))))
+                (fn [_ ^INode n _] (reset! drag-start-x (.getX n))))
     (events/on! r :volume_bar :drag
-      (fn [_ _ evt]
-        (let [new-x (max vol-min-x (min vol-max-x (+ @drag-start-x (double (:dx evt)))))
-              ^INode vb (rt/node-by-id r :volume_bar)
-              progress (max 0.0 (min 1.0 (/ (- new-x vol-min-x) vol-travel)))]
-          (.setX vb new-x)
-          (.setFlag vb node/FLAG-LAYOUT-DIRTY)
-          (swap! state assoc :volume progress)
-          (media-playback-call :set-volume! progress))))))
-
-;; ============================================================================
-;; Entry points
-;; ============================================================================
+                (fn [_ _ evt]
+                  (let [new-x (max vol-min-x
+                                   (min vol-max-x
+                                        (+ @drag-start-x (double (:dx evt)))))
+                        ^INode bar (rt/node-by-id r :volume_bar)
+                        progress (/ (- new-x vol-min-x) vol-travel)]
+                    (.setX bar new-x)
+                    (.setFlag bar node/FLAG-LAYOUT-DIRTY)
+                    (swap! state assoc :volume progress)
+                    (media-playback-call :set-volume! progress))))))
 
 (defn create-runtime []
   (let [r (rt/create-runtime)
-        spec (ui-xml/load-spec (modid/namespaced-path "guis/new/media_player.xml"))
-        _ (rt/build! r spec)
-        progress-fill (rt/build-child! r
-                        {:kind :box :props {:id :media-progress-fill :x 0.0 :y 0.0
-                                             :w 0.0 :h 6.0 :fill 0xFFFFFFFF}}
-                        (rt/node-by-id r :progress))
-        state (atom {:granted-internal [] :current nil :last-track nil
-                      :play-start-ms 0 :elapsed-ms 0 :volume 1.0 :scroll-px 0.0
-                      :progress-fill-node progress-fill})
-        rebuild! (fn rebuild-fn [] (rebuild-list! r state rebuild-fn))]
-    (rt/put-user-signal! r :media-progress-tick
-      (sig/computed-o [(rt/clock-ms-sig r)]
-        (fn [_]
-          (when (:current @state)
-            (swap! state assoc :elapsed-ms (- (System/currentTimeMillis) (:play-start-ms @state)))
-            (update-now-playing-display! r state))
-          nil)))
-    (events/on! r :pop :left-click (fn [_ _ _] (toggle-play-pause! r state rebuild!)))
+        _ (rt/build! r (ui-xml/load-spec (modid/namespaced-path "guis/new/media_player.xml")))
+        progress-fill
+        (rt/build-child! r
+                         {:kind :box
+                          :props {:id :media-progress-fill :x 0.0 :y 0.0
+                                  :w 0.0 :h 6.0 :fill 0xFFFFFFFF}}
+                         (rt/node-by-id r :progress))
+        volume (:volume (playback-state))
+        state (atom {:granted-internal [] :volume volume :scroll-px 0.0
+                     :progress-fill-node progress-fill})
+        ^INode volume-bar (rt/node-by-id r :volume_bar)
+        rebuild! #(rebuild-list! r state)]
+    (.setX volume-bar (+ vol-min-x (* volume vol-travel)))
+    (.setFlag volume-bar node/FLAG-LAYOUT-DIRTY)
+    (rt/put-user-signal!
+      r :media-progress-tick
+      (sig/computed-o [(rt/clock-ms-sig r) (rt/partial-ticks-sig r)]
+                      (fn [_ _]
+                        (update-now-playing-display! r state)
+                        nil)))
+    (events/on! r :pop :left-click (fn [_ _ _] (toggle-play-pause! r state)))
     (events/on! r :stop :left-click (fn [_ _ _] (stop! r state)))
     (attach-scrollbar! r state)
     (attach-volume-drag! r state)
@@ -209,6 +259,25 @@
     (update-now-playing-display! r state)
     r))
 
+(defn build-aux-overlay-elements [screen-width screen-height]
+  (when-let [track (current-track)]
+    (let [{:keys [status elapsed-secs]} (playback-state)
+          length (double (or (:length-secs track) 0.0))
+          progress (if (pos? length)
+                     (max 0.0 (min 1.0 (/ elapsed-secs length)))
+                     0.0)
+          [dx dy] (gameplay/hud-position :media)
+          x (+ (- screen-width 151) dx)
+          y (+ (- screen-height 42) dy)]
+      (when-not (= status :stopped)
+        [{:kind :text :text (:name track) :x (+ x 13) :y (+ y 17)
+          :color 0xFFFFFFFF}
+         {:kind :fill :x (+ x 14) :y (+ y 27) :w 120 :h 2
+          :color 0x33000000}
+         {:kind :fill :x (+ x 14) :y (+ y 27) :w (* 120.0 progress) :h 2
+          :color 0xFFFFFFFF}
+         {:kind :text :text (display-time elapsed-secs) :x (+ x 117) :y (+ y 27)
+          :color 0xFFFFFFFF}]))))
+
 (defn open! []
-  (let [r (create-runtime)]
-    (bridge/open-reactive-screen! r "Media Player")))
+  (bridge/open-reactive-screen! (create-runtime) "Media Player"))

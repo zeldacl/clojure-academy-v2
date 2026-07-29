@@ -2,39 +2,45 @@ package cn.li.mc1201.client.audio;
 
 import net.minecraft.client.Minecraft;
 import org.lwjgl.openal.AL10;
+import org.lwjgl.openal.AL11;
 import org.lwjgl.stb.STBVorbis;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.libc.LibCStdlib;
 
 import java.nio.IntBuffer;
 import java.nio.ShortBuffer;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Minimal external-.ogg playback for the terminal Media Player app's
- * "external tracks" feature (upstream: user-supplied files, no Minecraft
- * resource-pack registration involved). Reuses Minecraft's own already-current
- * OpenAL context on the client thread rather than managing a device/context.
+ * External OGG playback used by the AcademyCraft Media Player.
  *
- * Fidelity: play/stop only — stopping and playing again always restarts from
- * the beginning (no true seek/resume-from-position, matching upstream's
- * SoundSystem behavior only partially — see media_player app docs).
+ * Decoding stays off the render thread; OpenAL work is marshalled back onto
+ * Minecraft's client thread. A generation token prevents an old decode from
+ * replacing a newer selection.
  */
 public final class ExternalOggPlayer {
 
     private static volatile int currentSource = 0;
     private static volatile int currentBuffer = 0;
     private static volatile float currentVolume = 1.0f;
+    private static volatile boolean loading = false;
+    private static final AtomicLong playbackGeneration = new AtomicLong();
 
     private ExternalOggPlayer() {}
 
     public static void play(String filePath, float volume) {
         currentVolume = volume;
-        Thread decodeThread = new Thread(() -> decodeAndPlay(filePath, volume), "ac-media-decode");
+        loading = true;
+        long generation = playbackGeneration.incrementAndGet();
+        Thread decodeThread = new Thread(
+            () -> decodeAndPlay(filePath, volume, generation),
+            "ac-media-decode"
+        );
         decodeThread.setDaemon(true);
         decodeThread.start();
     }
 
-    private static void decodeAndPlay(String filePath, float volume) {
+    private static void decodeAndPlay(String filePath, float volume, long generation) {
         try {
             final ShortBuffer pcm;
             final int channels;
@@ -44,6 +50,9 @@ public final class ExternalOggPlayer {
                 IntBuffer sampleRateBuf = stack.mallocInt(1);
                 pcm = STBVorbis.stb_vorbis_decode_filename(filePath, channelsBuf, sampleRateBuf);
                 if (pcm == null) {
+                    if (generation == playbackGeneration.get()) {
+                        loading = false;
+                    }
                     return;
                 }
                 channels = channelsBuf.get(0);
@@ -51,6 +60,9 @@ public final class ExternalOggPlayer {
             }
             Minecraft.getInstance().execute(() -> {
                 try {
+                    if (generation != playbackGeneration.get()) {
+                        return;
+                    }
                     stopInternal();
                     int format = channels == 1 ? AL10.AL_FORMAT_MONO16 : AL10.AL_FORMAT_STEREO16;
                     int buffer = AL10.alGenBuffers();
@@ -61,18 +73,38 @@ public final class ExternalOggPlayer {
                     AL10.alSourcePlay(source);
                     currentSource = source;
                     currentBuffer = buffer;
+                    loading = false;
                 } finally {
                     LibCStdlib.free(pcm);
                 }
             });
         } catch (Throwable ignored) {
-            // Decode/playback failure (missing codec support, bad file, no AL
-            // context yet, ...) — leave nothing playing rather than crash.
+            if (generation == playbackGeneration.get()) {
+                loading = false;
+            }
         }
     }
 
     public static void stop() {
+        playbackGeneration.incrementAndGet();
+        loading = false;
         Minecraft.getInstance().execute(ExternalOggPlayer::stopInternal);
+    }
+
+    public static void pause() {
+        Minecraft.getInstance().execute(() -> {
+            if (currentSource != 0) {
+                AL10.alSourcePause(currentSource);
+            }
+        });
+    }
+
+    public static void resume() {
+        Minecraft.getInstance().execute(() -> {
+            if (currentSource != 0) {
+                AL10.alSourcePlay(currentSource);
+            }
+        });
     }
 
     private static void stopInternal() {
@@ -101,14 +133,40 @@ public final class ExternalOggPlayer {
     }
 
     public static boolean isPlaying() {
+        return "playing".equals(getPlaybackState());
+    }
+
+    public static String getPlaybackState() {
+        if (loading) {
+            return "loading";
+        }
         int source = currentSource;
         if (source == 0) {
-            return false;
+            return "stopped";
         }
         try {
-            return AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE) == AL10.AL_PLAYING;
+            int state = AL10.alGetSourcei(source, AL10.AL_SOURCE_STATE);
+            if (state == AL10.AL_PLAYING) {
+                return "playing";
+            }
+            if (state == AL10.AL_PAUSED) {
+                return "paused";
+            }
+            return "stopped";
         } catch (Throwable ignored) {
-            return false;
+            return "stopped";
+        }
+    }
+
+    public static float getElapsedSeconds() {
+        int source = currentSource;
+        if (source == 0) {
+            return 0.0f;
+        }
+        try {
+            return AL10.alGetSourcef(source, AL11.AL_SEC_OFFSET);
+        } catch (Throwable ignored) {
+            return 0.0f;
         }
     }
 }

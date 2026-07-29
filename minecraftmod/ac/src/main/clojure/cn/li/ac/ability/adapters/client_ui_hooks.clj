@@ -33,9 +33,10 @@
             [cn.li.ac.ability.messages :as catalog]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
-            [cn.li.ac.tutorial.client.notification :as tutorial-notification]
-            [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-tx]
-            [cn.li.ac.terminal.client.install-effect-reactive :as install-fx]
+             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
+             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-tx]
+             [cn.li.ac.terminal.client.apps.media-reactive :as media-player]
+             [cn.li.ac.terminal.client.install-effect-reactive :as install-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -941,8 +942,9 @@
                            :preset-indicator preset-indicator
                            :preset-indicators preset-indicators
                            :numbers-texts numbers-texts})
-        base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
-        coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
+         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
+         coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
+         media-elements (media-player/build-aux-overlay-elements screen-width screen-height)
         vm (scan-vm-contexts player-uuid)
         reflection-active? (:reflection-active? vm)
         deviation-active? (:deviation-active? vm)
@@ -963,7 +965,7 @@
                      :intensity (double (or vec-reflection-intensity 1.0))})]
     {:elements (persistent!
                  (let [out (transient [])]
-                   (doseq [coll [base-elements coin-qte-elements vm-wave]]
+                    (doseq [coll [base-elements coin-qte-elements media-elements vm-wave]]
                      (doseq [x coll] (conj! out x)))
                    (when crosshair (conj! out crosshair))
                    ;; Lazy: only build toast elements when toasts are active

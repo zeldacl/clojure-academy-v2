@@ -129,6 +129,8 @@
 	                                  {:client-session-id "" :player-uuid (str player-uuid)}
 	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+       :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
+       :settings-key-name key-scheme-core/key-display-name
 	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
 	     :send-system-message! (fn [^Player player translatable-key & args]
 	                              (.sendSystemMessage player

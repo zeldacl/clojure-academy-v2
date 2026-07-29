@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.reactive-overlay
   "Reactive HUD overlay — native node tree + signals; no build-client-overlay-plan."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -234,7 +235,10 @@
   (dsl/text {:id :line :text "" :color 0xFFFFFFFF}))
 
 (defn- build-overlay-spec [sw sh]
-  (let [bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
+  (let [[cp-dx cp-dy] (gameplay/hud-position :cpbar)
+        [key-dx key-dy] (gameplay/hud-position :keyhint)
+        [notif-dx notif-dy] (gameplay/hud-position :notification)
+        bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
         bar-y 12
         bar-w 193           ;; 964 * 0.2
         bar-h 29]           ;; 147 * 0.2
@@ -270,7 +274,7 @@
       ;; (GL11.glTranslated inside CPBar's own FrameEvent) to ONLY this
       ;; widget's own draw — not the whole HUD. Wrapped in one group so
       ;; apply-jitter! can offset just this subtree (see update-overlay-signals!).
-      (dsl/group {:id :cpbar-jitter-group :x 0 :y 0 :w sw :h sh}
+      (dsl/group {:id :cpbar-jitter-group :x cp-dx :y cp-dy :w sw :h sh}
         ;; Bar frame background (full bar, switches on overload)
         (dsl/image {:id :cpbar-bg :x bar-x :y bar-y :w bar-w :h bar-h
                     :src (modid/asset-path "textures" "guis/cpbar/back_normal.png")
@@ -358,11 +362,12 @@
       ;; centred on the right screen edge — see skill-slot-anchor) =====
       (let [[ax ay] (skill-slot-anchor sw sh)]
         (dsl/list-node {:id :skill-slots :spacing 0 :w 320 :h 400 :scale skill-slot-scale
-                        :x ax :y ay
+                        :x (+ ax key-dx) :y (+ ay key-dy)
                         :template (skill-slot-template)}))
       (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
       (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
-      (dsl/group {:id :tutorial-notif :w sw :h 200 :visible? false}
+      (dsl/group {:id :tutorial-notif :x notif-dx :y notif-dy
+                  :w sw :h 200 :visible? false}
         (dsl/image {:id :tut-bg :x 0 :y 15 :w 129 :h 43 :src "" :alpha 0.0})
         (dsl/image {:id :tut-icon :w 83 :h 83 :src "" :alpha 0.0})
         (dsl/text {:id :tut-title :text "" :color 0xFFFFFFFF})

@@ -168,15 +168,25 @@
 ;; doesn't collide with N's upstream-aligned meaning.
 (def screen-glfw-keys {:primary 78 :secondary 77})
 
+(defn- settings-key-id
+  "Translate the original Settings/KeyManager integer convention to the
+   neutral provider's keyboard-or-mouse key identity."
+  [key-code]
+  (case (int key-code)
+    -100 :mouse-left
+    -99 :mouse-right
+    key-code))
+
 (defn glfw-key-state-fn
   "key-state-fn callback for keybinds/tick-keys!. Takes [:slot idx],
-   [:movement kw], or [:screen kw] and returns boolean key/mouse-button state
+   [:movement kw], [:screen kw], or [:raw key-code] and returns boolean key/mouse-button state
    from GLFW (via the installed KeySchemeProvider SPI)."
   [[kind sub-key]]
   (let [key-code (case kind
                    :slot (nth slot-glfw-keys sub-key nil)
                    :movement (get movement-glfw-keys sub-key)
                    :screen (get screen-glfw-keys sub-key)
+                   :raw (settings-key-id sub-key)
                    nil)]
     (when key-code
       (try

@@ -1,6 +1,5 @@
 (ns cn.li.ac.terminal.freq-network
-  "Server-side network handlers for the Frequency Transmitter app.
-  Handles ray-trace device scanning and wireless configuration commands."
+  "Server protocol for the original Frequency Transmitter workflow."
   (:require [cn.li.ac.wireless.api :as wireless]
             [cn.li.ac.wireless.core.capability-resolver :as cap-resolver]
             [cn.li.ac.wireless.feedback :as feedback]
@@ -9,125 +8,145 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.acapi.wireless IWirelessMatrix IWirelessNode]))
+  (:import [cn.li.acapi.wireless IWirelessNode]))
 
-;; Message IDs (same as client-side)
-(def freq-scan-msg   1005)
+(def freq-scan-msg 1005)
 (def freq-config-msg 1006)
 
-;; --- Target resolution ---
-
-(defn- resolve-hit-target
-  "Ray-trace from the player's look direction. Returns {:world :pos :tile} or nil."
-  [player]
+(defn- resolve-hit-target [player]
   (when-let [hit (entity/player-raytrace-block player 4.0 false)]
     (let [world (entity/player-get-level player)
-          hx (:x (:hit-pos hit)) hy (:y (:hit-pos hit)) hz (:z (:hit-pos hit))
-          bp (pos/create-block-pos hx hy hz)]
-      {:world world :pos {:x hx :y hy :z hz} :tile (platform-be/get-block-entity world bp)})))
+          hx (:x (:hit-pos hit))
+          hy (:y (:hit-pos hit))
+          hz (:z (:hit-pos hit))
+          block-pos (pos/create-block-pos hx hy hz)]
+      {:world world
+       :pos {:x hx :y hy :z hz}
+       :tile (platform-be/get-block-entity world block-pos)})))
 
-(defn- resolve-target
-  "Resolve the target tile from a remembered scan position (payload :pos) when
-  present, falling back to a fresh ray-trace. Preferring the remembered
-  position avoids acting on a different block if the player's aim drifts by
-  even a pixel between the scan and configure/link/unlink steps."
-  [player payload]
-  (if-let [p (:pos payload)]
+(defn- resolve-target [player remembered-pos]
+  (if remembered-pos
     (let [world (entity/player-get-level player)
-          bp (pos/create-block-pos (:x p) (:y p) (:z p))]
-      {:world world :pos p :tile (platform-be/get-block-entity world bp)})
+          block-pos (pos/create-block-pos (:x remembered-pos)
+                                          (:y remembered-pos)
+                                          (:z remembered-pos))]
+      {:world world
+       :pos remembered-pos
+       :tile (platform-be/get-block-entity world block-pos)})
     (resolve-hit-target player)))
 
-;; --- Scan handler ---
+(defn- device-info [tile position]
+  (cond
+    (cap-resolver/matrix-capability tile)
+    (when-let [network (wireless/get-wireless-net-by-matrix tile)]
+      {:type :matrix :pos position :ssid (wireless/network-ssid network)})
 
-(defn- handle-scan
-  "Ray-trace from the player's look direction to find a wireless device.
-  Returns device info (type, SSID, password, position) if found."
-  [_payload player]
+    (cap-resolver/node-capability tile)
+    {:type :node
+     :pos position
+     :node-name (.getNodeName ^IWirelessNode
+                              (cap-resolver/node-capability tile))}
+
+    (cap-resolver/generator-capability tile)
+    {:type :generator :pos position}
+
+    (cap-resolver/receiver-capability tile)
+    {:type :receiver :pos position}
+
+    :else nil))
+
+(defn- handle-scan [_payload player]
   (try
     (if-let [{:keys [pos tile]} (resolve-hit-target player)]
-      (let [matrix-cap (cap-resolver/matrix-capability tile)
-            node-cap  (cap-resolver/node-capability tile)]
-        (cond
-          matrix-cap
-          (let [network (wireless/get-wireless-net-by-matrix tile)
-                ssid (if network
-                       (wireless/network-ssid network)
-                       (.getSsid ^IWirelessMatrix matrix-cap))]
-            {:success true
-             :device {:type :matrix
-                      :pos pos
-                      :ssid (or ssid "")
-                      :password (.getPassword ^IWirelessMatrix matrix-cap)
-                      :has-network (some? network)
-                      :node-count (if network (wireless/network-load network) 0)}})
-
-          node-cap
-          ;; :ssid/:password here describe the TARGET matrix network this node
-          ;; should join (upstream's matrix-authorize-then-link-node flow) —
-          ;; not the node's own name/password, which are irrelevant to linking.
-          ;; Pre-fill with the currently-linked network's SSID so re-linking
-          ;; shows what's already connected; leave blank when unlinked.
-          (let [network (wireless/get-wireless-net-by-node tile)]
-            {:success true
-             :device {:type :node
-                      :pos pos
-                      :node-name (.getNodeName ^IWirelessNode node-cap)
-                      :ssid (if network (wireless/network-ssid network) "")
-                      :linked? (some? network)}})
-
-          :else
-          {:success false :error "Target block is not a wireless device"}))
-      {:success false :error "No block targeted"})
+      (if-let [device (device-info tile pos)]
+        {:success true :device device}
+        {:success false :reason :unsupported
+         :error "Target block is not a wireless device"})
+      {:success false :reason :not-found :error "No block targeted"})
     (catch Throwable e
-      (log/error "Error in freq scan handler:" (ex-message e))
+      (log/error "Error in frequency transmitter scan:" (ex-message e))
       {:success false :error (ex-message e)})))
 
-;; --- Config handler ---
+(defn- authorize-source
+  [player {:keys [source-pos source-type password]}]
+  (if-let [{:keys [tile]} (resolve-target player source-pos)]
+    (case source-type
+      :matrix
+      (if-let [network (wireless/get-wireless-net-by-matrix tile)]
+        (if (= (str password) (str (wireless/network-password network)))
+          {:success true}
+          {:success false :reason :password})
+        {:success false :reason :not-found
+         :error "Matrix does not own a network"})
 
-(defn- handle-configure
-  "For a matrix: rename SSID / change password of its existing network.
-  For a node: link it into the network named `ssid` (authenticating with
-  `password`, matching upstream's matrix-authorize-then-link-node flow) —
-  or, when :unlink? is set, disconnect it from its current network."
-  [payload player]
+      :node
+      (if-let [node-cap (cap-resolver/node-capability tile)]
+        (if (= (str password) (str (.getPassword ^IWirelessNode node-cap)))
+          {:success true}
+          {:success false :reason :password})
+        {:success false :reason :not-a-node})
+
+      {:success false :reason :unsupported})
+    {:success false :reason :not-found
+     :error "Source device is no longer available"}))
+
+(defn- result-response [device-type result]
+  (assoc result :messages (feedback/result->messages device-type result)))
+
+(defn- link-target
+  [player {:keys [source-pos source-type password]}]
+  (let [source (resolve-target player source-pos)
+        target (resolve-hit-target player)]
+    (cond
+      (nil? source)
+      {:success false :reason :not-found
+       :error "Source device is no longer available"}
+
+      (nil? target)
+      {:success false :reason :not-found :error "No block targeted"}
+
+      (= source-type :matrix)
+      (if (cap-resolver/node-capability (:tile target))
+        (result-response
+          :node
+          (wireless/link-node-to-network!
+            (:tile target) (:tile source) password))
+        {:success false :reason :not-a-node
+         :error "Target is not a wireless node"})
+
+      (= source-type :node)
+      (cond
+        (cap-resolver/generator-capability (:tile target))
+        (result-response
+          :generator
+          (wireless/link-generator-to-node!
+            (:tile target) (:tile source) password false))
+
+        (cap-resolver/receiver-capability (:tile target))
+        (result-response
+          :receiver
+          (wireless/link-receiver-to-node!
+            (:tile target) (:tile source) password false))
+
+        :else
+        {:success false :reason :not-a-wireless-user
+         :error "Target is not a wireless generator or receiver"})
+
+      :else
+      {:success false :reason :unsupported})))
+
+(defn- handle-configure [payload player]
   (try
-    (let [{:keys [ssid password unlink?]} payload]
-      (if-let [{:keys [world tile]} (resolve-target player payload)]
-        (cond
-          (cap-resolver/matrix-capability tile)
-          (let [network (wireless/get-wireless-net-by-matrix tile)]
-            (if network
-              (if (and (string? ssid) (string? password))
-                (do
-                  (wireless/change-network-ssid! network ssid)
-                  (wireless/change-network-password! network password)
-                  {:success true
-                   :message "Network configuration updated successfully"})
-                {:success false :error "SSID and password are required"})
-              {:success false :error "Matrix does not own a network"}))
-
-          (cap-resolver/node-capability tile)
-          (if unlink?
-            (let [result (wireless/unlink-node-from-network! tile)]
-              (assoc result :messages (feedback/result->messages :node result)))
-            (if (and (string? ssid) (string? password))
-              (let [result (wireless/connect-node-to-ssid! world tile ssid password)]
-                (assoc result :messages (feedback/result->messages :node result)))
-              {:success false :error "SSID and password are required"}))
-
-          :else
-          {:success false :error "No wireless device targeted"})
-        {:success false :error "No block targeted"}))
+    (case (:operation payload)
+      :authorize (authorize-source player payload)
+      :link-target (link-target player payload)
+      {:success false :reason :unsupported
+       :error "Unknown transmitter operation"})
     (catch Throwable e
-      (log/error "Error in freq config handler:" (ex-message e))
+      (log/error "Error in frequency transmitter command:" (ex-message e))
       {:success false :error (ex-message e)})))
 
-;; --- Registration ---
-
-(defn register-handlers!
-  "Register freq transmitter server-side network handlers."
-  []
+(defn register-handlers! []
   (net-server/register-handler freq-scan-msg handle-scan)
   (net-server/register-handler freq-config-msg handle-configure)
-  (log/info "Freq transmitter network handlers registered"))
+  (log/info "Frequency transmitter handlers registered"))

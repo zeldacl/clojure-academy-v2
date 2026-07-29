@@ -32,13 +32,21 @@
   (swap! external-catalog assoc (:id media) (assoc media :external? true))
   nil)
 
+(defn update-external-media!
+  "Update mutable client-local metadata for one external track."
+  [id changes]
+  (let [id (keyword id)]
+    (when (contains? @external-catalog id)
+      (swap! external-catalog update id merge (select-keys changes [:name :desc]))))
+  nil)
+
 (defn reset-external-media!
   "Clear all registered external tracks (used before a rescan)."
   []
   (reset! external-catalog {})
   nil)
 
-(defn internal-medias [] (vec (vals internal-catalog)))
+(defn internal-medias [] (mapv internal-catalog internal-media-ids))
 (defn external-medias [] (vec (vals @external-catalog)))
 (defn all-medias [] (into (internal-medias) (external-medias)))
 

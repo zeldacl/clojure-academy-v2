@@ -26,6 +26,18 @@
 
       </group>
 
+      <group id="callback-row" pos="0.0,0.0" size="611.0,60.0" align="left,top">
+
+        <text id="callback-label" pos="15.0,0.0" size="300.0,40.0" align="left,center" text="" font-size="40.0" color="#FFFFFFFF"/>
+
+        <box id="callback-button" pos="440.0,0.0" size="160.0,40.0" align="left,center" fill="#FF333333" hover-tint="1.65">
+
+          <text id="callback-button-text" pos="0.0,0.0" size="160.0,40.0" align="center,center" text="OK" font-size="40.0" color="#FFFFFFFF"/>
+
+        </box>
+
+      </group>
+
     </group>
 
   </template>
@@ -43,4 +55,3 @@
   </image>
 
 </Ui>
-
