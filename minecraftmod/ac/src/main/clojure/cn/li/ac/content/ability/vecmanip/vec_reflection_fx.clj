@@ -38,6 +38,26 @@
           (update :wave-effects dissoc owner-key))))
   nil)
 
+(defn- queue-reflection-sound!
+  [x y z]
+  (client-sounds/queue-current-sound-effect!
+    {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
+     :x (double (or x 0.0))
+     :y (double (or y 0.0))
+     :z (double (or z 0.0))}))
+
+(defn- enqueue-wave
+  [store owner-key base-meta x y z]
+  (let [life (+ 8 (rand-int 6))]
+    (update-in store [:wave-effects owner-key]
+      (fnil conj [])
+      (merge base-meta
+             {:x (double (or x 0.0))
+              :y (double (or y 0.0))
+              :z (double (or z 0.0))
+              :ttl life
+              :max-ttl life}))))
+
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
   (let [store* (or store (default-vec-reflection-fx-runtime-state))
@@ -57,22 +77,14 @@
                 (merge base-meta {:active? false :ticks 0}))
       :reflect-entity
       (if reflected?
-        (let [life (+ 8 (rand-int 6))]
-          (update-in store* [:wave-effects owner-key*]
-            (fnil conj [])
-            (merge base-meta
-                   {:x (double (or x 0.0))
-                    :y (double (or y 0.0))
-                    :z (double (or z 0.0))
-                    :ttl life
-                    :max-ttl life})))
+        (do
+          (queue-reflection-sound! x y z)
+          (enqueue-wave store* owner-key* base-meta x y z))
         store*)
       :play
       (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
-           :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))})
-        store*)
+        (queue-reflection-sound! x y z)
+        (enqueue-wave store* owner-key* base-meta x y z))
       store*)))
 
 (defn- tick-state!
@@ -145,7 +157,7 @@
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
         alpha (int (max 0 (min 255 (* 180.0 life))))
         ^V3 cam (vec3/map->v3 cam-pos)
-        center (vec3/v3 (double x) (+ (double y) 0.6) (double z))
+        center (vec3/v3 (double x) (double y) (double z))
         right (ru/camera-facing-right-axis center cam)
         up (ru/billboard-up-axis center cam right)
         half-size (+ 0.4 (* 0.6 (- 1.0 life)))

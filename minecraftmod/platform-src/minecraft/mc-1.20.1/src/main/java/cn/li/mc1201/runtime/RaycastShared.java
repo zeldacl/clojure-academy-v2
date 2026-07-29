@@ -395,6 +395,10 @@ public final class RaycastShared {
         hit.put("x", entity.position().x);
         hit.put("y", entity.position().y);
         hit.put("z", entity.position().z);
+        Vec3 hitVec = optionalHit.get();
+        hit.put("hit-x", hitVec.x);
+        hit.put("hit-y", hitVec.y);
+        hit.put("hit-z", hitVec.z);
         hit.put("eye-height", entity.getEyeHeight());
         hit.put("distance", distance);
         return hit;

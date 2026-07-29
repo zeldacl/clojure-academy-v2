@@ -65,6 +65,19 @@
       (is (false? (damage-handler/run-attack-precheck-side-effects! "p" "a" 7.0 :src)))
       (is (= 0 @reflect-calls)))))
 
+(deftest reflection-target-prefers-direct-damage-source-entity-test
+  (with-redefs [cn.li.mcmod.platform.entity-damage/available? (constantly true)
+                cn.li.mcmod.platform.entity-damage/direct-source-entity-id
+                (fn [damage-source]
+                  (when (= :projectile-source damage-source)
+                    "projectile"))]
+    (is (= "projectile"
+           (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/reflection-target-id
+             "shooter" :projectile-source)))
+    (is (= "shooter"
+           (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/reflection-target-id
+             "shooter" :melee-source)))))
+
 (deftest can-cancel-attack-precheck-threshold-test
   (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-1")
                 cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
@@ -79,10 +92,11 @@
                                                                                 :combat.min-reflected-damage 5.0
                                                                                 0.0))
                 cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})]
-    ;; damage=2 -> consumption=4, current-cp=3 => false
+    ;; Original passby check is based on reflected damage, not available CP.
+    ;; damage=2 -> reflected=2 < min(5) => false
     (is (false? (vr/can-cancel-attack? "p" "a" 2.0)))
-      (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 15.0)]
-        ;; damage=6 -> consumption=12, current-cp=15 >= 12, reflected=6 >= min(5) => true
+      (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 0.0)]
+        ;; damage=6 -> reflected=6 >= min(5) => true
       (is (true? (vr/can-cancel-attack? "p" "a" 6.0))))))
 
 (deftest visited-map-prune-ttl-and-max-size-test
@@ -117,7 +131,7 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _]
+                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
@@ -144,7 +158,7 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 2)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _]
+                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
@@ -171,7 +185,7 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _]
+                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
@@ -199,7 +213,7 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _]
+                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
                                                                             (swap! applied conj [world-id attacker-id damage]))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
@@ -208,6 +222,41 @@
         (ctx/with-context-owner (test-context-owner "p")
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
       (is (= [["w" "a" 10.0]] @applied)))))
+
+(deftest reflect-damage-force-consumes-available-cp-test
+  (let [consumed (atom [])
+        applied (atom [])]
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state
+                  (fn [_] {:position {:world-id "w"}})
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 3.0)
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/consume-cp!
+                  (fn [player-id amount]
+                    (swap! consumed conj [player-id amount])
+                    true)
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/cfg-lerp
+                  (fn [field _]
+                    (case field
+                      :combat.damage-multiplier 0.5
+                      :cost.damage.cp 2.0
+                      0.0))
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/cfg-double
+                  (fn [field]
+                    (case field
+                      :progression.exp-damage-scale 0.0
+                      0.0))
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
+                  cn.li.mcmod.platform.entity-damage/available? (constantly true)
+                  cn.li.mcmod.platform.entity-damage/apply-direct-damage!
+                  (fn [world-id attacker-id damage source-type opts]
+                    (swap! applied conj [world-id attacker-id damage source-type opts]))
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [& _] nil)
+                  cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id
+                  (fn [_] nil)]
+      (ctx/with-context-owner (test-context-owner "p")
+        (is (= [true 5.0] (vr/reflect-damage "p" "a" 10.0))))
+      (is (= [["p" 3.0]] @consumed))
+      (is (= [["w" "a" 5.0 :skill {:attacker-uuid "p"}]] @applied)))))
 
 (deftest vec-reflection-state-is-per-player-test
   (ps-fix/seed-player-state! "p2" {})
@@ -228,10 +277,10 @@
   (let [spawn-calls (atom [])
         discard-calls (atom [])
         fx-calls (atom 0)]
-    (with-redefs [ctx/get-context (fn [_]
-                                    {:skill-state {:toggle {:vec-reflection {:active true}}
-                                                   :vec-reflection-overload-keep 0.0
-                                                   :vec-reflection-visited-map {}}})
+    (with-redefs [ctx-skill/get-context (fn [_]
+                                          {:skill-state {:toggle {:vec-reflection {:active true}}
+                                                         :vec-reflection-overload-keep 0.0
+                                                         :vec-reflection-visited-map {}}})
                   ctx-skill/update-skill-state-root! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
@@ -261,23 +310,31 @@
                   cn.li.mcmod.platform.world-effects/find-entities-in-radius (fn [& _]
                                                                                [{:uuid "e1"
                                                                                  :entity-id "minecraft:fireball"
+                                                                                 :owner-uuid "shooter"
+                                                                                 :explosion-power 3
                                                                                  :x 1.0 :y 65.0 :z 1.0}])
                   cn.li.mcmod.platform.world-effects/spawn-projectile! (fn [world-id spec]
                                                                          (swap! spawn-calls conj [world-id spec])
                                                                          {:success? true :uuid "spawned" :entity-id (:entity-id spec)})
                   cn.li.mcmod.platform.raycast/available? (constantly true)
                   cn.li.mcmod.platform.raycast/player-look-vector (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
+                  cn.li.mcmod.platform.raycast/player-position (fn [& _]
+                                                                  {:world-id "w" :x 0.0 :y 64.0 :eye-y 65.62 :z 0.0})
+                  cn.li.mcmod.platform.raycast/raycast-blocks (fn [& _]
+                                                                {:hit-x 20.0 :hit-y 65.0 :hit-z 1.0 :distance 20.0})
+                  cn.li.mcmod.platform.raycast/raycast-from-player (fn [& _] nil)
                   cn.li.ac.ability.effects.motion/entity-motion-available? (constantly true)
                   cn.li.ac.ability.effects.motion/entity-velocity (fn [& _] {:x 1.0 :y 0.0 :z 0.0})
                   cn.li.ac.ability.effects.motion/discard-entity! (fn [world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
-         "p1" "ctx-1" true)
+         "p1" "ctx-1" 0.5 true)
       (is (= 1 (count @spawn-calls)))
       (let [[world-id spec] (first @spawn-calls)]
         (is (= "w" world-id))
         (is (= "minecraft:fireball" (:entity-id spec)))
-        (is (= "p1" (:owner-uuid spec)))
+        (is (= "shooter" (:owner-uuid spec)))
+        (is (= 3 (:explosion-power spec)))
         (is (= 1.0 (:vx spec)))
         (is (= 0.0 (:vy spec)))
         (is (= 0.0 (:vz spec))))
@@ -288,10 +345,10 @@
   (let [spawn-calls (atom [])
         set-velocity-calls (atom [])
         discard-calls (atom [])]
-    (with-redefs [ctx/get-context (fn [_]
-                                    {:skill-state {:toggle {:vec-reflection {:active true}}
-                                                   :vec-reflection-overload-keep 0.0
-                                                   :vec-reflection-visited-map {}}})
+    (with-redefs [ctx-skill/get-context (fn [_]
+                                          {:skill-state {:toggle {:vec-reflection {:active true}}
+                                                         :vec-reflection-overload-keep 0.0
+                                                         :vec-reflection-visited-map {}}})
                   ctx-skill/update-skill-state-root! (fn [& _] nil)
                   cn.li.ac.ability.util.toggle/is-toggle-active? (fn [_ _] true)
                   cn.li.ac.ability.util.toggle/update-toggle-tick! (fn [& _] nil)
@@ -327,6 +384,11 @@
                                                                          {:success? false})
                   cn.li.mcmod.platform.raycast/available? (constantly true)
                   cn.li.mcmod.platform.raycast/player-look-vector (fn [& _] {:x 0.0 :y 1.0 :z 0.0})
+                  cn.li.mcmod.platform.raycast/player-position (fn [& _]
+                                                                  {:world-id "w" :x 0.0 :y 64.0 :eye-y 65.62 :z 0.0})
+                  cn.li.mcmod.platform.raycast/raycast-blocks (fn [& _]
+                                                                {:hit-x 1.0 :hit-y 85.0 :hit-z 1.0 :distance 20.0})
+                  cn.li.mcmod.platform.raycast/raycast-from-player (fn [& _] nil)
                   cn.li.ac.ability.effects.motion/entity-motion-available? (constantly true)
                   cn.li.ac.ability.effects.motion/entity-velocity (fn [& _] {:x 0.0 :y 0.0 :z 2.0})
                   cn.li.ac.ability.effects.motion/set-entity-velocity! (fn [world-id entity-id vx vy vz]
@@ -334,7 +396,7 @@
                   cn.li.ac.ability.effects.motion/discard-entity! (fn [world-id entity-id]
                                                                        (swap! discard-calls conj [world-id entity-id]))]
       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/vec-reflection-on-key-tick-body
-         "p1" "ctx-1" true)
+         "p1" "ctx-1" 0.5 true)
       (is (= 1 (count @spawn-calls)))
       (is (= [["w" "e1" 0.0 2.0 0.0]] @set-velocity-calls))
       (is (empty? @discard-calls)))))

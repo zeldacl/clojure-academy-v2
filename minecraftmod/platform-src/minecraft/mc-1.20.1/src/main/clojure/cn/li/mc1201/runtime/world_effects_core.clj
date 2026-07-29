@@ -1,6 +1,7 @@
 (ns cn.li.mc1201.runtime.world-effects-core
   "Shared Minecraft-side world effects helpers (no loader API imports)."
   (:import [cn.li.mc1201.entity ScriptedBlockBodyEntity ScriptedEffectEntity]
+           [net.minecraft.nbt CompoundTag]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources ResourceLocation]
@@ -9,7 +10,7 @@
            [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.entity.monster Monster]
-           [net.minecraft.world.entity.projectile Projectile]
+           [net.minecraft.world.entity.projectile LargeFireball Projectile]
            [net.minecraft.world.level Level]
            [net.minecraft.world.phys AABB Vec3]))
 
@@ -20,24 +21,29 @@
         ^ScriptedEffectEntity scripted-entity (when scripted? entity)
         age-ticks (when scripted? (.getAgeTicks scripted-entity))
         motion-progress (when (and scripted? (.hasMotionProgress scripted-entity))
-              (.getMotionProgress scripted-entity))]
+                          (.getMotionProgress scripted-entity))
+        projectile? (instance? Projectile entity)
+        owner (when projectile? (.getOwner ^Projectile entity))
+        explosion-power (when (instance? LargeFireball entity)
+                          (let [tag (.saveWithoutId entity (CompoundTag.))]
+                            (.getInt tag "ExplosionPower")))]
     {:uuid (str (.getUUID entity))
      :x (.x pos)
      :y (.y pos)
      :z (.z pos)
      :width (double (.getBbWidth entity))
      :height (double (.getBbHeight entity))
-     :eye-height (if (instance? LivingEntity entity)
-                   (double (.getEyeHeight ^LivingEntity entity))
-                   (double (.getBbHeight entity)))
+     :eye-height (double (.getEyeHeight entity))
      :entity-id (when resolve-entity-id-fn (resolve-entity-id-fn entity))
      :type (str (.getDescriptionId (.getType entity)))
      :living? (instance? LivingEntity entity)
      :mob? (instance? Monster entity)
      :item? (instance? ItemEntity entity)
-    :projectile? (instance? Projectile entity)
-    :age-ticks age-ticks
-    :motion-progress motion-progress}))
+     :projectile? projectile?
+     :owner-uuid (when owner (str (.getUUID ^Entity owner)))
+     :explosion-power explosion-power
+     :age-ticks age-ticks
+     :motion-progress motion-progress}))
 
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]
@@ -105,13 +111,18 @@
 
 (defn spawn-projectile-in-level!
   [^Level level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn]
-  (let [{:keys [entity-id x y z vx vy vz owner-uuid]} projectile-spec]
+  (let [{:keys [entity-id x y z vx vy vz owner-uuid explosion-power]} projectile-spec]
     (try
       (let [^EntityType entity-type (.get BuiltInRegistries/ENTITY_TYPE (ResourceLocation. (str entity-id)))]
         (if-not entity-type
           {:success? false}
           (if-let [^Entity entity (.create entity-type level)]
             (do
+              (when (and (instance? LargeFireball entity)
+                         (number? explosion-power))
+                (let [tag (.saveWithoutId entity (CompoundTag.))]
+                  (.putInt tag "ExplosionPower" (int explosion-power))
+                  (.load entity tag)))
               (.moveTo entity
                        (double (or x 0.0))
                        (double (or y 0.0))

@@ -11,7 +11,8 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
-           [net.minecraft.world.entity LivingEntity]
+           [net.minecraft.world.damagesource DamageSource]
+           [net.minecraft.world.entity Entity LivingEntity]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.phys AABB]))
 
@@ -24,7 +25,7 @@
          (+ x radius) (+ y radius) (+ z radius)))
 
 (defn- apply-vanilla-hurt!
-  [^LivingEntity entity dmg-source damage]
+  [^Entity entity dmg-source damage]
   (.hurt entity dmg-source (float damage)))
 
 (defn- pvp-blocked?
@@ -51,7 +52,13 @@
         resolve-level (fn [world-id]
                         (when-let [^MinecraftServer server (server-fn)]
                           (resolve-level* server resolve-level-fn world-id)))]
-    {:apply-direct-damage!
+    {:direct-source-entity-id
+     (fn [damage-source]
+       (when (instance? DamageSource damage-source)
+         (when-let [^Entity direct-source (.getDirectEntity ^DamageSource damage-source)]
+           (str (.getUUID direct-source)))))
+
+     :apply-direct-damage!
      (fn apply-direct-damage-impl
        ([world-id entity-uuid damage source-type]
         (apply-direct-damage-impl world-id entity-uuid damage source-type nil))
@@ -59,14 +66,14 @@
         (try
           (if-let [^ServerLevel level (resolve-level world-id)]
             (if-let [entity (get-entity-by-uuid level entity-uuid)]
-              (if (and (living? entity) (not (pvp-blocked? entity)))
-                (let [^LivingEntity living entity
-                      attacker (when-let [attacker-uuid (:attacker-uuid opts)]
+              (if-not (pvp-blocked? entity)
+                (let [attacker (when-let [attacker-uuid (:attacker-uuid opts)]
                                  (get-entity-by-uuid level attacker-uuid))
                       dmg-source (core/resolve-damage-source level source-type attacker)]
-                  (when (:reset-invulnerable-time? opts)
-                    (set! (.-invulnerableTime living) (int 0)))
-                  (apply-hurt! living dmg-source (float damage))
+                  (when (and (:reset-invulnerable-time? opts)
+                             (instance? LivingEntity entity))
+                    (set! (.-invulnerableTime ^LivingEntity entity) (int 0)))
+                  (apply-hurt! entity dmg-source (float damage))
                   true)
                 false)
               false)

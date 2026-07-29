@@ -64,6 +64,12 @@
   ([world-id entity-uuid damage source-type opts]
    (call :apply-direct-damage! world-id entity-uuid damage source-type opts)))
 
+(defn direct-source-entity-id
+  "Return the UUID of a native damage source's direct/immediate entity.
+  This differs from the causing entity for projectile damage."
+  [damage-source]
+  (call :direct-source-entity-id damage-source))
+
 (defn apply-aoe-damage!
   [world-id x y z radius damage source-type falloff?]
   (call :apply-aoe-damage! world-id x y z radius damage source-type falloff?))

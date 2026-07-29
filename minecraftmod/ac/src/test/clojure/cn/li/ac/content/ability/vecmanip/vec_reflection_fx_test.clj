@@ -9,7 +9,8 @@
   (try
         (level-effects/reset-level-effect-registry-for-test!)
         (vrfx/reset-vec-reflection-fx-for-test!)
-        (f)
+        (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+          (f))
         (finally
           (vrfx/reset-vec-reflection-fx-for-test!)
           (level-effects/reset-level-effect-registry-for-test!))))
@@ -22,6 +23,11 @@
    :ctx-id ctx-id
    :channel :vec-reflection/fx-reflect-entity
    :owner-key [:ctx ctx-id]})
+
+(defn- update-from-event!
+  [enqueue-state! {:keys [ctx-id channel owner-key payload]}]
+  (level-effects/update-effect-state!
+    :vec-reflection enqueue-state! ctx-id channel owner-key payload))
 
 (deftest init-registers-owner-aware-vec-reflection-fx-test
   (let [registered-level* (atom nil)
@@ -45,16 +51,36 @@
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)]
     (is (= (vrfx/default-vec-reflection-fx-runtime-state)
            (vrfx/vec-reflection-fx-snapshot)))
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-main" {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? false}))
     (is (empty? (:wave-effects (vrfx/vec-reflection-fx-snapshot))))
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-main" {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true}))
     (let [waves (get (:wave-effects (vrfx/vec-reflection-fx-snapshot)) [:ctx "ctx-main"])]
       (is (= 1 (count waves)))
       (is (= 3.0 (:z (first waves)))))))
+
+(deftest projectile-and-damage-reflection-both-play-sound-and-wave-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)
+        sounds* (atom [])]
+    (with-redefs [client-sounds/queue-current-sound-effect!
+                  (fn [sound]
+                    (swap! sounds* conj sound))]
+      (update-from-event!
+        enqueue-state!
+        (event "ctx-main"
+               {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true}))
+      (update-from-event!
+        enqueue-state!
+        {:payload {:mode :play :x 4.0 :y 5.0 :z 6.0}
+         :ctx-id "ctx-main"
+         :channel :vec-reflection/fx-play
+         :owner-key [:ctx "ctx-main"]}))
+    (is (= 2 (count @sounds*)))
+    (is (= 2 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot))
+                         [:ctx "ctx-main"]))))))
 
 (deftest init-registers-reflected-flag-through-fx-channel-handler-test
   (let [handlers* (atom {})
@@ -72,42 +98,28 @@
        {:x 1.0 :y 2.0 :z 3.0 :reflected? true})
       ((get @handlers* :vec-reflection/fx-reflect-entity) "ctx-1" :vec-reflection/fx-reflect-entity
        {:x 4.0 :y 5.0 :z 6.0 :reflected? false})
-      (is (= [[:vec-reflection {:mode :reflect-entity
-                                :owner-key [:ctx "ctx-1"]
-                                :ctx-id "ctx-1"
-                                :channel :vec-reflection/fx-reflect-entity
-                                :x 1.0
-                                :y 2.0
-                                :z 3.0
-                                :reflected? true}
-               {:ctx-id "ctx-1"
-                :channel :vec-reflection/fx-reflect-entity
-                :owner-key [:ctx "ctx-1"]}]
-              [:vec-reflection {:mode :reflect-entity
-                                :owner-key [:ctx "ctx-1"]
-                                :ctx-id "ctx-1"
-                                :channel :vec-reflection/fx-reflect-entity
-                                :x 4.0
-                                :y 5.0
-                                :z 6.0
-                                :reflected? false}
-               {:ctx-id "ctx-1"
-                :channel :vec-reflection/fx-reflect-entity
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
+                {:mode :reflect-entity
+                 :x 1.0 :y 2.0 :z 3.0 :reflected? true}
+                '(:owner-key [:ctx "ctx-1"])]
+              [:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
+                {:mode :reflect-entity
+                 :x 4.0 :y 5.0 :z 6.0 :reflected? false}
+                '(:owner-key [:ctx "ctx-1"])]]
              @enqueued*)))))
 
 (deftest two-owners-keep-vec-reflection-state-and-waves-independent-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)]
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-a" {:mode :start :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-b" {:mode :start :source-player-id "player-b"}))
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-a" {:mode :reflect-entity :x 1.0 :y 2.0 :z 3.0 :reflected? true :source-player-id "player-a"}))
-    (level-effects/update-effect-state! :vec-reflection
+    (update-from-event!
       enqueue-state!
       (event "ctx-b" {:mode :reflect-entity :x 4.0 :y 5.0 :z 6.0 :reflected? true :source-player-id "player-b"}))
     (let [snapshot (vrfx/vec-reflection-fx-snapshot)]
@@ -119,5 +131,3 @@
       (let [after-clear (vrfx/vec-reflection-fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (= 1 (count (get (:wave-effects after-clear) [:ctx "ctx-b"]))))))))
-
-
