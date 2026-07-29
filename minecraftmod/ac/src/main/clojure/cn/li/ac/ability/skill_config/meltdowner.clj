@@ -26,8 +26,9 @@
   {:skill-id :electron-missile :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "ElectronMissile exp gained per hit."}
 
   {:skill-id :jet-engine :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [7.0 20.0] :comment "JetEngine trigger-hit damage endpoints."}
-  {:skill-id :jet-engine :id :cost.down.cp :path "cost.down.cp" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [170.0 140.0] :comment "JetEngine release-stage CP cost."}
-  {:skill-id :jet-engine :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [60.0 50.0] :comment "JetEngine release-stage overload cost."}
+  {:skill-id :jet-engine :id :cost.hold.required-cp :path "cost.hold.required-cp" :section-suffix "cost.hold" :type :double-list :min 0.0 :list-count 2 :default [170.0 140.0] :comment "JetEngine CP required to keep marking (original consumption variable)."}
+  {:skill-id :jet-engine :id :cost.release.cp :path "cost.release.cp" :section-suffix "cost.release" :type :double-list :min 0.0 :list-count 2 :default [60.0 50.0] :comment "JetEngine release CP cost (original overload variable passed as consume's CP argument)."}
+  {:skill-id :jet-engine :id :cost.release.overload :path "cost.release.overload" :section-suffix "cost.release" :type :double-list :min 0.0 :list-count 2 :default [170.0 140.0] :comment "JetEngine release overload cost (original consumption variable passed as consume's overload argument)."}
   {:skill-id :jet-engine :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "JetEngine cooldown ticks after successful release."}
   {:skill-id :jet-engine :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.004 :comment "JetEngine exp gained on successful release."}
 

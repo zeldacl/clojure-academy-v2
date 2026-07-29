@@ -5,7 +5,7 @@
   - key down: enter marking phase
   - key tick: keep target marker synced while checking CP affordability
   - key up: settle resource once (cp+overload), then enter triggering phase
-  - triggering ticks: move player toward target, apply segment hit once per target
+  - triggering ticks: move player toward target, apply segment hit every tick
   - terminate after trigger lifetime or abort/failure
 
   No Minecraft imports."
@@ -30,11 +30,14 @@
 (def ^:private trigger-lifetime-ticks 15)
 (def ^:private min-segment-distance 1.0e-5)
 
+(defn- hold-cp-requirement [player-id]
+  (cfg-lerp :cost.hold.required-cp (skill-exp player-id)))
+
 (defn- release-cp-cost [player-id]
-  (cfg-lerp :cost.down.cp (skill-exp player-id)))
+  (cfg-lerp :cost.release.cp (skill-exp player-id)))
 
 (defn- release-overload-cost [player-id]
-  (cfg-lerp :cost.down.overload (skill-exp player-id)))
+  (cfg-lerp :cost.release.overload (skill-exp player-id)))
 
 (defn- damage-amount [player-id]
   (cfg-lerp :combat.damage (skill-exp player-id)))
@@ -85,7 +88,7 @@
 ;; once, atomically, at release time via perform-resource! in jet-engine-up!
 ;; — same as original's ctx.consume() running once in s_onEnd.
 (defn- can-hold? [player-id]
-  (>= (skill-effects/current-cp player-id) (release-cp-cost player-id)))
+  (>= (skill-effects/current-cp player-id) (hold-cp-requirement player-id)))
 
 ;; Mark (targeting reticle) FX stays owner-only: original's l_spawnMark/
 ;; l_updateMark/l_endMark are all gated by isLocal even though MSG_MARK_END
@@ -120,26 +123,21 @@
   (fx/send-local-and-nearby! ctx-id {:topic :jet-engine/fx-trigger-end :mode :trigger-end} nil nil))
 
 (defn- mark-hit-and-damage!
-  [player-id ctx-id world-id hit hit-uuids]
+  [player-id ctx-id world-id hit]
   (let [target-id (str (:uuid hit))
         self-id (str player-id)]
-    (if (or (empty? target-id)
-            (= target-id self-id)
-            (contains? hit-uuids target-id))
-      hit-uuids
-      (do
-        (when (entity-damage/available?)
-          (entity-damage/apply-direct-damage!
-            world-id
-            target-id
-            (damage-amount player-id)
-            :magic))
-        (md-damage/mark-target! player-id target-id
-              {:ctx-id ctx-id
-               :target-pos {:x (:x hit)
-                      :y (:y hit)
-                      :z (:z hit)}})
-        (conj hit-uuids target-id)))))
+    (when-not (or (empty? target-id) (= target-id self-id))
+      (when (entity-damage/available?)
+        (entity-damage/apply-direct-damage!
+          world-id
+          target-id
+          (damage-amount player-id)
+          :magic))
+      (md-damage/mark-target! player-id target-id
+            {:ctx-id ctx-id
+             :target-pos {:x (:x hit)
+                    :y (:y hit)
+                    :z (:z hit)}}))))
 
 (defn- tick-triggering!
   [ctx-id player-id]
@@ -148,8 +146,7 @@
         trigger-ticks (long (or (:trigger-ticks st) 0))
         start-pos (:start-pos st)
         target-pos (:target-pos st)
-        world-id (or (:world-id st) (geom/world-id-of player-id))
-        hit-uuids (or (:hit-uuids st) #{})]
+        world-id (or (:world-id st) (geom/world-id-of player-id))]
     (if (or (nil? start-pos) (nil? target-pos) (>= trigger-ticks trigger-lifetime-ticks))
       (do
         (send-trigger-end! ctx-id)
@@ -162,9 +159,8 @@
         segment (geom/v- next-pos prev-pos)
         segment-distance (geom/vlen segment)
         segment-dir (geom/vnorm segment)]
-        (when (zero? trigger-ticks)
-          (when (motion-effects/player-motion-available?)
-            (motion-effects/dismount-riding! player-id)))
+        (when (motion-effects/player-motion-available?)
+          (motion-effects/dismount-riding! player-id))
         (when (motion-effects/teleportation-available?)
           (motion-effects/teleport-player! player-id
                                          world-id
@@ -183,13 +179,11 @@
                                               (:x prev-pos) (:y prev-pos) (:z prev-pos)
                                               (:x segment-dir) (:y segment-dir) (:z segment-dir)
                                               segment-distance))
-              next-hit-uuids (if hit
-                              (mark-hit-and-damage! player-id ctx-id world-id hit hit-uuids)
-                               hit-uuids)]
+              _ (when hit
+                  (mark-hit-and-damage! player-id ctx-id world-id hit))]
           (update-skill-state-root! ctx-id merge
                                     {:trigger-ticks next-tick
-                                     :last-pos next-pos
-                                     :hit-uuids next-hit-uuids})
+                                     :last-pos next-pos})
           (send-trigger-update! ctx-id next-pos next-tick))))))
 
 (defn jet-engine-down!
@@ -199,8 +193,7 @@
       (ctx-skill/replace-skill-state! ctx-id {:phase :marking
                                      :hold-ticks 0
                                      :target-pos target
-                                     :trigger-ticks 0
-                                     :hit-uuids #{}})
+                                     :trigger-ticks 0})
       (send-mark-start! ctx-id target))))
 
 (defn jet-engine-tick!
@@ -254,8 +247,7 @@
                                          :last-pos start-pos
                                          :velocity velocity
                                          :world-id (geom/world-id-of player-id)
-                                         :trigger-ticks 0
-                                         :hit-uuids #{}})
+                                         :trigger-ticks 0})
               (send-mark-end! ctx-id target-pos)
               (send-trigger-start! ctx-id start-pos target-pos velocity)
               (skill-effects/add-skill-exp! player-id jet-engine-skill-id (cfg-double :progression.exp-use))

@@ -50,16 +50,24 @@
   (let [{:keys [ctx* get-context update-skill-state-root! terminate-context! send! terminated*]} (context-mocks {:skill-state {:phase :marking
                                                                                                             :target-pos {:x 8.0 :y 65.0 :z 8.0}}})
         exp-calls* (atom [])
-        cooldown-calls* (atom [])]
+        cooldown-calls* (atom [])
+        resource-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx/terminate-context! terminate-context!
                   fx/send! send!
                   skill-effects/skill-exp (fn [_ _] 0.0)
-                  skill-config/lerp-double (fn [_ _ _] 10.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :cost.release.cp 60.0
+                                               :cost.release.overload 170.0
+                                               10.0))
                   skill-config/lerp-int (fn [_ _ _] 60)
                   skill-config/tunable-double (fn [_ _] 0.004)
-                  skill-effects/perform-resource! (fn [& _] {:success? true})
+                  skill-effects/perform-resource! (fn [player-id overload cp simulate?]
+                                                    (swap! resource-calls* conj
+                                                           [player-id overload cp simulate?])
+                                                    {:success? true})
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args))
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
                   geom/world-id-of (fn [_] "w")
@@ -70,6 +78,7 @@
                   motion-effects/player-position (fn [_] {:world-id "w" :x 1.0 :y 64.0 :z 1.0})]
       (cb/apply-invoke jet/jet-engine-up! :player-id "p1" :ctx-id "ctx-1")
       (is (= :triggering (get-in @ctx* [:skill-state :phase])))
+      (is (= [["p1" 170.0 60.0 false]] @resource-calls*))
       (is (seq @exp-calls*))
       (is (seq @cooldown-calls*))
       (is (empty? @terminated*)))))
@@ -95,7 +104,7 @@
       (is (empty? @cooldown-calls*))
       (is (= :marking (get-in @ctx* [:skill-state :phase]))))))
 
-(deftest jet-engine-triggering-hit-dedup-test
+(deftest jet-engine-triggering-repeats-hit-and-dismount-each-tick-test
   (let [{:keys [ctx* get-context update-skill-state-root! terminate-context! send!]} (context-mocks {:skill-state {:phase :triggering
                                                                                                             :start-pos {:x 0.0 :y 64.0 :z 0.0}
                                                                                                             :target-pos {:x 4.0 :y 64.0 :z 0.0}
@@ -106,6 +115,7 @@
                                                                                                             :hit-uuids #{}}})
         damage-calls* (atom [])
         teleport-calls* (atom [])
+        dismount-calls* (atom 0)
         marks* (atom [])]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -122,7 +132,9 @@
                                                     true)
                   motion-effects/reset-fall-damage! (fn [& _] true)
                   motion-effects/player-motion-available? (constantly true)
-                  motion-effects/dismount-riding! (fn [& _] true)
+                  motion-effects/dismount-riding! (fn [& _]
+                                                    (swap! dismount-calls* inc)
+                                                    true)
                   motion-effects/player-velocity (fn [& _] {:x 0.0 :y 0.0 :z 0.0})
                   motion-effects/set-player-velocity! (fn [& _] true)
                   raycast/available? (constantly true)
@@ -133,9 +145,11 @@
                                                         true)]
       (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 1)
       (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 2)
-      (is (= ["target-1"] @damage-calls*))
-      (is (= #{"target-1"} (get-in @ctx* [:skill-state :hit-uuids])))
+      (is (= ["target-1" "target-1"] @damage-calls*))
+      (is (= 2 @dismount-calls*))
       (is (= 2 (count @teleport-calls*)))
       (is (= [["p1" "target-1" {:ctx-id "ctx-1"
+                                  :target-pos {:x nil :y nil :z nil}}]
+              ["p1" "target-1" {:ctx-id "ctx-1"
                                   :target-pos {:x nil :y nil :z nil}}]]
              @marks*)))))
