@@ -1,25 +1,13 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-accel-test
-  "Unit tests for VecAccel skill logic.
-
-  Tests cover:
-    - compute-init-vel  (velocity computation, pitch clamp, speed scaling)
-    - check-ground-raycast  (platform nil guards)
-    - perform! action (launches player, skips when can-perform?=false)
-    - :fx :end payload (reads [:skill-state :performed?], not root context)"
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.raycast :as raycast]
-            ;; side-effectful require: ensures defskill runs and private fns are compiled
-            [cn.li.ac.content.ability.vecmanip.vec-accel]))
-
-;; ---------------------------------------------------------------------------
-;; Helpers �?access private fns
-;; ---------------------------------------------------------------------------
+            [cn.li.ac.content.ability.vecmanip.vec-accel :as va]))
 
 (def ^:private compute-init-vel
   @#'cn.li.ac.content.ability.vecmanip.vec-accel/compute-init-vel)
@@ -27,24 +15,17 @@
 (def ^:private check-ground-raycast
   @#'cn.li.ac.content.ability.vecmanip.vec-accel/check-ground-raycast)
 
-;; The skill spec map (public var created by defskill)
-(def ^:private spec
-  cn.li.ac.content.ability.vecmanip.vec-accel/vec-accel)
+(def ^:private spec va/vec-accel)
 
-;; ---------------------------------------------------------------------------
-;; Config mock helper
-;; ---------------------------------------------------------------------------
-
-;; Default config values matching vecmanip.clj defaults.
 (defmacro ^:private with-config-mocks [& body]
   `(with-redefs [cn.li.ac.content.ability.vecmanip.vec-accel/cfg-double
                  (fn [field#]
                    (case field#
-                     :movement.pitch-offset-radians   -0.174533
-                     :movement.max-velocity           2.5
+                     :movement.pitch-offset-radians -0.174533
+                     :movement.max-velocity 2.5
                      :targeting.groundless-exp-threshold 0.5
                      :targeting.ground-check-distance 2.0
-                     :progression.exp-use             0.002
+                     :progression.exp-use 0.002
                      0.0))
                  cn.li.ac.content.ability.vecmanip.vec-accel/cfg-int
                  (fn [field#]
@@ -54,8 +35,8 @@
                  cn.li.ac.content.ability.vecmanip.vec-accel/cfg-lerp
                  (fn [field# _exp#]
                    (case field#
-                     :cost.up.cp       120.0
-                     :cost.up.overload  30.0
+                     :cost.up.cp 120.0
+                     :cost.up.overload 30.0
                      0.0))
                  cn.li.ac.content.ability.vecmanip.vec-accel/cfg-lerp-int
                  (fn [field# _exp#]
@@ -69,146 +50,129 @@
                      0.0))]
      ~@body))
 
-;; ---------------------------------------------------------------------------
-;; 1. compute-init-vel �?horizontal look direction
-;; ---------------------------------------------------------------------------
-
 (deftest compute-init-vel-horizontal-test
-  (testing "horizontal look (y=0, z=1): slight upward y, forward z, zero x"
+  (testing "horizontal look is tilted upward by ten degrees"
     (with-config-mocks
-      (let [look-dir {:x 0.0 :y 0.0 :z 1.0}
-            vel      (compute-init-vel look-dir 10)]
-        (is (< (Math/abs (double (:x vel))) 1.0e-6)
-            "x velocity should be ~0 when look-x=0")
-        (is (pos? (double (:y vel)))
-            "y velocity should be positive (pitch offset tilts upward)")
-        (is (pos? (double (:z vel)))
-            "z velocity should be positive (forward)")))))
+      (let [vel (compute-init-vel {:x 0.0 :y 0.0 :z 1.0} 10)]
+        (is (< (Math/abs (double (:x vel))) 1.0e-6))
+        (is (pos? (double (:y vel))))
+        (is (pos? (double (:z vel))))))))
 
-;; ---------------------------------------------------------------------------
-;; 2. compute-init-vel �?straight up clamped to -π/2
-;; ---------------------------------------------------------------------------
-
-(deftest compute-init-vel-straight-up-clamp-test
-  (testing "looking straight up: pitch clamped to -π/2, horizontal components �?0"
+(deftest compute-init-vel-keeps-original-pitch-overrotation-test
+  (testing "looking almost straight up rotates past -90 degrees like EntityLook"
     (with-config-mocks
-      (let [look-dir {:x 0.0 :y 1.0 :z 0.0}
-            vel      (compute-init-vel look-dir 10)]
-        (is (< (Math/abs (double (:x vel))) 1.0e-4)
-            "x �?0 when clamped to vertical")
-        (is (< (Math/abs (double (:z vel))) 1.0e-4)
-            "z �?0 when clamped to vertical")
-        (is (pos? (double (:y vel)))
-            "y > 0: launching upward")))))
-
-;; ---------------------------------------------------------------------------
-;; 3. compute-init-vel �?speed scales with charge ticks
-;; ---------------------------------------------------------------------------
+      (let [vel (compute-init-vel {:x 0.0 :y 1.0 :z 1.0e-9} 10)]
+        (is (pos? (double (:y vel))))
+        (is (neg? (double (:z vel))))))))
 
 (deftest compute-init-vel-speed-scales-with-charge-test
-  (testing "full charge (20 ticks) produces higher speed than zero charge (0 ticks)"
+  (with-config-mocks
+    (let [speed (fn [ticks]
+                  (let [{:keys [x y z]}
+                        (compute-init-vel {:x 0.0 :y 0.0 :z 1.0} ticks)]
+                    (Math/sqrt (+ (* x x) (* y y) (* z z)))))]
+      (is (> (speed 20) (speed 0))))))
+
+(deftest check-ground-raycast-platform-guards-test
+  (with-config-mocks
+    (with-redefs [raycast/available? (constantly false)]
+      (is (nil? (check-ground-raycast "player-1"))))
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/player-position (constantly nil)]
+      (is (nil? (check-ground-raycast "player-1"))))))
+
+(deftest down-starts-originally-performable-context-test
+  (let [state* (atom nil)
+        fx-calls* (atom [])
+        down-fn (get-in spec [:actions :down!])]
+    (with-redefs [ctx-skill/replace-skill-state! (fn [_ state] (reset! state* state))
+                  fx/send! (fn [& args] (swap! fx-calls* conj args))]
+      (cb/apply-invoke down-fn :ctx-id "ctx-1"))
+    (is (= {:charge-ticks 0
+            :can-perform? true
+            :look-dir nil
+            :init-vel nil
+            :performed? false}
+           @state*))
+    (is (= :vec-accel/fx-start (get-in @fx-calls* [0 1 :topic])))))
+
+(deftest tick-uses-own-ticker-and-strict-groundless-threshold-test
+  (let [state* (atom {:charge-ticks 0 :can-perform? true})
+        updates* (atom [])
+        tick-fn (get-in spec [:actions :tick!])]
     (with-config-mocks
-      (let [look-dir  {:x 0.0 :y 0.0 :z 1.0}
-            vel-zero  (compute-init-vel look-dir 0)
-            vel-full  (compute-init-vel look-dir 20)
-            speed-zero (Math/sqrt (+ (* (:x vel-zero) (:x vel-zero))
-                                     (* (:y vel-zero) (:y vel-zero))
-                                     (* (:z vel-zero) (:z vel-zero))))
-            speed-full (Math/sqrt (+ (* (:x vel-full) (:x vel-full))
-                                     (* (:y vel-full) (:y vel-full))
-                                     (* (:z vel-full) (:z vel-full))))]
-        (is (> speed-full speed-zero)
-            "full-charge speed should exceed zero-charge speed")))))
+      (with-redefs [ctx-skill/get-context (fn [_] {:skill-state @state*})
+                    ctx-skill/update-skill-state-root!
+                    (fn [_ f & args]
+                      (swap! state* #(apply f % args)))
+                    raycast/available? (constantly true)
+                    raycast/player-position
+                    (constantly {:x 0.0 :y 10.0 :z 0.0 :world-id "w"})
+                    raycast/raycast-blocks (fn [& _] nil)
+                    raycast/player-look-vector
+                    (constantly {:x 0.0 :y 0.0 :z 1.0})
+                    fx/send! (fn [& args] (swap! updates* conj args))]
+        (cb/apply-invoke tick-fn
+                         :player-id "p1" :ctx-id "ctx-1"
+                         :exp 0.5 :hold-ticks 99)))
+    (is (= 1 (:charge-ticks @state*))
+        "network hold-ticks are ignored; the context owns the original ticker")
+    (is (false? (:can-perform? @state*))
+        "original ignores ground only above, not at, 0.5 exp")
+    (is (= :vec-accel/fx-update (get-in @updates* [0 1 :topic])))))
 
-;; ---------------------------------------------------------------------------
-;; 4. check-ground-raycast �?no raycast platform (nil guard)
-;; ---------------------------------------------------------------------------
+(deftest up-launches-and-emits-original-sound-path-test
+  (let [vel-calls* (atom [])
+        state* (atom {:can-perform? true
+                      :init-vel {:x 1.0 :y 0.5 :z 0.0}})
+        fx-calls* (atom [])
+        up-fn (get-in spec [:actions :up!])]
+    (with-config-mocks
+      (with-redefs [ctx-skill/get-context (fn [_] {:skill-state @state*})
+                    ctx-skill/update-skill-state-root!
+                    (fn [_ f & args] (swap! state* #(apply f % args)))
+                    motion-effects/player-motion-available? (constantly true)
+                    motion-effects/set-player-velocity!
+                    (fn [player-id x y z]
+                      (swap! vel-calls* conj [player-id x y z]))
+                    motion-effects/teleportation-available? (constantly true)
+                    motion-effects/reset-fall-damage! (fn [_] true)
+                    skill-effects/set-main-cooldown! (fn [& _] nil)
+                    skill-effects/add-skill-exp! (fn [& _] nil)
+                    fx/send! (fn [& args] (swap! fx-calls* conj args))]
+        (cb/apply-invoke up-fn
+                         :player-id "p1" :ctx-id "ctx-1"
+                         :exp 0.5 :cost-ok? true)))
+    (is (= [["p1" 1.0 0.5 0.0]] @vel-calls*))
+    (is (true? (:performed? @state*)))
+    (is (= [:vec-accel/fx-perform :vec-accel/fx-end]
+           (mapv #(get-in % [1 :topic]) @fx-calls*)))))
 
-(deftest check-ground-raycast-no-raycast-platform-test
-  (testing "when raycast runtime is absent, returns nil without NPE"
-    (do
-                               (fn []
-                                 (is (nil? (check-ground-raycast "player-1"))
-                                           "nil teleportation runtime yields nil position")))))
+(deftest up-does-not-launch-when-cost-fails-test
+  (let [vel-calls* (atom [])
+        assoc-calls* (atom [])
+        fx-calls* (atom [])
+        up-fn (get-in spec [:actions :up!])]
+    (with-config-mocks
+      (with-redefs [ctx-skill/get-context
+                    (fn [_]
+                      {:skill-state {:can-perform? true
+                                     :init-vel {:x 1.0 :y 0.5 :z 0.0}}})
+                    ctx-skill/assoc-skill-state!
+                    (fn [& args] (swap! assoc-calls* conj args))
+                    motion-effects/player-motion-available? (constantly true)
+                    motion-effects/set-player-velocity!
+                    (fn [& args] (swap! vel-calls* conj args))
+                    fx/send! (fn [& args] (swap! fx-calls* conj args))]
+        (cb/apply-invoke up-fn
+                         :player-id "p1" :ctx-id "ctx-1"
+                         :exp 0.5 :cost-ok? false)))
+    (is (empty? @vel-calls*))
+    (is (= [["ctx-1" :performed? false]] @assoc-calls*))
+    (is (= :vec-accel/fx-end (get-in @fx-calls* [0 1 :topic])))))
 
-;; ---------------------------------------------------------------------------
-;; 5. check-ground-raycast �?no teleportation platform (nil guard)
-;; ---------------------------------------------------------------------------
-
-(deftest check-ground-raycast-no-teleport-position-test`n  (testing "when teleportation runtime is absent, returns nil without NPE"`n    (is (nil? (check-ground-raycast "player-1"))`n        "nil teleportation adapter returns nil position, so result is nil"))))
-
-;; ---------------------------------------------------------------------------
-;; 6. perform! �?launches player when can-perform? + init-vel both present
-;; ---------------------------------------------------------------------------
-
-(deftest perform-launches-player-test
-  (testing "perform! calls set-velocity! and marks performed?=true when conditions met"
-    (let [vel-calls    (atom [])
-          update-calls (atom [])
-          init-vel     {:x 1.0 :y 0.5 :z 0.0}
-          test-ctx     {:skill-state {:can-perform? true :init-vel init-vel}}
-          perform-fn   (get-in spec [:actions :perform!])]
-      (with-config-mocks
-        (with-redefs [ctx/get-context
-                      (fn ([id] test-ctx)
-                          ([_owner id] test-ctx))
-                      ctx-skill/update-skill-state-root!
-                      (fn [_id f & args] (swap! update-calls conj (apply list f args)))
-                      motion-effects/player-motion-available? (constantly true)
-                      motion-effects/set-player-velocity!
-                      (fn [pid x y z] (swap! vel-calls conj {:player-id pid :x x :y y :z z}))
-                      motion-effects/teleportation-available? (constantly true)
-                      motion-effects/reset-fall-damage!
-                      (fn [_pid] nil)
-                      skill-effects/set-main-cooldown! (fn [& _] nil)
-                      skill-effects/add-skill-exp!     (fn [& _] nil)]
-          (cb/apply-invoke perform-fn :player-id "p1" :ctx-id "ctx-1" :exp 0.5)))
-      (is (= 1 (count @vel-calls))
-          "set-velocity! called exactly once")
-      (is (= 1.0 (double (:x (first @vel-calls)))) "x velocity matches init-vel")
-      (is (= 0.5 (double (:y (first @vel-calls)))) "y velocity matches init-vel")
-      (is (= 0.0 (double (:z (first @vel-calls)))) "z velocity matches init-vel")
-      (is (seq @update-calls)
-          "ctx-skill/update-skill-state-root! called at least once"))))
-
-;; ---------------------------------------------------------------------------
-;; 7. perform! �?skips launch when can-perform? is false
-;; ---------------------------------------------------------------------------
-
-(deftest perform-skips-when-cannot-perform-test
-  (testing "perform! does NOT call set-velocity! when can-perform?=false"
-    (let [vel-calls (atom [])
-          test-ctx  {:skill-state {:can-perform? false
-                                   :init-vel     {:x 1.0 :y 0.0 :z 0.0}}}
-          perform-fn (get-in spec [:actions :perform!])]
-      (with-config-mocks
-        (with-redefs [ctx/get-context            (fn ([id] test-ctx) ([_ id] test-ctx))
-                      ctx-skill/assoc-skill-state!     (fn [& _] nil)
-                      ctx-skill/update-skill-state-root! (fn [& _] nil)
-                      motion-effects/player-motion-available? (constantly true)
-                      motion-effects/set-player-velocity!
-                      (fn [& _] (swap! vel-calls conj :called))
-                      skill-effects/set-main-cooldown! (fn [& _] nil)
-                      skill-effects/add-skill-exp!     (fn [& _] nil)]
-          (cb/apply-invoke perform-fn :player-id "p1" :ctx-id "ctx-1" :exp 0.0)))
-      (is (empty? @vel-calls)
-          "set-velocity! must NOT be called when can-perform?=false"))))
-
-;; ---------------------------------------------------------------------------
-;; 8. :fx :end payload �?reads [:skill-state :performed?], not root context
-;; ---------------------------------------------------------------------------
-
-(deftest fx-end-payload-reads-skill-state-test
-  (testing ":end payload returns {:performed? true} when [:skill-state :performed?]=true"
-    (let [payload-fn (get-in spec [:fx :end :payload])
-          test-ctx   {:id "ctx-1" :skill-state {:performed? true}}]
-      (with-redefs [ctx/get-context (fn [_id] test-ctx)]
-        (is (= {:performed? true}
-               (payload-fn {:ctx-id "ctx-1"}))
-            "payload reads from [:skill-state :performed?], not root key"))))
-  (testing ":end payload returns {:performed? false} when [:skill-state :performed?]=false"
-    (let [payload-fn (get-in spec [:fx :end :payload])
-          test-ctx   {:id "ctx-1" :skill-state {:performed? false}}]
-      (with-redefs [ctx/get-context (fn [_id] test-ctx)]
-        (is (= {:performed? false}
-               (payload-fn {:ctx-id "ctx-1"})))))))
+(deftest skill-uses-release-cast-lifecycle-test
+  (is (= :release-cast (:pattern spec)))
+  (is (fn? (get-in spec [:actions :down!])))
+  (is (fn? (get-in spec [:actions :tick!])))
+  (is (fn? (get-in spec [:actions :up!]))))
