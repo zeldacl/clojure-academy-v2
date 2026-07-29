@@ -23,8 +23,6 @@
                          (core/get-block-hardness (server-fn) world-id x y z))
    :block-collidable? (fn [world-id x y z]
                         (core/block-collidable? (server-fn) world-id x y z))
-   :block-collidable? (fn [world-id x y z]
-                        (core/block-collidable? (server-fn) world-id x y z))
    :can-break-block? (fn [player-id world-id x y z]
                        (boolean (core/can-break-block? (server-fn) player-id world-id x y z break-guard-fn)))
    :requires-high-tier-tool? (fn [world-id x y z]

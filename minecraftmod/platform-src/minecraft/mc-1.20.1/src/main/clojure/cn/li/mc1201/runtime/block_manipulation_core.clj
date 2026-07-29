@@ -128,18 +128,6 @@
       (log/warn "Failed to check block collision:" (ex-message e))
       false)))
 
-(defn block-collidable?
-  "Return whether the block has a non-empty collision shape at this position."
-  [^MinecraftServer server world-id x y z]
-  (try
-    (when-let [^ServerLevel level (get-level-by-id server world-id)]
-      (let [pos (BlockPos. (int x) (int y) (int z))
-            state (.getBlockState level pos)]
-        (not (.isEmpty (.getCollisionShape state level pos)))))
-    (catch Exception e
-      (log/warn "Failed to check block collision:" (ex-message e))
-      false)))
-
 (defn find-blocks-in-line
   [^MinecraftServer server world-id x1 y1 z1 dx dy dz max-distance]
   (try
