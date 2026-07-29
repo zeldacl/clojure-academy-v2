@@ -22,7 +22,7 @@
   {:skill-id :electron-missile :id :cost.attack.cp :path "cost.attack.cp" :section-suffix "cost.attack" :type :double-list :min 0.0 :list-count 2 :default [60.0 25.0] :comment "ElectronMissile extra CP cost per fired ball."}
   {:skill-id :electron-missile :id :cost.attack.overload :path "cost.attack.overload" :section-suffix "cost.attack" :type :double-list :min 0.0 :list-count 2 :default [9.0 4.0] :comment "ElectronMissile extra overload cost per fired ball."}
    {:skill-id :electron-missile :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [12.0 5.0] :comment "ElectronMissile channel CP cost."}
-   {:skill-id :electron-missile :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [700.0 400.0] :comment "ElectronMissile manual cooldown ticks."}
+   {:skill-id :electron-missile :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :int :min 0 :default 700 :comment "ElectronMissile cooldown. Original clampi(700,400,exp.toInt) always evaluates to 700."}
   {:skill-id :electron-missile :id :progression.exp-hit :path "progression.exp-hit" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "ElectronMissile exp gained per hit."}
 
   {:skill-id :jet-engine :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [7.0 20.0] :comment "JetEngine trigger-hit damage endpoints."}
