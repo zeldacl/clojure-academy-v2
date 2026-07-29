@@ -8,6 +8,8 @@
   (:require [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
@@ -18,6 +20,17 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :directed-shock)
+
+(defn- scaled-damage [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+   (skill-registry/get-skill :directed-shock)
+   (ability-event/fire-calc-event!
+    ability-event/CALC-SKILL-ATTACK
+    raw-damage
+    {:player-id player-id
+     :target-id target-id
+     :skill-id :directed-shock})))
+
 (defn- entity-trace
   [player-id]
   (when (raycast/available?)
@@ -114,7 +127,12 @@
                                     hit-pos)
                     impulse (hit-impulse player-pos moved-hit-pos)]
                 (when (entity-damage/available?)
-                  (entity-damage/apply-direct-damage! world-id target-id damage :generic))
+                  (entity-damage/apply-direct-damage!
+                   world-id
+                   target-id
+                   (scaled-damage player-id target-id damage)
+                   :skill
+                   {:attacker-uuid player-id}))
                 (when (motion-effects/entity-motion-available?)
                   (when knockback
                     (motion-effects/set-entity-position!
@@ -145,7 +163,8 @@
                                                         :punch-ticks 0}))
                 (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-hit))
                 (skill-effects/set-main-cooldown!
-                 player-id :directed-shock (cfg-lerp-int :cooldown.ticks exp*))
+                 player-id :directed-shock
+                 (int (cfg-lerp :cooldown.ticks exp*)))
                 (log/info "DirectedShock hit" target-id "dmg" (int damage)))
               (do
                 (skill-effects/add-skill-exp! player-id :directed-shock (cfg-double :progression.exp-miss))
