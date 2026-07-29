@@ -22,9 +22,9 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.content.ability.shared.vec-reflection-interaction :as vec-reflect]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -99,11 +99,6 @@
                   (:x look-dir) (:y look-dir) (:z look-dir)
                   (cfg-double :reflection.shot-distance)))]
           (when (and (= (:hit-type hit) :entity) (entity-damage/available?))
-            (md-damage/mark-target! reflector-player-id (:uuid hit)
-            {:ctx-id ctx-id
-             :target-pos {:x (:x hit)
-                  :y (:y hit)
-                  :z (:z hit)}})
             (entity-damage/apply-direct-damage!
                  world-id
                  (:uuid hit)
@@ -123,6 +118,9 @@
         damage   (* (time-rate ct) (cfg-lerp :combat.damage exp))
         world-id (geom/world-id-of player-id)
         eye      (geom/eye-pos player-id)
+        trace-pos (or (when (motion-effects/teleportation-available?)
+                        (motion-effects/player-position player-id))
+                      eye)
         look-vec (when (raycast/available?)
                    (raycast/player-look-vector player-id))]
     (if-not look-vec
@@ -136,6 +134,7 @@
                             :ctx-id          ctx-id
                             :world-id        world-id
                             :eye-pos         eye
+                            :trace-pos       trace-pos
                             :look-dir        look-vec}
                            reflection)
                     {:radius          (cfg-lerp :beam.radius exp)
@@ -147,7 +146,8 @@
                      :damage-type     :magic
                      :break-blocks?   true
                      :block-energy    (* (time-rate ct) (cfg-lerp :beam.block-energy exp))
-                     :fx-topic        :meltdowner/fx-perform})]
+                     :fx-topic        :meltdowner/fx-perform
+                     :trace-pos       trace-pos})]
         (or (:beam-result result) {:performed? false})))))
 
 ;; ---------------------------------------------------------------------------

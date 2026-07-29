@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.content.ability.meltdowner.meltdowner :as meltdowner]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as damage-helper]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -11,6 +10,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.effects.beam :as beam]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]))
 
@@ -27,7 +27,8 @@
 (deftest meltdowner-up-insufficient-charge-ends-context-test
   (let [{:keys [messages* terminated* fx-send! terminate!]} (context-mocks)
         exp-calls* (atom [])
-        cooldown-calls* (atom [])]
+        cooldown-calls* (atom [])
+        beam-params* (atom nil)]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
                   skill-effects/skill-exp (fn [_ _] 0.3)
@@ -81,12 +82,17 @@
                                                0.0))
                   raycast/available? (constantly true)
                   raycast/player-look-vector (constantly {:dx 0.0 :dy 0.0 :dz 1.0})
-                  beam/execute-beam! (fn [_ _] {:beam-result {:performed? true :reflection-hit? false}})
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (constantly {:x 0.0 :y 62.38 :z 0.0})
+                  beam/execute-beam! (fn [_ params]
+                                       (reset! beam-params* params)
+                                       {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
       (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 30)
       (is (= [["p1" :meltdowner 0.0022]] @exp-calls*))
       (is (= [["p1" :meltdowner 264]] @cooldown-calls*))
+      (is (= {:x 0.0 :y 62.38 :z 0.0} (:trace-pos @beam-params*)))
       (is (= [{:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}
               {:ctx-id "ctx-2" :topic :meltdowner/fx-end :payload {:performed? true}}]
              @messages*) "fanned out to owner + nearby")
@@ -115,7 +121,6 @@
 
 (deftest reflection-shot-supports-delta-look-vector-test
   (let [{:keys [calls* send!]} (fx-mocks/capture-fx-send!)
-        mark-calls* (atom [])
         ray-input* (atom nil)
         damage-calls* (atom [])]
     (with-redefs [geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
@@ -124,9 +129,6 @@
                   geom/v* (fn [v dist] {:x (* (:x v) dist) :y (* (:y v) dist) :z (* (:z v) dist)})
                   geom/v+ (fn [a b] {:x (+ (:x a) (:x b)) :y (+ (:y a) (:y b)) :z (+ (:z a) (:z b))})
                   fx/send! send!
-                  damage-helper/mark-target! (fn [& args]
-                                               (swap! mark-calls* conj (vec (take 3 args)))
-                                               nil)
                   skill-config/tunable-double (fn [_ field-id]
                                                 (case field-id
                                                   :reflection.shot-distance 10.0
@@ -152,7 +154,5 @@
            (#'cn.li.ac.content.ability.meltdowner.meltdowner/perform-reflection-shot!
             "ctx-r" "reflector-p" 0.0)))
       (is (= [0.0 0.0 1.0] (:dir @ray-input*)))
-      (is (= [["reflector-p" "target-1" {:ctx-id "ctx-r"
-                    :target-pos {:x nil :y nil :z nil}}]] @mark-calls*))
       (is (= [["w" "target-1" 20.0 :magic]] @damage-calls*))
       (is (some #(= :meltdowner/fx-reflect (nth % 1)) @calls*)))))
