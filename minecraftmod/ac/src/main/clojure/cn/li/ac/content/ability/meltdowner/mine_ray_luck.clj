@@ -35,6 +35,7 @@
      :break-speed    (cfg-lerp :mining.break-speed exp)
      :skill-id       mine-ray-luck-skill-id
      :fortune-level  mine-ray-luck-fortune-level
+     :tool-tier-capped? false
      :exp-block      (skill-config/tunable-double mine-ray-luck-skill-id :progression.exp-block)
      :cooldown-ticks (cooldown-ticks-for exp)}))
 

@@ -50,13 +50,15 @@
             :break-speed 1.0
             :skill-id :mine-ray-luck
             :fortune-level 3
+            :tool-tier-capped? false
             :exp-block 0.002
             :cooldown-ticks 60}
            (ffirst @calls*)))))
 
 (deftest mine-ray-luck-breaks-block-with-fortune-level-test
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.9}})
+        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2
+                                      :hardness-left 0.5 :starting-hardness 1.0}})
         break-calls* (atom [])
         exp-calls* (atom [])]
     (with-redefs [ctx/get-context get-context
@@ -84,12 +86,15 @@
                              "ctx-1" "p1" :mine-ray-luck 0.0 true 0 nil nil))
     (is (= [["p1" "w" 1 64 2 true 3]] @break-calls*))
     (is (= [["p1" :mine-ray-luck 0.002]] @exp-calls*))
-    (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
+    (is (= {:target-x nil :target-y nil :target-z nil
+            :hardness-left (double Float/MAX_VALUE)
+            :starting-hardness (double Float/MAX_VALUE)}
            (:skill-state @ctx*)))))
 
 (deftest mine-ray-luck-resets-stale-state-when-raycast-is-unavailable-test
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.6}})]
+        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2
+                                      :hardness-left 0.6 :starting-hardness 1.0}})]
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send-local-and-nearby! (fn [& _] nil)
@@ -104,5 +109,7 @@
                               :fortune-level 3
                               :exp-block 0.002}
                              "ctx-1" "p1" :mine-ray-luck 0.0 true 0 nil nil))
-    (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
+    (is (= {:target-x nil :target-y nil :target-z nil
+            :hardness-left (double Float/MAX_VALUE)
+            :starting-hardness (double Float/MAX_VALUE)}
            (:skill-state @ctx*)))))
