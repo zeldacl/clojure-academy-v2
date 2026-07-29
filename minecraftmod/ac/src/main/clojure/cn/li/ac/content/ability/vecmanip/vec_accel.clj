@@ -108,7 +108,7 @@
           (when (motion-effects/teleportation-available?)
             (motion-effects/reset-fall-damage! player-id))
           (skill-effects/set-main-cooldown! player-id :vec-accel
-                                          (cfg-lerp-int :cooldown.ticks exp))
+                                          (int (cfg-lerp :cooldown.ticks exp)))
           (skill-effects/add-skill-exp! player-id :vec-accel (cfg-double :progression.exp-use))
           (update-skill-state-root! ctx-id merge
                                     {:performed? true :final-vel {:x x :y y :z z}})
