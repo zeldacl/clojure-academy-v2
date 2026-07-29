@@ -11,6 +11,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -85,7 +86,7 @@
                       ctx-skill/assoc-skill-state! assoc-skill-state!
                       fx/send! send!]
          (cb/apply-invoke scatter/scatter-bomb-down! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
-    (is (= {:balls 0 :hold-ticks 0 :overload-floor 120.0}
+    (is (= {:balls 0 :ball-offsets [] :hold-ticks 0 :overload-floor 120.0}
            (:skill-state @ctx*)))
     (is (= [["ctx-1" :scatter-bomb/fx-start nil {}]
             ["ctx-1" :scatter-bomb/fx-start nil {}]]
@@ -128,6 +129,7 @@
   (let [{:keys [ctx* get-context update-skill-state-root! assoc-skill-state! send! messages*]}
         (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0}})
         damage-calls* (atom [])
+        scheduled* (atom [])
         terminate-calls* (atom [])]
     (with-scatter-env
       #(with-redefs [ctx/get-context get-context
@@ -139,9 +141,19 @@
                                            nil)
                   skill-config/tunable-int stub-tunable-int
                   skill-config/tunable-double stub-tunable-double
+                  skill-config/lerp-double stub-lerp-double
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  raycast/available? (constantly true)
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  scatter/*ball-offset-sampler* (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                  scatter/*scatter-dest-sampler* (fn [_ _] {:x 1.0 :y 64.0 :z 30.0})
+                  delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
+                                                                    (swap! scheduled* conj task))
                   entity/player-spawn-entity-by-id! (fn [& _] true)
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
@@ -149,6 +161,7 @@
                                                        true)]
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-afk" :player-ref {:id "player-obj"})))
     (is (= [["w" "p1" 6.0 :generic]] @damage-calls*))
+    (is (= 2 (count @scheduled*)))
     (is (= [["ctx-afk" nil]] @terminate-calls*))
     (is (= ["ctx-afk" :scatter-bomb/fx-end nil {:balls 2}] (last @messages*)))))
 
@@ -198,10 +211,12 @@
                   skill-effects/set-main-cooldown! (fn [& args]
                                                      (swap! cooldown-calls* conj args)
                                                      nil)
-                  delayed-projectiles/mdball-near-expire-delay (fn [] 15)
                   delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
                                                                     (swap! scheduled* conj task)
                                                                     nil)
+                  scatter/*ball-offset-sampler* (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   scatter/*scatter-dest-sampler* (fn [_eye _look-vec]
                                                     {:x 5.0 :y 64.0 :z 12.0})
                   geom/world-id-of (fn [_] "w")
@@ -210,7 +225,7 @@
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})]
          (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-3")))
 
-    (is (= [15 16 17] (mapv :delay-ticks @scheduled*)))
+    (is (= [1 1 1] (mapv :delay-ticks @scheduled*)))
     (is (every? #(= {:x 1.0 :y 64.0 :z 2.0} %) (mapv :origin @scheduled*)))
     (is (every? #(= {:x 5.0 :y 64.0 :z 12.0} %) (mapv :dest @scheduled*)))
     (is (= [["p1" :scatter-bomb 0.003]] @exp-calls*))
@@ -231,10 +246,12 @@
                   skill-config/tunable-double stub-tunable-double
                   skill-config/tunable-int stub-tunable-int
                   skill-effects/add-skill-exp! (fn [& _] nil)
-                  delayed-projectiles/mdball-near-expire-delay (fn [] 15)
                   delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
                                                                     (swap! scheduled* conj task)
                                                                     nil)
+                  scatter/*ball-offset-sampler* (fn [_] {:x 0.0 :y 0.0 :z 0.0})
+                  motion-effects/teleportation-available? (constantly true)
+                  motion-effects/player-position (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   scatter/*scatter-dest-sampler* (fn [_eye _look-vec]
                                                     {:x 5.0 :y 64.0 :z 12.0})
                   geom/world-id-of (fn [_] "w")
@@ -250,14 +267,18 @@
     (is (= 2 (count (filter #(= {:x 3.0 :y 65.6 :z 3.0} (:dest %)) @scheduled*))))
     (is (= 2 (count (filter #(= {:x 5.0 :y 64.0 :z 12.0} (:dest %)) @scheduled*))))))
 
-(deftest scatter-bomb-cost-fail-sends-fx-end-test
+(deftest scatter-bomb-cost-fail-settles-and-terminates-test
   (let [{:keys [get-context send! messages*]}
-        (context-mocks {:skill-state {:balls 4 :hold-ticks 21 :overload-floor 120.0}})]
+        (context-mocks {:skill-state {:balls 0 :hold-ticks 21 :overload-floor 120.0}})
+        terminate-calls* (atom [])]
     (with-scatter-env
       #(with-redefs [ctx/get-context get-context
-                  fx/send! send!]
-         (cb/apply-invoke scatter/scatter-bomb-cost-fail! :ctx-id "ctx-fail" :cost-stage :tick)))
-    (is (= [["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]
-            ["ctx-fail" :scatter-bomb/fx-end nil {:balls 4}]]
-           @messages*) "fanned out to owner + nearby")))
+                  fx/send! send!
+                  ctx/terminate-context! (fn [& args] (swap! terminate-calls* conj args))]
+         (cb/apply-invoke scatter/scatter-bomb-cost-fail!
+                          :ctx-id "ctx-fail" :player-id "p1" :cost-stage :tick)))
+    (is (= [["ctx-fail" :scatter-bomb/fx-end nil {:balls 0}]
+            ["ctx-fail" :scatter-bomb/fx-end nil {:balls 0}]]
+           @messages*) "fanned out to owner + nearby")
+    (is (= [["ctx-fail" nil]] @terminate-calls*))))
 

@@ -23,6 +23,7 @@
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
                         [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -88,6 +89,21 @@
   "Injectable sampler seam for deterministic tests."
   random-scatter-dest)
 
+(defn- random-ball-offset
+  "Approximate EntityMdBall's original player-relative spawn offset."
+  [look-vec]
+  (let [base-theta (Math/atan2 (double (or (:x look-vec) 0.0))
+                                (double (or (:z look-vec) 1.0)))
+        theta (+ base-theta (* (- (rand) 0.5) 0.9 Math/PI))
+        radius (+ 0.8 (* (rand) 0.5))]
+    {:x (* (Math/sin theta) radius)
+     :y (+ -1.2 (* (rand) 1.4))
+     :z (* (Math/cos theta) radius)}))
+
+(def ^:dynamic *ball-offset-sampler*
+  "Injectable EntityMdBall offset sampler for deterministic tests."
+  random-ball-offset)
+
 (defn- auto-aim-targets
   "Living entities within targeting.auto-aim-radius of the player, excluding
   the player themselves. Matches original's WorldUtils.getEntities(player,5,
@@ -115,6 +131,7 @@
     (let [floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
     (ctx-skill/replace-skill-state! ctx-id
                {:balls        0
+            :ball-offsets []
             :hold-ticks   0
             :overload-floor floor})
       ;; Original has no explicit sendTo* at all here — every ball is a real
@@ -122,8 +139,10 @@
       ;; port-added charge/release FX follows the same broadcast default.
       (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-start} nil {}))))
 
+(declare settle-scatter-bomb!)
+
 (defn scatter-bomb-tick!
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (let [ctx-data (ctx-skill/get-context ctx-id)]
     (when ctx-data
       (let [ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
@@ -140,7 +159,7 @@
               player-id
               (cfg-double :effect.anti-afk-damage)
               :generic))
-          (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})
+          (settle-scatter-bomb! ctx-id player-id exp)
           (ctx/terminate-context! ctx-id nil))
         ;; Spawn new ball every N ticks
         (when (and (<= ticks (cfg-int :projectile.max-hold-ticks))
@@ -150,6 +169,13 @@
                                (cfg-int :projectile.spawn-interval-ticks))))
           (let [new-balls (inc balls)]
             (set-skill-state! ctx-id [:balls] new-balls)
+            (let [look-vec (when (raycast/available?)
+                             (raycast/player-look-vector player-id))
+                  offsets (vec (or (get-in (ctx-skill/get-context ctx-id)
+                                            [:skill-state :ball-offsets])
+                                   []))]
+              (set-skill-state! ctx-id [:ball-offsets]
+                                (conj offsets (*ball-offset-sampler* look-vec))))
             (when player-ref
               (entity/player-spawn-entity-by-id! player-ref mdball-entity-id 0.0))
             (let [eye (geom/eye-pos player-id)]
@@ -157,56 +183,67 @@
                         {:x (:x eye) :y (:y eye) :z (:z eye)
                          :count new-balls}))))))))
 
-(defn scatter-bomb-up!
-  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+(defn- settle-scatter-bomb!
+  [ctx-id player-id exp]
   (let [ctx-data (ctx-skill/get-context ctx-id)
         balls (int (or (get-in ctx-data [:skill-state :balls]) 0))]
     (when (pos? balls)
       (let [world-id   (geom/world-id-of player-id)
             eye        (geom/eye-pos player-id)
+            player-pos (or (when (motion-effects/teleportation-available?)
+                             (motion-effects/player-position player-id))
+                           eye)
             look-vec   (when (raycast/available?)
                          (raycast/player-look-vector player-id))
             damage     (cfg-lerp :combat.damage exp)
             auto-aim?  (> (double exp) (double (cfg-double :targeting.auto-aim-exp-threshold)))
-            targets    (if auto-aim? (auto-aim-targets world-id player-id eye) [])
+            targets    (if auto-aim? (auto-aim-targets world-id player-id player-pos) [])
             auto-count (if auto-aim? (long (* balls (double exp))) 0)
-            auto-count* (long-array 1 auto-count)]
+            auto-count* (long-array 1 auto-count)
+            stored-offsets (vec (or (get-in ctx-data [:skill-state :ball-offsets]) []))
+            offsets (vec (take balls
+                               (concat stored-offsets
+                                       (repeatedly #(*ball-offset-sampler* look-vec)))))]
         (when look-vec
-          ;; Each ball settles with a slight delay to preserve projectile cadence.
-          (let [base-delay (delayed-projectiles/mdball-near-expire-delay)]
-            (dotimes [i balls]
-              (let [auto-target (when (and (pos? (aget auto-count* 0)) (seq targets))
-                                   (aset-long auto-count* 0 (dec (aget auto-count* 0)))
-                                   (rand-nth targets))
-                    dest (if auto-target
-                           {:x (double (:x auto-target))
-                            :y (+ (double (:y auto-target)) (double (or (:eye-height auto-target) 0.0)))
-                            :z (double (:z auto-target))}
-                           (*scatter-dest-sampler* eye look-vec))]
-                (delayed-projectiles/schedule-scatter-bomb-beam!
-                  {:player-id   player-id
-                   :ctx-id      ctx-id
-                   :world-id    world-id
-                   :origin      eye
-                   :dest        dest
-                   :damage      damage
-                   :delay-ticks (+ base-delay i)}))))
-          ;; Gain exp — matches original's ctx.addSkillExp(0.001f * balls.size),
-          ;; no cooldown set anywhere (original has none).
-          (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
-                                        (* (cfg-double :progression.exp-per-ball) balls))
-          (log/debug "ScatterBomb: fired" balls "balls"))))
+          (dotimes [i balls]
+            (let [auto-target (when (and (pos? (aget auto-count* 0)) (seq targets))
+                                (aset-long auto-count* 0 (dec (aget auto-count* 0)))
+                                (rand-nth targets))
+                  dest (if auto-target
+                         {:x (double (:x auto-target))
+                          :y (+ (double (:y auto-target)) (double (or (:eye-height auto-target) 0.0)))
+                          :z (double (:z auto-target))}
+                         (*scatter-dest-sampler* eye look-vec))
+                  offset (nth offsets i)
+                  origin {:x (+ (double (:x player-pos)) (double (:x offset)))
+                          :y (+ (double (:y player-pos)) (double (:y offset)))
+                          :z (+ (double (:z player-pos)) (double (:z offset)))}]
+              (delayed-projectiles/schedule-scatter-bomb-beam!
+                {:player-id   player-id
+                 :ctx-id      ctx-id
+                 :world-id    world-id
+                 :origin      origin
+                 :dest        dest
+                 :damage      damage
+                 :delay-ticks 1}))))
+        (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
+                                      (* (cfg-double :progression.exp-per-ball) balls))
+        (log/debug "ScatterBomb: fired" balls "balls")))
     (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
 
+(defn scatter-bomb-up!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (settle-scatter-bomb! ctx-id player-id exp))
+
 (defn scatter-bomb-cost-fail!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks cost-stage _player-ref]
   (when (= cost-stage :tick)
-    (let [balls (int (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :balls]) 0))]
-      (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls}))))
+    (settle-scatter-bomb! ctx-id player-id exp)
+    (ctx/terminate-context! ctx-id nil)))
 
 (defn scatter-bomb-abort!
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls 0}))
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (settle-scatter-bomb! ctx-id player-id exp))
 
 ;; ---------------------------------------------------------------------------
 ;; Skill registration
