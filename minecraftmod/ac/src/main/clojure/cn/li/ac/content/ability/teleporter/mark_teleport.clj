@@ -91,19 +91,13 @@
 
 
 
-(defn- max-distance [exp cp ticks creative?]
+(defn- max-distance [exp cp ticks]
 
   (let [max-range (cfg-lerp :targeting.range exp)
 
-        cp-limit (if creative?
-
-                   max-range
-
-                   (if (pos? (cp-per-block exp))
-
-                     (/ (double cp) (cp-per-block exp))
-
-                     max-range))]
+        cp-limit (if (pos? (cp-per-block exp))
+                   (/ (double cp) (cp-per-block exp))
+                   max-range)]
 
     (min (* (cfg-double :targeting.range-per-hold-tick)
 
@@ -215,9 +209,10 @@
 
         cp (current-cp player-id)
 
-        player-pos (when (motion-effects/teleportation-available?)
-
-                     (motion-effects/player-position player-id))
+        player-pos (or (when (raycast/available?)
+                         (raycast/player-position player-id))
+                       (when (motion-effects/teleportation-available?)
+                         (motion-effects/player-position player-id)))
 
         look-vec (when (raycast/available?)
 
@@ -227,27 +222,13 @@
 
       (let [{:keys [world-id x y z]} player-pos
 
-            creative? (boolean (and player (entity/player-creative? player)))
+            dist (max-distance exp cp hold-ticks)
 
-            dist (max-distance exp cp hold-ticks creative?)
-
-            start-y (+ (double y) (cfg-double :targeting.eye-height))
+            start-y (double (or (:eye-y player-pos)
+                                (+ (double y) (cfg-double :targeting.eye-height))))
 
             hit (when (raycast/available?)
-
-                  (raycast/raycast-combined
-
-                                            world-id
-
-                                            (double x) start-y (double z)
-
-                                            (double (:x look-vec))
-
-                                            (double (:y look-vec))
-
-                                            (double (:z look-vec))
-
-                                            dist))
+                  (raycast/raycast-combined-from-player player-id dist true))
 
             dest (if hit
 
@@ -285,13 +266,10 @@
 
     (let [hold-ticks (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0))]
 
-      (or (resolve-destination player-id player hold-ticks)
-
-          (when (get-in ctx-data [:skill-state :has-target])
-
+      (or (when (get-in ctx-data [:skill-state :has-target])
             (select-keys (:skill-state ctx-data)
-
-                         [:world-id :target-x :target-y :target-z :distance :exp]))))))
+                         [:world-id :target-x :target-y :target-z :distance :exp]))
+          (resolve-destination player-id player hold-ticks)))))
 
 
 
@@ -358,10 +336,8 @@
 
 
 (defn mark-teleport-cost-creative?
-
-  [_player-id _skill-id _exp]
-
-  false)
+  [_player-id _skill-id _exp player-ref]
+  (boolean (and player-ref (entity/player-creative? player-ref))))
 
 
 
@@ -403,13 +379,10 @@
 
     (let [hold-ticks (long (or (get-in ctx [:skill-state :hold-ticks]) 0))
 
-          target (or (resolve-destination player-id player-ref hold-ticks)
-
-                     (when (get-in ctx [:skill-state :has-target])
-
+          target (or (when (get-in ctx [:skill-state :has-target])
                        (select-keys (:skill-state ctx)
-
-                                    [:world-id :target-x :target-y :target-z :distance :exp])))]
+                                    [:world-id :target-x :target-y :target-z :distance :exp]))
+                     (resolve-destination player-id player-ref hold-ticks))]
 
       (if target
 

@@ -87,15 +87,10 @@
     (let [position (raycast/player-position player-id)
           look (raycast/player-look-vector player-id)]
       (when (and position look)
-        (when-let [result (raycast/raycast-combined
-                            (:world-id position)
-                            (double (:x position))
-                            (double (or (:eye-y position) (:y position)))
-                            (double (:z position))
-                            (double (:x look))
-                            (double (:y look))
-                            (double (:z look))
-                            (double max-dist))]
+        (when-let [result (raycast/raycast-combined-from-player
+                            player-id
+                            (double max-dist)
+                            true)]
           (let [entity-uuid (or (:entity-uuid result)
                                 (:entity-id result)
                                 (:uuid result))]

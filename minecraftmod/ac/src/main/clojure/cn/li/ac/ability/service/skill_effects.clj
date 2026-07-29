@@ -156,6 +156,8 @@
   Scales cp/overload by the skill's per-skill speed multipliers.
   Returns true when cost is paid or no cost is defined."
   ([spec stage player-id skill-id exp]
+   (apply-cost! spec stage player-id skill-id exp nil))
+  ([spec stage player-id skill-id exp player-ref]
    (let [cost-spec (get-in spec [:cost stage])]
      (if-not (map? cost-spec)
        true
@@ -171,9 +173,15 @@
              creative-raw (:creative? computed)
              creative? (boolean (if (fn? creative-raw)
                                   (try
-                                    (creative-raw player-id skill-id exp)
+                                    (creative-raw player-id skill-id exp player-ref)
                                     (catch clojure.lang.ArityException _
-                                      (creative-raw {:player-id player-id :skill-id skill-id :exp exp})))
+                                      (try
+                                        (creative-raw player-id skill-id exp)
+                                        (catch clojure.lang.ArityException _
+                                          (creative-raw {:player-id player-id
+                                                         :skill-id skill-id
+                                                         :exp exp
+                                                         :player-ref player-ref})))))
                                   creative-raw))]
          (if (and (zero? cp) (zero? overload))
            true
@@ -181,7 +189,12 @@
              (boolean success?)))))))
   ;; Legacy evt-map arity for tests and transitional call sites.
   ([spec stage evt]
-   (apply-cost! spec stage (:player-id evt) (:skill-id evt) (double (or (:exp evt) 0.0)))))
+   (apply-cost! spec
+                stage
+                (:player-id evt)
+                (:skill-id evt)
+                (double (or (:exp evt) 0.0))
+                (:player-ref evt))))
 
 (defn apply-cooldown!
   "Apply cooldown for skill according to ctrl-id and cooldown-policy."

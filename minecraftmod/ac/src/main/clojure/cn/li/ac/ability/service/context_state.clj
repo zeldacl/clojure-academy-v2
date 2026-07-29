@@ -69,7 +69,7 @@
                exp (skill-cb/skill-exp-for owner player-id skill-id)
                player-ref (:player payload)
                cost-ok? (if stage
-                          (skill-effects/apply-cost! spec stage player-id skill-id exp)
+                          (skill-effects/apply-cost! spec stage player-id skill-id exp player-ref)
                           true)
                invoke-args (skill-cb/extract-invoke-args
                             owner ctx-map payload

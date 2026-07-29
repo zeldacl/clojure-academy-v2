@@ -49,6 +49,12 @@
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-combined-all world-id sx sy sz dx dy dz max-dist))
 
+(defn raycast-combined-from-player
+  "Return the nearest block or entity along a player's eye ray, excluding the
+  player itself."
+  [player-uuid max-dist living-only?]
+  (call :raycast-combined-from-player player-uuid max-dist living-only?))
+
 (defn player-look-vector
   [player-uuid]
   (call :get-player-look-vector player-uuid))

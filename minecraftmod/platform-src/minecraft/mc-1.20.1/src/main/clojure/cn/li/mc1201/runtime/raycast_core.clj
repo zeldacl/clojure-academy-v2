@@ -71,6 +71,17 @@
                                (catch Exception e
                                  (log/warn "Failed to raycast combined entities:" (ex-message e))
                                  nil))))
+   :raycast-combined-from-player
+   (fn [player-uuid max-distance living-only?]
+     (try
+       (rn/normalize-bridge-map
+         (RaycastShared/raycastCombinedFromPlayer
+           (query-core/get-player-by-uuid (get-server) player-uuid)
+           max-distance
+           (boolean living-only?)))
+       (catch Exception e
+         (log/warn "Failed to raycast combined from player:" (ex-message e))
+         nil)))
    :get-player-look-vector (fn [player-uuid]
                              (try
                                (rn/normalize-bridge-map

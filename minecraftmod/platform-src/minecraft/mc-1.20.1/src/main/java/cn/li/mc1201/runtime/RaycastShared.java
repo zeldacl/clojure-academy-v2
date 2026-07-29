@@ -377,6 +377,41 @@ public final class RaycastShared {
         return entityHit;
     }
 
+    public static Map<String, Object> raycastCombinedFromPlayer(
+            ServerPlayer player,
+            double maxDistance,
+            boolean livingOnly) {
+        if (player == null) {
+            return null;
+        }
+        Vec3 eyePos = player.getEyePosition();
+        Vec3 lookVec = player.getLookAngle();
+        Map<String, Object> blockHit = raycastBlocks(
+                player.serverLevel(),
+                eyePos.x, eyePos.y, eyePos.z,
+                lookVec.x, lookVec.y, lookVec.z,
+                maxDistance);
+        Map<String, Object> entityHit = raycastFromPlayer(player, maxDistance, livingOnly);
+        if (blockHit == null) {
+            if (entityHit != null) {
+                entityHit.put("hit-type", "entity");
+            }
+            return entityHit;
+        }
+        if (entityHit == null) {
+            blockHit.put("hit-type", "block");
+            return blockHit;
+        }
+        double blockDistance = ((Number) blockHit.get("distance")).doubleValue();
+        double entityDistance = ((Number) entityHit.get("distance")).doubleValue();
+        if (blockDistance <= entityDistance) {
+            blockHit.put("hit-type", "block");
+            return blockHit;
+        }
+        entityHit.put("hit-type", "entity");
+        return entityHit;
+    }
+
     public static Map<String, Object> getPlayerLookVector(ServerPlayer player) {
         if (player == null) {
             return null;
