@@ -26,6 +26,7 @@
   (testing "activate! initializes state but does not manually emit client FX"
     (with-light-shield-env
       #(with-redefs [ctx-skill/assoc-skill-state! (fn [& _] nil)
+                    toggle/activate-toggle! (fn [& _] nil)
                     fx/send! (fn [& _]
                                (throw (ex-info "manual fx send should not happen" {})))
                     skill-effects/player-path (fn [& _] 12.0)
@@ -80,7 +81,7 @@
                                                  0.0))
                     skill-config/tunable-double (fn [_skill-id field-id]
                                                     (case field-id
-                                                      :progression.exp-absorbed-scale 0.0004
+                                                      :progression.exp-attacked 0.001
                                                       0.0))
                     skill-effects/perform-resource! (fn [& _] {:success? true})
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -128,12 +129,14 @@
                                                  0.0))
                     skill-config/tunable-double (fn [_skill-id field-id]
                                                   (case field-id
-                                                    :progression.exp-absorbed-scale 0.0004
+                                                    :progression.exp-attacked 0.001
                                                     :combat.front-cone-degrees 60.0
                                                     :combat.touch-radius 3.0
                                                     0.0))
                     motion-effects/player-position (fn [_]
                                                          {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
+                    motion-effects/entity-position (fn [_world-id _entity-id]
+                                                     {:x 1.0 :y 64.0 :z 0.0})
                     raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                     world-effects/available? (constantly true)
                     world-effects/find-entities-in-radius (fn [& _]
@@ -142,7 +145,7 @@
                                                                :living? true}])]
         (is (= [4.0 {:absorbed 6.0}]
                (reduce-damage! "p-3" "enemy-1" 10.0 :magic)))
-        (is (= [["p-3" :light-shield 0.0024000000000000002]] @exp-calls*))
+        (is (= [["p-3" :light-shield 0.001]] @exp-calls*))
         (is (seq @assoc-calls*))))))
 
 (deftest tick-timeout-deactivates-toggle-test
@@ -175,7 +178,15 @@
                                                      :effect.slowness-duration-ticks 100
                                                      :effect.slowness-amplifier 1
                                                      1))
+                        skill-config/tunable-double (fn [_skill-id field-id]
+                                                     (case field-id
+                                                       :progression.exp-tick 0.000001
+                                                       :combat.touch-radius 3.0
+                                                       :combat.front-cone-degrees 60.0
+                                                       0.0))
                         skill-effects/enforce-overload-floor! (fn [& _] true)
+                        skill-effects/add-skill-exp! (fn [& _] nil)
+                        ctx/terminate-context! (fn [& _] nil)
                         skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                             (swap! cooldown-calls* conj [player-id skill-id ticks])
                                                             true)

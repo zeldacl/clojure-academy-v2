@@ -31,7 +31,6 @@
   {:skill-id :jet-engine :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [60.0 30.0] :comment "JetEngine cooldown ticks after successful release."}
   {:skill-id :jet-engine :id :progression.exp-use :path "progression.exp-use" :section-suffix "progression" :type :double :min 0.0 :default 0.004 :comment "JetEngine exp gained on successful release."}
 
-   {:skill-id :light-shield :id :combat.damage-reduction :path "combat.damage-reduction" :section-suffix "combat" :type :double-list :min 0.0 :max 1.0 :list-count 2 :default [0.5 0.8] :comment "LightShield incoming damage reduction."}
    {:skill-id :light-shield :id :combat.touch-damage :path "combat.touch-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [2.0 6.0] :comment "LightShield contact damage."}
    {:skill-id :light-shield :id :combat.touch-radius :path "combat.touch-radius" :section-suffix "combat" :type :double :min 0.0 :default 3.0 :comment "LightShield touch damage radius."}
   {:skill-id :light-shield :id :combat.absorb-damage :path "combat.absorb-damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [15.0 50.0] :comment "LightShield max absorbed damage per hit."}
@@ -42,9 +41,11 @@
    {:skill-id :light-shield :id :effect.slowness-amplifier :path "effect.slowness-amplifier" :section-suffix "effect" :type :int :min 0 :default 1 :comment "LightShield slowness amplifier."}
    {:skill-id :light-shield :id :cost.down.overload :path "cost.down.overload" :section-suffix "cost.down" :type :double-list :min 0.0 :list-count 2 :default [110.0 60.0] :comment "LightShield activation overload cost."}
    {:skill-id :light-shield :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [9.0 4.0] :comment "LightShield tick CP cost."}
-  {:skill-id :light-shield :id :cost.absorb.cp :path "cost.absorb.cp" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [50.0 30.0] :comment "LightShield absorb CP cost per successful absorb/touch damage."}
-  {:skill-id :light-shield :id :cost.absorb.overload :path "cost.absorb.overload" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [5.0 3.0] :comment "LightShield absorb overload cost per successful absorb/touch damage."}
-   {:skill-id :light-shield :id :progression.exp-absorbed-scale :path "progression.exp-absorbed-scale" :section-suffix "progression" :type :double :min 0.0 :default 0.0004 :comment "LightShield exp gained per absorbed damage."}
+  {:skill-id :light-shield :id :cost.absorb.cp :path "cost.absorb.cp" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [50.0 30.0] :comment "LightShield contact CP cost; original defensive absorption accidentally uses this value as overload."}
+  {:skill-id :light-shield :id :cost.absorb.overload :path "cost.absorb.overload" :section-suffix "cost.absorb" :type :double-list :min 0.0 :list-count 2 :default [5.0 3.0] :comment "LightShield contact overload cost; original defensive absorption accidentally uses this value as CP."}
+  {:skill-id :light-shield :id :progression.exp-tick :path "progression.exp-tick" :section-suffix "progression" :type :double :min 0.0 :default 0.000001 :comment "LightShield exp gained per active server tick."}
+  {:skill-id :light-shield :id :progression.exp-touch :path "progression.exp-touch" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "LightShield exp gained per successful contact attack."}
+  {:skill-id :light-shield :id :progression.exp-attacked :path "progression.exp-attacked" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "LightShield exp gained per eligible incoming-damage event."}
 
    {:skill-id :meltdowner :id :charge.min-ticks :path "charge.min-ticks" :section-suffix "charge" :type :int :min 1 :default 20 :comment "Meltdowner minimum charge ticks."}
    {:skill-id :meltdowner :id :charge.max-ticks :path "charge.max-ticks" :section-suffix "charge" :type :int :min 1 :default 40 :comment "Meltdowner optimal max charge ticks."}

@@ -37,6 +37,9 @@
      :entity-id (when resolve-entity-id-fn (resolve-entity-id-fn entity))
      :type (str (.getDescriptionId (.getType entity)))
      :living? (instance? LivingEntity entity)
+     :invulnerable-time (if (instance? LivingEntity entity)
+                          (long (.-invulnerableTime ^LivingEntity entity))
+                          0)
      :mob? (instance? Monster entity)
      :item? (instance? ItemEntity entity)
      :projectile? projectile?

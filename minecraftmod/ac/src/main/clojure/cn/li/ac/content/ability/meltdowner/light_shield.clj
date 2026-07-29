@@ -4,10 +4,10 @@
   Pattern: :toggle
   Activation cost: overload lerp(110, 60, exp), no CP
   Tick cost: CP lerp(9, 4, exp) per tick
-  Damage reduction: lerp(0.5, 0.8, exp) of incoming damage
+  Defensive absorb cap: lerp(15, 50, exp) damage
   Touch damage: lerp(2, 6, exp) to entities in front 60° yaw cone within 3 blocks
   On deactivate or abort: slowness II for 100 ticks, cooldown = ticks-held * (2 - exp)
-  Exp: damage-absorbed * 0.0004 (touch and defensive absorb alike)
+  Exp: +0.000001/tick, +0.001/contact hit, +0.001/eligible incoming hit
 
   No Minecraft imports."
   (:require
@@ -58,7 +58,7 @@
   [exp]
   (cfg-lerp :cost.absorb.cp exp))
 
-(defn- consume-absorb!
+(defn- consume-touch!
   [player-id exp]
   (boolean
     (:success?
@@ -66,6 +66,20 @@
         player-id
         (absorb-overload-cost exp)
         (absorb-cp-cost exp)
+        false))))
+
+(defn- consume-defense!
+  "Preserve the original handleAttacked argument order. It accidentally calls
+  ctx.consume(getAbsorbConsumption(), getAbsorbOverload()), so defensive
+  absorption pays the large consumption value as overload and the small
+  overload value as CP. Contact attacks use the normal order."
+  [player-id exp]
+  (boolean
+    (:success?
+      (skill-effects/perform-resource!
+        player-id
+        (absorb-cp-cost exp)
+        (absorb-overload-cost exp)
         false))))
 
 (defn- get-player-look-vector
@@ -112,8 +126,9 @@
 (defn light-shield-activate!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
   (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
+    (toggle/activate-toggle! ctx-id light-shield-skill-id)
     (set-shield-state-path! ctx-id [:ticks] 0)
-    (set-shield-state-path! ctx-id [:last-absorb-tick] (- (cfg-int :combat.absorb-interval-ticks)))
+    (set-shield-state-path! ctx-id [:last-absorb-tick] -1)
     (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
     ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
     (when player-ref
@@ -124,7 +139,7 @@
 ;; with how long the shield was actually held (ticks), not a flat exp range.
 (defn- toggle-cooldown-ticks
   [ticks exp]
-  (long (Math/round (* (double ticks) (- 2.0 (double exp))))))
+  (long (* (double ticks) (- 2.0 (double exp)))))
 
 ;; Matches original's unified s_onEnd (MSG_TERMINATED): both voluntary
 ;; deactivation and forced abort funnel through the same slowness + cooldown
@@ -158,10 +173,10 @@
                     world-id (:x pos) (:y pos) (:z pos)
                     (cfg-double :combat.touch-radius))]
       (doseq [entity entities]
-        (when (and (:living? entity)
-                   (not= (:uuid entity) player-id)
+        (when (and (not= (str (:uuid entity)) (str player-id))
                    (in-front-cone? pos look-vec entity)
-                   (consume-absorb! player-id exp))
+                   (<= (long (or (:invulnerable-time entity) 0)) 0)
+                   (consume-touch! player-id exp))
           (when (entity-damage/available?)
             (md-damage/mark-target! player-id (:uuid entity)
                                     {:ctx-id ctx-id
@@ -174,13 +189,12 @@
              :magic)
             (skill-effects/add-skill-exp!
              player-id light-shield-skill-id
-             (* (cfg-lerp :combat.touch-damage exp)
-                (cfg-double :progression.exp-absorbed-scale)))))))))
+             (cfg-double :progression.exp-touch))))))))
 
 (defn light-shield-tick!
   [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-    (when (and cost-ok? (toggle/is-toggle-active? ctx-data :light-shield))
+    (when (toggle/is-toggle-active? ctx-data :light-shield)
       (let [next-ticks (inc (shield-ticks ctx-data))
             max-active (cfg-lerp-int :timing.max-active-ticks exp)
             pos (get-player-position player-id)
@@ -190,17 +204,32 @@
             look-vec (get-player-look-vector player-id)]
         (set-shield-state-path! ctx-id [:ticks] next-ticks)
         (enforce-overload-floor! player-id ctx-data)
-        (if (> next-ticks max-active)
-          (do
-            (toggle/remove-toggle! ctx-id :light-shield)
-            (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil))
-          (maybe-touch-damage!
-           {:ctx-id ctx-id
-            :player-id player-id
-            :exp exp
-            :pos pos
-            :world-id world-id
-            :look-vec look-vec}))))))
+        ;; Original continues the rest of s_tick after requesting termination:
+        ;; per-tick exp and contact damage still happen on the timeout/failing
+        ;; tick before the unified end callback settles cooldown/slowness.
+        (skill-effects/add-skill-exp! player-id light-shield-skill-id
+                                      (cfg-double :progression.exp-tick))
+        (maybe-touch-damage!
+         {:ctx-id ctx-id
+          :player-id player-id
+          :exp exp
+          :pos pos
+          :world-id world-id
+          :look-vec look-vec})
+        (when (> next-ticks max-active)
+          (toggle/remove-toggle! ctx-id :light-shield)
+          (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil)
+          (ctx/terminate-context! ctx-id nil))))))
+
+(defn light-shield-cost-fail!
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks cost-stage _player-ref]
+  (when (and (= cost-stage :tick)
+             (get-in (ctx-skill/get-context ctx-id)
+                     [:skill-state light-shield-state-key]))
+    (end-shield! ctx-id player-id exp)
+    (toggle/remove-toggle! ctx-id :light-shield)
+    (update-skill-state-root! ctx-id #(dissoc % light-shield-state-key))
+    (ctx/terminate-context! ctx-id nil)))
 
 (defn light-shield-abort!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -221,35 +250,46 @@
           world-id (or (:world-id pos)
                        (skill-effects/player-path player-id [:position :world-id])
                        "minecraft:overworld")
-          entities (when (and pos (world-effects/available?))
-                     (world-effects/find-entities-in-radius
-                      world-id (:x pos) (:y pos) (:z pos)
-                      (cfg-double :combat.touch-radius)))
-          attacker (some #(when (= (str (:uuid %)) (str attacker-id)) %) entities)]
-      (boolean (and attacker (in-front-cone? pos look-vec attacker))))))
+          attacker-pos (motion-effects/entity-position world-id attacker-id)]
+      (boolean (and attacker-pos (in-front-cone? pos look-vec attacker-pos))))))
 
 (defn- light-shield-reduce-damage
-  [player-id attacker-id damage _damage-source]
+  [player-id attacker-id damage damage-source]
   (try
     (if-let [[ctx-key ctx-data] (active-light-shield-entry player-id)]
       (let [ticks (shield-ticks ctx-data)
-            last-absorb (long (or (get-in ctx-data (state-path :last-absorb-tick)) (- (cfg-int :combat.absorb-interval-ticks))))
-            interval (cfg-int :combat.absorb-interval-ticks)]
+            last-absorb (long (or (get-in ctx-data (state-path :last-absorb-tick)) -1))
+            interval (cfg-int :combat.absorb-interval-ticks)
+            immediate-source-id (or (when (and damage-source (entity-damage/available?))
+                                      (entity-damage/direct-source-entity-id damage-source))
+                                    attacker-id)]
         ;; Matches original's <= (skip when diff<=interval, i.e. requires
         ;; interval+1 ticks since the last absorb, not just interval ticks).
-        (if (or (<= (- ticks last-absorb) interval)
-                (not (attacker-front? player-id attacker-id)))
+        (if (or (zero? (double damage))
+                (and (not= last-absorb -1)
+                     (<= (- ticks last-absorb) interval)))
           [damage nil]
-          (let [exp (skill-exp player-id)]
-            (if-not (consume-absorb! player-id exp)
-              [damage nil]
-              (let [absorb-cap (cfg-lerp :combat.absorb-damage exp)
-                    absorbed (double (min (double damage) absorb-cap))
-                    new-damage (double (- (double damage) absorbed))]
-                (set-shield-state-path! ctx-key [:last-absorb-tick] ticks)
-                (skill-effects/add-skill-exp! player-id light-shield-skill-id
-                                              (* absorbed (cfg-double :progression.exp-absorbed-scale)))
-                [new-damage {:absorbed absorbed}])))))
+          (let [exp (skill-exp player-id)
+                perform? (attacker-front? player-id immediate-source-id)
+                result (if-not perform?
+                         [damage nil]
+                         (do
+                           ;; Original records lastAbsorb before attempting
+                           ;; payment, so a failed payment still starts the
+                           ;; 18-tick defensive action interval.
+                           (set-shield-state-path! ctx-key [:last-absorb-tick] ticks)
+                           (if-not (consume-defense! player-id exp)
+                             [damage nil]
+                             (let [absorb-cap (cfg-lerp :combat.absorb-damage exp)
+                                   absorbed (double (min (double damage) absorb-cap))
+                                   new-damage (double (- (double damage) absorbed))]
+                               [new-damage {:absorbed absorbed}]))))]
+            ;; handleAttacked grants this flat amount after every eligible
+            ;; damage event, even when the attacker is behind the shield or
+            ;; resource payment fails.
+            (skill-effects/add-skill-exp! player-id light-shield-skill-id
+                                          (cfg-double :progression.exp-attacked))
+            result)))
       [damage nil])
     (catch Exception e
       (log/warn "LightShield reduce-damage failed:" (ex-message e))
@@ -296,7 +336,8 @@
   :actions        {:activate!   light-shield-activate!
                    :deactivate! light-shield-deactivate!
                    :tick!       light-shield-tick!
-                   :abort!      light-shield-abort!}
+                   :abort!      light-shield-abort!
+                   :cost-fail!  light-shield-cost-fail!}
   :fx             {:start {:topic :light-shield/fx-start :payload (fn [_] {})}
                    :end   {:topic :light-shield/fx-end   :payload (fn [_] {})}}
   :prerequisites  [{:skill-id :electron-bomb :min-exp 1.0}])
