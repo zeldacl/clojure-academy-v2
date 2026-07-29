@@ -20,9 +20,11 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -34,22 +36,30 @@
 (defn- horizontal-look [player-id]
   (when-let [look-vec (and (raycast/available?)
                            (raycast/player-look-vector player-id))]
-    (let [flat {:x (double (:x look-vec))
-                :y 0.0
+    (let [look {:x (double (:x look-vec))
+                :y (double (:y look-vec))
                 :z (double (:z look-vec))}
-          length (geom/vlen flat)]
-      (when (> length 1.0e-6)
-        (geom/vnorm flat)))))
+          horizontal-length (Math/sqrt (+ (* (:x look) (:x look))
+                                           (* (:z look) (:z look))))]
+      (when (> horizontal-length 1.0e-6)
+        (geom/vnorm look)))))
 
 (defn- horizontal-look-with-fallback [player-id]
   (or (horizontal-look player-id)
       (when (cfg-boolean :targeting.horizontal-look-fallback)
         {:x 0.0 :y 0.0 :z 1.0})))
 
-(defn- perpendicular [flat-dir]
-  {:x (- (double (:z flat-dir)))
-   :y 0.0
-   :z (double (:x flat-dir))})
+(defn- rotated-spread-vector
+  "Match Vec3d.rotateYaw(90): the original passes 90 radians, not 90 degrees."
+  [look-dir]
+  (let [angle 90.0
+        cos-a (Math/cos angle)
+        sin-a (Math/sin angle)
+        x (double (:x look-dir))
+        z (double (:z look-dir))]
+    {:x (+ (* x cos-a) (* z sin-a))
+     :y (double (:y look-dir))
+     :z (- (* z cos-a) (* x sin-a))}))
 
 (defn- cp-cost [exp]
   (cfg-lerp :cost.up.cp exp))
@@ -68,16 +78,27 @@
     (cfg-double :effect.energy-cost.default-block)))
 
 (defn- max-iterations [exp]
-  (cfg-lerp-int :effect.max-iterations exp))
+  (int (cfg-lerp :effect.max-iterations exp)))
 
 (defn- damage-value [exp]
   (cfg-lerp :combat.damage exp))
+
+(defn- scaled-damage
+  [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+   (skill-registry/get-skill :groundshock)
+   (ability-event/fire-calc-event!
+    ability-event/CALC-SKILL-ATTACK
+    raw-damage
+    {:player-id player-id
+     :target-id target-id
+     :skill-id :groundshock})))
 
 (defn- drop-rate [exp]
   (cfg-lerp :breaking.drop-rate exp))
 
 (defn- cooldown-ticks [exp]
-  (cfg-lerp-int :cooldown.ticks exp))
+  (int (cfg-lerp :cooldown.ticks exp)))
 
 (defn- launch-y-speed [exp]
   (* (+ (cfg-double :movement.launch-random-base)
@@ -188,26 +209,72 @@
                  (entity-overlaps-shock-box? entity bx by bz))
         (when (entity-damage/available?)
           (entity-damage/apply-direct-damage!
-                                              world-id
-                                              entity-id
-                                              damage
-                                              :generic))
+           world-id
+           entity-id
+           (scaled-damage player-id entity-id damage)
+           :skill
+           {:attacker-uuid player-id}))
         (when (motion-effects/entity-motion-available?)
-          (motion-effects/add-entity-velocity!
-                                       world-id
-                                       entity-id
-                                       0.0
-                                       y-speed
-                                       0.0))
+          (let [velocity (or (motion-effects/entity-velocity world-id entity-id)
+                             {:x 0.0 :z 0.0})]
+            (motion-effects/set-entity-velocity!
+             world-id entity-id
+             (double (or (:x velocity) 0.0))
+             y-speed
+             (double (or (:z velocity) 0.0)))))
         (.add ^HashSet affected-entities* entity-id)
         (add-exp! player-id (cfg-double :progression.exp-entity))))))
 
-(defn- propagation-positions [perp]
+(defn- make-plotter
+  [x0 y0 z0 dx dz]
+  (let [adx (Math/abs (double dx))
+        adz (Math/abs (double dz))]
+    (cond
+      (> adz adx)
+      {:axis :z
+       :x0 (int z0) :y0 (int y0) :z0 (int x0)
+       :x (int z0) :y (int y0) :z (int x0)
+       :dyx 0.0 :dzx (/ (double dx) (double dz))
+       :dirflag (if (pos? (double dz)) 1 -1)}
+
+      (pos? adx)
+      {:axis :x
+       :x0 (int x0) :y0 (int y0) :z0 (int z0)
+       :x (int x0) :y (int y0) :z (int z0)
+       :dyx 0.0 :dzx (/ (double dz) (double dx))
+       :dirflag (if (pos? (double dx)) 1 -1)}
+
+      :else nil)))
+
+(defn- plotter-next
+  [plotter]
+  (let [{:keys [x0 y0 z0 x y z dyx dzx dirflag axis]} plotter
+        next-x (+ x dirflag)
+        val-y (+ y0 (* (- next-x x0) dyx))
+        val-z (+ z0 (* (- next-x x0) dzx))
+        next-state (cond
+                     (> (Math/abs (- val-y y)) 0.5)
+                     (assoc plotter :y (+ y (* (Math/signum dyx) dirflag)))
+
+                     (> (Math/abs (- val-z z)) 0.5)
+                     (assoc plotter :z (+ z (* (Math/signum dzx) dirflag)))
+
+                     :else
+                     (assoc plotter :x next-x))
+        nx (int (:x next-state))
+        ny (int (:y next-state))
+        nz (int (:z next-state))]
+    [(case axis
+       :z [nz ny nx]
+       [nx ny nz])
+     next-state]))
+
+(defn- propagation-positions [spread]
   [[{:x 0.0 :y 0.0 :z 0.0} 1.0]
-   [perp 0.7]
-   [(geom/v* perp -1.0) 0.7]
-   [(geom/v* perp 2.0) 0.3]
-   [(geom/v* perp -2.0) 0.3]])
+   [spread 0.7]
+   [(geom/v* spread -1.0) 0.7]
+   [(geom/v* spread 2.0) 0.3]
+   [(geom/v* spread -2.0) 0.3]])
 
 (defn- finalize-affected-blocks [world-id positions]
   (mapv (fn [[x y z]]
@@ -228,7 +295,7 @@
 
 (defn- propagate-shockwave!
   "Propagate shockwave along ground in look direction."
-  [player-id world-id start-x start-y start-z flat-dir exp]
+  [player-id world-id start-x start-y start-z look-dir exp]
   (let [energy* (double-array [(init-energy exp)])
         damage (damage-value exp)
         y-speed (launch-y-speed exp)
@@ -238,31 +305,36 @@
         affected-blocks* (HashSet.)
         affected-entities* (HashSet.)
         broken-blocks* (HashSet.)
-        perp (perpendicular flat-dir)]
+        spread (rotated-spread-vector look-dir)
+        plotter (make-plotter
+                 (int (Math/floor (double start-x)))
+                 (int (Math/floor (double start-y)))
+                 (int (Math/floor (double start-z)))
+                 (:x look-dir)
+                 (:z look-dir))]
     (loop [iter 0
-           x (Math/floor (double start-x))
-           z (Math/floor (double start-z))]
-      (if (or (<= (aget energy* 0) 0.0) (>= iter max-iter))
+           plotter-state plotter]
+      (if (or (nil? plotter-state)
+              (<= (aget energy* 0) 0.0)
+              (>= iter max-iter))
         {:affected-blocks (finalize-affected-blocks world-id affected-blocks*)
          :affected-entities (vec affected-entities*)
          :broken-blocks (finalize-broken-blocks broken-blocks*)}
-        (let [block-x (int (Math/floor x))
-              block-y (int (Math/floor start-y))
-              block-z (int (Math/floor z))
+        (let [[[block-x block-y block-z] next-plotter] (plotter-next plotter-state)
               candidate-entities (when (world-effects/available?)
                                    (world-effects/find-entities-in-aabb
                                      world-id
-                                     (- x (+ entity-search-radius 3.0))
+                                     (- block-x (+ entity-search-radius 3.0))
                                      (- block-y 2.0)
-                                     (- z (+ entity-search-radius 3.0))
-                                     (+ x (+ entity-search-radius 3.0))
+                                     (- block-z (+ entity-search-radius 3.0))
+                                     (+ block-x (+ entity-search-radius 3.0))
                                      (+ block-y 4.0)
-                                     (+ z (+ entity-search-radius 3.0))))]
-          (doseq [[delta prob] (propagation-positions perp)]
+                                     (+ block-z (+ entity-search-radius 3.0))))]
+          (doseq [[delta prob] (propagation-positions spread)]
             (when (< (rand) prob)
-              (let [bx (int (Math/floor (+ x (:x delta))))
-                    by block-y
-                    bz (int (Math/floor (+ z (:z delta))))
+              (let [bx (int (Math/floor (+ block-x (:x delta))))
+                    by (int (Math/floor (+ block-y (:y delta))))
+                    bz (int (Math/floor (+ block-z (:z delta))))
                     pos-key [bx by bz]]
                 (when-not (.contains affected-blocks* pos-key)
                   (when-let [block-id (and (block-manip/available?)
@@ -288,19 +360,25 @@
                       (aset-double energy* 0 (- (aget energy* 0) (propagation-energy-cost block-id))))
 
                     (when (< (rand) (cfg-double :breaking.ground-break-probability))
-                      (break-with-force! player-id world-id block-x block-y block-z false energy* block-drop-rate broken-blocks*))
+                      (break-with-force!
+                       player-id world-id
+                       block-x block-y block-z
+                       false energy* block-drop-rate broken-blocks*))
 
                     (let [before-entities (.size affected-entities*)]
-                      (affect-entities! player-id world-id bx by bz damage y-speed candidate-entities affected-entities*)
+                      (affect-entities!
+                       player-id world-id bx by bz
+                       damage y-speed candidate-entities affected-entities*)
                       (aset-double energy* 0 (- (aget energy* 0)
                                                (double (- (.size affected-entities*) before-entities)))))))))
 
             (doseq [dy (range 1 4)]
-              (break-with-force! player-id world-id block-x (+ block-y dy) block-z false energy* block-drop-rate broken-blocks*)))
+              (break-with-force!
+               player-id world-id
+               block-x (+ block-y dy) block-z
+               false energy* block-drop-rate broken-blocks*)))
 
-          (recur (inc iter)
-                 (+ x (:x flat-dir))
-                 (+ z (:z flat-dir))))))))
+          (recur (inc iter) next-plotter))))))
 
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
@@ -316,11 +394,13 @@
         (when-let [hardness (block-manip/get-block-hardness world-id x y z)]
           (when (and (number? hardness)
              (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
-            (break-with-force! player-id world-id x y z true energy* 1.0 broken-blocks*)))))))
+            (break-with-force!
+             player-id world-id x y z
+             true energy* (drop-rate exp) broken-blocks*)))))))
 
 (defn groundshock-on-key-up
   "Perform the ground slam."
-  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
       (let [skill-state (:skill-state ctx-data)
@@ -330,7 +410,10 @@
         ;; Check if charge is valid (5+ ticks) and player is on ground
           (if (and (>= charge-ticks (cfg-int :charge.min-ticks))
                  (motion-effects/player-on-ground? player-id))
-          (if-not cost-ok?
+          (let [{resource-ok? :success?}
+                (skill-effects/perform-resource!
+                 player-id (overload-cost exp) (cp-cost exp))]
+          (if-not resource-ok?
             (do
               (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
               (log/debug "Groundshock perform failed: insufficient resource"))
@@ -370,7 +453,7 @@
                   (log/debug "Groundshock: Missing horizontal look vector")))
               (do
                 (fx/send! ctx-id {:topic :groundshock/fx-end :mode :end} nil {:performed? false})
-                (log/debug "Groundshock: Missing player position"))))
+                (log/debug "Groundshock: Missing player position")))))
 
           ;; Invalid conditions
           (do
@@ -400,11 +483,9 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks (fn [_player-id _skill-id exp]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
+                    (int (cfg-lerp :cooldown.ticks (double (or exp 0.0)))))
   :pattern :release-cast
   :cooldown {:mode :manual}
-  :cost {:up {:cp groundshock-cost-up-cp
-              :overload groundshock-cost-up-overload}}
   :actions {:down! groundshock-on-key-down
             :tick! groundshock-on-key-tick
             :up! groundshock-on-key-up

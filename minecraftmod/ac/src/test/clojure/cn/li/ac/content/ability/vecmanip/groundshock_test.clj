@@ -38,11 +38,16 @@
         exp-calls* (atom [])
         affected* (java.util.HashSet.)]
     (with-redefs [entity-damage/available? (constantly true)
-                  entity-damage/apply-direct-damage! (fn [world-id entity-id damage _]
+                  entity-damage/apply-direct-damage! (fn [world-id entity-id damage _ _opts]
                                                        (swap! damage-calls* conj [world-id entity-id damage]))
                   motion-effects/entity-motion-available? (constantly true)
-                  motion-effects/add-entity-velocity! (fn [world-id entity-id vx vy vz]
-                                                 (swap! velocity-calls* conj [world-id entity-id vx vy vz]))
+                  motion-effects/entity-velocity (fn [& _] {:x 0.25 :y -0.5 :z -0.4})
+                  motion-effects/set-entity-velocity! (fn [world-id entity-id vx vy vz]
+                                                        (swap! velocity-calls* conj [world-id entity-id vx vy vz]))
+                  cn.li.ac.ability.registry.event/fire-calc-event!
+                  (fn [_ damage _] damage)
+                  skill-effects/scale-damage (fn [_ damage] damage)
+                  cn.li.ac.ability.registry.skill/get-skill (fn [_] {})
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args) nil)
                   skill-config/tunable-double (fn [_ field-id]
                                                 (case field-id
@@ -57,7 +62,7 @@
        affected*)
       (is (= #{"living-1"} (set affected*)))
       (is (= [["w" "living-1" 5.0]] @damage-calls*))
-      (is (= [["w" "living-1" 0.0 0.8 0.0]] @velocity-calls*))
+      (is (= [["w" "living-1" 0.25 0.8 -0.4]] @velocity-calls*))
       (is (= 1 (count @exp-calls*))))))
 
 (deftest key-up-missing-position-sends-fx-end-test
@@ -68,6 +73,7 @@
                                                :charge.min-ticks 5
                                                0))
                   skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/perform-resource! (fn [& _] {:success? true})
                   motion-effects/teleportation-available? (constantly false)
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
@@ -85,6 +91,7 @@
                                                :charge.min-ticks 5
                                                0))
                   skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/perform-resource! (fn [& _] {:success? false})
                   fx/send! send!
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/player-on-ground? (constantly true)]
@@ -100,6 +107,7 @@
                                                0))
                   skill-config/tunable-boolean (fn [_ _] false)
                   skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/perform-resource! (fn [& _] {:success? true})
                   motion-effects/teleportation-available? (constantly true)
                   motion-effects/player-position (fn [_] {:world-id "w" :x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
