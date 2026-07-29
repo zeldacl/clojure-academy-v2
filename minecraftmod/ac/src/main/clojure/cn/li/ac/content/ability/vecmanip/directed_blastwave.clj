@@ -8,6 +8,8 @@
   (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.geom :as geom]
@@ -21,6 +23,17 @@
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :directed-blastwave)
+
+(defn- scaled-damage [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+   (skill-registry/get-skill :directed-blastwave)
+   (ability-event/fire-calc-event!
+    ability-event/CALC-SKILL-ATTACK
+    raw-damage
+    {:player-id player-id
+     :target-id target-id
+     :skill-id :directed-blastwave})))
+
 (defn- player-body-pos [player-id]
   (geom/body-pos player-id))
 
@@ -181,11 +194,15 @@
                            [])
                 damage (cfg-lerp :combat.damage exp*)]
             (skill-effects/set-main-cooldown!
-             player-id :directed-blastwave (cfg-lerp-int :cooldown.ticks exp*))
+             player-id :directed-blastwave
+             (int (cfg-lerp :cooldown.ticks exp*)))
             (doseq [entity entities]
               (when (entity-damage/available?)
                 (entity-damage/apply-direct-damage!
-                 world-id (:uuid entity) damage :skill
+                 world-id
+                 (:uuid entity)
+                 (scaled-damage player-id (:uuid entity) damage)
+                 :skill
                  {:attacker-uuid player-id}))
               ;; The original knockback call raises the target by 0.1, then
               ;; its following setMotion(delta) overwrites the knockback
