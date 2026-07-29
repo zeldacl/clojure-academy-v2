@@ -60,6 +60,21 @@
                            (catch Exception e
                              (log/warn "Failed to raycast combined:" (ex-message e))
                              nil))))
+   :raycast-combined-excluding
+   (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance excluded-entity-uuid]
+     (let [level (resolve-level (get-server) world-id)]
+       (try
+         (when level
+           (rn/normalize-bridge-map
+             (RaycastShared/raycastCombinedExcluding
+               level
+               start-x start-y start-z
+               dir-x dir-y dir-z
+               max-distance
+               (some-> excluded-entity-uuid str))))
+         (catch Exception e
+           (log/warn "Failed to raycast combined excluding entity:" (ex-message e))
+           nil))))
    :raycast-combined-all (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
                            (let [level (resolve-level (get-server) world-id)]
                              (try

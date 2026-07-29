@@ -43,6 +43,11 @@
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-combined world-id sx sy sz dx dy dz max-dist))
 
+(defn raycast-combined-excluding
+  [world-id sx sy sz dx dy dz max-dist excluded-entity-uuid]
+  (call :raycast-combined-excluding
+        world-id sx sy sz dx dy dz max-dist excluded-entity-uuid))
+
 (defn raycast-combined-all
   "Return the nearest block or any collidable entity, including non-living
   entities."

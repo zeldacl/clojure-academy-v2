@@ -36,7 +36,10 @@
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
 
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mcmod.platform.entity :as entity]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 
 
@@ -139,22 +142,10 @@
   [world-id x y z]
 
   (boolean
-
-    (helper/raycast-blocks world-id
-
-                           (double x)
-
-                           (+ (double y) 1.0)
-
-                           (double z)
-
-                           0.0
-
-                           1.0
-
-                           0.0
-
-                           1.1)))
+    (bm/get-block world-id
+                  (int (Math/floor (double x)))
+                  (int (Math/floor (+ (double y) 1.0)))
+                  (int (Math/floor (double z))))))
 
 
 
@@ -166,9 +157,7 @@
 
         hit-y (double (or (:hit-y hit) (:y hit) (:y fallback-end) 0.0))
 
-        hit-z (double (or (:hit-z hit) (:z hit) (:z fallback-end) 0.0))
-
-        block-y (double (or (:y hit) hit-y 0.0))]
+        hit-z (double (or (:hit-z hit) (:z hit) (:z fallback-end) 0.0))]
 
     (if (= (:hit-type hit) :entity)
 
@@ -186,13 +175,13 @@
 
                        :up {:to-x hit-x :to-y (+ hit-y 1.8) :to-z hit-z}
 
-                       :north {:to-x hit-x :to-y (+ block-y 1.7) :to-z (- hit-z 0.6)}
+                       :north {:to-x hit-x :to-y (+ hit-y 1.7) :to-z (- hit-z 0.6)}
 
-                       :south {:to-x hit-x :to-y (+ block-y 1.7) :to-z (+ hit-z 0.6)}
+                       :south {:to-x hit-x :to-y (+ hit-y 1.7) :to-z (+ hit-z 0.6)}
 
-                       :west {:to-x (- hit-x 0.6) :to-y (+ block-y 1.7) :to-z hit-z}
+                       :west {:to-x (- hit-x 0.6) :to-y (+ hit-y 1.7) :to-z hit-z}
 
-                       :east {:to-x (+ hit-x 0.6) :to-y (+ block-y 1.7) :to-z hit-z}
+                       :east {:to-x (+ hit-x 0.6) :to-y (+ hit-y 1.7) :to-z hit-z}
 
                        {:to-x hit-x :to-y hit-y :to-z hit-z})]
 
@@ -214,13 +203,15 @@
 
 (defn- resolve-preview
 
-  [player-id direction]
+  [player-id direction exp]
 
-  (let [exp (skill-exp player-id)
+  (let [exp (double exp)
 
         dist (cfg-lerp :movement.blink-distance exp)
 
-        pos (helper/player-position player-id)
+        pos (or (when (raycast/available?)
+                  (raycast/player-position player-id))
+                (helper/player-position player-id))
 
         look (helper/player-look-vec player-id)]
 
@@ -236,27 +227,25 @@
 
             [dx dy dz] (direction-vector look direction)
 
+            eye-y (double (or (:eye-y pos) (+ start-y 1.62)))
             end-x (+ start-x (* (double dist) dx))
 
-            end-y (+ start-y (* (double dist) dy))
+            end-y (+ eye-y (* (double dist) dy))
 
             end-z (+ start-z (* (double dist) dz))
-
-            hit (helper/raycast-combined world-id
-
-                                         start-x
-
-                                         start-y
-
-                                         start-z
-
-                                         dx
-
-                                         dy
-
-                                         dz
-
-                                         (double dist))
+            ray-dx (- end-x start-x)
+            ray-dy (- end-y start-y)
+            ray-dz (- end-z start-z)
+            ray-distance (Math/sqrt (+ (* ray-dx ray-dx)
+                                       (* ray-dy ray-dy)
+                                       (* ray-dz ray-dz)))
+            [ndx ndy ndz] (normalize-3d ray-dx ray-dy ray-dz)
+            hit (raycast/raycast-combined-excluding
+                  world-id
+                  start-x start-y start-z
+                  ndx ndy ndz
+                  ray-distance
+                  player-id)
 
             resolved (if hit
 
@@ -300,49 +289,12 @@
 
 
 
-(defn- maintain-active-state!
+(defn- active-context
 
   [ctx-id ctx-data]
 
-  (let [now (now-ms)
-
-        player-id (:player-uuid ctx-data)
-
-        expires-at (long (or (get-in ctx-data [:skill-state :expires-at-ms]) 0))
-
-        overload-floor (double (or (get-in ctx-data [:skill-state :overload-floor]) 0.0))
-
-        fall-protect-until (long (or (get-in ctx-data [:skill-state :fall-protect-until-ms]) 0))]
-
-    (cond
-
-      (not (get-in ctx-data [:skill-state :active?]))
-
-      nil
-
-
-
-      (and (pos? expires-at) (> now expires-at))
-
-      (do
-
-        (ctx/terminate-context! ctx-id nil)
-
-        nil)
-
-
-
-      :else
-
-      (do
-
-        (skill-effects/enforce-overload-floor! player-id overload-floor)
-
-        (when (> fall-protect-until now)
-
-          (helper/reset-fall-damage! player-id))
-
-        ctx-data))))
+  (when (get-in ctx-data [:skill-state :active?])
+    ctx-data))
 
 
 
@@ -350,36 +302,33 @@
 
   [player-id ctx-id direction]
 
-  (let [preview (resolve-preview player-id direction)
-
-        exp (skill-exp player-id)
+  (let [ctx-data (ctx-skill/get-context ctx-id)
+        exp (double (or (get-in ctx-data [:skill-state :active-exp])
+                        (skill-exp player-id)))
+        creative? (boolean (get-in ctx-data [:skill-state :creative?]))
 
         cp-cost (cfg-lerp :cost.blink.cp exp)
 
-        overload-cost (cfg-lerp :cost.blink.overload exp)]
+        overload-cost (cfg-lerp :cost.blink.overload exp)
+        resource-result (skill-effects/perform-resource!
+                          player-id
+                          (double overload-cost)
+                          (double cp-cost)
+                          creative?)]
 
-    (when (and preview
-
-               (>= (skill-effects/current-cp player-id) (double cp-cost)))
-
-      (let [world-id (geom/world-id-of player-id)]
-
-        (when (helper/teleport-to! player-id world-id
-
-                                   (:to-x preview)
-
-                                   (:to-y preview)
-
-                                   (:to-z preview))
-
-          (skill-effects/perform-resource! player-id (double overload-cost) (double cp-cost))
+    (when (:success? resource-result)
+      (when-let [preview (resolve-preview player-id direction exp)]
+        (let [world-id (geom/world-id-of player-id)]
+          (when (helper/teleport-to! player-id world-id
+                                     (:to-x preview)
+                                     (:to-y preview)
+                                     (:to-z preview))
 
           (let [protect-ticks (cfg-lerp-int :timing.post-blink-fall-protect-ticks exp)
 
-                protect-until (+ (now-ms) (* 50 (long (max 0 protect-ticks))))]
+                protect-ticks (long (max 0 protect-ticks))]
 
-          (set-skill-state! ctx-id [:fall-protect-until-ms] protect-until)
-
+            (set-skill-state! ctx-id [:fall-protect-ticks] protect-ticks)
             (helper/reset-fall-damage! player-id))
 
           (skill-effects/add-skill-exp! player-id flashing-skill-id
@@ -393,7 +342,7 @@
           ;; anti-fall-damage GravityCancellor hack is isLocal-gated).
           (fx/send-local-and-nearby! ctx-id {:topic :flashing/fx-perform :mode :perform} nil preview)
 
-          true)))))
+            true))))))
 
 
 
@@ -401,21 +350,33 @@
 
   [ctx-id player-id direction mode]
 
-  (when-let [preview (resolve-preview player-id direction)]
+  (let [ctx-data (ctx-skill/get-context ctx-id)
+        exp (double (or (get-in ctx-data [:skill-state :active-exp])
+                        (skill-exp player-id)))
+        creative? (boolean (get-in ctx-data [:skill-state :creative?]))
+        cp-cost (cfg-lerp :cost.blink.cp exp)]
+    (if (or creative?
+            (>= (skill-effects/current-cp player-id) (double cp-cost)))
+      (when-let [preview (resolve-preview player-id direction exp)]
 
-    (update-skill-state-root! ctx-id
+        (update-skill-state-root! ctx-id
 
-                              (fn [st]
+                                  (fn [st]
 
-                                (-> (or st {})
+                                    (-> (or st {})
 
-                                    (assoc :active? true)
+                                        (assoc :active? true)
 
-                                    (assoc :direction direction)
+                                        (assoc :direction direction)
 
-                                    (assoc :preview preview))))
+                                        (assoc :preview preview))))
 
-    (fx/send! ctx-id {:topic mode} nil preview)))
+        (fx/send! ctx-id {:topic mode} nil preview))
+      (do
+        (clear-preview! ctx-id)
+        (fx/send! ctx-id {:topic :flashing/fx-preview-end}
+                  nil
+                  {:direction direction})))))
 
 
 
@@ -431,7 +392,7 @@
 
                    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
 
-                     (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
+                     (when-let [active-ctx (active-context ctx-id ctx-data)]
 
                        (when-let [direction (movement-key->direction key)]
 
@@ -443,7 +404,7 @@
 
                    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
 
-                     (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
+                     (when-let [active-ctx (active-context ctx-id ctx-data)]
 
                        (when-let [direction (movement-key->direction key)]
 
@@ -455,7 +416,7 @@
 
                    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
 
-                     (when-let [active-ctx (maintain-active-state! ctx-id ctx-data)]
+                     (when-let [active-ctx (active-context ctx-id ctx-data)]
 
                        (when-let [direction (movement-key->direction key)]
 
@@ -471,17 +432,16 @@
 
 (defn flashing-activate!
 
-  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
 
-  (when cost-ok?
+  (if cost-ok?
 
     (let [exp (skill-exp player-id)
 
           max-active-ticks (cfg-lerp-int :timing.max-active-ticks exp)
 
           overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))
-
-          now (now-ms)]
+          creative? (boolean (and player-ref (entity/player-creative? player-ref)))]
 
       (update-skill-state-root! ctx-id
 
@@ -492,28 +452,43 @@
                                       (assoc :active? true)
 
                                       (assoc :active-exp exp)
-
-                                      (assoc :activated-at-ms now)
-
-                                      (assoc :expires-at-ms (+ now (* 50 (long (max 0 max-active-ticks)))))
+                                      (assoc :active-ticks 0)
+                                      (assoc :max-active-ticks max-active-ticks)
 
                                       (assoc :overload-floor overload-floor)
+                                      (assoc :creative? creative?)
+                                      (assoc :fall-protect-ticks 0)
 
                                       (dissoc :direction)
 
-                                      (dissoc :preview)))))
+                                      (dissoc :preview))))
 
-    (register-movement-listeners! ctx-id)))
+      (register-movement-listeners! ctx-id))
+    (ctx/terminate-context! ctx-id nil)))
 
 
 
 (defn flashing-tick!
 
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
 
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-
-    (maintain-active-state! ctx-id ctx-data)))
+    (when (get-in ctx-data [:skill-state :active?])
+      (let [ticks (long (or (get-in ctx-data [:skill-state :active-ticks]) 0))
+            max-ticks (long (or (get-in ctx-data [:skill-state :max-active-ticks]) 0))
+            overload-floor (double (or (get-in ctx-data [:skill-state :overload-floor]) 0.0))
+            protect-ticks (long (or (get-in ctx-data [:skill-state :fall-protect-ticks]) 0))]
+        (skill-effects/enforce-overload-floor! player-id overload-floor)
+        (when (pos? protect-ticks)
+          (helper/reset-fall-damage! player-id))
+        (if (> ticks max-ticks)
+          (ctx/terminate-context! ctx-id nil)
+          (update-skill-state-root!
+            ctx-id
+            (fn [st]
+              (-> st
+                  (assoc :active-ticks (inc ticks))
+                  (assoc :fall-protect-ticks (max 0 (dec protect-ticks)))))))))))
 
 
 
@@ -535,9 +510,11 @@
 
                                   (dissoc :preview))))
 
-  (skill-effects/set-main-cooldown! player-id flashing-skill-id
-
-                                    (cfg-lerp-int :cooldown.deactivate-ticks (skill-exp player-id))))
+  (let [exp (double (or (get-in (ctx-skill/get-context ctx-id)
+                                 [:skill-state :active-exp])
+                        (skill-exp player-id)))]
+    (skill-effects/set-main-cooldown! player-id flashing-skill-id
+                                      (cfg-lerp-int :cooldown.deactivate-ticks exp))))
 
 
 
@@ -559,9 +536,11 @@
 
                                   (dissoc :preview))))
 
-  (skill-effects/set-main-cooldown! player-id flashing-skill-id
-
-                                    (cfg-lerp-int :cooldown.deactivate-ticks (skill-exp player-id))))
+  (let [exp (double (or (get-in (ctx-skill/get-context ctx-id)
+                                 [:skill-state :active-exp])
+                        (skill-exp player-id)))]
+    (skill-effects/set-main-cooldown! player-id flashing-skill-id
+                                      (cfg-lerp-int :cooldown.deactivate-ticks exp))))
 
 
 
@@ -601,7 +580,11 @@
 
                                  (cfg-lerp :cost.down.cp
 
-                                                  (skill-exp player-id)))}}
+                                                  (skill-exp player-id)))
+                           :creative? (fn [_player-id _skill-id _exp player-ref]
+                                      (boolean
+                                        (and player-ref
+                                             (entity/player-creative? player-ref))))}}
 
   :cooldown        {:mode :manual}
 
