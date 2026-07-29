@@ -5,18 +5,19 @@
   Cost on perform: CP lerp(160,200), overload lerp(50,30) by exp
   Cooldown: lerp(80,50) ticks by exp
   Exp: +0.0025 on hit / +0.0012 on miss"
-  (:require            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
             [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :directed-blastwave)
@@ -31,6 +32,36 @@
   (ctx-skill/clear-skill-state! ctx-id)
   (ctx/terminate-context! ctx-id nil))
 
+(defn- nearer-hit
+  [block-hit entity-hit]
+  (cond
+    (nil? block-hit) (when entity-hit (assoc entity-hit :hit-type :entity))
+    (nil? entity-hit) (assoc block-hit :hit-type :block)
+    (<= (double (or (:distance block-hit) Double/POSITIVE_INFINITY))
+        (double (or (:distance entity-hit) Double/POSITIVE_INFINITY)))
+    (assoc block-hit :hit-type :block)
+    :else
+    (assoc entity-hit :hit-type :entity)))
+
+(defn- target-trace
+  [player-id world-id]
+  (when (raycast/available?)
+    (let [pos (raycast/player-position player-id)
+          look (raycast/player-look-vector player-id)
+          max-distance (cfg-double :targeting.raycast-distance)
+          block-hit (when (and pos look)
+                      (raycast/raycast-blocks
+                       world-id
+                       (double (:x pos))
+                       (double (or (:eye-y pos) (:y pos)))
+                       (double (:z pos))
+                       (double (:x look))
+                       (double (:y look))
+                       (double (:z look))
+                       max-distance))
+          entity-hit (raycast/raycast-from-player player-id max-distance true)]
+      (nearer-hit block-hit entity-hit))))
+
 (defn- hit-pos-from-trace [player-id trace]
   (let [look (or (when (raycast/available?)
                    (raycast/player-look-vector player-id))
@@ -40,34 +71,26 @@
       (geom/v+ (player-body-pos player-id)
                (geom/v* (geom/vnorm look) (cfg-double :targeting.raycast-distance)))
       (= :block (:hit-type trace))
-      {:x (double (int (Math/round (double (or (:x trace) 0.0)))))
-       :y (double (int (Math/round (double (or (:y trace) 0.0)))))
-       :z (double (int (Math/round (double (or (:z trace) 0.0)))))}
-      (= :entity (:hit-type trace))
-      {:x (double (or (:x trace) 0.0))
-        :y (+ (double (or (:y trace) 0.0)) (double (or (:eye-height trace) (cfg-double :targeting.eye-height))))
-       :z (double (or (:z trace) 0.0))}
-      :else
       {:x (double (or (:x trace) 0.0))
        :y (double (or (:y trace) 0.0))
-       :z (double (or (:z trace) 0.0))})))
+       :z (double (or (:z trace) 0.0))}
+      (= :entity (:hit-type trace))
+      {:x (double (or (:x trace) 0.0))
+       :y (+ (double (or (:y trace) 0.0))
+             (double (or (:eye-height trace) (cfg-double :targeting.eye-height))))
+       :z (double (or (:z trace) 0.0))}
+      :else
+      {:x (double (or (:hit-x trace) (:x trace) 0.0))
+       :y (double (or (:hit-y trace) (:y trace) 0.0))
+       :z (double (or (:hit-z trace) (:z trace) 0.0))})))
 
-(defn- knockback-impulse [player-id entity]
-  (let [player-head (geom/eye-pos player-id)
-        target-head {:x (double (or (:x entity) 0.0))
-                     :y (+ (double (or (:y entity) 0.0)) (double (or (:eye-height entity) (cfg-double :targeting.eye-height))))
-                     :z (double (or (:z entity) 0.0))}
-        d0 (geom/vnorm (geom/v- player-head target-head))
-        d1 (geom/vnorm {:x (:x d0) :y (- (:y d0) (cfg-double :movement.knockback-y-adjust)) :z (:z d0)})]
-    (geom/v* d1 (cfg-double :movement.knockback-scale))))
-
-    (defn- push-impulse [player-id entity]
-      (let [player-pos (player-body-pos player-id)
+(defn- push-velocity [player-id entity]
+  (let [player-pos (player-body-pos player-id)
         target-pos {:x (double (or (:x entity) 0.0))
-              :y (double (or (:y entity) 0.0))
-              :z (double (or (:z entity) 0.0))}
+                    :y (double (or (:y entity) 0.0))
+                    :z (double (or (:z entity) 0.0))}
         d0 (geom/vnorm (geom/v- target-pos player-pos))]
-      (geom/v* d0 0.24)))
+    (geom/v* d0 0.24)))
 
 (defn- break-hardness [exp]
   (let [[low-cap mid-cap high-cap] (cfg-double-list :breaking.hardness-caps)]
@@ -83,7 +106,7 @@
           hard-cap  (break-hardness exp)
           p-break   (cfg-lerp :breaking.break-probability exp)
           p-drop    (cfg-lerp :breaking.drop-probability exp)
-          full-exp? (= 1.0 (double (scaling/clamp-exp exp)))]
+          full-exp? (= 1.0 (double exp))]
       (doseq [x (range (- x0 3) (+ x0 3))
               y (range (- y0 3) (+ y0 3))
               z (range (- z0 3) (+ z0 3))]
@@ -99,9 +122,16 @@
                                   (some? block-id)
                                   (block-manip/can-break-block? player-id world-id x y z))]
               (when breakable?
-                (block-manip/break-block!
-                                          player-id world-id x y z
-                                          (or full-exp? (< (rand) p-drop)))))))))))
+                (if full-exp?
+                  (do
+                    ;; Exact mastery uses one ItemStack of the block itself,
+                    ;; rather than the block's normal loot table.
+                    (when (server-bridge/server-bridge-available?)
+                      (server-bridge/spawn-item-stack-at!
+                       world-id x y z block-id 1))
+                    (block-manip/break-block! player-id world-id x y z false))
+                  (block-manip/break-block!
+                   player-id world-id x y z (< (rand) p-drop)))))))))))
 
 (defn- directed-blastwave-down!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -138,11 +168,7 @@
         (if-not cost-ok?
           (terminate-with-end! ctx-id false)
           (let [world-id (geom/world-id-of player-id)
-                trace (when (raycast/available?)
-                        (raycast/raycast-from-player
-                         player-id
-                         (cfg-double :targeting.raycast-distance)
-                         true))
+                trace (target-trace player-id world-id)
                 hit-pos (hit-pos-from-trace player-id trace)
                 look (when (raycast/available?)
                        (raycast/player-look-vector player-id))
@@ -154,17 +180,26 @@
                                 vec)
                            [])
                 damage (cfg-lerp :combat.damage exp*)]
+            (skill-effects/set-main-cooldown!
+             player-id :directed-blastwave (cfg-lerp-int :cooldown.ticks exp*))
             (doseq [entity entities]
               (when (entity-damage/available?)
-                (entity-damage/apply-direct-damage! world-id (:uuid entity) damage :generic))
-              (let [knockback (knockback-impulse player-id entity)
-                    push (push-impulse player-id entity)]
+                (entity-damage/apply-direct-damage!
+                 world-id (:uuid entity) damage :skill
+                 {:attacker-uuid player-id}))
+              ;; The original knockback call raises the target by 0.1, then
+              ;; its following setMotion(delta) overwrites the knockback
+              ;; velocity with this outward 0.24 motion.
+              (let [moved-entity (update entity :y
+                                         (fn [y] (+ (double (or y 0.0)) 0.1)))
+                    push (push-velocity player-id moved-entity)]
                 (when (motion-effects/entity-motion-available?)
-                  (motion-effects/set-entity-velocity! world-id (:uuid entity)
-                                                (:x knockback) (:y knockback) (:z knockback)))
-                (when (motion-effects/entity-motion-available?)
-                  (motion-effects/add-entity-velocity! world-id (:uuid entity)
-                                                (:x push) (:y push) (:z push)))))
+                  (motion-effects/set-entity-position!
+                   world-id (:uuid entity)
+                   (:x moved-entity) (:y moved-entity) (:z moved-entity))
+                  (motion-effects/set-entity-velocity!
+                   world-id (:uuid entity)
+                   (:x push) (:y push) (:z push)))))
             (break-nearby-blocks! player-id world-id hit-pos exp*)
             ;; Original's s_perform sendToClient(MSG_PERFORM, position); each
             ;; recipient's c_perform (owner + nearby, no isLocal gate) then
@@ -178,8 +213,6 @@
             (ctx-skill/replace-skill-state! ctx-id
                                             (assoc (:skill-state ctx-data)
                                                    :punched? true :punch-ticks 0 :performed? true))
-            (skill-effects/set-main-cooldown!
-             player-id :directed-blastwave (cfg-lerp-int :cooldown.ticks exp*))
             (skill-effects/add-skill-exp!
              player-id :directed-blastwave (if (seq entities)
                                              (cfg-double :progression.exp-hit)

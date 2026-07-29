@@ -116,6 +116,9 @@
                          geom/body-pos (fn [_] {:x 2.0 :y 3.0 :z 4.0})
                          geom/eye-pos (fn [_] {:x 2.0 :y 4.62 :z 4.0})
                          raycast/available? (constantly true)
+                         raycast/player-position
+                         (fn [_] {:x 2.0 :y 3.0 :z 4.0 :eye-y 4.62 :world-id "w"})
+                         raycast/raycast-blocks (fn [& _] nil)
                          raycast/raycast-from-player (fn [& _] nil)
                          raycast/player-look-vector (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
@@ -142,8 +145,8 @@
         {:keys [ctx-state get-context update-skill-state-root! clear-skill-state! terminate-context! terminate-calls]}
         (make-context-mocks {:skill-state {:charge-ticks 10 :performed? false :punched? false :punch-ticks 0}})
         damage-calls* (atom [])
+        set-position-calls* (atom [])
         set-velocity-calls* (atom [])
-        add-velocity-calls* (atom [])
         perform-calls* (atom [])
         cooldown-calls* (atom [])
         exp-calls* (atom [])]
@@ -158,20 +161,26 @@
                          geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
                          raycast/available? (constantly true)
+                         raycast/player-position
+                         (fn [_] {:x 0.0 :y 0.0 :z 0.0 :eye-y 1.62 :world-id "w"})
+                         raycast/raycast-blocks (fn [& _] nil)
                          raycast/raycast-from-player (fn [& _]
-                                                        {:hit-type :entity :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8})
+                                                        {:x 1.0 :y 2.0 :z 3.0
+                                                         :eye-height 1.8 :distance 2.0})
                          raycast/player-look-vector (fn [& _] {:x 0.0 :y 0.0 :z 1.0})
                          world-effects/available? (constantly true)
                          world-effects/find-entities-in-radius (fn [& _]
                                                                   [{:uuid "e1" :x 1.0 :y 2.0 :z 3.0 :eye-height 1.8}])
                          entity-damage/available? (constantly true)
-                         entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
-                                                              (swap! damage-calls* conj [world-id target-id damage kind]))
+                         entity-damage/apply-direct-damage!
+                         (fn [world-id target-id damage kind opts]
+                           (swap! damage-calls* conj [world-id target-id damage kind opts]))
                          motion-effects/entity-motion-available? (constantly true)
+                         motion-effects/set-entity-position!
+                         (fn [world-id target-id x y z]
+                           (swap! set-position-calls* conj [world-id target-id x y z]))
                          motion-effects/set-entity-velocity! (fn [world-id target-id x y z]
                                                         (swap! set-velocity-calls* conj [world-id target-id x y z]))
-                         motion-effects/add-entity-velocity! (fn [world-id target-id x y z]
-                                                        (swap! add-velocity-calls* conj [world-id target-id x y z]))
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (when (= :directed-blastwave/fx-perform (:topic entry))
                                       (swap! perform-calls* conj [ctx-id (:topic entry) (:mode entry) payload])))
@@ -180,9 +189,9 @@
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
              (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-hit" :exp 0.5 :cost-ok? true)))))
-    (is (= [["w" "e1" 20.0 :generic]] @damage-calls*))
+    (is (= [["w" "e1" 20.0 :skill {:attacker-uuid "p1"}]] @damage-calls*))
+    (is (= [["w" "e1" 1.0 2.1 3.0]] @set-position-calls*))
     (is (= 1 (count @set-velocity-calls*)))
-    (is (= 1 (count @add-velocity-calls*)))
     (is (= 2 (count @perform-calls*)) "fanned out to owner + nearby")
     (is (empty? @terminate-calls))
     (is (= [["p1" :directed-blastwave 80]] @cooldown-calls*))
