@@ -272,9 +272,10 @@
                        (.width (.-font mc) text)))
        :resolve-shader (fn [shader-name]
                          (case shader-name
-                           :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
-                           :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
-                           :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
+                            :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
+                            :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
+                            :cpbar-overload (cn.li.forge1201.client.render.ModShaders/getCpbarOverloadShader)
+                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
                            nil))
        :get-window-size (fn []
                          (let [^Minecraft mc (Minecraft/getInstance)

@@ -33,6 +33,10 @@ public final class ModShaders {
         return ForgeClientRenderRegistry.getMonoShader();
     }
 
+    public static ShaderInstance getCpbarOverloadShader() {
+        return ForgeClientRenderRegistry.getCpbarOverloadShader();
+    }
+
     public static ShaderInstance getAlphaDiscardShader() {
         return ForgeClientRenderRegistry.getAlphaDiscardShader();
     }

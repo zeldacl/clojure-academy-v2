@@ -182,7 +182,8 @@
 
 (defn build-numbers-texts-data
   "CP/OL numeric readout (hold V to show, fades in/out), based on wall-clock
-   now-ms — only non-nil while showing or within the ~600ms fade-out window."
+   now-ms — only non-nil while showing or within the original 300ms fade-out
+   window."
   [hud-model showing-numbers? last-show-value-change-ms now-ms]
   ;; Upstream CPBar: when isOverloaded(), the CP/OL readout alpha is forced to 0
   ;; (numbers hidden entirely) — the overload visual owns the bar area instead.
@@ -195,11 +196,14 @@
                         (< dt 200) 0.0
                         (< dt 600) (/ (+ 0.0 (- dt 200)) 400.0)
                         :else 1.0)
-                  ;; Fade out: 600ms linear decay from full to transparent
+                  ;; Upstream CPBar.stopDisplayNumbers + draw-data branch:
+                  ;; release after a real hold fades from 1 -> 0 over 300ms.
                   (cond (zero? last-change) 0.0
-                        (< dt 600) (- 1.0 (/ (+ 0.0 dt) 600.0))
+                        (< dt 300) (- 1.0 (/ (+ 0.0 dt) 300.0))
                         :else 0.0))
-          a (int (* 255.0 alpha))]
+          ;; Original FontOption alpha is 0.6 * mAlpha * transition alpha;
+          ;; this builder supplies the steady-state 0.6 factor.
+          a (int (* 255.0 0.6 alpha))]
       (when (pos? alpha)
         [{:kind :text
           :text (str "CP " (int (get-in hud-model [:cp :cur])) "/" (int (get-in hud-model [:cp :max])))
