@@ -29,7 +29,9 @@
 
 (defn- empty-skill-state
   []
-  {:target-x nil :target-y nil :target-z nil :countdown 0.0})
+  {:target-x nil :target-y nil :target-z nil
+   :hardness-left (double Float/MAX_VALUE)
+   :starting-hardness (double Float/MAX_VALUE)})
 
 (defn- with-floor
   "Carry :overload-floor forward across replace-skill-state! calls, which
@@ -84,30 +86,39 @@
                   prev-z (get-in ctx-data [:skill-state :target-z])
                   same-target? (and (= hx prev-x) (= hy prev-y) (= hz prev-z))]
               (if same-target?
-                ;; Continuing to aim at the already-tracked block: decrement
-                ;; the hardness countdown (original's "pos == x/y/z" branch).
-                (let [hardness (double (or (bm/get-block-hardness world-id hx hy hz) 1.0))
-                      countdown-delta (/ (double break-speed) (max 0.1 hardness))
-                      prev-countdown (double (or (get-in ctx-data [:skill-state :countdown]) 0.0))
-                      new-countdown (+ prev-countdown countdown-delta)]
+                ;; Original snapshots hardness when a block is acquired and
+                ;; subtracts raw speed on later ticks. Negative hardness is
+                ;; converted to Float/MAX_VALUE, so unbreakable blocks never
+                ;; complete instead of being treated as very soft blocks.
+                (let [prev-hardness (double (or (get-in ctx-data [:skill-state :hardness-left])
+                                                Float/MAX_VALUE))
+                      starting-hardness (double (or (get-in ctx-data [:skill-state :starting-hardness])
+                                                   prev-hardness))
+                      new-hardness (- prev-hardness (double break-speed))
+                      progress (if (and (pos? starting-hardness)
+                                        (< starting-hardness (double Float/MAX_VALUE)))
+                                 (min 1.0 (max 0.0 (- 1.0 (/ new-hardness starting-hardness))))
+                                 0.0)]
                   ;; Original's sendToClient(MSG_PARTICLES,...) has no isLocal
                   ;; gate in c_spawnParticles — visible to everyone nearby.
                   (fx/send-local-and-nearby! ctx-id {:topic :mine-ray/fx-progress} nil
                             {:x hx :y hy :z hz
-                             :progress (min 1.0 new-countdown)})
-                  (if (>= new-countdown 1.0)
+                             :progress progress})
+                  (if (<= new-hardness 0.0)
                     (do
-                      (when (bm/can-break-block? player-id world-id hx hy hz)
-                        (if (pos? (long (or fortune-level 0)))
-                          (bm/break-block! player-id world-id hx hy hz true fortune-level)
-                          (bm/break-block! player-id world-id hx hy hz true))
-                        (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001))))
+                      ;; Permission was checked when this target was acquired,
+                      ;; exactly where original posts BlockDestroyEvent.
+                      (if (pos? (long (or fortune-level 0)))
+                        (bm/break-block! player-id world-id hx hy hz true fortune-level)
+                        (bm/break-block! player-id world-id hx hy hz true))
+                      (skill-effects/add-skill-exp! player-id skill-id (double (or exp-block 0.001)))
                       (ctx-skill/replace-skill-state! ctx-id (with-floor (empty-skill-state) ctx-data)))
                     (ctx-skill/replace-skill-state! ctx-id
                                            (with-floor {:target-x hx
                                                         :target-y hy
                                                         :target-z hz
-                                                        :countdown new-countdown}
+                                                        :hardness-left new-hardness
+                                                        :starting-hardness starting-hardness}
                                                        ctx-data))))
                 ;; New block acquired this tick: original only captures
                 ;; x/y/z + starting hardness here — no countdown progress
@@ -115,14 +126,21 @@
                 ;; Matches original's BlockDestroyEvent+harvestLevel gate: a
                 ;; disallowed block is rejected (never tracked), same as a
                 ;; canceled BlockDestroyEvent.
-                (if (and tool-tier-capped? (bm/requires-high-tier-tool? world-id hx hy hz))
+                (if (or (not (bm/can-break-block? player-id world-id hx hy hz))
+                        (and tool-tier-capped? (bm/requires-high-tier-tool? world-id hx hy hz)))
                   (ctx-skill/replace-skill-state! ctx-id (with-floor (empty-skill-state) ctx-data))
-                  (ctx-skill/replace-skill-state! ctx-id
-                                         (with-floor {:target-x hx
-                                                      :target-y hy
-                                                      :target-z hz
-                                                      :countdown 0.0}
-                                                     ctx-data)))))))
+                  (let [raw-hardness (double (or (bm/get-block-hardness world-id hx hy hz)
+                                                 Float/MAX_VALUE))
+                        hardness (if (neg? raw-hardness)
+                                   (double Float/MAX_VALUE)
+                                   raw-hardness)]
+                    (ctx-skill/replace-skill-state! ctx-id
+                                           (with-floor {:target-x hx
+                                                        :target-y hy
+                                                        :target-z hz
+                                                        :hardness-left hardness
+                                                        :starting-hardness hardness}
+                                                       ctx-data))))))))
         (ctx-skill/replace-skill-state! ctx-id (with-floor (empty-skill-state) ctx-data))))
     (catch Exception e
       (log/warn "MiningRay tick! failed:" (ex-message e)))))

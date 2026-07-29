@@ -69,7 +69,10 @@
                   skill-effects/player-path (fn [_player-id path _default]
                                               (when (= path [:resource-data :cur-overload]) 137.0))]
       (cb/apply-invoke basic/mine-ray-basic-down! :player-id "p1" :ctx-id "ctx-3" :cost-ok? true))
-    (is (= [["ctx-3" {:target-x nil :target-y nil :target-z nil :countdown 0.0 :overload-floor 137.0}]]
+    (is (= [["ctx-3" {:target-x nil :target-y nil :target-z nil
+                       :hardness-left (double Float/MAX_VALUE)
+                       :starting-hardness (double Float/MAX_VALUE)
+                       :overload-floor 137.0}]]
            @state-calls*))))
 
 (deftest mine-ray-basic-cost-fail-on-tick-terminates-and-applies-cooldown-test

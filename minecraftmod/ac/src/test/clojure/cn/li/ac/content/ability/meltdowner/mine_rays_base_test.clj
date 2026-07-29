@@ -31,7 +31,9 @@
   ;; tick itself — decrementing only starts on a SUBSEQUENT tick that still
   ;; aims at the same block.
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil :countdown 0.0}})
+        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil
+                                      :hardness-left (double Float/MAX_VALUE)
+                                      :starting-hardness (double Float/MAX_VALUE)}})
         fx-calls* (atom 0)]
     (with-redefs [ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -42,9 +44,12 @@
                   raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                   raycast/raycast-blocks (fn [& _] {:x 1 :y 64 :z 2})
                   bm/available? (constantly true)
+                  bm/can-break-block? (constantly true)
+                  bm/get-block-hardness (constantly 2.0)
                   bm/requires-high-tier-tool? (constantly false)]
       (base/mining-ray-tick! base-cfg "ctx-1" "p1" :mine-ray-basic 0.0 true 0 nil nil))
-    (is (= {:target-x 1 :target-y 64 :target-z 2 :countdown 0.0}
+    (is (= {:target-x 1 :target-y 64 :target-z 2
+            :hardness-left 2.0 :starting-hardness 2.0}
            (:skill-state @ctx*)))
     (is (zero? @fx-calls*))))
 
@@ -52,7 +57,9 @@
   ;; Matches original's harvestLevel gate: a disallowed block is rejected
   ;; (never tracked), same as a canceled BlockDestroyEvent.
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil :countdown 0.0}})]
+        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil
+                                      :hardness-left (double Float/MAX_VALUE)
+                                      :starting-hardness (double Float/MAX_VALUE)}})]
     (with-redefs [ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send-local-and-nearby! (fn [& _] nil)
@@ -62,14 +69,19 @@
                   raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                   raycast/raycast-blocks (fn [& _] {:x 1 :y 64 :z 2})
                   bm/available? (constantly true)
+                  bm/can-break-block? (constantly true)
                   bm/requires-high-tier-tool? (constantly true)]
       (base/mining-ray-tick! base-cfg "ctx-1" "p1" :mine-ray-basic 0.0 true 0 nil nil))
-    (is (= {:target-x nil :target-y nil :target-z nil :countdown 0.0}
+    (is (= {:target-x nil :target-y nil :target-z nil
+            :hardness-left (double Float/MAX_VALUE)
+            :starting-hardness (double Float/MAX_VALUE)}
            (:skill-state @ctx*)))))
 
 (deftest tick-uncapped-variant-ignores-tool-tier-test
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil :countdown 0.0}})
+        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil
+                                      :hardness-left (double Float/MAX_VALUE)
+                                      :starting-hardness (double Float/MAX_VALUE)}})
         tier-check-calls* (atom 0)]
     (with-redefs [ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -80,15 +92,21 @@
                   raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
                   raycast/raycast-blocks (fn [& _] {:x 1 :y 64 :z 2})
                   bm/available? (constantly true)
+                  bm/can-break-block? (constantly true)
+                  bm/get-block-hardness (constantly 3.0)
                   bm/requires-high-tier-tool? (fn [& _] (swap! tier-check-calls* inc) true)]
       (base/mining-ray-tick! (assoc base-cfg :tool-tier-capped? false) "ctx-1" "p1" :mine-ray-basic 0.0 true 0 nil nil))
-    (is (= {:target-x 1 :target-y 64 :target-z 2 :countdown 0.0}
+    (is (= {:target-x 1 :target-y 64 :target-z 2
+            :hardness-left 3.0 :starting-hardness 3.0}
            (:skill-state @ctx*)))
     (is (zero? @tier-check-calls*))))
 
 (deftest tick-enforces-overload-floor-every-tick-test
   (let [{:keys [get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil :countdown 0.0 :overload-floor 50.0}})
+        (context-mocks {:skill-state {:target-x nil :target-y nil :target-z nil
+                                      :hardness-left (double Float/MAX_VALUE)
+                                      :starting-hardness (double Float/MAX_VALUE)
+                                      :overload-floor 50.0}})
         floor-calls* (atom [])]
     (with-redefs [ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
@@ -105,7 +123,9 @@
 
 (deftest tick-carries-overload-floor-forward-while-progressing-test
   (let [{:keys [ctx* get-context update-skill-state-root!]}
-        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2 :countdown 0.1 :overload-floor 50.0}})]
+        (context-mocks {:skill-state {:target-x 1 :target-y 64 :target-z 2
+                                      :hardness-left 0.9 :starting-hardness 1.0
+                                      :overload-floor 50.0}})]
     (with-redefs [ctx-skill/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send-local-and-nearby! (fn [& _] nil)
