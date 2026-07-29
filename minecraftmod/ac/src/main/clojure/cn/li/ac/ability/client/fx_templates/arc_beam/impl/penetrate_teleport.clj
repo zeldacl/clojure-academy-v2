@@ -45,7 +45,7 @@
              :x (double (or (:to-x payload) 0.0)) :y (+ 1.0 (double (or (:to-y payload) 0.0))) :z (double (or (:to-z payload) 0.0))
              :count 10 :speed 0.06 :offset-x 0.25 :offset-y 0.5 :offset-z 0.25})
           (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-            {:type :sound :sound-id (modid/namespaced-path "tp.tp_flashing") :volume 0.5 :pitch 1.0})
+            {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
           state*)
       :end
       (do (remove-tp-marking!) (update state* :fx-state dissoc owner-key*))
