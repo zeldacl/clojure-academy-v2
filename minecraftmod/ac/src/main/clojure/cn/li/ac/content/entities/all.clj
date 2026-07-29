@@ -50,7 +50,7 @@
          :client-tracking-range 64
          :update-interval 1
          :properties {:effect {:life-ticks 15
-                               :follow-owner? false
+                               :follow-owner? true
                                :renderer-id "intensify-arcs"
                                :hook :intensify-arcs
                                :hook-params {:arc-life-ticks 3
@@ -59,6 +59,10 @@
                                              :tier-radius-base 0.5
                                              :tier-radius-random 0.1
                                              :tier-theta-max 6.283185307179586
+                                             ;; ScriptedEffectEntity is anchored at
+                                             ;; owner Y+1; upstream tiers are relative
+                                             ;; to owner Y, so cancel that shared offset.
+                                             :tier-origin-offset-y -1.0
                                              :tier-heights [2.0 1.8 1.5 1.0 0.5 0.0 -0.1]
                                              :tier-delays [0 1 3 4 6 7 8]
                                              :branch-count-base 1

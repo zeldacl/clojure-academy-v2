@@ -36,7 +36,8 @@
            [cn.li.fabric1201.client.render BlockEntityRendererImpl]
            [com.mojang.blaze3d.platform Window]
            [net.minecraft.world.entity.player Player]
-           [cn.li.mc1201.client GuiGraphicsHelper]))
+           [cn.li.mc1201.client GuiGraphicsHelper]
+           [cn.li.mc1201.client.effect ScriptedEffectSpawner]))
 
 (defn- bind-texture-fabric!
   "Bind a texture for rendering."
@@ -155,10 +156,26 @@
                         (sound/stop-all-media!))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
+                            :mcmod/spawn-local-scripted-effect
+                            (ScriptedEffectSpawner/spawnLocal (:effect-id payload))
+
+                            :mcmod/spawn-scripted-effect-at-player
+                            (ScriptedEffectSpawner/spawnAtPlayerWithUuid
+                              (:effect-id payload) (:owner-uuid payload))
+
+                            :mcmod/remove-local-scripted-effect
+                            (ScriptedEffectSpawner/removeLocalByUuid (:entity-uuid payload))
+
                             :mcmod/start-loop-sound
                             (sound/start-loop-sound! (:key payload) (:sound-id payload)
                               (:volume payload) (:pitch payload)
                               (:x payload) (:y payload) (:z payload))
+
+                            :mcmod/start-loop-sound-at-player
+                            (sound/start-loop-sound-at-player!
+                              (:key payload) (:sound-id payload)
+                              (:volume payload) (:pitch payload)
+                              (:owner-uuid payload))
 
                             :mcmod/update-loop-sound-position
                             (sound/update-loop-sound-position! (:key payload)

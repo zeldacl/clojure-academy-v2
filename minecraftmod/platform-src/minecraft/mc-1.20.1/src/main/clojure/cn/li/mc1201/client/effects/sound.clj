@@ -90,6 +90,14 @@
                                (double x) (double y) (double z))
   nil)
 
+(defn start-loop-sound-at-player!
+  "Start (or restart) a native-looping ambient sound that follows a loaded
+  player by UUID until explicitly stopped."
+  [key sound-id volume pitch player-uuid]
+  (LoopingSoundRegistry/startFollowingPlayer
+   (str key) (str sound-id) (float volume) (float pitch) (str player-uuid))
+  nil)
+
 (defn update-loop-sound-position!
   [key x y z]
   (LoopingSoundRegistry/updatePosition (str key) (double x) (double y) (double z))

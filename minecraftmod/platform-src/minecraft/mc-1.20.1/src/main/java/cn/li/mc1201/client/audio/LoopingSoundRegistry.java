@@ -6,8 +6,10 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.player.Player;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -21,24 +23,54 @@ public final class LoopingSoundRegistry {
 
     private LoopingSoundRegistry() {}
 
-    public static void start(String key, String soundId, float volume, float pitch, double x, double y, double z) {
-        stop(key);
-        Minecraft mc = Minecraft.getInstance();
-        if (mc == null) {
-            return;
-        }
+    private static SoundEvent resolveSoundEvent(String soundId) {
         int sep = soundId.indexOf(':');
         ResourceLocation loc = sep < 0
-            ? ResourceLocation.fromNamespaceAndPath("minecraft", soundId)
-            : ResourceLocation.fromNamespaceAndPath(soundId.substring(0, sep), soundId.substring(sep + 1));
-        SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(loc);
-        if (event == null) {
+            ? new ResourceLocation("minecraft", soundId)
+            : new ResourceLocation(soundId.substring(0, sep), soundId.substring(sep + 1));
+        return BuiltInRegistries.SOUND_EVENT.get(loc);
+    }
+
+    private static void play(String key, PositionalLoopSoundInstance instance) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || instance == null) {
             return;
         }
-        PositionalLoopSoundInstance instance =
-                new PositionalLoopSoundInstance(event, SoundSource.AMBIENT, volume, pitch, x, y, z);
         ACTIVE.put(key, instance);
         mc.getSoundManager().play(instance);
+    }
+
+    public static void start(String key, String soundId, float volume, float pitch, double x, double y, double z) {
+        stop(key);
+        SoundEvent event = resolveSoundEvent(soundId);
+        if (event != null) {
+            play(key, new PositionalLoopSoundInstance(
+                    event, SoundSource.AMBIENT, volume, pitch, x, y, z));
+        }
+    }
+
+    public static void startFollowingPlayer(
+            String key, String soundId, float volume, float pitch, String playerUuid) {
+        stop(key);
+        Minecraft mc = Minecraft.getInstance();
+        if (mc == null || mc.level == null || playerUuid == null || playerUuid.isBlank()) {
+            return;
+        }
+
+        final UUID uuid;
+        try {
+            uuid = UUID.fromString(playerUuid);
+        } catch (IllegalArgumentException ignored) {
+            return;
+        }
+
+        Player player = mc.level.getPlayerByUUID(uuid);
+        SoundEvent event = resolveSoundEvent(soundId);
+        if (player != null && event != null) {
+            play(key, new PositionalLoopSoundInstance(
+                    event, SoundSource.AMBIENT, volume, pitch,
+                    player.getX(), player.getY(), player.getZ(), uuid));
+        }
     }
 
     public static void updatePosition(String key, double x, double y, double z) {

@@ -18,7 +18,7 @@
 (deftest fx-handler-plays-local-effect-when-performed-test
   (let [handlers* (atom {})
         sounds* (atom [])
-        local-fx* (atom [])]
+        client-effects* (atom [])]
     (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
@@ -26,13 +26,38 @@
                                                                (swap! sounds* conj payload)
                                                                nil)
                   client-bridge/run-client-effect! (fn [effect-key payload]
-                                                     (swap! local-fx* conj [effect-key payload])
+                                                     (swap! client-effects* conj [effect-key payload])
                                                      nil)]
       (body-intensify-fx/init!)
-      ((get @handlers* :body-intensify/fx-end) "ctx-1" :body-intensify/fx-end {:performed? true})
-      ((get @handlers* :body-intensify/fx-end) "ctx-2" :body-intensify/fx-end {:performed? false})
+      ((get @handlers* :body-intensify/fx-start)
+       "ctx-1" :body-intensify/fx-start
+       {:source-player-id "player-1"})
+      ((get @handlers* :body-intensify/fx-end)
+       "ctx-1" :body-intensify/fx-end
+       {:performed? true
+        :source-player-id "player-1"
+        :caster-pos {:x 1.0 :y 2.0 :z 3.0}})
+      ((get @handlers* :body-intensify/fx-end)
+       "ctx-2" :body-intensify/fx-end
+       {:performed? false
+        :source-player-id "player-2"})
       (is (= 1 (count @sounds*)))
-      (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "intensify_effect"
-                       :ctx-id "ctx-1"
-                       :channel :body-intensify/fx-end}]]
-             @local-fx*)))))
+      (is (= {:source :ambient
+              :volume 0.5
+              :pitch 1.0
+              :x 1.0
+              :y 2.0
+              :z 3.0}
+             (dissoc (first @sounds*) :sound-id)))
+      (is (= [:mcmod/start-loop-sound-at-player
+              :mcmod/stop-loop-sound
+              :mcmod/spawn-scripted-effect-at-player
+              :mcmod/stop-loop-sound]
+             (mapv first @client-effects*)))
+      (is (= "player-1"
+             (get-in @client-effects* [0 1 :owner-uuid])))
+      (is (= {:effect-id "intensify_effect"
+              :owner-uuid "player-1"
+              :ctx-id "ctx-1"
+              :channel :body-intensify/fx-end}
+             (get-in @client-effects* [2 1]))))))

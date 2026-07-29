@@ -29,26 +29,42 @@
                                            (case field-id
                                              :charge.min-ticks 10
                                              :charge.max-ticks 40
+                                             :charge.max-tolerant-ticks 100
                                              :effect.hunger-amplifier 0
                                              0))
                 skill-config/lerp-int (fn [_ _ _] 25)
-                shuffle identity
                 clojure.core/rand (fn [] 0.0)]
     (f)))
 
-(deftest apply-body-intensify-buffs-includes-first-effect-test
+(deftest apply-body-intensify-buffs-preserves-original-first-pick-test
   (let [applied* (atom [])]
-    (with-buff-config ["speed:3" "jump-boost:3"]
+    (with-buff-config ["speed:3" "jump-boost:1" "regeneration:1"]
       #(with-redefs [potion-effects/available? (constantly true)
                      potion-effects/apply-effect! (fn [player-uuid effect duration amplifier]
-                                                            (swap! applied* conj {:player-uuid player-uuid
-                                                                                  :effect effect
-                                                                                  :duration duration
-                                                                                  :amplifier amplifier})
-                                                            true)]
+                                                    (swap! applied* conj
+                                                           {:player-uuid player-uuid
+                                                            :effect effect
+                                                            :duration duration
+                                                            :amplifier amplifier})
+                                                    true)]
          (@apply-buffs! "player-a" 20 0.2)
-         (is (= :speed (:effect (first @applied*))))
+         (is (= :jump-boost (:effect (first @applied*))))
+         (is (not-any? (fn [applied]
+                         (= :speed (:effect applied)))
+                       @applied*))
          (is (= :hunger (:effect (last @applied*))))))))
+
+(deftest max-charge-preserves-original-no-damage-boost-test
+  (let [applied* (atom [])]
+    (with-buff-config ["speed:3" "jump-boost:1" "regeneration:1"
+                       "strength:1" "resistance:1"]
+      #(with-redefs [potion-effects/available? (constantly true)
+                     potion-effects/apply-effect! (fn [_player-uuid effect _duration _amplifier]
+                                                    (swap! applied* conj effect)
+                                                    true)]
+         (@apply-buffs! "player-damage" 40 0.2)
+         (is (= [:jump-boost :regeneration :hunger] @applied*))
+         (is (not-any? #{:strength} @applied*))))))
 
 (deftest apply-body-intensify-buffs-with-empty-pool-still-applies-hunger-test
   (let [applied* (atom [])]
@@ -82,6 +98,7 @@
         applied* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])
+        cooldown-exp* (atom [])
         fx-calls* (atom [])
         context-registry-val (ctx/snapshot-context-registry)]
     (try
@@ -90,9 +107,13 @@
         #(with-redefs [potion-effects/available? (constantly true)
                        potion-effects/apply-effect! (fn [& _] (swap! applied* conj :applied) true)
                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                      (swap! exp-calls* conj [player-id skill-id amount]))
+                                                      (swap! exp-calls* conj [player-id skill-id amount])
+                                                      {:data {:skill-exps {:body-intensify 0.52}}})
                        skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                           (swap! cooldown-calls* conj [player-id skill-id ticks]))
+                       skill-config/lerp-int (fn [_skill-id _field-id exp]
+                                               (swap! cooldown-exp* conj exp)
+                                               25)
                        fx/send! (fn [& args] (swap! fx-calls* conj args) nil)]
            (seed-charge-context! "p-low" "ctx-low" 9)
            (cb/apply-invoke up-fn :player-id "p-low" :ctx-id "ctx-low" :exp 0.5)
@@ -105,7 +126,70 @@
            (is (pos? (count @applied*)) "successful release applies buffs")
            (is (= [["p-ok" :body-intensify 0.02]] @exp-calls*))
            (is (= [["p-ok" :body-intensify 25]] @cooldown-calls*))
-           (is (= 4 (count @fx-calls*)) "fx sent on both the miss and the success release, each fanned out to owner + nearby")))
+           (is (= [0.52] @cooldown-exp*)
+               "cooldown uses skill exp after the successful exp grant")
+           (is (= 4 (count @fx-calls*))
+               "miss and success releases each fan out to owner + nearby")
+           (is (= [false false true true]
+                  (mapv (fn [args] (get-in args [3 :performed?]))
+                        @fx-calls*)))))
+      (finally
+        (ctx/reset-contexts-for-test! context-registry-val)))))
+
+(deftest down-and-tick-use-post-cost-total-overload-floor-test
+  (let [down-fn (get-in body-intensify/body-intensify [:actions :down!])
+        tick-fn (get-in body-intensify/body-intensify [:actions :tick!])
+        floors* (atom [])
+        context-registry-val (ctx/snapshot-context-registry)]
+    (try
+      (ctx/reset-contexts-for-test!)
+      (seed-charge-context! "p-floor" "ctx-floor" 0)
+      (with-redefs [skill-effects/player-path
+                    (fn [_player-id path default]
+                      (if (= [:resource-data :cur-overload] path) 137.0 default))
+                    skill-effects/enforce-overload-floor!
+                    (fn [player-id floor]
+                      (swap! floors* conj [player-id floor])
+                      true)
+                    fx/send! (fn [& _] nil)]
+        (cb/apply-invoke down-fn :player-id "p-floor" :ctx-id "ctx-floor" :exp 0.5)
+        (is (= 137.0
+               (get-in (ctx-skill/get-context "ctx-floor")
+                       [:skill-state :overload-floor])))
+        (cb/apply-invoke tick-fn :player-id "p-floor" :ctx-id "ctx-floor" :exp 0.5)
+        (is (= [["p-floor" 137.0]] @floors*))
+        (is (= 1
+               (get-in (ctx-skill/get-context "ctx-floor")
+                       [:skill-state :hold-ticks]))))
+      (finally
+        (ctx/reset-contexts-for-test! context-registry-val)))))
+
+(deftest tolerant-timeout-and-abort-never-perform-test
+  (let [tick-fn (get-in body-intensify/body-intensify [:actions :tick!])
+        abort-fn (get-in body-intensify/body-intensify [:actions :abort!])
+        fx-calls* (atom [])
+        context-registry-val (ctx/snapshot-context-registry)]
+    (try
+      (ctx/reset-contexts-for-test!)
+      (with-buff-config ["speed:3" "jump-boost:1"]
+        #(with-redefs [skill-effects/enforce-overload-floor! (fn [& _] true)
+                       fx/send! (fn [& args] (swap! fx-calls* conj args) nil)]
+           (seed-charge-context! "p-timeout" "ctx-timeout" 99)
+           (cb/apply-invoke tick-fn
+                            :player-id "p-timeout" :ctx-id "ctx-timeout" :exp 0.5)
+           (is (= [false false]
+                  (mapv (fn [args] (get-in args [3 :performed?]))
+                        @fx-calls*))
+               "100-tick timeout fans out a failed release")
+
+           (reset! fx-calls* [])
+           (seed-charge-context! "p-abort" "ctx-abort" 40)
+           (cb/apply-invoke abort-fn
+                            :player-id "p-abort" :ctx-id "ctx-abort" :exp 0.5)
+           (is (= [false]
+                  (mapv (fn [args] (get-in args [3 :performed?]))
+                        @fx-calls*))
+               "abort only stops the owning client's charge effect")))
       (finally
         (ctx/reset-contexts-for-test! context-registry-val)))))
 
@@ -122,7 +206,8 @@
         #(with-redefs [potion-effects/available? (constantly true)
                        potion-effects/apply-effect! (fn [& _] (swap! applied* conj :applied) true)
                        skill-effects/add-skill-exp! (fn [player-id skill-id amount]
-                                                      (swap! exp-calls* conj [player-id skill-id amount]))
+                                                      (swap! exp-calls* conj [player-id skill-id amount])
+                                                      {:data {:skill-exps {:body-intensify 0.52}}})
                        skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                           (swap! cooldown-calls* conj [player-id skill-id ticks]))
                        fx/send! (fn [& _] nil)]

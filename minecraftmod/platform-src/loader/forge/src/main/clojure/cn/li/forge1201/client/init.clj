@@ -223,6 +223,12 @@
                               (:volume payload) (:pitch payload)
                               (:x payload) (:y payload) (:z payload))
 
+                            :mcmod/start-loop-sound-at-player
+                            (sound/start-loop-sound-at-player!
+                              (:key payload) (:sound-id payload)
+                              (:volume payload) (:pitch payload)
+                              (:owner-uuid payload))
+
                             :mcmod/update-loop-sound-position
                             (sound/update-loop-sound-position! (:key payload)
                               (:x payload) (:y payload) (:z payload))

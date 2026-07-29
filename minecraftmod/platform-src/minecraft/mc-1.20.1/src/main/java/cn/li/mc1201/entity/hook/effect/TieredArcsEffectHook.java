@@ -23,6 +23,7 @@ public final class TieredArcsEffectHook implements ScriptedEffectHook {
     private static final double DEFAULT_TIER_RADIUS_BASE = 0.5D;
     private static final double DEFAULT_TIER_RADIUS_RANDOM = 0.1D;
     private static final double DEFAULT_TIER_THETA_MAX = Math.PI * 2.0D;
+    private static final double DEFAULT_TIER_ORIGIN_OFFSET_Y = 0.0D;
     private static final int DEFAULT_BRANCH_COUNT_BASE = 1;
     private static final int DEFAULT_BRANCH_COUNT_RANDOM = 2;
     private static final int DEFAULT_BRANCH_POINTS_BASE = 3;
@@ -95,6 +96,9 @@ public final class TieredArcsEffectHook implements ScriptedEffectHook {
         double tierThetaMax = spec == null
             ? DEFAULT_TIER_THETA_MAX
             : spec.getDoubleParam("tier-theta-max", DEFAULT_TIER_THETA_MAX);
+        double tierOriginOffsetY = spec == null
+            ? DEFAULT_TIER_ORIGIN_OFFSET_Y
+            : spec.getDoubleParam("tier-origin-offset-y", DEFAULT_TIER_ORIGIN_OFFSET_Y);
 
         int randomBatchPart = batchRandom <= 0 ? 0 : random.nextInt(batchRandom);
         int batch = Math.max(1, batchBase + randomBatchPart);
@@ -104,7 +108,7 @@ public final class TieredArcsEffectHook implements ScriptedEffectHook {
             double theta = random.nextDouble() * tierThetaMax;
             double ox = radius * Math.sin(theta);
             double oz = radius * Math.cos(theta);
-            arcs.add(createArcData(entity, ox, height, oz));
+            arcs.add(createArcData(entity, ox, height + tierOriginOffsetY, oz));
         }
     }
 
