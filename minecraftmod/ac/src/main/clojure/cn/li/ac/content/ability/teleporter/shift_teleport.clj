@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.shift-teleport
 
-  "ShiftTeleport skill - teleport to target location while transporting a held block.
+  "ShiftTeleport skill - coordinate-shift a held block to the target location.
 
 
 
@@ -8,9 +8,8 @@
 
   Mechanic: Resolve look target, place held block on the hit face when possible,
 
-            fallback to dropping one held item at target point, then teleport and
-
-            apply line-hit magic damage.
+            fallback to dropping one held item at target point, then apply
+            armor-respecting line-hit skill damage.
 
   Range: lerp(25, 35, exp)
 
@@ -37,6 +36,7 @@
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
 
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.config.modid :as modid]
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
@@ -44,6 +44,7 @@
                         [cn.li.mcmod.platform.entity :as entity]
 
             [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.block-manipulation :as bm]
 
             [cn.li.mcmod.platform.world-effects :as world-effects]
 
@@ -82,8 +83,16 @@
 
 
 (defn- floor-int [x]
-
   (int (Math/floor (double x))))
+
+(defn- trunc-int [x]
+  (int (double x)))
+
+(defn- effective-exp
+  [player-id]
+  (if (bm/destroy-allowed?)
+    (skill-exp player-id)
+    1.0))
 
 
 
@@ -108,14 +117,16 @@
       (when (and player-pos look-vec)
 
         (let [world-id (geom/world-id-of player-id)
+              ray-position (or (raycast/player-position player-id) player-pos)
+              body-x (double (:x player-pos))
+              body-y (double (:y player-pos))
+              body-z (double (:z player-pos))
+              eye-x (double (:x ray-position))
+              eye-y (double (or (:eye-y ray-position)
+                                (+ (double (:y ray-position))
+                                   (cfg-double :targeting.eye-height))))
 
-              eye-x (double (:x player-pos))
-
-              eye-y (+ (double (:y player-pos))
-
-                       (cfg-double :targeting.eye-height))
-
-              eye-z (double (:z player-pos))
+              eye-z (double (:z ray-position))
 
               hit (raycast/raycast-blocks
 
@@ -135,39 +146,44 @@
 
               [ox oy oz] (get face-offsets face [0 -1 0])
 
-              hit-x (if hit (double (:x hit)) (+ eye-x (* (double (:x look-vec)) (double max-range))))
-
-              hit-y (if hit (double (:y hit)) (+ eye-y (* (double (:y look-vec)) (double max-range))))
-
-              hit-z (if hit (double (:z hit)) (+ eye-z (* (double (:z look-vec)) (double max-range))))
-
-              bx (if hit (int (:x hit)) (floor-int hit-x))
-
-              by (if hit (int (:y hit)) (floor-int hit-y))
-
-              bz (if hit (int (:z hit)) (floor-int hit-z))
-
-              place-x (+ bx ox)
-
-              place-y (+ by oy)
-
-              place-z (+ bz oz)]
+              endpoint-x (+ eye-x (* (double (:x look-vec)) (double max-range)))
+              endpoint-y (+ eye-y (* (double (:y look-vec)) (double max-range)))
+              endpoint-z (+ eye-z (* (double (:z look-vec)) (double max-range)))
+              hit-block-x (if hit (int (:x hit)) (floor-int endpoint-x))
+              hit-block-y (if hit (int (:y hit)) (floor-int endpoint-y))
+              hit-block-z (if hit (int (:z hit)) (floor-int endpoint-z))
+              place-x (+ hit-block-x ox)
+              place-y (+ hit-block-y oy)
+              place-z (+ hit-block-z oz)
+              dest-block-x (if hit place-x (trunc-int endpoint-x))
+              dest-block-y (if hit place-y (trunc-int endpoint-y))
+              dest-block-z (if hit place-z (trunc-int endpoint-z))
+              drop-x (if hit
+                       (+ (double (:hit-x hit)) ox)
+                       endpoint-x)
+              drop-y (if hit
+                       (+ (double (:hit-y hit)) oy)
+                       endpoint-y)
+              drop-z (if hit
+                       (+ (double (:hit-z hit)) oz)
+                       endpoint-z)]
 
           {:world-id world-id
 
            :eye-pos {:x eye-x :y eye-y :z eye-z}
+           :line-pos {:x body-x :y body-y :z body-z}
 
-           :drop-x (+ (double place-x) 0.5)
+           :drop-x drop-x
+           :drop-y drop-y
+           :drop-z drop-z
 
-           :drop-y (double place-y)
+           :dest-x (+ (double dest-block-x) 0.5)
+           :dest-y (double dest-block-y)
+           :dest-z (+ (double dest-block-z) 0.5)
 
-           :drop-z (+ (double place-z) 0.5)
-
-           :dest-x (+ (double place-x) 0.5)
-
-           :dest-y (double place-y)
-
-           :dest-z (+ (double place-z) 0.5)
+           :hit-block-x hit-block-x
+           :hit-block-y hit-block-y
+           :hit-block-z hit-block-z
 
            :place-x place-x
 
@@ -381,7 +397,7 @@
 
   [player-id]
 
-  (let [exp (skill-exp player-id)
+  (let [exp (effective-exp player-id)
 
         range (cfg-lerp :targeting.range exp)
 
@@ -399,7 +415,7 @@
 
                                    (:world-id target)
 
-                                   (:eye-pos target)
+                                   (:line-pos target)
 
                                    line-end)]
 
@@ -415,55 +431,51 @@
 
 (defn- try-place-or-drop!
 
-  [player trace]
+  [player-id player trace]
 
-  (let [place-result (entity/player-place-main-hand-block-at-hit!
-
-                       player
-
-                       (:world-id trace)
-
-                       (:place-x trace)
-
-                       (:place-y trace)
-
-                       (:place-z trace)
-
-                       (:face trace))
-
+  (let [creative? (boolean (entity/player-creative? player))
+        can-place? (and (bm/destroy-allowed?)
+                        (not (bm/block-collidable? (:world-id trace)
+                                                   (:place-x trace)
+                                                   (:place-y trace)
+                                                   (:place-z trace)))
+                        (bm/can-break-block? player-id
+                                             (:world-id trace)
+                                             (:hit-block-x trace)
+                                             (:hit-block-y trace)
+                                             (:hit-block-z trace)))
+        place-result (when can-place?
+                       (entity/player-place-main-hand-block-at-hit!
+                         player
+                         (:world-id trace)
+                         (:place-x trace)
+                         (:place-y trace)
+                         (:place-z trace)
+                         (:face trace)))
         placed? (boolean (:placed? place-result))
 
-        creative? (boolean (entity/player-creative? player))
-
         dropped? (boolean
-
-                   (and (not placed?)
-
-                        (entity/player-drop-main-hand-item-at! player
-
-                                                               1
-
-                                                               (:drop-x trace)
-
-                                                               (:drop-y trace)
-
-                                                               (:drop-z trace))))
+                   (when-not can-place?
+                     (if creative?
+                       (entity/player-spawn-main-hand-item-copy-at!
+                         player 1
+                         (:drop-x trace) (:drop-y trace) (:drop-z trace))
+                       (entity/player-drop-main-hand-item-at!
+                         player 1
+                         (:drop-x trace) (:drop-y trace) (:drop-z trace)))))
 
         consumed? (boolean
-
                     (or creative?
-
-                        (not placed?)
-
-                        (entity/player-consume-main-hand-item! player 1)))]
+                        (if can-place?
+                          (entity/player-consume-main-hand-item! player 1)
+                          dropped?)))]
 
     {:placed? placed?
 
      :dropped? dropped?
 
-    :consumed? consumed?
-
-     :executed? (and consumed? (or placed? dropped?))}))
+     :consumed? consumed?
+     :executed? consumed?}))
 
 
 
@@ -476,6 +488,9 @@
   (let [hand-valid? (hand-placeable-block? player-ref)
 
         trace (when hand-valid? (build-trace player-id))]
+
+    (when-not hand-valid?
+      (ctx/terminate-context! ctx-id nil))
 
     (ctx-skill/replace-skill-state! ctx-id {:hold-ticks hold-ticks
 
@@ -515,37 +530,41 @@
 
                     (when hand-valid? (build-trace player-id)))]
 
-      (when (and cost-ok? hand-valid? trace)
+      (when (and hand-valid? trace)
 
-        (let [place-drop-result (try-place-or-drop! player-ref trace)
+        ;; Original sends MSG_EXECUTE before resource settlement, so its block
+        ;; trail remains visible even when the subsequent consume fails.
+        (fx/send-local-and-nearby!
+          ctx-id
+          {:topic :shift-teleport/fx-perform :mode :perform}
+          nil
+          {:from-x (get-in trace [:line-pos :x])
+           :from-y (- (double (get-in trace [:line-pos :y])) 0.5)
+           :from-z (get-in trace [:line-pos :z])
+           :x (:dest-x trace)
+           :y (:dest-y trace)
+           :z (:dest-z trace)
+           :target-count (count (:entities trace))})
 
-              damage (cfg-lerp :combat.damage (:exp trace))]
+        (when cost-ok?
+          (let [place-drop-result (try-place-or-drop! player-id player-ref trace)
 
-          (when (and (:executed? place-drop-result)
+                damage (cfg-lerp :combat.damage (:exp trace))]
 
-                     (helper/teleport-to! player-id
+            (when (:executed? place-drop-result)
 
-                                          (:world-id trace)
-
-                                          (:dest-x trace)
-
-                                          (:dest-y trace)
-
-                                          (:dest-z trace)))
-
-            (let [hit-count
+              (let [hit-count
 
                   (reduce (fn [n entity]
 
                             (let [target-uuid (str (:uuid entity))
 
-                                  damage-result (helper/deal-magic-damage! player-id
-
-                                                                           (:world-id trace)
-
-                                                                           target-uuid
-
-                                                                           damage)]
+                                  damage-result (helper/deal-skill-damage!
+                                                  player-id
+                                                  shift-teleport-skill-id
+                                                  (:world-id trace)
+                                                  target-uuid
+                                                  damage)]
 
                               (when (helper/crit-applied? damage-result)
 
@@ -575,41 +594,27 @@
 
                           (:entities trace))
 
-                  exp-base (cfg-double :progression.exp-base)]
+                    exp-base (cfg-double :progression.exp-base)]
 
-              (skill-effects/add-skill-exp! player-id
+                (skill-effects/add-skill-exp! player-id
 
                                             shift-teleport-skill-id
 
                                             (* (double exp-base) (double (inc hit-count))))
 
-              (let [cd (cfg-lerp-int :cooldown.ticks (:exp trace))]
+                (let [cd (cfg-lerp-int :cooldown.ticks (:exp trace))]
 
-                (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
-
-              ;; Original's s_execute sendToClient(MSG_EXECUTE, attacked) —
-              ;; c_end's particle trail runs unconditionally for every
-              ;; recipient; only the target/block marker cleanup is
-              ;; isLocal-gated (handled by :shift-teleport/fx-update above).
-              (fx/send-local-and-nearby! ctx-id {:topic :shift-teleport/fx-perform :mode :perform} nil
-
-                        {:from-x (get-in trace [:eye-pos :x])
-
-                         :from-y (get-in trace [:eye-pos :y])
-
-                         :from-z (get-in trace [:eye-pos :z])
-
-                         :x (:dest-x trace)
-
-                         :y (:dest-y trace)
-
-                         :z (:dest-z trace)
-
-                         :target-count (count (:entities trace))
-
-                         :placed? (:placed? place-drop-result)
-
-                         :dropped? (:dropped? place-drop-result)})))))
+                  (skill-effects/set-main-cooldown! player-id shift-teleport-skill-id cd))
+                (when (world-effects/available?)
+                  (world-effects/play-sound!
+                    (:world-id trace)
+                    (get-in trace [:line-pos :x])
+                    (get-in trace [:line-pos :y])
+                    (get-in trace [:line-pos :z])
+                    (modid/namespaced-path "tp.tp_shift")
+                    :ambient
+                    0.5
+                    1.0)))))))
 
       (when-not trace
 
@@ -681,13 +686,17 @@
 
                                     (cfg-lerp :cost.up.cp
 
-                                                     (skill-exp player-id)))
+                                                     (effective-exp player-id)))
 
                         :overload (fn [player-id _skill-id _exp]
 
                                     (cfg-lerp :cost.up.overload
 
-                                                     (skill-exp player-id)))}}
+                                                     (effective-exp player-id)))
+                        :creative? (fn [_player-id _skill-id _exp player-ref]
+                                    (boolean
+                                      (and player-ref
+                                           (entity/player-creative? player-ref))))}}
 
   :cooldown       {:mode :manual}
 

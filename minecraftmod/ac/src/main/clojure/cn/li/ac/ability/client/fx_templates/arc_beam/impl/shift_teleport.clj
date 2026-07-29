@@ -61,8 +61,6 @@
                   {:type :particle :particle-type :portal
                    :x (+ (:x from-pos) (* dx t)) :y (+ (:y from-pos) (* dy t)) :z (+ (:z from-pos) (* dz t))
                    :count 2 :speed 0.05 :offset-x 0.2 :offset-y 0.2 :offset-z 0.2}))))
-          (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-            {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.1})
           state*)
       :end
       (do (remove-entity-marker!) (update state* :fx-state dissoc owner-key*))
