@@ -12,9 +12,13 @@
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.block.multiblock-core :as multiblock]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as position]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world :as world]))
 
 (def-skill-config-ops :current-charging)
 (def ^:private current-charging-skill-id :current-charging)
@@ -33,6 +37,30 @@
 (defn- block-entity-at [world-id x y z]
   (when-let [fw-atom (fw/fw-atom)]
     (platform/call-adapter fw-atom :runtime-interop :get-block-entity-at world-id x y z)))
+
+(defn- resolve-energy-target-tile
+  "Route a hit multiblock part to its controller before checking energy APIs.
+
+  AcademyCraft's old BlockMulti gave every Developer cell a TileDeveloper
+  receiver. In this port, part cells carry a controller position and the
+  authoritative machine energy lives on that controller. Keep the hit
+  coordinates for the surround arc, but perform support lookup and charging
+  against the controller so aiming at any visible Developer cell works."
+  [hit-tile]
+  (or
+   (try
+     (when-let [level (platform-be/be-get-world-safe hit-tile)]
+       (let [hit-pos (position/block-pos hit-tile)
+             block-id (platform-be/get-block-id hit-tile)
+             controller-pos
+             (when (and hit-pos block-id)
+               (multiblock/resolve-controller-pos
+                {:world level :pos hit-pos :block-id block-id}))]
+         (when controller-pos
+           (world/get-tile-entity level controller-pos))))
+     (catch Throwable _
+       nil))
+   hit-tile))
 
 (defn- view->pos [view]
   (when (map? view)
@@ -198,18 +226,21 @@
     (if (not= :block hit-type)
       {:effective? false :charged 0.0 :block-pos nil :ray-end target}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
-            be (block-entity-at world-id bx by bz)]
-        (if-not be
+            hit-be (block-entity-at world-id bx by bz)
+            energy-be (resolve-energy-target-tile hit-be)]
+        (if-not energy-be
           {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end target}
           (cond
-            (energy/is-node-supported? be)
+            (energy/is-node-supported? energy-be)
             {:effective? true
-             :charged (max 0.0 (- (double charge) (double (energy/charge-node be charge true))))
+             :charged (max 0.0 (- (double charge)
+                                  (double (energy/charge-node energy-be charge true))))
              :block-pos [bx by bz] :ray-end target}
 
-            (energy/is-receiver-supported? be)
+            (energy/is-receiver-supported? energy-be)
             {:effective? true
-             :charged (max 0.0 (- (double charge) (double (energy/charge-receiver be charge))))
+             :charged (max 0.0 (- (double charge)
+                                  (double (energy/charge-receiver energy-be charge))))
              :block-pos [bx by bz] :ray-end target}
 
             :else
