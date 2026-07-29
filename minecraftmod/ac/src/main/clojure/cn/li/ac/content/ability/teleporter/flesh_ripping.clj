@@ -6,19 +6,19 @@
 
   Pattern: :release-cast
 
-  Range: lerp(15, 25, exp)
+  Range: lerp(6, 14, exp)
 
-  Damage: lerp(6, 16, exp)
+  Damage: lerp(5, 12, exp)
 
-  Nausea chance: 30% (3 ticks per level)
+  Nausea chance: 5% on the caster for 100 ticks
 
-  CP cost: lerp(180, 130, exp)
+  CP cost: lerp(130, 270, exp)
 
-  Overload: lerp(70, 50, exp)
+  Overload: lerp(60, 50, exp)
 
-  Cooldown: lerp(30, 18, exp) ticks
+  Cooldown: lerp(90, 40, exp) ticks
 
-  Exp: +0.003 per entity hit
+  Exp: +0.005 per entity hit
 
 
 
@@ -39,6 +39,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
 
             [cn.li.ac.ability.effects.potion :as potion-effects]
+            [cn.li.mcmod.platform.entity :as entity]
 
             [cn.li.mcmod.util.log :as log]))
 
@@ -63,22 +64,26 @@
   [player-id exp]
 
   (let [range (cfg-lerp :targeting.range exp)
-
-        hit (helper/raycast-entity player-id range)]
-
-    (when hit
-
-      {:world-id (geom/world-id-of player-id)
-
-       :hit? true
-
-       :target-uuid (:entity-uuid hit)
-
-       :target-x (:entity-x hit)
-
-       :target-y (:entity-y hit)
-
-       :target-z (:entity-z hit)})))
+        hit (helper/raycast-entity player-id range)
+        position (helper/player-position player-id)
+        look (helper/player-look-vec player-id)]
+    (when (and position look)
+      (if hit
+        {:world-id (or (:world-id position) (geom/world-id-of player-id))
+         :hit? true
+         :target-uuid (:entity-uuid hit)
+         :target-x (double (or (:hit-x hit) (:entity-x hit)))
+         :target-y (double (or (:hit-y hit) (:entity-y hit)))
+         :target-z (double (or (:hit-z hit) (:entity-z hit)))}
+        {:world-id (or (:world-id position) (geom/world-id-of player-id))
+         :hit? false
+         :target-uuid nil
+         :target-x (+ (double (:x position))
+                      (* (double (:x look)) range))
+         :target-y (+ (double (:y position))
+                      (* (double (:y look)) range))
+         :target-z (+ (double (:z position))
+                      (* (double (:z look)) range))}))))
 
 (defn flesh-ripping-down!
 
@@ -92,11 +97,17 @@
 
 (defn flesh-ripping-tick!
 
-  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage player-ref]
 
   (let [exp (skill-exp player-id)
-
+        cp-cost (cfg-lerp :cost.up.cp exp)
+        affordable? (or (and player-ref
+                             (boolean (entity/player-creative? player-ref)))
+                        (>= (skill-effects/current-cp player-id) cp-cost))
         trace (build-trace player-id exp)]
+
+    (when-not affordable?
+      (ctx/terminate-context! ctx-id nil))
 
     (ctx-skill/replace-skill-state! ctx-id {:hold-ticks (long hold-ticks)
 
@@ -132,13 +143,18 @@
 
                     (build-trace player-id exp))]
 
-      (if (and cost-ok? trace)
+      (if (and cost-ok? (:hit? trace) (:target-uuid trace))
 
         (let [world-id (:world-id trace)
 
               e-uuid (:target-uuid trace)
 
-              damage-result (helper/deal-magic-damage! player-id world-id e-uuid damage)]
+              damage-result (helper/deal-magic-damage!
+                              player-id
+                              flesh-ripping-skill-id
+                              world-id
+                              e-uuid
+                              damage)]
 
           (when (helper/crit-applied? damage-result)
 
@@ -168,7 +184,7 @@
 
             (potion-effects/apply-effect!
 
-              e-uuid :nausea
+              player-id :nausea
 
               (cfg-int :effect.nausea-duration-ticks)
 

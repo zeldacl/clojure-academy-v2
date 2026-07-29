@@ -84,19 +84,30 @@
   "Cast ray from player, returning first living non-player entity UUID, or nil."
   [player-id max-dist]
   (when (raycast/available?)
-    (when-let [result (raycast/raycast-from-player
-                                                    player-id (double max-dist) true)]
-      (let [entity-uuid (or (:entity-uuid result)
-                            (:entity-id result)
-                            (:uuid result))]
-        (when (and entity-uuid
-                   (not= (str entity-uuid) (str player-id)))
-          (assoc result
-                 :hit-entity true
-                 :entity-uuid (str entity-uuid)
-                 :entity-x (double (or (:entity-x result) (:x result) 0.0))
-                 :entity-y (double (or (:entity-y result) (:y result) 0.0))
-                 :entity-z (double (or (:entity-z result) (:z result) 0.0))))))))
+    (let [position (raycast/player-position player-id)
+          look (raycast/player-look-vector player-id)]
+      (when (and position look)
+        (when-let [result (raycast/raycast-combined
+                            (:world-id position)
+                            (double (:x position))
+                            (double (or (:eye-y position) (:y position)))
+                            (double (:z position))
+                            (double (:x look))
+                            (double (:y look))
+                            (double (:z look))
+                            (double max-dist))]
+          (let [entity-uuid (or (:entity-uuid result)
+                                (:entity-id result)
+                                (:uuid result))]
+            (when (and (= :entity (:hit-type result))
+                       entity-uuid
+                       (not= (str entity-uuid) (str player-id)))
+              (assoc result
+                     :hit-entity true
+                     :entity-uuid (str entity-uuid)
+                     :entity-x (double (or (:entity-x result) (:x result) 0.0))
+                     :entity-y (double (or (:entity-y result) (:y result) 0.0))
+                     :entity-z (double (or (:entity-z result) (:z result) 0.0))))))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Damage helper
