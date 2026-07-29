@@ -71,7 +71,7 @@
 
 (defn build-skill-slot-shape
   "Per-slot identity/shape: skill lookup, icon, name, key-label, position,
-   cooldown-total. Depends only on the active-slots binding (preset-data) —
+  cooldown-total source. Depends only on the active-slots binding (preset-data) —
    no cooldown-data/context dependency, so callers can cache this and only
    rebuild when the player rebinds a skill slot."
   [model screen-width screen-height]
@@ -95,22 +95,39 @@
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))
-             :cooldown-total (or (get-in skill-spec [:cooldown-policy :ticks])
-                                (:cooldown-ticks skill-spec)
-                                100)}))))
+             :cooldown-total-spec (or (get-in skill-spec [:cooldown-policy :ticks])
+                                      (:cooldown-ticks skill-spec)
+                                      100)}))))
     (:active-slots model))))
+
+(defn- resolve-cooldown-total
+  [cooldown-spec {:keys [player-id skill-id exp]}]
+  (let [raw (if (fn? cooldown-spec)
+              (or (try
+                    (cooldown-spec {:player-id player-id :skill-id skill-id :exp exp})
+                    (catch clojure.lang.ArityException _
+                      (cooldown-spec player-id skill-id exp)))
+                  0)
+              cooldown-spec)]
+    (int (max 1 (Math/round (double raw))))))
 
 (defn patch-skill-slot-cooldown
   "Refresh per-slot cooldown numeric fields from cooldown-data (plain map
    lookups, no registry/context calls) — cheap enough to run every frame."
-  [slot-shapes cooldown-data]
+  [slot-shapes cooldown-data {:keys [player-id skill-exps]}]
   (mapv (fn [s]
           (let [ctrl-id (:skill-id s)
+                exp (double (or (get skill-exps ctrl-id) 0.0))
                 in-cooldown (cd-data/in-cooldown? cooldown-data ctrl-id :main)
                 remaining (when in-cooldown
                             (cd-data/get-remaining cooldown-data ctrl-id :main))
+                total (resolve-cooldown-total (:cooldown-total-spec s)
+                                              {:player-id player-id
+                                               :skill-id ctrl-id
+                                               :exp exp})
                 remaining-seconds (when remaining (/ remaining 20.0))]
             (assoc s
+                   :cooldown-total total
                    :in-cooldown in-cooldown
                    :cooldown-remaining (or remaining 0)
                    :cooldown-seconds (or remaining-seconds 0.0))))

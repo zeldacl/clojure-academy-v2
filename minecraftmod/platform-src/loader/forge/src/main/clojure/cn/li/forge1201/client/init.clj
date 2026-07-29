@@ -128,7 +128,7 @@
     :translucent buffer-impl/get-translucent-buffer
     :cutout-no-cull buffer-impl/get-cutout-no-cull-buffer
     :submit-vertex pose-impl/submit-vertex
-    :triangle-vertex-order [0 1 2 2]}
+    :triangle-vertex-order (fn [] [0 1 2 2])}
    "forge-client")
 
   (log/info "Client-side rendering bindings complete"))

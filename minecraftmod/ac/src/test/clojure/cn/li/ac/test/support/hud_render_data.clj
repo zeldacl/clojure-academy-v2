@@ -19,9 +19,11 @@
   "Build skill slot render data with cooldown info and delegate visual state."
   [model screen-width screen-height cooldown-data player-uuid]
   (let [active-contexts (when player-uuid
-                          (player-contexts player-uuid))]
+                          (player-contexts player-uuid))
+        skill-exps (or (:skill-exps model) {})]
     (-> (hud/build-skill-slot-shape model screen-width screen-height)
-        (hud/patch-skill-slot-cooldown cooldown-data)
+        (hud/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
+                                                      :skill-exps skill-exps})
         (hud/patch-skill-slot-visual active-contexts player-uuid))))
 
 (defn build-hud-render-data

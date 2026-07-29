@@ -488,6 +488,7 @@
         [contexts hud-model bg-mask skill-slot-shape]
         (cached-frame-inputs ok player-uuid player-state activated? screen-w screen-h)
         cooldown-data (:cooldown-data player-state)
+        skill-exps (get-in player-state [:ability-data :skill-exps])
         showing-numbers? (boolean (:showing-numbers? opts false))
         last-show-ms (long (or (:last-show-value-change-ms opts) 0))
         preset-state (keybinds/get-preset-switch-state player-uuid)
@@ -497,7 +498,8 @@
                        (hud/build-overload-bar-render-data hud-model now-ms))
         skill-slots (when skill-slot-shape
                       (-> skill-slot-shape
-                          (hud/patch-skill-slot-cooldown cooldown-data)
+                  (hud/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
+                                        :skill-exps skill-exps})
                           (hud/patch-skill-slot-visual contexts player-uuid)))
         preset-indicators (hud/build-preset-indicators-data preset-state now-ms)
         numbers-texts (hud/build-numbers-texts-data hud-model showing-numbers? last-show-ms now-ms)
