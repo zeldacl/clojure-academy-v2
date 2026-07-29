@@ -138,13 +138,10 @@
 
             dz (double (:z look-vec))
 
-            hit (raycast/raycast-combined
-
-                                          world-id
-
-                                          sx sy sz dx dy dz
-
-                                          (double range))]
+            hit (raycast/raycast-combined-from-player
+                  player-id
+                  (double range)
+                  true)]
 
         (if hit
 
@@ -170,7 +167,9 @@
 
             {:world-id world-id
 
-             :start-x sx :start-y sy :start-z sz
+             :start-x sx
+             :start-y (- (double (:y player-pos)) 0.5)
+             :start-z sz
 
              :drop-x drop-x :drop-y drop-y :drop-z drop-z
 
@@ -194,7 +193,9 @@
 
             {:world-id world-id
 
-             :start-x sx :start-y sy :start-z sz
+             :start-x sx
+             :start-y (- (double (:y player-pos)) 0.5)
+             :start-z sz
 
              :drop-x mx :drop-y my :drop-z mz
 
@@ -439,9 +440,10 @@
 
                                                      (skill-exp player-id)))
 
-                        :creative (fn [_player-id _skill-id _exp]
-
-                                    false)}}
+                        :creative? (fn [_player-id _skill-id _exp player-ref]
+                                     (boolean
+                                       (and player-ref
+                                            (entity/player-creative? player-ref))))}}
 
   :cooldown       {:mode :manual}
 

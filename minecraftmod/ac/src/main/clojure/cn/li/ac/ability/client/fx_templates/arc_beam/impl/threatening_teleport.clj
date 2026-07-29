@@ -53,8 +53,35 @@
                :y (+ 1.0 (double (or (:target-y payload) 0.0)))
                :z (double (or (:target-z payload) 0.0))
                :count 8 :speed 0.08 :offset-x 0.3 :offset-y 0.3 :offset-z 0.3}))
+          ;; AcademyCraft draws a loose teleport-particle path from the caster
+          ;; to the item drop point. Keep the destination burst above as an
+          ;; enhanced hit cue.
+          (let [from-x (double (or (:start-x payload) 0.0))
+                from-y (double (or (:start-y payload) 0.0))
+                from-z (double (or (:start-z payload) 0.0))
+                to-x (+ 0.5 (double (or (:target-x payload) 0.0)))
+                to-y (+ 0.5 (double (or (:target-y payload) 0.0)))
+                to-z (+ 0.5 (double (or (:target-z payload) 0.0)))
+                dx (- to-x from-x)
+                dy (- to-y from-y)
+                dz (- to-z from-z)
+                dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+                steps (max 1 (int (Math/ceil (/ dist 1.5))))]
+            (dotimes [idx steps]
+              (let [t (/ (double (inc idx)) (double steps))]
+                (client-particles/queue-particle-effect! (:queue-owner base-meta)
+                  {:type :particle
+                   :particle-type :portal
+                   :x (+ from-x (* dx t))
+                   :y (+ from-y (* dy t))
+                   :z (+ from-z (* dz t))
+                   :count 1
+                   :speed 0.04
+                   :offset-x 0.02
+                   :offset-y 0.05
+                   :offset-z 0.02}))))
           (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-            {:type :sound :sound-id (modid/namespaced-path "tp.tp_shift") :volume 0.5 :pitch 1.0})
+            {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
           state*)
       :end
       (do (remove-marker!) (update state* :fx-state dissoc owner-key*))
