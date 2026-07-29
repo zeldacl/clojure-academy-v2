@@ -10,14 +10,16 @@
   - Successful hit plays blood splash / blood spray visuals and sound
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.util.scaling :as scaling]
-            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.util.scaling :as scaling]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log]))
@@ -63,44 +65,20 @@
   (cfg-lerp :combat.damage exp))
 
 (defn- cooldown-ticks [exp]
-  (cfg-lerp-int :cooldown.ticks exp))
+  (int (cfg-lerp :cooldown.ticks exp)))
 
 (defn- update-skill-state-root!
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn- release-hit
-  [player-id ctx-id stage]
-  (let [ticks (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :ticks]) 0))
-        should-release? (case stage
-                          :tick (>= (inc ticks) (cfg-int :charge.max-ticks))
-                          :up true
-                          false)]
-    (when (and should-release? (raycast/available?))
-      (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))))
-
-(defn- release-hit?
-  [player-id ctx-id stage]
-  (boolean (release-hit player-id ctx-id stage)))
-
-(defn blood-retrograde-cost-release-tick
-  [_player-id _skill-id _exp]
-  0.0)
-
-(defn blood-retrograde-cost-release-cp
-  [player-id _skill-id exp]
-  (if (release-hit? player-id nil :up)
-    (cp-cost (double (or exp 0.0)))
-    0.0))
-
-(defn blood-retrograde-cost-release-overload
-  [player-id _skill-id exp]
-  (if (release-hit? player-id nil :up)
-    (overload-cost (double (or exp 0.0)))
-    0.0))
-
 (defn- spray-hit-payloads [player-id world-id target-info]
-  (let [base-look (get-player-look player-id)
+  (let [player-look (get-player-look player-id)
+        base-look (let [horizontal {:x (:x player-look)
+                                    :y 0.0
+                                    :z (:z player-look)}]
+                    (if (> (geom/vlen horizontal) 1.0e-5)
+                      (geom/vnorm horizontal)
+                      {:x 0.0 :y 0.0 :z 1.0}))
         head-pos {:x (:x target-info)
                   :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.6))
                   :z (:z target-info)}]
@@ -121,7 +99,7 @@
                                                       (:x dir) (:y dir) (:z dir)
                                                       5.5))]
                      (when (map? hit)
-                       (repeatedly (+ 2 (rand-int 2))
+                       (repeatedly 2
                                    (fn []
                                      {:x (double (or (:x hit) 0.0))
                                       :y (double (or (:y hit) 0.0))
@@ -157,14 +135,17 @@
 
 (defn- send-fx-perform! [ctx-id player-id world-id target-id hit]
   (let [target-info (get-target-info world-id target-id hit)
-        look-dir (get-player-look player-id)]
+        look-dir (get-player-look player-id)
+        player-pos (or (when (raycast/available?)
+                         (raycast/player-position player-id))
+                       target-info)]
     ;; Original's s_perform sendToClient(MSG_PERFORM, targ) — c_perform spawns
     ;; the blood-splash particles unconditionally for owner + nearby; only the
     ;; caster's own walk-speed slowdown (no fx counterpart here) is isLocal.
     (fx/send-local-and-nearby! ctx-id {:topic :blood-retrograde/fx-perform :mode :perform} nil
-              {:sound-pos {:x (:x target-info)
-                           :y (+ (double (:y target-info)) (* (double (:height target-info)) 0.5))
-                           :z (:z target-info)}
+              {:sound-pos {:x (:x player-pos)
+                           :y (:y player-pos)
+                           :z (:z player-pos)}
                :splashes (splash-payloads look-dir target-info)
                :sprays (spray-hit-payloads player-id world-id target-info)})))
 
@@ -178,24 +159,46 @@
   (fx/send! ctx-id {:topic :blood-retrograde/fx-end :mode :end} nil {:performed? (boolean performed?)})
   (ctx/terminate-context! ctx-id nil))
 
-(defn- try-perform! [player-id ctx-id hit cost-ok?]
+(defn- scaled-damage
+  [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+   (skill-registry/get-skill blood-retrograde-skill-id)
+   (ability-event/fire-calc-event!
+    ability-event/CALC-SKILL-ATTACK
+    raw-damage
+    {:player-id player-id
+     :target-id target-id
+     :skill-id blood-retrograde-skill-id})))
+
+(defn- try-perform! [player-id ctx-id hit]
   (let [target-id (:entity-id hit)
         world-id (geom/world-id-of player-id)
         exp (skill-exp player-id)]
     (when target-id
-      (if-not cost-ok?
-        false
-        (do
-          (skill-effects/set-main-cooldown! player-id :blood-retrograde (cooldown-ticks exp))
-          (when (entity-damage/available?)
-            (entity-damage/apply-direct-damage!
-                                                world-id
-                                                target-id
-                                                (damage-value exp)
-                                                :generic))
-          (skill-effects/add-skill-exp! player-id blood-retrograde-skill-id (cfg-double :progression.exp-hit))
-          (send-fx-perform! ctx-id player-id world-id target-id hit)
-          true)))))
+      (let [resource-result
+            (skill-effects/perform-resource!
+             player-id
+             (overload-cost exp)
+             (cp-cost exp)
+             false)]
+        (if (:success? resource-result)
+          (do
+            (skill-effects/set-main-cooldown!
+             player-id :blood-retrograde (cooldown-ticks exp))
+            (send-fx-perform! ctx-id player-id world-id target-id hit)
+            (when (entity-damage/available?)
+              (entity-damage/apply-direct-damage!
+               world-id
+               target-id
+               (scaled-damage player-id target-id (damage-value exp))
+               :skill
+               {:attacker-uuid player-id}))
+            (skill-effects/add-skill-exp!
+             player-id
+             blood-retrograde-skill-id
+             (cfg-double :progression.exp-hit))
+            true)
+          false)))))
 
 (defn blood-retrograde-on-key-down
   "Initialize charge state and local charge slowdown."
@@ -210,7 +213,7 @@
 
 (defn blood-retrograde-on-key-tick
   "Update charge progress and auto-release at max charge."
-  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
@@ -223,20 +226,20 @@
           (when (>= ticks (cfg-int :charge.max-ticks))
             (let [hit (when (raycast/available?)
                         (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))
-                  performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
+                  performed? (boolean (and hit (try-perform! player-id ctx-id hit)))]
               (finish! ctx-id performed?)
               (log/debug "BloodRetrograde auto-release" "ticks" ticks "performed" performed?))))))))
 
 (defn blood-retrograde-on-key-up
   "Execute the skill on release if a valid target is found."
-  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (when-let [ctx-data (ctx-skill/get-context ctx-id)]
     (let [skill-state (:skill-state ctx-data)
           executed? (boolean (:executed? skill-state false))]
       (when-not executed?
         (let [hit (when (raycast/available?)
               (raycast/raycast-from-player player-id (cfg-double :targeting.distance) true))
-              performed? (boolean (and hit (try-perform! player-id ctx-id hit cost-ok?)))]
+              performed? (boolean (and hit (try-perform! player-id ctx-id hit)))]
           (finish! ctx-id performed?)
           (log/debug "BloodRetrograde released" "performed" performed?))))))
 
@@ -260,13 +263,9 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks (fn [_player-id _skill-id exp]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
+                    (int (cfg-lerp :cooldown.ticks (double (or exp 0.0)))))
   :pattern :release-cast
   :cooldown {:mode :manual}
-  :cost {:tick {:cp blood-retrograde-cost-release-tick
-               :overload blood-retrograde-cost-release-tick}
-         :up {:cp blood-retrograde-cost-release-cp
-              :overload blood-retrograde-cost-release-overload}}
   :actions {:down! blood-retrograde-on-key-down
             :tick! blood-retrograde-on-key-tick
             :up! blood-retrograde-on-key-up
