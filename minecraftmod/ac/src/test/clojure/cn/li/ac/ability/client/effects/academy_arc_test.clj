@@ -37,8 +37,9 @@
              nil)]
     (is (seq ops))
     (is (every? #(= :current-charging/beam (:effect-part %)) ops))
-    (is (every? #(= {:r 255 :g 255 :b 255}
-                    (dissoc (:color %) :a))
+    (is (every? #(integer? (:color %)) ops))
+    (is (every? #(= 0x00FFFFFF
+                    (bit-and 0x00FFFFFF (long (:color %))))
                 ops))))
 
 (deftest surround-subarcs-use-client-tick-state-test

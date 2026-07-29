@@ -16,6 +16,13 @@
 (def ^:private line-texture
   (modid/asset-path "textures" "effects/arc/line_segment.png"))
 
+(defn- white-argb
+  [alpha]
+  (let [a (int (max 0 (min 255 (long alpha))))]
+    (unchecked-int
+     (bit-or (bit-shift-left a 24)
+             0x00FFFFFF))))
+
 (def ^:private profiles
   {:charging
    {:template-count 20
@@ -215,8 +222,7 @@
                             (v/v- p0 s-off)
                             (v/v- p1 e-off)
                             (v/v+ p1 e-off)
-                            {:r 255 :g 255 :b 255
-                             :a (int (max 0 (min 255 (* 255.0 alpha))))})
+                            (white-argb (* 255.0 alpha)))
                 :effect-part effect-part)))))
        line))
     lines)))
