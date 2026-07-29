@@ -656,8 +656,8 @@
                                   :channel :penetrate-tp/set-distance
                                   :payload {:delta (double delta)}})))))
 
-(defn- active-flashing-context-ids
-  [player-uuid]
+(defn- active-context-ids-for-skill
+  [player-uuid skill-id]
   (let [owner-key (client-ui-owner-key player-uuid)]
     (->> (slot-context-ids-snapshot)
        (keep (fn [[slot-key ctx-id]]
@@ -666,19 +666,32 @@
                                   player-uuid
                                   (fn [owner]
                                     (ctx/get-context owner ctx-id)))]
-                   (when (and (= :flashing (:skill-id ctx-data))
+                   (when (and (= skill-id (:skill-id ctx-data))
                               (ctx/active-context? ctx-data))
                      ctx-id)))))
        distinct
        vec)))
 
-(defn- send-flashing-movement-message!
-  [player-uuid channel movement-key]
-  (doseq [ctx-id (active-flashing-context-ids player-uuid)]
-    (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
-                             {:ctx-id ctx-id
-                              :channel channel
-                              :payload {:key movement-key}})))
+(defn- send-movement-message!
+  [player-uuid transition movement-key]
+  (doseq [[skill-id channel]
+          [[:flashing
+            (case transition
+              :down :flashing/move-down
+              :tick :flashing/move-tick
+              :up :flashing/move-up)]
+           [:storm-wing
+            (case transition
+              :down :storm-wing/move-down
+              :tick :storm-wing/move-tick
+              :up :storm-wing/move-up)]]
+          ctx-id (active-context-ids-for-skill player-uuid skill-id)]
+    (send-with-client-owner!
+     player-uuid
+     catalog/MSG-CTX-CHANNEL
+     {:ctx-id ctx-id
+      :channel channel
+      :payload {:key movement-key}})))
 
 (defn- scan-vm-contexts
   "Single-pass context walk: returns reflection-active?, deviation-active?, and
@@ -1086,15 +1099,15 @@
 
      :client-on-movement-key-down!
      (fn [player-uuid movement-key]
-       (send-flashing-movement-message! player-uuid :flashing/move-down movement-key))
+       (send-movement-message! player-uuid :down movement-key))
 
      :client-on-movement-key-tick!
      (fn [player-uuid movement-key]
-       (send-flashing-movement-message! player-uuid :flashing/move-tick movement-key))
+       (send-movement-message! player-uuid :tick movement-key))
 
      :client-on-movement-key-up!
      (fn [player-uuid movement-key]
-       (send-flashing-movement-message! player-uuid :flashing/move-up movement-key))
+       (send-movement-message! player-uuid :up movement-key))
 
      :client-on-slot-wheel!
      (fn [player-uuid key-idx delta]

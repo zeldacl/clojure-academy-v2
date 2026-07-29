@@ -46,6 +46,19 @@
    (when-let [fw-atom (fw/fw-atom)]
      (platform/call-adapter fw-atom :player-motion :dismount-riding! player-id))))
 
+(defn player-can-fly?
+  [player-id]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :player-motion :can-fly? player-id))))
+
+(defn set-player-can-fly!
+  [player-id can-fly?]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :player-motion :set-can-fly!
+                            player-id (boolean can-fly?)))))
+
 (defn entity-motion-available?
   []
   (boolean

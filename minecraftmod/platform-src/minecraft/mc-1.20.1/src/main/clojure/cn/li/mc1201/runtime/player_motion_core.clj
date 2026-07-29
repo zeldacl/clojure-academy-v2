@@ -49,6 +49,19 @@
       (.stopRiding player))
     true))
 
+(defn can-fly-for-player?
+  [^ServerPlayer player]
+  (boolean
+   (and player
+        (.-mayfly (.getAbilities player)))))
+
+(defn set-can-fly-for-player!
+  [^ServerPlayer player can-fly?]
+  (when player
+    (set! (.-mayfly (.getAbilities player)) (boolean can-fly?))
+    (.onUpdateAbilities player)
+    true))
+
 (defn create-player-motion
   "Create an IPlayerMotion adapter using a platform-provided server supplier."
   [get-server]
@@ -63,4 +76,11 @@
    :is-on-ground? (fn [player-id]
                     (is-on-ground-for-player? (query-core/get-player-by-uuid (get-server) player-id)))
    :dismount-riding! (fn [player-id]
-                       (boolean (dismount-riding-for-player! (query-core/get-player-by-uuid (get-server) player-id))))})
+                       (boolean (dismount-riding-for-player! (query-core/get-player-by-uuid (get-server) player-id))))
+   :can-fly? (fn [player-id]
+               (can-fly-for-player? (query-core/get-player-by-uuid (get-server) player-id)))
+   :set-can-fly! (fn [player-id can-fly?]
+                   (boolean
+                    (set-can-fly-for-player!
+                     (query-core/get-player-by-uuid (get-server) player-id)
+                     can-fly?)))})
