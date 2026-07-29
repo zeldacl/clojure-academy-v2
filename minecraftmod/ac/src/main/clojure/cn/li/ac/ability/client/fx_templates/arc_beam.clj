@@ -183,13 +183,19 @@
               :view-offset-other (local-frame-offset start end third-person-view-offset)}))))
 
 (defn- play-sound!
-  [{:keys [sound-id sound-volume sound-pitch]}]
+  [{:keys [sound-id sound-source sound-volume sound-pitch]} payload]
   (when sound-id
-    (client-sounds/queue-current-sound-effect!
-      {:type :sound
-       :sound-id sound-id
-       :volume (double (or sound-volume 0.5))
-       :pitch (double (or sound-pitch 1.0))})))
+    (let [{:keys [x y z]} (:sound-pos payload)]
+      (client-sounds/queue-current-sound-effect!
+        (cond-> {:type :sound
+                 :sound-id sound-id
+                 :volume (double (or sound-volume 0.5))
+                 :pitch (double (or sound-pitch 1.0))}
+          sound-source (assoc :source sound-source)
+          (every? number? [x y z])
+          (assoc :x (double x)
+                 :y (double y)
+                 :z (double z)))))))
 
 (defn- enqueue-arc-state!
   [opts store ctx-id channel owner-key payload]
@@ -213,12 +219,12 @@
                                         (arc-item base aoe-start pt life arc-pattern :is-aoe? true)))))
                             vec)
               store** (update-in store* [:arcs owner-key*] (fnil into []) (into main-arcs aoe-arcs))]
-          (play-sound! opts)
+          (play-sound! opts payload)
           store**)
 
         (and (map? start) (map? end))
         (do
-          (play-sound! opts)
+          (play-sound! opts payload)
           (update-in store* [:arcs owner-key*] (fnil conj [])
                      (arc-item base start end arc-life arc-pattern
                                :hit-type hit-type
@@ -476,10 +482,10 @@
   [opts]
   (let [effect-id (:effect-id opts)
         runtime (or (:runtime opts) :level)
-        arc-opts (when (some opts [:sound-id :sound-volume :sound-pitch :arc-life :arc-pattern
+        arc-opts (when (some opts [:sound-id :sound-source :sound-volume :sound-pitch :arc-life :arc-pattern
                                    :aoe-points? :hand-origin?])
                    (merge {:effect-id effect-id :arc-pattern :weak :arc-life 10}
-                          (select-keys opts [:effect-id :sound-id :sound-volume :sound-pitch
+                          (select-keys opts [:effect-id :sound-id :sound-source :sound-volume :sound-pitch
                                              :arc-life :arc-pattern :aoe-points? :hand-origin?])))
         channels (normalize-channels (:channels opts))
         transform (or (:transform-fn opts)

@@ -63,6 +63,69 @@ public final class RaycastShared {
     }
 
     /**
+     * Trace the same block set used by AcademyCraft ArcGen: ordinary blocks
+     * with a collision shape, plus water (including flowing water). Other
+     * non-collidable blocks and fluids are transparent to the trace.
+     */
+    public static Map<String, Object> raycastCollidableBlocksOrWater(
+            ServerLevel level,
+            double startX,
+            double startY,
+            double startZ,
+            double dirX,
+            double dirY,
+            double dirZ,
+            double maxDistance) {
+        if (level == null) {
+            return null;
+        }
+
+        Vec3 start = new Vec3(startX, startY, startZ);
+        Vec3 end = new Vec3(startX + dirX * maxDistance, startY + dirY * maxDistance, startZ + dirZ * maxDistance);
+        BlockHitResult collidableResult = level.clip(
+                new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null));
+        Map<String, Object> collidableHit =
+                collidableResult == null || collidableResult.getType() != HitResult.Type.BLOCK
+                        ? null
+                        : buildBlockHit(level, start, collidableResult);
+        Map<String, Object> waterHit = raycastBlocksMatching(
+                level,
+                startX, startY, startZ,
+                dirX, dirY, dirZ,
+                maxDistance,
+                List.of("minecraft:water"));
+
+        if (collidableHit == null) {
+            return waterHit;
+        }
+        if (waterHit == null) {
+            return collidableHit;
+        }
+        double collidableDistance = ((Number) collidableHit.get("distance")).doubleValue();
+        double waterDistance = ((Number) waterHit.get("distance")).doubleValue();
+        return collidableDistance <= waterDistance ? collidableHit : waterHit;
+    }
+
+    private static Map<String, Object> buildBlockHit(
+            ServerLevel level,
+            Vec3 start,
+            BlockHitResult result) {
+        BlockPos pos = result.getBlockPos();
+        BlockState blockState = level.getBlockState(pos);
+        Map<String, Object> hit = new LinkedHashMap<>();
+        hit.put("x", pos.getX());
+        hit.put("y", pos.getY());
+        hit.put("z", pos.getZ());
+        hit.put("hit-x", result.getLocation().x);
+        hit.put("hit-y", result.getLocation().y);
+        hit.put("hit-z", result.getLocation().z);
+        hit.put("block-id", BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).toString());
+        hit.put("face", result.getDirection().getSerializedName());
+        hit.put("distance", start.distanceTo(result.getLocation()));
+        return hit;
+    }
+
+    /**
      * Trace only blocks whose registry ids are accepted, allowing the ray to
      * pass through every other block. This matches LambdaLib2's filtered block
      * selector used by AcademyCraft's MagManip acquisition trace.
@@ -108,6 +171,9 @@ public final class RaycastShared {
                 continue;
             }
             BlockHitResult result = state.getShape(level, pos).clip(start, end, pos);
+            if (result == null && !state.getFluidState().isEmpty()) {
+                result = state.getFluidState().getShape(level, pos).clip(start, end, pos);
+            }
             if (result == null || result.getType() != HitResult.Type.BLOCK) {
                 continue;
             }

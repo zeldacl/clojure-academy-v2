@@ -46,14 +46,19 @@
                                                         (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (arc-fx/init!)
-      ((get @handlers* :arc-gen/fx-perform) "ctx-arc" :arc-gen/fx-perform {:start {:x 1.0 :y 2.0 :z 3.0}
-                                                 :end {:x 4.0 :y 5.0 :z 6.0}
-                                                 :hit-type :entity})
+      ((get @handlers* :arc-gen/fx-perform) "ctx-arc" :arc-gen/fx-perform
+       {:start {:x 1.0 :y 2.0 :z 3.0}
+        :end {:x 4.0 :y 5.0 :z 6.0}
+        :hit-type :entity
+        :sound-pos {:x 1.0 :y 0.38 :z 3.0}
+        :source-player-id "caster"})
       (is (= [[:arc-gen "ctx-arc" :arc-gen/fx-perform
                {:mode :perform
                 :start {:x 1.0 :y 2.0 :z 3.0}
                 :end {:x 4.0 :y 5.0 :z 6.0}
-                :hit-type :entity}
+                :hit-type :entity
+                :sound-pos {:x 1.0 :y 0.38 :z 3.0}
+                :source-player-id "caster"}
                :owner-key [:ctx "ctx-arc"]]]
              @enqueued*)))))
 
@@ -61,6 +66,7 @@
   (let [spec (arc-beam/build-spec
                {:effect-id :arc-gen
                 :sound-id "my_mod:em.arc_weak"
+                :sound-source :ambient
                 :arc-life 10
                 :arc-pattern :weak
                 :channels []})
@@ -73,13 +79,22 @@
         {:mode :perform
          :start {:x 0.0 :y 64.0 :z 0.0}
          :end {:x 3.0 :y 64.0 :z 3.0}
+         :sound-pos {:x 0.0 :y 62.38 :z 0.0}
          :hit-type :block})
       (let [plan (build-plan {:x 0.0 :y 65.0 :z 0.0} nil 0 nil)]
         (is (some? plan))
         (is (seq (:ops plan))))
       (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:em.arc_weak" (:sound-id (first @sounds*)))))))
+      (is (= {:type :sound
+              :sound-id "my_mod:em.arc_weak"
+              :source :ambient
+              :volume 0.5
+              :pitch 1.0
+              :x 0.0
+              :y 62.38
+              :z 0.0}
+             (first @sounds*))))))
 
 (deftest hand-origin-shifts-arc-per-viewer-test
   ;; Original spawns EntityArc at the caster's eye and lets ViewOptimize.fix

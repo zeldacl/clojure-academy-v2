@@ -31,6 +31,16 @@
                                 (catch Exception e
                                   (log/warn "Failed to raycast matching blocks:" (ex-message e))
                                   nil)))
+   :raycast-collidable-blocks-or-water
+   (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+     (try
+       (rn/normalize-bridge-map
+         (RaycastShared/raycastCollidableBlocksOrWater
+           (resolve-level (get-server) world-id)
+           start-x start-y start-z dir-x dir-y dir-z max-distance))
+       (catch Exception e
+         (log/warn "Failed to raycast collidable blocks or water:" (ex-message e))
+         nil)))
    :raycast-entities (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
                        (try
                          (rn/normalize-bridge-map

@@ -8,6 +8,8 @@
   (arc-beam/build-spec
     {:effect-id :arc-gen
      :sound-id (modid/namespaced-path "em.arc_weak")
+     :sound-source :ambient
+     :sound-volume 0.5
      :arc-life 10
      :arc-pattern :weak
      ;; Original spawns EntityArc at the caster's eye and then renders it
@@ -17,6 +19,8 @@
                  :level-payload-fn (fn [_ _ p]
                                      {:start (:start p)
                                       :end (:end p)
-                                      :hit-type (:hit-type p)})}]}))
+                                      :hit-type (:hit-type p)
+                                      :sound-pos (:sound-pos p)
+                                      :source-player-id (:source-player-id p)})}]}))
 
 (arc-beam/def-arc-beam-fx :arc-gen)

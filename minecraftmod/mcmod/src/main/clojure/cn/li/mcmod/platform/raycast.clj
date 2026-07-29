@@ -28,6 +28,13 @@
   (call :raycast-blocks-matching
         world-id sx sy sz dx dy dz max-dist accepted-block-ids))
 
+(defn raycast-collidable-blocks-or-water
+  "Trace blocks with a collision shape plus water, passing through other
+  non-collidable blocks and fluids."
+  [world-id sx sy sz dx dy dz max-dist]
+  (call :raycast-collidable-blocks-or-water
+        world-id sx sy sz dx dy dz max-dist))
+
 (defn raycast-entities
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-entities world-id sx sy sz dx dy dz max-dist))
