@@ -12,7 +12,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.fx :as fx]
-                        [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log]))
@@ -39,7 +39,10 @@
       geom/vnorm
       (geom/v* (cfg-double :movement.hit-impulse))))
 
-(defn- knockback-velocity [player-id hit-pos]
+(defn- knockback-velocity
+  "Reproduce the original DirectedShock knockback, including its motionZ =
+  delta.y quirk."
+  [player-id hit-pos]
   (let [player-head (geom/eye-pos player-id)
         target-head {:x (:x hit-pos)
                      :y (+ (:y hit-pos)
@@ -53,7 +56,14 @@
         scale (cfg-double :movement.knockback-scale)]
     {:x (* (:x d1) scale)
      :y (* (:y d1) scale)
-     :z (* (:z d1) scale)}))
+     :z (* (:y d1) scale)}))
+
+(defn- player-body-position
+  [player-id eye-pos]
+  (or (raycast/player-position player-id)
+      {:x (:x eye-pos)
+       :y (- (double (:y eye-pos)) (cfg-double :targeting.eye-height))
+       :z (:z eye-pos)}))
 
 (defn- directed-shock-down!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -88,6 +98,7 @@
           (terminate-with-end! ctx-id false)
           (let [world-id (geom/world-id-of player-id)
                 eye (geom/eye-pos player-id)
+                player-pos (player-body-position player-id eye)
                 trace (entity-trace player-id)]
             (if-let [target-id (:entity-id trace)]
               (let [hit-pos {:x (double (or (:x trace) 0.0))
@@ -96,15 +107,22 @@
                              :eye-height (double (or (:eye-height trace)
                                                      (cfg-double :targeting.eye-height)))}
                     damage (cfg-lerp :combat.damage exp*)
-                    impulse (hit-impulse eye hit-pos)
                     knockback (when (>= exp* (cfg-double :movement.knockback-exp-threshold))
-                                (knockback-velocity player-id hit-pos))]
+                                (knockback-velocity player-id hit-pos))
+                    moved-hit-pos (if knockback
+                                    (update hit-pos :y + 0.1)
+                                    hit-pos)
+                    impulse (hit-impulse player-pos moved-hit-pos)]
                 (when (entity-damage/available?)
                   (entity-damage/apply-direct-damage! world-id target-id damage :generic))
-                (when (and knockback (motion-effects/entity-motion-available?))
-                  (motion-effects/set-entity-velocity! world-id target-id
-                                                (:x knockback) (:y knockback) (:z knockback)))
                 (when (motion-effects/entity-motion-available?)
+                  (when knockback
+                    (motion-effects/set-entity-position!
+                     world-id target-id
+                     (:x moved-hit-pos) (:y moved-hit-pos) (:z moved-hit-pos))
+                    (motion-effects/set-entity-velocity!
+                     world-id target-id
+                     (:x knockback) (:y knockback) (:z knockback)))
                   (motion-effects/add-entity-velocity! world-id target-id
                                                 (:x impulse) (:y impulse) (:z impulse)))
                 ;; Original's second MSG_GENERATE_EFFECT client listener plays
@@ -117,9 +135,9 @@
                                                                                           :world-id world-id
                                                                                           :impulse impulse
                                                                                           :knockback knockback
-                                                                                          :x (:x eye)
-                                                                                          :y (:y eye)
-                                                                                          :z (:z eye)})
+                                                                                          :x (:x player-pos)
+                                                                                          :y (:y player-pos)
+                                                                                          :z (:z player-pos)})
                 (ctx-skill/replace-skill-state! ctx-id
                                                 (merge (:skill-state ctx-data)
                                                        {:performed? true

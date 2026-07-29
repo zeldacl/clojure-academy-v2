@@ -107,6 +107,7 @@
         damage-calls* (atom [])
         add-velocity-calls* (atom [])
         set-velocity-calls* (atom [])
+        set-position-calls* (atom [])
         perform-calls* (atom [])
         end-calls* (atom [])
         cooldown-calls* (atom [])
@@ -120,6 +121,9 @@
                          ctx/terminate-context! terminate-context!
                          geom/world-id-of (fn [_] "w")
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
+                         raycast/player-position (fn [_]
+                                                   {:x 0.0 :y 0.0 :z 0.0
+                                                    :eye-y 1.62 :world-id "w"})
                          raycast/available? (constantly true)
                          raycast/raycast-from-player (fn [& _]
                                                         {:entity-id "e1"
@@ -133,6 +137,9 @@
                                                         (swap! add-velocity-calls* conj [world-id target-id x y z]))
                          motion-effects/set-entity-velocity! (fn [world-id target-id x y z]
                                                         (swap! set-velocity-calls* conj [world-id target-id x y z]))
+                         motion-effects/set-entity-position! (fn [world-id target-id x y z]
+                                                                (swap! set-position-calls* conj
+                                                                       [world-id target-id x y z]))
                          fx/send! (fn [ctx-id entry _evt payload]
                                     (case (:topic entry)
                                       :directed-shock/fx-perform
@@ -147,11 +154,15 @@
              (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true)))))
     (is (= [["w" "e1" 12.0 :generic]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
+    (is (= [["w" "e1" 1.0 2.1 3.0]] @set-position-calls*))
+    (is (= (get-in @set-velocity-calls* [0 3])
+           (get-in @set-velocity-calls* [0 4]))
+        "original DirectedShock assigns motionZ from the adjusted Y delta")
     (is (= 1 (count @add-velocity-calls*)))
     (is (= 2 (count @perform-calls*)) "fx-perform fanned out to owner + nearby")
-    (is (= {:x 0.0 :y 1.62 :z 0.0}
+    (is (= {:x 0.0 :y 0.0 :z 0.0}
            (select-keys (get-in @perform-calls* [0 3]) [:x :y :z]))
-        "punch sound position matches the caster's eye position")
+        "punch sound position matches the caster entity position")
     (is (empty? @end-calls*))
     (is (empty? @terminate-calls*))
     (is (= [["p1" :directed-shock 40]] @cooldown-calls*))
@@ -175,6 +186,9 @@
                          ctx/terminate-context! terminate-context!
                          geom/world-id-of (fn [_] "w")
                          geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
+                         raycast/player-position (fn [_]
+                                                   {:x 0.0 :y 0.0 :z 0.0
+                                                    :eye-y 1.62 :world-id "w"})
                          raycast/available? (constantly true)
                          raycast/raycast-from-player (fn [& _] nil)
                          fx/send! (fn [ctx-id entry _evt payload]
