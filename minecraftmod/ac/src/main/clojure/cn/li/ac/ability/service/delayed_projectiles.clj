@@ -127,36 +127,30 @@
                                               (double (:x dir))
                                               (double (:y dir))
                                               (double (:z dir))
-                                              electron-bomb-ray-distance)]
-            (when hit
-              (let [end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
-                    target-uuid (:uuid hit)
-                    damage-amt (double (or damage 0.0))]
-                (when (and target-uuid (entity-damage/available?))
-                  (entity-damage/apply-direct-damage!
-                    world-id
-                    target-uuid
-                    damage-amt
-                    :magic)
-                  (md-damage/mark-target! player-id target-uuid
-                                          {:ctx-id ctx-id
-                                           :target-pos {:x (:x hit)
-                                                        :y (:y hit)
-                                                        :z (:z hit)}}))
-                (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam
-                  {:mode :perform
-                   :start eye
-                   :end end-pos
-                   :hit-distance electron-bomb-ray-distance
-                   :performed? true
-                   :target-uuid target-uuid})
-                (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam
-                  {:mode :perform
-                   :start eye
-                   :end end-pos
-                   :hit-distance electron-bomb-ray-distance
-                   :performed? true
-                   :target-uuid target-uuid})))))))
+                                              electron-bomb-ray-distance)
+                end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+                target-uuid (:uuid hit)
+                damage-amt (double (or damage 0.0))
+                payload {:mode :perform
+                         :start eye
+                         :end end-pos
+                         :hit-distance electron-bomb-ray-distance
+                         :performed? true
+                         :target-uuid target-uuid}]
+            (when (and target-uuid (entity-damage/available?))
+              (entity-damage/apply-direct-damage!
+                world-id
+                target-uuid
+                damage-amt
+                :magic)
+              (md-damage/mark-target! player-id target-uuid
+                                      {:ctx-id ctx-id
+                                       :target-pos {:x (:x hit)
+                                                    :y (:y hit)
+                                                    :z (:z hit)}}))
+            ;; Original broadcasts the small ray even when it hits no entity.
+            (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam payload)
+            (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam payload)))))
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 

@@ -2,8 +2,7 @@
   "ElectronBomb skill - delayed MdBall settlement with single-ray hit.
 
   Pattern: :instant (key press fires the bomb)
-  Cost: CP lerp(250, 180, exp), overload lerp(120, 90, exp) — not present in
-  original (which consumes no resource at all); kept as a deliberate departure.
+  Cost: none
   Damage: lerp(6, 12, exp) at target, settled near MdBall end-of-life callback
   Cooldown: lerp(20, 10, exp) ticks
   Exp: +0.005 per cast, unconditional (matches original's ctx.addSkillExp
@@ -65,6 +64,8 @@
         ;; Exp/cooldown are granted at cast time in original, unconditionally,
         ;; before the ball's delayed callback ever fires.
         (skill-effects/add-skill-exp! player-id :electron-bomb (cfg-double :progression.exp-hit))
+        (skill-effects/set-main-cooldown! player-id :electron-bomb
+                                          (cfg-lerp-int :cooldown.ticks exp))
         (let [life-ticks (life-ticks-for-exp exp)
               delay-ticks (delayed-projectiles/mdball-near-expire-delay life-ticks 2)]
           (delayed-projectiles/schedule-electron-bomb-beam!
@@ -95,10 +96,7 @@
   :ui-position    [15 45]
   :ctrl-id        :electron-bomb
   :pattern        :instant
-  :cost           {:down {:cp       (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.cp (skill-exp player-id)))
-                          :overload (fn [{:keys [player-id]}]
-                                      (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
+  :cooldown       {:mode :manual}
   :cooldown-ticks (fn [{:keys [player-id]}]
                     (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
   :actions        {:perform! electron-bomb-perform!}

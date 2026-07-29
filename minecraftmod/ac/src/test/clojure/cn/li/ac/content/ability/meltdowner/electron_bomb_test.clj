@@ -29,13 +29,20 @@
     :charge.settle-ticks-improved 5
     0))
 
+(defn- stub-lerp-int [_skill-id field-id _exp]
+  (case field-id
+    :cooldown.ticks 15
+    0))
+
 (deftest perform-schedules-delayed-settlement-and-spawn-fx-test
   (let [spawn-calls* (atom [])
         fx-calls* (atom [])
         scheduled* (atom [])
-        exp-calls* (atom [])]
+        exp-calls* (atom [])
+        cooldown-calls* (atom [])]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.5)
                   skill-config/lerp-double stub-lerp-double
+                  skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   skill-config/tunable-int stub-tunable-int
                   geom/world-id-of (fn [_] "w")
@@ -49,8 +56,11 @@
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)
                   skill-effects/add-skill-exp! (fn [& args]
-                                                (swap! exp-calls* conj args)
-                                                nil)
+                                                 (swap! exp-calls* conj args)
+                                                 nil)
+                  skill-effects/set-main-cooldown! (fn [& args]
+                                                     (swap! cooldown-calls* conj args)
+                                                     nil)
                   delayed-projectiles/mdball-near-expire-delay (fn [life-ticks offset-ticks]
                                                                  (- life-ticks offset-ticks))
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
@@ -73,6 +83,7 @@
       ;; Exp is granted immediately/unconditionally at cast time, matching
       ;; original's ctx.addSkillExp(.005f) firing in s_Execute.
       (is (= [["p1" :electron-bomb 0.005]] @exp-calls*))
+      (is (= [["p1" :electron-bomb 15]] @cooldown-calls*))
       (is (= [{:player-id "p1"
                :ctx-id "ctx-1"
                :damage 12.5
@@ -83,6 +94,7 @@
   (let [scheduled* (atom [])]
     (with-redefs [skill-effects/skill-exp (fn [& _] 0.9)
                   skill-config/lerp-double stub-lerp-double
+                  skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   skill-config/tunable-int stub-tunable-int
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
@@ -91,6 +103,7 @@
                   entity/player-spawn-entity-by-id! (constantly true)
                   fx/send! (constantly nil)
                   skill-effects/add-skill-exp! (constantly nil)
+                  skill-effects/set-main-cooldown! (constantly nil)
                   delayed-projectiles/mdball-near-expire-delay (fn [life-ticks offset-ticks]
                                                                  (- life-ticks offset-ticks))
                   delayed-projectiles/schedule-electron-bomb-beam! (fn [task]
