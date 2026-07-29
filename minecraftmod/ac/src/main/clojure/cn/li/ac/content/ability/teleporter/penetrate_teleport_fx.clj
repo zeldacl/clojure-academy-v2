@@ -6,9 +6,9 @@
   (arc-beam/build-spec
     {:effect-id :penetrate-teleport
      :initial-state (fn [] {:fx-state {}})
-     :channels {:start {:topic :penetrate-tp/fx-start :mode :start}
-                :update {:topic :penetrate-tp/fx-update :mode :update}
-                :perform {:topic :penetrate-tp/fx-perform :mode :perform}
-                :end {:topic :penetrate-tp/fx-end :mode :end}}}))
+     :channels {:start {:topic :penetrate-teleport/fx-start :mode :start}
+                :update {:topic :penetrate-teleport/fx-update :mode :update}
+                :perform {:topic :penetrate-teleport/fx-perform :mode :perform}
+                :end {:topic :penetrate-teleport/fx-end :mode :end}}}))
 
 (arc-beam/def-arc-beam-fx :penetrate-teleport)

@@ -34,6 +34,7 @@
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
             [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mcmod.platform.entity :as entity]
 
                         [cn.li.mcmod.util.log :as log]))
 
@@ -59,9 +60,8 @@
 
 
 
-(defn- floor-int [x]
-
-  (int (Math/floor (double x))))
+(defn- trunc-int [x]
+  (int (double x)))
 
 
 
@@ -116,10 +116,7 @@
 (defn- solid? [world-id bx by bz]
 
   (when (bm/available?)
-
-    (let [h (bm/get-block-hardness world-id bx by bz)]
-
-      (and (some? h) (pos? (double h))))))
+    (bm/block-collidable? world-id bx by bz)))
 
 
 
@@ -129,11 +126,9 @@
 
   [world-id x y z]
 
-  (let [ix (floor-int x)
-
-        iy (floor-int y)
-
-        iz (floor-int z)]
+  (let [ix (trunc-int x)
+        iy (trunc-int y)
+        iz (trunc-int z)]
 
     (and (not (solid? world-id ix iy iz))
 
@@ -150,8 +145,7 @@
         cp-limit (/ (double current-cp) per-block)
 
         max-dist (max-distance exp)]
-
-    (clamp desired-distance min-distance (min max-dist cp-limit))))
+    (min (double desired-distance) max-dist cp-limit)))
 
 
 
@@ -169,8 +163,6 @@
 
         (let [step (scan-step)
 
-              max-steps (max 1 (int (Math/ceil (/ (double distance) step))))
-
               px (double (:x player-pos))
 
               py (double (:y player-pos))
@@ -183,9 +175,7 @@
 
               dz (double (:z look-vec))]
 
-          (loop [i 0
-
-                 stage 0
+          (loop [stage 0
 
                  clear-steps 0
 
@@ -197,7 +187,7 @@
 
                  traveled 0.0]
 
-            (if (> i max-steps)
+            (if (> traveled (double distance))
 
               {:x x :y y :z z :distance traveled :available? (not= stage 1)}
 
@@ -207,7 +197,7 @@
 
                   (and (= stage 0) (not place?))
 
-                  (recur (inc i) 1 clear-steps
+                  (recur 1 clear-steps
 
                          (+ x (* step dx))
 
@@ -221,7 +211,7 @@
 
                   (and (= stage 1) place?)
 
-                  (recur (inc i) 2 0
+                  (recur 2 0
 
                          (+ x (* step dx))
 
@@ -235,11 +225,12 @@
 
                   (= stage 2)
 
-                  (if (or (not place?) (> clear-steps stage2-clearance-steps))
+                  (if (or (not place?)
+                          (>= clear-steps stage2-clearance-steps))
 
                     {:x x :y y :z z :distance traveled :available? true}
 
-                    (recur (inc i) 2 (inc clear-steps)
+                    (recur 2 (inc clear-steps)
 
                            (+ x (* step dx))
 
@@ -253,7 +244,7 @@
 
                   :else
 
-                  (recur (inc i) stage clear-steps
+                  (recur stage clear-steps
 
                          (+ x (* step dx))
 
@@ -419,10 +410,8 @@
 
 
 (defn- up-cost-creative?
-
-  [_player-id _skill-id _exp]
-
-  false)
+  [_player-id _skill-id _exp player-ref]
+  (boolean (and player-ref (entity/player-creative? player-ref))))
 
 
 
@@ -510,21 +499,19 @@
 
           dest (:dest resolved)
 
-          exp (:exp resolved)
+          exp (:exp resolved)]
 
-          success? (and cost-ok?
+      ;; AcademyCraft plays the local release sound before server validation,
+      ;; including unavailable destinations and failed resource settlement.
+      (fx/send! ctx-id {:topic :penetrate-teleport/fx-perform :mode :perform}
+                nil
+                (or dest {}))
 
-                        (:available? resolved)
-
-                        dest
-
-                        (helper/teleport-to! player-id
-
-                                             (geom/world-id-of player-id)
-
-                                             (:x dest) (:y dest) (:z dest)))]
-
-      (if success?
+      (if (and cost-ok?
+               dest
+               (helper/teleport-to! player-id
+                                    (geom/world-id-of player-id)
+                                    (:x dest) (:y dest) (:z dest)))
 
         (do
 
@@ -538,14 +525,7 @@
 
           (skill-effects/set-main-cooldown! player-id penetrate-teleport-skill-id (cooldown-ticks exp))
 
-          ;; Deliberately owner-only, unlike this file's teleporter siblings.
-          ;; Original's teleport sound is played by l_onKeyUp — a CLIENT-side
-          ;; listener driven by the local key-press input, so it only ever
-          ;; runs on the caster's own client, never on a bystander's mirrored
-          ;; context (MSG_KEYUP is never network-delivered to nearby players
-          ;; in the first place). s_execute itself has no sendToClient/
-          ;; sendToAllAround call at all — a silent teleport, no broadcast FX.
-          (fx/send! ctx-id {:topic :penetrate-teleport/fx-perform :mode :perform} nil dest))
+          nil)
 
         (log/debug "PenetrateTP: execute failed" {:cost-ok? cost-ok?
 

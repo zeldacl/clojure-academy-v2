@@ -50,6 +50,10 @@
   [world-id x y z]
   (call :get-block-hardness world-id x y z))
 
+(defn block-collidable?
+  [world-id x y z]
+  (boolean (call :block-collidable? world-id x y z)))
+
 (defn can-break-block?
   [player-id world-id x y z]
   (call :can-break-block? player-id world-id x y z))
