@@ -253,11 +253,11 @@
         val-y (+ y0 (* (- next-x x0) dyx))
         val-z (+ z0 (* (- next-x x0) dzx))
         next-state (cond
-                     (> (Math/abs (- val-y y)) 0.5)
-                     (assoc plotter :y (+ y (* (Math/signum dyx) dirflag)))
+                     (> (Math/abs (double (- val-y y))) 0.5)
+                     (assoc plotter :y (+ y (* (Math/signum (double dyx)) dirflag)))
 
-                     (> (Math/abs (- val-z z)) 0.5)
-                     (assoc plotter :z (+ z (* (Math/signum dzx) dirflag)))
+                     (> (Math/abs (double (- val-z z))) 0.5)
+                     (assoc plotter :z (+ z (* (Math/signum (double dzx)) dirflag)))
 
                      :else
                      (assoc plotter :x next-x))
