@@ -110,10 +110,31 @@
          :is-item false
          :caster-pos {:x 1.0 :y 65.0 :z 2.0}
          :target target})
+      (is (true? (:beam-visible?
+                  (current-charging-fx/current-state [:ctx "ctx-block"]))))
+      (is (= 0 (:visual-ticks
+                (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= target
              (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= :mcmod/start-loop-sound (ffirst @effects*)))
       (is (= "my_mod:em.charge_loop" (get-in @effects* [0 1 :sound-id])))
+      (let [plan (level-effects/build-level-effect-plan
+                  {:x 1.0 :y 65.0 :z 2.0}
+                  {:player-uuid "local-player"}
+                  0
+                  (fn [& _] []))]
+        (is (seq (:ops plan)))
+        (is (every? #(= :current-charging/beam (:effect-part %))
+                    (:ops plan))))
+
+      ;; Visual animation is driven by client ticks, not by the most recent
+      ;; server charge-ticks packet. This prevents a hidden network sample
+      ;; from making the beam disappear for an arbitrary number of frames.
+      (level-effects/tick-level-effects!)
+      (is (= 1 (:visual-ticks
+                (current-charging-fx/current-state [:ctx "ctx-block"]))))
+      (is (= 0 (:charge-ticks
+                (current-charging-fx/current-state [:ctx "ctx-block"]))))
 
       ;; No update packet arrives for two seconds. A held upstream effect
       ;; remains alive; only an explicit end/owner cleanup may remove it.

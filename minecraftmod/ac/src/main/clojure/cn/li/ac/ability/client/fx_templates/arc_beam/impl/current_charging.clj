@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging
   (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
+            [cn.li.ac.ability.client.effects.academy-arc :as academy-arc]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -27,6 +28,10 @@
   :caster-pos nil
    :block-pos nil
    :charged 0.0
+   :visual-ticks 0
+   :beam-visible? true
+   :beam-shape-id 0
+   :surround-state nil
    :started-at-ms 0
   :ending-at-ms 0
   :updated-at-ms 0})
@@ -134,14 +139,16 @@
     (case mode
       :start
       (let [ts (now-ms)
-            meta (base-meta owner-key* ctx-id channel payload*)]
+            meta (base-meta owner-key* ctx-id channel payload*)
+            item? (boolean (:is-item payload*))
+            arc-type (if item? :thin :normal)]
         (start-loop-sound-at! owner-key* (:caster-pos payload*))
         (assoc-in store* [:states owner-key*]
                   (merge default-state
                          meta
                          {:active? true
                           :blending? false
-                          :is-item (boolean (:is-item payload*))
+                          :is-item item?
                           :good? false
                           :charge-ticks 0
                           :charge-ratio 0.0
@@ -149,6 +156,12 @@
                           :caster-pos (:caster-pos payload*)
                           :block-pos nil
                           :charged 0.0
+                          :visual-ticks 0
+                          ;; EntityArc starts with show=true and template 0.
+                          :beam-visible? true
+                          :beam-shape-id 0
+                          :surround-state
+                          (academy-arc/initial-surround-state arc-type ts)
                           :started-at-ms ts
                           :ending-at-ms 0
                           :updated-at-ms ts})))
@@ -186,15 +199,61 @@
 
       store*)))
 
+(defn- visual-roll
+  [salt visual-tick stream]
+  (.nextDouble
+   (java.util.Random.
+    (long (hash [salt visual-tick stream])))))
+
+(defn- visual-template-id
+  [salt visual-tick]
+  (.nextInt
+   (java.util.Random.
+    (long (hash [salt visual-tick :beam-template-pick])))
+   20))
+
+(defn- advance-visual-state
+  [state]
+  (if-not (:active? state)
+    state
+    (let [visual-tick (inc (long (or (:visual-ticks state) 0)))
+          salt (long (or (:started-at-ms state) 0))
+          visible? (boolean (:beam-visible? state))
+          ;; EntityArc.onUpdate:
+          ;;   visible -> hidden with showWiggle=.2
+          ;;   hidden  -> visible with hideWiggle=.8
+          beam-visible?
+          (if visible?
+            (not (< (visual-roll salt visual-tick :beam-hide) 0.2))
+            (< (visual-roll salt visual-tick :beam-show) 0.8))
+          beam-shape-id
+          (if (< (visual-roll salt visual-tick :beam-template-swap) 0.8)
+            (visual-template-id salt visual-tick)
+            (int (or (:beam-shape-id state) 0)))
+          arc-type (if (:is-item state) :thin :normal)]
+      (assoc state
+             :visual-ticks visual-tick
+             :beam-visible? beam-visible?
+             :beam-shape-id beam-shape-id
+             :surround-state
+             (academy-arc/tick-surround-state
+              (:surround-state state)
+              arc-type
+              salt
+              visual-tick)))))
+
 (defn- tick-state!
   [store]
-  ;; CurrentCharging is a held effect. Upstream gives its arc/surround
-  ;; entities a very long life and destroys them only on EFFECT_END; it
-  ;; never treats a delayed tick packet as the end of a cast. The previous
-  ;; 500 ms stale timeout removed both the beam state and loop sound during
-  ;; an otherwise-active cast.
+  ;; Held FX live until the explicit end packet, exactly like the original
+  ;; long-lived entities. Animation still advances locally every client tick;
+  ;; it must not freeze on the last received server charge-ticks value.
   (if (contains? (or store {}) :states)
-    store
+    (update store :states
+            (fn [states]
+              (into {}
+                    (map (fn [[owner-key state]]
+                           [owner-key (advance-visual-state state)]))
+                    states)))
     {:states {}}))
 
 ;; A perfectly straight billboard beam is geometrically invisible whenever
@@ -498,22 +557,26 @@
                  (double (:player-z view-pos))
                  (double (:z caster-pos)))]
     {:x feet-x
-     :y (+ feet-y (* 0.5 height))
+     ;; CubePointFactory is centered only on X/Z. EntitySurroundArc's entity
+     ;; position is the player's feet, so Y spans [feet-y, feet-y+height].
+     :y feet-y
      :z feet-z
      :width (* 1.3 width)
      :height (* 1.3 height)
      :depth (* 1.3 width)
      :yaw-rad (double (or (:player-yaw-rad view-pos) 0.0))}))
 
-(defn- upstream-item-spark-ops
-  [cam-v body ticks salt]
-  (upstream-surround-spark-ops
-   cam-v body item-spark-count 0.45 0.6 ticks item-spark-pattern salt))
-
-(defn- beam-visible?
-  [ticks salt]
-  (< (.nextDouble (java.util.Random. (+ (long ticks) (* 17 (long salt)))))
-     0.8))
+(defn- target-body
+  [[bx by bz]]
+  ;; Original updatePos(blockX + .5, blockY, blockZ + .5) combined with a
+  ;; 1x1x1 CubePointFactory whose Y axis is not centered.
+  {:x (+ (double bx) 0.5)
+   :y (double by)
+   :z (+ (double bz) 0.5)
+   :width 1.0
+   :height 1.0
+   :depth 1.0
+   :yaw-rad 0.0})
 
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
@@ -539,44 +602,50 @@
                         caster-pos (:caster-pos st)
                         target (:target st)
                         block-pos (:block-pos st)
-                        ticks (long (or (:charge-ticks st) 0))
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))
                         cast-salt (long (or (:started-at-ms st) 0))
+                        surround-state (:surround-state st)
                         beam-ops (when (and (not item?)
                                             (map? caster-pos)
                                             (map? target)
-                                            (beam-visible? ticks cast-salt))
-                                   (zigzag-ops cam-v
-                                               (rv3/map->v3 caster-pos)
-                                               (rv3/map->v3 target)
-                                               charging-beam-pattern
-                                               ticks
-                                               (arc-beam/local-frame-offset
-                                                 caster-pos target
-                                                 (if own?
-                                                   arc-beam/first-person-view-offset
-                                                   arc-beam/third-person-view-offset))))
+                                            (:beam-visible? st))
+                                   (academy-arc/entity-arc-ops
+                                    cam-v
+                                    (rv3/map->v3 caster-pos)
+                                    (rv3/map->v3 target)
+                                    (int (or (:beam-shape-id st) 0))
+                                    (arc-beam/local-frame-offset
+                                     caster-pos target
+                                     (if own?
+                                       arc-beam/first-person-view-offset
+                                       arc-beam/third-person-view-offset))))
                         ;; Matches original: the surround sparks only ever
                         ;; appear around the TARGET block once it's a valid
                         ;; energy receiver (block mode) — never around the
                         ;; caster in block mode.
-                        ;; Distinguishes this cast from any other (ticks
-                        ;; alone resets to 0 every cast, so without this
-                        ;; every short-enough cast would reroll from the
-                        ;; exact same seed and land on the exact same spots).
                         ring-ops (when (and (not item?) good?
-                                            (sequential? block-pos) (= 3 (count block-pos)))
-                                    (upstream-target-spark-ops cam-v block-pos ticks cast-salt))
+                                            (sequential? block-pos)
+                                            (= 3 (count block-pos))
+                                            (map? surround-state))
+                                   (academy-arc/surround-arc-ops
+                                    cam-v
+                                    (target-body block-pos)
+                                    :normal
+                                    surround-state
+                                    cast-salt))
                         ;; Item mode has no beam/target at all — original
                         ;; wraps the surround sparks around the PLAYER
                         ;; instead (new EntitySurroundArc(player)).
                         item-ring-ops
-                        (when (and item? (map? caster-pos))
-                          (upstream-item-spark-ops
+                        (when (and item?
+                                   (map? caster-pos)
+                                   (map? surround-state))
+                          (academy-arc/surround-arc-ops
                            cam-v
                            (item-body own? hand-center-pos caster-pos)
-                           ticks
+                           :thin
+                           surround-state
                            cast-salt))]
                     (concat beam-ops ring-ops item-ring-ops)))
                 active-states))]
