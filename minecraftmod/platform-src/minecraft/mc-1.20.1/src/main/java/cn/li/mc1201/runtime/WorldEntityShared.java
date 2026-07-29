@@ -48,11 +48,19 @@ public final class WorldEntityShared {
         return level.addFreshEntity(lightning);
     }
 
-    public static void createExplosion(ServerLevel level, double x, double y, double z, float radius, boolean fire) {
-        Level.ExplosionInteraction interaction = fire
+    public static void createExplosion(
+            ServerLevel level,
+            Entity source,
+            double x,
+            double y,
+            double z,
+            float radius,
+            boolean fire,
+            boolean terrain) {
+        Level.ExplosionInteraction interaction = terrain
             ? Level.ExplosionInteraction.MOB
             : Level.ExplosionInteraction.NONE;
-        level.explode(null, x, y, z, radius, fire, interaction);
+        level.explode(source, x, y, z, radius, fire, interaction);
     }
 
     /**

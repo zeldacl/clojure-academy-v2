@@ -281,6 +281,98 @@ public final class RaycastShared {
         return entityHit;
     }
 
+    public static Map<String, Object> raycastAllEntities(
+            ServerLevel level,
+            double startX,
+            double startY,
+            double startZ,
+            double dirX,
+            double dirY,
+            double dirZ,
+            double maxDistance) {
+        if (level == null) {
+            return null;
+        }
+
+        Vec3 start = new Vec3(startX, startY, startZ);
+        Vec3 end = new Vec3(
+                startX + dirX * maxDistance,
+                startY + dirY * maxDistance,
+                startZ + dirZ * maxDistance);
+        AABB searchBox = createSearchBox(
+                startX, startY, startZ,
+                dirX, dirY, dirZ,
+                maxDistance).inflate(2.0D);
+
+        Map<String, Object> nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
+        List<Entity> entities = level.getEntitiesOfClass(Entity.class, searchBox);
+
+        for (Entity entity : entities) {
+            if (!entity.isPickable()) {
+                continue;
+            }
+            Optional<Vec3> optionalHit = entity.getBoundingBox().inflate(0.3D).clip(start, end);
+            if (optionalHit.isEmpty()) {
+                continue;
+            }
+            Vec3 hitVec = optionalHit.get();
+            double distance = start.distanceTo(hitVec);
+            if (distance >= nearestDistance) {
+                continue;
+            }
+            nearestDistance = distance;
+            nearest = new LinkedHashMap<>();
+            nearest.put("uuid", entity.getUUID().toString());
+            nearest.put("x", entity.position().x);
+            nearest.put("y", entity.position().y);
+            nearest.put("z", entity.position().z);
+            nearest.put("hit-x", hitVec.x);
+            nearest.put("hit-y", hitVec.y);
+            nearest.put("hit-z", hitVec.z);
+            nearest.put("eye-height", entity.getEyeHeight());
+            nearest.put("type", entity.getType().getDescriptionId());
+            nearest.put("distance", distance);
+        }
+        return nearest;
+    }
+
+    public static Map<String, Object> raycastCombinedAll(
+            ServerLevel level,
+            double startX,
+            double startY,
+            double startZ,
+            double dirX,
+            double dirY,
+            double dirZ,
+            double maxDistance) {
+        Map<String, Object> blockHit = raycastBlocks(
+                level, startX, startY, startZ,
+                dirX, dirY, dirZ, maxDistance);
+        Map<String, Object> entityHit = raycastAllEntities(
+                level, startX, startY, startZ,
+                dirX, dirY, dirZ, maxDistance);
+
+        if (blockHit == null) {
+            if (entityHit != null) {
+                entityHit.put("hit-type", "entity");
+            }
+            return entityHit;
+        }
+        if (entityHit == null) {
+            blockHit.put("hit-type", "block");
+            return blockHit;
+        }
+        double blockDistance = ((Number) blockHit.get("distance")).doubleValue();
+        double entityDistance = ((Number) entityHit.get("distance")).doubleValue();
+        if (blockDistance <= entityDistance) {
+            blockHit.put("hit-type", "block");
+            return blockHit;
+        }
+        entityHit.put("hit-type", "entity");
+        return entityHit;
+    }
+
     public static Map<String, Object> getPlayerLookVector(ServerPlayer player) {
         if (player == null) {
             return null;

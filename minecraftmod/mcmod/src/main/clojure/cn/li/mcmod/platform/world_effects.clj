@@ -25,8 +25,10 @@
    (call :spawn-lightning! world-id x y z visual-only?)))
 
 (defn create-explosion!
-  [world-id x y z radius fire?]
-  (call :create-explosion! world-id x y z radius fire?))
+  ([world-id x y z radius fire?]
+   (call :create-explosion! world-id x y z radius fire?))
+  ([world-id x y z radius fire? opts]
+   (call :create-explosion! world-id x y z radius fire? opts)))
 
 (defn spawn-projectile!
   [world-id projectile-spec]

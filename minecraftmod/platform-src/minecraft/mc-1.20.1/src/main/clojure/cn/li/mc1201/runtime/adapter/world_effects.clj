@@ -25,7 +25,9 @@
                    resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
                    block-id-fn (fn [^Block block _block-state] (str (.getDescriptionId block)))}}]
   (let [spawn-lightning! (or spawn-lightning-fn (fn [_level _x _y _z _visual-only?] false))
-        create-explosion! (or create-explosion-fn (fn [_level _x _y _z _radius _fire?] false))
+        create-explosion! (or create-explosion-fn
+                              (fn [_level _source _x _y _z _radius _fire? _terrain?]
+                                false))
         spawn-projectile! (or spawn-projectile-fn
                               (fn [level projectile-spec]
                                 (core/spawn-projectile-in-level!
@@ -41,14 +43,29 @@
                             (catch Exception e
                               (log/warn "Failed to spawn lightning:" (ex-message e))
                               false))))
-     :create-explosion! (fn [world-id x y z radius fire?]
-                          (try
-                            (when-let [^MinecraftServer server (server-fn)]
-                              (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                (boolean (create-explosion! level x y z radius fire?))))
-                            (catch Exception e
-                              (log/warn "Failed to create explosion:" (ex-message e))
-                              false)))
+     :create-explosion! (fn create-explosion-adapter!
+                          ([world-id x y z radius fire?]
+                           (create-explosion-adapter!
+                            world-id x y z radius fire?
+                            {:terrain? (boolean fire?)}))
+                          ([world-id x y z radius fire? opts]
+                           (try
+                             (when-let [^MinecraftServer server (server-fn)]
+                               (when-let [^ServerLevel level
+                                          (resolve-level server resolve-level-fn world-id)]
+                                 (let [source
+                                       (when-let [attacker-uuid
+                                                  (:attacker-uuid opts)]
+                                         (get-entity-by-uuid-fn
+                                          level attacker-uuid))]
+                                   (boolean
+                                    (create-explosion!
+                                     level source x y z radius
+                                     (boolean fire?)
+                                     (boolean (:terrain? opts)))))))
+                             (catch Exception e
+                               (log/warn "Failed to create explosion:" (ex-message e))
+                               false))))
      :spawn-projectile! (fn [world-id projectile-spec]
                           (try
                             (when-let [^MinecraftServer server (server-fn)]

@@ -1,367 +1,468 @@
 (ns cn.li.ac.content.ability.vecmanip.plasma-cannon
-  "PlasmaCannon - Level 5 Vector Manipulation skill.
-
-  Aligned 1:1 with original AcademyCraft (Forge 1.12) PlasmaCannon.scala.
-
-  Mechanics:
-  - Charge 60�?0 ticks (scales with exp, held-key)
-  - Per-tick CP drain during charge: 18�?5 (scales UP with exp)
-  - Initial overload: 500�?00 (maintained throughout skill, prevents recovery)
-  - On key-release (fully charged): raycast from player eye to first living entity
-    or block within 100 blocks �?becomes destination
-  - Plasma projectile spawns 15 blocks above player, flies at 1 block/tick
-  - Max flight time: 240 ticks
-  - Explosion: radius 12�?5, damage 80�?50 in 10-block radius (no friendly fire)
-  - Cooldown: 1000�?00 ticks (set on fire, scales down with exp)
-  - Experience: 0.008 on successful cast
-  - Client FX: plasma body effect + tornado at ground + loop sound + charged sound
-
-  No Minecraft imports."
-  (:require [cn.li.ac.ability.util.scaling :as scaling]
-            [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  "PlasmaCannon - charged plasma body and remote explosion."
+  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.registry.event :as ability-event]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
-                        [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
-                        [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.ac.ability.util.scaling :as scaling]
+            [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
-
-;; ============================================================
-;; Scaling helpers (all values from original PlasmaCannon.scala)
-;; ============================================================
 
 (def-skill-config-ops :plasma-cannon)
 (def ^:private plasma-cannon-skill-id :plasma-cannon)
 
-(defn- charge-time [exp] (cfg-lerp :charge.time exp))
-(defn- cp-per-tick [exp] (cfg-lerp :cost.tick.cp exp))
-(defn- overload-keep [exp] (cfg-lerp :cost.overload-keep exp))
-(defn- damage-amount [exp] (cfg-lerp :combat.damage exp))
-(defn- explosion-radius [exp] (cfg-lerp :combat.explosion-radius exp))
-(defn- cooldown-ticks [exp] (cfg-lerp-int :cooldown.ticks exp))
+(defn- charge-time [exp]
+  (cfg-lerp :charge.time exp))
 
-;; ============================================================
-;; Player state helpers
-;; ============================================================
+(defn- cp-per-tick [exp]
+  (cfg-lerp :cost.tick.cp exp))
+
+(defn- overload-keep [exp]
+  (cfg-lerp :cost.overload-keep exp))
+
+(defn- damage-amount [exp]
+  (cfg-lerp :combat.damage exp))
+
+(defn- explosion-radius [exp]
+  (cfg-lerp :combat.explosion-radius exp))
+
+(defn- cooldown-ticks [exp]
+  (int (cfg-lerp :cooldown.ticks exp)))
 
 (defn get-skill-exp [player-id]
-  (scaling/clamp-exp (skill-effects/skill-exp player-id plasma-cannon-skill-id)))
+  (scaling/clamp-exp
+   (skill-effects/skill-exp player-id plasma-cannon-skill-id)))
 
 (defn- get-skill-exp-from [exp]
   (scaling/clamp-exp (double (or exp 0.0))))
 
 (defn- get-player-position [player-id]
   (or (motion-effects/player-position player-id)
-      (skill-effects/player-path player-id :position {:world-id "minecraft:overworld" :x 0.0 :y 64.0 :z 0.0})))
+      (skill-effects/player-path
+       player-id
+       :position
+       {:world-id "minecraft:overworld"
+        :x 0.0
+        :y 64.0
+        :z 0.0})))
 
 (defn- get-world-id [player-id]
-  (or (skill-effects/player-path player-id [:position :world-id])
+  (or (skill-effects/player-path
+       player-id [:position :world-id])
       "minecraft:overworld"))
 
 (defn- add-exp! [player-id amount]
-  (skill-effects/add-skill-exp! player-id :plasma-cannon amount))
+  (skill-effects/add-skill-exp!
+   player-id :plasma-cannon amount))
 
-(defn- set-skill-state!
-  [ctx-id k v]
-  (ctx-skill/assoc-skill-state! ctx-id k v))
-
-(defn- update-skill-state-root!
-  [ctx-id f & args]
+(defn- update-skill-state-root! [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn plasma-cannon-cost-down-overload
-  [_player-id _skill-id exp]
-  (overload-keep (get-skill-exp-from exp)))
-
-(defn plasma-cannon-cost-tick-cp
-  [_player-id _skill-id exp]
-  (cp-per-tick (get-skill-exp-from exp)))
-
-;; Maintain overload floor each tick (prevent recovery below overload-keep)
 (defn- maintain-overload! [player-id min-overload]
-  (skill-effects/enforce-overload-floor! player-id min-overload))
+  (skill-effects/enforce-overload-floor!
+   player-id min-overload))
 
 (defn- apply-cooldown! [player-id exp]
-  (skill-effects/set-main-cooldown! player-id :plasma-cannon (cooldown-ticks exp)))
-
-;; ============================================================
-;; FX messaging (server �?client)
-;; ============================================================
-
-;; ============================================================
-;; Projectile movement helpers
-;; ============================================================
+  (skill-effects/set-main-cooldown!
+   player-id :plasma-cannon (cooldown-ticks exp)))
 
 (defn- try-move [charge-pos destination]
-  ;; Advance charge-pos one block toward destination. Returns [new-pos last-pos].
-  (let [dx (- (double (:x destination)) (double (:x charge-pos)))
-        dy (- (double (:y destination)) (double (:y charge-pos)))
-        dz (- (double (:z destination)) (double (:z charge-pos)))
-        raw {:x dx :y dy :z dz}
-        len (geom/vlen raw)]
-    (if (< len 1.0e-6)
+  (let [raw-delta
+        {:x (- (double (:x destination))
+               (double (:x charge-pos)))
+         :y (- (double (:y destination))
+               (double (:y charge-pos)))
+         :z (- (double (:z destination))
+               (double (:z charge-pos)))}
+        length (geom/vlen raw-delta)]
+    (if (< length 1.0)
       [charge-pos charge-pos]
-      (let [step (geom/vnorm raw)]          ; 1 block/tick
+      (let [step (geom/vnorm raw-delta)]
         [{:x (+ (double (:x charge-pos)) (:x step))
           :y (+ (double (:y charge-pos)) (:y step))
           :z (+ (double (:z charge-pos)) (:z step))}
          charge-pos]))))
 
-;; Simplified block-hit check: cast ray from last-pos to new-pos
-(defn- block-hit? [world-id last-pos new-pos]
+(defn- path-hit? [world-id last-pos new-pos]
   (when (raycast/available?)
-    (let [dx (- (double (:x new-pos)) (double (:x last-pos)))
-          dy (- (double (:y new-pos)) (double (:y last-pos)))
-          dz (- (double (:z new-pos)) (double (:z last-pos)))
-          dist (geom/vlen {:x dx :y dy :z dz})]
-      (when (> dist 1.0e-6)
-        (let [dir (geom/vnorm {:x dx :y dy :z dz})
-              hit (raycast/raycast-blocks
-                                         world-id
-                                         (double (:x last-pos))
-                                         (double (:y last-pos))
-                                         (double (:z last-pos))
-                                         (:x dir) (:y dir) (:z dir)
-                                         (+ dist (cfg-double :projectile.block-hit-extra-distance)))]
-          (some? hit))))))
+    (let [delta {:x (- (double (:x new-pos))
+                       (double (:x last-pos)))
+                 :y (- (double (:y new-pos))
+                       (double (:y last-pos)))
+                 :z (- (double (:z new-pos))
+                       (double (:z last-pos)))}
+          distance (geom/vlen delta)]
+      (when (pos? distance)
+        (let [dir (geom/vnorm delta)]
+          (some?
+           (raycast/raycast-combined-all
+            world-id
+            (double (:x last-pos))
+            (double (:y last-pos))
+            (double (:z last-pos))
+            (:x dir)
+            (:y dir)
+            (:z dir)
+            (+ distance
+               (cfg-double
+                :projectile.block-hit-extra-distance)))))))))
 
-;; ============================================================
-;; Explosion logic (equivalent to original explode() method)
-;; ============================================================
+(defn- scaled-damage [player-id target-id raw-damage]
+  (skill-effects/scale-damage
+   (skill-registry/get-skill plasma-cannon-skill-id)
+   (ability-event/fire-calc-event!
+    ability-event/CALC-SKILL-ATTACK
+    raw-damage
+    {:player-id player-id
+     :target-id target-id
+     :skill-id plasma-cannon-skill-id})))
 
 (defn- do-explode! [player-id world-id destination exp]
   (let [tx (double (:x destination))
         ty (double (:y destination))
         tz (double (:z destination))
-        dmg (damage-amount exp)
+        damage (damage-amount exp)
         radius (explosion-radius exp)]
-    ;; Damage all living entities in 10-block radius (excluding caster)
     (when (world-effects/available?)
-      (let [entities (world-effects/find-entities-in-radius world-id tx ty tz (cfg-double :combat.damage-radius))]
-        (doseq [entity entities]
-          (when-not (= (:uuid entity) player-id)
-            (when (entity-damage/available?)
-              ;; TODO: use apply-damage-bypass-immunity! once protocol is extended (Bug 4)
-              (entity-damage/apply-direct-damage!
-                                                  world-id
-                                                  (:uuid entity)
-                                                  dmg
-                                                  :explosion))))))
-    ;; Create Minecraft explosion (no fire, destroys terrain)
+      (doseq [entity
+              (world-effects/find-entities-in-radius
+               world-id
+               tx
+               ty
+               tz
+               (cfg-double :combat.damage-radius))
+              :let [target-id (:uuid entity)]
+              :when target-id]
+        (when (entity-damage/available?)
+          ;; Original resets hurtResistantTime to -1 after each ctx.attack.
+          (entity-damage/apply-direct-damage!
+           world-id
+           target-id
+           (scaled-damage player-id target-id damage)
+           :skill
+           {:attacker-uuid player-id
+            :reset-invulnerable-time-after? true}))))
     (when (world-effects/available?)
       (world-effects/create-explosion!
-                                       world-id tx ty tz radius false))
-    ;; Note: Experience is now granted in key-up (on fire), not here
-    (log/info "PlasmaCannon: Exploded at" [tx ty tz]
-              "radius:" (int radius) "damage:" (int dmg))))
-
-;; ============================================================
-;; Raycast target resolution (original: getLookingPos, max 100, living)
-;; ============================================================
+       world-id
+       tx
+       ty
+       tz
+       radius
+       false
+       {:terrain? (block-manip/destroy-allowed?)
+        :attacker-uuid player-id}))
+    (log/info
+     "PlasmaCannon: Exploded at"
+     [tx ty tz]
+     "radius:" (int radius)
+     "damage:" (int damage))))
 
 (defn- resolve-destination [player-id world-id player-pos]
-  ;; Raycast from player eye in look direction (max 100 blocks, prefer living).
   (let [eye-x (double (:x player-pos))
-      eye-y (+ (double (:y player-pos)) (cfg-double :targeting.eye-height))
-      eye-z (double (:z player-pos))
-      max-distance (cfg-double :targeting.raycast-distance)]
+        eye-y (+ (double (:y player-pos))
+                 (cfg-double :targeting.eye-height))
+        eye-z (double (:z player-pos))
+        max-distance (cfg-double :targeting.raycast-distance)]
     (if (raycast/available?)
       (let [look (raycast/player-look-vector player-id)
             dx (double (or (:x look) 0.0))
             dy (double (or (:y look) 0.0))
             dz (double (or (:z look) 1.0))
-            ;; Combined trace: living entities + blocks, 100 blocks
-            hit (raycast/raycast-combined
-                                          world-id
-                                          eye-x eye-y eye-z
-                                          dx dy dz max-distance)]
+            hit
+            (raycast/raycast-combined
+             world-id
+             eye-x
+             eye-y
+             eye-z
+             dx
+             dy
+             dz
+             max-distance)]
         (if hit
-          {:x (double (or (:x hit) eye-x))
-           :y (double (or (:y hit) eye-y))
-           :z (double (or (:z hit) eye-z))}
-          ;; No hit: position at max distance along look vector
-          {:x (+ eye-x (* dx max-distance))
-           :y (+ eye-y (* dy max-distance))
-           :z (+ eye-z (* dz max-distance))}))
-      ;; Fallback if raycast not available
+          (let [entity-hit? (= "entity" (:hit-type hit))
+                hit-x (double (or (:hit-x hit) (:x hit) eye-x))
+                hit-y (double (or (:hit-y hit) (:y hit) eye-y))
+                hit-z (double (or (:hit-z hit) (:z hit) eye-z))]
+            {:x hit-x
+             :y (+ hit-y
+                   (if entity-hit?
+                     (* (double (or (:eye-height hit) 0.0))
+                        0.6)
+                     0.0))
+             :z hit-z})
+          ;; LambdaLib2's no-hit fallback starts at getPositionVector rather
+          ;; than the eye position used for the trace.
+          {:x (+ (double (:x player-pos))
+                 (* dx max-distance))
+           :y (+ (double (:y player-pos))
+                 (* dy max-distance))
+           :z (+ (double (:z player-pos))
+                 (* dz max-distance))}))
       {:x eye-x :y eye-y :z eye-z})))
 
-;; ============================================================
-;; Key handlers
-;; ============================================================
-;;
-;; All FX below broadcast (fx/send-local-and-nearby!): original's
-;; c_begin/c_stateChange/c_syncPos are plain ClientContext listeners with no
-;; isLocal gate, so every player who received MSG_MADEALIVE (owner + nearby)
-;; spawns their own PlasmaBodyEffect/Tornado and tracks the same charge/flight
-;; position — the glowing plasma ball is genuinely visible to bystanders, not
-;; a local-only hand effect like Railgun's charge glow.
+(defn- send-end-and-terminate! [ctx-id performed?]
+  (fx/send-local-and-nearby!
+   ctx-id
+   {:topic :plasma-cannon/fx-end :mode :end}
+   nil
+   {:performed? (boolean performed?)})
+  (ctx/terminate-context! ctx-id nil)
+  nil)
 
 (defn plasma-cannon-on-key-down
-  "Server-side: initialize charge. Consume initial overload (500–300 by exp).
-  Equivalent to s_madeAlive() in original."
-  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (let [exp (get-skill-exp-from exp)
-          ct  (int (charge-time exp))]
-      (if-not cost-ok?
-        (do
-          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
-          (ctx/terminate-context! ctx-id nil)
-          (log/debug "PlasmaCannon: Not enough resources to activate"))
-        (let [pos      (get-player-position player-id)
-              spawn-pos {:x (double (:x pos))
-                         :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
-                         :z (double (:z pos))}]
-            (ctx-skill/replace-skill-state! ctx-id
-                   {:state        :charging
-                    :charge-ticks  0
-                    :charge-time   ct
-                    :overload-keep (overload-keep exp)
-                    :sync-ticks    0
-                    :flight-ticks  0
-                    :charge-pos    spawn-pos
-                    :destination   nil})
-          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-start :mode :start} nil nil)
-          (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state :charging :charge-pos spawn-pos :charge-ticks 0 :fully-charged? false})
-          (log/debug "PlasmaCannon: Charge started, need" ct "ticks"))))
+          charge-time (charge-time exp)
+          position (get-player-position player-id)
+          spawn-pos {:x (double (:x position))
+                     :y (+ (double (:y position))
+                           (cfg-double
+                            :projectile.spawn-y-offset))
+                     :z (double (:z position))}
+          overload-cost (overload-keep exp)]
+      ;; s_madeAlive ignores consume's return and stores actual overload.
+      (skill-effects/perform-resource!
+       player-id overload-cost 0.0 false)
+      (let [actual-overload
+            (double
+             (skill-effects/player-path
+              player-id
+              [:resource-data :cur-overload]
+              0.0))]
+        (ctx-skill/replace-skill-state!
+         ctx-id
+         {:state :charging
+          :charge-ticks 0
+          :charge-time charge-time
+          :overload-keep actual-overload
+          :sync-ticks 0
+          :flight-ticks 0
+          :world-id (:world-id position)
+          :charge-pos spawn-pos
+          :destination nil})
+        (maintain-overload! player-id actual-overload)
+        (fx/send-local-and-nearby!
+         ctx-id
+         {:topic :plasma-cannon/fx-start :mode :start}
+         nil
+         {:charge-pos spawn-pos})
+        (fx/send-local-and-nearby!
+         ctx-id
+         {:topic :plasma-cannon/fx-update :mode :update}
+         nil
+         {:state :charging
+          :charge-pos spawn-pos
+          :charge-ticks 0
+          :fully-charged? false})
+        (log/debug
+         "PlasmaCannon: Charge started, need"
+         charge-time
+         "ticks")))
     (catch Exception e
-      (log/warn "PlasmaCannon key-down failed:" (ex-message e)))))
+      (log/warn
+       "PlasmaCannon key-down failed:"
+       (ex-message e)))))
+
+(defn- tick-charging! [ctx-id player-id exp skill-state]
+  (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
+        charge-time (double
+                     (or (:charge-time skill-state)
+                         (charge-time exp)))
+        next-ticks (inc charge-ticks)
+        should-consume? (< next-ticks charge-time)
+        result
+        (when should-consume?
+          (skill-effects/perform-resource!
+           player-id
+           0.0
+           (cp-per-tick exp)
+           false))]
+    (if (and should-consume? (not (:success? result)))
+      (do
+        (send-end-and-terminate! ctx-id false)
+        (log/debug
+         "PlasmaCannon: Ran out of CP, aborting"))
+      (do
+        (update-skill-state-root!
+         ctx-id
+         #(assoc % :charge-ticks next-ticks))
+        (fx/send-local-and-nearby!
+         ctx-id
+         {:topic :plasma-cannon/fx-update :mode :update}
+         nil
+         {:charge-ticks next-ticks
+          ;; Charged cue is at chargeTime.toInt; readiness uses the float.
+          :fully-charged? (= next-ticks (int charge-time))
+          :release-ready? (>= next-ticks charge-time)})))))
+
+(defn- finish-flight!
+  [ctx-id player-id world-id destination exp explosion-count]
+  ;; Collision and terminal checks are independent upstream. If both are true,
+  ;; explode() runs twice in the same tick.
+  (dotimes [_ explosion-count]
+    (do-explode! player-id world-id destination exp))
+  (fx/send-local-and-nearby!
+   ctx-id
+   {:topic :plasma-cannon/fx-perform :mode :perform}
+   nil
+   {:pos destination})
+  (send-end-and-terminate! ctx-id true))
+
+(defn- tick-flight! [ctx-id player-id exp skill-state]
+  (let [charge-pos (:charge-pos skill-state)
+        destination (:destination skill-state)
+        flight-ticks (long (or (:flight-ticks skill-state) 0))
+        sync-ticks (long (or (:sync-ticks skill-state) 0))
+        world-id (or (:world-id skill-state)
+                     (get-world-id player-id))
+        next-flight (inc flight-ticks)]
+    (when (and charge-pos destination)
+      (let [[new-pos last-pos] (try-move charge-pos destination)
+            distance-to-destination (geom/vdist new-pos destination)
+            path-hit? (path-hit? world-id last-pos new-pos)
+            terminal?
+            (or (< distance-to-destination
+                   (cfg-double :projectile.destination-epsilon))
+                (>= next-flight
+                    (cfg-int :projectile.max-flight-ticks)))
+            explosion-count
+            (+ (if path-hit? 1 0)
+               (if terminal? 1 0))]
+        (if (pos? explosion-count)
+          (finish-flight!
+           ctx-id
+           player-id
+           world-id
+           destination
+           exp
+           explosion-count)
+          (let [next-sync
+                (if (zero? sync-ticks)
+                  (cfg-int
+                   :projectile.sync-interval-ticks)
+                  (dec sync-ticks))]
+            (update-skill-state-root!
+             ctx-id
+             #(assoc %
+                     :charge-pos new-pos
+                     :flight-ticks next-flight
+                     :sync-ticks next-sync))
+            (when (zero? sync-ticks)
+              (fx/send-local-and-nearby!
+               ctx-id
+               {:topic :plasma-cannon/fx-update :mode :update}
+               nil
+               {:charge-pos new-pos
+                :flight-ticks next-flight}))))))))
 
 (defn plasma-cannon-on-key-tick
-  "Server-side tick. Handles both :charging and :go states."
-  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
-  (try
-    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx-data)
-            state       (or (:state skill-state) :charging)
-            exp*        (get-skill-exp-from exp)
-            ov-keep     (double (or (:overload-keep skill-state) (overload-keep exp*)))]
-
-        ;; Always maintain overload floor (prevent recovery below overload-keep)
-        (maintain-overload! player-id ov-keep)
-
-        (case state
-          :charging
-          (let [charge-ticks (long (or (:charge-ticks skill-state) 0))
-                charge-time  (long (or (:charge-time skill-state) (charge-time exp*)))
-                next-ticks   (inc charge-ticks)
-                cp-amount    (cp-per-tick exp*)
-                {:keys [success?]} (skill-effects/perform-resource! player-id 0.0 cp-amount)]
-            (if-not success?
-              ;; Out of CP: abort (original: terminate())
-              (do
-                (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
-                (ctx/terminate-context! ctx-id nil)
-                (log/debug "PlasmaCannon: Ran out of CP, aborting"))
-              ;; Still charging
-              (do
-                (set-skill-state! ctx-id [:charge-ticks] next-ticks)
-                ;; Notify client: fully-charged flag triggers plasma_cannon_t sound
-                (let [fully-charged? (>= next-ticks charge-time)]
-                  (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-ticks  next-ticks
-                                    :fully-charged? fully-charged?})))))
-
-          :go
-          (let [charge-pos   (:charge-pos skill-state)
-                destination  (:destination skill-state)
-                flight-ticks (long (or (:flight-ticks skill-state) 0))
-                sync-ticks   (long (or (:sync-ticks skill-state) 0))
-                world-id     (get-world-id player-id)
-                next-flight  (inc flight-ticks)]
-            (when (and charge-pos destination)
-              (let [[new-pos last-pos] (try-move charge-pos destination)
-                    dist-to-dest       (geom/vdist new-pos destination)
-                    hit-block?         (block-hit? world-id last-pos new-pos)
-                    should-explode?    (or hit-block?
-                                          (< dist-to-dest (cfg-double :projectile.destination-epsilon))
-                                          (>= next-flight (cfg-int :projectile.max-flight-ticks)))]
-                (if should-explode?
-                  ;; Explode at destination
-                  (let [exp (get-skill-exp-from exp)]
-                    (do-explode! player-id world-id destination exp)
-                    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-perform :mode :perform} nil {:pos destination})
-                    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? true})
-                    (ctx/terminate-context! ctx-id nil))
-                  ;; Still flying: move and sync every configured interval
-                  (let [next-sync (if (zero? sync-ticks) (cfg-int :projectile.sync-interval-ticks) (dec sync-ticks))]
-                    (update-skill-state-root! ctx-id #(assoc %
-                                                             :charge-pos new-pos
-                                                             :flight-ticks next-flight
-                                                             :sync-ticks next-sync))
-                    (when (zero? sync-ticks)
-                      (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:charge-pos   new-pos
-                                        :flight-ticks next-flight})))))))
-
-          ;; Fallback: unknown state �?terminate
-          (do
-            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
-            (ctx/terminate-context! ctx-id nil)))))
-    (catch Exception e
-      (log/warn "PlasmaCannon key-tick failed:" (ex-message e)))))
-
-(defn plasma-cannon-on-key-up
-  "Server-side: key released. Fire if fully charged, else abort.
-  Equivalent to l_keyUp() / s_perform() in original."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (let [skill-state  (:skill-state ctx-data)
-            state        (or (:state skill-state) :charging)
-            charge-ticks (long (or (:charge-ticks skill-state) 0))
-            charge-time  (long (or (:charge-time skill-state) 60))
-            exp          (get-skill-exp-from exp)]
+      (let [skill-state (:skill-state ctx-data)
+            state (or (:state skill-state) :charging)
+            exp (get-skill-exp-from exp)
+            floor (double
+                   (or (:overload-keep skill-state)
+                       (overload-keep exp)))]
+        (maintain-overload! player-id floor)
+        (case state
+          :charging
+          (tick-charging!
+           ctx-id player-id exp skill-state)
 
-        (if (or (= state :go)
-                (< charge-ticks charge-time))
-          ;; Not fully charged or already flying �?abort
-          (when-not (= state :go)
-            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
-            (ctx/terminate-context! ctx-id nil)
-            (log/debug "PlasmaCannon: Released before fully charged, aborting"))
+          :go
+          (tick-flight!
+           ctx-id player-id exp skill-state)
 
-          ;; Fully charged �?fire (equivalent to s_perform on server)
-          (let [pos      (get-player-position player-id)
-                world-id (or (:world-id pos) (get-world-id player-id))
-                dest     (resolve-destination player-id world-id pos)
-                ;; Projectile spawns 15 blocks above player
-                ;; (original: add(player.getPositionVector, Vec3d(0, 15, 0)))
-                spawn-pos {:x (double (:x pos))
-                           :y (+ (double (:y pos)) (cfg-double :projectile.spawn-y-offset))
-                           :z (double (:z pos))}]
-            ;; Grant experience on successful cast (moved from do-explode! to fire-time)
-            (add-exp! player-id (cfg-double :progression.exp-use))
-            ;; Set cooldown (original: ctx.setCooldown in s_perform)
-            (apply-cooldown! player-id exp)
-            ;; Transition to :go state
-            (update-skill-state-root! ctx-id #(assoc %
-                                                     :state :go
-                                                     :charge-pos spawn-pos
-                                                     :destination dest
-                                                     :flight-ticks 0
-                                                     :sync-ticks 0))
-            ;; Notify client: state change to flying
-            (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-update :mode :update} nil {:state       :go
-                              :charge-pos  spawn-pos
-                              :destination dest})
-            (log/info "PlasmaCannon: Fired �?destination"
-                      [(int (:x dest)) (int (:y dest)) (int (:z dest))])))))
+          (send-end-and-terminate! ctx-id false))))
     (catch Exception e
-      (log/warn "PlasmaCannon key-up failed:" (ex-message e)))))
+      (log/warn
+       "PlasmaCannon key-tick failed:"
+       (ex-message e)))))
+
+(defn plasma-cannon-on-key-up
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (try
+    (when-let [ctx-data (ctx-skill/get-context ctx-id)]
+      (let [skill-state (:skill-state ctx-data)
+            state (or (:state skill-state) :charging)
+            charge-ticks
+            (long (or (:charge-ticks skill-state) 0))
+            charge-time
+            (double (or (:charge-time skill-state) 60.0))
+            exp (get-skill-exp-from exp)]
+        (cond
+          (= state :go)
+          nil
+
+          (< charge-ticks charge-time)
+          (do
+            (send-end-and-terminate! ctx-id false)
+            (log/debug
+             "PlasmaCannon: Released before fully charged, aborting"))
+
+          :else
+          (let [position (get-player-position player-id)
+                world-id (or (:world-id position)
+                             (get-world-id player-id))
+                destination
+                (resolve-destination
+                 player-id world-id position)]
+            ;; s_perform adds exp and cooldown when the shot is fired.
+            (add-exp!
+             player-id
+             (cfg-double :progression.exp-use))
+            (apply-cooldown! player-id exp)
+            (update-skill-state-root!
+             ctx-id
+             #(assoc %
+                     :state :go
+                     :destination destination
+                     :flight-ticks 0
+                     :sync-ticks 0
+                     :world-id world-id))
+            (fx/send-local-and-nearby!
+             ctx-id
+             {:topic :plasma-cannon/fx-update :mode :update}
+             nil
+             {:state :go
+              :charge-pos (:charge-pos skill-state)
+              :destination destination})
+            (log/info
+             "PlasmaCannon: Fired - destination"
+             [(int (:x destination))
+              (int (:y destination))
+              (int (:z destination))])))))
+    (catch Exception e
+      (log/warn
+       "PlasmaCannon key-up failed:"
+       (ex-message e)))))
 
 (defn plasma-cannon-on-key-abort
-  "Clean up on abort."
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (fx/send-local-and-nearby! ctx-id {:topic :plasma-cannon/fx-end :mode :end} nil {:performed? false})
+    (fx/send-local-and-nearby!
+     ctx-id
+     {:topic :plasma-cannon/fx-end :mode :end}
+     nil
+     {:performed? false})
     (ctx-skill/clear-skill-state! ctx-id)
     (log/debug "PlasmaCannon: Aborted")
     (catch Exception e
-      (log/warn "PlasmaCannon key-abort failed:" (ex-message e)))))
+      (log/warn
+       "PlasmaCannon key-abort failed:"
+       (ex-message e)))))
 
 (defskill plasma-cannon
   :id :plasma-cannon
@@ -374,13 +475,16 @@
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
   :cooldown-ticks (fn [_player-id _skill-id exp]
-                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
+                    (int
+                     (cfg-lerp
+                      :cooldown.ticks
+                      (double (or exp 0.0)))))
   :pattern :charge-window
   :cooldown {:mode :manual}
-  :cost {:down {:overload plasma-cannon-cost-down-overload}}
+  :input-policy {:terminate-on-key-up? false
+                 :keep-active-on-key-up? true}
   :actions {:down! plasma-cannon-on-key-down
             :tick! plasma-cannon-on-key-tick
             :up! plasma-cannon-on-key-up
             :abort! plasma-cannon-on-key-abort}
   :prerequisites [{:skill-id :storm-wing :min-exp 0.0}])
-

@@ -25,12 +25,20 @@
                                (.moveTo bolt (double x) (double y) (double z))
                                (.setVisualOnly bolt (boolean visual-only?))
                                (boolean (.addFreshEntity level bolt)))))
-     :create-explosion-fn (fn [^ServerLevel level x y z radius fire?]
+     :create-explosion-fn (fn [^ServerLevel level source x y z radius fire? terrain?]
                             (try
-                              (.explode level nil (double x) (double y) (double z) (float radius) (boolean fire?) Level$ExplosionInteraction/MOB)
+                              (.explode level source (double x) (double y) (double z)
+                                        (float radius) (boolean fire?)
+                                        (if terrain?
+                                          Level$ExplosionInteraction/MOB
+                                          Level$ExplosionInteraction/NONE))
                               true
                               (catch Throwable _
-                                (.explode level nil (double x) (double y) (double z) (float radius) Level$ExplosionInteraction/MOB)
+                                (.explode level source (double x) (double y) (double z)
+                                          (float radius)
+                                          (if terrain?
+                                            Level$ExplosionInteraction/MOB
+                                            Level$ExplosionInteraction/NONE))
                                 true)))
      :get-entities-in-aabb-fn (fn [^ServerLevel l ^AABB aabb]
                                 (.getEntities l nil aabb))

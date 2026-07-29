@@ -43,6 +43,12 @@
   [world-id sx sy sz dx dy dz max-dist]
   (call :raycast-combined world-id sx sy sz dx dy dz max-dist))
 
+(defn raycast-combined-all
+  "Return the nearest block or any collidable entity, including non-living
+  entities."
+  [world-id sx sy sz dx dy dz max-dist]
+  (call :raycast-combined-all world-id sx sy sz dx dy dz max-dist))
+
 (defn player-look-vector
   [player-uuid]
   (call :get-player-look-vector player-uuid))

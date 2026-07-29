@@ -60,6 +60,17 @@
                            (catch Exception e
                              (log/warn "Failed to raycast combined:" (ex-message e))
                              nil))))
+   :raycast-combined-all (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
+                           (let [level (resolve-level (get-server) world-id)]
+                             (try
+                               (when level
+                                 (rn/normalize-bridge-map
+                                  (RaycastShared/raycastCombinedAll
+                                   level start-x start-y start-z
+                                   dir-x dir-y dir-z max-distance)))
+                               (catch Exception e
+                                 (log/warn "Failed to raycast combined entities:" (ex-message e))
+                                 nil))))
    :get-player-look-vector (fn [player-uuid]
                              (try
                                (rn/normalize-bridge-map

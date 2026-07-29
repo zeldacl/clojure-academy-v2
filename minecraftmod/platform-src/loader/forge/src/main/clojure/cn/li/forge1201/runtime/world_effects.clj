@@ -14,8 +14,9 @@
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z visual-only?]
                  (WorldEntityShared/spawnLightning level (double x) (double y) (double z) (boolean visual-only?)))
-     :create-explosion-fn (fn [^ServerLevel level x y z radius fire?]
-                (WorldEntityShared/createExplosion level x y z (float radius) (boolean fire?))
+     :create-explosion-fn (fn [^ServerLevel level source x y z radius fire? terrain?]
+                (WorldEntityShared/createExplosion level source x y z (float radius)
+                                                   (boolean fire?) (boolean terrain?))
                             true)
      :get-entities-in-aabb-fn (fn [^ServerLevel l ^AABB aabb]
                   (WorldEntityShared/getEntitiesInAabb l aabb))
