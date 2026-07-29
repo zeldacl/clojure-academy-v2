@@ -39,6 +39,9 @@
 (defn spawn-local-scripted-effect! [effect-id]
   (ScriptedEffectSpawner/spawnLocal effect-id))
 
+(defn spawn-local-scripted-effect-at! [effect-id x y z]
+  (ScriptedEffectSpawner/spawnLocalAt effect-id x y z))
+
 (defn spawn-scripted-effect-at-player!
   "Spawn a scripted effect anchored to `owner-uuid` (any currently-loaded
   player, not just the local one) — the string UUID of the spawned entity is

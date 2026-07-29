@@ -159,6 +159,11 @@
                             :mcmod/spawn-local-scripted-effect
                             (ScriptedEffectSpawner/spawnLocal (:effect-id payload))
 
+                            :mcmod/spawn-local-scripted-effect-at
+                            (ScriptedEffectSpawner/spawnLocalAt
+                              (:effect-id payload)
+                              (:x payload) (:y payload) (:z payload))
+
                             :mcmod/spawn-scripted-effect-at-player
                             (ScriptedEffectSpawner/spawnAtPlayerWithUuid
                               (:effect-id payload) (:owner-uuid payload))

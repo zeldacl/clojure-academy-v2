@@ -7,7 +7,12 @@
    :target-y (:target-y p)
    :target-z (:target-z p)
    :hit? (:hit? p)
-   :target-uuid (:target-uuid p)})
+   :target-uuid (:target-uuid p)
+   :entity-x (:entity-x p)
+   :entity-y (:entity-y p)
+   :entity-z (:entity-z p)
+   :target-width (:target-width p)
+   :target-height (:target-height p)})
 
 (def ^:private spec
   (arc-beam/build-spec

@@ -36,6 +36,40 @@ public final class ScriptedEffectSpawner {
         return spawnLocalWithUuid(effectId) != null;
     }
 
+    public static boolean spawnLocalAt(String effectId, double x, double y, double z) {
+        if (effectId == null || effectId.isBlank()) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        ClientLevel level = mc.level;
+        if (player == null || level == null) {
+            return false;
+        }
+
+        ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, player, effectId);
+        effect.setPos(x, y, z);
+        return level.addFreshEntity(effect);
+    }
+
+    public static boolean spawnLocalAt(String effectId, double x, double y, double z) {
+        if (effectId == null || effectId.isBlank()) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        LocalPlayer player = mc.player;
+        ClientLevel level = mc.level;
+        if (player == null || level == null) {
+            return false;
+        }
+
+        ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, player, effectId);
+        effect.setPos(x, y, z);
+        return level.addFreshEntity(effect);
+    }
+
     /**
      * Spawn a scripted effect anchored to an arbitrary currently-loaded player
      * (resolved by UUID via the client level's own entity tracking, the same

@@ -74,7 +74,12 @@
          :target-uuid (:entity-uuid hit)
          :target-x (double (or (:hit-x hit) (:entity-x hit)))
          :target-y (double (or (:hit-y hit) (:entity-y hit)))
-         :target-z (double (or (:hit-z hit) (:entity-z hit)))}
+         :target-z (double (or (:hit-z hit) (:entity-z hit)))
+         :entity-x (double (:entity-x hit))
+         :entity-y (double (:entity-y hit))
+         :entity-z (double (:entity-z hit))
+         :target-width (double (or (:width hit) 0.6))
+         :target-height (double (or (:height hit) 1.8))}
         {:world-id (or (:world-id position) (geom/world-id-of player-id))
          :hit? false
          :target-uuid nil
@@ -212,7 +217,17 @@
 
                      :hit? true
 
-                     :target-uuid e-uuid}))
+                     :target-uuid e-uuid
+
+                     :entity-x (:entity-x trace)
+
+                     :entity-y (:entity-y trace)
+
+                     :entity-z (:entity-z trace)
+
+                     :target-width (:target-width trace)
+
+                     :target-height (:target-height trace)}))
 
         (log/debug "FleshRipping: no entity in range or cost failed")))
 
@@ -276,7 +291,12 @@
 
                                   (cfg-lerp :cost.up.overload
 
-                                                   (skill-exp player-id)))}}
+                                                   (skill-exp player-id)))
+
+                      :creative? (fn [_player-id _skill-id _exp player-ref]
+                                   (boolean
+                                     (and player-ref
+                                          (entity/player-creative? player-ref))))}}
 
   :cooldown       {:mode :manual}
 

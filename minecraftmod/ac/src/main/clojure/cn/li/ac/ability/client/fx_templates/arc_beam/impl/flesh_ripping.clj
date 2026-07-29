@@ -31,9 +31,9 @@
 
 (defn- spawn-blood-splash!
   "Spawn EntityBloodSplash at target (matching original EntityBloodSplash on hit)."
-  []
-  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
-    {:effect-id "entity_blood_splash"}))
+  [x y z]
+  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect-at
+    {:effect-id "entity_blood_splash" :x x :y y :z z}))
 
 (defn- remove-marker!
   []
@@ -72,10 +72,21 @@
       :perform
       (do
         (when (:hit? payload)
-          ;; EntityBloodSplash on hit (matching original EntityBloodSplash)
-          (spawn-blood-splash!))
+          (let [x (double (or (:entity-x payload) (:target-x payload) 0.0))
+                y (double (or (:entity-y payload) (:target-y payload) 0.0))
+                z (double (or (:entity-z payload) (:target-z payload) 0.0))
+                width (double (or (:target-width payload) 0.6))
+                height (double (or (:target-height payload) 1.8))
+                splash-count (+ 4 (rand-int 3))]
+            (dotimes [_ splash-count]
+              (let [theta (* (rand) Math/PI 2.0)
+                    radius (* 0.5 width (+ 0.8 (* 0.2 (rand))))]
+                (spawn-blood-splash!
+                  (+ x (* radius (Math/sin theta)))
+                  (+ y (* height (rand)))
+                  (+ z (* radius (Math/cos theta))))))))
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id (modid/namespaced-path "tp.guts") :volume 0.6 :pitch 0.95})
+          {:type :sound :sound-id (modid/namespaced-path "tp.guts") :volume 0.6 :pitch 1.0})
         ;; Remove marker after perform
         (remove-marker!)
         state*)
@@ -105,7 +116,12 @@
    :target-y (:target-y p)
    :target-z (:target-z p)
    :hit? (:hit? p)
-   :target-uuid (:target-uuid p)})
+   :target-uuid (:target-uuid p)
+   :entity-x (:entity-x p)
+   :entity-y (:entity-y p)
+   :entity-z (:entity-z p)
+   :target-width (:target-width p)
+   :target-height (:target-height p)})
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flesh-ripping :level] [_ _] {:fx-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:flesh-ripping :level]
