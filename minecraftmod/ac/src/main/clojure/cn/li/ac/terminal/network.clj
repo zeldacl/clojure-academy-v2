@@ -67,7 +67,10 @@
                                      (catalog/app-ids)))
           all-installed (into pre-installed explicit-installed)]
       {:terminal-installed? (:terminal-installed? normalized)
-       :installed-apps (vec all-installed)
+       ;; The wire response is stable and follows the terminal's AppRegistry
+       ;; order. Consumers may still store membership as a set.
+       :installed-apps (mapv :id
+                             (catalog/installed-apps-in-display-order all-installed))
        :available-apps (catalog/app-ids)
        :app-count (catalog/app-count)})
     (catch Exception e

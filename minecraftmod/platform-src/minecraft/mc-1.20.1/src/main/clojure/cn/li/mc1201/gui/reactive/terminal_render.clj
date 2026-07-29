@@ -8,11 +8,11 @@
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client Minecraft]
            [net.minecraft.resources ResourceLocation]
-           [com.mojang.blaze3d.vertex PoseStack]
+           [com.mojang.blaze3d.vertex PoseStack VertexSorting]
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.platform Window GlStateManager$SourceFactor
             GlStateManager$DestFactor]
-           [org.joml Quaternionf]
+           [org.joml Matrix4f Quaternionf]
            [org.lwjgl.glfw GLFW]))
 
 ;; ============================================================================
@@ -36,10 +36,12 @@
   (let [;; Read frame state from runtime user signals
         fd (rt/user-signal rt :terminal-fd)  ;; double-array
         fi (rt/user-signal rt :terminal-fi)  ;; int-array
+        render-state (rt/user-signal rt :terminal-render-state)
         _owner (rt/user-signal rt :terminal-owner)]
-    (when (and fd fi)
+    (when (and fd fi render-state)
       (let [^doubles fd fd
             ^ints fi fi
+            ^objects render-state render-state
             new-bx (aget fd 2)
             new-by (aget fd 3)
             t-ms (double (System/currentTimeMillis))
@@ -47,10 +49,25 @@
             aspect (/ (double (.getWidth (.getWindow mc)))
                      (double (.getHeight (.getWindow mc))))
             scale (/ 1.0 310.0)
+            perspective (doto (Matrix4f.)
+                          (.setPerspective
+                            (float (Math/toRadians 50.0))
+                            (float aspect)
+                            1.0
+                            100.0))
             ^PoseStack ps (.pose gg)]
         ;; Write current mx/my for next frame delta
         (aset fd 4 (double mx)) (aset fd 5 (double my))
-        ;; --- 3D Perspective transform sequence (exact upstream GL matching) ---
+        ;; Submit normal GUI geometry before switching away from Minecraft's
+        ;; orthographic projection.
+        (.flush gg)
+        (aset render-state 0 (RenderSystem/getProjectionMatrix))
+        (RenderSystem/setProjectionMatrix
+          perspective VertexSorting/DISTANCE_TO_ORIGIN)
+        (RenderSystem/disableDepthTest)
+        (RenderSystem/enableBlend)
+        (RenderSystem/defaultBlendFunc)
+        ;; --- 3D perspective + model transform (exact upstream GL matching) ---
         (.pushPose ps)
         (.translate ps (* 0.35 aspect) 1.2 -4.0)
         (.translate ps 1.0 -1.8 0.0)
@@ -73,17 +90,26 @@
    GL_ONE, alpha 0.4). Reads buff-x/buff-y from runtime user-signals.
    Called as the :on-post-render hook."
   [^GuiGraphics gg ^UiRt rt _mx _my _pt]
-  (let [fd (rt/user-signal rt :terminal-fd)]
-    (when fd
+  (let [fd (rt/user-signal rt :terminal-fd)
+        fi (rt/user-signal rt :terminal-fi)
+        render-state (rt/user-signal rt :terminal-render-state)]
+    (when (and fd fi render-state)
       (let [^doubles fd fd
+            ^ints fi fi
+            ^objects render-state render-state
             ^PoseStack ps (.pose gg)
             bx (aget fd 2) by (aget fd 3)
             t-ms (double (System/currentTimeMillis))
-            csize (+ 20.0 (* 2.0 (Math/sin (/ t-ms 300.0))))
+            selected-app-idx (+ (* (aget fi 0) 3) (aget fi 1))
+            selected? (and (>= selected-app-idx 0)
+                           (< selected-app-idx (aget fi 3)))
+            csize (* (if selected? 1.3 1.0)
+                     (+ 20.0 (* 2.0 (Math/sin (/ t-ms 300.0)))))
             cx bx cy (+ by 120.0)]
-        ;; Pop the PoseStack pushed in apply-perspective!
-        (.popPose ps)
-        ;; Draw cursor with additive blending
+        ;; Draw inside the same perspective/model transform as the terminal.
+        ;; Upstream offsets the cursor quad by local z=-2.
+        (.pushPose ps)
+        (.translate ps 0.0 0.0 -2.0)
         (RenderSystem/enableBlend)
         (RenderSystem/blendFunc GlStateManager$SourceFactor/SRC_ALPHA
                                 GlStateManager$DestFactor/ONE)
@@ -92,8 +118,19 @@
               ix (int (- cx half)) iy (int (- cy half))
               is (int csize)]
           (.blit gg cursor-rl ix iy 0 0 is is is is))
+        ;; Buffered vertices must be submitted while perspective is active.
+        (.flush gg)
         (RenderSystem/defaultBlendFunc)
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+        (.popPose ps)
+        ;; Restore the pose pushed in apply-perspective! and the normal GUI
+        ;; projection/state for anything rendered after this screen.
+        (.popPose ps)
+        (when-let [^Matrix4f saved-projection (aget render-state 0)]
+          (RenderSystem/setProjectionMatrix
+            saved-projection VertexSorting/DISTANCE_TO_ORIGIN)
+          (aset render-state 0 nil))
+        (RenderSystem/enableDepthTest)))))
 
 ;; ============================================================================
 ;; Cursor visibility (upstream hides the OS cursor and shows only the custom
@@ -102,13 +139,12 @@
 ;; ============================================================================
 
 (defn hide-cursor!
-  "Called when the terminal screen opens. Hides the OS cursor icon (does not
-   grab/capture it — position tracking is unaffected) so only the custom
-   glowing reticle is visible, matching upstream."
+  "Capture unbounded mouse movement and hide the OS pointer, matching upstream
+   TerminalMouseHelper while leaving only the custom reticle visible."
   []
   (let [^Minecraft mc (Minecraft/getInstance)
         ^Window w (.getWindow mc)]
-    (GLFW/glfwSetInputMode (.getWindow w) GLFW/GLFW_CURSOR GLFW/GLFW_CURSOR_HIDDEN)))
+    (GLFW/glfwSetInputMode (.getWindow w) GLFW/GLFW_CURSOR GLFW/GLFW_CURSOR_DISABLED)))
 
 (defn show-cursor!
   "Called when the terminal screen closes. Restores the normal OS cursor."

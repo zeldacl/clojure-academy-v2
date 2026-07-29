@@ -6,17 +6,15 @@
    Layout reused from the existing guis/new/terminal_installing.xml (a thin
    progress-bar strip near the bottom of the screen, matching the original
    AcademyCraft TerminalInstallEffect design — not a big centered panel).
-   Simplification versus the original (cosmetic-only): alpha fade-in/out of
-   the whole bar omitted, progress fill uses a flat-color box instead of the
-   original's two-texture blend (no functional loss — the bar still fills
-   0→100% over anim-length seconds and the key-hint/terminal-open completion
-   flow is fully preserved)."
+   Preserves the original progress timing, per-element base opacity, label,
+   fade-in/out, key hint, and terminal-open completion flow."
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.messages :as terminal-messages]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -33,6 +31,20 @@
 (def ^:private blend-out 0.2)  ;; upstream BLEND_OUT
 
 (defn- now-secs [] (/ (double (System/nanoTime)) 1.0e9))
+
+(defn- current-terminal-key-name []
+  (or (bridge/call-adapter :keybind-get-key-name
+                           :content/toggle-terminal)
+      "Left Alt"))
+
+(defn- faded-argb [red green blue base-alpha fade]
+  (let [alpha (long (Math/round
+                      (* (double base-alpha)
+                         (max 0.0 (min 1.0 (double fade))))))]
+    (bit-or (bit-shift-left alpha 24)
+            (bit-shift-left (long red) 16)
+            (bit-shift-left (long green) 8)
+            (long blue))))
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run
@@ -71,10 +83,13 @@
   (let [r (rt/create-runtime)
         spec (ui-xml/load-spec (modid/asset-path "guis" "new/terminal_installing.xml"))
         _ (rt/build! r spec)
+        _ (ui/set-prop! r :tag-text :text
+                        (i18n/translate
+                          (str "gui." modid/MOD-ID ".terminal.installing")))
         start-time (now-secs)
         progress (sig/signal-d 0.0)]
     (rt/build-child! r
-      {:kind :box :props {:id :bar-fill :x 0.0 :y 0.0 :w 0.0 :h 4.0 :fill 0xFFE0E0E0}}
+      {:kind :box :props {:id :bar-fill :x 0.0 :y 0.0 :w 0.0 :h 4.0 :fill 0xC8FFFFFF}}
       (rt/node-by-id r :progbar))
     (bind-box-width! r :bar-fill 145.0 progress)
     (let [done? (atom false)]
@@ -92,21 +107,36 @@
                             (< dt blend-in) (/ dt blend-in)
                             (> dt anim-length) (max 0.0 (- 1.0 (/ (- dt anim-length) blend-out)))
                             :else 1.0)]
-                ;; Apply alpha to main/outline/cover/tag/progbar nodes
-                (doseq [node-id [:main :outline :cover :tag :progbar]]
-                  (when-let [^INode n (rt/node-by-id r node-id)]
-                    (ui/set-prop! r node-id :alpha (float alpha)))))
+                ;; initBlender multiplies every drawable's original alpha.
+                (doseq [[node-id red green blue base-alpha]
+                        [[:main 60 60 60 120]
+                         [:outline 255 255 255 150]
+                         [:cover 30 30 30 200]
+                         [:tag 60 60 60 120]
+                         [:bar-fill 255 255 255 200]]]
+                  (ui/set-prop! r node-id :fill
+                                (faded-argb red green blue base-alpha alpha)))
+                ;; Original TextBox keeps a faint 0.1 alpha floor.
+                (ui/set-prop! r :tag-text :color
+                              (faded-argb 255 255 255 255
+                                          (+ 0.1 (* 0.9 alpha)))))
               (when (and (not @done?) (>= dt (+ anim-length wait-time)))
                 (reset! done? true)
-                (when-let [p (bridge/get-client-player)]
-                  (bridge/send-system-message! p (str "terminal." modid/MOD-ID ".key_hint") "Left Alt"))
                 (bridge/close-screen!)
-                (terminal-actions/open-terminal! player)))
+                (terminal-actions/open-terminal! player)
+                (when-let [p (bridge/get-client-player)]
+                  (bridge/send-system-message!
+                    p
+                    (str "terminal." modid/MOD-ID ".key_hint")
+                    (current-terminal-key-name)))))
             nil))))
     r))
 
 (defn show! [player]
-  (bridge/open-reactive-screen! (create-runtime player) "Installing..."))
+  (bridge/open-reactive-screen!
+    (create-runtime player)
+    "Installing..."
+    {:render-background? false}))
 
 (defn build-overlay-elements
   "Build overlay elements for terminal install effect (non-modal mode).
