@@ -240,15 +240,57 @@
       (catch Exception _
         []))))
 
+(defn- color-channel-255
+  "Normalize one color channel to an int in [0,255].
+
+  Accepts either byte-style values (0..255) or unit values (0.0..1.0)."
+  [v default-v]
+  (let [raw (if (number? v) (double v) (double default-v))
+        scaled (if (<= 0.0 raw 1.0)
+                 (* raw 255.0)
+                 raw)
+        clamped (max 0.0 (min 255.0 scaled))]
+    (int (Math/round clamped))))
+
+(defn- map-color->channels
+  [m]
+  (let [r (or (:r m) (get m "r"))
+        g (or (:g m) (get m "g"))
+        b (or (:b m) (get m "b"))
+        a (or (:a m) (get m "a") 255)]
+    [(color-channel-255 a 255)
+     (color-channel-255 r 255)
+     (color-channel-255 g 255)
+     (color-channel-255 b 255)]))
+
+(defn- vec-color->channels
+  [color-vec]
+  (let [[r g b a] (concat (take 4 color-vec) [nil nil nil 255])]
+    [(color-channel-255 a 255)
+     (color-channel-255 r 255)
+     (color-channel-255 g 255)
+     (color-channel-255 b 255)]))
+
 (defn- color-int→channels
-  "Render ops store colours as packed ARGB ints (from arc/pattern-color);
+  "Render ops may carry color as packed ARGB int or legacy RGBA map/vector.
    Minecraft's VertexConsumer expects separate RGBA int channels."
-  [color-int]
-  (let [c (long color-int)]
-    [(unchecked-int (bit-and (bit-shift-right c 24) 0xFF))      ;; a
-     (unchecked-int (bit-and (bit-shift-right c 16) 0xFF))      ;; r
-     (unchecked-int (bit-and (bit-shift-right c 8)  0xFF))      ;; g
-     (unchecked-int (bit-and c 0xFF))]))                         ;; b
+  [color]
+  (cond
+    (number? color)
+    (let [c (long color)]
+      [(unchecked-int (bit-and (bit-shift-right c 24) 0xFF))      ;; a
+       (unchecked-int (bit-and (bit-shift-right c 16) 0xFF))      ;; r
+       (unchecked-int (bit-and (bit-shift-right c 8)  0xFF))      ;; g
+       (unchecked-int (bit-and c 0xFF))])                         ;; b
+
+    (map? color)
+    (map-color->channels color)
+
+    (sequential? color)
+    (vec-color->channels color)
+
+    :else
+    [255 255 255 255]))
 
 (defn- emit-line-vertex!
   [^VertexConsumer vc mat x y z r g b a]

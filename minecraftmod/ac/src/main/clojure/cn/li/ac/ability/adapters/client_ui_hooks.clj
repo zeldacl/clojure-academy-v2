@@ -915,6 +915,7 @@
                     (assoc hud-model :consumption-hint consumption-hint)
                     hud-model)
         cooldown-data (:cooldown-data player-state)
+        skill-exps (get-in player-state [:ability-data :skill-exps])
         activate-hint (client-keybinds/get-activate-hint player-uuid)
         preset-state (preset-switch-state-for-overlay player-uuid)
         ;; Reactive assembly (Cache A/B, see docs/dev plan "Overlay/HUD 响应式重构"):
@@ -928,7 +929,8 @@
                                                              last-show-value-change-ms now-ms)
         skill-slots (when (:activated hud-model)
                       (-> (cached-skill-slot-shapes owner-key hud-model screen-width screen-height preset-data)
-                          (hud-renderer/patch-skill-slot-cooldown cooldown-data)
+                          (hud-renderer/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
+                                                     :skill-exps skill-exps})
                           (hud-renderer/patch-skill-slot-visual active-contexts player-uuid)))
         hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
                                   (pos? last-show-value-change-ms))
