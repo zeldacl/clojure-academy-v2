@@ -46,7 +46,7 @@
         len (max 1.0e-6 (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz))))]
     {:dx (/ dx len) :dy (/ dy len) :dz (/ dz len)}))
 
-;; Matches original's eyaw/epitch formulas exactly (fixing the obvious
+;; Player look inversion uses the corrected pitch denominator; target
 ;; dz*dz+dz*dz typo in original's pitch horizontal-distance calc — the
 ;; correct term is dx*dx+dz*dz). Applying the same formula to a look
 ;; DIRECTION vector (instead of a relative position delta) recovers the
@@ -61,6 +61,53 @@
   (- (Math/toDegrees (Math/atan2 (double dy)
                                   (Math/sqrt (+ (* (double dx) (double dx))
                                                 (* (double dz) (double dz))))))))
+
+(defn- target-pitch-degrees
+  "Preserve RayBarrage's original dz*dz+dz*dz denominator typo."
+  [dy dz]
+  (- (Math/toDegrees
+       (Math/atan2 (double dy)
+                   (Math/sqrt (+ (* (double dz) (double dz))
+                                 (* (double dz) (double dz))))))))
+
+(defn- rotate-yaw-raw
+  "Minecraft 1.12 Vec3d.rotateYaw semantics. Original passes degree-valued
+  yaw directly to this radians API; keep that behavior for its candidate AABB."
+  [{:keys [dx dy dz]} angle]
+  (let [c (Math/cos (double angle))
+        s (Math/sin (double angle))]
+    {:dx (+ (* dx c) (* dz s))
+     :dy dy
+     :dz (- (* dz c) (* dx s))}))
+
+(defn- rotate-pitch-raw
+  [{:keys [dx dy dz]} angle]
+  (let [c (Math/cos (double angle))
+        s (Math/sin (double angle))]
+    {:dx dx
+     :dy (+ (* dy c) (* dz s))
+     :dz (- (* dz c) (* dy s))}))
+
+(defn- scatter-aabb
+  [body look-dir min-yaw max-yaw min-pitch max-pitch range]
+  (let [endpoint (fn [yaw pitch]
+                   (let [{:keys [dx dy dz]} (-> look-dir
+                                                (rotate-yaw-raw yaw)
+                                                (rotate-pitch-raw pitch))]
+                     {:x (+ (:x body) (* range dx))
+                      :y (+ (:y body) (* range dy))
+                      :z (+ (:z body) (* range dz))}))
+        points [body
+                (endpoint min-yaw min-pitch)
+                (endpoint min-yaw max-pitch)
+                (endpoint max-yaw max-pitch)
+                (endpoint max-yaw min-pitch)]]
+    {:min-x (apply min (map :x points))
+     :min-y (apply min (map :y points))
+     :min-z (apply min (map :z points))
+     :max-x (apply max (map :x points))
+     :max-y (apply max (map :y points))
+     :max-z (apply max (map :z points))}))
 
 (defn- normalize-angle
   [a]
@@ -135,7 +182,7 @@
   "All entities (excluding player + silbarn) within original's cone: yaw
   spans cone-angle-degrees total, pitch spans cone-angle-degrees on EACH
   side — both centered on the player's CURRENT aim, not the silbarn."
-  [world-id player-id silbarn-uuid eye look-dir]
+  [world-id player-id silbarn-uuid body eye look-dir]
   (if-not (world-effects/available?)
     []
     (let [range        (double (cfg-double :targeting.range))
@@ -146,17 +193,20 @@
           min-yaw      (- player-yaw half-yaw)
           max-yaw      (+ player-yaw half-yaw)
           min-pitch    (- player-pitch cone-angle)
-          max-pitch    (+ player-pitch cone-angle)]
-      (->> (world-effects/find-entities-in-radius world-id (:x eye) (:y eye) (:z eye) range)
+          max-pitch    (+ player-pitch cone-angle)
+          {:keys [min-x min-y min-z max-x max-y max-z]}
+          (scatter-aabb body look-dir min-yaw max-yaw min-pitch max-pitch range)]
+      (->> (world-effects/find-entities-in-aabb
+             world-id min-x min-y min-z max-x max-y max-z)
            (remove (fn [{:keys [uuid]}]
                      (or (= (str uuid) (str player-id))
                          (= (str uuid) silbarn-uuid))))
            (filter (fn [{:keys [x y z eye-height]}]
-                     (let [dx (- (double x) (double (:x eye)))
+                     (let [dx (- (double x) (double (:x body)))
                            dy (- (+ (double y) (double (or eye-height 0.0))) (double (:y eye)))
-                           dz (- (double z) (double (:z eye)))
+                           dz (- (double z) (double (:z body)))
                            target-yaw (yaw-degrees dx dz)
-                           target-pitch (pitch-degrees dx dy dz)]
+                           target-pitch (target-pitch-degrees dy dz)]
                        (and (yaw-in-range? min-yaw max-yaw target-yaw)
                             (<= min-pitch target-pitch max-pitch)))))))))
 
@@ -165,16 +215,18 @@
 ;; ---------------------------------------------------------------------------
 
 (defn ray-barrage-perform!
-  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
-    (let [plain-damage   (cfg-lerp :combat.damage.plain exp)
-          scatter-damage (cfg-lerp :combat.damage.scattered exp)
-          world-id       (geom/world-id-of player-id)
-          eye            (geom/eye-pos player-id)
-          look-vec       (when (raycast/available?)
-                           (raycast/player-look-vector player-id))
-          look-dir       (when look-vec (normalize-look-dir look-vec))]
-      (when look-dir
+    (when cost-ok?
+      (let [plain-damage   (cfg-lerp :combat.damage.plain exp)
+            scatter-damage (cfg-lerp :combat.damage.scattered exp)
+            world-id       (geom/world-id-of player-id)
+            body           (geom/body-pos player-id)
+            eye            (geom/eye-pos player-id)
+            look-vec       (when (raycast/available?)
+                             (raycast/player-look-vector player-id))
+            look-dir       (when look-vec (normalize-look-dir look-vec))]
+        (when look-dir
         (let [front-hit      (raycast-front-hit world-id eye look-dir)
               silbarn-hit?   (and (= :entity (:hit-type front-hit))
                                   (silbarn-type? (:type front-hit)))
@@ -185,9 +237,10 @@
             silbarn-ready?
             (do
               (world-effects/trigger-behavior-hit! world-id (str (:uuid front-hit)))
-              (send-preray-fx! ctx-id eye front-hit true)
+              (send-preray-fx! ctx-id body front-hit true)
               (send-barrage-fx! ctx-id front-hit)
-              (let [targets (cone-scatter-targets world-id player-id (str (:uuid front-hit)) eye look-dir)]
+              (let [targets (cone-scatter-targets world-id player-id (str (:uuid front-hit))
+                                                  body eye look-dir)]
                 (doseq [{:keys [uuid x y z]} targets]
                   (attack! player-id ctx-id world-id uuid scatter-damage)
                   (send-beam-line-fx! ctx-id eye {:x x :y y :z z})))
@@ -205,12 +258,12 @@
                   hit-uuid (when (= :entity (:hit-type front-hit)) (:uuid front-hit))]
               (when hit-uuid
                 (attack! player-id ctx-id world-id hit-uuid plain-damage))
-              (send-preray-fx! ctx-id eye hit-end false)
+              (send-preray-fx! ctx-id body hit-end false)
               (send-beam-line-fx! ctx-id eye hit-end)
               (skill-effects/set-main-cooldown! player-id ray-barrage-skill-id
                                                 (cfg-lerp-int :cooldown.ticks exp))
               (skill-effects/add-skill-exp! player-id ray-barrage-skill-id
-                                            (cfg-double :progression.exp-hit)))))))
+                                            (cfg-double :progression.exp-hit))))))))
     (catch Exception e
       (log/warn "RayBarrage perform! failed:" (ex-message e)))))
 

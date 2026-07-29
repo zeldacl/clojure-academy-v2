@@ -57,6 +57,7 @@
                   skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (capture-fx-topic! fx*)
                   raycast/available? (constantly true)
@@ -102,6 +103,7 @@
                   skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (fn [& _] nil)
                   raycast/available? (constantly true)
@@ -137,6 +139,7 @@
                   skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (capture-fx-topic! fx*)
                   raycast/available? (constantly true)
@@ -148,10 +151,10 @@
                                                :x 0.0 :y 64.0 :z 15.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   world-effects/available? (constantly true)
-                  world-effects/find-entities-in-radius (fn [world-id x y z radius]
-                                                          [{:uuid "enemy-front" :x 0.0 :y 64.0 :z 10.0 :eye-height 1.6}
-                                                           {:uuid "enemy-behind" :x 0.0 :y 64.0 :z -10.0 :eye-height 1.6}
-                                                           {:uuid "silbarn-1" :x 0.0 :y 64.0 :z 15.0 :eye-height 0.2}])
+                  world-effects/find-entities-in-aabb (fn [& _]
+                                                        [{:uuid "enemy-front" :x 0.0 :y 64.0 :z 10.0 :eye-height 1.6}
+                                                         {:uuid "enemy-behind" :x 0.0 :y 64.0 :z -10.0 :eye-height 1.6}
+                                                         {:uuid "silbarn-1" :x 0.0 :y 64.0 :z 15.0 :eye-height 0.2}])
                   world-effects/trigger-behavior-hit! (fn [world-id uuid]
                                                        (swap! trigger-calls* conj [world-id uuid])
                                                        true)
@@ -183,6 +186,7 @@
                   skill-config/lerp-int stub-lerp-int
                   skill-config/tunable-double stub-tunable-double
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   fx/send! (fn [& _] nil)
                   raycast/available? (constantly true)
