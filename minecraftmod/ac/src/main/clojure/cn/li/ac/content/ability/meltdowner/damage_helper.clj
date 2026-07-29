@@ -147,7 +147,13 @@
    (let [source-id (normalize-id attacker-id)
          marked-target-id (normalize-id target-id)]
      (when (and source-id marked-target-id (learned-rad-intensify? source-id))
-       (let [source-ticks (long (or (:ticks-left (prt-cmd/radiation-marks-for-target marked-target-id)) 0))
+       ;; Original stores one mark directly on the target entity. A later
+       ;; Meltdowner hit therefore replaces both the previous source/rate and
+       ;; its duration instead of keeping concurrent per-caster marks.
+       ;;
+       ;; Its unusual max(60, getMarkTick(player)) expression reads the
+       ;; ATTACKER's incoming mark duration, not the victim's current mark.
+       (let [source-ticks (long (or (:ticks-left (prt-cmd/radiation-marks-for-target source-id)) 0))
              mark-ticks (long (max 60 (rad/mark-duration-ticks) source-ticks))
              mark-rate (rad/rate source-id)
              mark {:source-player-id source-id
@@ -155,6 +161,7 @@
                    :ticks-left mark-ticks
                    :rate mark-rate
                    :updated-at-tick (current-server-tick-id)}]
+         (clear-mark! marked-target-id)
          (prt-cmd/run-for-player!
           source-id
           {:command :mark-radiation-target

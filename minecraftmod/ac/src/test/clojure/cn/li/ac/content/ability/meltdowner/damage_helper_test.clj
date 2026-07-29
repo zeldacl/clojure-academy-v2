@@ -91,6 +91,29 @@
       (is (= 100 (:ticks-left (get (dh/marks-snapshot) victim))))
       (is (= 2.0 (:rate (get (dh/marks-snapshot) victim)))))))
 
+(deftest mark-duration-inherits-attacker-mark-not-victim-mark-test
+  (let [attacker "atk-inherited"
+        victim "victim-existing"
+        old-owner "atk-old"]
+    (learn-rad-intensify! attacker)
+    (dh/reset-marks-for-test!
+      {attacker {:source-player-id old-owner
+                 :target-id attacker
+                 :ticks-left 80
+                 :rate 1.4}
+       victim {:source-player-id old-owner
+               :target-id victim
+               :ticks-left 120
+               :rate 1.4}})
+    (with-redefs [rad/rate (fn [_] 1.8)
+                  rad/mark-duration-ticks (fn [] 60)]
+      (dh/mark-target! attacker victim)
+      (is (= {:source-player-id attacker
+              :target-id victim
+              :ticks-left 80
+              :rate 1.8}
+             (dissoc (get (dh/marks-snapshot) victim) :updated-at-tick))))))
+
 (deftest expired-mark-cleanup-by-ticks-test
   (let [victim-a "victim-a"
         victim-b "victim-b"]
