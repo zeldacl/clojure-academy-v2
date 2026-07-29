@@ -9,7 +9,8 @@
     :player-get-main-hand-item-id :player-get-main-hand-item-count
     :player-get-main-hand-item-stack :player-main-hand-placeable-block?
     :player-place-main-hand-block-at-hit! :player-consume-main-hand-item!
-    :player-drop-main-hand-item-at! :player-count-item-by-id :player-consume-item-by-id!
+    :player-drop-main-hand-item-at! :player-spawn-main-hand-item-copy-at!
+    :player-count-item-by-id :player-consume-item-by-id!
     :player-give-item-stack! :player-spawn-entity-by-id! :player-spawn-tracked-entity-by-id!
     :player-raytrace-block :player-get-container-menu
     :inventory-get-player :menu-get-container-id})
@@ -50,6 +51,8 @@
 (defn player-place-main-hand-block-at-hit! [p world-id x y z face] (call :player-place-main-hand-block-at-hit! p world-id x y z face))
 (defn player-consume-main-hand-item! [p n]   (call :player-consume-main-hand-item! p n))
 (defn player-drop-main-hand-item-at! [p n x y z] (call :player-drop-main-hand-item-at! p n x y z))
+(defn player-spawn-main-hand-item-copy-at! [p n x y z]
+  (call :player-spawn-main-hand-item-copy-at! p n x y z))
 (defn player-count-item-by-id        [p id]  (call :player-count-item-by-id p id))
 (defn player-consume-item-by-id!     [p id n](call :player-consume-item-by-id! p id n))
 (defn player-give-item-stack!        [p s]   (call :player-give-item-stack! p s))

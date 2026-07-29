@@ -238,6 +238,8 @@ public final class RaycastShared {
             nearest.put("hit-y", hitVec.y);
             nearest.put("hit-z", hitVec.z);
             nearest.put("eye-height", entity.getEyeHeight());
+            nearest.put("width", entity.getBbWidth());
+            nearest.put("height", entity.getBbHeight());
             nearest.put("type", entity.getType().getDescriptionId());
             nearest.put("distance", distance);
         }
@@ -331,6 +333,8 @@ public final class RaycastShared {
             nearest.put("hit-y", hitVec.y);
             nearest.put("hit-z", hitVec.z);
             nearest.put("eye-height", entity.getEyeHeight());
+            nearest.put("width", entity.getBbWidth());
+            nearest.put("height", entity.getBbHeight());
             nearest.put("type", entity.getType().getDescriptionId());
             nearest.put("distance", distance);
         }
@@ -492,6 +496,8 @@ public final class RaycastShared {
         hit.put("hit-y", hitVec.y);
         hit.put("hit-z", hitVec.z);
         hit.put("eye-height", entity.getEyeHeight());
+        hit.put("width", entity.getBbWidth());
+        hit.put("height", entity.getBbHeight());
         hit.put("distance", distance);
         return hit;
     }

@@ -68,6 +68,7 @@
 
   {:skill-id :threatening-teleport :id :targeting.range :path "targeting.range" :section-suffix "targeting" :type :double-list :min 0.0 :list-count 2 :default [8.0 15.0] :comment "ThreateningTeleport raycast range."}
   {:skill-id :threatening-teleport :id :combat.damage :path "combat.damage" :section-suffix "combat" :type :double-list :min 0.0 :list-count 2 :default [3.0 6.0] :comment "ThreateningTeleport base magic damage."}
+  {:skill-id :threatening-teleport :id :combat.needle-damage-multiplier :path "combat.needle-damage-multiplier" :section-suffix "combat" :type :double :min 0.0 :default 1.5 :comment "ThreateningTeleport damage multiplier while the held item is a needle."}
   {:skill-id :threatening-teleport :id :cost.up.cp :path "cost.up.cp" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [35.0 100.0] :comment "ThreateningTeleport up-stage CP cost."}
   {:skill-id :threatening-teleport :id :cost.up.overload :path "cost.up.overload" :section-suffix "cost.up" :type :double-list :min 0.0 :list-count 2 :default [18.0 10.0] :comment "ThreateningTeleport up-stage overload cost."}
   {:skill-id :threatening-teleport :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [30.0 15.0] :comment "ThreateningTeleport cooldown ticks."}

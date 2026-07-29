@@ -35,6 +35,7 @@
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
 
             [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.ac.config.modid :as modid]
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
@@ -81,27 +82,35 @@
 
 
 
-(defn- consume-or-drop-main-hand-item!
+(defn- settle-main-hand-item!
 
   [player trace drop?]
 
   (if (nil? player)
 
-    true
+    false
 
-    (if drop?
+    (let [creative? (boolean (entity/player-creative? player))
+          x (double (:drop-x trace))
+          y (double (:drop-y trace))
+          z (double (:drop-z trace))]
+      (cond
+        (and drop? creative?)
+        (entity/player-spawn-main-hand-item-copy-at! player 1 x y z)
 
-      (entity/player-drop-main-hand-item-at! player
+        drop?
+        (entity/player-drop-main-hand-item-at! player 1 x y z)
 
-                                             1
+        creative?
+        true
 
-                                             (double (:drop-x trace))
+        :else
+        (entity/player-consume-main-hand-item! player 1)))))
 
-                                             (double (:drop-y trace))
-
-                                             (double (:drop-z trace)))
-
-      (entity/player-consume-main-hand-item! player 1))))
+(defn- needle-in-main-hand?
+  [player]
+  (= (modid/namespaced-path "needle")
+     (some-> player entity/player-get-main-hand-item-id str)))
 
 
 
@@ -147,13 +156,23 @@
 
                 target-uuid (or (:entity-uuid hit) (:uuid hit))
 
-                attacked? (= :entity (:hit-type hit))]
+                attacked? (= :entity (:hit-type hit))
+                drop-x (if attacked?
+                         (double (or (:x hit) hit-x))
+                         hit-x)
+                drop-y (if attacked?
+                         (+ (double (or (:y hit) hit-y))
+                            (double (or (:height hit) 0.0)))
+                         hit-y)
+                drop-z (if attacked?
+                         (double (or (:z hit) hit-z))
+                         hit-z)]
 
             {:world-id world-id
 
              :start-x sx :start-y sy :start-z sz
 
-             :drop-x hit-x :drop-y hit-y :drop-z hit-z
+             :drop-x drop-x :drop-y drop-y :drop-z drop-z
 
              :attacked? attacked?
 
@@ -261,7 +280,10 @@
 
     (let [exp (skill-exp player-id)
 
-          damage (cfg-lerp :combat.damage exp)
+          base-damage (cfg-lerp :combat.damage exp)
+          damage (if (needle-in-main-hand? player-ref)
+                   (* base-damage (cfg-double :combat.needle-damage-multiplier))
+                   base-damage)
 
           ctx-data (ctx-skill/get-context ctx-id)
 
@@ -281,13 +303,18 @@
 
               drop? (should-drop? attacked?)
 
-              consumed? (consume-or-drop-main-hand-item! player-ref trace drop?)]
+              consumed? (settle-main-hand-item! player-ref trace drop?)]
 
           (when consumed?
 
             (let [damage-result (when attacked?
 
-                                  (helper/deal-magic-damage! player-id world-id target-uuid damage))]
+                                  (helper/deal-magic-damage!
+                                    player-id
+                                    threatening-teleport-skill-id
+                                    world-id
+                                    target-uuid
+                                    damage))]
 
               (when (helper/crit-applied? damage-result)
 

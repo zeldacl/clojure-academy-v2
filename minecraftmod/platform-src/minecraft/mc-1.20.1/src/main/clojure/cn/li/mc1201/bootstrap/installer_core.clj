@@ -21,6 +21,7 @@
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.entity.player Inventory Player]
            [net.minecraft.world.inventory AbstractContainerMenu]
            [net.minecraft.world.item Item ItemStack]
@@ -262,6 +263,19 @@
                                                                       base-result))))
                          :player-drop-main-hand-item-at! (fn [this amount x y z]
                                                            (player-ops/drop-player-main-hand-item-at! adapter this amount x y z))
+                         :player-spawn-main-hand-item-copy-at!
+                         (fn [^Player this amount x y z]
+                           (let [n (int (max 0 (or amount 0)))
+                                 ^ItemStack stack (.getMainHandItem this)]
+                             (if (or (zero? n) (.isEmpty stack))
+                               false
+                               (let [^ItemStack copy (.copyWithCount stack
+                                                                     (min n (int (.getCount stack))))
+                                     ^ItemEntity item-entity
+                                     (ItemEntity. (.level this)
+                                                  (double x) (double y) (double z)
+                                                  copy)]
+                                 (boolean (.addFreshEntity (.level this) item-entity))))))
                          :player-count-item-by-id (fn [this item-id] (player-ops/count-player-item-by-id adapter this item-id))
                          :player-consume-item-by-id! (fn [this item-id amount] (player-ops/consume-player-item-by-id! adapter this item-id amount))
                          :player-give-item-stack! (fn [this stack] (player-ops/give-player-item-stack! adapter this stack))
