@@ -13,9 +13,12 @@
 
 (defn- ability-key-label [idx]
   (let [key-code (gameplay/input-key (keyword (str "ability-key-" idx)))]
-    (case key-code
-      -100 :mouse-left
-      -99 :mouse-right
+    (if (number? key-code)
+      (case (long key-code)
+        -100 :mouse-left
+        -99 :mouse-right
+        (or (bridge/call-adapter :settings-key-name key-code)
+            (str "KEY_" key-code)))
       (or (bridge/call-adapter :settings-key-name key-code)
           (str "KEY_" key-code)))))
 
