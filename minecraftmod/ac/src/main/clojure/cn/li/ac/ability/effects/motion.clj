@@ -95,6 +95,20 @@
      (platform/call-adapter fw-atom :entity-motion :discard-entity!
                             world-id entity-uuid))))
 
+(defn set-projectile-damage!
+  [world-id entity-uuid damage]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :set-projectile-damage!
+                            world-id entity-uuid (double damage)))))
+
+(defn add-entity-tag!
+  [world-id entity-uuid tag]
+  (boolean
+   (when-let [fw-atom (fw/fw-atom)]
+     (platform/call-adapter fw-atom :entity-motion :add-tag!
+                            world-id entity-uuid (str tag)))))
+
 (defn entity-velocity
   [world-id entity-uuid]
   (when-let [fw-atom (fw/fw-atom)]

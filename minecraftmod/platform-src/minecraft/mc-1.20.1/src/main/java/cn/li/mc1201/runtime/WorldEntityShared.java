@@ -52,7 +52,7 @@ public final class WorldEntityShared {
         Level.ExplosionInteraction interaction = fire
             ? Level.ExplosionInteraction.MOB
             : Level.ExplosionInteraction.NONE;
-        level.explode(null, x, y, z, radius, interaction);
+        level.explode(null, x, y, z, radius, fire, interaction);
     }
 
     /**

@@ -10,7 +10,7 @@
            [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.entity.monster Monster]
-           [net.minecraft.world.entity.projectile LargeFireball Projectile]
+           [net.minecraft.world.entity.projectile AbstractArrow LargeFireball Projectile]
            [net.minecraft.world.level Level]
            [net.minecraft.world.phys AABB Vec3]))
 
@@ -40,6 +40,8 @@
      :mob? (instance? Monster entity)
      :item? (instance? ItemEntity entity)
      :projectile? projectile?
+     :arrow? (instance? AbstractArrow entity)
+     :vec-deviation-marked? (contains? (.getTags entity) "ac_vm_deviated")
      :owner-uuid (when owner (str (.getUUID ^Entity owner)))
      :explosion-power explosion-power
      :age-ticks age-ticks

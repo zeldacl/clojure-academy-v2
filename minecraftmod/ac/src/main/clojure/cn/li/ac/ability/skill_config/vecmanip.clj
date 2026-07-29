@@ -110,7 +110,9 @@
    {:skill-id :storm-wing :id :cooldown.ticks :path "cooldown.ticks" :section-suffix "cooldown" :type :double-list :min 0.0 :list-count 2 :default [30.0 10.0] :comment "StormWing cooldown ticks on terminate."}
    {:skill-id :storm-wing :id :progression.exp-tick :path "progression.exp-tick" :section-suffix "progression" :type :double :min 0.0 :default 0.00005 :comment "StormWing exp gained per flight tick."}
 
-   {:skill-id :vec-deviation :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [13.0 5.0] :comment "VecDeviation active tick CP cost."}
+   {:skill-id :vec-deviation :id :cost.tick.cp :path "cost.tick.cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [13.0 5.0] :comment "VecDeviation server projectile-scan tick CP cost."}
+   {:skill-id :vec-deviation :id :cost.tick.normal-cp :path "cost.tick.normal-cp" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [5.0 2.5] :comment "VecDeviation normal context tick CP cost, paid in addition to the scan cost."}
+   {:skill-id :vec-deviation :id :cost.tick.normal-overload :path "cost.tick.normal-overload" :section-suffix "cost.tick" :type :double-list :min 0.0 :list-count 2 :default [0.5 0.2] :comment "VecDeviation normal context tick overload cost."}
    {:skill-id :vec-deviation :id :targeting.radius :path "targeting.radius" :section-suffix "targeting" :type :double :min 0.0 :default 5.0 :comment "VecDeviation projectile scan radius."}
    {:skill-id :vec-deviation :id :targeting.affected-entity-difficulty :path "targeting.affected-entity-difficulty" :section-suffix "targeting" :type :string-list :default ["minecraft:arrow:1.0" "minecraft:potion:1.4" "minecraft:snowball:0.1"] :comment "VecDeviation projectile difficulty entries as registry-id:difficulty."}
    {:skill-id :vec-deviation :id :targeting.excluded-entity-ids :path "targeting.excluded-entity-ids" :section-suffix "targeting" :type :string-list :default ["minecraft:item" "minecraft:xp_bottle" "minecraft:experience_bottle"] :comment "VecDeviation registry ids excluded from projectile handling."}

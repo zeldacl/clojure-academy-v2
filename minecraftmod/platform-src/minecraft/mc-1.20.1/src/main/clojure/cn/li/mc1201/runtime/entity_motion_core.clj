@@ -7,6 +7,7 @@
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
+           [net.minecraft.world.entity.projectile AbstractArrow]
            [net.minecraft.world.phys Vec3]))
 
 (defn set-velocity-for-entity!
@@ -53,6 +54,17 @@
   (when entity
     (.discard entity)
     true))
+
+(defn set-projectile-damage-for-entity!
+  [^Entity entity damage]
+  (when (instance? AbstractArrow entity)
+    (.setBaseDamage ^AbstractArrow entity (double damage))
+    true))
+
+(defn add-tag-for-entity!
+  [^Entity entity tag]
+  (when entity
+    (.addTag entity (str tag))))
 
 (defn get-velocity-for-entity
   [^Entity entity]
@@ -118,6 +130,16 @@
                                   place-when-collide?)))
    :discard-entity! (fn [world-id entity-uuid]
                       (boolean (discard-entity! (resolve-entity (get-server) world-id entity-uuid))))
+   :set-projectile-damage! (fn [world-id entity-uuid damage]
+                             (boolean
+                              (set-projectile-damage-for-entity!
+                               (resolve-entity (get-server) world-id entity-uuid)
+                               damage)))
+   :add-tag! (fn [world-id entity-uuid tag]
+               (boolean
+                (add-tag-for-entity!
+                 (resolve-entity (get-server) world-id entity-uuid)
+                 tag)))
    :get-velocity (fn [world-id entity-uuid]
                    (get-velocity-for-entity (resolve-entity (get-server) world-id entity-uuid)))
    :get-position (fn [world-id entity-uuid]
