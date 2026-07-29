@@ -143,9 +143,9 @@
 
   (boolean
     (bm/get-block world-id
-                  (int (Math/floor (double x)))
-                  (int (Math/floor (+ (double y) 1.0)))
-                  (int (Math/floor (double z))))))
+                  (int (double x))
+                  (int (+ (double y) 1.0))
+                  (int (double z)))))
 
 
 
