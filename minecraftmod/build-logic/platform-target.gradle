@@ -219,11 +219,12 @@ if (target.loader != "none") {
         }
     }
 
+    def clojureVersions = rootProject.ext.clojureVersions
     def clojureRuntimeLibraries = [
-        "org.clojure:clojure:1.12.5",
-        "metosin:malli:0.16.4",
-        "org.clojure:spec.alpha:0.5.238",
-        "org.clojure:core.specs.alpha:0.4.74"
+        "org.clojure:clojure:${clojureVersions.clojure}",
+        "metosin:malli:${clojureVersions.malli}",
+        "org.clojure:spec.alpha:${clojureVersions.specAlpha}",
+        "org.clojure:core.specs.alpha:${clojureVersions.coreSpecsAlpha}"
     ]
 
     // Do not put SourceSetOutput on platform configurations: it is built by
@@ -246,7 +247,7 @@ if (target.loader != "none") {
         clojureRuntimeLibraries.each { dependencyNotation ->
             implementation dependencyNotation
         }
-        testImplementation "org.clojure:test.check:1.1.1"
+        testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
 
         minecraft target.dependencies.minecraft
         mappings loom.officialMojangMappings()

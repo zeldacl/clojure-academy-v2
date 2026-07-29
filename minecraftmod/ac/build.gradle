@@ -125,15 +125,17 @@ configurations {
     cloverageRuntime
 }
 
+def clojureVersions = rootProject.ext.clojureVersions
+
 dependencies {
-    implementation "org.clojure:clojure:1.12.4"
+    implementation "org.clojure:clojure:${clojureVersions.clojure}"
 
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
     compileOnly 'net.minecraftforge:eventbus:6.0.5'
     testCompileOnly 'net.minecraftforge:eventbus:6.0.5'
-    testImplementation "org.clojure:test.check:1.1.1"
-    cloverageRuntime "cloverage:cloverage:1.2.4"
+    testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
+    cloverageRuntime "cloverage:cloverage:${clojureVersions.cloverage}"
 }
 
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
