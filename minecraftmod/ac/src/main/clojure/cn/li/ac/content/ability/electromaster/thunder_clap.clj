@@ -75,15 +75,37 @@
   [ctx-id f & args]
   (apply ctx-skill/update-skill-state-root! ctx-id f args))
 
-(defn- active-skill-ctx-data [player-id skill-id]
-  (some (fn [[_ctx-id ctx-data]]
-          (when (and (= (:player-uuid ctx-data) player-id)
-                     (= skill-id (:skill-id ctx-data)))
-            ctx-data))
-        (ctx/get-all-contexts)))
+(defn- active-skill-ctx-data
+  "Server-side charge context for this player/skill.
 
+  The :logical-side and :status filters are load-bearing: in single player the
+  client twin of this very context lives in the same dispatcher registry under
+  the same ctx-id, and context-projection only overlays :skill-state onto the
+  SERVER copy — the client one reports zero held ticks forever. Picking it
+  froze the charge at 1 tick, so the release never reached min-ticks and no
+  lightning ever struck."
+  [player-id skill-id]
+  (->> (ctx/get-all-contexts)
+       vals
+       (filter (fn [ctx-data]
+                 (and (= (str (:player-uuid ctx-data)) (str player-id))
+                      (= skill-id (:skill-id ctx-data))
+                      (= :server (:logical-side ctx-data))
+                      (= ctx/STATUS-ALIVE (:status ctx-data)))))
+       ;; If a stale duplicate survives briefly, prefer the longest charge.
+       (sort-by (fn [ctx-data]
+                  (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
+                >)
+       first))
+
+;; Only the cost callbacks need this scan — their arity is
+;; [player-id skill-id exp] with no ctx-id. Everything dispatched with a
+;; ctx-id must use stored-hold-ticks-by-ctx instead.
 (defn- stored-hold-ticks [player-id skill-id]
   (long (or (get-in (active-skill-ctx-data player-id skill-id) [:skill-state :hold-ticks]) 0)))
+
+(defn- stored-hold-ticks-by-ctx [ctx-id]
+  (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks]) 0)))
 
 (defn- tick-cp-cost [player-id _skill-id exp]
   ;; Cost is evaluated before thunder-clap-tick! increments the stored tick
@@ -190,7 +212,7 @@
 
 (defn- thunder-clap-tick!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (let [ticks (inc (stored-hold-ticks player-id :thunder-clap))]
+  (let [ticks (inc (stored-hold-ticks-by-ctx ctx-id))]
     (update-skill-state-root! ctx-id assoc :hold-ticks ticks)
     (refresh-hit-pos! ctx-id player-id)
     (emit-thunder-clap-fx! :update {:ctx-id ctx-id :player-id player-id :hold-ticks ticks})
@@ -204,7 +226,7 @@
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (mark-performed! ctx-id false)
   (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
-                               :hold-ticks (stored-hold-ticks player-id :thunder-clap)}))
+                               :hold-ticks (stored-hold-ticks-by-ctx ctx-id)}))
 
 (defn- perform-thunder-clap!
   [ctx-id player-id exp ticks]
@@ -238,7 +260,7 @@
 
 (defn- thunder-clap-up!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  (let [ticks (stored-hold-ticks player-id :thunder-clap)]
+  (let [ticks (stored-hold-ticks-by-ctx ctx-id)]
     (if (< ticks (min-ticks))
       (do
         (mark-performed! ctx-id false :final-target (current-target ctx-id player-id))
@@ -247,7 +269,7 @@
 
 (defn- thunder-clap-cost-fail!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks cost-stage _player-ref]
-  (let [ticks (stored-hold-ticks player-id :thunder-clap)]
+  (let [ticks (stored-hold-ticks-by-ctx ctx-id)]
     ;; Upstream increments before payment. A failure exactly on MIN_TICKS
     ;; therefore still reaches s_onEnd with a valid charge and strikes.
     (if (and (= cost-stage :tick) (>= ticks (min-ticks)))

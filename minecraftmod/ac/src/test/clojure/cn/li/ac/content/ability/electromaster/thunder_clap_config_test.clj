@@ -33,8 +33,15 @@
            (is (fn? tick-cp))
            (is (fn? down-action))
            (is (fn? tick-action))
-           (is (= 200.0 (down-overload {:exp 0.5})))
-           (is (= 20.0 (tick-cp {:hold-ticks 50 :exp 0.5})))
-           (is (= 0.0 (tick-cp {:hold-ticks 51 :exp 0.5})))
+           (is (= 200.0 (down-overload "p1" :thunder-clap 0.5))
+               "cost callbacks take the positional [player-id skill-id exp] contract")
+           ;; The CP gate is evaluated before thunder-clap-tick! stores the
+           ;; incremented count, so it tests the tick this call is about to
+           ;; produce: stored 49 -> tick 50 still pays, stored 50 -> tick 51
+           ;; is free. Ticks come from :skill-state, never from a cost argument.
+           (with-redefs [thunder-clap/stored-hold-ticks (fn [_ _] 49)]
+             (is (= 20.0 (tick-cp "p1" :thunder-clap 0.5))))
+           (with-redefs [thunder-clap/stored-hold-ticks (fn [_ _] 50)]
+             (is (= 0.0 (tick-cp "p1" :thunder-clap 0.5))))
            (is (nil? (cb/apply-invoke down-action :ctx-id "ctx-1" :player-id "p1")))
            (is (nil? (cb/apply-invoke tick-action :ctx-id "ctx-1" :player-id "p1"))))))))
