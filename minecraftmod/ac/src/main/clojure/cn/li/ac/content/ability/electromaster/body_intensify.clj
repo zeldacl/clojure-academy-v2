@@ -57,34 +57,14 @@
 (defn- enforce-overload-floor! [player-id floor-value]
   (skill-effects/enforce-overload-floor! player-id floor-value))
 
-(defn- same-player?
-  [a b]
-  (= (str a) (str b)))
-
-(defn- active-skill-ctx-data [player-id skill-id]
-  (->> (ctx/get-all-contexts)
-       vals
-       (filter (fn [ctx-data]
-                 (and (same-player? (:player-uuid ctx-data) player-id)
-                      (= skill-id (:skill-id ctx-data))
-                      (= :server (:logical-side ctx-data))
-                      (= ctx/STATUS-ALIVE (:status ctx-data)))))
-       ;; If a stale duplicate survives briefly, prefer the context with the
-       ;; largest tracked hold-tick count.
-       (sort-by (fn [ctx-data]
-                  (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))
-                >)
-       first))
-
+;; Only the cost callbacks need the by-player scan — their arity is
+;; [player-id skill-id exp] with no ctx-id. Everything dispatched with a
+;; ctx-id uses ctx-skill/hold-ticks instead.
 (defn- stored-hold-ticks [player-id skill-id]
-  (long (or (get-in (active-skill-ctx-data player-id skill-id)
-                    [:skill-state :hold-ticks])
-            0)))
+  (ctx-skill/hold-ticks-for-player player-id skill-id))
 
 (defn- stored-hold-ticks-by-ctx [ctx-id]
-  (long (or (get-in (ctx-skill/get-context ctx-id)
-                    [:skill-state :hold-ticks])
-            0)))
+  (ctx-skill/hold-ticks ctx-id))
 
 (defn- down-overload-cost [_player-id _skill-id exp]
   (cfg-lerp :cost.down.overload (double (or exp 0.0))))

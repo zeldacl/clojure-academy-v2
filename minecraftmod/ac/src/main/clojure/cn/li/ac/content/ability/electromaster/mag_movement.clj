@@ -151,13 +151,6 @@
              :target-z           (double (:z position))}))
         nil))))
 
-(defn- active-skill-ctx-data [player-id skill-id]
-  (some (fn [[_ctx-id ctx-data]]
-          (when (and (= (:player-uuid ctx-data) player-id)
-                     (= skill-id (:skill-id ctx-data)))
-            ctx-data))
-        (ctx/get-all-contexts)))
-
 ;; ---------------------------------------------------------------------------
 ;; Cost fn (tick CP is conditional on having a target)
 ;; ---------------------------------------------------------------------------
@@ -180,7 +173,12 @@
 (defn- tick-cp-cost [player-id _skill-id exp]
   (if (player-creative? player-id)
     0.0
-    (if-let [ctx-data (active-skill-ctx-data player-id mag-movement-skill-id)]
+    ;; No ctx-id in the cost arity, so this has to scan — but only over alive
+    ;; SERVER contexts. The client twin registered under the same ctx-id in
+    ;; single player carries no projected :skill-state, so matching it made
+    ;; live-target? always false and the whole skill free of CP.
+    (if-let [ctx-data (ctx-skill/active-server-skill-context
+                       player-id mag-movement-skill-id)]
       (let [skill-state (:skill-state ctx-data)
             live-target? (and (:has-target skill-state)
                               (or (not= :entity (:target-kind skill-state))
