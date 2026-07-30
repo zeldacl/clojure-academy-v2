@@ -66,10 +66,7 @@
                                                         (swap! enqueued-effects* conj [effect-id ctx-id channel payload opts])
                                                         (level-effects/update-effect-state! effect-id
                                                           @enqueue-fn*
-                                                          {:payload payload
-                                                           :ctx-id ctx-id
-                                                           :channel channel
-                                                           :owner-key [:ctx ctx-id]})
+                                                          ctx-id channel [:ctx ctx-id] payload)
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sound-calls* conj payload)

@@ -45,17 +45,14 @@
       (rad-fx/init!)
       ((get @handlers* :rad-intensify/fx-mark) "ctx-rad" :rad-intensify/fx-mark {:target-id "t-1" :ticks-left 60 :x 1.0 :y 64.0 :z 2.0})
       (is (= [[:rad-intensify-mark
-               {:owner-key [:ctx "ctx-rad"]
-                :ctx-id "ctx-rad"
-                :channel :rad-intensify/fx-mark
-                :target-id "t-1"
+               "ctx-rad"
+               :rad-intensify/fx-mark
+               {:target-id "t-1"
                 :ticks-left 60
                 :x 1.0
                 :y 64.0
                 :z 2.0}
-               {:ctx-id "ctx-rad"
-                :channel :rad-intensify/fx-mark
-                :owner-key [:ctx "ctx-rad"]}]]
+               [:owner-key [:ctx "ctx-rad"]]]]
              @enqueued*)))))
 
 (deftest mark-ttl-decays-and-expires-test

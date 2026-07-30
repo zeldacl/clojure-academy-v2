@@ -68,8 +68,7 @@
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform {:mode :start :source-player-id "player-a"})
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform {:mode :end :performed? false})
       (level-effects/update-effect-state! :directed-blastwave
-        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
-        nil)
+        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store)))
       (is (empty? (:effect-state (blastwave-fx/fx-snapshot))))
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-tick" :directed-blastwave/fx-perform
                {:mode :perform
@@ -77,8 +76,7 @@
                 :look-dir {:x 0.0 :y 0.0 :z 1.0}})
       (dotimes [_ 15]
         (level-effects/update-effect-state! :directed-blastwave
-          (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))))
       (is (empty? (:waves (blastwave-fx/fx-snapshot)))))))
 
 (deftest two-owners-keep-blastwave-state-and-waves-independent-test
@@ -95,8 +93,7 @@
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))
       (arc-beam/enqueue-for-test! :directed-blastwave "ctx-a" :directed-blastwave/fx-perform {:mode :end :performed? false :source-player-id "player-a"})
       (level-effects/update-effect-state! :directed-blastwave
-        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store))
-        nil)
+        (fn [store] (arc-beam/effect-tick-state! :level :directed-blastwave store)))
       (let [snapshot (blastwave-fx/fx-snapshot)]
         (is (nil? (get (:effect-state snapshot) [:ctx "ctx-a"])))
         (is (= 11 (get-in (get (:effect-state snapshot) [:ctx "ctx-b"]) [:charge-ticks]))))

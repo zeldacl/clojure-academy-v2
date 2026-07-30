@@ -52,8 +52,8 @@
       ((get @handlers* :flesh-ripping/fx-end) "ctx-1" :flesh-ripping/fx-end nil)
 
       (is (= [[:flesh-ripping "ctx-1" :flesh-ripping/fx-start {:mode :start} :owner-key [:ctx "ctx-1"]]
-              [:flesh-ripping "ctx-1" :flesh-ripping/fx-update {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true :target-uuid "target-1"} :owner-key [:ctx "ctx-1"]]
-              [:flesh-ripping "ctx-1" :flesh-ripping/fx-perform {:mode :perform :target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? true :target-uuid "target-2"} :owner-key [:ctx "ctx-1"]]
+              [:flesh-ripping "ctx-1" :flesh-ripping/fx-update {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true :target-uuid "target-1" :entity-x nil :entity-y nil :entity-z nil :target-width nil :target-height nil} :owner-key [:ctx "ctx-1"]]
+              [:flesh-ripping "ctx-1" :flesh-ripping/fx-perform {:mode :perform :target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? true :target-uuid "target-2" :entity-x nil :entity-y nil :entity-z nil :target-width nil :target-height nil} :owner-key [:ctx "ctx-1"]]
               [:flesh-ripping "ctx-1" :flesh-ripping/fx-end {:mode :end} :owner-key [:ctx "ctx-1"]]]
              @enqueued*)))))
 

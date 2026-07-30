@@ -92,8 +92,9 @@
                    (fn [_a# _b#] nil)
                    cn.li.ac.content.ability.vecmanip.vec-deviation/send-fx-stop-entity!
                    (fn [_a# _b# _c#] nil)
+                   ;; ctx-skill/get-context routes through the 2-arity form
                    ctx/get-context
-                   (fn [_id#] ctx-data#)
+                   (fn [& _#] ctx-data#)
                    ctx-skill/update-skill-state-root!
                    (fn [_a# _b# & _rest#] nil)
                    world-effects/find-entities-in-radius
@@ -102,6 +103,11 @@
                    motion-effects/set-entity-velocity!
                    (fn [& _#] (swap! set-vel-calls# conj :called))
                    motion-effects/discard-entity!
+                   (fn [& _#] nil)
+                   ;; arrows also get their damage zeroed and a marker tag
+                   motion-effects/set-projectile-damage!
+                   (fn [& _#] nil)
+                   motion-effects/add-entity-tag!
                    (fn [& _#] nil)
                    motion-effects/entity-motion-available? (constantly true)
                    skill-effects/perform-resource!
@@ -127,9 +133,9 @@
           ]
       (with-tick-mocks {:consume-atom consume-calls :difficulty 2.0 :current-cp 100.0}
         (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
-      ;; After fix: cost should be 15.0, not 30.0
-      (is (= 1 (count @consume-calls)) "perform-resource! called once")
-      (is (= 15.0 (first @consume-calls)) "CP consumed = base cost 15.0, not difficulty-scaled 30.0"))))
+      ;; The tick charges three times: scan cost, per-entity deflect, normal tick.
+      (is (= 3 (count @consume-calls)) "scan cost, deflect cost, normal tick cost")
+      (is (= 15.0 (second @consume-calls)) "CP consumed = base cost 15.0, not difficulty-scaled 30.0"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug 2 �?deflect must proceed even when CP is nearly empty (force-consume)
@@ -141,9 +147,8 @@
           consume-calls (atom [])]
       (with-tick-mocks {:set-vel-atom set-vel-calls :consume-atom consume-calls :current-cp 3.0}
         (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
-      (is (= 1 (count @set-vel-calls)) "set-velocity! called �?deflection happened")
-      (is (= 1 (count @consume-calls)) "perform-resource! called once")
-      (is (= 3.0 (first @consume-calls)) "CP consumed capped to available 3.0, not full 15.0"))))
+      (is (= 1 (count @set-vel-calls)) "set-velocity! called - deflection happened")
+      (is (= 3.0 (second @consume-calls)) "CP consumed capped to available 3.0, not full 15.0"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Bug 2 cont. �?toggle must NOT be terminated by insufficient deflect CP
@@ -174,7 +179,9 @@
                         :claim?        false}
         (with-redefs [arbitration/skill-allowed-in-dual-active? (fn [_] false)]
           (cb/apply-invoke vd/vec-deviation-tick! :player-id "p1" :ctx-id "ctx-1" :cost-ok? true)))
-      (is (empty? @consume-calls)  "perform-resource! not called when arbitration denies")
+      ;; Only the per-entity deflect charge is skipped; the scan and normal tick
+      ;; costs are unconditional.
+      (is (= [13.0 0.0] @consume-calls) "no deflect charge when arbitration denies")
       (is (empty? @set-vel-calls)  "set-velocity! not called when arbitration denies"))))
 
 ;; ---------------------------------------------------------------------------

@@ -72,7 +72,9 @@
     (f)))
 (use-fixtures :each
   (fn [f]
-    (runtime-hooks/with-client-ctx-fn {:player-owner {:server-session-id :test-session}} (fn [] (f)))))
+    ;; Must be a complete owner — :player-uuid is required by the :owner contract
+    ;; that context routing validates.
+    (runtime-hooks/with-client-ctx-fn {:player-owner ps-fix/test-player-state-owner} (fn [] (f)))))
 
 (deftest build-item-use-plan-order-test
   (testing "coin use plans consume, dispatch domain action, then spawn scripted effect"
@@ -85,7 +87,8 @@
           (is (= :domain-action (:kind (second (:server-actions plan)))))
           (is (= :railgun-coin-throw (:action (second (:server-actions plan)))))
           (is (number? (get-in plan [:server-actions 1 :payload :timestamp-ms])))
-          (is (= {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing" :speed 0.0}
+          (is (= {:kind :spawn-scripted-effect :entity-id "entity_coin_throwing"
+                  :unique-per-owner? false :speed 0.0}
             (nth (:server-actions plan) 2)))
       (is (= [{:kind :notify-local-effect
                :event-key :ac/charge-coin-throw}]
@@ -158,9 +161,13 @@
           [:remove-state :test-session "player-1"]]
            @called))))
 
-(deftest on-player-tick-drives-player-contexts-before-manager-sweep-test
+;; The manager sweep and mark tick are global work: they run once in
+;; :on-server-tick-start!, ahead of the per-player phase.
+(deftest server-tick-start-sweeps-before-player-tick-test
   (let [calls (atom [])
-        tick! (:on-player-tick! (server-hooks/runtime-server-hooks))]
+        hooks (server-hooks/runtime-server-hooks)
+        start! (:on-server-tick-start! hooks)
+        tick! (:on-player-tick! hooks)]
     (with-redefs [store/get-or-create-player-state! (fn [session-id uuid]
                                                       (swap! calls conj [:ensure-state session-id uuid])
                                                       nil)
@@ -170,19 +177,21 @@
                   ctx-mgr/tick-player-contexts! (fn [uuid]
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
-                  md-damage/tick-marks! (fn [] nil)
+                  md-damage/tick-marks! (fn [] (swap! calls conj [:marks]) nil)
                   delayed-projectiles/tick-player! (fn [uuid]
                                                      (swap! calls conj [:projectiles uuid])
                                                      nil)
                   ctx-mgr/tick-context-manager! (fn []
                                                  (swap! calls conj [:context-manager])
                                                  nil)]
+      (start! 1)
       (tick! "p1")
-      (is (= [[:ensure-state :test-session "p1"]
+      (is (= [[:marks]
+              [:context-manager]
+              [:ensure-state :test-session "p1"]
               [:player-state-tick :test-session "p1" nil]
               [:context-tick "p1"]
-              [:projectiles "p1"]
-              [:context-manager]]
+              [:projectiles "p1"]]
              @calls)))))
 
 (deftest get-context-player-uuid-requires-owner-or-unique-match-test
@@ -208,7 +217,7 @@
     (with-redefs [ctx/clear-store-session-contexts! (fn [session-id]
                                                       (swap! called conj [:contexts session-id])
                                                       nil)
-                  store/remove-session! (fn [_ability-store session-id]
+                  store/remove-session! (fn [session-id]
                                           (swap! called conj [:player-states session-id])
                                           nil)
                   world-registry/clear-session-world-data! (fn [session-id]
@@ -221,12 +230,13 @@
                                                          (swap! called conj [:projectiles])
                                                          nil)]
       (stop! :server-session))
-          (is (= [[:contexts :server-session]
+    (is (= [[:contexts :server-session]
+            [:player-states :server-session]
             [:wireless :server-session]
             [:reset-runtimes]
             [:projectiles]
             [:marks :server-session]]
-           (remove #(= :player-states (first %)) @called)))))
+           @called))))
 
 (deftest register-platform-functions-registers-network-reset-and-energy-pull-test
   (let [energy-calls (atom [])]

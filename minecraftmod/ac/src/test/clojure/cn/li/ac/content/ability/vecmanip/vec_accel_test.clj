@@ -86,7 +86,7 @@
         fx-calls* (atom [])
         down-fn (get-in spec [:actions :down!])]
     (with-redefs [ctx-skill/replace-skill-state! (fn [_ state] (reset! state* state))
-                  fx/send! (fn [& args] (swap! fx-calls* conj args))]
+                  fx/send! (fn [& args] (swap! fx-calls* conj (vec args)))]
       (cb/apply-invoke down-fn :ctx-id "ctx-1"))
     (is (= {:charge-ticks 0
             :can-perform? true
@@ -111,7 +111,7 @@
                     raycast/raycast-blocks (fn [& _] nil)
                     raycast/player-look-vector
                     (constantly {:x 0.0 :y 0.0 :z 1.0})
-                    fx/send! (fn [& args] (swap! updates* conj args))]
+                    fx/send! (fn [& args] (swap! updates* conj (vec args)))]
         (cb/apply-invoke tick-fn
                          :player-id "p1" :ctx-id "ctx-1"
                          :exp 0.5 :hold-ticks 99)))
@@ -139,7 +139,7 @@
                     motion-effects/reset-fall-damage! (fn [_] true)
                     skill-effects/set-main-cooldown! (fn [& _] nil)
                     skill-effects/add-skill-exp! (fn [& _] nil)
-                    fx/send! (fn [& args] (swap! fx-calls* conj args))]
+                    fx/send! (fn [& args] (swap! fx-calls* conj (vec args)))]
         (cb/apply-invoke up-fn
                          :player-id "p1" :ctx-id "ctx-1"
                          :exp 0.5 :cost-ok? true)))
@@ -163,7 +163,7 @@
                     motion-effects/player-motion-available? (constantly true)
                     motion-effects/set-player-velocity!
                     (fn [& args] (swap! vel-calls* conj args))
-                    fx/send! (fn [& args] (swap! fx-calls* conj args))]
+                    fx/send! (fn [& args] (swap! fx-calls* conj (vec args)))]
         (cb/apply-invoke up-fn
                          :player-id "p1" :ctx-id "ctx-1"
                          :exp 0.5 :cost-ok? false)))

@@ -15,15 +15,21 @@
   [{:id :arc-gen :category-id :electromaster :level 1 :controllable? true}
    {:id :body-intensify :category-id :electromaster :level 3 :controllable? true}
    {:id :current-charging :category-id :electromaster :level 1 :controllable? true}
-   {:id :mag-manip :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :mag-movement :category-id :electromaster :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   ;; mag-manip/mag-movement/railgun all declare real :cost blocks, and
+   ;; apply-cost! multiplies those by the consume speeds — a 0.0 override here
+   ;; made them free. Same zero-cost bug as the meltdowner block below;
+   ;; original's default.conf has no per-skill override for any of them.
+   {:id :mag-manip :category-id :electromaster :level 2 :controllable? true}
+   {:id :mag-movement :category-id :electromaster :level 2 :controllable? true}
   {:id :mine-detect :category-id :electromaster :level 3 :controllable? true}
-   {:id :railgun :category-id :electromaster :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :railgun :category-id :electromaster :level 4 :controllable? true}
   {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? true}
    {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
 
    {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? false}
-   {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   ;; electron-missile's own defskill already declares 1.0/1.0 — the override
+   ;; here was silently overruling it and zeroing its :cost block.
+   {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true}
    ;; jet-engine/light-shield/meltdowner: no override -> field-level default
    ;; 1.0/1.0 applies. jet-engine has no :cost block (fully manual
    ;; perform-resource!, unaffected either way); light-shield and meltdowner

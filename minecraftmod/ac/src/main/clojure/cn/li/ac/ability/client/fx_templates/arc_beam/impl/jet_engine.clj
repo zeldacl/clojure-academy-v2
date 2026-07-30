@@ -17,6 +17,7 @@
 
 (def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
 (def ^:private local-remove-scripted-effect-key :mcmod/remove-local-scripted-effect)
+(def ^:private diamond-shield-effect-id "entity_diamond_shield")
 
 
 (def ^:private mark-ttl 8)
@@ -140,7 +141,7 @@
 (defn- spawn-diamond-shield!
   []
   (let [entity-uuid (client-bridge/run-client-effect! local-scripted-effect-key
-                                                       {:effect-id :jet-engine})]
+                                                       {:effect-id diamond-shield-effect-id})]
     (when (seq entity-uuid)
       entity-uuid)))
 

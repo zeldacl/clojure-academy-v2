@@ -124,8 +124,7 @@
                              :destination {:x 4.0 :y 64.0 :z 4.0}})
       (dotimes [_ 10]
         (level-effects/update-effect-state! :plasma-cannon
-          (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
       (let [plan (arc-beam/effect-build-plan :plasma-cannon nil nil 0)]
         (is (= 3 (count @sound-calls*)))
         (is (= 10 (count @particle-calls*)))

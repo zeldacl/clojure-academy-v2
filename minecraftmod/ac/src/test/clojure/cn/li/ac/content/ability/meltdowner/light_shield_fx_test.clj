@@ -57,8 +57,7 @@
       (is (some? (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       (dotimes [_ 5]
         (level-effects/update-effect-state! :light-shield
-          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
       (is (seq @particles*))
       (is (map? (arc-beam/effect-build-plan :light-shield {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
       (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"})
@@ -77,8 +76,7 @@
 
       (dotimes [_ 10]
         (level-effects/update-effect-state! :light-shield
-          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
 
       (is (= 10 (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
       (is (= 2 (count @particles*))

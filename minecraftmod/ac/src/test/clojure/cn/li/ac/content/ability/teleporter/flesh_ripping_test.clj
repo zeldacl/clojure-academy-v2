@@ -16,6 +16,22 @@
 (defn- with-flesh-env [f]
   (skill-ctx/with-server-skill-context f))
 
+(def ^:private hit-trace
+  {:world-id "minecraft:overworld"
+   :hit? true
+   :target-uuid "target-1"
+   :target-x 1.0 :target-y 2.0 :target-z 3.0
+   :entity-x 1.0 :entity-y 2.0 :entity-z 3.0
+   :target-width 0.6 :target-height 1.8})
+
+;; fx-perform carries the entity box so the client can size the blood splash.
+(def ^:private perform-payload
+  {:target-x 1.0 :target-y 2.0 :target-z 3.0
+   :hit? true
+   :target-uuid "target-1"
+   :entity-x 1.0 :entity-y 2.0 :entity-z 3.0
+   :target-width 0.6 :target-height 1.8})
+
 (deftest flesh-ripping-tick-caches-trace-and-sends-update-fx-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
         {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
@@ -37,6 +53,9 @@
                                              :entity-x 1.0
                                              :entity-y 2.0
                                              :entity-z 3.0})
+                    helper/player-position (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                    helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    skill-effects/current-cp (fn [_] 100.0)
                     geom/world-id-of (fn [_] "minecraft:overworld")
                     skill-effects/skill-exp (fn [_ _] 0.5)]
          (cb/apply-invoke flesh/flesh-ripping-tick! :player-id "p1" :ctx-id "ctx-0" :hold-ticks 7)))
@@ -46,7 +65,12 @@
             :target-uuid "target-1"
             :target-x 1.0
             :target-y 2.0
-            :target-z 3.0}
+            :target-z 3.0
+            :entity-x 1.0
+            :entity-y 2.0
+            :entity-z 3.0
+            :target-width 0.6
+            :target-height 1.8}
            (get-in @ctx* [:skill-state :trace])))
     (is (= [["ctx-0" :flesh-ripping/fx-update :update
              {:target-x 1.0
@@ -57,13 +81,7 @@
            @calls*))))
 
 (deftest flesh-ripping-hit-critical-emits-crit-fx-test
-  (let [mocks (skill-ctx/content-ctx-mocks
-               {:skill-state {:trace {:world-id "minecraft:overworld"
-                                      :hit? true
-                                      :target-uuid "target-1"
-                                      :target-x 1.0
-                                      :target-y 2.0
-                                      :target-z 3.0}}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:trace hit-trace}})
         {:keys [get-context assoc-skill-state! update-skill-state-root! clear-skill-state!]}
         mocks
         exp-calls* (atom [])
@@ -94,7 +112,7 @@
                                                  :effect.nausea-duration-ticks 60
                                                  :effect.nausea-amplifier 0
                                                  0))
-                    helper/deal-magic-damage! (fn [_ world-id target-uuid damage]
+                    helper/deal-magic-damage! (fn [_player-id _skill-id world-id target-uuid damage]
                                                 (swap! damage-calls* conj [world-id target-uuid damage])
                                                 {:critical? true
                                                  :crit-level 2
@@ -133,26 +151,14 @@
                                       :message-args ["x2.6"]
                                       :target-uuid "target-1"
                                       :skill-id :flesh-ripping}]
-            [:flesh-ripping/fx-perform {:target-x 1.0
-                                        :target-y 2.0
-                                        :target-z 3.0
-                                        :hit? true
-                                        :target-uuid "target-1"}]
-            [:flesh-ripping/fx-perform {:target-x 1.0
-                                        :target-y 2.0
-                                        :target-z 3.0
-                                        :hit? true
-                                        :target-uuid "target-1"}]]
+            [:flesh-ripping/fx-perform perform-payload]
+            [:flesh-ripping/fx-perform perform-payload]]
            @fx-calls*))))
 
-(deftest flesh-ripping-critical-but-not-applied-skips-crit-fx-test
-  (let [mocks (skill-ctx/content-ctx-mocks
-               {:skill-state {:trace {:world-id "minecraft:overworld"
-                                      :hit? true
-                                      :target-uuid "target-1"
-                                      :target-x 1.0
-                                      :target-y 2.0
-                                      :target-z 3.0}}})
+;; crit-applied? keys off :critical? alone — upstream fires the crit event before
+;; ctx.attack, so armor/invulnerability rejecting the hit must not cancel the fx.
+(deftest flesh-ripping-critical-fx-survives-rejected-damage-test
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:trace hit-trace}})
         {:keys [get-context assoc-skill-state! update-skill-state-root! clear-skill-state!]}
         mocks
         fx-calls* (atom [])]
@@ -180,26 +186,21 @@
                                nil)
                     clojure.core/rand (fn [] 0.0)]
          (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-1b" :cost-ok? true)))
-    (is (= [[:flesh-ripping/fx-perform {:target-x 1.0
-                                        :target-y 2.0
-                                        :target-z 3.0
-                                        :hit? true
-                                        :target-uuid "target-1"}]
-            [:flesh-ripping/fx-perform {:target-x 1.0
-                                        :target-y 2.0
-                                        :target-z 3.0
-                                        :hit? true
-                                        :target-uuid "target-1"}]]
+    (is (= [[:teleporter/fx-crit-hit {:x 1.0
+                                      :y 2.0
+                                      :z 3.0
+                                      :crit-level 2
+                                      :crit-rate nil
+                                      :message-key nil
+                                      :message-args nil
+                                      :target-uuid "target-1"
+                                      :skill-id :flesh-ripping}]
+            [:flesh-ripping/fx-perform perform-payload]
+            [:flesh-ripping/fx-perform perform-payload]]
            @fx-calls*))))
 
 (deftest flesh-ripping-up-cost-fail-has-no-side-effects-test
-  (let [mocks (skill-ctx/content-ctx-mocks
-               {:skill-state {:trace {:world-id "minecraft:overworld"
-                                      :hit? true
-                                      :target-uuid "target-1"
-                                      :target-x 1.0
-                                      :target-y 2.0
-                                      :target-z 3.0}}})
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:trace hit-trace}})
         {:keys [get-context]} mocks
         damage-calls* (atom 0)
         exp-calls* (atom 0)

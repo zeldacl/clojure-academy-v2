@@ -59,7 +59,9 @@
                   down-overload (get-in spec [:cost :down :overload])]
               (is (fn? down-cp))
               (is (fn? down-overload))
-              (is (= 1500.0 (down-cp {:player-id player-id})))
-              (is (= 200.0 (down-overload {:player-id player-id}))))))))))
+              ;; The scaled cost wrapper reads exp off the ctx map — the
+              ;; midpoint of each seeded curve.
+              (is (= 1500.0 (down-cp {:player-id player-id :skill-id :railgun :exp 0.5})))
+              (is (= 200.0 (down-overload {:player-id player-id :skill-id :railgun :exp 0.5}))))))))))
 
 

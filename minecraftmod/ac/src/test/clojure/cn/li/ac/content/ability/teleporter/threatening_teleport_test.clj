@@ -60,7 +60,7 @@
                   helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   geom/world-id-of (fn [_] "minecraft:overworld")
                   raycast/available? (constantly true)
-                  raycast/raycast-combined (fn [& _]
+                  raycast/raycast-combined-from-player (fn [& _]
                                               {:hit-type :entity
                                                :entity-uuid "enemy"
                                                :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
@@ -70,8 +70,9 @@
     (is (= 9 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= true (get-in @ctx* [:skill-state :trace :attacked?])))
     (is (= "enemy" (get-in @ctx* [:skill-state :trace :target-uuid])))
+    ;; The trail starts half a block below the feet, not at the eye.
     (is (= [["ctx-2" :threatening-teleport/fx-update :update
-             {:start-x 1.0 :start-y 3.62 :start-z 3.0
+             {:start-x 1.0 :start-y 1.5 :start-z 3.0
               :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
               :attacked? true
               :target-uuid "enemy"}]]
@@ -113,13 +114,15 @@
                                              :interaction.drop-prob.miss 1.0
                                              0.0))
                   entity/player-get-main-hand-item-count (fn [_] 1)
+                  entity/player-get-main-hand-item-id (fn [_] nil)
+                  entity/player-creative? (fn [_] false)
                   entity/player-consume-main-hand-item! (fn [_ _]
                                                          (swap! consume-calls* inc)
                                                          true)
                   entity/player-drop-main-hand-item-at! (fn [_ amount x y z]
                                                           (swap! drop-calls* conj [amount x y z])
                                                           true)
-                  helper/deal-magic-damage! (fn [_ world-id target-uuid damage]
+                  helper/deal-magic-damage! (fn [_player-id _skill-id world-id target-uuid damage]
                                               (swap! damage-calls* conj [world-id target-uuid damage])
                                               {:critical? true
                                                :crit-level 1
@@ -165,7 +168,9 @@
              :skill-id :threatening-teleport}]
            @crit-fx-calls*))))
 
-(deftest threatening-tp-up-critical-but-not-applied-skips-crit-fx-test
+;; crit-applied? keys off :critical? alone — upstream fires the crit event before
+;; ctx.attack, so armor/invulnerability rejecting the hit must not cancel the fx.
+(deftest threatening-tp-up-critical-fx-survives-rejected-damage-test
   (let [{:keys [get-context]} (make-context-mocks {:skill-state {:trace {:world-id "minecraft:overworld"
                                                                           :start-x 1.0 :start-y 2.0 :start-z 3.0
                                                                           :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
@@ -193,10 +198,13 @@
                                              :interaction.drop-prob.miss 1.0
                                              0.0))
                   entity/player-get-main-hand-item-count (fn [_] 1)
+                  entity/player-get-main-hand-item-id (fn [_] nil)
+                  entity/player-creative? (fn [_] false)
                   entity/player-drop-main-hand-item-at! (fn [& _] true)
                   helper/deal-magic-damage! (fn [& _]
                                               {:critical? true
                                                :crit-level 1
+                                               :crit-rate 1.4
                                                :applied? false})
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   skill-effects/set-main-cooldown! (fn [& _] nil)
@@ -209,5 +217,5 @@
                   rand (fn [] 0.0)]
       (cb/apply-invoke tt/threatening-tp-up! :player-id "p1" :ctx-id "ctx-4" :player-ref :player :cost-ok? true))
 
-    (is (empty? @crit-fx-calls*))
+    (is (= 1 (count @crit-fx-calls*)))
     (is (some (fn [[topic _]] (= topic :threatening-teleport/fx-perform)) @fx-calls*))))

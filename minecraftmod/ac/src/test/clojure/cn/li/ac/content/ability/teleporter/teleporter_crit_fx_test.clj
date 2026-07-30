@@ -35,22 +35,20 @@
                                                         nil)]
       (crit-fx/init!)
       ((get @handlers* :teleporter/fx-crit-hit) "ctx-1" :teleporter/fx-crit-hit {:x 1.0 :y 2.0 :z 3.0 :crit-level 2 :crit-rate 2.6 :message-key "ability.teleporter.critical_hit" :message-args ["x2.6"] :target-uuid "t" :skill-id :flesh-ripping})
-      (is (= [[:teleporter-crit {:mode :crit-hit
-                                 :owner-key [:ctx "ctx-1"]
-                                 :ctx-id "ctx-1"
-                                 :channel :teleporter/fx-crit-hit
-                                 :x 1.0
-                                 :y 2.0
-                                 :z 3.0
-                                 :crit-level 2
-                                 :crit-rate 2.6
-                                 :message-key "ability.teleporter.critical_hit"
-                                 :message-args ["x2.6"]
-                                 :target-uuid "t"
-                                 :skill-id :flesh-ripping}
-                {:ctx-id "ctx-1"
-                 :channel :teleporter/fx-crit-hit
-                 :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:teleporter-crit
+               "ctx-1"
+               :teleporter/fx-crit-hit
+               {:mode :crit-hit
+                :x 1.0
+                :y 2.0
+                :z 3.0
+                :crit-level 2
+                :crit-rate 2.6
+                :message-key "ability.teleporter.critical_hit"
+                :message-args ["x2.6"]
+                :target-uuid "t"
+                :skill-id :flesh-ripping}
+               [:owner-key [:ctx "ctx-1"]]]]
              @enqueued*)))))
 
 (deftest enqueue-crit-hit-emits-level-scaled-effects-and-notice-test

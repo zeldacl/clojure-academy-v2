@@ -40,6 +40,8 @@
     :combat.damage 12.0
     :cost.up.cp 75.0
     :cost.up.overload 14.0
+    ;; cooldown now reads the double curve, not lerp-int
+    :cooldown.ticks 40.0
     0.0))
 
 (defn- mock-cfg-lerp-int [field _exp]
@@ -130,7 +132,7 @@
                                                          :x 1.0 :y 2.0 :z 3.0
                                                          :eye-height 1.8})
                          entity-damage/available? (constantly true)
-                         entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
+                         entity-damage/apply-direct-damage! (fn [world-id target-id damage kind & _opts]
                                                                 (swap! damage-calls* conj [world-id target-id damage kind]))
                          motion-effects/entity-motion-available? (constantly true)
                          motion-effects/add-entity-velocity! (fn [world-id target-id x y z]
@@ -152,7 +154,7 @@
                          skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                         (swap! exp-calls* conj [player-id skill-id amount]))]
              (cb/apply-invoke up-fn :player-id "p1" :ctx-id "ctx-hit" :exp 0.3 :cost-ok? true)))))
-    (is (= [["w" "e1" 12.0 :generic]] @damage-calls*))
+    (is (= [["w" "e1" 12.0 :skill]] @damage-calls*))
     (is (= 1 (count @set-velocity-calls*)))
     (is (= [["w" "e1" 1.0 2.1 3.0]] @set-position-calls*))
     (is (= (get-in @set-velocity-calls* [0 3])

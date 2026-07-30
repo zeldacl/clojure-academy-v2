@@ -1,6 +1,5 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -19,12 +18,19 @@
 
 (use-fixtures :each reset-fixture)
 
-(defn- event
-  [ctx-id channel payload]
-  {:payload payload
-   :ctx-id ctx-id
-   :channel channel
-   :owner-key [:ctx ctx-id]})
+;; ElectronMissile has no arc-beam impl — it owns its enqueue/tick fns and
+;; registers them through fx-spec, so tests drive those directly.
+(defn- enqueue!
+  [enqueue-state! ctx-id channel payload]
+  (level-effects/update-effect-state! :electron-missile
+    (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))
+  nil)
+
+(defn- tick!
+  [tick-state!]
+  (level-effects/update-effect-state! :electron-missile
+    (fn [store] (tick-state! store)))
+  nil)
 
 (deftest init-registers-owner-aware-electron-missile-fx-test
   (let [registered-level* (atom nil)
@@ -66,45 +72,24 @@
                                                       :end {:x 1.0 :y 65.5 :z 2.0}
                                                       :source-player-id "player-a"})
       ((get @handlers* :electron-missile/fx-end) "ctx-em" :electron-missile/fx-end {:source-player-id "player-a"})
-      (is (= [[:electron-missile {:mode :start
-                                  :owner-key [:ctx "ctx-em"]
-                                  :ctx-id "ctx-em"
-                                  :channel :electron-missile/fx-start
-                                  :source-player-id "player-a"}
-               {:ctx-id "ctx-em"
-                :channel :electron-missile/fx-start
-                :owner-key [:ctx "ctx-em"]}]
-              [:electron-missile {:mode :update
-                                  :owner-key [:ctx "ctx-em"]
-                                  :ctx-id "ctx-em"
-                                  :channel :electron-missile/fx-update
-                                  :ticks 12
-                                  :balls 3
-                                  :source-player-id "player-a"}
-               {:ctx-id "ctx-em"
-                :channel :electron-missile/fx-update
-                :owner-key [:ctx "ctx-em"]}]
-              [:electron-missile {:mode :fire
-                                  :owner-key [:ctx "ctx-em"]
-                                  :ctx-id "ctx-em"
-                                  :channel :electron-missile/fx-fire
-                                  :start {:x 0.0 :y 64.0 :z 0.0}
-                                  :end {:x 1.0 :y 65.5 :z 2.0}
-                                  :target-x 1.0
-                                  :target-y 64.0
-                                  :target-z 2.0
-                                  :source-player-id "player-a"}
-               {:ctx-id "ctx-em"
-                :channel :electron-missile/fx-fire
-                :owner-key [:ctx "ctx-em"]}]
-              [:electron-missile {:mode :end
-                                  :owner-key [:ctx "ctx-em"]
-                                  :ctx-id "ctx-em"
-                                  :channel :electron-missile/fx-end
-                                  :source-player-id "player-a"}
-               {:ctx-id "ctx-em"
-                :channel :electron-missile/fx-end
-                :owner-key [:ctx "ctx-em"]}]]
+      (is (= [[:electron-missile "ctx-em" :electron-missile/fx-start
+               {:mode :start :source-player-id "player-a"}
+               [:owner-key [:ctx "ctx-em"]]]
+              [:electron-missile "ctx-em" :electron-missile/fx-update
+               {:mode :update :ticks 12 :balls 3 :source-player-id "player-a"}
+               [:owner-key [:ctx "ctx-em"]]]
+              [:electron-missile "ctx-em" :electron-missile/fx-fire
+               {:mode :fire
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 1.0 :y 65.5 :z 2.0}
+                :target-x 1.0
+                :target-y 64.0
+                :target-z 2.0
+                :source-player-id "player-a"}
+               [:owner-key [:ctx "ctx-em"]]]
+              [:electron-missile "ctx-em" :electron-missile/fx-end
+               {:mode :end :source-player-id "player-a"}
+               [:owner-key [:ctx "ctx-em"]]]]
              @enqueued*)))))
 
 (deftest fire-adds-beam-and-end-clears-state-test
@@ -119,28 +104,25 @@
                   client-sounds/queue-sound-effect! (fn [& args]
                                                         (swap! sounds* conj args)
                                                         nil)]
-      (arc-beam/enqueue-for-test! :electron-missile "ctx-a" :electron-missile/fx-update
-               {:mode :update
-                :ticks 8
-                :balls 2
-                :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-a" :electron-missile/fx-update
+                {:mode :update
+                 :ticks 8
+                 :balls 2
+                 :source-player-id "player-a"})
       (is (= 2 (get-in (em-fx/electron-missile-fx-snapshot) [:charge-state [:ctx "ctx-a"] :balls])))
-      (arc-beam/enqueue-for-test! :electron-missile "ctx-a" :electron-missile/fx-fire
-               {:mode :fire
-                :start {:x 0.0 :y 64.0 :z 0.0}
-                :end {:x 1.0 :y 65.5 :z 2.0}
-                :target-x 1.0 :target-y 64.0 :target-z 2.0
-                :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-a" :electron-missile/fx-fire
+                {:mode :fire
+                 :start {:x 0.0 :y 64.0 :z 0.0}
+                 :end {:x 1.0 :y 65.5 :z 2.0}
+                 :target-x 1.0 :target-y 64.0 :target-z 2.0
+                 :source-player-id "player-a"})
       (is (seq (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]])))
       (dotimes [_ 10]
-        (level-effects/update-effect-state! :electron-missile
-          (fn [store _]
-            (tick-state! store))
-          nil))
+        (tick! tick-state!))
       (is (empty? (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]])))
-      (arc-beam/enqueue-for-test! :electron-missile "ctx-a" :electron-missile/fx-end
-               {:mode :end
-                :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-a" :electron-missile/fx-end
+                {:mode :end
+                 :source-player-id "player-a"})
       (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:charge-state [:ctx "ctx-a"]])))
       (is (seq @particles*))
       (is (seq @sounds*)))))
@@ -155,23 +137,20 @@
                                                             (swap! particles* conj args)
                                                             nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)]
-      (arc-beam/enqueue-for-test! :electron-missile "ctx-em" :electron-missile/fx-fire
-               {:mode :fire
-                :start {:x 0.0 :y 64.0 :z 0.0}
-                :end {:x 1.0 :y 65.5 :z 2.0}
-                :source-player-id "player-a"})
-      (arc-beam/enqueue-for-test! :electron-missile "ctx-em" :electron-missile/fx-fire
-               {:mode :fire
-                :target-x 4.0 :target-y 64.0 :target-z 4.0
-                :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-em" :electron-missile/fx-fire
+                {:mode :fire
+                 :start {:x 0.0 :y 64.0 :z 0.0}
+                 :end {:x 1.0 :y 65.5 :z 2.0}
+                 :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-em" :electron-missile/fx-fire
+                {:mode :fire
+                 :target-x 4.0 :target-y 64.0 :target-z 4.0
+                 :source-player-id "player-a"})
 
       (is (= 10 (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"] 0 :ttl])))
       (is (= 10 (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"] 0 :ttl])))
 
-      (level-effects/update-effect-state! :electron-missile
-        (fn [store _]
-          (tick-state! store))
-        nil)
+      (tick! tick-state!)
 
       (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"] 0 :ttl])))
       (is (= 9 (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"] 0 :ttl])))
@@ -180,10 +159,7 @@
           "one impact spark and one beam-end spark should be emitted per tick while both entries are alive")
 
       (dotimes [_ 9]
-        (level-effects/update-effect-state! :electron-missile
-          (fn [store _]
-            (tick-state! store))
-          nil))
+        (tick! tick-state!))
 
       (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-em"]])))
       (is (nil? (get-in (em-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-em"]])))

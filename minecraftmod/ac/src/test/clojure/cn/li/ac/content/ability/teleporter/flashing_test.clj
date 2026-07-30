@@ -10,7 +10,9 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.content.ability.teleporter.flashing :as flashing]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
-            [cn.li.ac.ability.effects.geom :as geom]))
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.mcmod.platform.block-manipulation :as bm]
+            [cn.li.mcmod.platform.raycast :as raycast]))
 
 (defn- with-flashing-env [f]
   (skill-ctx/with-server-skill-context f))
@@ -90,8 +92,11 @@
                     skill-effects/player-path (fn [_ _ _] 33.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)
                     helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                    helper/player-position (fn [_] {:x 10.0 :y 64.0 :z 10.0})
-                    helper/raycast-combined (fn [& _] nil)
+                    raycast/available? (constantly true)
+                    raycast/player-position (fn [_] {:x 10.0 :y 64.0 :z 10.0
+                                                     :eye-y 64.0
+                                                     :world-id "minecraft:overworld"})
+                    raycast/raycast-combined-excluding (fn [& _] nil)
                     geom/world-id-of (fn [_] "minecraft:overworld")
                     helper/teleport-to! (fn [player-id world-id x y z]
                                         (swap! teleports* conj [player-id world-id x y z])
@@ -99,7 +104,7 @@
                     helper/reset-fall-damage! (fn [player-id]
                                               (swap! reset-fall* conj player-id)
                                               true)
-                    skill-effects/perform-resource! (fn [player-id overload cp]
+                    skill-effects/perform-resource! (fn [player-id overload cp _creative?]
                                                       (swap! resources* conj [player-id overload cp])
                                                       {:success? true})
                     skill-effects/add-skill-exp! (fn [player-id skill-id amount]
@@ -175,10 +180,13 @@
                                               :cooldown.deactivate-ticks 500
                                               0))
                     skill-effects/player-path (fn [_ _ _] 20.0)
+                    skill-effects/current-cp (fn [_] 100.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)
                     helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                    helper/player-position (fn [_] {:world-id "minecraft:overworld" :x 10.0 :y 64.0 :z 10.0})
-                    helper/raycast-combined (fn [& _]
+                    raycast/available? (constantly true)
+                    raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                     :x 10.0 :y 64.0 :z 10.0 :eye-y 64.0})
+                    raycast/raycast-combined-excluding (fn [& _]
                                               {:hit-type :block
                                                :hit-x 10.0
                                                :hit-y 65.0
@@ -187,7 +195,9 @@
                                                :y 65.0
                                                :z 10.0
                                                :face :north})
-                    helper/raycast-blocks (fn [& _] {:x 10 :y 66 :z 9})]
+                    ;; Head space above the side-face landing spot is occupied,
+                    ;; so the destination drops by 1.25.
+                    bm/get-block (fn [& _] :minecraft/stone)]
          (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
          ((get @listeners* :flashing/move-down) {:key :forward})))
     (let [[topic payload] (last @fx*)]

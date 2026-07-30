@@ -36,8 +36,11 @@
     (when-let [session-id (client-session/client-session-id)]
       (overlay-state/clear-client-overlay-session! session-id))))
 
-(defn spawn-local-scripted-effect! [effect-id]
-  (ScriptedEffectSpawner/spawnLocal effect-id))
+(defn spawn-local-scripted-effect!
+  "Returns the spawned entity's UUID string (nil on failure) so callers that
+  own a despawn — e.g. JetEngine's diamond shield — can remove it later."
+  [effect-id]
+  (ScriptedEffectSpawner/spawnLocalWithUuid effect-id))
 
 (defn spawn-local-scripted-effect-at! [effect-id x y z]
   (ScriptedEffectSpawner/spawnLocalAt effect-id x y z))

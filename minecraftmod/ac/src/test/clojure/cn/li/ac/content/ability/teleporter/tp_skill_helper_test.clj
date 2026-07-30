@@ -67,14 +67,17 @@
 
 (defn- with-raycast-from-player [result f]
   (with-redefs [raycast/available? (constantly true)
-                raycast/raycast-from-player (fn [_ _ _] result)]
+                raycast/player-position (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                raycast/player-look-vector (fn [_] {:dx 0.0 :dy 0.0 :dz 1.0})
+                raycast/raycast-combined-from-player (fn [_ _ _] result)]
     (f)))
 
 (deftest raycast-entity-filters-self-and-nil-miss-test
-  (let [hit {:hit-entity true :entity-uuid "other"}]
+  (let [hit {:hit-type :entity :entity-uuid "other" :x 1.0 :y 2.0 :z 3.0}]
     (is (nil? (with-raycast-from-player nil #(h/raycast-entity "p" 8.0))))
     (is (nil? (with-raycast-from-player hit #(h/raycast-entity "other" 8.0))))
-    (is (= hit (with-raycast-from-player hit #(h/raycast-entity "self-id" 8.0))))))
+    (is (= (assoc hit :hit-entity true :entity-x 1.0 :entity-y 2.0 :entity-z 3.0)
+           (with-raycast-from-player hit #(h/raycast-entity "self-id" 8.0))))))
 
 (deftest deal-magic-damage-plain-arity-test
   (is (nil? (h/deal-magic-damage! "world" "e1" 5.5)))

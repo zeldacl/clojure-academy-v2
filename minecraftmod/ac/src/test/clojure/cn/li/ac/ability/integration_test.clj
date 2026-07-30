@@ -8,9 +8,8 @@
 
 (deftest store-plus-reducer-command-flow-test
   (let [session-id :test-session
-        player-uuid "int-player"
-        store (runtime-store/get-store)]
-    (runtime-store/create-session! store session-id)
+        player-uuid "int-player"]
+    (runtime-store/create-session! session-id)
     (runtime-store/get-or-create-player-state! session-id player-uuid)
 
     (let [activate-result (reducer/apply-command

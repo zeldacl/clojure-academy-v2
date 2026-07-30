@@ -1,6 +1,5 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -18,12 +17,20 @@
 
 (use-fixtures :each reset-fixture)
 
-(defn- event
-  [ctx-id payload]
-  {:payload payload
-   :ctx-id ctx-id
-   :channel :storm-wing/fx-update
-   :owner-key [:ctx ctx-id]})
+;; StormWing has no arc-beam impl — it owns its enqueue/tick fns and registers
+;; them through fx-spec, so tests drive those directly.
+(defn- enqueue!
+  [enqueue-state! ctx-id payload]
+  (level-effects/update-effect-state! :storm-wing
+    (fn [store]
+      (enqueue-state! store ctx-id :storm-wing/fx-update [:ctx ctx-id] payload)))
+  nil)
+
+(defn- tick!
+  [tick-state!]
+  (level-effects/update-effect-state! :storm-wing
+    (fn [store] (tick-state! store)))
+  nil)
 
 (deftest init-registers-owner-aware-storm-wing-fx-test
   (let [registered-level* (atom nil)
@@ -56,13 +63,10 @@
                                                             (swap! particle-calls* conj args)
                                                             nil)
                   rand (fn [] 0.5)]
-      (arc-beam/enqueue-for-test! :storm-wing "ctx-main" :storm-wing/fx-update {:mode :start :source-player-id "player-a"})
-      (arc-beam/enqueue-for-test! :storm-wing "ctx-main" :storm-wing/fx-update {:mode :update :phase :flying :charge-ticks 40 :charge-ratio 1.0 :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-main" {:mode :start :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-main" {:mode :update :phase :flying :charge-ticks 40 :charge-ratio 1.0 :source-player-id "player-a"})
       (dotimes [_ 10]
-        (level-effects/update-effect-state! :storm-wing
-          (fn [store _]
-            (tick-state! store))
-          nil))
+        (tick! tick-state!))
       (let [plan (build-plan nil {:x 0.0 :y 64.0 :z 0.0 :player-uuid "player-a"} 0 nil)]
         (is (= 2 (count @sound-calls*)))
         (is (= 12 (count @particle-calls*)))

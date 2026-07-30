@@ -114,14 +114,16 @@
                               :blood-retrograde/fx-end
                               (swap! end-calls* conj [ctx-id (:topic entry) (:mode entry) payload])
                               nil))
-                  entity-damage/apply-direct-damage! (fn [world-id target-id damage kind]
+                  skill-effects/perform-resource! (fn [& _] {:success? true})
+                  skill-effects/scale-damage (fn [_skill damage] damage)
+                  entity-damage/apply-direct-damage! (fn [world-id target-id damage kind & _opts]
                                                       (swap! damage-calls* conj [world-id target-id damage kind]))
                   skill-effects/set-main-cooldown! (fn [player-id skill-id ticks]
                                                      (swap! cooldown-calls* conj [player-id skill-id ticks]))
                   skill-effects/add-skill-exp! (fn [player-id skill-id amount]
                                                  (swap! exp-calls* conj [player-id skill-id amount]))]
       (cb/apply-invoke br/blood-retrograde-on-key-tick :player-id "p1" :ctx-id "ctx-1" :cost-ok? true))
-    (is (= [["w" "target-1" 30.0 :generic]] @damage-calls*))
+    (is (= [["w" "target-1" 30.0 :skill]] @damage-calls*))
     (is (= [["p1" :blood-retrograde 90]] @cooldown-calls*))
     (is (= [["p1" :blood-retrograde 0.002]] @exp-calls*))
     (is (= 2 (count @perform-calls*)) "fx-perform fanned out to owner + nearby")

@@ -158,8 +158,9 @@
                         (sound/stop-all-media!))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
+                            ;; Returns the UUID string so callers can despawn later.
                             :mcmod/spawn-local-scripted-effect
-                            (ScriptedEffectSpawner/spawnLocal (:effect-id payload))
+                            (ScriptedEffectSpawner/spawnLocalWithUuid (:effect-id payload))
 
                             :mcmod/spawn-local-scripted-effect-at
                             (ScriptedEffectSpawner/spawnLocalAt

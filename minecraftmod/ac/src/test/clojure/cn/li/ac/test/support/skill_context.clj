@@ -98,13 +98,16 @@
      :terminate-context! terminate-context!}))
 
 (defn flatten-redefs
-  "Expand `in-memory-skill-mocks` map into a `with-redefs` vector."
+  "Expand `in-memory-skill-mocks` into a var->fn map for `with-redefs-fn`.
+
+  Must be a map, not a vector: `with-redefs` reads its bindings at macroexpansion
+  and cannot take a computed list."
   [mocks]
-  [ctx/get-context (:get-context mocks)
-   ctx/terminate-context! (:terminate-context! mocks)
-   ctx-skill/assoc-skill-state! (:assoc-skill-state! mocks)
-   ctx-skill/update-skill-state-root! (:update-skill-state-root! mocks)
-   ctx-skill/clear-skill-state! (:clear-skill-state! mocks)])
+  {#'ctx/get-context (:get-context mocks)
+   #'ctx/terminate-context! (:terminate-context! mocks)
+   #'ctx-skill/assoc-skill-state! (:assoc-skill-state! mocks)
+   #'ctx-skill/update-skill-state-root! (:update-skill-state-root! mocks)
+   #'ctx-skill/clear-skill-state! (:clear-skill-state! mocks)})
 
 (defn content-ctx-mocks
   "Scatter-style in-memory context atom for public skill entrypoint tests.
@@ -151,18 +154,13 @@
      :terminate-context! terminate-context!}))
 
 (defn redefs-vector
-  "Expand `content-ctx-mocks` into a `with-redefs` vector."
+  "Expand `content-ctx-mocks` into a var->fn map for `with-redefs-fn`."
   [mocks]
-  [ctx/get-context (:get-context mocks)
-   ctx/terminate-context! (:terminate-context! mocks)
-   ctx-skill/assoc-skill-state! (:assoc-skill-state! mocks)
-   ctx-skill/update-skill-state-root! (:update-skill-state-root! mocks)
-   ctx-skill/clear-skill-state! (:clear-skill-state! mocks)])
+  (flatten-redefs mocks))
 
 (defn with-in-memory-skill-mocks
   "Bind owners and in-memory ctx/skill-state mocks around `f`."
   [store opts f]
   (let [mocks (in-memory-skill-mocks (assoc opts :store store))]
     (with-server-skill-context
-      #(with-redefs (flatten-redefs mocks)
-         (f)))))
+      #(with-redefs-fn (flatten-redefs mocks) f))))

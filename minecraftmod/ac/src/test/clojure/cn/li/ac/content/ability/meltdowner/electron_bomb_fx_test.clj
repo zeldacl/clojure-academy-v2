@@ -59,33 +59,21 @@
                                                    :performed? true
                                                    :target-uuid "target-1"})
       ((get @handlers* :electron-bomb/fx-end) "ctx-eb" :electron-bomb/fx-end {})
-      (is (= [[:electron-bomb {:mode :spawn
-                               :owner-key [:ctx "ctx-eb"]
-                               :ctx-id "ctx-eb"
-                               :channel :electron-bomb/fx-spawn
-                               :x 1.0 :y 64.0 :z 2.0
-                               :dx 0.0 :dy 0.0 :dz 1.0}
-               {:ctx-id "ctx-eb"
-                :channel :electron-bomb/fx-spawn
-                :owner-key [:ctx "ctx-eb"]}]
-              [:electron-bomb {:mode :beam
-                               :owner-key [:ctx "ctx-eb"]
-                               :ctx-id "ctx-eb"
-                               :channel :electron-bomb/fx-beam
-                               :start {:x 1.0 :y 64.0 :z 2.0}
-                               :end {:x 1.0 :y 64.0 :z 17.0}
-                               :performed? true
-                               :target-uuid "target-1"}
-               {:ctx-id "ctx-eb"
-                :channel :electron-bomb/fx-beam
-                :owner-key [:ctx "ctx-eb"]}]
-              [:electron-bomb {:mode :end
-                               :owner-key [:ctx "ctx-eb"]
-                               :ctx-id "ctx-eb"
-                               :channel :electron-bomb/fx-end}
-               {:ctx-id "ctx-eb"
-                :channel :electron-bomb/fx-end
-                :owner-key [:ctx "ctx-eb"]}]]
+      (is (= [[:electron-bomb "ctx-eb" :electron-bomb/fx-spawn
+               {:mode :spawn
+                :x 1.0 :y 64.0 :z 2.0
+                :dx 0.0 :dy 0.0 :dz 1.0}
+               [:owner-key [:ctx "ctx-eb"]]]
+              [:electron-bomb "ctx-eb" :electron-bomb/fx-beam
+               {:mode :beam
+                :start {:x 1.0 :y 64.0 :z 2.0}
+                :end {:x 1.0 :y 64.0 :z 17.0}
+                :performed? true
+                :target-uuid "target-1"}
+               [:owner-key [:ctx "ctx-eb"]]]
+              [:electron-bomb "ctx-eb" :electron-bomb/fx-end
+               {:mode :end}
+               [:owner-key [:ctx "ctx-eb"]]]]
              @enqueued*)))))
 
 (deftest spawn-beam-and-tick-state-test
@@ -116,8 +104,7 @@
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 9]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (is (seq @particles*))
       (is (seq @sounds*)))))
@@ -135,8 +122,7 @@
 
       (dotimes [_ 41]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
 
       (is (nil? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
           "active electron-bomb state should auto-expire after tick > 40")
@@ -151,7 +137,6 @@
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 8]
         (level-effects/update-effect-state! :electron-bomb
-          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
           "beam flash plan should disappear when ttl decays to zero"))))

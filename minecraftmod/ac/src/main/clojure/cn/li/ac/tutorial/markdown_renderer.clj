@@ -12,7 +12,9 @@
 
   Returns a vector of pure data specs.  Caller creates CGUI widgets from them."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.client.platform-bridge :as platform-bridge]))
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
+            [cn.li.mcmod.i18n :as i18n]))
 
 ;; --- Constants ---
 
@@ -36,12 +38,23 @@
 (def ^:private image-re
   #"!\[([^\]]*)\]\(([^\)]+)\)")
 
+(defn key-display-name
+  "Localized label for a keybinding prop id, or nil when the id is unknown.
+  Mirrors the settings app's `settings.<modid>.prop.<id>` lookup; the platform
+  translator echoes the key back when the language file has no entry."
+  [key-id]
+  (let [k (str "settings." modid/MOD-ID ".prop." key-id)
+        v (i18n/translate k)]
+    (when (and (string? v) (not= v k) (not (str/blank? v)))
+      v)))
+
 (defn- resolve-inline-tags
   [line misaka-id]
   (-> line
       (str/replace key-tag-re
                    (fn [[_ key-id]]
-                     (str "[" key-id "]")))
+                     (or (key-display-name key-id)
+                         (str "[" key-id "]"))))
       (str/replace misaka-tag-re
                    (if misaka-id
                      (str "__Misaka No." misaka-id "__")
@@ -144,9 +157,11 @@
   ([raw-content misaka-id max-width-px] (render-segments raw-content misaka-id max-width-px nil))
   ([raw-content misaka-id max-width-px text-width-fn]
    (let [text-width-fn (or text-width-fn
-                           (fn [font-desc text font-size] (platform-bridge/font-text-width font-desc text font-size))
-                           (fn [_font-desc text font-size]
-                             (* (count text) font-size 0.6)))
+                           ;; Measure with the client font when the bridge is up; off-client
+                           ;; (tests, dedicated server) fall back to a char-count estimate.
+                           (fn [font-desc text font-size]
+                             (or (platform-bridge/call-adapter :font-text-width font-desc text font-size)
+                                 (* (count text) font-size 0.6))))
          lines (str/split-lines (or raw-content ""))
          segments
          (loop [remaining lines

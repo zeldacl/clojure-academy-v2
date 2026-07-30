@@ -28,10 +28,10 @@
                                                       nil)]
       (tfx/init!)
       (is (= :threatening-teleport (first @registered-level*)))
-      (is (= #{:threatening-tp/fx-start
-               :threatening-tp/fx-update
-               :threatening-tp/fx-perform
-               :threatening-tp/fx-end}
+      (is (= #{:threatening-teleport/fx-start
+               :threatening-teleport/fx-update
+               :threatening-teleport/fx-perform
+               :threatening-teleport/fx-end}
              @registered-topics*)))))
 
 (deftest two-owners-keep-threatening-teleport-state-independent-test

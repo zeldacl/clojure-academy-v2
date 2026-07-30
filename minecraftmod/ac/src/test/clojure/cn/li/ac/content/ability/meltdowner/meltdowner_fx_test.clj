@@ -67,46 +67,25 @@
       ((get @handlers* :meltdowner/fx-reflect) "ctx-md" :meltdowner/fx-reflect {:start {:x 0.0 :y 64.0 :z 0.0}
                                                    :end {:x 1.0 :y 65.0 :z 1.0}
                                                    :source-player-id "player-a"})
-      (is (= [[:meltdowner {:source-player-id "player-a"
-                            :mode :start
-                            :owner-key [:ctx "ctx-md"]
-                            :ctx-id "ctx-md"
-                            :channel :meltdowner/fx-start}
-               {:ctx-id "ctx-md"
-                :channel :meltdowner/fx-start
-                :owner-key [:ctx "ctx-md"]}]
-              [:meltdowner {:source-player-id "player-a"
-                            :mode :update
-                            :owner-key [:ctx "ctx-md"]
-                            :ctx-id "ctx-md"
-                            :channel :meltdowner/fx-update
-                            :ticks 9
-                            :charge-ratio 0.7}
-               {:ctx-id "ctx-md"
-                :channel :meltdowner/fx-update
-                :owner-key [:ctx "ctx-md"]}]
-              [:meltdowner {:source-player-id "player-a"
-                            :mode :perform
-                            :owner-key [:ctx "ctx-md"]
-                            :ctx-id "ctx-md"
-                            :channel :meltdowner/fx-perform
-                            :charge-ticks 18
-                            :beam-length 24.0
-                            :start {:x 0.0 :y 64.0 :z 0.0}
-                            :end {:x 2.0 :y 64.0 :z 2.0}}
-               {:ctx-id "ctx-md"
-                :channel :meltdowner/fx-perform
-                :owner-key [:ctx "ctx-md"]}]
-              [:meltdowner {:source-player-id "player-a"
-                            :mode :reflect
-                            :owner-key [:ctx "ctx-md"]
-                            :ctx-id "ctx-md"
-                            :channel :meltdowner/fx-reflect
-                            :start {:x 0.0 :y 64.0 :z 0.0}
-                            :end {:x 1.0 :y 65.0 :z 1.0}}
-               {:ctx-id "ctx-md"
-                :channel :meltdowner/fx-reflect
-                :owner-key [:ctx "ctx-md"]}]]
+      (is (= [[:meltdowner "ctx-md" :meltdowner/fx-start
+               {:source-player-id "player-a" :mode :start}
+               [:owner-key [:ctx "ctx-md"]]]
+              [:meltdowner "ctx-md" :meltdowner/fx-update
+               {:source-player-id "player-a" :mode :update
+                :ticks 9 :charge-ratio 0.7}
+               [:owner-key [:ctx "ctx-md"]]]
+              [:meltdowner "ctx-md" :meltdowner/fx-perform
+               {:source-player-id "player-a" :mode :perform
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 2.0 :y 64.0 :z 2.0}
+                :charge-ticks 18
+                :beam-length 24.0}
+               [:owner-key [:ctx "ctx-md"]]]
+              [:meltdowner "ctx-md" :meltdowner/fx-reflect
+               {:source-player-id "player-a" :mode :reflect
+                :start {:x 0.0 :y 64.0 :z 0.0}
+                :end {:x 1.0 :y 65.0 :z 1.0}}
+               [:owner-key [:ctx "ctx-md"]]]]
              @enqueued*)))))
 
 (deftest start-update-perform-end-manage-state-test

@@ -29,10 +29,10 @@
                                                       nil)]
       (pfx/init!)
       (is (= :penetrate-teleport (first @registered-level*)))
-      (is (= #{:penetrate-tp/fx-start
-               :penetrate-tp/fx-update
-               :penetrate-tp/fx-perform
-               :penetrate-tp/fx-end}
+      (is (= #{:penetrate-teleport/fx-start
+               :penetrate-teleport/fx-update
+               :penetrate-teleport/fx-perform
+               :penetrate-teleport/fx-end}
              @registered-topics*)))))
 
 (deftest perform-and-tick-emit-particles-and-sound-test

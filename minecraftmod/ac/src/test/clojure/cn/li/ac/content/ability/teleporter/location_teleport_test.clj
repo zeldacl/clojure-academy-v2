@@ -166,10 +166,10 @@
                                              (swap! handlers* assoc msg-id f)
                                              nil)
                   uuid/player-uuid (fn [player] player)
-                  loc-tp/query-location-teleport (fn [_] empty-snapshot)
+                  loc-tp/query-location-teleport (fn [_ _] empty-snapshot)
                   loc-tp/save-current-location! (fn [_ _] {:success? false :error :save-failed})
                   loc-tp/delete-saved-location! (fn [_ _] {:success? true :name "ok"})
-                  loc-tp/perform-location-teleport! (fn [_ _] {:success? false :error :err-cp :cp-cost 99.0})]
+                  loc-tp/perform-location-teleport! (fn [_ _ _] {:success? false :error :err-cp :cp-cost 99.0})]
       (loc-tp/init!)
       (let [query-fn (get @handlers* catalog/MSG-REQ-SAVED-POS-QUERY)
             add-fn (get @handlers* catalog/MSG-REQ-SAVED-POS-ADD)

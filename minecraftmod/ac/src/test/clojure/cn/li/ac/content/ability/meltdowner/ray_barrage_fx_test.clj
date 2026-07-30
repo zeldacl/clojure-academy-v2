@@ -5,6 +5,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as rb-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -60,12 +61,13 @@
                                                   :effect-instance-id "inst-rb"
                                                   :source-player-id "player-a"
                                                   :world-id "world-a"})
-      (is (= [[:ray-barrage {:effect-instance-id "inst-rb"
-                             :source-player-id "player-a"
-                             :world-id "world-a"
-                             :from-x 1.0 :from-y 2.0 :from-z 3.0
-                             :to-x 4.0 :to-y 5.0 :to-z 6.0}
-               {:ctx-id "ctx-rb" :channel :ray-barrage/fx-beam}]]
+      (is (= [[:ray-barrage "ctx-rb" :ray-barrage/fx-beam
+               {:effect-instance-id "inst-rb"
+                :source-player-id "player-a"
+                :world-id "world-a"
+                :from-x 1.0 :from-y 2.0 :from-z 3.0
+                :to-x 4.0 :to-y 5.0 :to-z 6.0}
+               nil]]
              @enqueued*))
       (is (empty? @sounds*)))))
 
@@ -77,6 +79,8 @@
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
                   level-effects/enqueue-level-effect! (fn [& _] nil)
+                  ;; both sound handlers also spawn a local scripted effect
+                  client-bridge/run-client-effect! (fn [& _] nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sounds* conj payload)
                                                               nil)]
@@ -105,7 +109,7 @@
       (is (= 1 (count @enqueued*)))
       (is (= {:from-x 1.0 :from-y 2.0 :from-z 3.0
               :to-x 4.0 :to-y 5.0 :to-z 6.0}
-             (select-keys (second (first @enqueued*))
+             (select-keys (nth (first @enqueued*) 3)
                           [:from-x :from-y :from-z :to-x :to-y :to-z]))))))
 
 (deftest enqueue-beam-tick-and-build-plan-test
@@ -120,8 +124,7 @@
       (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 12]
         (level-effects/update-effect-state! :ray-barrage
-          (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))))
       (is (nil? (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (is (empty? (:beam-queue (rb-fx/fx-snapshot)))))))
 
@@ -136,16 +139,14 @@
 
       (is (= 12 (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl])))
       (level-effects/update-effect-state! :ray-barrage
-        (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))
-        nil)
+        (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store)))
       (is (= 11 (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-fade"] 0 :ttl]))
           "beam ttl should deterministically decay by one tick")
       (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage nil nil 1))))
 
       (dotimes [_ 11]
         (level-effects/update-effect-state! :ray-barrage
-          (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))
-          nil))
+          (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))))
 
       (is (nil? (arc-beam/effect-build-plan :ray-barrage nil nil 13)))
       (is (empty? (:beam-queue (rb-fx/fx-snapshot)))))))

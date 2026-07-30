@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.test.support.contexts :as test-contexts]
             [cn.li.ac.test.support.player-state :as ps-fix]
-            [cn.li.ac.test.support.skill-context :as skill-ctx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.util.toggle :as tg]))
 
@@ -32,7 +31,9 @@
         c2 (ctx/new-server-context "player-b" :skill "ctx-b" (assoc test-context-owner :player-uuid "player-b"))]
     (ctx/register-context! c1)
     (ctx/register-context! c2)
-    (skill-ctx/with-context-owner test-context-owner
+    ;; Bind the routing owner on the thread — that is what the command runtime
+    ;; and ctx/get-context read, not the framework atom.
+    (ctx/with-context-owner-fn test-context-owner
       (fn []
         (tg/activate-toggle! "ctx-a" :storm-wing)
         (is (true? (tg/toggle-active-for-player? "player-a" :storm-wing)))
@@ -42,7 +43,9 @@
 (deftest toggle-mutations-via-context-test
   (let [c (ctx/new-server-context "p" :skill "ctx-toggle" test-context-owner)]
     (ctx/register-context! c)
-    (skill-ctx/with-context-owner test-context-owner
+    ;; Bind the routing owner on the thread — that is what the command runtime
+    ;; and ctx/get-context read, not the framework atom.
+    (ctx/with-context-owner-fn test-context-owner
       (fn []
         (tg/activate-toggle! "ctx-toggle" :s)
         (is (tg/is-toggle-active? (ctx/get-context test-context-owner "ctx-toggle") :s))
