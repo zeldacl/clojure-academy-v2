@@ -3,6 +3,7 @@
   (:require [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
@@ -29,6 +30,10 @@
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
    {:key (loop-key ctx-id)})
+  ;; Upstream c_endEffect: isLocal → hud.startBlend(performed). No-op for the
+  ;; fanned-out copies about other players' releases.
+  (reactive-hud/start-charging-blend! (:source-player-id payload)
+                                      (boolean (:performed? payload)))
   (when (:performed? payload)
     (let [{:keys [x y z]} (:caster-pos payload)]
       (client-sounds/queue-current-sound-effect!

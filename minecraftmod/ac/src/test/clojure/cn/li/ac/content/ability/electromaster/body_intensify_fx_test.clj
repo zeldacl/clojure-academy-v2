@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.content.ability.electromaster.body-intensify-fx :as body-intensify-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
@@ -18,13 +19,17 @@
 (deftest fx-handler-plays-local-effect-when-performed-test
   (let [handlers* (atom {})
         sounds* (atom [])
-        client-effects* (atom [])]
+        client-effects* (atom [])
+        blends* (atom [])]
     (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                                (swap! sounds* conj payload)
                                                                nil)
+                  reactive-hud/start-charging-blend! (fn [source-player-id performed?]
+                                                       (swap! blends* conj [source-player-id performed?])
+                                                       nil)
                   client-bridge/run-client-effect! (fn [effect-key payload]
                                                      (swap! client-effects* conj [effect-key payload])
                                                      nil)]
@@ -60,4 +65,6 @@
               :owner-uuid "player-1"
               :ctx-id "ctx-1"
               :channel :body-intensify/fx-end}
-             (get-in @client-effects* [2 1]))))))
+             (get-in @client-effects* [2 1])))
+      (is (= [["player-1" true] ["player-2" false]] @blends*)
+          "every release drives CurrentChargingHUD.startBlend(performed)"))))

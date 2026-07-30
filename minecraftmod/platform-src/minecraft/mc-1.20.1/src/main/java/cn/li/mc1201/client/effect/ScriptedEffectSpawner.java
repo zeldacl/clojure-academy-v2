@@ -8,9 +8,35 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public final class ScriptedEffectSpawner {
+    /**
+     * Client-local entity network ids. {@code ClientLevel} indexes entities by
+     * the id the server assigned them, and server ids are always positive, so
+     * counting down from -1 can never collide with a tracked entity.
+     */
+    private static final AtomicInteger LOCAL_ENTITY_IDS = new AtomicInteger(-1);
+
     private ScriptedEffectSpawner() {
+    }
+
+    /**
+     * Add a purely client-side entity to the client level.
+     *
+     * {@code Level#addFreshEntity} must NOT be used here: it is
+     * {@code LevelWriter}'s default implementation, which returns false without
+     * doing anything, and only {@code ServerLevel} overrides it. Client-only
+     * entities have to go through {@code ClientLevel#putNonPlayerEntity}, the
+     * same path vanilla uses for entities arriving over the network.
+     */
+    private static boolean addClientEntity(ClientLevel level, ScriptedEffectEntity effect) {
+        try {
+            level.putNonPlayerEntity(LOCAL_ENTITY_IDS.getAndDecrement(), effect);
+            return true;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     public static String spawnLocalWithUuid(String effectId) {
@@ -26,7 +52,7 @@ public final class ScriptedEffectSpawner {
         }
 
         ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, player, effectId);
-        if (!level.addFreshEntity(effect)) {
+        if (!addClientEntity(level, effect)) {
             return null;
         }
         return effect.getUUID().toString();
@@ -50,7 +76,7 @@ public final class ScriptedEffectSpawner {
 
         ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, player, effectId);
         effect.setPos(x, y, z);
-        return level.addFreshEntity(effect);
+        return addClientEntity(level, effect);
     }
 
     /**
@@ -94,7 +120,7 @@ public final class ScriptedEffectSpawner {
         }
 
         ScriptedEffectEntity effect = ScriptedEffectEntity.create(level, owner, effectId);
-        if (!level.addFreshEntity(effect)) {
+        if (!addClientEntity(level, effect)) {
             return null;
         }
         return effect.getUUID().toString();

@@ -80,18 +80,29 @@
          (is (= 1 (count @applied*)))
          (is (= :hunger (:effect (first @applied*))))))))
 
+(defn- test-owner [player-id]
+  {:logical-side :server :server-session-id :test-session :player-uuid player-id})
+
 (defn- seed-charge-context!
   "body-intensify-up! ignores the (never-populated-in-production) hold-ticks
   positional argument and instead self-tracks charge duration in
-  :skill-state �?so tests must seed a real registered context rather than
+  :skill-state, so tests must seed a real registered context rather than
   passing :hold-ticks through cb/apply-invoke."
   [player-id ctx-id ticks]
-  (let [owner {:logical-side :server :server-session-id :test-session :player-uuid player-id}]
+  (let [owner (test-owner player-id)]
     (ctx/with-context-owner owner
       (ctx/register-context!
        (assoc (ctx/new-server-context player-id :body-intensify ctx-id owner)
               :status ctx/STATUS-ALIVE))
       (ctx-skill/update-skill-state-root! ctx-id identity {:hold-ticks ticks}))))
+
+(defn- invoke-as-owner!
+  "Skill callbacks always run inside context-state's owner binding in
+  production; cb/apply-invoke does not establish one, and every :skill-state
+  read here resolves its context through that binding."
+  [action-fn player-id ctx-id]
+  (ctx/with-context-owner (test-owner player-id)
+    (cb/apply-invoke action-fn :player-id player-id :ctx-id ctx-id :exp 0.5)))
 
 (deftest up-action-requires-min-charge-before-performing-test
   (let [up-fn (get-in body-intensify/body-intensify [:actions :up!])
@@ -114,15 +125,15 @@
                        skill-config/lerp-int (fn [_skill-id _field-id exp]
                                                (swap! cooldown-exp* conj exp)
                                                25)
-                       fx/send! (fn [& args] (swap! fx-calls* conj args) nil)]
+                       fx/send! (fn [& args] (swap! fx-calls* conj (vec args)) nil)]
            (seed-charge-context! "p-low" "ctx-low" 9)
-           (cb/apply-invoke up-fn :player-id "p-low" :ctx-id "ctx-low" :exp 0.5)
+           (invoke-as-owner! up-fn "p-low" "ctx-low")
            (is (empty? @applied*) "below min charge does not apply buffs")
            (is (empty? @exp-calls*))
            (is (empty? @cooldown-calls*))
 
            (seed-charge-context! "p-ok" "ctx-ok" 10)
-           (cb/apply-invoke up-fn :player-id "p-ok" :ctx-id "ctx-ok" :exp 0.5)
+           (invoke-as-owner! up-fn "p-ok" "ctx-ok")
            (is (pos? (count @applied*)) "successful release applies buffs")
            (is (= [["p-ok" :body-intensify 0.02]] @exp-calls*))
            (is (= [["p-ok" :body-intensify 25]] @cooldown-calls*))
@@ -152,15 +163,17 @@
                       (swap! floors* conj [player-id floor])
                       true)
                     fx/send! (fn [& _] nil)]
-        (cb/apply-invoke down-fn :player-id "p-floor" :ctx-id "ctx-floor" :exp 0.5)
-        (is (= 137.0
-               (get-in (ctx-skill/get-context "ctx-floor")
-                       [:skill-state :overload-floor])))
-        (cb/apply-invoke tick-fn :player-id "p-floor" :ctx-id "ctx-floor" :exp 0.5)
+        (invoke-as-owner! down-fn "p-floor" "ctx-floor")
+        (ctx/with-context-owner (test-owner "p-floor")
+          (is (= 137.0
+                 (get-in (ctx-skill/get-context "ctx-floor")
+                         [:skill-state :overload-floor]))))
+        (invoke-as-owner! tick-fn "p-floor" "ctx-floor")
         (is (= [["p-floor" 137.0]] @floors*))
-        (is (= 1
-               (get-in (ctx-skill/get-context "ctx-floor")
-                       [:skill-state :hold-ticks]))))
+        (ctx/with-context-owner (test-owner "p-floor")
+          (is (= 1
+                 (get-in (ctx-skill/get-context "ctx-floor")
+                         [:skill-state :hold-ticks])))))
       (finally
         (ctx/reset-contexts-for-test! context-registry-val)))))
 
@@ -173,10 +186,9 @@
       (ctx/reset-contexts-for-test!)
       (with-buff-config ["speed:3" "jump-boost:1"]
         #(with-redefs [skill-effects/enforce-overload-floor! (fn [& _] true)
-                       fx/send! (fn [& args] (swap! fx-calls* conj args) nil)]
+                       fx/send! (fn [& args] (swap! fx-calls* conj (vec args)) nil)]
            (seed-charge-context! "p-timeout" "ctx-timeout" 99)
-           (cb/apply-invoke tick-fn
-                            :player-id "p-timeout" :ctx-id "ctx-timeout" :exp 0.5)
+           (invoke-as-owner! tick-fn "p-timeout" "ctx-timeout")
            (is (= [false false]
                   (mapv (fn [args] (get-in args [3 :performed?]))
                         @fx-calls*))
@@ -184,8 +196,7 @@
 
            (reset! fx-calls* [])
            (seed-charge-context! "p-abort" "ctx-abort" 40)
-           (cb/apply-invoke abort-fn
-                            :player-id "p-abort" :ctx-id "ctx-abort" :exp 0.5)
+           (invoke-as-owner! abort-fn "p-abort" "ctx-abort")
            (is (= [false]
                   (mapv (fn [args] (get-in args [3 :performed?]))
                         @fx-calls*))
@@ -224,7 +235,7 @@
                      :status ctx/STATUS-ALIVE))
              (ctx-skill/update-skill-state-root! "ctx-new" identity {:hold-ticks 10}))
 
-           (cb/apply-invoke up-fn :player-id "p-same" :ctx-id "ctx-new" :exp 0.5)
+           (invoke-as-owner! up-fn "p-same" "ctx-new")
            (is (pos? (count @applied*)) "current ctx-id hold-ticks controls perform gate")
            (is (= [["p-same" :body-intensify 0.02]] @exp-calls*))
            (is (= [["p-same" :body-intensify 25]] @cooldown-calls*))))

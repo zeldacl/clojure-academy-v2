@@ -61,19 +61,32 @@
     (store/get-player-state session-id player-uuid)))
 
 (defn- active-server-contexts-for-player
-  [owner player-uuid]
+  "Server contexts that key-tick should drive this tick.
+
+  `transport-contexts-for-player` deliberately returns RAW transport maps, and
+  :status / :input-state are NOT authoritative there — context-projection owns
+  them in the runtime-store [:context-registry] and only `ctx/get-context`
+  merges them back. A raw transport ctx keeps the :input-state it was created
+  with (:idle) forever, so filtering it directly matched nothing and every
+  tick-driven skill (:charge-window / :hold-channel) silently never ticked.
+  `registry` is the caller's already-loaded [:context-registry] map, so the
+  authoritative overlay costs no extra store read per tick."
+  [owner player-uuid registry]
   (let [pid (str player-uuid)
+        registry (or registry {})
         contexts (ctx/transport-contexts-for-player owner player-uuid)
         size (count contexts)]
     (loop [index 0
            matches (transient [])]
       (if (< index size)
-        (let [ctx-map (nth contexts index)]
+        (let [ctx-map (nth contexts index)
+              stored (get registry (:id ctx-map))]
           (recur (unchecked-inc-int index)
                  (if (and (= :server (:logical-side ctx-map))
                           (= pid (:player-uuid ctx-map))
-                          (= ctx/STATUS-ALIVE (:status ctx-map))
-                          (= ctx-state/INPUT-ACTIVE (:input-state ctx-map)))
+                          (= ctx/STATUS-ALIVE (or (:status stored) (:status ctx-map)))
+                          (= ctx-state/INPUT-ACTIVE
+                             (or (:input-state stored) (:input-state ctx-map))))
                    (conj! matches ctx-map)
                    matches)))
         (persistent! matches)))))
@@ -228,9 +241,9 @@
   common case for idle players — avoiding the global registry snapshot,
   owner map allocation, and :purge-terminated-contexts command dispatch."
   [player-uuid]
-  (when (seq (:context-registry (server-player-state player-uuid)))
+  (when-let [registry (not-empty (:context-registry (server-player-state player-uuid)))]
     (let [owner (server-context-owner player-uuid)]
-      (doseq [spec (active-server-contexts-for-player owner player-uuid)]
+      (doseq [spec (active-server-contexts-for-player owner player-uuid registry)]
         (tick-context-entry! owner send-terminated-context! spec))
       (when-let [server-session-id (owner/store-session-id owner)]
         (command-rt/run-command-in-session!
