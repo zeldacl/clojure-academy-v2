@@ -113,8 +113,11 @@
 (deftest default-abort-handler-uses-client-abort-hook-test
   (let [aborted (atom [])]
     (keybinds/install-default-handlers!)
+    ;; Simulate a held skill key so the upstream-style active-delegate handler
+    ;; wins over default toggle.
+    (binding [keybinds/*client-session-id* :session-a]
+      (keybinds/on-skill-key-event 0 true))
     (with-redefs [read-model/get-player-state (fn [& _] {:ability-data {:category-id :test-cat}})
-                  read-model/get-player-contexts-for-player (fn [& _] [{:id "ctx-1" :status :alive}])
                   runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
                   runtime-hooks/set-client-overlay-activated! (fn [_ _] nil)
                   ctx/abort-all-contexts-for-player! (fn [& _]
@@ -123,6 +126,26 @@
       (binding [keybinds/*client-session-id* :session-a]
         (keybinds/trigger-mode-switch! "p1")))
     (is (= [:abort-hook] @aborted))))
+
+(deftest no-active-delegate-does-not-block-toggle-test
+  (let [aborted (atom [])
+        toggled (atom [])
+        overlay (atom [])]
+    (keybinds/install-default-handlers!)
+    (with-redefs [read-model/get-player-state (fn [& _]
+                                                {:ability-data {:category-id :test-cat}
+                                                 :resource-data {:activated true}})
+                  runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
+                  client-api/req-set-activated! (fn [_owner activated _callback]
+                                                 (swap! toggled conj activated)
+                                                 nil)
+                  runtime-hooks/set-client-overlay-activated! (fn [player-uuid activated]
+                                                                (swap! overlay conj [player-uuid activated]))]
+      (binding [keybinds/*client-session-id* :session-a]
+        (keybinds/trigger-mode-switch! "p1")))
+    (is (empty? @aborted))
+    (is (= [false] @toggled))
+    (is (= [["p1" false]] @overlay))))
 
 
 

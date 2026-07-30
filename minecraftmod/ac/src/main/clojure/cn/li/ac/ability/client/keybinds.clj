@@ -336,26 +336,15 @@
                                                   (current-client-session-id))
    :player-uuid player-uuid})
 
-(defn- client-context-query-owner
+(defn- has-active-delegates?
+  "Check if any skill delegate key is currently held (upstream
+  ClientRuntime.hasActiveDelegate semantics).
+  V-key short-press aborts only while a delegate key is down; otherwise it
+  toggles activation even if stale/alive contexts still exist."
   [player-uuid]
-  (when-let [session-id (current-client-session-id)]
-    {:logical-side :client
-     :client-session-id session-id
-     :player-uuid (str player-uuid)}))
-
-(defn- player-contexts
-  [player-uuid]
-  (read-model/get-player-contexts-for-player (str player-uuid)
-                                             (current-client-session-id)
-                                             :keybinds))
-
-(defn- has-active-contexts?
-  "Check if the player has any non-terminated contexts.
-  Used by activate handler stack: if true, V-key short-press aborts
-  delegates instead of toggling activation."
-  [player-uuid]
-  (seq (filter #(not= (:status %) :terminated)
-               (player-contexts player-uuid))))
+  (let [owner (current-client-owner player-uuid)
+        skill-keys (:skill-keys (key-state-snapshot owner))]
+    (boolean (some true? skill-keys))))
 
 (defn on-skill-key-event
   "Handle skill key state change. Uses delegate system with pre-checks."
@@ -411,11 +400,11 @@
                  {:uuid (str player-uuid)
                   :session-id (current-client-session-id)
                   :state-keys (some-> (get-client-player-state player-uuid) keys vec)})
-       ;; Determine whether abort handler will match BEFORE running the stack.
-       ;; When has-active-contexts? is true, the priority-10 abort-delegates
+      ;; Determine whether abort handler will match BEFORE running the stack.
+      ;; When has-active-delegates? is true, the priority-10 abort-delegates
        ;; handler will fire → aborts contexts WITHOUT toggling activation.
        ;; When false, the priority-0 default-toggle handler fires → toggles.
-       (let [will-abort? (boolean (has-active-contexts? player-uuid))]
+      (let [will-abort? (boolean (has-active-delegates? player-uuid))]
          (if-let [handler (get-active-handler player-uuid)]
            (do
              (log/info "[V-TRACE][AC][CLIENT][HANDLER]"
@@ -536,7 +525,7 @@
   (add-activate-handler!
    {:id              :abort-delegates
     :priority        10
-    :handles-fn      (fn [uuid] (boolean (has-active-contexts? uuid)))
+    :handles-fn      (fn [uuid] (boolean (has-active-delegates? uuid)))
     :on-key-down-fn  (fn [uuid]
                        (runtime-hooks/client-abort-all!)
                        (log/info "[V-TRACE] Aborted all contexts for" uuid))
