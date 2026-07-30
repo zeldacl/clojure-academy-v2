@@ -20,7 +20,7 @@
             Tesselator BufferBuilder BufferUploader]
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.vertex VertexSorting]
-           [org.lwjgl.opengl GL11]
+           [org.lwjgl.opengl GL11 GL13]
            [org.joml Matrix4f Quaternionf]))
 
 (declare draw-tape!)
@@ -89,20 +89,25 @@
 ;; ============================================================================
 ;; Depth layering (opt-in, static props)
 ;;
-;; A node may declare `:z` and `:depth-func` to take part in depth-buffer
+;; A node may declare `:depth-z` and `:depth-func` to take part in depth-buffer
 ;; layering — used by the skill tree to reproduce upstream SkillTree.scala's
 ;; mask trick: node plates/rings stamp the depth buffer, the icon draws with
 ;; GL_EQUAL so it is clipped to its plate, and connection lines draw with
 ;; GL_NOTEQUAL so they are cut where they would cross a node's ring.
+;;
+;; NOT `:z`: that is the layout layer's paint-order key (layout/flatten-into!
+;; sorts each group's children by it), so putting a GL depth there silently
+;; reorders the tape — a node icon at :z -2 sorts BEFORE the plate that is
+;; supposed to sit behind it, and the plate then paints over the icon.
 ;;
 ;; These are static props, not slots: nothing animates them, so they cost one
 ;; map lookup and no dslot layout churn on the kinds that opt in. Nodes without
 ;; :depth-func render exactly as before — depth test off, painter's order.
 ;;
 ;; The GUI depth buffer is shared with the rest of the screen, so the skill tree
-;; stamps NEGATIVE z (behind the z=0 plane every other GUI element draws at).
-;; Anything drawn afterwards with the usual LEQUAL test is nearer and still
-;; passes; a positive z would silently punch holes in later overlays.
+;; stamps NEGATIVE depth-z (behind the z=0 plane every other GUI element draws
+;; at). Anything drawn afterwards with the usual LEQUAL test is nearer and still
+;; passes; a positive value would silently punch holes in later overlays.
 ;; ============================================================================
 
 (defn- depth-func-gl [kw]
@@ -121,7 +126,7 @@
       (RenderSystem/enableDepthTest)
       (RenderSystem/depthFunc (int (depth-func-gl f)))
       (RenderSystem/depthMask (boolean (:depth-write? sp false))))
-    (float (double (:z sp 0.0)))))
+    (float (double (:depth-z sp 0.0)))))
 
 (defn- pop-depth!
   "Restore the shared default: no depth test, LEQUAL, depth writes on. Every
@@ -582,6 +587,14 @@
             (.vertex bb pose-matrix x y z) (.uv bb u0 v0) (.endVertex bb)
             (BufferUploader/drawWithShader (.end bb))
             (pop-depth! node)))
+        ;; ShaderInstance.apply() walks its samplers with activeTexture(GL_TEXTUREi)
+        ;; and never puts the unit back, so a two-sampler shader (ring-progbar)
+        ;; leaves unit 1 selected. The next AbstractTexture.bind() — notably the
+        ;; MSDF glyph atlas — then lands on the wrong unit and Sampler0 keeps
+        ;; whatever stale texture was there, which renders text as solid boxes.
+        ;; Upstream restores it explicitly (SkillTree.scala: glActiveTexture(
+        ;; GL_TEXTURE0) after the progress-bar draw).
+        (RenderSystem/activeTexture GL13/GL_TEXTURE0)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
         ;; Release the custom program, but leave a *usable* shader bound: a nil
         ;; current shader NPEs the next raw-BufferBuilder node (drawWithShader
@@ -611,7 +624,7 @@
     (when (and rl si)
       (try
         (let [sp (.getStaticProps node)
-              z (float (double (:z sp 0.0)))
+              z (float (double (:depth-z sp 0.0)))
               cutoff (float (double (:alpha-cutoff sp 0.3)))
               x (float (node-abs-x node)) y (float (node-abs-y node))
               x2 (float (+ (node-abs-x node) (scaled-w node)))
@@ -641,6 +654,7 @@
           (RenderSystem/depthMask true)
           (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
           (RenderSystem/disableDepthTest)
+          (RenderSystem/activeTexture GL13/GL_TEXTURE0)
           (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader))))
         (catch Exception e
           ;; Never leave the colour mask off — a leaked one blanks the screen.
@@ -648,6 +662,7 @@
           (RenderSystem/depthMask true)
           (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
           (RenderSystem/disableDepthTest)
+          (RenderSystem/activeTexture GL13/GL_TEXTURE0)
           (cn.li.mcmod.util.log/stacktrace "depth mask render failed" e))))))
 
 (defn render-shader-quad! [^GuiGraphics gg ^INode node]

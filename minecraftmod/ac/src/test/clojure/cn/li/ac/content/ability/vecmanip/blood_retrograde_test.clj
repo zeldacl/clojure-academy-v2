@@ -27,6 +27,8 @@
     :cost.release.cp 280.0
     :cost.release.overload 55.0
     :combat.damage 30.0
+    ;; cooldown reads the double curve and truncates
+    :cooldown.ticks 90.0
     0.0))
 
 (defn- mock-cfg-lerp-int [field _exp]
@@ -101,6 +103,7 @@
                   ctx/terminate-context! terminate-context!
                   geom/world-id-of (fn [_] "w")
                   raycast/available? (constantly true)
+                  raycast/player-position (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   entity-damage/available? (constantly true)
                   raycast/raycast-from-player (fn [& _]
                                                 {:entity-id "target-1"

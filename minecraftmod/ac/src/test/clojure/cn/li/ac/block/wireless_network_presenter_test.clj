@@ -36,8 +36,10 @@
               :matrix-range #(.getMatrixRange %)})))))
 
 (deftest matrix-presenter-uses-plain-network-values-test
+  ;; Pure presenter test — stay on the non-committing state update so it does
+  ;; not need a live world runtime.
   (let [network (-> (network "ssid" "pw")
-                    (network-state/update-nodes! conj :node-a))]
+                    (network-state/update-state-value :nodes conj :node-a))]
     (is (= {:ssid "ssid"
             :password "pw"
             :owner "tester"

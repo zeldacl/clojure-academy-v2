@@ -23,7 +23,9 @@
       (is (some #(= 'cn.li.ac.content.ability/init-ability-content! %) (:init-fns ability-phase)))
       (is (some #(= 'cn.li.ac.content.loot/init-loot! %) (:init-fns ability-phase))))
     (let [system-phase (first (filter #(= :system (:phase %)) plan))]
-      (is (= '[cn.li.ac.terminal.init/init-terminal!] (:init-fns system-phase))))))
+      (is (= '[cn.li.ac.terminal.init/init-terminal!
+               cn.li.ac.tutorial.init/init-tutorial!]
+             (:init-fns system-phase))))))
 
 (deftest register-content-phase-plugin-appends-after-defaults-test
   (content-ns/register-content-phase-plugin!

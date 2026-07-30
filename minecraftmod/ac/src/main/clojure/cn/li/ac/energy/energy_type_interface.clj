@@ -137,11 +137,16 @@
 (defn list-energy-types []
   (->> (:types (energy-type-state-snapshot)) vals (sort-by #(get % :energy-type-id)) vec))
 
-(defn resolve-energy-type [type-or-item]
+(defn resolve-energy-type
+  "The energy type owning `type-or-item` — a type id, or an item stack matched
+  against every registered type's :supports-item?. Returns the type itself, not
+  the predicate's result: callers feed it straight to get-energy* and friends."
+  [type-or-item]
   (cond
     (keyword? type-or-item) (get-energy-type type-or-item)
     :else (some (fn [energy-type]
-                  ((:supports-item? energy-type) type-or-item))
+                  (when ((:supports-item? energy-type) type-or-item)
+                    energy-type))
                 (vals (:types (energy-type-state-snapshot))))))
 
 ;; ============================================================================

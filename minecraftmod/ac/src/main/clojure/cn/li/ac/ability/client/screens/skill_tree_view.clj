@@ -80,11 +80,13 @@
   [node-count]
   (+ (node-blend-offset (max 0 (dec (long (or node-count 0))))) 0.62))
 
-;; Depth-layering planes. Upstream uses +10 (plate) / +11 (ring, and the
-;; connection lines) relative to the widget; only the ORDERING and the equality
-;; the icon/line tests rely on matter, so we mirror it below the z=0 plane the
-;; rest of the GUI draws at — depth we leave behind then never rejects an
-;; overlay drawn after the tree. See render.clj's depth-layering notes.
+;; Depth-layering planes, passed as :depth-z (NOT :z — that is the layout
+;; layer's paint-order key and reordering the tape with it puts the plate on
+;; top of the icon). Upstream uses +10 (plate) / +11 (ring, and the connection
+;; lines) relative to the widget; only the ORDERING and the equality the
+;; icon/line tests rely on matter, so we mirror it below the z=0 plane the rest
+;; of the GUI draws at — depth we leave behind then never rejects an overlay
+;; drawn after the tree. See render.clj's depth-layering notes.
 (def ^:private z-plate -2.0)
 (def ^:private z-ring  -1.0)
 
@@ -126,7 +128,7 @@
              ;; Upstream draws lines at the ring's z under GL_NOTEQUAL, so a line
              ;; is cut wherever it would cross a node's outline ring (the ring
              ;; stamped that exact depth) but still crosses the plate.
-             :z z-ring :depth-func :notequal
+             :depth-z z-ring :depth-func :notequal
              :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
              :color (line-color m-alpha child-learned?)}}))
 
@@ -369,10 +371,10 @@
         ;; Children of the group, so hover scaling moves the mask with the art.
         _ (rt/build-child! rt {:kind :depth-mask :props {:x da :y da :w ta :h ta
                                                          :src (tex-src :skill-back)
-                                                         :z z-plate :alpha-cutoff 0.3}} grp)
+                                                         :depth-z z-plate :alpha-cutoff 0.3}} grp)
         _ (rt/build-child! rt {:kind :depth-mask :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
                                                          :src (tex-src :skill-outline)
-                                                         :z z-ring :alpha-cutoff 0.5}} grp)
+                                                         :depth-z z-ring :alpha-cutoff 0.5}} grp)
         ;; Unlearned skills show a greyscale icon (upstream wraps the icon draw in
         ;; `glUseProgram(shaderMono)` when !learned). Both kinds expose :alpha, so
         ;; apply-node-anim! fades either one the same way. If the loader has no
@@ -383,10 +385,10 @@
         icon (if (:learned nd)
                (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
                                                          :src (icon-src (:skill-icon nd)) :alpha 0.0
-                                                         :z z-plate :depth-func :equal}} grp)
+                                                         :depth-z z-plate :depth-func :equal}} grp)
                (rt/build-child! rt {:kind :shader-quad
                                     :props {:x oia :y oia :w logic/icon-size :h logic/icon-size :alpha 0.0
-                                            :z z-plate :depth-func :equal
+                                            :depth-z z-plate :depth-func :equal
                                             :shader-props {:shader-id :mono
                                                            :texture-0 (icon-src (:skill-icon nd))}}} grp))
         ring (when (:learned nd)

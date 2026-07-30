@@ -178,7 +178,8 @@
 
 (deftest default-values-preserve-existing-core-fields-test
   (testing "static defaults mirror current skill specs for core fields"
-    (is (= 0.0 (get (get skill-config/default-values-by-category :electromaster)
+    ;; railgun routes real costs through :cost, so it inherits the 1.0 default
+    (is (= 1.0 (get (get skill-config/default-values-by-category :electromaster)
                     (skill-config/config-key :railgun :cp-consume-speed))))
     (is (= 0.0 (get (get skill-config/default-values-by-category :teleporter)
                     (skill-config/config-key :flashing :overload-consume-speed))))

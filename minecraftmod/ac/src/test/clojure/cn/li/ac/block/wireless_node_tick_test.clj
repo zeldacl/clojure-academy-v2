@@ -6,9 +6,21 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.world :as world]))
 
-(deftest node-tick-state-increments-ticker-test
-  (let [state (machine-runtime/ensure-machine-state {} node-logic/node-default-state)]
-    (is (= 1 (:update-ticker (node-logic/node-tick-state state :w :p nil :be))))))
+;; :update-ticker stopped being a state key in "performance fix" — the ticker is
+;; now a private mutable field on MachineState, and the sync-interval network
+;; check is the observable consequence of it advancing.
+(deftest node-tick-state-advances-the-machine-ticker-test
+  (let [state (machine-runtime/ensure-machine-state {} node-logic/node-default-state)
+        checks* (atom 0)]
+    (with-redefs [node-logic/tick-charge-in identity
+                  node-logic/tick-charge-out identity
+                  node-logic/tick-check-network (fn [s _ _ _] (swap! checks* inc) s)]
+      (dotimes [_ (node-config/sync-interval)]
+        (node-logic/node-tick-state state :w :p nil :be))
+      (is (= 1 @checks*) "network check runs once per sync interval")
+      (dotimes [_ (node-config/sync-interval)]
+        (node-logic/node-tick-state state :w :p nil :be))
+      (is (= 2 @checks*)))))
 
 (deftest node-scripted-tick-fn-uses-machine-wrapper-test
   (testing "tick fn commits via machine runtime on server"
@@ -27,7 +39,9 @@
                     platform-be/set-changed! (fn [_] nil)]
         (node-logic/node-scripted-tick-fn :level :pos nil be)
         (is (some? @saved))
-        (is (= 1 (:update-ticker @saved))))))
+        (is (machine-runtime/machine-state? @saved)
+            "the wrapper commits the machine state itself")
+        (is (= :basic (:node-type @saved)) "node fields survive the commit"))))
 
 (deftest sync-blockstate-compares-broadcast-metadata-test
   (testing "after-commit updates blockstate when energy level changes on sync tick"

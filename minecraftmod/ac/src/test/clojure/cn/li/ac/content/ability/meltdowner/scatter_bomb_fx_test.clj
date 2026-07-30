@@ -5,6 +5,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.scatter-bomb-fx :as sb-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -55,7 +56,8 @@
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/tick-state!)
         particles* (atom [])
         sounds* (atom [])]
-    (with-redefs [client-particles/queue-current-particle-effect! (fn [& args]
+    (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
+                  client-particles/queue-current-particle-effect! (fn [& args]
                                                                      (swap! particles* conj args)
                                                                      nil)
                   client-sounds/queue-current-sound-effect! (fn [& args]

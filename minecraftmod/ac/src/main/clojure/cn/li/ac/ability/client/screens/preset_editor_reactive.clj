@@ -338,7 +338,7 @@
       ;; glow CRL_GLOW, text at (3,-12) 9pt #FFBBBBBB, content = hovered
       ;; item's name — updated per frame by update-selector-tooltip!).
       (let [default-text (local "skill_select")
-            len (double (or (bridge/font-width (str default-text)) 40.0))
+            len (double (or (bridge/call-adapter :font-width (str default-text)) 40.0))
             tt-w (+ len 6.0)
             ^INode tt-group (rt/build-child! r
                               {:kind :group
@@ -417,7 +417,7 @@
         (when-not (= nm (aget ^objects last 0))
           (aset ^objects last 0 nm)
           (ui/set-node-prop! r text :text (str nm))
-          (let [w (+ 6.0 (double (or (bridge/font-width (str nm)) 40.0)))]
+          (let [w (+ 6.0 (double (or (bridge/call-adapter :font-width (str nm)) 40.0)))]
             (.setW bg w)
             (.setFlag bg node/FLAG-LAYOUT-DIRTY)
             (doseq [suffix ["up" "down"]]

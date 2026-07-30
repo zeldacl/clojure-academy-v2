@@ -39,7 +39,8 @@
            [cn.li.mcmod.uipojo.signal ISigO]))
 
 ;; ============================================================================
-;; Layout — loaded from guis/new/tutorial.xml (port of upstream academy:guis/tutorial.xml)
+;; Layout — loaded from guis/new/tutorial.xml (port of upstream AcademyCraft's
+;; own guis/tutorial.xml)
 ;; ============================================================================
 
 (def ^:private eh 12.0) (def ^:private lih 207.0) (def ^:private liw 72.0)

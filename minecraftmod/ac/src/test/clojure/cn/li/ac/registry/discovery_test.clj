@@ -1,5 +1,6 @@
 (ns cn.li.ac.registry.discovery-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.registry.core :as registry-core]
             [cn.li.ac.registry.discovery :as discovery]))
 
 (defn- reset-provider-registry-fixture [f]
@@ -14,7 +15,9 @@
 (deftest provider-registry-discovers-in-order-test
   (discovery/register-provider! {:id :b :priority 20 :phases [{:phase :b}]})
   (discovery/register-provider! {:id :a :priority 10 :phases [{:phase :a}]})
-  (is (= [:a :b] (map :id (discovery/discover-providers))))
+  ;; register-provider! normalizes maps into provider values — read the id
+  ;; through the accessor rather than as a map key.
+  (is (= [:a :b] (map registry-core/provider-id* (discovery/discover-providers))))
   (is (= [{:phase :a} {:phase :b}]
          (discovery/discovered-content-phases))))
 

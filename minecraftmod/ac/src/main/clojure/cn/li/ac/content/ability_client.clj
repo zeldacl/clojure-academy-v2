@@ -7,6 +7,7 @@
   This namespace must ONLY be required from client-side code paths
   (e.g. platform client entry points), never from dedicated-server code."
   (:require [cn.li.ac.ability.discovery :as discovery]
+            [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
@@ -16,10 +17,11 @@
             [cn.li.mcmod.util.log :as log]))
 
 (defn- init-fx-namespace! [ns-sym]
-  (require ns-sym)
-  (when-let [init-var (ns-resolve ns-sym 'init!)]
-    (when (bound? init-var)
-      (init-var))))
+  (let [ns-sym (discovery-core/ns-symbol ns-sym)]
+    (require ns-sym)
+    (when-let [init-var (ns-resolve ns-sym 'init!)]
+      (when (bound? init-var)
+        (init-var)))))
 
 (defn- init-discovered-fx! []
   (doseq [ns-sym (discovery/discovered-fx-namespaces)]

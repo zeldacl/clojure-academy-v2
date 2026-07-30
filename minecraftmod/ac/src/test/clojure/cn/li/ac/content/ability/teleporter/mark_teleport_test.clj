@@ -86,8 +86,11 @@
                                                       (swap! reset-calls* conj player-id)
                                                       true)
                   raycast/available? (constantly true)
+                  ;; resolve-destination prefers the live raycast position
+                  raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                   :x 1.0 :y 64.0 :z 3.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-combined (fn [& _]
+                  raycast/raycast-combined-from-player (fn [& _]
                                               {:hit-type :entity
                                                :hit-x 1.0 :hit-y 62.4 :hit-z 6.5
                                                :eye-height 1.6})]

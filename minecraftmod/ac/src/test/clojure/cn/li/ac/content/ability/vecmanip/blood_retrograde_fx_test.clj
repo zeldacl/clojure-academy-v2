@@ -79,41 +79,22 @@
                                                        :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.2 :rotation 0.0
                                                                 :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
       ((get @handlers* :blood-retrograde/fx-end) "ctx-1" :blood-retrograde/fx-end {:performed? true})
-      (is (= [[:blood-retrograde {:mode :start
-                                  :owner-key [:ctx "ctx-1"]
-                                  :ctx-id "ctx-1"
-                                  :channel :blood-retrograde/fx-start}
-               {:ctx-id "ctx-1"
-                :channel :blood-retrograde/fx-start
-                :owner-key [:ctx "ctx-1"]}]
-              [:blood-retrograde {:mode :update
-                                  :owner-key [:ctx "ctx-1"]
-                                  :ctx-id "ctx-1"
-                                  :channel :blood-retrograde/fx-update
-                                  :ticks 7
-                                  :charge-ratio 0.35}
-               {:ctx-id "ctx-1"
-                :channel :blood-retrograde/fx-update
-                :owner-key [:ctx "ctx-1"]}]
-              [:blood-retrograde {:mode :perform
-                                  :owner-key [:ctx "ctx-1"]
-                                  :ctx-id "ctx-1"
-                                  :channel :blood-retrograde/fx-perform
-                                  :sound-pos {:x 1.0 :y 2.0 :z 3.0}
-                                  :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.4}]
-                                  :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.2 :rotation 0.0
-                                            :offset-u 0.0 :offset-v 0.0 :texture-id 1}]}
-               {:ctx-id "ctx-1"
-                :channel :blood-retrograde/fx-perform
-                :owner-key [:ctx "ctx-1"]}]
-              [:blood-retrograde {:mode :end
-                                  :owner-key [:ctx "ctx-1"]
-                                  :ctx-id "ctx-1"
-                                  :channel :blood-retrograde/fx-end
-                                  :performed? true}
-               {:ctx-id "ctx-1"
-                :channel :blood-retrograde/fx-end
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:blood-retrograde "ctx-1" :blood-retrograde/fx-start
+               {:mode :start}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:blood-retrograde "ctx-1" :blood-retrograde/fx-update
+               {:mode :update :ticks 7 :charge-ratio 0.35}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:blood-retrograde "ctx-1" :blood-retrograde/fx-perform
+               {:mode :perform
+                :sound-pos {:x 1.0 :y 2.0 :z 3.0}
+                :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.4}]
+                :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.2 :rotation 0.0
+                          :offset-u 0.0 :offset-v 0.0 :texture-id 1}]}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:blood-retrograde "ctx-1" :blood-retrograde/fx-end
+               {:mode :end :performed? true}
+               [:owner-key [:ctx "ctx-1"]]]]
              @enqueued-effects*))
       (is (= 1 (count @sound-calls*)))
       (is (= "my_mod:vecmanip.blood_retro" (:sound-id (first @sound-calls*)))))))

@@ -108,7 +108,11 @@
     (keybinds/freeze-keybind-registries!)
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Keybind registries are frozen"
-                          (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})))))
+                          (keybinds/add-activate-handler!
+                            (assoc handler-a :id :test/after-freeze))))
+    ;; key delegates are rebound by runtime preset syncs, so they stay writable
+    ;; after the registration phase is frozen.
+    (is (nil? (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})))))
 
 (deftest default-abort-handler-uses-client-abort-hook-test
   (let [aborted (atom [])]

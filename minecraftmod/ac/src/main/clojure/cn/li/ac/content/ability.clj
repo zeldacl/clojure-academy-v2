@@ -14,6 +14,7 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
+            [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.teleporter.passive-hooks :as tp-passive]
             [cn.li.mcmod.runtime.install :as install]
@@ -52,8 +53,11 @@
   :enabled true)
 
 (defn- load-discovered-skill-namespaces!
+  "Require every discovered skill namespace, returning them as loadable
+  namespace symbols (discovery hands them over split as ns/name)."
   []
-  (let [skill-namespaces (discovery/discovered-skill-namespaces)]
+  (let [skill-namespaces (mapv discovery-core/ns-symbol
+                               (discovery/discovered-skill-namespaces))]
     (doseq [ns-sym skill-namespaces]
       (require ns-sym))
     skill-namespaces))

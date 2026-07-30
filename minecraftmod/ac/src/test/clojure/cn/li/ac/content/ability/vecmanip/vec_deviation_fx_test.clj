@@ -69,28 +69,12 @@
        {:x 1.0 :y 2.0 :z 3.0 :marked? true})
       ((get @handlers* :vec-deviation/fx-stop-entity) "ctx-1" :vec-deviation/fx-stop-entity
        {:x 4.0 :y 5.0 :z 6.0 :marked? false})
-      (is (= [[:vec-deviation {:mode :stop-entity
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :vec-deviation/fx-stop-entity
-                               :x 1.0
-                               :y 2.0
-                               :z 3.0
-                               :marked? true}
-               {:ctx-id "ctx-1"
-                :channel :vec-deviation/fx-stop-entity
-                :owner-key [:ctx "ctx-1"]}]
-              [:vec-deviation {:mode :stop-entity
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :vec-deviation/fx-stop-entity
-                               :x 4.0
-                               :y 5.0
-                               :z 6.0
-                               :marked? false}
-               {:ctx-id "ctx-1"
-                :channel :vec-deviation/fx-stop-entity
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:vec-deviation "ctx-1" :vec-deviation/fx-stop-entity
+               {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:vec-deviation "ctx-1" :vec-deviation/fx-stop-entity
+               {:mode :stop-entity :x 4.0 :y 5.0 :z 6.0 :marked? false}
+               [:owner-key [:ctx "ctx-1"]]]]
              @enqueued*)))))
 
 (deftest two-owners-keep-vec-deviation-state-and-waves-independent-test

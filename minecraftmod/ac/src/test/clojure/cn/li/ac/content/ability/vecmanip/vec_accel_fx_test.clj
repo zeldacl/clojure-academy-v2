@@ -84,18 +84,14 @@
         :can-perform? true
         :look-dir {:x 1.0 :y 0.0 :z 0.0}
         :init-vel {:x 0.0 :y 0.5 :z 1.0}})
-      (is (= [[:vec-accel {:source-player-id "player-a"
-                           :mode :update
-                           :owner-key [:ctx "ctx-1"]
-                           :ctx-id "ctx-1"
-                           :channel :vec-accel/fx-update
-                           :charge-ticks 9
-                           :can-perform? true
-                           :look-dir {:x 1.0 :y 0.0 :z 0.0}
-                           :init-vel {:x 0.0 :y 0.5 :z 1.0}}
-               {:ctx-id "ctx-1"
-                :channel :vec-accel/fx-update
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:vec-accel "ctx-1" :vec-accel/fx-update
+               {:source-player-id "player-a"
+                :mode :update
+                :charge-ticks 9
+                :can-perform? true
+                :look-dir {:x 1.0 :y 0.0 :z 0.0}
+                :init-vel {:x 0.0 :y 0.5 :z 1.0}}
+               [:owner-key [:ctx "ctx-1"]]]]
              @enqueued*)))))
 
 

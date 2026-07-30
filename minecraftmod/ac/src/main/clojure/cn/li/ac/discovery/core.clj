@@ -33,3 +33,15 @@
 (defn fx-namespace?
   [ns-sym]
   (str/ends-with? (name ns-sym) "-fx"))
+
+(defn ns-symbol
+  "Join a discovered ns/name pair back into a loadable namespace symbol.
+
+  Discovery carries namespaces split at the last segment
+  (cn.li.ac.content.ability.electromaster/railgun) so `base-family` and
+  `fx-namespace?` can read the parts; `require` and `ns-resolve` need the
+  joined form."
+  [ns-sym]
+  (if-let [prefix (namespace ns-sym)]
+    (symbol (str prefix "." (name ns-sym)))
+    ns-sym))
