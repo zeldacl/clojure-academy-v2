@@ -7,6 +7,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.resources.ResourceLocation;
 import org.joml.Matrix4f;
 
@@ -36,6 +37,14 @@ public final class GuiGraphicsHelper {
      * quad honors the current translate/scale (e.g. a container screen's
      * leftPos/topPos offset). Emitting raw {@code bb.vertex(x,y,z)} without the
      * matrix would ignore the pose and render at absolute coordinates.</p>
+     *
+     * <p>{@code BufferUploader.drawWithShader} uses whatever shader
+     * {@code RenderSystem.setShader} last selected, and MC's RenderType shards
+     * leave their own shader bound after a text/fill batch flushes. Bind
+     * position_tex explicitly (exactly as vanilla {@code GuiGraphics.innerBlit}
+     * does) — without it a POSITION_TEX quad is fed to e.g. position_color,
+     * which reads the UV floats as the colour attribute and renders a flat,
+     * untextured fill instead of the texture.</p>
      */
     public static void blitTexturedQuad(
             GuiGraphics graphics,
@@ -46,6 +55,7 @@ public final class GuiGraphicsHelper {
             float u0, float u1,
             float v0, float v1) {
         Matrix4f pose = graphics.pose().last().pose();
+        RenderSystem.setShader(GameRenderer::getPositionTexShader);
         RenderSystem.setShaderTexture(0, texture);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();

@@ -66,24 +66,54 @@
 (defn- lerp [a b t]
   (+ a (* (- b a) (clamp01 t))))
 
+(defn- node-blend-offset
+  "Upstream `blendOffset = idx * 0.08 + 0.1` — the per-node stagger the whole
+   reveal (plate, icon, exp ring, incoming connection) is keyed off."
+  [idx]
+  (+ (* (double (or idx 0)) 0.08) 0.1))
+
+(defn reveal-duration-s
+  "Seconds until the staggered reveal has fully settled for `node-count` nodes.
+   The last thing to finish is the exp ring: blendOffset + 0.12 + 0.5 (upstream
+   `progressBlend = clampd(0,1,(dt-0.12)*2.0)`). Callers drive apply-anim! with
+   an elapsed time until this, then once more with nil to pin the final state."
+  [node-count]
+  (+ (node-blend-offset (max 0 (dec (long (or node-count 0))))) 0.62))
+
+(def ^:private line-inset
+  "Upstream shortens each connection by 12.2px at BOTH ends (SkillTree.scala:
+   `(dx,dy) = (px/norm*12.2, py/norm*12.2)`), so the 5.5px-thick line stops at
+   the rim of the node circles instead of running underneath them."
+  12.2)
+
 (defn- connection-endpoints
-  "Node-center coords for a connection (matches upstream's +8 to the node
-   corner). Lines are children of :tree-cam, same as the nodes, so parallax
-   is handled once at the camera-group level — no per-line offset needed."
+  "Parent→child endpoints for a connection, pulled `line-inset` toward each
+   other so the line clears both node circles. The coords are already node
+   CENTERS — build-skill-connections adds upstream's +WidgetSize/2 offset — so
+   adding it again here would shove every line 8px off its nodes. Lines are
+   children of :tree-cam, same as the nodes, so parallax is handled once at the
+   camera-group level; no per-line offset needed."
   [{:keys [from-x from-y to-x to-y]}]
-  [(+ (double from-x) 8.0) (+ (double from-y) 8.0)
-   (+ (double to-x) 8.0) (+ (double to-y) 8.0)])
+  (let [fx (double from-x) fy (double from-y)
+        tx (double to-x)   ty (double to-y)
+        dx (- tx fx) dy (- ty fy)
+        norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
+    (if (<= norm (* 2.0 line-inset))
+      [fx fy tx ty]
+      (let [ix (* (/ dx norm) line-inset) iy (* (/ dy norm) line-inset)]
+        [(+ fx ix) (+ fy iy) (- tx ix) (- ty iy)]))))
 
 (defn- connection-spec
-  "blend in [0,1]: fraction of the line drawn from parent (0) to child (1) —
-   upstream lineBlend, the parent→child draw-in reveal."
+  "blend in [0,1]: fraction of the line drawn, growing from the PARENT end
+   (blend 0 → nothing) toward the CHILD end (blend 1 → whole line). Upstream
+   lineBlend: drawLine pins (x0,y0) at the parent and lerps the far vertex."
   [conn blend]
   (let [[fx fy tx ty] (connection-endpoints conn)
         {:keys [m-alpha child-learned?]} conn
-        x1 (lerp fx tx blend) y1 (lerp fy ty blend)]
+        x2 (lerp fx tx blend) y2 (lerp fy ty blend)]
     {:kind :line
      :props {:x 0.0 :y 0.0 :w 0.0 :h 0.0
-             :x1 x1 :y1 y1 :x2 tx :y2 ty
+             :x1 fx :y1 fy :x2 x2 :y2 y2
              :thickness 5.5
              :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
              :color (line-color m-alpha child-learned?)}}))
@@ -317,10 +347,23 @@
                                         :props {:x (double (:x nd)) :y (double (:y nd)) :w ta :h ta}} parent)
         back (rt/build-child! rt {:kind :image :props {:x da :y da :w ta :h ta
                                                        :src (tex-src :skill-back) :alpha 0.0}} grp)
+        ;; Upstream draws the outline ring at glColor4d(0.2, 0.2, 0.2, backAlpha*0.6)
+        ;; — a dark recessed ring behind the plate, not the raw white texture.
         outline (rt/build-child! rt {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
-                                                          :src (tex-src :skill-outline) :alpha 0.0}} grp)
-        icon (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
-                                                       :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+                                                          :src (tex-src :skill-outline) :alpha 0.0
+                                                          :tint 0xFF333333}} grp)
+        ;; Unlearned skills show a greyscale icon (upstream wraps the icon draw in
+        ;; `glUseProgram(shaderMono)` when !learned). Both kinds expose :alpha, so
+        ;; apply-node-anim! fades either one the same way. If the loader has no
+        ;; mono shader the renderer falls back to a plain textured quad — colour
+        ;; instead of grey, which is the graceful degradation, not a break.
+        icon (if (:learned nd)
+               (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
+                                                         :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+               (rt/build-child! rt {:kind :shader-quad
+                                    :props {:x oia :y oia :w logic/icon-size :h logic/icon-size :alpha 0.0
+                                            :shader-props {:shader-id :mono
+                                                           :texture-0 (icon-src (:skill-icon nd))}}} grp))
         ring (when (:learned nd)
                (rt/build-child! rt {:kind :shader-progress
                                     :props {:x opa :y opa :w logic/prog-size :h logic/prog-size :progress 0.0
@@ -333,36 +376,39 @@
      :m-alpha (double (or (:m-alpha nd) 0.7)) :exp (double (or (:exp nd) 0.0))}))
 
 (defn- apply-node-anim!
-  "Mutate a node's alphas/progress for the reveal. anim-s = nil → final state."
+  "Mutate a node's alphas/progress for the reveal (upstream backAlpha /
+   iconAlpha / progressBlend, all keyed off dt = anim-s - blendOffset).
+   anim-s = nil → final state."
   [^UiRt rt h anim-s]
   (let [ma (double (:m-alpha h))
         reveal? (some? anim-s)
-        dt (if reveal? (- (double anim-s) (+ (* (double (:idx h)) 0.08) 0.1)) 1.0)
+        dt (if reveal? (- (double anim-s) (node-blend-offset (:idx h))) 1.0)
         back-mult (if reveal? (clamp01 (* dt 10.0)) 1.0)
         icon-mult (if reveal? (clamp01 (* (- dt 0.08) 10.0)) 1.0)
         prog-mult (if reveal? (clamp01 (* (- dt 0.12) 2.0)) 1.0)
         a (clamp01 (* ma back-mult))]
     (ui/set-node-prop! rt (:back h) :alpha a)
     (ui/set-node-prop! rt (:outline h) :alpha (* a 0.6))
-    (ui/set-node-prop! rt (:icon h) :alpha (clamp01 (* ma 0.9 icon-mult)))
+    (ui/set-node-prop! rt (:icon h) :alpha (clamp01 (* ma icon-mult)))
     (when-let [ring (:ring h)]
       (ui/set-node-prop! rt ring :progress (float (* (:exp h) prog-mult))))))
 
 (defn- apply-connection-anim!
-  "Mutate a connection line's start point for the parent→child draw-in reveal
+  "Mutate a connection line's far end for the parent→child draw-in reveal: the
+   parent end (x1,y1) is pinned, the child end (x2,y2) sweeps out from it
    (upstream lineBlend = clampd(0,1, dt*5.0), dt keyed off the CHILD node's own
    reveal stagger/offset). anim-s = nil → final state (full line)."
   [^UiRt rt ch anim-s]
   (let [reveal? (some? anim-s)
-        dt (if reveal? (- (double anim-s) (+ (* (double (:child-idx ch)) 0.08) 0.1)) 1.0)
+        dt (if reveal? (- (double anim-s) (node-blend-offset (:child-idx ch))) 1.0)
         blend (if reveal? (clamp01 (* dt 5.0)) 1.0)
         ^INode line (:line ch)
-        x1 (lerp (:from-x ch) (:to-x ch) blend)
-        y1 (lerp (:from-y ch) (:to-y ch) blend)]
-    ;; :line has no :x1/:y1 prop-writer (only :color/:alpha) — poke the dslots
+        x2 (lerp (:from-x ch) (:to-x ch) blend)
+        y2 (lerp (:from-y ch) (:to-y ch) blend)]
+    ;; :line has no :x2/:y2 prop-writer (only :color/:alpha) — poke the dslots
     ;; directly, same pattern as :glow-line/:progress elsewhere in this UI stack.
-    (.setDSlot line 0 x1)
-    (.setDSlot line 1 y1)
+    (.setDSlot line 2 x2)
+    (.setDSlot line 3 y2)
     (.setFlag line node/FLAG-RENDER-DIRTY)))
 
 (defn- build-tree!
@@ -442,8 +488,11 @@
             delta (- target cur)
             nxt (if (<= (Math/abs delta) step) target (+ cur (* (Math/signum delta) step)))]
         (when (not= nxt cur)
-          ;; grow from the node centre: offset by (scale-1)*size/2
-          (let [off (* logic/total-size (/ (- nxt 1.0) 2.0))]
+          ;; Grow about the WIDGET centre (group-local 8.0), which is where the
+          ;; plate/icon art is centred and where upstream pivots its glScaled —
+          ;; the group box is total-size (23), so pivoting on its own centre
+          ;; (11.5) would drift the node 0.7px as it pops.
+          (let [off (* logic/widget-size (/ (- nxt 1.0) 2.0))]
             (.setScale g nxt)
             (.setX g (- (double (:bx h)) off))
             (.setY g (- (double (:by h)) off))

@@ -183,10 +183,11 @@
     :hit? false}
 
    :shader-quad
-   {:dslots {}
+   {:dslots {:alpha 0}
     :oslots {:shader-props 0}
     :oslots-backend-base 4
-    :prop-writers {:shader-props {:slot :oslot :idx 0 :sig :o}}
+    :prop-writers {:alpha {:slot :dslot :idx 0 :sig :d}
+                   :shader-props {:slot :oslot :idx 0 :sig :o}}
     :hit? false}
 
    :shader-ring

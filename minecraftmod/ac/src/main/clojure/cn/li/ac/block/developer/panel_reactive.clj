@@ -668,6 +668,7 @@
         [fit-s fit-ox fit-oy] (skill-tree-view/area-fit-transform (:skill-nodes rd0) area-w area-h)
         rd-a (atom rd0)                       ;; render-data cache, refreshed on skill change
         clickable-a (atom (clickable-of rd0)) ;; interactive nodes, refreshed with rd-a
+        reveal-s (atom (skill-tree-view/reveal-duration-s (count (:skill-nodes rd0))))
         open-ms (atom nil)
         mouse-a (atom nil)   ;; area-local pointer for parallax
         hover-a (atom nil)   ;; skill-id under the pointer (for highlight)
@@ -706,7 +707,10 @@
         (fn [now-ms]
           (when (nil? @open-ms) (reset! open-ms (double now-ms)))
           (let [anim-s (/ (- (double now-ms) (double @open-ms)) 1000.0)
-                anim-active? (< anim-s 1.0)          ;; reveal settles by ~0.92s
+                ;; The reveal is staggered 0.08s per node, so how long it runs
+                ;; depends on how many skills the category has — a fixed window
+                ;; snaps the tail of a larger tree into place mid-fade.
+                anim-active? (< anim-s @reveal-s)
                 dt-sec (let [prev (aget last-ms 0)]
                          (aset last-ms 0 (double now-ms))
                          (if (Double/isNaN prev) 0.0
@@ -722,6 +726,7 @@
               (let [rd (skill-tree/build-render-data-for-player-state pstate dev-type)]
                 (reset! rd-a rd)
                 (reset! clickable-a (clickable-of rd))
+                (reset! reveal-s (skill-tree-view/reveal-duration-s (count (:skill-nodes rd))))
                 (reset! handles-a (skill-tree-view/build-embedded! embed-rt rd area-w area-h))))
             ;; Reveal: mutate node alphas while the fade plays; settle once after.
             (when (or anim-active? skill-changed? (not @anim-settled?))

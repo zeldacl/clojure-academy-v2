@@ -12,6 +12,7 @@
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
+           [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.renderer GameRenderer ShaderInstance]
            [net.minecraft.resources ResourceLocation]
@@ -52,6 +53,7 @@
 (def ^:private SLOT-LINE-ALPHA 5)
 (def ^:private SLOT-SHADER-PROPS 0)
 (def ^:private SLOT-SHADER-PROGRESS 0)
+(def ^:private SLOT-SQUAD-ALPHA 0)   ;; :shader-quad reuses dslot 0 for alpha
 
 (deftype StaticShaderSupplier [^ShaderInstance shader]
   java.util.function.Supplier
@@ -462,9 +464,23 @@
 ;; :shader-quad / :shader-ring / :shader-progress
 ;; ============================================================================
 
+(defn- sampler-texture
+  "ShaderInstance.apply() binds a sampler only when its map value is a
+   RenderTarget / AbstractTexture / Integer — a bare ResourceLocation resolves to
+   -1 and the unit keeps whatever the previous draw left bound. Hand it the
+   loaded texture object so the binding is deterministic."
+  [^ResourceLocation rl]
+  (when rl
+    (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)))
+
 (defn- render-shader-progress-node! [^GuiGraphics gg ^INode node]
   (let [props (.getOSlot node SLOT-SHADER-PROPS)
-        progress (float (.getDSlot node SLOT-SHADER-PROGRESS))
+        ;; :shader-quad has no :progress — dslot 0 is its alpha (node.clj).
+        quad? (identical? :shader-quad (.getKind node))
+        progress (float (if quad? 0.0 (.getDSlot node SLOT-SHADER-PROGRESS)))
+        alpha (float (if quad?
+                       (max 0.0 (min 1.0 (.getDSlot node SLOT-SQUAD-ALPHA)))
+                       1.0))
         shader-id (or (:shader-id props) :ring-progbar)
         ^ResourceLocation tex-0 (resolve-tex-loc (or (:texture-0 props) (:tex-0 props)))
         ^ResourceLocation tex-1 (resolve-tex-loc (or (:texture-1 props) (:tex-1 props)))
@@ -476,10 +492,12 @@
         v1 (float (if uv-region (nth uv-region 3) 1.0))]
     (when tex-0
       (try
-        (if (and si tex-1)
+        ;; tex-1 is optional — single-sampler shaders (mono) are as valid as the
+        ;; two-sampler ring-progbar; only the shader itself is required.
+        (if si
           (do
-            (.setSampler si "TexSampler0" tex-0)
-            (.setSampler si "TexSampler1" tex-1)
+            (.setSampler si "TexSampler0" (sampler-texture tex-0))
+            (when tex-1 (.setSampler si "TexSampler1" (sampler-texture tex-1)))
             (RenderSystem/setShader (StaticShaderSupplier. si))
             (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
             (when-let [u (.safeGetUniform si "ScrollOffset")] (.set u progress))
@@ -492,6 +510,9 @@
             (RenderSystem/setShader GameRenderer/getPositionTexShader)))
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
+        ;; ColorModulator — read by ShaderInstance.apply() inside drawWithShader.
+        ;; Set unconditionally so the quad never inherits the previous node's tint.
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 alpha)
         (let [x (float (node-abs-x node)) y (float (node-abs-y node))
               x2 (float (+ (node-abs-x node) (scaled-w node)))
               y2 (float (+ (node-abs-y node) (scaled-h node)))
@@ -508,7 +529,11 @@
           (.vertex bb pose-matrix x2 y 0.0) (.uv bb u1 v0) (.endVertex bb)
           (.vertex bb pose-matrix x y 0.0) (.uv bb u0 v0) (.endVertex bb)
           (BufferUploader/drawWithShader (.end bb)))
-        (RenderSystem/setShader (StaticShaderSupplier. nil))
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+        ;; Release the custom program, but leave a *usable* shader bound: a nil
+        ;; current shader NPEs the next raw-BufferBuilder node (drawWithShader
+        ;; dereferences it), and every skill-tree node ends with this ring.
+        (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
         (catch Exception e
           (cn.li.mcmod.util.log/stacktrace "shader render failed" e))))))
 
@@ -601,6 +626,9 @@
             ^BufferBuilder bb (.getBuilder tess)]
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
+        ;; POSITION_COLOR buffer → bind position_color explicitly (drawWithShader
+        ;; otherwise reuses the previous node's shader).
+        (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionColorShader)))
         (if horizontal?
           ;; Vertical bands for horizontal-ish gradient
           (let [band-w (/ (double w) (double (max 1 (dec n))))]
@@ -646,11 +674,17 @@
 ;; ============================================================================
 
 (defn render-line! [^GuiGraphics gg ^INode node]
-  (let [x1 (+ (node-abs-x node) (.getDSlot node SLOT-LINE-X1))
-        y1 (+ (node-abs-y node) (.getDSlot node SLOT-LINE-Y1))
-        x2 (+ (node-abs-x node) (.getDSlot node SLOT-LINE-X2))
-        y2 (+ (node-abs-y node) (.getDSlot node SLOT-LINE-Y2))
-        line-w (double (max 1.0 (.getDSlot node SLOT-LINE-THICK)))
+  ;; Endpoints and thickness are authored in the parent's local units, so they
+  ;; scale with it — a :line under a scaled camera group (the skill tree fits its
+  ;; tree into the panel area at ~0.68x) otherwise draws at raw coordinates and
+  ;; raw width, landing off its nodes and reading much thicker than the art
+  ;; around it. Everything else in the tree goes through layout's cum-scale.
+  (let [s (node-scale node)
+        x1 (+ (node-abs-x node) (* s (.getDSlot node SLOT-LINE-X1)))
+        y1 (+ (node-abs-y node) (* s (.getDSlot node SLOT-LINE-Y1)))
+        x2 (+ (node-abs-x node) (* s (.getDSlot node SLOT-LINE-X2)))
+        y2 (+ (node-abs-y node) (* s (.getDSlot node SLOT-LINE-Y2)))
+        line-w (double (max 1.0 (* s (.getDSlot node SLOT-LINE-THICK))))
         alpha (double (max 0.0 (min 1.0 (.getDSlot node SLOT-LINE-ALPHA))))
         color-raw (.getOSlot node 0)
         color-int (if (number? color-raw) (unchecked-int (long color-raw)) 0xFFFFFFFF)
@@ -659,11 +693,12 @@
         norm (Math/sqrt (+ (* dx dx) (* dy dy)))]
     (when (and tex (> norm 0.5) (> alpha 0.0))
       (try
+        ;; Quad straddles the p1→p2 axis by half the width on each side
+        ;; (upstream ACRenderingHelper drawLine). The endpoints themselves are
+        ;; not nudged — offsetting them along the normal, as an earlier version
+        ;; did, pushes the whole line half its width off-axis.
         (let [half-w (/ line-w 2.0)
-              ndx (/ (- dy) norm) ndy (/ dx norm)
-              nx (* ndx half-w) ny (* ndy half-w)
-              x0 (- x1 (* ndx half-w)) y0 (- y1 (* ndy half-w))
-              x1e (+ x2 (* ndx half-w)) y1e (+ y2 (* ndy half-w))
+              nx (* (/ (- dy) norm) half-w) ny (* (/ dx norm) half-w)
               ca (float (* alpha (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)))
               ^PoseStack ps (.pose gg)
               ^PoseStack$Pose entry (.last ps)
@@ -672,13 +707,17 @@
               ^BufferBuilder bb (.getBuilder tess)]
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
+          ;; Bind position_tex explicitly — see render-nine-slice!: drawWithShader
+          ;; reuses whatever shader was last set, and the tree background / text
+          ;; nodes drawn just before leave a different one active.
+          (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 ca)
           (RenderSystem/setShaderTexture (int 0) tex)
           (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (.vertex bb pose-matrix (float (- x0 nx)) (float (- y0 ny)) 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (+ x0 nx)) (float (+ y0 ny)) 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (+ x1e nx)) (float (+ y1e ny)) 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (- x1e nx)) (float (- y1e ny)) 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (+ x2 nx)) (float (+ y2 ny)) 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix (float (- x2 nx)) (float (- y2 ny)) 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
           (BufferUploader/drawWithShader (.end bb))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
         (catch Exception e
@@ -846,6 +885,7 @@
               ^BufferBuilder bb (.getBuilder tess)]
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
+          (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
           (RenderSystem/setShaderColor tr tg tb ta)
           (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
           ;; corners
