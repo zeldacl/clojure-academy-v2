@@ -43,7 +43,8 @@
                                              :player-uuid uuid}
                                             context)))
     (is (= {} (:cooldown-data (store/get-player-state ps-fix/test-session-id uuid))))
-    (is (seq (:dirty-domains (store/get-player-state ps-fix/test-session-id uuid))))
+    ;; dirty tracking moved off the state map onto the runtime's bitmask
+    (is (pos? (store/dirty-mask ps-fix/test-session-id uuid)))
     (is (some #(= "command.academy.aim.level.success" (first %)) @feedbacks))))
 
 (deftest registered-command-actions-delegate-stateful-mutations-to-service-test

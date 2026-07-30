@@ -104,5 +104,9 @@
     (is (= [["p1" "minecraft:overworld" 10.0 64.0 12.0]] @teleport-calls*))
     (is (= [["p1" :penetrate-teleport 0.008]] @exp-calls*))
     (is (= [["p1" :penetrate-teleport 40]] @cooldown-calls*))
-    (is (= [["ctx-ok" :penetrate-teleport/fx-perform :perform {:x 10.0 :y 64.0 :z 12.0}]] @calls*))
+    ;; The release sound fires before server validation, so the cost-fail
+    ;; context still gets its fx-perform — matching the original.
+    (is (= [["ctx-ok" :penetrate-teleport/fx-perform :perform {:x 10.0 :y 64.0 :z 12.0}]
+            ["ctx-fail" :penetrate-teleport/fx-perform :perform {:x 10.0 :y 64.0 :z 12.0}]]
+           @calls*))
     (is (= [["p1" "teleporter.ignore_barrier"]] @ach-calls*))))

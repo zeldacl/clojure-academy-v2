@@ -35,7 +35,9 @@
                :shift-teleport/fx-end}
              @registered-topics*)))))
 
-(deftest enqueue-perform-emits-path-particles-and-sound-test
+;; The teleport sound is played server-side (world-effects/play-sound! with
+;; tp.tp_shift) since the AcademyCraft alignment; the client fx only draws.
+(deftest enqueue-perform-emits-path-particles-test
   (let [particles* (atom [])
         sounds* (atom [])]
     (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
@@ -50,8 +52,7 @@
       (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :x 5.0 :y 64.0 :z 0.0}
                                          :owner-key [:ctx "ctx-1"])
       (is (>= (count @particles*) 2))
-      (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.tp" (:sound-id (second (first @sounds*))))))))
+      (is (empty? @sounds*)))))
 
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)

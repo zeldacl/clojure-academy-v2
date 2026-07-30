@@ -63,43 +63,24 @@
                                                                 :destination {:x 4.0 :y 64.0 :z 4.0}})
       ((get @handlers* :plasma-cannon/fx-perform) "ctx-1" :plasma-cannon/fx-perform {:pos {:x 2.0 :y 65.0 :z 2.0}})
       ((get @handlers* :plasma-cannon/fx-end) "ctx-1" :plasma-cannon/fx-end {:performed? true})
-      (is (= [[:plasma-cannon {:mode :start
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :plasma-cannon/fx-start
-                               :charge-pos {:x 1.0 :y 64.0 :z 1.0}}
-               {:ctx-id "ctx-1"
-                :channel :plasma-cannon/fx-start
-                :owner-key [:ctx "ctx-1"]}]
-              [:plasma-cannon {:mode :update
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :plasma-cannon/fx-update
-                               :charge-ticks 24
-                               :fully-charged? true
-                               :charge-pos {:x 1.0 :y 64.0 :z 1.0}
-                               :flight-ticks 2
-                               :state :go
-                               :destination {:x 4.0 :y 64.0 :z 4.0}}
-               {:ctx-id "ctx-1"
-                :channel :plasma-cannon/fx-update
-                :owner-key [:ctx "ctx-1"]}]
-              [:plasma-cannon {:mode :perform
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :plasma-cannon/fx-perform
-                               :pos {:x 2.0 :y 65.0 :z 2.0}}
-               {:ctx-id "ctx-1"
-                :channel :plasma-cannon/fx-perform
-                :owner-key [:ctx "ctx-1"]}]
-              [:plasma-cannon {:mode :end
-                               :owner-key [:ctx "ctx-1"]
-                               :ctx-id "ctx-1"
-                               :channel :plasma-cannon/fx-end
-                               :performed? true}
-               {:ctx-id "ctx-1"
-                :channel :plasma-cannon/fx-end
-                :owner-key [:ctx "ctx-1"]}]]
+      (is (= [[:plasma-cannon "ctx-1" :plasma-cannon/fx-start
+               {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:plasma-cannon "ctx-1" :plasma-cannon/fx-update
+               {:mode :update
+                :charge-ticks 24
+                :fully-charged? true
+                :charge-pos {:x 1.0 :y 64.0 :z 1.0}
+                :flight-ticks 2
+                :state :go
+                :destination {:x 4.0 :y 64.0 :z 4.0}}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:plasma-cannon "ctx-1" :plasma-cannon/fx-perform
+               {:mode :perform :pos {:x 2.0 :y 65.0 :z 2.0}}
+               [:owner-key [:ctx "ctx-1"]]]
+              [:plasma-cannon "ctx-1" :plasma-cannon/fx-end
+               {:mode :end :performed? true}
+               [:owner-key [:ctx "ctx-1"]]]]
              @enqueued*)))))
 
 (deftest tick-build-plan-and-perform-effects-test

@@ -32,13 +32,18 @@
       (is (= 1 (get-in got [:preset-data :active-preset])))
       (is (= 42.0 (get-in got [:develop-data :level-progress]))))
     (is (true? (runtime-hooks/runtime-activated? uuid)))
-    (is (= {:uuid uuid
-            :ability-data (:ability-data state)
-            :resource-data (:resource-data state)
-            :cooldown-data (:cooldown-data state)
-            :preset-data (:preset-data state)
-            :develop-data (:develop-data state)}
-           (runtime-hooks/build-sync-payload uuid)))
+    ;; The payload now carries a protocol header (version/opcode/revision/mask)
+    ;; alongside the domains; only the domain content is asserted here.
+    (let [payload (runtime-hooks/build-sync-payload uuid)]
+      (is (= {:uuid uuid
+              :ability-data (:ability-data state)
+              :resource-data (:resource-data state)
+              :cooldown-data (:cooldown-data state)
+              :preset-data (:preset-data state)
+              :develop-data (:develop-data state)}
+             (select-keys payload [:uuid :ability-data :resource-data
+                                   :cooldown-data :preset-data :develop-data])))
+      (is (every? #(contains? payload %) [:version :opcode :revision :dirty-mask])))
     (is (nil? (runtime-hooks/mark-player-clean! uuid)))))
 
 (deftest dimension-change-hook-aborts-player-contexts-test

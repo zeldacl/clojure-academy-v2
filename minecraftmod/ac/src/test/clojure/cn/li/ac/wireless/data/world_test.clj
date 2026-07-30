@@ -11,7 +11,8 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.data.world :as world]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.world :as platform-world]))
 
 (use-fixtures :each support-fw/with-fresh-framework)
 
@@ -111,6 +112,8 @@
         node-conn-vb (vb/->VBlock 3 0 0 :node-conn true)
         gen-vb (vb/->VBlock 5 0 0 :generator true)]
     (with-redefs [vb/is-chunk-loaded? (constantly true)
+                  ;; the rebuild-draining tick reads the world clock
+                  platform-world/game-time (fn [_] 0)
                   resolver/resolve-matrix-cap (caps-by-pos {[0 0 0] matrix-cap})
                   resolver/resolve-node-cap (caps-by-pos {[3 0 0] node-cap})
                   resolver/resolve-generator-cap (caps-by-pos {[5 0 0] gen-cap})]

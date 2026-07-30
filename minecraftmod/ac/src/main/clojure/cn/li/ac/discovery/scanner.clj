@@ -21,7 +21,7 @@
 (defn- normalize-path->ns
   [path]
   (let [dot-name (-> path
-                     (str/replace #"\\\\" "/")
+                     (str/replace #"\\" "/")
                      (str/replace #"\.clj$" "")
                      (str/replace #"_" "-")
                      (str/replace #"/" "."))]
@@ -35,7 +35,7 @@
     (vec (->> (file-seq root)
               (filter #(.isFile ^File %))
               (map #(.getPath ^File %))
-              (map #(str/replace % #"\\\\" "/"))
+              (map #(str/replace % #"\\" "/"))
               (filter #(str/ends-with? % ".clj"))))))
 
 (defn- classpath-file-paths
@@ -43,7 +43,7 @@
   (let [root (io/resource ability-resource-prefix)]
     (when (and root (= "file" (.getProtocol root)))
       (let [root-file (io/file (.toURI root))
-            root-path (str/replace (.getPath root-file) #"\\\\" "/")
+            root-path (str/replace (.getPath root-file) #"\\" "/")
             prefix (str root-path "/")]
         (->> (file-clj-paths root-file)
              (map #(subs % (count prefix)))
@@ -77,7 +77,7 @@
     (mapcat
      (fn [^File ac-root]
        (when (.exists ac-root)
-         (let [prefix (str/replace (.getPath ac-root) #"\\\\" "/")]
+         (let [prefix (str/replace (.getPath ac-root) #"\\" "/")]
            (->> (file-clj-paths ac-root)
                 (map #(subs % (inc (count prefix))))
                 (map #(str ability-resource-prefix "/" %))))))

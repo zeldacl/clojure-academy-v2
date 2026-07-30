@@ -52,7 +52,12 @@
                     ([_ctx-id] @ctx*)
                     ([_owner _ctx-id] @ctx*))
      :update-skill-state-root! (fn [_ f & args]
-                        (swap! ctx* update :skill-state (fn [ss] (apply f (or ss {}) args))))}))
+                                 (swap! ctx* update :skill-state
+                                        (fn [ss]
+                                          ;; replace-skill-state! passes identity + the whole map
+                                          (if (and (= f identity) (= 1 (count args)))
+                                            (first args)
+                                            (apply f (or ss {}) args)))))}))
 
 (defn- stub-missile-lerp-double [_skill-id field-id _exp]
   (case field-id
@@ -128,6 +133,9 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)
+                  ;; settle time re-reads world-id/eye live, per upstream
+                  geom/world-id-of (fn [_] "w")
+                  geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-entities (fn [& _]
@@ -152,7 +160,10 @@
 (deftest electron-missile-hit-installs-rad-mark-test
   (let [attacker "atk-em"
         victim "victim-em"
-        {:keys [get-context update-skill-state-root!]} (missile-context-mocks {:skill-state {:ticks 8 :active-balls 1 :active? true :overload-floor 200.0}})]
+        {:keys [get-context update-skill-state-root!]} (missile-context-mocks {:skill-state {:ticks 8
+                                              :ball-ids ["ball-1"]
+                                              :active? true
+                                              :overload-floor 200.0}})]
     (dh/ensure-damage-handler!)
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.6)
@@ -177,6 +188,8 @@
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6
                                                            :living? true}])
+                  ;; no live entity runtime: the ball position falls back to the eye
+                  motion-effects/entity-motion-available? (constantly false)
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)
                   entity-damage/apply-aoe-damage! (fn [& _] [])
@@ -197,16 +210,21 @@
                   skill-config/tunable-double stub-ray-tunable-double
                   skill-config/tunable-int stub-ray-tunable-int
                   fx/send! (fn [& _] nil)
-                  beam/execute-beam! (fn [_ _]
-                                       {:beam-result {:performed? true
-                                                      :hit-uuids [victim]}})
                   skill-effects/add-skill-exp! (fn [& _] nil)
+                  skill-effects/set-main-cooldown! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.4 :z 0.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  ;; a plain (non-silbarn) entity in front takes the direct hit
                   raycast/raycast-combined (fn [& _]
-                                              {:hit-type :block :x 0.0 :y 64.0 :z 5.0})
+                                              {:hit-type :entity
+                                               :uuid victim
+                                               :type "minecraft:zombie"
+                                               :x 0.0 :y 64.0 :z 5.0})
+                  entity-damage/available? (constantly true)
+                  entity-damage/apply-direct-damage! (fn [& _] true)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
       (cb/apply-invoke ray-barrage/ray-barrage-perform! :player-id attacker :ctx-id "ctx-rb"))
@@ -220,19 +238,22 @@
     (learn-rad-intensify! attacker)
     (with-redefs [rad/rate (fn [_] 1.33)
                   rad/mark-duration-ticks (fn [] 100000)
-                  beam/execute-beam! (fn [_ _]
-                                       {:beam-result {:visual-distance 23.0
-                                                      :hit-uuids [victim]}})
+                  ;; each ball resolves as a single origin->dest raycast, not a
+                  ;; radius beam sweep
+                  raycast/available? (constantly true)
+                  raycast/raycast-entities (fn [& _]
+                                             {:uuid victim :x 0.0 :y 64.0 :z 5.0 :distance 5.0})
+                  entity-damage/available? (constantly true)
+                  entity-damage/apply-direct-damage! (fn [& _] true)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] nil)]
       (dp/schedule-scatter-bomb-beam!
        {:player-id attacker
         :ctx-id "ctx-sc"
         :world-id "w"
-        :eye {:x 0.0 :y 64.0 :z 0.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :origin {:x 0.0 :y 64.0 :z 0.0}
+        :dest {:x 0.0 :y 64.0 :z 5.0}
         :damage 7.0
-        :beam {:radius 0.3 :query-radius 20.0 :step 0.8 :max-distance 25.0 :visual-distance 23.0}
         :delay-ticks 1})
       (dp/tick-player! attacker)
       (is (= 1.33 (:rate (get (dh/marks-snapshot) victim))))

@@ -121,7 +121,9 @@
     (is (seq @reset-fall*))
     (is (some #(= :flashing/fx-perform (first %)) @fx*))))
 
-(deftest flashing-timeout-terminates-on-movement-event-test
+;; The active window is counted down by flashing-tick! against
+;; :max-active-ticks, not checked opportunistically on a movement event.
+(deftest flashing-timeout-terminates-on-tick-test
   (let [{:keys [ctx* listeners* get-context update-skill-state-root! assoc-skill-state!
                 clear-skill-state! ctx-on!]}
         (make-context-mocks {:player-uuid "p1" :skill-id :flashing :skill-state {}})
@@ -145,8 +147,8 @@
                     skill-effects/player-path (fn [_ _ _] 10.0)
                     skill-effects/enforce-overload-floor! (fn [& _] true)]
          (cb/apply-invoke flashing/flashing-activate! :ctx-id "ctx-1" :player-id "p1" :cost-ok? true)
-         (swap! ctx* assoc-in [:skill-state :expires-at-ms] 1)
-         ((get @listeners* :flashing/move-down) {:key :forward})))
+         (swap! ctx* assoc-in [:skill-state :active-ticks] 81)
+         (cb/apply-invoke flashing/flashing-tick! :ctx-id "ctx-1" :player-id "p1")))
     (is (= ["ctx-1"] @terminated*))))
 
 (deftest flashing-block-hit-resolution-applies-side-and-head-correction-test
