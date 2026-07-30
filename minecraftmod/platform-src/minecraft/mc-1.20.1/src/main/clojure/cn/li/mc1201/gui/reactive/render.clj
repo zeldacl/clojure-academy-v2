@@ -15,6 +15,7 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.renderer GameRenderer ShaderInstance]
+           [net.minecraft.client.renderer.texture MissingTextureAtlasSprite]
            [net.minecraft.resources ResourceLocation]
            [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
             Tesselator BufferBuilder BufferUploader]
@@ -208,6 +209,45 @@
          (float (/ (double (or a 255.0)) 255.0))])
       [1.0 1.0 1.0 1.0])))
 
+;; ---------------------------------------------------------------------------
+;; Image draw diagnostics
+;;
+;; A GUI texture that fails to resolve draws as a flat untextured quad and
+;; nothing else says so, which reads as a renderer bug rather than a bad path.
+;; Report each offending location once. -Dmcmod.ui.debugImages=true additionally
+;; dumps the first draws (source string, resolved location, GL texture id) so a
+;; "why is this a blank square" question can be answered from a client log.
+;; ---------------------------------------------------------------------------
+
+(def ^:private debug-images? (Boolean/getBoolean "mcmod.ui.debugImages"))
+(defonce ^:private seen-image-textures (java.util.HashSet.))
+(defonce ^:private debug-image-budget (java.util.concurrent.atomic.AtomicInteger. 60))
+
+(defn- check-image-texture!
+  "Called once per distinct texture (always) and per draw while debugging.
+   `bound` is the GL texture id RenderSystem actually had on unit 0 after the
+   draw — when that disagrees with the location's own id, the quad sampled
+   somebody else's texture."
+  [^INode node ^ResourceLocation rl bound]
+  (when (or debug-images? (.add seen-image-textures rl))
+    (let [tex (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)
+          missing? (identical? tex (MissingTextureAtlasSprite/getTexture))]
+      (when missing?
+        (cn.li.mcmod.util.log/warn
+          "UI image texture did not resolve: " (str rl)
+          " (node " (str (.getId node)) ") — draws as a blank quad"))
+      (when (and debug-images? (pos? (.getAndDecrement debug-image-budget)))
+        (cn.li.mcmod.util.log/info
+          "[ui-image] node=" (str (.getId node))
+          " src=" (pr-str (.getOSlot node SLOT-IMG-SRC))
+          " rl=" (str rl)
+          " texId=" (.getId tex)
+          " boundTex0=" bound
+          " missing?=" missing?
+          " shader=" (some-> (RenderSystem/getShader) .getName)
+          " alpha=" (.getDSlot node SLOT-IMG-ALPHA)
+          " size=" (scaled-w node) "x" (scaled-h node))))))
+
 (defn render-image! [^GuiGraphics gg ^INode node]
   (let [rl-obj (.getOSlot node SLOT-IMG-BAKED-RL)
         ;; Fallback: if bake-image! never ran (FLAG-RENDER-DIRTY wasn't set or
@@ -259,6 +299,7 @@
                 (float u) (float (+ u tex-w))
                 (float v) (float (+ v tex-h)))
               (pop-depth! node)))
+          (check-image-texture! node rl (RenderSystem/getShaderTexture 0))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================
@@ -546,6 +587,16 @@
         v0 (float (if uv-region (nth uv-region 1) 0.0))
         u1 (float (if uv-region (nth uv-region 2) 1.0))
         v1 (float (if uv-region (nth uv-region 3) 1.0))]
+    (when (and debug-images? (pos? (.getAndDecrement debug-image-budget)))
+      (cn.li.mcmod.util.log/info
+        "[ui-shader] node=" (str (.getId node))
+        " kind=" (str (.getKind node))
+        " shader-id=" (str shader-id)
+        " resolved?=" (some? si)
+        " tex0=" (str tex-0)
+        " tex1=" (str tex-1)
+        " alpha=" alpha " progress=" progress
+        " size=" (scaled-w node) "x" (scaled-h node)))
     (when tex-0
       (try
         ;; tex-1 is optional — single-sampler shaders (mono) are as valid as the

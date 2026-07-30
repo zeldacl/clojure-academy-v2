@@ -124,6 +124,9 @@
     (with-redefs [read-model/get-player-state (fn [& _] {:ability-data {:category-id :test-cat}})
                   runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
                   runtime-hooks/set-client-overlay-activated! (fn [_ _] nil)
+                  ;; the default toggle handler now round-trips through the
+                  ;; server; there is no network transport in a unit test
+                  client-api/req-set-activated! (fn [& _] nil)
                   ctx/abort-all-contexts-for-player! (fn [& _]
                                                        (throw (ex-info "legacy abort path should not be used" {})))]
       ;; keybind owner resolution needs an explicit client session in tests
