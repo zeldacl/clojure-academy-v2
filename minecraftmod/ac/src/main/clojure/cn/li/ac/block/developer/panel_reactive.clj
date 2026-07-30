@@ -95,11 +95,19 @@
           (log/info "[req-start-development!] response:" (pr-str resp))
           (when callback (callback resp)))))))
 
-(defn- texture-path-from-category-icon [icon-str]
+(defn- texture-path-from-category-icon
+  "Category :icon → an :src a ResourceLocation can parse. Content categories
+   author it already namespaced (\"my_mod:textures/guis/icons/...\"); prefixing
+   that a second time yields \"my_mod:textures/my_mod:textures/...\", which
+   tryParse rejects outright, so the image silently drew nothing. Same
+   pass-through guard skill-query/get-skill-icon-path uses."
+  [icon-str]
   (when (string? icon-str)
-    (if (str/starts-with? icon-str "textures/")
+    (cond
+      (str/includes? icon-str ":") icon-str
+      (str/starts-with? icon-str "textures/")
       (modid/asset-path "textures" (subs icon-str (count "textures/")))
-      (modid/asset-path "textures" icon-str))))
+      :else (modid/asset-path "textures" icon-str))))
 
 (defn- default-ability-icon-path []
   (modid/asset-path "textures" "guis/icons/icon_nocategory.png"))

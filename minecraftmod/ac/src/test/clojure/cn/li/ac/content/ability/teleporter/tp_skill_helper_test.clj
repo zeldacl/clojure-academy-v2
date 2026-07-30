@@ -106,9 +106,13 @@
                   skill-config/tunable-double exp-double]
       (f))))
 
-(deftest crit-applied-gates-on-both-critical-and-applied-test
+;; Upstream TPSkillHelper fires the crit event and passive progression BEFORE it
+;; attempts ctx.attack, so armor / PvP rules / invulnerability rejecting the hit
+;; must not retract the crit. crit-applied? therefore keys off :critical? alone —
+;; it used to also require :applied?, which is what this pair asserted before.
+(deftest crit-applied-ignores-whether-the-damage-landed-test
   (is (true? (h/crit-applied? {:critical? true :applied? true})))
-  (is (false? (h/crit-applied? {:critical? true :applied? false})))
+  (is (true? (h/crit-applied? {:critical? true :applied? false})))
   (is (false? (h/crit-applied? {:critical? false :applied? true})))
   (is (false? (h/crit-applied? nil))))
 
@@ -129,13 +133,13 @@
       (with-crit-config 1.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _ _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        #'passive-hooks/send-chat-message! (fn [pid message args translate?]
+                        passive-hooks/send-chat-message! (fn [pid message args translate?]
                                                                (swap! feedback-calls conj [pid message args translate?])
                                                                true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]
@@ -176,7 +180,7 @@
       (with-crit-config 0.0 0.0 0.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _ _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [& _] (is false "no exp on non-crit"))
@@ -209,13 +213,13 @@
       (with-crit-config 0.0 0.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _ _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        #'passive-hooks/send-chat-message! (fn [& _] true)
+                        passive-hooks/send-chat-message! (fn [& _] true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]
                                                                (swap! events conj [pid event-id])
                                                                nil)]
@@ -245,11 +249,11 @@
       (with-crit-config 1.0 1.0 1.0
         (fn []
           (with-redefs [entity-damage/available? (constantly true)
-                        entity-damage/apply-direct-damage! (fn [_ _ dmg _]
+                        entity-damage/apply-direct-damage! (fn [_ _ dmg _ _]
                                                               (reset! last-damage dmg)
                                                               true)
                         skill-effects/add-skill-exp! (fn [& _] (is false "no exp when passives unlearned"))
-                        #'passive-hooks/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
+                        passive-hooks/send-chat-message! (fn [& _] (is false "no feedback when passives unlearned"))
                         ach-dispatcher/trigger-custom-event! (fn [& _] (is false "no events when passives unlearned"))]
             (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
               (is (= false (:critical? result)))
@@ -259,7 +263,11 @@
       (finally
         (store/reset-store!)))))
 
-(deftest deal-magic-damage-critical-not-applied-has-no-side-effects-test
+;; Counterpart to crit-applied-ignores-whether-the-damage-landed-test, at the
+;; deal-magic-damage! level: a crit that rolls but whose damage is rejected
+;; still pays out exp / chat feedback / achievements, matching upstream's
+;; ordering. This used to assert the opposite (no side effects when !applied?).
+(deftest deal-magic-damage-critical-side-effects-survive-rejected-damage-test
   (let [exp-calls (atom [])
         feedback-calls (atom [])
         events (atom [])
@@ -279,7 +287,7 @@
                         skill-effects/add-skill-exp! (fn [pid sid amount]
                                                        (swap! exp-calls conj [pid sid amount])
                                                        nil)
-                        #'passive-hooks/send-chat-message! (fn [pid message args translate?]
+                        passive-hooks/send-chat-message! (fn [pid message args translate?]
                                                              (swap! feedback-calls conj [pid message args translate?])
                                                              true)
                         ach-dispatcher/trigger-custom-event! (fn [pid event-id]
@@ -288,8 +296,7 @@
             (let [result (h/deal-magic-damage! attacker "w" "victim" 10.0)]
               (is (= true (:critical? result)))
               (is (= false (:applied? result)))))))
-      (is (empty? @exp-calls))
-      (is (empty? @feedback-calls))
-      (is (empty? @events))
+      (is (= [["att" :dim-folding-theorem 0.005] ["att" :space-fluct 1.0E-4]] @exp-calls))
+      (is (seq @feedback-calls) "crit chat feedback still fires")
       (finally
         (store/reset-store!)))))

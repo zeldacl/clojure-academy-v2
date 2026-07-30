@@ -20,6 +20,7 @@
             Tesselator BufferBuilder BufferUploader]
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.vertex VertexSorting]
+           [org.lwjgl.opengl GL11]
            [org.joml Matrix4f Quaternionf]))
 
 (declare draw-tape!)
@@ -84,6 +85,52 @@
 
 (defn- argb [^long a ^long r ^long g ^long b]
   (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b)))
+
+;; ============================================================================
+;; Depth layering (opt-in, static props)
+;;
+;; A node may declare `:z` and `:depth-func` to take part in depth-buffer
+;; layering — used by the skill tree to reproduce upstream SkillTree.scala's
+;; mask trick: node plates/rings stamp the depth buffer, the icon draws with
+;; GL_EQUAL so it is clipped to its plate, and connection lines draw with
+;; GL_NOTEQUAL so they are cut where they would cross a node's ring.
+;;
+;; These are static props, not slots: nothing animates them, so they cost one
+;; map lookup and no dslot layout churn on the kinds that opt in. Nodes without
+;; :depth-func render exactly as before — depth test off, painter's order.
+;;
+;; The GUI depth buffer is shared with the rest of the screen, so the skill tree
+;; stamps NEGATIVE z (behind the z=0 plane every other GUI element draws at).
+;; Anything drawn afterwards with the usual LEQUAL test is nearer and still
+;; passes; a positive z would silently punch holes in later overlays.
+;; ============================================================================
+
+(defn- depth-func-gl [kw]
+  (case kw
+    :equal    GL11/GL_EQUAL
+    :notequal GL11/GL_NOTEQUAL
+    :always   GL11/GL_ALWAYS
+    GL11/GL_LEQUAL))
+
+(defn- push-depth!
+  "Apply a node's declared depth state. Returns its z (0.0 when it declares
+   none, which is also the no-depth-test case)."
+  [^INode node]
+  (let [sp (.getStaticProps node)]
+    (when-let [f (:depth-func sp)]
+      (RenderSystem/enableDepthTest)
+      (RenderSystem/depthFunc (int (depth-func-gl f)))
+      (RenderSystem/depthMask (boolean (:depth-write? sp false))))
+    (float (double (:z sp 0.0)))))
+
+(defn- pop-depth!
+  "Restore the shared default: no depth test, LEQUAL, depth writes on. Every
+   depth-aware renderer must call this so the state never escapes the node."
+  [^INode node]
+  (when (:depth-func (.getStaticProps node))
+    (RenderSystem/depthMask true)
+    (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
+    (RenderSystem/disableDepthTest)))
 
 ;; ============================================================================
 ;; :box
@@ -181,6 +228,7 @@
             tex-h-raw (.getDSlot node SLOT-IMG-TEX-H)
             tex-w (if (pos? tex-w-raw) tex-w-raw 1.0)
             tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)
+            depth? (some? (:depth-func (.getStaticProps node)))
             [tr tg tb ta] (image-tint-rgba node)]
         (when (pos? alpha)
           ;; Enable blend for the alpha channel — otherwise a texture with
@@ -191,18 +239,21 @@
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
           (RenderSystem/setShaderColor tr tg tb (* alpha ta))
-          (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0))
+          (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0) (not depth?))
             ;; Fast path: no sprite-sheet cropping requested — full-texture blit.
+            ;; (GuiGraphics.blit pins z at 0, so a depth-layered image can't use it.)
             (.blit gg rl ix iy iw ih 0.0 0.0 iw ih iw ih)
             ;; Cropped path: sample a [u,v]→[u+tex-w,v+tex-h] fractional UV region
             ;; (matching the old CGUI comp/render-texture-region convention), e.g.
             ;; a single frame out of a vertically-stacked sprite-sheet. Pass `gg`
             ;; so the quad is transformed by the current PoseStack (draw-tape's
             ;; leftPos/topPos translate) instead of rendering at raw coordinates.
-            (GuiGraphicsHelper/blitTexturedQuad gg rl
-              (float x) (float y) (float (+ x w)) (float (+ y h)) 0.0
-              (float u) (float (+ u tex-w))
-              (float v) (float (+ v tex-h))))
+            (let [z (push-depth! node)]
+              (GuiGraphicsHelper/blitTexturedQuad gg rl
+                (float x) (float y) (float (+ x w)) (float (+ y h)) z
+                (float u) (float (+ u tex-w))
+                (float v) (float (+ v tex-h)))
+              (pop-depth! node)))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================
@@ -523,12 +574,14 @@
               ^BufferBuilder bb (.getBuilder tess)]
           (RenderSystem/setShaderTexture (int 0) tex-0)
           (when tex-1 (RenderSystem/setShaderTexture (int 1) tex-1))
-          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (.vertex bb pose-matrix x y2 0.0) (.uv bb u0 v1) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y2 0.0) (.uv bb u1 v1) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y 0.0) (.uv bb u1 v0) (.endVertex bb)
-          (.vertex bb pose-matrix x y 0.0) (.uv bb u0 v0) (.endVertex bb)
-          (BufferUploader/drawWithShader (.end bb)))
+          (let [z (push-depth! node)]
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+            (.vertex bb pose-matrix x y2 z) (.uv bb u0 v1) (.endVertex bb)
+            (.vertex bb pose-matrix x2 y2 z) (.uv bb u1 v1) (.endVertex bb)
+            (.vertex bb pose-matrix x2 y z) (.uv bb u1 v0) (.endVertex bb)
+            (.vertex bb pose-matrix x y z) (.uv bb u0 v0) (.endVertex bb)
+            (BufferUploader/drawWithShader (.end bb))
+            (pop-depth! node)))
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
         ;; Release the custom program, but leave a *usable* shader bound: a nil
         ;; current shader NPEs the next raw-BufferBuilder node (drawWithShader
@@ -536,6 +589,66 @@
         (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
         (catch Exception e
           (cn.li.mcmod.util.log/stacktrace "shader render failed" e))))))
+
+;; ============================================================================
+;; :depth-mask — colour-less depth stamp (upstream SkillTree.scala's
+;; glColorMask(false…) + glAlphaFunc pass)
+;; ============================================================================
+
+(def ^:private SLOT-DM-SRC 0)
+(def ^:private SLOT-DM-BAKED 1)
+
+(defn bake-depth-mask! [^INode node]
+  (let [src (.getOSlot node SLOT-DM-SRC)]
+    (when (string? src)
+      (.setOSlot node SLOT-DM-BAKED (resolve-rl src)))))
+
+(defn render-depth-mask! [^GuiGraphics gg ^INode node]
+  (let [^ResourceLocation rl (.getOSlot node SLOT-DM-BAKED)
+        ^ShaderInstance si (platform-bridge/resolve-shader :alpha-discard)]
+    ;; No alpha-discard shader on this loader → skip the stamp entirely rather
+    ;; than write a full opaque quad. Layering degrades to painter's order.
+    (when (and rl si)
+      (try
+        (let [sp (.getStaticProps node)
+              z (float (double (:z sp 0.0)))
+              cutoff (float (double (:alpha-cutoff sp 0.3)))
+              x (float (node-abs-x node)) y (float (node-abs-y node))
+              x2 (float (+ (node-abs-x node) (scaled-w node)))
+              y2 (float (+ (node-abs-y node) (scaled-h node)))
+              ^PoseStack ps (.pose gg)
+              ^Matrix4f pose-matrix (.pose (.last ps))
+              ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))]
+          (.setSampler si "TexSampler0" (sampler-texture rl))
+          (RenderSystem/setShader (StaticShaderSupplier. si))
+          (when-let [u (.safeGetUniform si "AlphaThreshold")] (.set u cutoff))
+          (RenderSystem/setShaderTexture (int 0) rl)
+          ;; GL_ALWAYS, not LEQUAL: the stamp sits behind the z=0 plane the rest
+          ;; of the GUI (and its own depth writes) occupy, so a depth-ordered
+          ;; test would reject it. Equality against these values is all the
+          ;; icon/line passes care about.
+          (RenderSystem/enableDepthTest)
+          (RenderSystem/depthFunc (int GL11/GL_ALWAYS))
+          (RenderSystem/depthMask true)
+          (RenderSystem/colorMask false false false false)
+          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+          (.vertex bb pose-matrix x y2 z) (.uv bb 0.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y2 z) (.uv bb 1.0 1.0) (.endVertex bb)
+          (.vertex bb pose-matrix x2 y z) (.uv bb 1.0 0.0) (.endVertex bb)
+          (.vertex bb pose-matrix x y z) (.uv bb 0.0 0.0) (.endVertex bb)
+          (BufferUploader/drawWithShader (.end bb))
+          (RenderSystem/colorMask true true true true)
+          (RenderSystem/depthMask true)
+          (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
+          (RenderSystem/disableDepthTest)
+          (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader))))
+        (catch Exception e
+          ;; Never leave the colour mask off — a leaked one blanks the screen.
+          (RenderSystem/colorMask true true true true)
+          (RenderSystem/depthMask true)
+          (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
+          (RenderSystem/disableDepthTest)
+          (cn.li.mcmod.util.log/stacktrace "depth mask render failed" e))))))
 
 (defn render-shader-quad! [^GuiGraphics gg ^INode node]
   (render-shader-progress-node! gg node))
@@ -713,12 +826,14 @@
           (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 ca)
           (RenderSystem/setShaderTexture (int 0) tex)
-          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) 0.0) (.uv bb 0.0 0.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) 0.0) (.uv bb 0.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (+ x2 nx)) (float (+ y2 ny)) 0.0) (.uv bb 1.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix (float (- x2 nx)) (float (- y2 ny)) 0.0) (.uv bb 1.0 0.0) (.endVertex bb)
-          (BufferUploader/drawWithShader (.end bb))
+          (let [z (push-depth! node)]
+            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+            (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) z) (.uv bb 0.0 0.0) (.endVertex bb)
+            (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) z) (.uv bb 0.0 1.0) (.endVertex bb)
+            (.vertex bb pose-matrix (float (+ x2 nx)) (float (+ y2 ny)) z) (.uv bb 1.0 1.0) (.endVertex bb)
+            (.vertex bb pose-matrix (float (- x2 nx)) (float (- y2 ny)) z) (.uv bb 1.0 0.0) (.endVertex bb)
+            (BufferUploader/drawWithShader (.end bb))
+            (pop-depth! node))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
         (catch Exception e
           (cn.li.mcmod.util.log/stacktrace "line render failed" e))))))
@@ -1149,6 +1264,7 @@
    :image           {:render! render-image!           :bake! bake-image!}
    :text            {:render! render-text!            :bake! bake-text!}
    :progress        {:render! render-progress!        :bake! bake-progress!}
+   :depth-mask      {:render! render-depth-mask!      :bake! bake-depth-mask!}
    :shader-quad     {:render! render-shader-quad!     :bake! bake-shader-quad!}
    :shader-ring     {:render! render-shader-ring!     :bake! bake-shader-ring!}
    :shader-progress {:render! render-shader-progress! :bake! bake-shader-progress!}

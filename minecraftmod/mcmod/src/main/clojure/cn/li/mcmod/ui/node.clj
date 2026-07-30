@@ -182,6 +182,16 @@
     :prop-writers {}
     :hit? false}
 
+   ;; Stamps a texture's opaque area into the depth buffer without drawing any
+   ;; colour — the mask half of depth layering (see render.clj). Static props:
+   ;; :z, :alpha-cutoff.
+   :depth-mask
+   {:dslots {}
+    :oslots {:src 0}
+    :oslots-backend-base 1
+    :prop-writers {:src {:slot :oslot :idx 0 :sig :o}}
+    :hit? false}
+
    :shader-quad
    {:dslots {:alpha 0}
     :oslots {:shader-props 0}

@@ -51,7 +51,8 @@
 (deftest meltdowner-up-success-applies-rewards-and-terminates-test
   (let [{:keys [messages* terminated* fx-send! terminate!]} (context-mocks)
         exp-calls* (atom [])
-        cooldown-calls* (atom [])]
+        cooldown-calls* (atom [])
+        beam-params* (atom nil)]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
                   skill-effects/skill-exp (fn [_ _] 0.6)

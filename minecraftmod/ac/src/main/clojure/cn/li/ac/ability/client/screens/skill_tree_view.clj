@@ -80,6 +80,14 @@
   [node-count]
   (+ (node-blend-offset (max 0 (dec (long (or node-count 0))))) 0.62))
 
+;; Depth-layering planes. Upstream uses +10 (plate) / +11 (ring, and the
+;; connection lines) relative to the widget; only the ORDERING and the equality
+;; the icon/line tests rely on matter, so we mirror it below the z=0 plane the
+;; rest of the GUI draws at — depth we leave behind then never rejects an
+;; overlay drawn after the tree. See render.clj's depth-layering notes.
+(def ^:private z-plate -2.0)
+(def ^:private z-ring  -1.0)
+
 (def ^:private line-inset
   "Upstream shortens each connection by 12.2px at BOTH ends (SkillTree.scala:
    `(dx,dy) = (px/norm*12.2, py/norm*12.2)`), so the 5.5px-thick line stops at
@@ -115,6 +123,10 @@
      :props {:x 0.0 :y 0.0 :w 0.0 :h 0.0
              :x1 fx :y1 fy :x2 x2 :y2 y2
              :thickness 5.5
+             ;; Upstream draws lines at the ring's z under GL_NOTEQUAL, so a line
+             ;; is cut wherever it would cross a node's outline ring (the ring
+             ;; stamped that exact depth) but still crosses the plate.
+             :z z-ring :depth-func :notequal
              :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
              :color (line-color m-alpha child-learned?)}}))
 
@@ -352,16 +364,29 @@
         outline (rt/build-child! rt {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
                                                           :src (tex-src :skill-outline) :alpha 0.0
                                                           :tint 0xFF333333}} grp)
+        ;; Depth stamps, drawn after the colour passes exactly as upstream does:
+        ;; the plate at z-plate (alpha > 0.3) and the ring at z-ring (alpha > 0.5).
+        ;; Children of the group, so hover scaling moves the mask with the art.
+        _ (rt/build-child! rt {:kind :depth-mask :props {:x da :y da :w ta :h ta
+                                                         :src (tex-src :skill-back)
+                                                         :z z-plate :alpha-cutoff 0.3}} grp)
+        _ (rt/build-child! rt {:kind :depth-mask :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
+                                                         :src (tex-src :skill-outline)
+                                                         :z z-ring :alpha-cutoff 0.5}} grp)
         ;; Unlearned skills show a greyscale icon (upstream wraps the icon draw in
         ;; `glUseProgram(shaderMono)` when !learned). Both kinds expose :alpha, so
         ;; apply-node-anim! fades either one the same way. If the loader has no
         ;; mono shader the renderer falls back to a plain textured quad — colour
         ;; instead of grey, which is the graceful degradation, not a break.
+        ;; :depth-func :equal — upstream draws the icon under glDepthFunc(GL_EQUAL)
+        ;; at the plate's z, so it is clipped to the plate's opaque disc.
         icon (if (:learned nd)
                (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
-                                                         :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+                                                         :src (icon-src (:skill-icon nd)) :alpha 0.0
+                                                         :z z-plate :depth-func :equal}} grp)
                (rt/build-child! rt {:kind :shader-quad
                                     :props {:x oia :y oia :w logic/icon-size :h logic/icon-size :alpha 0.0
+                                            :z z-plate :depth-func :equal
                                             :shader-props {:shader-id :mono
                                                            :texture-0 (icon-src (:skill-icon nd))}}} grp))
         ring (when (:learned nd)
@@ -411,27 +436,39 @@
     (.setDSlot line 3 y2)
     (.setFlag line node/FLAG-RENDER-DIRTY)))
 
+(defn- build-connection!
+  [^UiRt rt ^INode cam conn]
+  (let [^INode line (rt/build-child! rt (connection-spec conn 0.0) cam)
+        [fx fy tx ty] (connection-endpoints conn)]
+    {:line line :from-x fx :from-y fy :to-x tx :to-y ty
+     :child-idx (long (or (:child-idx conn) 0))}))
+
 (defn- build-tree!
   "Build the :tree-cam camera group + connections + skill nodes under :tree-layer
-   once, returning mutation handles. Chrome/visibility is the caller's concern."
+   once, returning mutation handles. Chrome/visibility is the caller's concern.
+
+   Build order matters now that the tree uses the depth buffer: upstream emits
+   each widget as [node visuals + depth stamps, then that widget's incoming
+   connection], so a line is only cut by the rings stamped before it. Emitting
+   every line first (as this did) would leave them all in front of every ring."
   [^UiRt rt render-data w h]
   (let [nodes (:skill-nodes render-data)
         [s offx offy] (area-fit-transform nodes w h)
+        conns-by-child (group-by #(long (or (:child-idx %) 0)) (:connections render-data))
         ^INode layer (ui/node rt :tree-layer)]
     (rt/clear-children! rt layer)
     (let [^INode cam (rt/build-child! rt {:kind :group :id :tree-cam
                                           :props {:x offx :y offy :w (double w) :h (double h) :scale s}}
                        layer)
-          conn-handles
-          (mapv (fn [conn]
-                  (let [^INode line (rt/build-child! rt (connection-spec conn 0.0) cam)
-                        [fx fy tx ty] (connection-endpoints conn)]
-                    {:line line :from-x fx :from-y fy :to-x tx :to-y ty
-                     :child-idx (long (or (:child-idx conn) 0))}))
-                (:connections render-data))]
+          built (mapv (fn [nd]
+                        {:node (build-skill-node! rt cam nd)
+                         :conns (mapv #(build-connection! rt cam %)
+                                      (get conns-by-child (long (or (:idx nd) 0))))})
+                      nodes)]
       (rt/mark-tree-dirty! rt)
-      {:cam cam :fit [s offx offy] :connections conn-handles
-       :nodes (mapv #(build-skill-node! rt cam %) nodes)})))
+      {:cam cam :fit [s offx offy]
+       :nodes (mapv :node built)
+       :connections (into [] (mapcat :conns) built)})))
 
 (defn build-embedded!
   "Build the embedded skill tree once. Returns handles {:cam :fit :nodes

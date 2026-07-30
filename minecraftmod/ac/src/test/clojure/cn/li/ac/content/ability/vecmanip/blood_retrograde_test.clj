@@ -50,29 +50,35 @@
      :terminate-context! (fn [ctx-id _]
                            (swap! terminate-calls conj ctx-id))}))
 
-(deftest release-cost-tick-is-zero-even-when-hit-test
-  (testing "tick release cost is disabled even if a target is available"
-    (with-redefs [br/release-hit (fn [& _] {:entity-id "e-1"})
-            br/skill-exp (fn [_] 0.5)]
-      (is (= 0.0 ((get-in br/blood-retrograde [:cost :tick :cp])
-                  {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 0.0 ((get-in br/blood-retrograde [:cost :tick :overload])
-                  {:player-id "p1" :ctx-id "ctx-1"}))))))
+;; The declarative `:cost {:tick … :up …}` map these two used to poke at went
+;; away in "fix: align blood retrograde with AcademyCraft": the release cost is
+;; now charged imperatively inside try-perform!, and the spec just declares no
+;; per-tick drain. Same two invariants, asserted against the current shape.
 
-(deftest release-cost-up-only-fires-on-hit-test
-  (testing "up-stage release costs only apply when the release raycast hits"
-    (with-redefs [br/release-hit (fn [& _] nil)
-            br/skill-exp (fn [_] 0.0)]
-      (is (= 0.0 ((get-in br/blood-retrograde [:cost :up :cp])
-                  {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 0.0 ((get-in br/blood-retrograde [:cost :up :overload])
-                  {:player-id "p1" :ctx-id "ctx-1"}))))
-    (with-redefs [br/release-hit (fn [& _] {:entity-id "e-1"})
-            br/skill-exp (fn [_] 0.0)]
-      (is (= 280.0 ((get-in br/blood-retrograde [:cost :up :cp])
-                    {:player-id "p1" :ctx-id "ctx-1"})))
-      (is (= 55.0 ((get-in br/blood-retrograde [:cost :up :overload])
-                   {:player-id "p1" :ctx-id "ctx-1"}))))))
+(deftest release-cost-is-not-drained-per-tick-test
+  (testing "no per-tick CP/overload drain — the release cost is a one-shot charge"
+    (is (= 0.0 (:cp-consume-speed br/blood-retrograde)))
+    (is (= 0.0 (:overload-consume-speed br/blood-retrograde)))))
+
+(deftest release-cost-only-charged-on-hit-test
+  (testing "up-stage release cost only applies when the release raycast hits"
+    (let [resource-calls* (atom [])]
+      (with-redefs [br/cfg-lerp mock-cfg-lerp
+                    br/cfg-double mock-cfg-double
+                    br/skill-exp (fn [_] 0.0)
+                    geom/world-id-of (fn [_] "w")
+                    fx/send! (fn [& _] nil)
+                    entity-damage/available? (constantly false)
+                    skill-effects/set-main-cooldown! (fn [& _] nil)
+                    skill-effects/add-skill-exp! (fn [& _] nil)
+                    skill-effects/perform-resource!
+                    (fn [player-id overload cp _]
+                      (swap! resource-calls* conj [player-id overload cp])
+                      {:success? true})]
+        (is (nil? (#'br/try-perform! "p1" "ctx-1" nil)))
+        (is (empty? @resource-calls*) "no target — nothing charged")
+        (is (true? (#'br/try-perform! "p1" "ctx-1" {:entity-id "e-1"})))
+        (is (= [["p1" 55.0 280.0]] @resource-calls*) "charged once, at the release rates")))))
 
 (deftest auto-release-at-max-tick-applies-side-effects-test
   (let [{:keys [ctx-state get-context update-skill-state-root! terminate-context! terminate-calls]}

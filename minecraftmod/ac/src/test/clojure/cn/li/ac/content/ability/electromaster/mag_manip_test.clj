@@ -53,7 +53,8 @@
                     nil)
                   fx/send! (fn [& _] nil)]
       (is (true?
-            (mag-manip/start-holding!
+            ;; start-holding! is defn- — go through the var to call it here.
+            (#'mag-manip/start-holding!
               ctx-id "p1" {:player true}
               {:block-id "minecraft:iron_block"
                :from-world? true

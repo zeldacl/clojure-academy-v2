@@ -28,7 +28,7 @@
         (with-redefs [log/info (fn [& _])
                       log/warn (fn [& _])
                       uuid/player-uuid (fn [_] #uuid "00000000-0000-0000-0000-000000000001")
-                      #'player/player-persistent-data (fn [p] (:persistent-data p))]
+                      player/player-persistent-data (fn [p] (:persistent-data p))]
           (f))))))
 
 (deftest terminal-nbt-persistence-test

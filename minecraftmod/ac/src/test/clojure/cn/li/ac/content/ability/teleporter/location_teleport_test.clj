@@ -13,8 +13,8 @@
    in-memory store atom (the platform layer is a function map now — no
    protocol to reify)."
   [store current-pos f]
-  (with-redefs [#'loc-tp/position-store-available? (constantly true)
-                #'loc-tp/save-location!
+  (with-redefs [loc-tp/position-store-available? (constantly true)
+                loc-tp/save-location!
                 (fn [player-uuid location-name world-id x y z]
                   (swap! store assoc-in [player-uuid location-name]
                          {:name location-name
@@ -23,23 +23,23 @@
                           :y (double y)
                           :z (double z)})
                   true)
-                #'loc-tp/delete-location!
+                loc-tp/delete-location!
                 (fn [player-uuid location-name]
                   (let [exists? (contains? (get @store player-uuid {}) location-name)]
                     (swap! store update player-uuid dissoc location-name)
                     exists?))
-                #'loc-tp/get-location
+                loc-tp/get-location
                 (fn [player-uuid location-name]
                   (get-in @store [player-uuid location-name]))
-                #'loc-tp/list-locations
+                loc-tp/list-locations
                 (fn [player-uuid]
                   (->> (vals (get @store player-uuid {}))
                        (sort-by :name)
                        vec))
-                #'loc-tp/get-location-count
+                loc-tp/get-location-count
                 (fn [player-uuid]
                   (count (get @store player-uuid {})))
-                #'loc-tp/has-location?
+                loc-tp/has-location?
                 (fn [player-uuid location-name]
                   (contains? (get @store player-uuid {}) location-name))
                 motion-effects/teleportation-available? (constantly true)
