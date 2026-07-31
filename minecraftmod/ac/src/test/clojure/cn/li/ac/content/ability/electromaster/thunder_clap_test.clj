@@ -164,6 +164,40 @@
       (is (= [["world-1" 1.0 65.0 2.0 0.0 0.0 1.0 40.0]]
              @raycast-calls*)))))
 
+(deftest thunder-clap-strikes-the-block-hit-not-the-sky-test
+  ;; The bolt was landing ~range blocks along the look vector — up in the air
+  ;; — instead of at the aimed block. RaycastShared.raycastBlocks did not put
+  ;; a "hit-type" (only the combined variants did), so attack/hit-kind
+  ;; classified every real block hit as :miss and resolve-raycast-target took
+  ;; the eye+look*range fallback every time.
+  ;;
+  ;; The fixture below is the exact key set RaycastShared.raycastBlocks puts:
+  ;; hit-type, x/y/z (block pos), hit-x/hit-y/hit-z (precise), block-id, face,
+  ;; distance. Tests that invent a friendlier shape are what let this ship.
+  (let [block-hit {:hit-type :block
+                   :x 3 :y 65 :z 9
+                   :hit-x 3.5 :hit-y 65.0 :hit-z 9.25
+                   :block-id "minecraft:stone"
+                   :face "up"
+                   :distance 12.0}
+        ;; Looking steeply upward, so the fallback lands far overhead and is
+        ;; unmistakable if it is taken by mistake.
+        look {:x 0.0 :y 1.0 :z 0.0}
+        eye {:x 1.0 :y 65.0 :z 2.0}]
+    (with-redefs [raycast/available? (constantly true)
+                  raycast/player-look-vector (fn [_] look)
+                  geom/eye-pos (fn [_] eye)
+                  geom/world-id-of (fn [_] "world-1")
+                  thunder-clap/targeting-range (constantly 40.0)]
+      (with-redefs [raycast/raycast-blocks (fn [& _] block-hit)]
+        (is (= {:x 3.5 :y 65.0 :z 9.25}
+               (#'thunder-clap/resolve-raycast-target "p1"))
+            "a block hit strikes its precise impact point"))
+      (with-redefs [raycast/raycast-blocks (fn [& _] nil)]
+        (is (= {:x 1.0 :y 105.0 :z 2.0}
+               (#'thunder-clap/resolve-raycast-target "p1"))
+            "only a genuine miss falls back to eye + look * range")))))
+
 (deftest thunder-clap-aoe-applies-original-scaling-and-attribution-test
   (let [calc-calls* (atom [])
         damage-calls* (atom [])

@@ -56,6 +56,7 @@ public final class RaycastShared {
         hit.put("hit-x", result.getLocation().x);
         hit.put("hit-y", result.getLocation().y);
         hit.put("hit-z", result.getLocation().z);
+        hit.put("hit-type", "block");
         hit.put("block-id", blockState.getBlock().getDescriptionId());
         hit.put("face", result.getDirection().getSerializedName());
         hit.put("distance", start.distanceTo(result.getLocation()));
@@ -119,6 +120,7 @@ public final class RaycastShared {
         hit.put("hit-x", result.getLocation().x);
         hit.put("hit-y", result.getLocation().y);
         hit.put("hit-z", result.getLocation().z);
+        hit.put("hit-type", "block");
         hit.put("block-id", BuiltInRegistries.BLOCK.getKey(blockState.getBlock()).toString());
         hit.put("face", result.getDirection().getSerializedName());
         hit.put("distance", start.distanceTo(result.getLocation()));
@@ -184,6 +186,7 @@ public final class RaycastShared {
             hit.put("hit-x", result.getLocation().x);
             hit.put("hit-y", result.getLocation().y);
             hit.put("hit-z", result.getLocation().z);
+            hit.put("hit-type", "block");
             hit.put("block-id", blockId);
             hit.put("face", result.getDirection().getSerializedName());
             hit.put("distance", start.distanceTo(result.getLocation()));
@@ -230,6 +233,7 @@ public final class RaycastShared {
 
             nearestDistance = distance;
             nearest = new LinkedHashMap<>();
+            nearest.put("hit-type", "entity");
             nearest.put("uuid", entity.getUUID().toString());
             nearest.put("x", entity.position().x);
             nearest.put("y", entity.position().y);
@@ -360,6 +364,7 @@ public final class RaycastShared {
             }
             nearestDistance = distance;
             nearest = new LinkedHashMap<>();
+            nearest.put("hit-type", "entity");
             nearest.put("uuid", entity.getUUID().toString());
             nearest.put("x", entity.position().x);
             nearest.put("y", entity.position().y);
@@ -418,6 +423,7 @@ public final class RaycastShared {
             }
             nearestDistance = distance;
             nearest = new LinkedHashMap<>();
+            nearest.put("hit-type", "entity");
             nearest.put("uuid", entity.getUUID().toString());
             nearest.put("x", entity.position().x);
             nearest.put("y", entity.position().y);
@@ -615,6 +621,7 @@ public final class RaycastShared {
         }
 
         Map<String, Object> hit = new LinkedHashMap<>();
+        hit.put("hit-type", "entity");
         hit.put("entity-id", entity.getUUID().toString());
         hit.put("x", entity.position().x);
         hit.put("y", entity.position().y);
