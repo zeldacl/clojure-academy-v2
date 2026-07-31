@@ -462,21 +462,26 @@
 (defn add-overload-ceiling [level]
   (get-add-overload level))
 
-(defn max-cp-for-level
-  "Compute max CP for a given ability level."
-  [level]
-  (when-not (and (>= level 1) (<= level (max-level)))
-    (throw (IllegalArgumentException. "get-max-cp: level must be 1 to max-level")))
-  (+ (get-init-cp level)
-     (get-add-cp level)))
+;; Upstream CPData keeps the level grant and the earned growth apart:
+;; recalcMaxValue sets maxCP = getInitCP(level), and getMaxCP() returns that
+;; plus addMaxCP, which starts at 0 and accumulates through skill use up to
+;; add-cp-ceiling. These functions are the level grant only — the growth
+;; allowance belongs to :add-max-cp / :add-max-overload, and adding it here
+;; too would hand out at level 1 a maximum the player is supposed to earn.
 
-(defn max-overload-for-level
-  "Compute max overload for a given ability level."
+(defn base-max-cp-for-level
+  "Max CP granted by `level` alone, before any growth from skill use."
   [level]
   (when-not (and (>= level 1) (<= level (max-level)))
-    (throw (IllegalArgumentException. "get-max-overload: level must be 1 to max-level")))
-  (+ (get-init-overload level)
-     (get-add-overload level)))
+    (throw (IllegalArgumentException. "base-max-cp-for-level: level must be 1 to max-level")))
+  (get-init-cp level))
+
+(defn base-max-overload-for-level
+  "Max overload granted by `level` alone, before any growth from skill use."
+  [level]
+  (when-not (and (>= level 1) (<= level (max-level)))
+    (throw (IllegalArgumentException. "base-max-overload-for-level: level must be 1 to max-level")))
+  (get-init-overload level))
 
 (defn cp-recover-cooldown []
   (non-negative-int :cp-recover-cooldown))

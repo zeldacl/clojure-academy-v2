@@ -10,8 +10,8 @@
 (defn skill-exp
   "Matches original's overridden getSkillExp: clamp(0,1, maxCP / getInitCP(5)).
   getInitCP(5) reads only the init_cp config list at level 5 — NOT
-  init_cp + add_cp (that sum is a different concept, the achievable ceiling
-  including skill-usage bonuses, which cfg/max-cp-for-level computes)."
+  init_cp + add_cp. That sum is a different concept: the ceiling a player can
+  reach once :add-max-cp has fully accumulated through skill use."
   [player-id]
   (let [max-cp (double (or (skill-effects/player-path player-id [:resource-data :max-cp] 0.0) 0.0))
         level5-cp (double (cfg/get-init-cp 5))]

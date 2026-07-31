@@ -66,7 +66,12 @@
     (is (true? (cfg/is-metal-entity? "custom:metal-entity")))
     (is (= 12.0 (cfg/get-init-cp 3)))
     (is (= 102.0 (cfg/get-add-cp 3)))
-    (is (= 114.0 (cfg/max-cp-for-level 3)))
+    ;; The level grant only. Adding get-add-cp (102) here as well would
+    ;; double-count the growth allowance that :add-max-cp earns separately.
+    (is (= 12.0 (cfg/base-max-cp-for-level 3)))
+    ;; :init-overload is not overridden above, so this reads the shipped table
+    ;; — which mirrors upstream default.conf init_overload[3].
+    (is (= 240.0 (cfg/base-max-overload-for-level 3)))
     (is (= 0.01 (cfg/cp-recovery-rate-base)))
     (is (= 0.7 (cfg/cp-recovery-lerp-start)))
     (is (= 1.7 (cfg/cp-recovery-lerp-end)))

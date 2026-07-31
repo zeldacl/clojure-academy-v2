@@ -25,8 +25,8 @@
 (defn new-resource-data
   "Create fresh ResourceData. max-cp and max-overload come from config."
   ([]
-   (new-resource-data (cfg/max-cp-for-level 1)
-                      (cfg/max-overload-for-level 1)))
+   (new-resource-data (cfg/base-max-cp-for-level 1)
+                      (cfg/base-max-overload-for-level 1)))
   ([max-cp max-overload]
    {:cur-cp                 max-cp
     :max-cp                 max-cp
@@ -221,13 +221,18 @@
 ;; ============================================================================
 
 (defn recalc-max-values
-  "After level change, recompute max-cp/max-overload from init + add-max growth.
-  Clamp cur values to new maxes."
+  "After level change, recompute max-cp/max-overload from the level grant plus
+  accumulated growth. Clamp cur values to new maxes.
+
+  Mirrors upstream CPData.getMaxCP()/getMaxOverload() = maxCP + addMaxCP,
+  where maxCP is recalcMaxValue's getInitCP(level). The growth allowance is
+  reached only through :add-max-cp / :add-max-overload, never granted up
+  front."
   [d level]
   (let [add-cp  (double (:add-max-cp d 0.0))
         add-ol  (double (:add-max-overload d 0.0))
-        new-max-cp (+ (double (cfg/max-cp-for-level level)) add-cp)
-        new-max-ol (+ (double (cfg/max-overload-for-level level)) add-ol)]
+        new-max-cp (+ (double (cfg/base-max-cp-for-level level)) add-cp)
+        new-max-ol (+ (double (cfg/base-max-overload-for-level level)) add-ol)]
     (assoc d
            :max-cp       new-max-cp
            :max-overload new-max-ol

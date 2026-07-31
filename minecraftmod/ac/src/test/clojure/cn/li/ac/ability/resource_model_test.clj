@@ -7,8 +7,8 @@
             [cn.li.ac.ability.config :as cfg]))
 
 (deftest resource-core-and-edge-test
-  (with-redefs [cfg/max-cp-for-level (fn [level] (* 100.0 level))
-                cfg/max-overload-for-level (fn [level] (* 10.0 level))
+  (with-redefs [cfg/base-max-cp-for-level (fn [level] (* 100.0 level))
+                cfg/base-max-overload-for-level (fn [level] (* 10.0 level))
                 cfg/add-cp-ceiling (fn [_level] 50.0)
                 cfg/add-overload-ceiling (fn [_level] 10.0)]
     (let [d0 (resource/new-resource-data)]
