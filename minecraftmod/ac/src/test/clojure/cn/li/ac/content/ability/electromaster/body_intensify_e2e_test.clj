@@ -61,20 +61,39 @@
     :resource-data (assoc (rd/new-resource-data max-cp max-overload)
                           :activated true)}))
 
-(defn- seed-alive-context! []
-  (ctx/register-context!
-   (assoc (ctx/new-server-context player-id :body-intensify ctx-id (server-owner))
-          :status ctx/STATUS-ALIVE))
-  (command-rt/run-command-in-session!
-   test-player/test-session-id player-id
-   {:command :register-context :ctx-id ctx-id
-    :skill-id :body-intensify :status :alive}))
+(defn- seed-alive-context!
+  "`created-ms` back-dates the transport-level keepalive stamp, which is what a
+  context that has already been held for a while looks like."
+  ([] (seed-alive-context! (System/currentTimeMillis)))
+  ([created-ms]
+   (ctx/register-context!
+    (assoc (ctx/new-server-context player-id :body-intensify ctx-id (server-owner))
+           :status ctx/STATUS-ALIVE
+           :last-keepalive-ms created-ms))
+   (command-rt/run-command-in-session!
+    test-player/test-session-id player-id
+    {:command :register-context :ctx-id ctx-id
+     :skill-id :body-intensify :status :alive})))
 
 (defn- server-tick! []
   (runtime-hooks/with-client-ctx-fn
     {:player-owner {:server-session-id test-player/test-session-id
                     :player-uuid player-id}}
     (fn [] (cm/tick-player-contexts! player-id))))
+
+(defn- client-keepalive! []
+  (command-rt/run-command-in-session!
+   test-player/test-session-id player-id
+   {:command :touch-context-keepalive :ctx-id ctx-id
+    :timestamp-ms (System/currentTimeMillis)}))
+
+(defn- reaped-server-tick!
+  "A server tick with the context-manager's keepalive reaper running too, as
+  it does in game, and with the client keepalive the held key keeps sending."
+  []
+  (client-keepalive!)
+  (cm/tick-context-manager!)
+  (server-tick!))
 
 (defn- current-cp []
   (get-in (store/get-player-state test-player/test-session-id player-id)
@@ -113,6 +132,42 @@
                     [:body-intensify/fx-end true]]
                    @fx*)
                 "release fans out performed? true to the owner and nearby players")))))))
+
+(deftest charge-outliving-the-keepalive-timeout-still-performs-test
+  ;; The useful hold runs to max-ticks (40 ticks = 2s), well past the 1.5s
+  ;; keepalive tolerance. The reaper judged expiry from the transport map's
+  ;; :last-keepalive-ms — stamped once at creation, never refreshed — so it
+  ;; killed the context around tick 30 and wiped :skill-state. The key-up that
+  ;; followed hit a dead context: no buffs, no release FX, no reaction at all.
+  (let [applied* (atom [])
+        fx* (atom [])]
+    (runtime-hooks/with-player-state-owner-fn
+      {:server-session-id test-player/test-session-id :player-uuid player-id}
+      (fn []
+        (seed-player!)
+        (with-redefs [potion-effects/available? (constantly true)
+                      potion-effects/apply-effect!
+                      (fn [_player effect _duration _amplifier]
+                        (swap! applied* conj effect)
+                        true)
+                      fx/send! (fn [_ctx-id entry _evt payload]
+                                 (swap! fx* conj [(:topic entry) (:performed? payload)])
+                                 nil)]
+          (ctx/with-context-owner (server-owner)
+            (seed-alive-context! (- (System/currentTimeMillis)
+                                    (* 4 (cm/keepalive-timeout-ms))))
+            (ctx-rt/handle-key-down! (server-owner) ctx-id {} nil)
+            (dotimes [_ 35] (reaped-server-tick!))
+
+            (is (= ctx/STATUS-ALIVE (:status (ctx/get-context (server-owner) ctx-id)))
+                "a keepalive-refreshed context must survive a hold longer than the timeout")
+            (is (= 35 (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks])))
+
+            (ctx-rt/handle-key-up! (server-owner) ctx-id {} nil)
+            (is (some #{:hunger} @applied*)
+                "the release must still apply its buffs")
+            (is (some #{[:body-intensify/fx-end true]} @fx*)
+                "and still report performed? to the client")))))))
 
 (deftest release-below-min-charge-performs-nothing-test
   (let [applied* (atom [])

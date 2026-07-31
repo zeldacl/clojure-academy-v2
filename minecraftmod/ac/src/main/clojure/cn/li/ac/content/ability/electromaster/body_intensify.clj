@@ -13,6 +13,7 @@
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]))
 
@@ -162,7 +163,11 @@
 (defn- body-intensify-cost-fail!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (send-end-fx! ctx-id player-id false)
-  (ctx/terminate-context! ctx-id nil))
+  ;; Server-initiated end with no key-up termination to follow, so nothing
+  ;; else will notify the client. Upstream's terminate() always reaches the
+  ;; client: ContextManager's server tick sends M_TERM_ATSERVER to the caster
+  ;; and nearby players when it disposes the context.
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
 
 (defn- body-intensify-tick!
   "Self-track server ticks because tick-context-entry! does not populate the
@@ -179,7 +184,8 @@
     (enforce-overload-floor! player-id overload-floor)
     (when (>= ticks (max-tolerant-time))
       (send-end-fx! ctx-id player-id false)
-      (ctx/terminate-context! ctx-id nil))))
+      ;; Same as the cost-fail path: the server ends this one on its own.
+      (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))))
 
 (defn- body-intensify-up!
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
