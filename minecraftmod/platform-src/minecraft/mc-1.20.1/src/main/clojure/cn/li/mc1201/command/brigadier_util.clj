@@ -28,6 +28,15 @@
     :enum (StringArgumentType/word)
     (StringArgumentType/string)))
 
+(defn brigadier-arg-present?
+  "Whether the parsed command line actually supplied this argument."
+  [^CommandContext brigadier-ctx arg-name]
+  (try
+    (.getArgument brigadier-ctx ^String arg-name ^Class Object)
+    true
+    (catch IllegalArgumentException _ false)
+    (catch Exception _ false)))
+
 (defn extract-argument-value
   "Extract a typed argument value from a Brigadier CommandContext."
   [^CommandContext brigadier-ctx arg-name arg-type]
@@ -47,13 +56,20 @@
       nil)))
 
 (defn extract-all-arguments
-  "Extract all DSL-declared arguments from a Brigadier CommandContext."
+  "Extract all DSL-declared arguments from a Brigadier CommandContext.
+
+  An omitted optional argument is not an error — the command ran at an
+  earlier node — so it is skipped without the warning a genuinely failed
+  extraction logs."
   [^CommandContext brigadier-ctx arg-specs]
   (into {}
         (keep (fn [arg-spec]
                 (let [arg-name (name (:name arg-spec))
                       arg-type (:type arg-spec)
-                      value (extract-argument-value brigadier-ctx arg-name arg-type)]
+                      value (if (and (:optional? arg-spec)
+                                     (not (brigadier-arg-present? brigadier-ctx arg-name)))
+                              nil
+                              (extract-argument-value brigadier-ctx arg-name arg-type))]
                   (when value
                     [(keyword arg-name) value])))
         arg-specs)))

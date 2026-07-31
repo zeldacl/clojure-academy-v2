@@ -66,6 +66,22 @@
     (is (= {:action :set-node-exp :node-id :sk :exp 0.25 :player nil}
            (h/handle-aim-exp {:arguments {:skill "sk" :exp 0.25}})))))
 
+(deftest omitted-value-turns-cat-level-exp-into-a-query-test
+  ;; Upstream CommandAIMBase prints the current value when the argument is
+  ;; left off: `cat` -> curcat/nonecat, `level` -> the level, `exp <skill>`
+  ;; -> curexp. Without these branches the omitted argument fell through to
+  ;; the setter's validation and reported an error instead.
+  (is (= {:action :show-category :player :p}
+         (h/handle-aim-cat {:arguments {} :player :p})))
+  (is (= {:action :show-level :player :p}
+         (h/handle-aim-level {:arguments {} :player :p})))
+  (with-redefs [skill/get-skill (fn [id] (when (= id :sk) {:id :sk}))]
+    (is (= {:action :show-node-exp :node-id :sk :player :p}
+           (h/handle-aim-exp {:arguments {:skill "sk"} :player :p})))
+    (is (= :send-message
+           (:action (h/handle-aim-exp {:arguments {:skill "nope"}})))
+        "an unknown skill is still an error, query or not")))
+
 (deftest handle-aim-simple-actions-test
   (is (= {:action :reset-abilities :player :p} (h/handle-aim-reset {:player :p})))
   (is (= {:action :learn-all-nodes :player nil} (h/handle-aim-learn-all {})))

@@ -87,13 +87,16 @@
     :category - category ID string"
   [ctx]
   (let [category-str (:category (:arguments ctx))
-        category-id (keyword category-str)
         target-player (get-target-player ctx)]
-    (if-not (cat/get-category category-id)
-      (error-message "command.academy.aim.cat.not_found" category-str)
-      {:action :switch-category
-       :category-id category-id
-       :player target-player})))
+    ;; Upstream prints the current category when the argument is omitted.
+    (if (nil? category-str)
+      {:action :show-category :player target-player}
+      (let [category-id (keyword category-str)]
+        (if-not (cat/get-category category-id)
+          (error-message "command.academy.aim.cat.not_found" category-str)
+          {:action :switch-category
+           :category-id category-id
+           :player target-player})))))
 
 (defn handle-aim-catlist
   "List all available ability categories."
@@ -171,8 +174,15 @@
   [ctx]
   (let [level (:level (:arguments ctx))
         target-player (get-target-player ctx)]
-    (if-not (and (integer? level) (>= level 1) (<= level 5))
+    (cond
+      ;; Upstream prints the current level when the argument is omitted.
+      (nil? level)
+      {:action :show-level :player target-player}
+
+      (not (and (integer? level) (>= level 1) (<= level 5)))
       (error-message "command.academy.aim.level.invalid" level)
+
+      :else
       {:action :set-level
        :level level
        :player target-player})))
@@ -191,6 +201,12 @@
     (cond
       (not (skill/get-skill skill-id))
       (error-message "command.academy.aim.node.exp.not_found" skill-str)
+
+      ;; Upstream prints the skill's current exp when the value is omitted.
+      (nil? exp)
+      {:action :show-node-exp
+       :node-id skill-id
+       :player target-player}
 
       (not (and (number? exp) (>= exp 0.0) (<= exp 1.0)))
       (error-message "command.academy.aim.node.exp.invalid" exp)

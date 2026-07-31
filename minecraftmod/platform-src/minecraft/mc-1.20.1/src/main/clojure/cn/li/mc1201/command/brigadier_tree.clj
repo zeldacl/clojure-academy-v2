@@ -157,8 +157,25 @@
       (.executes builder (build-executor executor-fn all-arg-specs target-player-arg)))
     builder))
 
+(defn all-optional?
+  "True when every one of these argument specs may be omitted."
+  [arg-specs]
+  (every? :optional? arg-specs))
+
+(defn- complete-at?
+  "True when supplying argument `index` already forms a runnable command —
+   that is, every argument after it is optional."
+  [arg-specs index]
+  (all-optional? (subvec arg-specs (inc index))))
+
 (defn build-arguments-chain
   "Build a chain of argument nodes.
+
+  Every prefix that is followed only by optional arguments gets its own
+  .executes, which is what makes :optional? mean anything: Brigadier has no
+  notion of optional arguments, a command runs at whichever node the input
+  stops on. Attaching the executor solely to the last node — as this did —
+  silently made every declared-optional argument mandatory.
 
   Args:
     arg-specs: Vector of ArgumentSpec records
@@ -169,20 +186,20 @@
     First argument node with chained arguments"
   [arg-specs executor-fn target-player-arg]
   (when (seq arg-specs)
-    (loop [remaining (reverse arg-specs)
-           ^ArgumentBuilder current-node nil]
-      (if (empty? remaining)
-        current-node
-        (let [arg-spec (first remaining)
-              is-last? (nil? current-node)
-              ^RequiredArgumentBuilder node (build-argument-node
-                                            arg-spec
-                                            (when is-last? executor-fn)
-                                            arg-specs
-                                            target-player-arg)]
-          (when current-node
-            (.then node current-node))
-          (recur (rest remaining) node))))))
+    (let [arg-specs (vec arg-specs)]
+      (loop [index (dec (count arg-specs))
+             ^ArgumentBuilder current-node nil]
+        (if (neg? index)
+          current-node
+          (let [^RequiredArgumentBuilder node
+                (build-argument-node
+                  (nth arg-specs index)
+                  (when (complete-at? arg-specs index) executor-fn)
+                  arg-specs
+                  target-player-arg)]
+            (when current-node
+              (.then node current-node))
+            (recur (dec index) node)))))))
 
 (defn build-subcommand-node
   "Build a Brigadier node for a subcommand.
@@ -202,7 +219,11 @@
         all-args (vec (concat parent-args sub-args))]
     (if (seq sub-args)
       (let [^RequiredArgumentBuilder arg-chain (build-arguments-chain sub-args executor-fn target-player-arg)]
-        (.then literal arg-chain))
+        (.then literal arg-chain)
+        ;; The bare subcommand is itself runnable when nothing is required,
+        ;; e.g. `/aim level` printing the current level.
+        (when (and executor-fn (all-optional? sub-args))
+          (.executes literal (build-executor executor-fn all-args target-player-arg))))
       (when executor-fn
         (.executes literal (build-executor executor-fn all-args target-player-arg))))
     literal))
@@ -265,7 +286,9 @@
             arg-specs (:arguments command-spec)]
         (if (seq arg-specs)
           (let [^RequiredArgumentBuilder arg-chain (build-arguments-chain arg-specs executor-fn nil)]
-            (.then literal arg-chain))
+            (.then literal arg-chain)
+            (when (and executor-fn (all-optional? arg-specs))
+              (.executes literal (build-executor executor-fn arg-specs nil))))
           (when executor-fn
             (.executes literal (build-executor executor-fn [] nil))))))
 

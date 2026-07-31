@@ -28,6 +28,9 @@
 		:reset-abilities
 		:maxout-progression
 		:max-all-progression
+		:show-category
+		:show-level
+		:show-node-exp
 		:enable-cheats
 		:disable-cheats})
 
@@ -188,6 +191,43 @@
 		(send-feedback! context "command.academy.aim.node.list" [payload] false)
 		{:success? true}))
 
+;; Upstream runs cat / level / exp with the value omitted as a query. The
+;; reads live here rather than in handlers because this is the layer that
+;; already resolves the session and owns feedback; handlers stay pure.
+
+(defn- player-state-for
+	[action-map context]
+	(normalize-runtime-state
+	 (store/get-or-create-player-state!
+		(runtime-hooks/require-context-player-state-session-id "Command actions" context)
+		(action-player-uuid action-map context))))
+
+(defn- execute-show-category!
+	[action-map context]
+	(let [category-id (get-in (player-state-for action-map context)
+														[:ability-data :category-id])]
+		(if category-id
+			(send-feedback! context "command.academy.aim.cat.current" [(name category-id)] false)
+			(send-feedback! context "command.academy.aim.cat.none" [] false))
+		{:success? true}))
+
+(defn- execute-show-level!
+	[action-map context]
+	(let [level (get-in (player-state-for action-map context) [:ability-data :level])]
+		(send-feedback! context "command.academy.aim.level.current" [(str level)] false)
+		{:success? true}))
+
+(defn- execute-show-node-exp!
+	[action-map context]
+	(let [node-id (:node-id action-map)
+				exp (double (get-in (player-state-for action-map context)
+														[:ability-data :skill-exps node-id]
+														0.0))]
+		;; Upstream curexp prints a percentage.
+		(send-feedback! context "command.academy.aim.node.exp.current"
+										[(name node-id) (format "%.1f" (* 100.0 exp))] false)
+		{:success? true}))
+
 (defn- execute-set-level!
 	[action-map context]
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
@@ -313,6 +353,9 @@
 		:reset-abilities (execute-reset-abilities! action-map context)
 		:maxout-progression (execute-maxout-progression! action-map context)
 		:max-all-progression (execute-max-all! action-map context)
+		:show-category (execute-show-category! action-map context)
+		:show-level (execute-show-level! action-map context)
+		:show-node-exp (execute-show-node-exp! action-map context)
 		:enable-cheats (execute-set-cheats! action-map context true)
 		:disable-cheats (execute-set-cheats! action-map context false)
 		(throw (ex-info "Unknown AC command action" {:action (:action action-map)}))))

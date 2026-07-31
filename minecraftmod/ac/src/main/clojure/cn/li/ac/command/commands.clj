@@ -39,12 +39,15 @@
          sort)))
 
 (defn- build-common-aim-subcommands []
+  ;; Upstream runs cat / level / exp with the value omitted as a query that
+  ;; prints the current one, so those arguments are optional here.
   {:cat {:arguments [{:name "category"
                       :type :string
-                      :description "Category ID to switch to"
+                      :optional? true
+                      :description "Category ID to switch to; omit to print the current one"
                       :suggestions category-id-suggestions}]
          :executor-fn (resolve-handler "handle-aim-cat")
-         :description "Switch ability category"}
+         :description "Show or switch ability category"}
    :catlist {:arguments []
              :executor-fn (resolve-handler "handle-aim-catlist")
              :description "List all ability categories"}
@@ -74,18 +77,20 @@
             :description "List available skills"}
    :level {:arguments [{:name "level"
                         :type :integer
-                        :description "Level to set (1-5)"}]
+                        :optional? true
+                        :description "Level to set (1-5); omit to print the current one"}]
            :executor-fn (resolve-handler "handle-aim-level")
-           :description "Set ability level"}
+           :description "Show or set ability level"}
    :exp {:arguments [{:name "skill"
                       :type :string
                       :description "Skill ID"
                       :suggestions skill-id-suggestions}
                      {:name "exp"
                       :type :float
-                      :description "Experience value (0.0-1.0)"}]
+                      :optional? true
+                      :description "Experience value (0.0-1.0); omit to print the current one"}]
          :executor-fn (resolve-handler "handle-aim-exp")
-         :description "Set skill experience"}
+         :description "Show or set skill experience"}
    :fullcp {:arguments []
             :executor-fn (resolve-handler "handle-aim-fullcp")
             :description "Restore CP to full"}
