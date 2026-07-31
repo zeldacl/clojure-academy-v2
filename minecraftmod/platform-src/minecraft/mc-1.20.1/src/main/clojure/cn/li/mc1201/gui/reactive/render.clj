@@ -232,7 +232,9 @@
 ;; Report each offending location once.
 ;; ---------------------------------------------------------------------------
 
-(defonce ^:private seen-image-textures (java.util.HashSet.))
+;; Tagged so the .add below resolves statically — this runs per image node on
+;; the render path, where a reflective call would allocate and box every frame.
+(defonce ^:private ^java.util.HashSet seen-image-textures (java.util.HashSet.))
 
 (defn- warn-missing-texture!
   [^INode node ^ResourceLocation rl]
