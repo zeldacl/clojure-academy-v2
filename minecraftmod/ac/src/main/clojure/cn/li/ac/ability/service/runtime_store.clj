@@ -56,6 +56,10 @@
   {:ability-data (adata/new-ability-data)
    :resource-data (rdata/new-resource-data)
    :preset-data (pdata/new-preset-data)
+   ;; Upstream keeps the /aim cheat switch in PlayerDataTag, outside
+   ;; AbilityData/CPData, and it survives relog. Its own persisted domain here
+   ;; for the same reason: it gates commands, it is not ability progression.
+   :cheats-data {:enabled? false}
    :context-registry {}})
 
 (definterface IPlayerRuntime

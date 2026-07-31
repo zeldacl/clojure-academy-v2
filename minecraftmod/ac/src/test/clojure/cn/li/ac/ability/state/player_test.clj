@@ -127,7 +127,10 @@
         decoded (edn/read-string (pr-str persisted))]
     (is (= persisted decoded))
     (is (false? (contains? decoded :dirty-domains)))
-    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data :context-registry}
+    (is (= #{:ability-data :resource-data :cooldown-data :preset-data :develop-data
+             :cheats-data :context-registry}
            (set (keys decoded))))
+    (is (false? (get-in decoded [:cheats-data :enabled?]))
+        "the /aim cheat switch round-trips like any other persisted domain")
     (is (= [:electromaster :railgun]
            (get-in decoded [:preset-data :slots [0 0]])))))

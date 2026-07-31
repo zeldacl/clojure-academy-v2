@@ -66,6 +66,7 @@
   (runtime-hooks/register-player-state-domain! {:domain-key :resource-data :nbt-key "ac_resource"})
   (runtime-hooks/register-player-state-domain! {:domain-key :preset-data :nbt-key "ac_preset"})
   (runtime-hooks/register-player-state-domain! {:domain-key :develop-data :nbt-key "ac_develop"})
+  (runtime-hooks/register-player-state-domain! {:domain-key :cheats-data :nbt-key "ac_cheats"})
   nil)
 
 (defn- install-runtime-components!

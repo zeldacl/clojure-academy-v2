@@ -737,7 +737,7 @@
 
   (defn- cmd-set-cheats-enabled
     [player-state {:keys [enabled?]}]
-    (ok (assoc player-state :cheats-enabled? (boolean enabled?))))
+    (ok (assoc-in player-state [:cheats-data :enabled?] (boolean enabled?))))
 
   (defn- cmd-context-assoc-skill-state
     [player-state {:keys [ctx-id k v]}]

@@ -5,6 +5,7 @@
             [cn.li.ac.command.dsl :as cmd]
             [cn.li.ac.command.handlers :as handlers]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.runtime.install :as install]))
 
 (defn- resolve-handler [handler-name]
@@ -98,14 +99,49 @@
           :executor-fn (resolve-handler "handle-aim-help")
           :description "Show help message"}})
 
+(defn cheats-enabled?
+  "Whether /aim's cheat switch is on for this context's player.
+
+  Creative mode counts as on, matching upstream's
+  `!isActive(player) && !player.capabilities.isCreativeMode` gate."
+  [{:keys [player player-uuid] :as _ctx}]
+  (boolean
+   (or (and player
+            (entity/available?)
+            (entity/player-creative? player))
+       (let [session-id (runtime-hooks/player-state-session-id)]
+         (when (and player-uuid session-id)
+           (get-in (store/get-player-state session-id player-uuid)
+                   [:cheats-data :enabled?]))))))
+
+(defn- gated-by-cheats
+  "Wrap an /aim subcommand executor with upstream CommandAIM's cheat gate.
+
+  Upstream refuses every subcommand until the player switches cheats on —
+  that refusal is the entire observable effect of cheats_on, and without it
+  the switch does nothing at all. cheats_on/cheats_off/help stay ungated so
+  the switch remains reachable, and /aimp is left ungated entirely because
+  upstream's CommandAIMP has no such check: it is already OP-only."
+  [executor-fn]
+  (fn [ctx]
+    (if (cheats-enabled? ctx)
+      (executor-fn ctx)
+      (handlers/error-message "command.academy.aim.notactive"))))
+
 (defn- build-aim-subcommands []
-  (assoc (build-common-aim-subcommands)
-         :cheats_on {:arguments []
-                     :executor-fn (resolve-handler "handle-aim-cheats-on")
-                     :description "Enable cheat mode"}
-         :cheats_off {:arguments []
-                      :executor-fn (resolve-handler "handle-aim-cheats-off")
-                      :description "Disable cheat mode"}))
+  (-> (reduce-kv (fn [acc subcommand spec]
+                   (assoc acc subcommand
+                          (if (= :help subcommand)
+                            spec
+                            (update spec :executor-fn gated-by-cheats))))
+                 {}
+                 (build-common-aim-subcommands))
+      (assoc :cheats_on {:arguments []
+                         :executor-fn (resolve-handler "handle-aim-cheats-on")
+                         :description "Enable cheat mode"}
+             :cheats_off {:arguments []
+                          :executor-fn (resolve-handler "handle-aim-cheats-off")
+                          :description "Disable cheat mode"})))
 
 (defn- build-aimp-subcommands []
   (build-common-aim-subcommands))
