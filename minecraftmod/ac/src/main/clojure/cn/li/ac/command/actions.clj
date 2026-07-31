@@ -135,20 +135,20 @@
 				player-uuid (action-player-uuid action-map context)]
 		(let [state (normalize-runtime-state (store/get-or-create-player-state! session-id player-uuid))
 					skill-ids (skills-for-category (get-in state [:ability-data :category-id]))]
+			;; Learn only. Upstream AbilityData.learnAllSkills is exactly
+			;; `learnedSkills.set(0, category.getSkillCount(), true)` — it never
+			;; touches skillExps, so every skill starts at exp 0 just as a
+			;; single `learn` leaves it. Granting exp 1.0 here silently handed
+			;; out mastery the player never earned, and skill tunables lerp on
+			;; exp, so it also changed every cost and damage number.
 			(command-rt/run-commands-in-session!
 				session-id
 				player-uuid
-				(vec (concat
-							(map (fn [skill-id]
-									 {:command :learn-skill
-									  :skill-id skill-id
-									  :check-conditions? false})
-								 skill-ids)
-							(map (fn [skill-id]
-									 {:command :set-skill-exp
-									  :skill-id skill-id
-									  :amount 1.0})
-								 skill-ids)))))
+				(mapv (fn [skill-id]
+								{:command :learn-skill
+								 :skill-id skill-id
+								 :check-conditions? false})
+							skill-ids)))
 		(log/info "Learned all nodes for player" player-uuid)
 		(send-feedback! context "command.academy.aim.node.learn_all.success" [] false)
 		{:success? true}))

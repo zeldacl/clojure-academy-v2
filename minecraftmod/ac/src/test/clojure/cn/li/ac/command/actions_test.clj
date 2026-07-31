@@ -75,10 +75,11 @@
         (is (:success? (command-actions/execute action context))))
       (is (= [[:command ps-fix/test-session-id uuid {:command :learn-skill :skill-id :railgun :check-conditions? false}]
               [:command ps-fix/test-session-id uuid {:command :unlearn-skill :skill-id :railgun}]
+              ;; learn_all learns and nothing else, matching upstream
+              ;; AbilityData.learnAllSkills — no :set-skill-exp, so the skills
+              ;; land at exp 0 exactly as a single `learn` leaves them.
               [:commands ps-fix/test-session-id uuid [{:command :learn-skill :skill-id :arc-gen :check-conditions? false}
-                                                      {:command :learn-skill :skill-id :railgun :check-conditions? false}
-                                                      {:command :set-skill-exp :skill-id :arc-gen :amount 1.0}
-                                                      {:command :set-skill-exp :skill-id :railgun :amount 1.0}]]
+                                                      {:command :learn-skill :skill-id :railgun :check-conditions? false}]]
               [:command ps-fix/test-session-id uuid {:command :set-level :level 3}]
               [:command ps-fix/test-session-id uuid {:command :set-skill-exp :skill-id :railgun :amount 0.5}]
               [:command ps-fix/test-session-id uuid {:command :recover-all}]
