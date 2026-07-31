@@ -188,6 +188,113 @@
         :color {:r r :g g :b b :a a}}))))
 
 ;; ---------------------------------------------------------------------------
+;; Public API: descending strike bolt
+;;
+;; Vanilla's LightningBoltRenderer walks 8 fixed 16-block segments straight up
+;; from the entity, jittering each joint by at most ±5. Over 128 blocks that
+;; is a very shallow wander, which is why a vanilla bolt reads as a bright
+;; vertical column rather than a forked strike. The generator below reuses the
+;; same L-system as the small arcs but tuned for a tall descending channel:
+;; many more joints, a displacement budget that halves each pass (fractal
+;; midpoint displacement), and forks that branch off and taper out on the way
+;; down.
+;; ---------------------------------------------------------------------------
+
+(def ^:private strike-defaults
+  {:height 64.0          ;; tall enough to leave the top out of frame
+   :width 0.55
+   :max-offset 5.0       ;; halved per pass: 5, 2.5, 1.25, 0.625, 0.3125
+   :passes 5             ;; 2^5 joints on the trunk — ~2 blocks per segment
+   :branch-factor 0.16
+   :branch-length 0.28   ;; fraction of the remaining drop
+   :width-shrink 0.55})
+
+(defn- midpoint-displace
+  "One fractal midpoint-displacement pass: split every span and push the new
+  joint sideways by up to `offset`."
+  [pts offset]
+  (conj (into []
+              (mapcat (fn [[a b]]
+                        (let [dir (v- b a)
+                              mid (v* (v+ a b) 0.5)
+                              push (random-dir-orthogonal (v-normalize dir)
+                                                          (* offset (rand)))]
+                          [a (v+ mid push)])))
+              (partition 2 1 pts))
+        (last pts)))
+
+(defn- refine-channel
+  [pts max-offset passes]
+  (loop [pts pts
+         offset (double max-offset)
+         pass 0]
+    (if (>= pass passes)
+      pts
+      (recur (midpoint-displace pts offset) (/ offset 2.0) (inc pass)))))
+
+(defn- polyline->segments
+  [pts width alpha]
+  (mapv (fn [[a b]] (segment (point a width) (point b width) alpha))
+        (partition 2 1 pts)))
+
+(defn strike-bolt-segments
+  "World-space segments for a bolt descending onto `impact` out of the sky.
+
+  Fractal midpoint displacement on a sky-to-impact channel, plus forks that
+  veer off and taper out on the way down.
+
+  Deliberately not `generate-arc-segments`: that one alternates which list it
+  refines and hands the unprocessed branch list back as the trunk, so the
+  trunk is dropped after the first pass and a run with no branches returns
+  nothing at all. That behaviour is load-bearing for the bushy little railgun
+  arcs it was ported for, but a strike needs its channel to survive.
+
+  Generate once per strike and keep the result — the displacement is
+  randomised, so rebuilding per frame would make the channel crawl instead of
+  holding its shape while it flickers."
+  ([impact] (strike-bolt-segments impact {}))
+  ([impact opts]
+   (let [{:keys [height width max-offset passes branch-factor branch-length
+                 width-shrink]}
+         (merge strike-defaults opts)
+         impact-v (vec3/v3 (double (:x impact)) (double (:y impact)) (double (:z impact)))
+         top (v+ impact-v (vec3/v3 0.0 (double height) 0.0))
+         trunk (refine-channel [top impact-v] max-offset passes)
+         ;; Forks start at a trunk joint, keep heading roughly downward, and
+         ;; get their own (shorter, thinner, dimmer) displaced channel.
+         branches
+         (into []
+               (comp
+                 (map-indexed vector)
+                 (filter (fn [[idx _]] (and (pos? idx) (< (rand) branch-factor))))
+                 (mapcat
+                   (fn [[idx joint]]
+                     (let [remaining (- (count trunk) idx)
+                           span (* (double branch-length)
+                                   (/ (double remaining) (count trunk))
+                                   (double height))]
+                       (when (> span 1.0)
+                         (let [dir (random-rotate 35.0
+                                                  (v* (vec3/v3 0.0 -1.0 0.0) span))
+                               tip (v+ joint dir)]
+                           (polyline->segments
+                             (refine-channel [joint tip] (/ max-offset 2.0)
+                                             (max 1 (dec passes)))
+                             (* width width-shrink)
+                             0.6)))))))
+               trunk)]
+     (into (polyline->segments trunk width 1.0) branches))))
+
+(defn bolt-segments->ops
+  "Render pre-generated bolt segments, scaling every segment's alpha by
+  `alpha-scale` so the caller can drive the flash envelope."
+  [segments alpha-scale]
+  (let [scale (double alpha-scale)]
+    (if-not (pos? scale)
+      []
+      (segment->quads (mapv #(update % :alpha * scale) segments)))))
+
+;; ---------------------------------------------------------------------------
 ;; Public API: arc ops for railgun beam
 ;; ---------------------------------------------------------------------------
 

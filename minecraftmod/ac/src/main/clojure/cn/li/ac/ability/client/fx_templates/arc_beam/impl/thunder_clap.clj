@@ -13,6 +13,18 @@
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [clojure.string :as str]))
 
+(defn- strike-impact
+  "One strike record. The bolt geometry is generated here, once, and carried
+  for the record's whole life — the L-system is randomised, so rebuilding it
+  per frame would make the channel crawl instead of holding its shape while
+  it flickers out."
+  [target charge-ratio ttl]
+  {:target target
+   :ttl ttl
+   :max-ttl ttl
+   :charge-ratio (double (or charge-ratio 0.0))
+   :bolt (arc-fx/strike-bolt-segments target)})
+
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:effect-state {} :tails {} :impacts {}})
@@ -58,11 +70,7 @@
                                          :performed? true}))]
         (if (map? target)
           (update-in next-store [:impacts owner-key*] (fnil conj [])
-                     (merge base-meta
-                            {:target target
-                             :ttl 6
-                             :max-ttl 6
-                             :charge-ratio (double (or charge-ratio 0.0))}))
+                     (merge base-meta (strike-impact target charge-ratio 8)))
           next-store))
 
       :end
@@ -76,11 +84,7 @@
                          without-active)]
         (if (and (map? target) performed?)
           (update-in next-store [:impacts owner-key*] (fnil conj [])
-                     (merge base-meta
-                            {:target target
-                             :ttl 4
-                             :max-ttl 4
-                             :charge-ratio (double (or charge-ratio 0.0))}))
+                     (merge base-meta (strike-impact target charge-ratio 6)))
           next-store))
 
       store*)))
@@ -149,7 +153,24 @@
                   p1 (rv3/v3 (+ tx (* pulse (Math/cos a1))) y (+ tz (* pulse (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
-(defn- impact-ops [{:keys [target ttl max-ttl charge-ratio]}]
+(defn- bolt-alpha
+  "Flash envelope for the descending channel: bright on the strike frame,
+  fading out, with the odd dark frame so it reads as a real bolt's restrikes
+  rather than a light source dimming smoothly."
+  [ttl max-ttl]
+  (let [ttl (long (or ttl 0))
+        life (if (pos? (long (or max-ttl 0)))
+               (/ (double ttl) (double max-ttl))
+               0.0)]
+    (cond
+      (zero? ttl) 0.0
+      ;; Vanilla LightningBolt re-seeds itself a couple of times before it
+      ;; dies; the gaps between those restrikes are what makes lightning
+      ;; flicker instead of glow.
+      (zero? (mod ttl 3)) (* 0.25 life)
+      :else life)))
+
+(defn- impact-ops [{:keys [target ttl max-ttl charge-ratio bolt]}]
   (let [life (if (pos? (long (or max-ttl 0)))
                (/ (double (or ttl 0)) (double max-ttl))
                0.0)
@@ -160,14 +181,18 @@
         tz (double (:z target))
         segments 20
         alpha (int (+ 20 (* 160 life)))
-        color {:r 220 :g 245 :b 255 :a alpha}]
-    (vec
-      (for [idx (range segments)
-            :let [a0 (/ (* 2.0 Math/PI idx) segments)
-                  a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 (rv3/v3 (+ tx (* radius (Math/cos a0))) y (+ tz (* radius (Math/sin a0))))
-                  p1 (rv3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
-        (ru/line-op p0 p1 color)))))
+        color {:r 220 :g 245 :b 255 :a alpha}
+        ground-ring
+        (vec
+          (for [idx (range segments)
+                :let [a0 (/ (* 2.0 Math/PI idx) segments)
+                      a1 (/ (* 2.0 Math/PI (inc idx)) segments)
+                      p0 (rv3/v3 (+ tx (* radius (Math/cos a0))) y (+ tz (* radius (Math/sin a0))))
+                      p1 (rv3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
+            (ru/line-op p0 p1 color)))]
+    (into ground-ring
+          (when (seq bolt)
+            (arc-fx/bolt-segments->ops bolt (bolt-alpha ttl max-ttl))))))
 
 (defn- live-target
   "The caster's own aim point, recomputed locally.
