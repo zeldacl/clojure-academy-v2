@@ -31,9 +31,16 @@
              (+ (* (.-z a) cos) (* (.-y a) sin)))))
 
 (defn- random-rotate
-  "Randomly rotate a vector within range degrees (matching original randomRotate)."
+  "Randomly rotate a vector within range degrees (matching original randomRotate).
+
+  Upstream: `a = rangef(-range, range) / 180 * PI`. This read
+  `(/ deg 180.0 Math/PI)` — dividing by pi where the degree-to-radian
+  conversion multiplies — so every rotation came out pi^2 (~9.9x) too small.
+  Branch directions barely deviated from their parent, and the random
+  perpendicular segment->quads derives for billboarding was nearly parallel
+  to the segment it came from, leaving the cross product close to zero."
   [range-deg dir]
-  (let [a-rad (/ (* range-deg (rand)) 180.0 Math/PI)
+  (let [a-rad (* (/ (* range-deg (rand)) 180.0) Math/PI)
         pitched (v-rotate-pitch dir (- (* (rand) 2 a-rad) a-rad))]
     (v-rotate-yaw pitched (- (* (rand) 2 a-rad) a-rad))))
 
@@ -70,57 +77,72 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- handle-single-pass
-  "Process one L-system pass: subdivide segments and possibly create branches.
-  Returns {:main-arcs (updated segment lists) :branches (new branch lists)}."
-  [segment-lists offset width-shrink alpha-shrink length-shrink branch-factor]
+  "Process one L-system pass over every arc: split each segment at a displaced
+  midpoint, and fork a new arc with probability branch-factor.
+  Returns {:arcs refined-arcs :branches new-arcs}."
+  [arcs offset width-shrink alpha-shrink length-shrink branch-factor]
   (let [branches (transient [])
-        result
+        refined
         (mapv (fn [segments]
-                (mapcat (fn [s]
-                          (let [ave (point-avg (:start s) (:end s))
-                                dir-vec (v- (:pos (:end s)) (:pos (:start s)))
-                                displace-dir (random-dir-orthogonal
-                                              (v-normalize dir-vec)
-                                              (* (rand) offset))
-                                ave-pt (point (v+ (:pos ave) displace-dir) (:width ave))
-                                s1 (assoc s :end ave-pt)
-                                s2 (segment ave-pt (:end s) (:alpha s))]
-                            ;; Branching
-                            (when (< (rand) branch-factor)
-                              (let [dir (v* dir-vec length-shrink)
-                                    rdir (random-rotate 10.0 dir)
-                                    w2 (* (:width ave-pt) width-shrink)
-                                    bp1 (point (:pos ave-pt) w2)
-                                    bp2 (point (v+ (:pos ave-pt) rdir) w2)]
-                                (conj! branches [(segment bp1 bp2 (* (:alpha s) alpha-shrink))])))
-                            [s1 s2]))
-                        segments))
-              segment-lists)]
-    {:main-arcs (vec result) :branches (persistent! branches)}))
+                (vec
+                 (mapcat (fn [s]
+                           (let [ave (point-avg (:start s) (:end s))
+                                 dir-vec (v- (:pos (:end s)) (:pos (:start s)))
+                                 displace-dir (random-dir-orthogonal
+                                               (v-normalize dir-vec)
+                                               (* (rand) offset))
+                                 ave-pt (point (v+ (:pos ave) displace-dir) (:width ave))
+                                 s1 (assoc s :end ave-pt)
+                                 s2 (segment ave-pt (:end s) (:alpha s))]
+                             ;; Branching
+                             (when (< (rand) branch-factor)
+                               ;; Upstream forks along `ave.pt - s.start.pt`,
+                               ;; i.e. the displaced HALF segment. Using the
+                               ;; whole segment made every branch twice as
+                               ;; long as intended.
+                               (let [dir (v* (v- (:pos ave-pt) (:pos (:start s)))
+                                             length-shrink)
+                                     rdir (random-rotate 10.0 dir)
+                                     w2 (* (:width ave-pt) width-shrink)
+                                     bp1 (point (:pos ave-pt) w2)
+                                     bp2 (point (v+ (:pos ave-pt) rdir) w2)]
+                                 (conj! branches [(segment bp1 bp2 (* (:alpha s) alpha-shrink))])))
+                             [s1 s2]))
+                         segments)))
+              arcs)]
+    {:arcs refined :branches (persistent! branches)}))
 
 (defn- generate-arc-segments
   "Generate L-system arc segments for a single arc template.
-  Returns list of segment-lists (main trunk + all branches)."
+  Returns a vector of segment-lists (main trunk + all branches).
+
+  Upstream ArcFactory keeps listAll and bufferAll as PARALLEL per-arc
+  ping-pong buffers — index j of each is one arc's read/write pair, every arc
+  is refined on every pass, and a fork appends a new arc to both. This port
+  had collapsed them into two flat lists and, on the passes where it refined
+  the branch list, handed the previous *unrefined* branch list back as the
+  trunk. The trunk was therefore discarded after the first such pass, and a
+  run that happened to fork nothing returned no segments at all — verified:
+  with branch-factor 0 it produced zero.
+
+  The ping-pong is a Java allocation trick; refining into fresh vectors needs
+  no buffer swap, so passes here just refine every arc and append new forks."
   [length width max-offset passes branch-factor width-shrink]
   (let [v0 (vec3/v3 0.0 0.0 0.0)
         v1 (vec3/v3 length 0.0 0.0)
         init [(segment (point v0 width) (point v1 width) 1.0)]
         alpha-shrink 0.9
         length-shrink 0.7]
-    (loop [main-arcs [init]
-           all-branches []
+    (loop [arcs [init]
            offset max-offset
-           flip false
            pass 0]
       (if (>= pass passes)
-        (concat main-arcs all-branches)
-        (let [source (if flip all-branches main-arcs)
-              {:keys [main-arcs branches]}
-              (handle-single-pass source offset width-shrink alpha-shrink length-shrink branch-factor)]
-          (recur (if flip all-branches main-arcs)
-                 (concat (if flip main-arcs all-branches) branches)
+        arcs
+        (let [{:keys [arcs branches]}
+              (handle-single-pass arcs offset width-shrink alpha-shrink
+                                  length-shrink branch-factor)]
+          (recur (into arcs branches)
                  (/ offset 2.0)
-                 (not flip)
                  (inc pass)))))))
 
 ;; ---------------------------------------------------------------------------
