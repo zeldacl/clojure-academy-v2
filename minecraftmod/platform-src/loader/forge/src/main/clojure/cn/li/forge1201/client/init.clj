@@ -197,6 +197,7 @@
      :local-player-pos runtime-bridge/local-player-pos
      :local-player-eye-pos runtime-bridge/local-player-eye-pos
      :local-player-look-end runtime-bridge/local-player-look-end
+     :local-player-block-aim runtime-bridge/local-player-block-aim
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!
      :client-overlay-activated-override
      (fn [_owner]

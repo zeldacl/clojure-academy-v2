@@ -1,7 +1,9 @@
 (ns cn.li.mc1201.client.player-state-core
   "CLIENT-ONLY shared helpers for reading local player state from Minecraft."
   (:import [net.minecraft.client Minecraft]
-           [net.minecraft.core.registries BuiltInRegistries]))
+           [net.minecraft.core.registries BuiltInRegistries]
+           [net.minecraft.world.level ClipContext ClipContext$Block ClipContext$Fluid]
+           [net.minecraft.world.phys BlockHitResult HitResult$Type Vec3]))
 
 (defn local-player-item-id
   "Returns the registry ID string of the item in the local player's main hand,
@@ -39,3 +41,29 @@
         {:x (+ (:x eye) (* (.x look) distance))
          :y (+ (:y eye) (* (.y look) distance))
          :z (+ (:z eye) (* (.z look) distance))}))))
+
+(defn local-player-block-aim
+  "Where the local player is aiming: the precise block-hit point within
+  [distance], or the look end when nothing is hit. Returns nil if not in-game.
+
+  The same trace the server runs for aim-following skills — OUTLINE blocks,
+  no fluids, no entity shape context — but evaluated locally, so a client
+  effect can follow the crosshair instead of lagging a server tick plus
+  network latency behind it. Uses the render-interpolated eye and view vector
+  so it stays smooth between ticks."
+  [distance]
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (when-let [player (.player mc)]
+      (when-let [level (.level mc)]
+        (let [^Vec3 eye (.getEyePosition player (float 1.0))
+              ^Vec3 look (.getViewVector player (float 1.0))
+              ^Vec3 end (.add eye (.scale look (double distance)))
+              ^BlockHitResult hit (.clip level
+                                         (ClipContext. eye end
+                                                       ClipContext$Block/OUTLINE
+                                                       ClipContext$Fluid/NONE
+                                                       nil))
+              ^Vec3 point (if (and hit (= (.getType hit) HitResult$Type/BLOCK))
+                            (.getLocation hit)
+                            end)]
+          {:x (.x point) :y (.y point) :z (.z point)})))))

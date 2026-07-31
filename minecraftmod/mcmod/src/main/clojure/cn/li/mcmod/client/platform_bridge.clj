@@ -70,6 +70,14 @@
 (defn spawn-item-stack-at!       [& args] (apply bridge-op :spawn-item-stack-at! args))
 (defn blit-textured-quad!        [& args] (apply bridge-op :blit-textured-quad! args))
 (defn is-glfw-key-down?          [& args] (apply bridge-op :is-glfw-key-down? args))
+
+(defn local-player-block-aim
+  "Where the local player is aiming, as {:x :y :z}: the precise block hit
+  within `distance`, else the look end. nil when the loader does not provide
+  it (fabric registers no local-player ops yet) or the player is not in-game,
+  so callers must have a fallback."
+  [distance]
+  (bridge-op-optional :local-player-block-aim distance))
 (defn open-reactive-screen!      [& args] (apply bridge-op :open-reactive-screen args))
 
 (defn call-adapter

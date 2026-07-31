@@ -169,6 +169,20 @@
                   p1 (rv3/v3 (+ tx (* radius (Math/cos a1))) y (+ tz (* radius (Math/sin a1))))]]
         (ru/line-op p0 p1 color)))))
 
+(defn- live-target
+  "The caster's own aim point, recomputed locally.
+
+  Upstream's ThunderClapContextC.c_updateEffect runs its own
+  Raytrace.traceLiving every client tick and feeds the result straight to
+  mark.setPosition — the ripple mark never waits on the server. The synced
+  :target arrives at server-tick rate plus network latency, so using it for
+  the caster's own mark left the ring visibly trailing the crosshair while
+  turning. Fall back to the synced value when the loader has no local aim op."
+  [synced-target]
+  (or (client-bridge/local-player-block-aim
+        (skill-config/tunable-double :thunder-clap :targeting.range))
+      synced-target))
+
 (defn- local-walk-speed [ticks]
   (let [max-speed 0.1
         min-speed 0.001
@@ -206,7 +220,7 @@
                    (concat
                      (when (map? center) (surround-ops center ticks))
                      (when (and own? (map? (:target st)))
-                       (target-mark-ops (:target st) ticks ratio)))))
+                       (target-mark-ops (live-target (:target st)) ticks ratio)))))
                active-states))
         tail-ops
         (vec

@@ -29,6 +29,7 @@
 (defn local-player-pos [] (player-state/local-player-pos))
 (defn local-player-eye-pos [] (player-state/local-player-eye-pos))
 (defn local-player-look-end [distance] (player-state/local-player-look-end distance))
+(defn local-player-block-aim [distance] (player-state/local-player-block-aim distance))
 
 (defn clear-client-activated-overlay! []
   (if-let [owner (client-session/current-local-player-owner)]
