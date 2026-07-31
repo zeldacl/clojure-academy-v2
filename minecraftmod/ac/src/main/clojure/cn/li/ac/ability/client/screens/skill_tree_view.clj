@@ -80,14 +80,16 @@
   [node-count]
   (+ (node-blend-offset (max 0 (dec (long (or node-count 0))))) 0.62))
 
-;; Upstream clips the icon to its plate and cuts connection lines at the node
-;; rings by stamping the depth buffer (SkillTree.scala:356-421: glColorMask off
-;; + glAlphaFunc to write depth, then GL_EQUAL for the icon and GL_NOTEQUAL for
-;; the lines). The renderer can do this — :depth-mask / :depth-z / :depth-func,
-;; see render.clj — but wiring the tree to it rendered the icons and the detail
-;; popup as blank quads on a real client, and the GL state involved cannot be
-;; verified from a headless test run. Painter's order until that can be checked
-;; in game: the icons draw over their plate and the lines run under the nodes.
+;; Depth-layering planes, passed as :depth-z — NOT :z, which is the layout
+;; layer's paint-order key (sorting the tape by it puts the plate on top of the
+;; icon). Upstream uses +10 (plate) / +11 (ring, and the connection lines)
+;; relative to the widget; only the ORDERING and the equality the icon/line
+;; tests rely on matter, so we mirror it below the z=0 plane the rest of the GUI
+;; draws at — depth we leave behind then never rejects an overlay drawn after
+;; the tree. Loaders without the alpha-discard shader fall back to painter's
+;; order automatically; see render.clj's depth-layering notes.
+(def ^:private z-plate -2.0)
+(def ^:private z-ring  -1.0)
 
 (def ^:private line-inset
   "Upstream shortens each connection by 12.2px at BOTH ends (SkillTree.scala:
@@ -124,6 +126,10 @@
      :props {:x 0.0 :y 0.0 :w 0.0 :h 0.0
              :x1 fx :y1 fy :x2 x2 :y2 y2
              :thickness 5.5
+             ;; Upstream draws lines at the ring's depth under GL_NOTEQUAL, so a
+             ;; line is cut wherever it would cross a node's outline ring (the
+             ;; ring stamped that exact depth) but still crosses the plate.
+             :depth-z z-ring :depth-func :notequal
              :alpha (clamp01 (* (or m-alpha 0.7) (if child-learned? 1.0 0.4)))
              :color (line-color m-alpha child-learned?)}}))
 
@@ -361,16 +367,29 @@
         outline (rt/build-child! rt {:kind :image :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
                                                           :src (tex-src :skill-outline) :alpha 0.0
                                                           :tint 0xFF333333}} grp)
+        ;; Depth stamps, drawn after the colour passes exactly as upstream does:
+        ;; the plate at z-plate (alpha > 0.3) and the ring at z-ring (alpha > 0.5).
+        ;; Children of the group, so hover scaling moves the mask with the art.
+        _ (rt/build-child! rt {:kind :depth-mask :props {:x da :y da :w ta :h ta
+                                                         :src (tex-src :skill-back)
+                                                         :depth-z z-plate :alpha-cutoff 0.3}} grp)
+        _ (rt/build-child! rt {:kind :depth-mask :props {:x opa :y opa :w logic/prog-size :h logic/prog-size
+                                                         :src (tex-src :skill-outline)
+                                                         :depth-z z-ring :alpha-cutoff 0.5}} grp)
         ;; Unlearned skills show a greyscale icon (upstream wraps the icon draw in
         ;; `glUseProgram(shaderMono)` when !learned). Both kinds expose :alpha, so
         ;; apply-node-anim! fades either one the same way. If the loader has no
         ;; mono shader the renderer falls back to a plain textured quad — colour
         ;; instead of grey, which is the graceful degradation, not a break.
+        ;; :depth-func :equal — upstream draws the icon under glDepthFunc(GL_EQUAL)
+        ;; at the plate's depth, so it is clipped to the plate's opaque disc.
         icon (if (:learned nd)
                (rt/build-child! rt {:kind :image :props {:x oia :y oia :w logic/icon-size :h logic/icon-size
-                                                         :src (icon-src (:skill-icon nd)) :alpha 0.0}} grp)
+                                                         :src (icon-src (:skill-icon nd)) :alpha 0.0
+                                                         :depth-z z-plate :depth-func :equal}} grp)
                (rt/build-child! rt {:kind :shader-quad
                                     :props {:x oia :y oia :w logic/icon-size :h logic/icon-size :alpha 0.0
+                                            :depth-z z-plate :depth-func :equal
                                             :shader-props {:shader-id :mono
                                                            :texture-0 (icon-src (:skill-icon nd))}}} grp))
         ring (when (:learned nd)

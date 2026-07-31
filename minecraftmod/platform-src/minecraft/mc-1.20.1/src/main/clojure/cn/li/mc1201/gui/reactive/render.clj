@@ -109,6 +109,12 @@
 ;; stamps NEGATIVE depth-z (behind the z=0 plane every other GUI element draws
 ;; at). Anything drawn afterwards with the usual LEQUAL test is nearer and still
 ;; passes; a positive value would silently punch holes in later overlays.
+;;
+;; The whole scheme rides on the alpha-discard shader that writes the stamps.
+;; Where that is not registered — Fabric registers no custom shaders at all —
+;; the layering degrades to painter's order for every participant together. A
+;; GL_EQUAL test against a depth buffer nothing stamped rejects every fragment,
+;; so leaving the test on would silently erase the icons instead.
 ;; ============================================================================
 
 (defn- depth-func-gl [kw]
@@ -118,12 +124,23 @@
     :always   GL11/GL_ALWAYS
     GL11/GL_LEQUAL))
 
+(defn- depth-mask-shader
+  "The shader the depth stamps are drawn with, or nil when this loader has none."
+  ^ShaderInstance []
+  (platform-bridge/call-adapter :resolve-shader :alpha-discard))
+
+(defn- depth-func-of
+  "A node's declared depth func, or nil when depth layering is unavailable."
+  [^INode node]
+  (when-let [f (:depth-func (.getStaticProps node))]
+    (when (depth-mask-shader) f)))
+
 (defn- push-depth!
   "Apply a node's declared depth state. Returns its z (0.0 when it declares
    none, which is also the no-depth-test case)."
   [^INode node]
   (let [sp (.getStaticProps node)]
-    (when-let [f (:depth-func sp)]
+    (when-let [f (depth-func-of node)]
       (RenderSystem/enableDepthTest)
       (RenderSystem/depthFunc (int (depth-func-gl f)))
       (RenderSystem/depthMask (boolean (:depth-write? sp false))))
@@ -133,7 +150,7 @@
   "Restore the shared default: no depth test, LEQUAL, depth writes on. Every
    depth-aware renderer must call this so the state never escapes the node."
   [^INode node]
-  (when (:depth-func (.getStaticProps node))
+  (when (depth-func-of node)
     (RenderSystem/depthMask true)
     (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
     (RenderSystem/disableDepthTest)))
@@ -210,43 +227,21 @@
       [1.0 1.0 1.0 1.0])))
 
 ;; ---------------------------------------------------------------------------
-;; Image draw diagnostics
-;;
 ;; A GUI texture that fails to resolve draws as a flat untextured quad and
 ;; nothing else says so, which reads as a renderer bug rather than a bad path.
-;; Report each offending location once. -Dmcmod.ui.debugImages=true additionally
-;; dumps the first draws (source string, resolved location, GL texture id) so a
-;; "why is this a blank square" question can be answered from a client log.
+;; Report each offending location once.
 ;; ---------------------------------------------------------------------------
 
-(def ^:private debug-images? (Boolean/getBoolean "mcmod.ui.debugImages"))
 (defonce ^:private seen-image-textures (java.util.HashSet.))
-(defonce ^:private debug-image-budget (java.util.concurrent.atomic.AtomicInteger. 60))
 
-(defn- check-image-texture!
-  "Called once per distinct texture (always) and per draw while debugging.
-   `bound` is the GL texture id RenderSystem actually had on unit 0 after the
-   draw — when that disagrees with the location's own id, the quad sampled
-   somebody else's texture."
-  [^INode node ^ResourceLocation rl bound]
-  (when (or debug-images? (.add seen-image-textures rl))
-    (let [tex (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)
-          missing? (identical? tex (MissingTextureAtlasSprite/getTexture))]
-      (when missing?
-        (cn.li.mcmod.util.log/warn
-          "UI image texture did not resolve: " (str rl)
-          " (node " (str (.getId node)) ") — draws as a blank quad"))
-      (when (and debug-images? (pos? (.getAndDecrement debug-image-budget)))
-        (cn.li.mcmod.util.log/info
-          "[ui-image] node=" (str (.getId node))
-          " src=" (pr-str (.getOSlot node SLOT-IMG-SRC))
-          " rl=" (str rl)
-          " texId=" (.getId tex)
-          " boundTex0=" bound
-          " missing?=" missing?
-          " shader=" (some-> (RenderSystem/getShader) .getName)
-          " alpha=" (.getDSlot node SLOT-IMG-ALPHA)
-          " size=" (scaled-w node) "x" (scaled-h node))))))
+(defn- warn-missing-texture!
+  [^INode node ^ResourceLocation rl]
+  (when (.add seen-image-textures rl)
+    (when (identical? (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)
+                      (MissingTextureAtlasSprite/getTexture))
+      (cn.li.mcmod.util.log/warn
+        "UI image texture did not resolve: " (str rl)
+        " (node " (str (.getId node)) ") — draws as a blank quad"))))
 
 (defn render-image! [^GuiGraphics gg ^INode node]
   (let [rl-obj (.getOSlot node SLOT-IMG-BAKED-RL)
@@ -262,6 +257,7 @@
                                      (.setOSlot node SLOT-IMG-BAKED-RL resolved)
                                      resolved))))]
     (when rl
+      (warn-missing-texture! node rl)
       (let [x  (node-abs-x node)  y  (node-abs-y node)
             w  (scaled-w node)    h  (scaled-h node)
             ix (unchecked-int x)  iy (unchecked-int y)
@@ -273,7 +269,7 @@
             tex-h-raw (.getDSlot node SLOT-IMG-TEX-H)
             tex-w (if (pos? tex-w-raw) tex-w-raw 1.0)
             tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)
-            depth? (some? (:depth-func (.getStaticProps node)))
+            depth? (some? (depth-func-of node))
             [tr tg tb ta] (image-tint-rgba node)]
         (when (pos? alpha)
           ;; Enable blend for the alpha channel — otherwise a texture with
@@ -299,7 +295,6 @@
                 (float u) (float (+ u tex-w))
                 (float v) (float (+ v tex-h)))
               (pop-depth! node)))
-          (check-image-texture! node rl (RenderSystem/getShaderTexture 0))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================
@@ -561,15 +556,6 @@
 ;; :shader-quad / :shader-ring / :shader-progress
 ;; ============================================================================
 
-(defn- sampler-texture
-  "ShaderInstance.apply() binds a sampler only when its map value is a
-   RenderTarget / AbstractTexture / Integer — a bare ResourceLocation resolves to
-   -1 and the unit keeps whatever the previous draw left bound. Hand it the
-   loaded texture object so the binding is deterministic."
-  [^ResourceLocation rl]
-  (when rl
-    (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)))
-
 (defn- render-shader-progress-node! [^GuiGraphics gg ^INode node]
   (let [props (.getOSlot node SLOT-SHADER-PROPS)
         ;; :shader-quad has no :progress — dslot 0 is its alpha (node.clj).
@@ -587,24 +573,15 @@
         v0 (float (if uv-region (nth uv-region 1) 0.0))
         u1 (float (if uv-region (nth uv-region 2) 1.0))
         v1 (float (if uv-region (nth uv-region 3) 1.0))]
-    (when (and debug-images? (pos? (.getAndDecrement debug-image-budget)))
-      (cn.li.mcmod.util.log/info
-        "[ui-shader] node=" (str (.getId node))
-        " kind=" (str (.getKind node))
-        " shader-id=" (str shader-id)
-        " resolved?=" (some? si)
-        " tex0=" (str tex-0)
-        " tex1=" (str tex-1)
-        " alpha=" alpha " progress=" progress
-        " size=" (scaled-w node) "x" (scaled-h node)))
     (when tex-0
       (try
         ;; tex-1 is optional — single-sampler shaders (mono) are as valid as the
         ;; two-sampler ring-progbar; only the shader itself is required.
         (if si
           (do
-            (.setSampler si "TexSampler0" (sampler-texture tex-0))
-            (when tex-1 (.setSampler si "TexSampler1" (sampler-texture tex-1)))
+            ;; Samplers are named Sampler0/Sampler1 exactly as vanilla core
+            ;; shaders are, so ShaderInstance.apply() fills them from the
+            ;; RenderSystem texture slots set below — no manual setSampler.
             (RenderSystem/setShader (StaticShaderSupplier. si))
             (when-let [u (.safeGetUniform si "Progress")] (.set u progress))
             (when-let [u (.safeGetUniform si "ScrollOffset")] (.set u progress))
@@ -669,7 +646,7 @@
 
 (defn render-depth-mask! [^GuiGraphics gg ^INode node]
   (let [^ResourceLocation rl (.getOSlot node SLOT-DM-BAKED)
-        ^ShaderInstance si (platform-bridge/resolve-shader :alpha-discard)]
+        ^ShaderInstance si (depth-mask-shader)]
     ;; No alpha-discard shader on this loader → skip the stamp entirely rather
     ;; than write a full opaque quad. Layering degrades to painter's order.
     (when (and rl si)
@@ -683,7 +660,6 @@
               ^PoseStack ps (.pose gg)
               ^Matrix4f pose-matrix (.pose (.last ps))
               ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))]
-          (.setSampler si "TexSampler0" (sampler-texture rl))
           (RenderSystem/setShader (StaticShaderSupplier. si))
           (when-let [u (.safeGetUniform si "AlphaThreshold")] (.set u cutoff))
           (RenderSystem/setShaderTexture (int 0) rl)

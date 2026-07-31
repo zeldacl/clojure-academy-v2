@@ -136,7 +136,10 @@
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
-                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+                  client-sounds/queue-sound-effect! (fn [& _] nil)
+                  ;; beam ops roll (rand) against a flicker threshold, so an
+                  ;; unpinned rand drops both beams outright ~16% of runs
+                  rand (fn ([] 0.0) ([n] (* 0.0 n)))]
       (enqueue! enqueue-state! "ctx-em" :electron-missile/fx-fire
                 {:mode :fire
                  :start {:x 0.0 :y 64.0 :z 0.0}
