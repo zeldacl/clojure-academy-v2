@@ -67,11 +67,16 @@
 
 (defn- seed-alive-contexts!
   "Register the server context the pipeline drives plus the client-side twin
-  that single player always keeps alongside it."
-  []
+  that single player always keeps alongside it.
+
+  `created-ms` back-dates the transport-level keepalive stamp, which is what a
+  context that has already been held for a while looks like."
+  ([] (seed-alive-contexts! (System/currentTimeMillis)))
+  ([created-ms]
   (ctx/register-context!
    (assoc (ctx/new-server-context player-id :thunder-clap ctx-id (server-owner))
-          :status ctx/STATUS-ALIVE))
+          :status ctx/STATUS-ALIVE
+          :last-keepalive-ms created-ms))
   (ctx/with-context-owner (client-owner)
     (ctx/register-context!
      (assoc (ctx/new-context player-id :thunder-clap (client-owner))
@@ -80,13 +85,27 @@
   (command-rt/run-command-in-session!
    test-player/test-session-id player-id
    {:command :register-context :ctx-id ctx-id
-    :skill-id :thunder-clap :status :alive}))
+    :skill-id :thunder-clap :status :alive})))
 
 (defn- server-tick! []
   (runtime-hooks/with-client-ctx-fn
     {:player-owner {:server-session-id test-player/test-session-id
                     :player-uuid player-id}}
     (fn [] (cm/tick-player-contexts! player-id))))
+
+(defn- client-keepalive! []
+  (command-rt/run-command-in-session!
+   test-player/test-session-id player-id
+   {:command :touch-context-keepalive :ctx-id ctx-id
+    :timestamp-ms (System/currentTimeMillis)}))
+
+(defn- reaped-server-tick!
+  "A server tick with the context-manager's keepalive reaper running too, as
+  it does in game, and with the client keepalive the held key keeps sending."
+  []
+  (client-keepalive!)
+  (cm/tick-context-manager!)
+  (server-tick!))
 
 (defn- current-cp []
   (get-in (store/get-player-state test-player/test-session-id player-id)
@@ -142,6 +161,34 @@
             (is (empty? @strikes*))
             (is (false? (get-in (ctx-skill/get-context ctx-id)
                                 [:skill-state :performed?])))))))))
+
+(deftest charge-outliving-the-keepalive-timeout-still-strikes-test
+  ;; min-ticks is 40 (2s) and max-ticks 60 (3s), both longer than the 1.5s
+  ;; keepalive timeout. The reaper judged expiry from the transport map's
+  ;; :last-keepalive-ms, which is stamped once at context creation and never
+  ;; refreshed, so it killed the context mid-charge however faithfully the
+  ;; client kept talking — and the strike could never be reached.
+  (let [strikes* (atom [])]
+    (runtime-hooks/with-player-state-owner-fn
+      {:server-session-id test-player/test-session-id :player-uuid player-id}
+      (fn []
+        (seed-player!)
+        (with-redefs [world-op/execute-spawn-lightning!
+                      (fn [evt _params] (swap! strikes* conj evt) evt)
+                      tc/execute-thunder-clap-aoe! (fn [& _] 0)
+                      skill-effects/set-main-cooldown! (fn [& _] nil)]
+          (ctx/with-context-owner (server-owner)
+            (seed-alive-contexts! (- (System/currentTimeMillis)
+                                     (* 4 (cm/keepalive-timeout-ms))))
+            (ctx-rt/handle-key-down! (server-owner) ctx-id {} nil)
+            (dotimes [_ 45] (reaped-server-tick!))
+
+            (is (= ctx/STATUS-ALIVE (:status (ctx/get-context (server-owner) ctx-id)))
+                "a keepalive-refreshed context must survive a hold longer than the timeout")
+            (is (= 45 (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks])))
+
+            (ctx-rt/handle-key-up! (server-owner) ctx-id {} nil)
+            (is (= 1 (count @strikes*)))))))))
 
 (deftest auto-strike-at-max-charge-test
   (let [strikes* (atom [])]

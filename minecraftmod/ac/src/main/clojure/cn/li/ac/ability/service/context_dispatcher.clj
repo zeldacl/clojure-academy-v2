@@ -235,6 +235,21 @@
   [registry-key]
   (get (transport-contexts-snapshot) registry-key))
 
+(defn get-projected-transport-context
+  "Like `get-raw-transport-context`, but with the authoritative runtime-store
+   fields (:status, :input-state, :last-keepalive-ms, ...) overlaid.
+
+   Lifecycle deadline decisions must use this, not the raw map: keepalive
+   refreshes land in the store via the :touch-context-keepalive command and
+   are never written back onto the transport map, whose :last-keepalive-ms
+   stays frozen at the value new-server-context stamped at creation.
+
+   Unlike `get-context`, the transport owner metadata is preserved, so the
+   caller can still resolve the owning route from the result."
+  [registry-key]
+  (when-let [ctx (get-raw-transport-context registry-key)]
+    (ctx-proj/merge-store-projection ctx)))
+
 (defn drain-due-deadline-keys!
   "Return registry keys whose scheduled deadline bucket is at or before
    `now`, removing those buckets. O(number of currently populated buckets

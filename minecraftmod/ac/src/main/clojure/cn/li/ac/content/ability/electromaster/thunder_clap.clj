@@ -15,6 +15,7 @@
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.ac.ability.util.balance :as bal]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.effects.world :as world-op]
@@ -197,7 +198,12 @@
     ;; even while the player is still holding the key.
     (when (>= ticks (max-ticks))
       (perform-thunder-clap! ctx-id player-id exp ticks)
-      (ctx/terminate-context! ctx-id nil))))
+      ;; Server-initiated end (upstream's sendToSelf(MSG_END) -> terminate()),
+      ;; so nothing else will notify the client afterwards — unlike the key-up
+      ;; path, where context-state terminates right after this returns. Passing
+      ;; nil here would leave the client's context list believing the context
+      ;; is still running after the auto-strike.
+      (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))))
 
 (defn- thunder-clap-abort!
   [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -255,7 +261,9 @@
         (mark-performed! ctx-id false)
         (emit-thunder-clap-fx! :end {:ctx-id ctx-id :player-id player-id
                                      :hold-ticks ticks}))))
-  (ctx/terminate-context! ctx-id nil))
+  ;; Same as the max-charge auto-release: a cost failure ends the context from
+  ;; the server side, with no key-up termination to follow.
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
 
 (defskill thunder-clap
   :id              :thunder-clap

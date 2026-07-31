@@ -187,7 +187,16 @@
   neither check confirms the entry is due yet, reschedule it under its exact
   deadline rather than dropping it from tracking."
   [now timeout-ms grace-ms registry-key]
-  (when-let [ctx-map (ctx/get-raw-transport-context registry-key)]
+  ;; Store-projected, never raw: the client's keepalives are applied to
+  ;; [:context-registry ctx-id :last-keepalive-ms] by the
+  ;; :touch-context-keepalive command and never written back onto the
+  ;; transport map, so the raw :last-keepalive-ms is frozen at the moment
+  ;; new-server-context created the context. Reading it here expired every
+  ;; server context keepalive-timeout-ms (1.5s) after creation however alive
+  ;; the client was, which silently capped every hold/charge skill's duration
+  ;; — thunder-clap needs a 2s hold to reach min-ticks, so its strike was
+  ;; unreachable.
+  (when-let [ctx-map (ctx/get-projected-transport-context registry-key)]
     (cond
       (expired-server-context? now timeout-ms ctx-map)
       (ctx/terminate-context! (context-owner-from-map ctx-map) (:id ctx-map) send-terminated!)
