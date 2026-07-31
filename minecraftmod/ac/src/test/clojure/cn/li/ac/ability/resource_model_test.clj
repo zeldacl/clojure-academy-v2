@@ -41,7 +41,25 @@
         (is (= 210.0 (:max-cp d7)))
         (is (= 22.0 (:max-overload d7)))
         (is (= 210.0 (:cur-cp d7)))
-        (is (= 22.0 (:cur-overload d7))))
+        (is (= 0.0 (:cur-overload d7))
+            "upstream recalcMaxValue sets curOverload = 0, it does not clamp"))
+      ;; Starting below the new maximum proves the refill: clamping would have
+      ;; left cur-cp at 1.0.
+      (let [d7b (resource/recalc-max-values
+                 {:cur-cp 1.0 :cur-overload 0.0 :add-max-cp 10.0 :add-max-overload 2.0}
+                 2)]
+        (is (= 210.0 (:cur-cp d7b))
+            "upstream recalcMaxValue sets curCP = getMaxCP()"))
+      ;; overloadFine is untouched, exactly as upstream leaves it; the recovery
+      ;; tick is what clears the lockout once cur-overload has reached 0.
+      (let [d7c (resource/recalc-max-values
+                 {:cur-cp 0.0 :cur-overload 22.0 :overload-fine false
+                  :until-overload-recover 0}
+                 2)]
+        (is (= 0.0 (:cur-overload d7c)))
+        (is (false? (:overload-fine d7c)))
+        (is (true? (:overload-fine (resource/tick-overload-recovery d7c 1.0)))
+            "and the next recovery tick lifts the lockout"))
       (is (= 50.0 (:add-max-cp (resource/grow-max-cp {:add-max-cp 0.0} 10000 1.0 2))))
       (is (= 10.0 (:add-max-overload (resource/grow-max-overload {:add-max-overload 0.0} 9999 1.0 2)))))))
 

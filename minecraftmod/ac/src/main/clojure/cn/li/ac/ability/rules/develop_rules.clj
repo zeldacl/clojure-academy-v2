@@ -19,11 +19,14 @@
         calc-extra {:uuid uuid}
         max-cp (evt/fire-calc-event! evt/CALC-MAX-CP (:max-cp base) calc-extra)
         max-ol (evt/fire-calc-event! evt/CALC-MAX-OVERLOAD (:max-overload base) calc-extra)]
+    ;; recalc-max-values already refilled to its own maximum; redo it against
+    ;; the post-CALC one so passive bonuses are part of the refill rather than
+    ;; headroom left empty.
     (assoc base
            :max-cp max-cp
            :max-overload max-ol
-           :cur-cp (min (:cur-cp base) max-cp)
-           :cur-overload (min (:cur-overload base) max-ol))))
+           :cur-cp max-cp
+           :cur-overload 0.0)))
 
 (defn start-skill-learning
   "Start learning a skill. Returns {:develop-data :error nil|keyword}.

@@ -57,13 +57,19 @@
              (->> @recalc-calls
                   (filter #(= :calc (first %)))
                   (mapv second))))
-      (is (= {:cur-cp 80.0
+      ;; recalc-max-values is stubbed out above, so the refill asserted here is
+      ;; the wrapper's own: upstream recalcMaxValue ends with
+      ;; curCP = getMaxCP() / curOverload = 0, and the wrapper has to redo it
+      ;; against the post-CALC maximum, not the pre-CALC one.
+      (is (= {:cur-cp 140.0
+              :cur-overload 0.0
               :max-cp 140.0
               :max-overload 55.0
               :add-max-cp 0.0
               :add-max-overload 0.0}
              (select-keys (get-in (store/get-player-state ps-fix/test-session-id "p1") [:resource-data])
-                          [:cur-cp :max-cp :max-overload :add-max-cp :add-max-overload]))))))
+                          [:cur-cp :cur-overload :max-cp :max-overload
+                           :add-max-cp :add-max-overload]))))))
 
 (deftest recover-all-restores-cp-overload-and-recovery-timers-test
   (store/set-player-state! ps-fix/test-session-id "p1"

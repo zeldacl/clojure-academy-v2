@@ -221,13 +221,25 @@
 ;; ============================================================================
 
 (defn recalc-max-values
-  "After level change, recompute max-cp/max-overload from the level grant plus
-  accumulated growth. Clamp cur values to new maxes.
+  "Recompute max-cp/max-overload from the level grant plus accumulated growth,
+  then refill CP and clear overload.
 
-  Mirrors upstream CPData.getMaxCP()/getMaxOverload() = maxCP + addMaxCP,
-  where maxCP is recalcMaxValue's getInitCP(level). The growth allowance is
-  reached only through :add-max-cp / :add-max-overload, never granted up
-  front."
+  Full port of upstream CPData.recalcMaxValue:
+
+    maxCP = getInitCP(level); maxOverload = getInitOverload(level);
+    curCP = getMaxCP();       curOverload = 0;
+
+  where getMaxCP() = maxCP + addMaxCP, so the growth allowance is reached
+  only through :add-max-cp / :add-max-overload and never granted up front.
+
+  Refilling rather than clamping is upstream's behaviour on all three of its
+  triggers — level change, skill learn, category change — which are exactly
+  the triggers wired here.
+
+  :overload-fine is deliberately left alone, as upstream leaves overloadFine
+  alone: a player who recalculates mid-overload keeps the locked-out state
+  until tick-overload-recovery clears it, which it does on the first tick
+  past :until-overload-recover now that :cur-overload is already 0."
   [d level]
   (let [add-cp  (double (:add-max-cp d 0.0))
         add-ol  (double (:add-max-overload d 0.0))
@@ -236,8 +248,8 @@
     (assoc d
            :max-cp       new-max-cp
            :max-overload new-max-ol
-           :cur-cp       (min (:cur-cp d) new-max-cp)
-           :cur-overload (min (:cur-overload d) new-max-ol))))
+           :cur-cp       new-max-cp
+           :cur-overload 0.0)))
 
 (defn reset-add-max
   "Reset accumulated growth (called on level-up)."
