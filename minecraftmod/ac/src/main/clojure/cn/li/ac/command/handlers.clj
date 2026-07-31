@@ -216,10 +216,17 @@
      :player target-player}))
 
 (defn handle-aim-maxout
-  "Max out level progression."
+  "Fill the current level's progress bar, matching upstream maxout."
   [ctx]
   (let [target-player (get-target-player ctx)]
     {:action :maxout-progression
+     :player target-player}))
+
+(defn handle-aim-max-all
+  "Level 5 + every skill learned + every skill at exp 1.0. Not upstream."
+  [ctx]
+  (let [target-player (get-target-player ctx)]
+    {:action :max-all-progression
      :player target-player}))
 
 (defn handle-aim-help

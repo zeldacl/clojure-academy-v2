@@ -53,6 +53,19 @@
                                     (select-keys saved [:cheats-data])))
     (is (true? (commands/cheats-enabled? (ctx))))))
 
+(deftest category-gate-follows-the-chosen-category-test
+  ;; Upstream CommandAIMBase.matchCommands answers `nonecathint` for every
+  ;; category-scoped subcommand while aData.hasCategory() is false. It lives
+  ;; in the shared base, so /aimp is gated by it too — unlike the cheat gate.
+  (store/set-player-state! ps-fix/test-session-id uuid (store/fresh-player-state))
+  (is (false? (commands/has-category? (ctx)))
+      "a fresh player has no category")
+  (store/set-player-state! ps-fix/test-session-id uuid
+                           (assoc-in (store/fresh-player-state)
+                                     [:ability-data :category-id] :electromaster))
+  (is (true? (commands/has-category? (ctx))))
+  (is (false? (commands/has-category? {:player-uuid "nobody"}))))
+
 (deftest gate-is-open-for-unknown-players-only-when-cheats-are-on-test
   (is (false? (commands/cheats-enabled? {:player-uuid "nobody"}))
       "no player state means no cheats, never a fail-open")

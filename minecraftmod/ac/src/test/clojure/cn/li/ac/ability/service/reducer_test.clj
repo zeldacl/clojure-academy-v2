@@ -56,6 +56,41 @@
         "and must match the constructor the subscriber destructures")
     (is (= "p-overload" (:uuid overload-event)))))
 
+(deftest set-skill-exp-is-refused-for-an-unlearned-skill-test
+  ;; Upstream AbilityData.setSkillExp is guarded by isSkillLearned; exp on an
+  ;; unlearned skill is meaningless and would surface the moment it is
+  ;; learned.
+  (let [unlearned (reducer/apply-command (base-state)
+                                         {:command :set-skill-exp
+                                          :player-uuid "p-exp"
+                                          :skill-id :railgun
+                                          :amount 1.0})]
+    (is (= :skill-not-learned (:rejected-reason unlearned)))
+    (is (nil? (get-in unlearned [:state :ability-data :skill-exps :railgun]))))
+  (let [learned (-> (base-state)
+                    (update-in [:ability-data :learned-skills] conj :railgun))
+        result (reducer/apply-command learned
+                                      {:command :set-skill-exp
+                                       :player-uuid "p-exp"
+                                       :skill-id :railgun
+                                       :amount 1.0})]
+    (is (= 1.0 (get-in result [:state :ability-data :skill-exps :railgun])))))
+
+(deftest maxout-only-fills-the-current-level-progress-test
+  ;; Upstream maxOutLevelProgress is `expAddedThisLevel = 100` — it grants no
+  ;; level, no skills and no exp.
+  (let [before (-> (base-state)
+                   (assoc-in [:ability-data :category-id] :electromaster)
+                   (assoc-in [:ability-data :level] 2))
+        result (reducer/apply-command before {:command :maxout-level-progress
+                                              :player-uuid "p-maxout"})
+        after (:state result)]
+    (is (nil? (:rejected-reason result)))
+    (is (= 2 (get-in after [:ability-data :level])) "no level is granted")
+    (is (empty? (get-in after [:ability-data :learned-skills])) "no skill is learned")
+    (is (empty? (get-in after [:ability-data :skill-exps])) "no exp is granted")
+    (is (>= (get-in after [:ability-data :level-progress]) 0.0))))
+
 (deftest apply-commands-accumulates-events-and-effects-test
   (let [player-state (base-state)
         result (reducer/apply-commands player-state

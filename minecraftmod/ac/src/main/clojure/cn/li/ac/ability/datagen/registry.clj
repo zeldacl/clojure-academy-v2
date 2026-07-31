@@ -104,10 +104,12 @@
     "command.academy.aim.fullcp.success" "Restored CP to full"
     "command.academy.aim.cd_clear.success" "Cleared all cooldowns"
     "command.academy.aim.maxout.success" "Maxed out progression"
+    "command.academy.aim.max_all.success" "Level 5, all skills learned and fully mastered"
+    "command.academy.aim.nonecathint" "No ability category selected. Run \"/aim cat <category>\" first."
     "command.academy.aim.cheats_on.success" "Enabled cheat mode"
     "command.academy.aim.cheats_off.success" "Disabled cheat mode"
     "command.academy.aim.notactive" "Cheat mode is off. Run \"/aim cheats_on\" first."
-    "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "Available commands: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
    :zh_cn
    {"command.academy.acach.missing_advancement" "缺少进度参数"
     "command.academy.aim.cat.success" "已切换到类别: %s"
@@ -131,10 +133,12 @@
     "command.academy.aim.fullcp.success" "已恢复CP至满值"
     "command.academy.aim.cd_clear.success" "已清除所有冷却"
     "command.academy.aim.maxout.success" "已最大化进度"
+    "command.academy.aim.max_all.success" "已设为 5 级、学会全部技能并全部满经验"
+    "command.academy.aim.nonecathint" "尚未选择能力系别，请先执行 \"/aim cat <category>\"。"
     "command.academy.aim.cheats_on.success" "已启用作弊模式"
     "command.academy.aim.cheats_off.success" "已禁用作弊模式"
     "command.academy.aim.notactive" "作弊模式未启用，请先执行 \"/aim cheats_on\"。"
-    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
    :zh_tw
    {"command.academy.acach.missing_advancement" "缺少進度參數"
     "command.academy.aim.cat.success" "已切換到類別: %s"
@@ -158,10 +162,12 @@
     "command.academy.aim.fullcp.success" "已恢復CP至滿值"
     "command.academy.aim.cd_clear.success" "已清除所有冷卻"
     "command.academy.aim.maxout.success" "已最大化進度"
+    "command.academy.aim.max_all.success" "已設為 5 級、學會全部技能並全部滿經驗"
+    "command.academy.aim.nonecathint" "尚未選擇能力系別，請先執行 \"/aim cat <category>\"。"
     "command.academy.aim.cheats_on.success" "已啟用作弊模式"
     "command.academy.aim.cheats_off.success" "已禁用作弊模式"
     "command.academy.aim.notactive" "作弊模式未啟用，請先執行 \"/aim cheats_on\"。"
-    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "可用命令: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
    :ja_jp
    {"command.academy.acach.missing_advancement" "進捗引数がありません"
     "command.academy.aim.cat.success" "カテゴリを切り替えました: %s"
@@ -185,10 +191,12 @@
     "command.academy.aim.fullcp.success" "CPを最大まで回復しました"
     "command.academy.aim.cd_clear.success" "すべてのクールダウンを解除しました"
     "command.academy.aim.maxout.success" "進行度を最大にしました"
+    "command.academy.aim.max_all.success" "レベル5・全スキル習得・全スキル熟練度最大にしました"
+    "command.academy.aim.nonecathint" "能力系統が未選択です。先に \"/aim cat <category>\" を実行してください。"
     "command.academy.aim.cheats_on.success" "チートモードを有効にしました"
     "command.academy.aim.cheats_off.success" "チートモードを無効にしました"
     "command.academy.aim.notactive" "チートモードが無効です。先に \"/aim cheats_on\" を実行してください。"
-    "command.academy.aim.help" "使用可能なコマンド: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "使用可能なコマンド: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
    :ko_kr
    {"command.academy.acach.missing_advancement" "발전 과제 인수가 없습니다"
     "command.academy.aim.cat.success" "카테고리를 전환했습니다: %s"
@@ -212,10 +220,12 @@
     "command.academy.aim.fullcp.success" "CP를 최대치까지 회복했습니다"
     "command.academy.aim.cd_clear.success" "모든 쿨다운을 해제했습니다"
     "command.academy.aim.maxout.success" "진행도를 최대로 설정했습니다"
+    "command.academy.aim.max_all.success" "레벨 5, 모든 스킬 습득 및 숙련도 최대로 설정했습니다"
+    "command.academy.aim.nonecathint" "능력 계열이 선택되지 않았습니다. 먼저 \"/aim cat <category>\" 를 실행하세요."
     "command.academy.aim.cheats_on.success" "치트 모드를 활성화했습니다"
     "command.academy.aim.cheats_off.success" "치트 모드를 비활성화했습니다"
     "command.academy.aim.notactive" "치트 모드가 꺼져 있습니다. 먼저 \"/aim cheats_on\" 을 실행하세요."
-    "command.academy.aim.help" "사용 가능한 명령어: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}
+    "command.academy.aim.help" "사용 가능한 명령어: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}
    :ru_ru
    {"command.academy.acach.missing_advancement" "Отсутствует аргумент достижения"
     "command.academy.aim.cat.success" "Переключено на категорию: %s"
@@ -239,10 +249,12 @@
     "command.academy.aim.fullcp.success" "CP полностью восстановлено"
     "command.academy.aim.cd_clear.success" "Все перезарядки сброшены"
     "command.academy.aim.maxout.success" "Прогресс максимизирован"
+    "command.academy.aim.max_all.success" "Уровень 5, все навыки изучены и полностью освоены"
+    "command.academy.aim.nonecathint" "Категория способностей не выбрана. Сначала выполните \"/aim cat <category>\"."
     "command.academy.aim.cheats_on.success" "Режим читов включен"
     "command.academy.aim.cheats_off.success" "Режим читов выключен"
     "command.academy.aim.notactive" "Режим читов выключен. Сначала выполните \"/aim cheats_on\"."
-    "command.academy.aim.help" "Доступные команды: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, help, cheats_on, cheats_off"}})
+    "command.academy.aim.help" "Доступные команды: cat, catlist, reset, learn, unlearn, learn_all, learned, nodes, level, exp, fullcp, cd_clear, maxout, max_all, help, cheats_on, cheats_off"}})
 
 (defn register-datagen-metadata!
   "Register ability domain's datagen content into shared metadata registry.

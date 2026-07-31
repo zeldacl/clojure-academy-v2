@@ -27,6 +27,7 @@
 		:clear-cooldowns
 		:reset-abilities
 		:maxout-progression
+		:max-all-progression
 		:enable-cheats
 		:disable-cheats})
 
@@ -240,6 +241,24 @@
 		{:success? true}))
 
 (defn- execute-maxout-progression!
+	"Upstream maxout: fill the current level's progress bar, nothing else.
+	See cmd-maxout-level-progress. For the level-5-and-everything shortcut this
+	command used to be, use max_all."
+	[action-map context]
+	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
+				player-uuid (action-player-uuid action-map context)]
+		(command-rt/run-command-in-session! session-id player-uuid
+		                                    {:command :maxout-level-progress})
+		(send-feedback! context "command.academy.aim.maxout.success" [] false)
+		{:success? true}))
+
+(defn- execute-max-all!
+	"Not an upstream command. The fully-kitted test character in one step:
+	level 5, every skill in the category learned, every skill at exp 1.0.
+
+	Kept separate from maxout precisely because upstream's maxout does none of
+	this — conflating the two is what silently put mastery-level tunables on
+	characters that had only run learn_all."
 	[action-map context]
 	(let [session-id (runtime-hooks/require-context-player-state-session-id "Command actions" context)
 				player-uuid (action-player-uuid action-map context)]
@@ -249,6 +268,8 @@
 				session-id
 				player-uuid
 				(vec (concat [{:command :set-level :level 5}]
+							;; Learn first: set-skill-exp rejects unlearned skills,
+							;; matching upstream's isSkillLearned guard.
 							(map (fn [skill-id]
 									 {:command :learn-skill
 									  :skill-id skill-id
@@ -259,7 +280,8 @@
 									  :skill-id skill-id
 									  :amount 1.0})
 								 skill-ids)))))
-		(send-feedback! context "command.academy.aim.maxout.success" [] false)
+		(log/info "Maxed out everything for player" player-uuid)
+		(send-feedback! context "command.academy.aim.max_all.success" [] false)
 		{:success? true}))
 
 (defn- execute-set-cheats!
@@ -290,6 +312,7 @@
 		:clear-cooldowns (execute-clear-cooldowns! action-map context)
 		:reset-abilities (execute-reset-abilities! action-map context)
 		:maxout-progression (execute-maxout-progression! action-map context)
+		:max-all-progression (execute-max-all! action-map context)
 		:enable-cheats (execute-set-cheats! action-map context true)
 		:disable-cheats (execute-set-cheats! action-map context false)
 		(throw (ex-info "Unknown AC command action" {:action (:action action-map)}))))

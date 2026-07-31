@@ -94,10 +94,20 @@
               :description "Clear all cooldowns"}
    :maxout {:arguments []
             :executor-fn (resolve-handler "handle-aim-maxout")
-            :description "Max out level progression"}
+            :description "Fill the current level's progress bar"}
+   :max_all {:arguments []
+             :executor-fn (resolve-handler "handle-aim-max-all")
+             :description "Level 5, learn every skill, set every skill to full exp"}
    :help {:arguments []
           :executor-fn (resolve-handler "handle-aim-help")
           :description "Show help message"}})
+
+;; Upstream requires a chosen category for every subcommand that reads or
+;; writes category-scoped data, answering `nonecathint` otherwise. cat,
+;; catlist, reset, learned and level are deliberately absent: upstream runs
+;; those with no category too.
+(def ^:private category-required-subcommands
+  #{:learn :unlearn :learn_all :skills :fullcp :exp :cd_clear :maxout :max_all})
 
 (defn cheats-enabled?
   "Whether /aim's cheat switch is on for this context's player.
@@ -114,6 +124,23 @@
            (get-in (store/get-player-state session-id player-uuid)
                    [:cheats-data :enabled?]))))))
 
+(defn has-category?
+  "Whether this context's player has chosen an ability category."
+  [{:keys [player-uuid] :as _ctx}]
+  (let [session-id (runtime-hooks/player-state-session-id)]
+    (boolean
+     (when (and player-uuid session-id)
+       (get-in (store/get-player-state session-id player-uuid)
+               [:ability-data :category-id])))))
+
+(defn- gated-by-category
+  "Wrap a subcommand executor with upstream's `aData.hasCategory()` check."
+  [executor-fn]
+  (fn [ctx]
+    (if (has-category? ctx)
+      (executor-fn ctx)
+      (handlers/error-message "command.academy.aim.nonecathint"))))
+
 (defn- gated-by-cheats
   "Wrap an /aim subcommand executor with upstream CommandAIM's cheat gate.
 
@@ -128,6 +155,16 @@
       (executor-fn ctx)
       (handlers/error-message "command.academy.aim.notactive"))))
 
+(defn- with-category-gate
+  [subcommands]
+  (reduce-kv (fn [acc subcommand spec]
+               (assoc acc subcommand
+                      (cond-> spec
+                        (contains? category-required-subcommands subcommand)
+                        (update :executor-fn gated-by-category))))
+             {}
+             subcommands))
+
 (defn- build-aim-subcommands []
   (-> (reduce-kv (fn [acc subcommand spec]
                    (assoc acc subcommand
@@ -135,7 +172,7 @@
                             spec
                             (update spec :executor-fn gated-by-cheats))))
                  {}
-                 (build-common-aim-subcommands))
+                 (with-category-gate (build-common-aim-subcommands)))
       (assoc :cheats_on {:arguments []
                          :executor-fn (resolve-handler "handle-aim-cheats-on")
                          :description "Enable cheat mode"}
@@ -144,7 +181,9 @@
                           :description "Disable cheat mode"})))
 
 (defn- build-aimp-subcommands []
-  (build-common-aim-subcommands))
+  ;; The category check is in CommandAIMBase.matchCommands upstream, so it
+  ;; applies to /aimp too — unlike the cheat gate, which lives in CommandAIM.
+  (with-category-gate (build-common-aim-subcommands)))
 
 (defn init-commands!
   []

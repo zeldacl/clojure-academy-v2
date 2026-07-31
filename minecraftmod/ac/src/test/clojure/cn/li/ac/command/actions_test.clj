@@ -71,7 +71,8 @@
                       {:action :restore-cp :player-uuid uuid}
                       {:action :clear-cooldowns :player-uuid uuid}
                       {:action :reset-abilities :player-uuid uuid}
-                      {:action :maxout-progression :player-uuid uuid}]]
+                      {:action :maxout-progression :player-uuid uuid}
+                      {:action :max-all-progression :player-uuid uuid}]]
         (is (:success? (command-actions/execute action context))))
       (is (= [[:command ps-fix/test-session-id uuid {:command :learn-skill :skill-id :railgun :check-conditions? false}]
               [:command ps-fix/test-session-id uuid {:command :unlearn-skill :skill-id :railgun}]
@@ -85,6 +86,12 @@
               [:command ps-fix/test-session-id uuid {:command :recover-all}]
               [:command ps-fix/test-session-id uuid {:command :clear-all-cooldowns}]
               [:command ps-fix/test-session-id uuid {:command :reset-abilities}]
+              ;; maxout only fills the current level's progress bar, matching
+              ;; upstream maxOutLevelProgress.
+              [:command ps-fix/test-session-id uuid {:command :maxout-level-progress}]
+              ;; max_all is the non-upstream shortcut maxout used to be, and
+              ;; must learn before setting exp because set-skill-exp rejects
+              ;; unlearned skills.
               [:commands ps-fix/test-session-id uuid [{:command :set-level :level 5}
                                                       {:command :learn-skill :skill-id :arc-gen :check-conditions? false}
                                                       {:command :learn-skill :skill-id :railgun :check-conditions? false}

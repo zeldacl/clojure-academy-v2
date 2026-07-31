@@ -554,14 +554,45 @@
             :domain :ability-data}]))))
 
 (defn- cmd-set-skill-exp
-  "Set one skill exp directly (admin path)."
+  "Set one skill exp directly (admin path).
+
+  Upstream AbilityData.setSkillExp is guarded by `if (isSkillLearned(skill))`
+  — exp on an unlearned skill is meaningless and would resurrect as soon as
+  the skill was learned. Rejecting keeps :skill-exps consistent with
+  :learned-skills, which unlearn-skill also maintains by dissoc'ing the exp."
   [player-state {:keys [player-uuid skill-id amount]}]
-  (let [new-state (update player-state :ability-data adata/set-skill-exp skill-id amount)]
-    (ok new-state
+  (if-not (contains? (get-in player-state [:ability-data :learned-skills] #{}) skill-id)
+    (rejected player-state :skill-not-learned)
+    (let [new-state (update player-state :ability-data adata/set-skill-exp skill-id amount)]
+      (ok new-state
+          []
+          [{:effect/type :persist-state
+            :player-uuid player-uuid
+            :domain :ability-data}]))))
+
+(defn- cmd-maxout-level-progress
+  "Fill the current level's progress bar so the player can level up now.
+
+  Upstream AbilityData.maxOutLevelProgress is `expAddedThisLevel = 100`, a
+  sentinel comfortably above any threshold (getLevelProgress caps the ratio
+  at 1). The equivalent here is the actual threshold can-level-up? compares
+  against, computed from the same inputs cmd-level-up uses.
+
+  This is all upstream's maxout does: no levels granted, no skills learned,
+  no exp handed out."
+  [player-state {:keys [player-uuid]}]
+  (let [ability-data (:ability-data player-state)
+        cat-id (:category-id ability-data)
+        skills (skill-query/get-controllable-skills-at-level cat-id (:level ability-data))
+        threshold (learning/level-up-threshold ability-data
+                                               skills
+                                               (category/get-prog-incr-rate cat-id)
+                                               (cfg/prog-incr-rate))]
+    (ok (update player-state :ability-data adata/set-level-progress threshold)
         []
         [{:effect/type :persist-state
           :player-uuid player-uuid
-          :domain :ability-data}])) )
+          :domain :ability-data}])))
 
 (defn- cmd-unlearn-skill
   "Remove a skill from learned set and clear related preset slots."
@@ -992,6 +1023,7 @@
     :clear-all-cooldowns (cmd-clear-all-cooldowns player-state command)
     :set-level (cmd-set-level player-state command)
     :set-skill-exp (cmd-set-skill-exp player-state command)
+    :maxout-level-progress (cmd-maxout-level-progress player-state command)
     :unlearn-skill (cmd-unlearn-skill player-state command)
     :recover-all (cmd-recover-all player-state command)
     :reset-abilities (cmd-reset-abilities player-state command)
