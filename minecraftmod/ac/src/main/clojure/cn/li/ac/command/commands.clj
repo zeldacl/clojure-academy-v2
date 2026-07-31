@@ -114,25 +114,45 @@
 (def ^:private category-required-subcommands
   #{:learn :unlearn :learn_all :skills :fullcp :exp :cd_clear :maxout :max_all})
 
+(defn context-player-uuid
+  "UUID of the player a subcommand acts on.
+
+  `cmd-ctx/create-context` carries the platform player object and a
+  :player-uuid-fn to resolve it — there is no :player-uuid key on the context
+  itself, so reading one directly always yielded nil and every gate below it
+  failed open or closed regardless of the real player. Targets before
+  executor, matching handlers/get-target-player, so /aimp gates on the player
+  being operated on."
+  [{:keys [player target-player metadata] :as ctx}]
+  (let [subject (or target-player player)]
+    (or (:player-uuid ctx)
+        (cond
+          (string? subject) subject
+          (keyword? subject) (name subject)
+          subject (when-let [resolve-fn (:player-uuid-fn metadata)]
+                    (resolve-fn subject))))))
+
 (defn cheats-enabled?
   "Whether /aim's cheat switch is on for this context's player.
 
   Creative mode counts as on, matching upstream's
   `!isActive(player) && !player.capabilities.isCreativeMode` gate."
-  [{:keys [player player-uuid] :as _ctx}]
+  [{:keys [player] :as ctx}]
   (boolean
    (or (and player
             (entity/available?)
             (entity/player-creative? player))
-       (let [session-id (runtime-hooks/player-state-session-id)]
+       (let [session-id (runtime-hooks/player-state-session-id)
+             player-uuid (context-player-uuid ctx)]
          (when (and player-uuid session-id)
            (get-in (store/get-player-state session-id player-uuid)
                    [:cheats-data :enabled?]))))))
 
 (defn has-category?
   "Whether this context's player has chosen an ability category."
-  [{:keys [player-uuid] :as _ctx}]
-  (let [session-id (runtime-hooks/player-state-session-id)]
+  [ctx]
+  (let [session-id (runtime-hooks/player-state-session-id)
+        player-uuid (context-player-uuid ctx)]
     (boolean
      (when (and player-uuid session-id)
        (get-in (store/get-player-state session-id player-uuid)

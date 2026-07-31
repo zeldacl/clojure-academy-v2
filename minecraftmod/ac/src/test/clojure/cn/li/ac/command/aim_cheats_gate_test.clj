@@ -66,6 +66,31 @@
   (is (true? (commands/has-category? (ctx))))
   (is (false? (commands/has-category? {:player-uuid "nobody"}))))
 
+(deftest gates-resolve-the-player-from-a-real-command-context-test
+  ;; cmd-ctx/create-context carries the platform player object plus a
+  ;; :player-uuid-fn — never a :player-uuid key. Reading one directly made
+  ;; both gates see nil and answer for nobody, which showed up in game as
+  ;; every category-scoped subcommand replying `nonecathint` to a player who
+  ;; had a category.
+  (store/set-player-state! ps-fix/test-session-id uuid
+                           (assoc-in (store/fresh-player-state)
+                                     [:ability-data :category-id] :electromaster))
+  (let [platform-player (Object.)
+        real-ctx {:player platform-player
+                  :metadata {:player-uuid-fn (fn [p]
+                                               (when (identical? p platform-player)
+                                                 uuid))}}]
+    (is (= uuid (commands/context-player-uuid real-ctx)))
+    (is (true? (commands/has-category? real-ctx))))
+  ;; /aimp acts on the named target, so the gate must read that player.
+  (let [target (Object.)
+        aimp-ctx {:player (Object.)
+                  :target-player target
+                  :metadata {:player-uuid-fn (fn [p]
+                                               (if (identical? p target) uuid "someone-else"))}}]
+    (is (= uuid (commands/context-player-uuid aimp-ctx)))
+    (is (true? (commands/has-category? aimp-ctx)))))
+
 (deftest gate-is-open-for-unknown-players-only-when-cheats-are-on-test
   (is (false? (commands/cheats-enabled? {:player-uuid "nobody"}))
       "no player state means no cheats, never a fail-open")
