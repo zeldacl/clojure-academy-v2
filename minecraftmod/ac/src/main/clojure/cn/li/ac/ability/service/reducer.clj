@@ -210,11 +210,15 @@
     (if-not success?
       {:state player-state :events [] :effects [] :success? false}
       
+      ;; Must go through make-overload-event: server-hooks answers this with
+      ;; (abort-player-contexts! uuid) — upstream's __onOverload ->
+      ;; disposePlayer — and destructures :uuid, like every other event
+      ;; constructor here produces. Emitting :player-uuid instead made the
+      ;; subscriber read nil and skip the abort entirely, so an overloaded
+      ;; player kept running the very contexts the overload should have killed.
       (let [events (cond-> []
                      (some #{:overload-cap-hit} events-needed)
-                     (conj {:event/type evt/EVT-OVERLOAD
-                            :event/side :server
-                            :player-uuid player-uuid}))]
+                     (conj (evt/make-overload-event player-uuid)))]
         (assoc (ok (assoc player-state :resource-data data) events [])
                :success? true)))))
 

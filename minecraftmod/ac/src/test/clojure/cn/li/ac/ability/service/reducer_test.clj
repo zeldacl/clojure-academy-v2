@@ -33,6 +33,29 @@
     (is (< (get-in result [:state :resource-data :cur-cp])
            (get-in player-state [:resource-data :cur-cp])))))
 
+(deftest overload-cap-emits-an-event-the-abort-subscriber-can-read-test
+  ;; server-hooks answers EVT-OVERLOAD with (abort-player-contexts! uuid),
+  ;; mirroring upstream ContextManager.__onOverload -> disposePlayer. It reads
+  ;; :uuid, the key every constructor in registry.event produces. An overload
+  ;; event carrying the player under any other key is silently a no-op: the
+  ;; player's contexts survive an overload they should have been killed by.
+  (let [player-state (-> (base-state)
+                         (update :resource-data rdata/set-activated true)
+                         (assoc-in [:resource-data :max-overload] 100.0)
+                         (assoc-in [:resource-data :cur-overload] 0.0))
+        result (reducer/apply-command player-state
+                                      {:command :consume-resource
+                                       :player-uuid "p-overload"
+                                       :cp 0.0
+                                       :overload 500.0
+                                       :creative? false})
+        overload-event (first (filter #(= evt/EVT-OVERLOAD (:event/type %))
+                                      (:events result)))]
+    (is (some? overload-event) "hitting the cap must emit EVT-OVERLOAD")
+    (is (= (evt/make-overload-event "p-overload") overload-event)
+        "and must match the constructor the subscriber destructures")
+    (is (= "p-overload" (:uuid overload-event)))))
+
 (deftest apply-commands-accumulates-events-and-effects-test
   (let [player-state (base-state)
         result (reducer/apply-commands player-state
