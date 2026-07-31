@@ -22,6 +22,8 @@
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -65,6 +67,24 @@
 
 (defn- body-pos [player-id]
   (geom/body-pos player-id))
+
+(defn- resolve-player-ref
+  "Live player ref for player-id.
+
+  The dispatch pipeline's positional player-ref argument is only populated on
+  the network-driven callbacks. Server-tick-driven ones get nil — see
+  context-manager's tick-context-entry!, which builds its payload as
+  {:ctx-id :skill-id} with no :player — and the client deliberately does not
+  send MSG-SLOT-KEY-TICK (it would double-dispatch costs), so the tick
+  callback's player is nil in production, always. Same idiom mag-movement
+  uses for its creative check."
+  [player-id]
+  (try
+    (when-let [fw-atom (fw/fw-atom)]
+      (when (platform/get-adapter fw-atom :runtime-interop)
+        (platform/call-adapter fw-atom :runtime-interop :get-player-entity player-id)))
+    (catch Exception _
+      nil)))
 
 (defn- accepted-item-in-hand? [player]
   (when player
@@ -427,10 +447,16 @@
 
 (defn- railgun-on-key-tick
   "Item-charge path: countdown; auto-fires when charge-ticks reaches zero."
-  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player]
+  [ctx-id player-id _skill-id exp cost-ok? _hold-ticks _cost-stage player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (let [skill-state (:skill-state ctx-data)]
+      ;; player-ref is nil on this path — the tick comes from the server tick
+      ;; loop, not the network — so resolve the live player from player-id.
+      ;; Without it accepted-item-in-hand? saw nil, answered false, and the
+      ;; item charge could never reach its shot: the charge ran its full
+      ;; second and then silently landed in :item-charge-failed.
+      (let [player (or player-ref (resolve-player-ref player-id))
+            skill-state (:skill-state ctx-data)]
         (when (= (:mode skill-state) :item-charge)
           (let [ticks-left (max 0 (int (or (:charge-ticks skill-state) 0)))]
             (if (<= ticks-left 1)

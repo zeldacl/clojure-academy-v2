@@ -80,6 +80,44 @@
         (is (true? (railgun/register-coin-throw! "p1" {:timestamp-ms 12345})))
         (is (= :item-charge-cancelled (get-in (ctx/get-context "ctx-1") [:skill-state :mode])))))))
 
+(deftest item-charge-fires-when-the-tick-supplies-no-player-ref-test
+  ;; The item path's shot is reached from :tick!, and that tick comes from the
+  ;; server tick loop, never the network: context-manager's tick-context-entry!
+  ;; builds its payload as {:ctx-id :skill-id}, and the client deliberately
+  ;; does not send MSG-SLOT-KEY-TICK (it would double-dispatch costs). So the
+  ;; callback's positional player-ref is nil in production, always.
+  ;;
+  ;; accepted-item-in-hand? answered false for that nil, so the charge ran its
+  ;; full second and then landed in :item-charge-failed — the release did
+  ;; nothing and showed nothing. Passing nil here is the whole point of the
+  ;; test; a test that supplies a player-ref cannot see this.
+  (ps-fix/seed-player-state! "p1" (store/fresh-player-state))
+  (let [owner {:logical-side :server :server-session-id :test-session :player-uuid "p1"}
+        fired* (atom nil)
+        held-player (Object.)]
+    (ctx/with-context-owner owner
+      (ctx/register-context!
+       (assoc (ctx/new-server-context "p1" :railgun "ctx-tick" owner)
+              :status ctx/STATUS-ALIVE))
+      (ctx-skill/update-skill-state-root! "ctx-tick" identity
+                                          {:mode :item-charge :charge-ticks 1 :fired false})
+      (with-redefs [log/debug (fn [& _])
+                    ;; The live player the server tick loop can still resolve
+                    ;; from the uuid, which is what the fix reaches for.
+                    railgun/resolve-player-ref (fn [pid]
+                                                 (when (= pid "p1") held-player))
+                    railgun/accepted-item-in-hand? (fn [p] (identical? p held-player))
+                    railgun/consume-item-for-shot! (fn [p] (identical? p held-player))
+                    railgun/perform-main-shot!
+                    (fn [& _]
+                      (reset! fired* true)
+                      {:performed? true :reflection-hit? false
+                       :normal-hit-count 0 :hit-uuids []})
+                    railgun/send-charge-end! (fn [& _] nil)]
+        (#'railgun/railgun-on-key-tick "ctx-tick" "p1" :railgun 0.0 true 0 :tick nil)
+        (is (true? @fired*) "the charge must reach its shot")
+        (is (= :performed (get-in (ctx/get-context "ctx-tick") [:skill-state :mode])))))))
+
 (deftest coin-progress-threshold-status-test
   (let [below (#'railgun/qte-status 0.59)
         active (#'railgun/qte-status 0.6)
