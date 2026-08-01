@@ -152,7 +152,35 @@
          :blend-in-ms 200.0
          :blend-out-ms 700.0
          :start-color 0xD8F8D8
-         :end-color 0x6AF26A}}])
+         :end-color 0x6AF26A}}
+
+     ;; MdBall (electron-bomb/electron-missile/scatter-bomb entity): pulsing
+     ;; glow ball. Replaces the pre-refactor MdBallRenderer — 5 core frames,
+     ;; fullbright translucent billboard. The old renderer's separate glow
+     ;; pass + alpha/size ramps are approximated by the texture's own alpha.
+     {:id "md-ball"
+      :kind :animated-billboard
+      :state {:layer :translucent
+              :blend :alpha}
+      :params {:texture-prefix (modid/namespaced-path "textures/effects/mdball/")
+               :frame-count 5
+               :frame-ms 100.0
+               :half-size 0.35
+               :offset-y 0.0
+               :offset-z 0.0}}
+
+     ;; EntityBloodSplash (flesh-ripping hit splash): 10-frame splash,
+     ;; matching the pre-refactor BloodSplashRenderer.
+     {:id "blood-splash"
+      :kind :animated-billboard
+      :state {:layer :translucent
+              :blend :alpha}
+      :params {:texture-prefix (modid/namespaced-path "textures/effects/blood_splash/")
+               :frame-count 10
+               :frame-ms 50.0
+               :half-size 0.4
+               :offset-y 0.0
+               :offset-z 0.0}}])
 
 (def ^:private ac-effect-kinds
   #{:intensify-arcs})
