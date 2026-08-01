@@ -104,21 +104,26 @@
 (defn- run-plan-actions!
   [^Player player hand ^ItemStack stack side player-uuid plan _opts]
   (when plan
-    (doseq [action (:client-actions plan)]
-      (case (:kind action)
-        :notify-local-effect
-        (hooks-core/client-notify-visual-event!
-          (or (:event-key action) (:effect-key action) :local-effect)
-          (merge {:player-uuid player-uuid :now-ms (game-time-ms player)}
-                 (or (:payload action) {})))
+    ;; Client-actions notify the *local* client's UI and require a bound client
+    ;; session — only present on the client thread. In singleplayer the
+    ;; client-thread item-use event fires alongside this one and dispatches them
+    ;; there; skip on the server side like :consume-item / :spawn-scripted-effect.
+    (when (= side :client)
+      (doseq [action (:client-actions plan)]
+        (case (:kind action)
+          :notify-local-effect
+          (hooks-core/client-notify-visual-event!
+            (or (:event-key action) (:effect-key action) :local-effect)
+            (merge {:player-uuid player-uuid :now-ms (game-time-ms player)}
+                   (or (:payload action) {})))
 
-        :open-screen
-        (client-bridge/open-screen!
-          (:screen-key action)
-          (merge {:player-uuid player-uuid}
-                 (or (:payload action) {})))
+          :open-screen
+          (client-bridge/open-screen!
+            (:screen-key action)
+            (merge {:player-uuid player-uuid}
+                   (or (:payload action) {})))
 
-        nil))
+          nil)))
 
     (doseq [action (:server-actions plan)]
       (case (:kind action)

@@ -58,12 +58,23 @@ public final class ParticleEntityShared {
         if (level.isClientSide) {
             return true;
         }
-        EntityType<?> type;
+        // BuiltInRegistries.ENTITY_TYPE is a DefaultedRegistry — get() on an
+        // unknown key silently returns the registry default (minecraft:pig),
+        // which spawned a pig for a mistyped/missing entity id. Resolve
+        // explicitly and throw with the offending id: a wrong id is a bug and
+        // must surface in the log, never degrade into a random mob.
+        ResourceLocation key;
         try {
-            type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(entityId));
-        } catch (Exception ignored) {
-            return false;
+            key = ResourceLocation.parse(entityId);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Malformed entity type id '" + entityId + "'", e);
         }
+        if (!BuiltInRegistries.ENTITY_TYPE.containsKey(key)) {
+            throw new IllegalArgumentException(
+                "Unknown entity type id '" + entityId + "' (resolves to " + key
+                    + "; remember the modid namespace, e.g. ac:entity_coin_throwing)");
+        }
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(key);
         if (type == null) {
             return false;
         }
@@ -101,12 +112,20 @@ public final class ParticleEntityShared {
         if (level.isClientSide) {
             return null;
         }
-        EntityType<?> type;
+        // Same loud DefaultedRegistry pig-fallback guard as
+        // spawnEntityByIdFromPlayer: unknown ids throw instead of degrading.
+        ResourceLocation key;
         try {
-            type = BuiltInRegistries.ENTITY_TYPE.get(ResourceLocation.parse(entityId));
-        } catch (Exception ignored) {
-            return null;
+            key = ResourceLocation.parse(entityId);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Malformed entity type id '" + entityId + "'", e);
         }
+        if (!BuiltInRegistries.ENTITY_TYPE.containsKey(key)) {
+            throw new IllegalArgumentException(
+                "Unknown entity type id '" + entityId + "' (resolves to " + key
+                    + "; remember the modid namespace, e.g. ac:entity_coin_throwing)");
+        }
+        EntityType<?> type = BuiltInRegistries.ENTITY_TYPE.get(key);
         if (type == null) {
             return null;
         }

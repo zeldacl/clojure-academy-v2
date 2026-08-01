@@ -119,14 +119,16 @@
     (skill-effects/clear-railgun-coin-judged! player-id)
     (when-let [ctx-id (active-railgun-ctx-id player-id)]
       ;; Upstream broadcasts the one-shot RailgunHandEffect for coin throws.
-      (send-coin-charge-start! ctx-id player-id)
-      (when (world-effects/available?)
-        (when-let [pos (geom/eye-pos player-id)]
-          (when-let [world-id (geom/world-id-of player-id)]
-            (world-effects/play-sound!
-              world-id (:x pos) (:y pos) (:z pos)
-              (modid/namespaced-path "entity.flipcoin")
-              :players 0.5 1.0)))))
+      (send-coin-charge-start! ctx-id player-id))
+    ;; Upstream ItemCoin plays the flipcoin sound on every throw, with no
+    ;; railgun-context requirement (sound at 0.5/1.0).
+    (when (world-effects/available?)
+      (when-let [pos (geom/eye-pos player-id)]
+        (when-let [world-id (geom/world-id-of player-id)]
+          (world-effects/play-sound!
+            world-id (:x pos) (:y pos) (:z pos)
+            (modid/namespaced-path "entity.flipcoin")
+            :players 0.5 1.0))))
     true))
 
 (def ^:private coin-entity-registry-id (modid/namespaced-path "entity_coin_throwing"))
@@ -545,10 +547,13 @@
   (item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
   (item-actions/register-item-action! (modid/namespaced-path "coin") :railgun-coin-throw)
   (item-actions/register-action-handler! :railgun-coin-throw register-coin-throw!)
+  ;; Spawn ids must carry the mod namespace: the entity type is registered as
+  ;; <modid>:entity_coin_throwing, and a bare path would resolve to
+  ;; minecraft:entity_coin_throwing (→ DefaultedRegistry pig fallback).
   (item-actions/register-item-entity-spawn!
     "ac:coin"
-    {:entity-id "entity_coin_throwing" :speed 0.0 :unique-per-owner? true})
+    {:entity-id (modid/namespaced-path "entity_coin_throwing") :speed 0.0 :unique-per-owner? true})
   (item-actions/register-item-entity-spawn!
     (modid/namespaced-path "coin")
-    {:entity-id "entity_coin_throwing" :speed 0.0 :unique-per-owner? true})
+    {:entity-id (modid/namespaced-path "entity_coin_throwing") :speed 0.0 :unique-per-owner? true})
   nil)

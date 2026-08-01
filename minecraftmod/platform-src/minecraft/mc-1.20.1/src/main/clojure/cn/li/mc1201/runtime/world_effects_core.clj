@@ -118,7 +118,15 @@
   [^Level level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn]
   (let [{:keys [entity-id x y z vx vy vz owner-uuid explosion-power]} projectile-spec]
     (try
-      (let [^EntityType entity-type (.get BuiltInRegistries/ENTITY_TYPE (ResourceLocation. (str entity-id)))]
+      ;; DefaultedRegistry get() falls back to the default entry (minecraft:pig)
+      ;; for unknown keys — resolve explicitly and THROW on a missing id so a
+      ;; config bug surfaces in the log (adapter boundary logs the ex-message)
+      ;; instead of silently spawning a pig.
+      (let [^ResourceLocation type-key (ResourceLocation. (str entity-id))
+            ^EntityType entity-type (if (.containsKey BuiltInRegistries/ENTITY_TYPE type-key)
+                                      (.get BuiltInRegistries/ENTITY_TYPE type-key)
+                                      (throw (ex-info (str "Unknown entity type id '" entity-id "'")
+                                                      {:entity-id entity-id})))]
         (if-not entity-type
           {:success? false}
           (if-let [^Entity entity (.create entity-type level)]

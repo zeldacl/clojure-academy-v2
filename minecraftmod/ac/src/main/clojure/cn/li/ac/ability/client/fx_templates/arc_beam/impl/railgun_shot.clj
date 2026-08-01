@@ -222,6 +222,7 @@
     [{:kind :quad
       :texture texture-path
       :p0 p0 :p1 p1 :p2 p2 :p3 p3
+      :u0 0.0 :u1 1.0 :v0 0.0 :v1 1.0
       :color {:r 255 :g 255 :b 255 :a 255}}]))
 
 (defn- build-plan

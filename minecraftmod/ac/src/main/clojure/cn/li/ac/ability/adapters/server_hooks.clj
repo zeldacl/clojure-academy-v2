@@ -385,27 +385,27 @@
      (item-actions/on-item-action! action player-uuid payload))
 
    :build-item-use-plan
-   (fn [_player-uuid item-id activated? _side]
+   (fn [_player-uuid item-id _activated? _side]
      (when-let [action (item-actions/resolve-item-action item-id)]
        (let [railgun-coin? (= action :railgun-coin-throw)
              entity-spawn (item-actions/get-item-entity-spawn item-id)
              domain-payload (if railgun-coin?
                               {:timestamp-ms (System/currentTimeMillis)}
                               {})
-             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}]
-                              (or (not railgun-coin?) activated?)
-                              (conj {:kind :domain-action :action action :payload domain-payload})
-
+             ;; Upstream ItemCoin#onItemRightClick throws unconditionally — no
+             ;; ability-activation requirement. A coin use always consumes,
+             ;; spawns, dispatches the domain action (CoinThrowEvent analog)
+             ;; and notifies the client QTE.
+             server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
+                                     {:kind :domain-action :action action :payload domain-payload}]
                               entity-spawn (conj {:kind :spawn-scripted-effect
                                                   :entity-id (:entity-id entity-spawn)
                                                   :unique-per-owner?
                                                   (boolean (:unique-per-owner? entity-spawn))
                                                   :speed (double (or (:speed entity-spawn) 0.0))}))]
          {:server-actions server-actions
-          :client-actions (if (and railgun-coin? (not activated?))
-                            []
-                            [{:kind :notify-local-effect
-                              :event-key :ac/charge-coin-throw}])
+          :client-actions [{:kind :notify-local-effect
+                            :event-key :ac/charge-coin-throw}]
           :consume? true})))
 
    :compute-aoe-damage

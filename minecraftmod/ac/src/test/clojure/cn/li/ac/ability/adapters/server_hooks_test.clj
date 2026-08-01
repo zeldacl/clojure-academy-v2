@@ -95,6 +95,19 @@
              (:client-actions plan)))
       (is (true? (:consume? plan))))))
 
+(deftest build-item-use-plan-coin-throw-unconditional-test
+  (testing "coin use plans dispatch consume + domain + spawn + QTE notify regardless of activation (upstream ItemCoin)"
+    (item-actions/register-item-action! "ac:coin" :railgun-coin-throw)
+    (item-actions/register-item-entity-spawn! "ac:coin" {:entity-id "entity_coin_throwing" :speed 0.0})
+    (let [build-plan (:build-item-use-plan (server-hooks/runtime-server-hooks))
+          plan (build-plan "p1" "ac:coin" false :server)]
+      (is (= [:consume-item :domain-action :spawn-scripted-effect]
+             (mapv :kind (:server-actions plan))))
+      (is (= [{:kind :notify-local-effect
+               :event-key :ac/charge-coin-throw}]
+             (:client-actions plan)))
+      (is (true? (:consume? plan))))))
+
 (deftest level-change-event-uses-service-recalc-path-test
   (let [commands* (atom [])
         calc-calls (atom [])]
