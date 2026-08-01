@@ -138,7 +138,7 @@
                             :y (double (or (:y target-pos) 0.0))
                             :z (double (or (:z target-pos) 0.0))}))]
       (ctx-mgr/push-channel-to-player! source-id ctx-id rad-mark-fx-channel payload)
-      (ctx-mgr/push-channel-to-nearby-players! ctx-id rad-mark-fx-channel payload))))
+      (ctx-mgr/push-channel-to-nearby-players! source-id ctx-id rad-mark-fx-channel payload))))
 
 (defn mark-target!
   ([attacker-id target-id]

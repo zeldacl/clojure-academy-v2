@@ -42,10 +42,10 @@
   (aset-boolean ^booleans frozen 0 false)
   nil)
 
+(defn registered-channels []
+  (set (.keySet handlers)))
+
 (defn dispatch-fx-channel! [ctx-id channel payload]
   (if-let [handler-fn (.get handlers channel)]
     (do (handler-fn ctx-id channel payload) true)
     (do (log/debug "No FX handler for channel" channel) false)))
-
-(defn registered-channels []
-  (set (.keySet handlers)))

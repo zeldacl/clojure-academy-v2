@@ -33,12 +33,16 @@
 
 (defn- merge-payload
   [mode payload* custom level-extra hand-extra]
+  ;; :mode is merged LAST so the channel-spec mode stays authoritative — a
+  ;; server payload carrying its own :mode (e.g. electron-bomb's
+  ;; {:mode :perform} settle payload) must not override the channel's
+  ;; :spawn/:beam/:end routing.
   (merge (select-meta payload*)
-         (when mode {:mode mode})
          custom
          payload*
          level-extra
-         hand-extra))
+         hand-extra
+         (when mode {:mode mode})))
 
 (defn- normalize-targets [targets]
   (vec (or targets [:level])))

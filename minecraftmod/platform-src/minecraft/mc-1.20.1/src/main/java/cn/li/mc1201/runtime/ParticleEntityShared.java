@@ -105,6 +105,11 @@ public final class ParticleEntityShared {
      * held-block tracking via the entity-motion adapter).
      */
     public static String spawnTrackedEntityByIdFromPlayer(Object playerObj, String entityId, float speed) {
+        return spawnTrackedEntityByIdFromPlayer(playerObj, entityId, speed, null);
+    }
+
+    public static String spawnTrackedEntityByIdFromPlayer(Object playerObj, String entityId, float speed,
+                                                          Integer lifeTicksOverride) {
         if (!(playerObj instanceof Player player) || entityId == null || entityId.isEmpty()) {
             return null;
         }
@@ -139,6 +144,16 @@ public final class ParticleEntityShared {
         }
         if (entity instanceof Projectile projectile) {
             projectile.setOwner(player);
+        }
+        // Mirror spawnEntityByIdFromPlayer's ScriptedEffectEntity handling:
+        // without the owner the client-side orbit hook (OwnerOrbitEffectHook)
+        // bails and the entity stays at its spawn point inside the player.
+        if (entity instanceof ScriptedEffectEntity scriptedEffect) {
+            scriptedEffect.setOwnerPlayer(player);
+            scriptedEffect.setPos(player.getX(), player.getY() + 1.0D, player.getZ());
+            if (lifeTicksOverride != null && lifeTicksOverride > 0) {
+                scriptedEffect.setLifeTicksOverride(lifeTicksOverride);
+            }
         }
         return level.addFreshEntity(entity) ? entity.getStringUUID() : null;
     }

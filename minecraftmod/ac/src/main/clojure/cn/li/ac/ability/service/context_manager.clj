@@ -228,10 +228,18 @@
   "Push a context channel payload to nearby players except the local owner.
 
   Uses dispatcher route `:to-except-local` when the context route is still
-  available, which mirrors normal server-side FX fan-out behavior."
-  [ctx-id channel payload]
-  (ctx/ctx-send-to-except-local! ctx-id channel payload)
-  nil)
+  available, which mirrors normal server-side FX fan-out behavior.
+
+  Delayed server tasks (settle callbacks) run under the tick-scoped owner
+  binding, which has no :player-uuid and therefore fails owner validation
+  when the router resolves the ctx route — rebuild the full server owner
+  from the player-uuid here."
+  [player-id ctx-id channel payload]
+  (let [session-id (runtime-hooks/require-player-state-session-id
+                    "push-channel-to-nearby-players!")
+        owner {:server-session-id session-id :player-uuid (str player-id)}]
+    (ctx/ctx-send-to-except-local! owner ctx-id channel payload)
+    nil))
 
 (defn- tick-context-entry!
   "Drive a single server-owned context for one tick.

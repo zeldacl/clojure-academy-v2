@@ -2,9 +2,9 @@ package cn.li.mc1201.entity.hook.effect;
 
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
-import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 
 import java.util.Map;
 import java.util.UUID;
@@ -25,7 +25,7 @@ public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
     private final Map<UUID, OrbitState> states = new ConcurrentHashMap<>();
 
     @Override
-    public void onClientTick(ScriptedEffectEntity entity, ClientLevel level) {
+    public void onServerTick(ScriptedEffectEntity entity, Level level) {
         if (!entity.isAlive()) {
             states.remove(entity.getUUID());
             return;
@@ -37,7 +37,7 @@ public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
         }
 
         OrbitState state = states.computeIfAbsent(entity.getUUID(),
-        key -> OrbitState.create(entity, owner, entity.getEffectRandom()));
+        key -> OrbitState.create(entity, owner));
         ScriptedEffectSpec effectSpec = entity.getEffectSpec();
         double phaseStep = effectSpec == null
             ? DEFAULT_PHASE_STEP
@@ -83,7 +83,10 @@ public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
             this.phase = phase;
         }
 
-        private static OrbitState create(ScriptedEffectEntity entity, Player owner, RandomSource random) {
+        private static OrbitState create(ScriptedEffectEntity entity, Player owner) {
+            UUID uuid = entity.getUUID();
+            long seed = uuid.getMostSignificantBits() ^ uuid.getLeastSignificantBits();
+            RandomSource random = RandomSource.create(seed);
             ScriptedEffectSpec effectSpec = entity.getEffectSpec();
             double baseYaw = Math.toRadians(-owner.getYRot());
             double thetaSpreadFactor = effectSpec == null

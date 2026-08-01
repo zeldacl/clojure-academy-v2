@@ -49,9 +49,9 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  entity/player-spawn-entity-by-id! (fn [& args]
-                                                      (swap! spawn-calls* conj args)
-                                                      true)
+                  entity/player-spawn-tracked-entity-by-id! (fn [& args]
+                                                              (swap! spawn-calls* conj args)
+                                                              "ball-uuid-1")
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)
@@ -68,8 +68,10 @@
                                                                      nil)]
       ;; exp defaults to 0.0 in cb/apply-invoke (below the 0.8 improved-exp
       ;; threshold), so this exercises the un-improved 20-tick settle branch.
+      ;; The ball spawns with a life override equal to the settle life, so the
+      ;; ball dies exactly when the ray fires (original death callback).
       (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
-      (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]]
+      (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0 20]]
              @spawn-calls*))
       (is (= [["ctx-1"
                :electron-bomb/fx-spawn
@@ -87,6 +89,7 @@
       (is (= [{:player-id "p1"
                :ctx-id "ctx-1"
                :damage 12.5
+               :ball-uuid "ball-uuid-1"
                :delay-ticks 18}]
              @scheduled*)))))
 
@@ -100,7 +103,7 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  entity/player-spawn-entity-by-id! (constantly true)
+                  entity/player-spawn-tracked-entity-by-id! (constantly "ball-uuid-2")
                   fx/send! (constantly nil)
                   skill-effects/add-skill-exp! (constantly nil)
                   skill-effects/set-main-cooldown! (constantly nil)
@@ -123,9 +126,9 @@
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [& _] nil)
-                  entity/player-spawn-entity-by-id! (fn [& args]
-                                                      (swap! spawn-calls* conj args)
-                                                      true)
+                  entity/player-spawn-tracked-entity-by-id! (fn [& args]
+                                                              (swap! spawn-calls* conj args)
+                                                              "ball-uuid-1")
                   fx/send! (fn [ctx-id entry _evt payload]
                              (swap! fx-calls* conj [ctx-id (:topic entry) payload])
                              nil)

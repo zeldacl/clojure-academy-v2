@@ -57,7 +57,9 @@
 (defn player-consume-item-by-id!     [p id n](call :player-consume-item-by-id! p id n))
 (defn player-give-item-stack!        [p s]   (call :player-give-item-stack! p s))
 (defn player-spawn-entity-by-id!     [p eid sp] (call :player-spawn-entity-by-id! p eid sp))
-(defn player-spawn-tracked-entity-by-id! [p eid sp] (call :player-spawn-tracked-entity-by-id! p eid sp))
+(defn player-spawn-tracked-entity-by-id!
+  ([p eid sp] (call :player-spawn-tracked-entity-by-id! p eid sp nil))
+  ([p eid sp life] (call :player-spawn-tracked-entity-by-id! p eid sp life)))
 (defn player-raytrace-block          [p r f?](call :player-raytrace-block p r f?))
 (defn player-get-container-menu      [p]     (call :player-get-container-menu p))
 

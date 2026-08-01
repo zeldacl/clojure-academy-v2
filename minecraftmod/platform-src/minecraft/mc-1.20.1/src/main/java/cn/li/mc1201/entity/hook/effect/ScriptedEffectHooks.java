@@ -10,9 +10,12 @@ public final class ScriptedEffectHooks {
         AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
     }
 
+    private static final ScriptedEffectHook NOOP = new ScriptedEffectHook() {
+    };
+
     public static ScriptedEffectHook resolve(String hookId) {
         ScriptedEffectHook hook = AbstractHookRegistry.resolve(REGISTRY_CLASS, hookId);
-        return hook != null ? hook : (entity, level) -> {};
+        return hook != null ? hook : NOOP;
     }
 
     public static boolean registerByClassName(String hookId, String className) {

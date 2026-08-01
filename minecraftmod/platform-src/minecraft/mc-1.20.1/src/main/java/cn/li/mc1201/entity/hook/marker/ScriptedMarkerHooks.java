@@ -10,9 +10,12 @@ public final class ScriptedMarkerHooks {
         AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
     }
 
+    private static final ScriptedMarkerHook NOOP = new ScriptedMarkerHook() {
+    };
+
     public static ScriptedMarkerHook resolve(String hookId) {
         ScriptedMarkerHook hook = AbstractHookRegistry.resolve(REGISTRY_CLASS, hookId);
-        return hook != null ? hook : (entity, level) -> {};
+        return hook != null ? hook : NOOP;
     }
 
     public static boolean registerByClassName(String hookId, String className) {

@@ -10,9 +10,12 @@ public final class ScriptedRayHooks {
         AbstractHookRegistry.register(REGISTRY_CLASS, hookId, hook);
     }
 
+    private static final ScriptedRayHook NOOP = new ScriptedRayHook() {
+    };
+
     public static ScriptedRayHook resolve(String hookId) {
         ScriptedRayHook hook = AbstractHookRegistry.resolve(REGISTRY_CLASS, hookId);
-        return hook != null ? hook : (entity, level) -> {};
+        return hook != null ? hook : NOOP;
     }
 
     public static boolean registerByClassName(String hookId, String className) {

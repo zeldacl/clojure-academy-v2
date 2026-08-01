@@ -102,7 +102,9 @@
         (is (nil? (get-in snapshot [:effect-state [:ctx "ctx-a"]])))
         (is (seq (get-in snapshot [:beams [:ctx "ctx-a"]]))))
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
-      (dotimes [_ 9]
+      ;; Original EntityMdRaySmall life is 14 ticks — beam must outlive the
+      ;; old 8-tick window.
+      (dotimes [_ 14]
         (level-effects/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)))
@@ -135,7 +137,7 @@
                 :start {:x 1.0 :y 64.0 :z 2.0}
                 :end {:x 1.0 :y 64.0 :z 17.0}})
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
-      (dotimes [_ 8]
+      (dotimes [_ 14]
         (level-effects/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))

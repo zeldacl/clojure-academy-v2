@@ -165,7 +165,7 @@
       :params {:texture-prefix (modid/namespaced-path "textures/effects/mdball/")
                :frame-count 5
                :frame-ms 100.0
-               :half-size 0.35
+               :half-size 0.25
                :offset-y 0.0
                :offset-z 0.0}}
 

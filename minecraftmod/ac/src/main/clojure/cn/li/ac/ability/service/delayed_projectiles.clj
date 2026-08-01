@@ -9,6 +9,7 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util ArrayList HashMap]))
 
@@ -105,34 +106,58 @@
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
 
+(defn- resolve-ball-position
+  "Locate the spawned MdBall entity by uuid at settle time. The ball orbits
+  the caster (body-level, radius 0.8-1.3), so a small AABB around the caster's
+  eye covers it. Returns the ball's world position map, or nil when the ball
+  is gone (world unloaded) — callers then fall back to the caster's eye."
+  [world-id player-id ball-uuid]
+  (when (and ball-uuid (world-effects/available?))
+    (let [eye (geom/eye-pos player-id)
+          ex (double (:x eye)) ey (double (:y eye)) ez (double (:z eye))
+          r 3.5]
+      (some (fn [{:keys [uuid x y z]}]
+              (when (= (str uuid) (str ball-uuid))
+                {:x (double x) :y (double y) :z (double z)}))
+            (world-effects/find-entities-in-aabb
+              world-id (- ex r) (- ey r) (- ez r)
+              (+ ex r) (+ ey r) (+ ez r))))))
+
 (defn- run-electron-bomb-beam!
   "Matches original's callback: getDest(player)/eye are re-evaluated fresh at
   settle time (not the values captured when the skill was cast), so the
-  player can turn or move during the delay and still redirect the shot."
-  [{:keys [player-id ctx-id damage]}]
+  player can turn or move during the delay and still redirect the shot. The
+  ray originates from the ball's current orbit position (original: ray from
+  ball.pos to getDest(player)); the destination stays the player's look point."
+  [{:keys [player-id ctx-id damage ball-uuid]}]
   (try
     (when (raycast/available?)
       (let [world-id (geom/world-id-of player-id)
             eye (geom/eye-pos player-id)
             look-vec (raycast/player-look-vector player-id)]
         (when look-vec
-          (let [dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
+          (let [ball-pos (resolve-ball-position world-id player-id ball-uuid)
+                origin (or ball-pos eye)
+                dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
                                  :y (double (or (:y look-vec) 0.0))
                                  :z (double (or (:z look-vec) 0.0))})
+                dest (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+                shot-dir (geom/vnorm (geom/v- dest origin))
+                shot-dist (geom/vdist origin dest)
                 hit (raycast/raycast-entities
                                               world-id
-                                              (double (:x eye))
-                                              (double (:y eye))
-                                              (double (:z eye))
-                                              (double (:x dir))
-                                              (double (:y dir))
-                                              (double (:z dir))
-                                              electron-bomb-ray-distance)
-                end-pos (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+                                              (double (:x origin))
+                                              (double (:y origin))
+                                              (double (:z origin))
+                                              (double (:x shot-dir))
+                                              (double (:y shot-dir))
+                                              (double (:z shot-dir))
+                                              shot-dist)
+                end-pos dest
                 target-uuid (:uuid hit)
                 damage-amt (double (or damage 0.0))
                 payload {:mode :perform
-                         :start eye
+                         :start origin
                          :end end-pos
                          :hit-distance electron-bomb-ray-distance
                          :performed? true
@@ -150,7 +175,7 @@
                                                     :z (:z hit)}}))
             ;; Original broadcasts the small ray even when it hits no entity.
             (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam payload)
-            (ctx-mgr/push-channel-to-nearby-players! ctx-id :electron-bomb/fx-beam payload)))))
+            (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :electron-bomb/fx-beam payload)))))
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 
@@ -183,7 +208,7 @@
           (md-damage/mark-target! player-id target-uuid {:ctx-id ctx-id}))
         (ctx-mgr/push-channel-to-player! player-id ctx-id :scatter-bomb/fx-beam
           {:start origin :end dest})
-        (ctx-mgr/push-channel-to-nearby-players! ctx-id :scatter-bomb/fx-beam
+        (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :scatter-bomb/fx-beam
           {:start origin :end dest})))
     (catch Exception e
       (log/warn "Delayed ScatterBomb settle failed:" (ex-message e)))))

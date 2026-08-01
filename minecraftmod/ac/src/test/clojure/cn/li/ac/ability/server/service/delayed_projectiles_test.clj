@@ -9,7 +9,8 @@
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.mcmod.platform.raycast :as raycast]
-            [cn.li.mcmod.platform.entity-damage :as entity-damage]))
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (defn- with-fresh-delayed-projectile-runtime [f]
   (ps-fix/with-test-player-state-owner
@@ -79,7 +80,8 @@
                        :hit-distance 15.0
                        :performed? true
                      :target-uuid "target-1"}]]
-                  [:fx-nearby ["ctx-1"
+                  [:fx-nearby ["p1"
+                       "ctx-1"
                        :electron-bomb/fx-beam
                        {:mode :perform
                         :start {:x 1.0 :y 64.0 :z 2.0}
@@ -89,6 +91,64 @@
                         :target-uuid "target-1"}]]]
                @calls))
         (is (empty? (dp/pending-tasks-snapshot "p1")))))))
+
+(deftest electron-bomb-settlement-rays-from-ball-position-test
+  (testing "the settle ray originates from the tracked MdBall's orbit position, matching the original's callback (ray from ball.pos toward getDest(player))"
+    (let [calls (atom [])
+          raycast-args* (atom nil)]
+      (with-redefs [raycast/available? (constantly true)
+                    entity-damage/available? (constantly true)
+                    world-effects/available? (constantly true)
+                    geom/world-id-of (fn [_] "w")
+                    geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                    raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    world-effects/find-entities-in-aabb
+                    (fn [& _] [{:uuid "ball-9" :x 1.5 :y 63.0 :z 2.2}])
+                    raycast/raycast-entities
+                    (fn [& args]
+                      (reset! raycast-args* args)
+                      {:uuid "target-1" :x 4.0 :y 65.0 :z 6.0})
+                    entity-damage/apply-direct-damage! (fn [& args]
+                                                         (swap! calls conj [:damage (vec args)])
+                                                         true)
+                    md-damage/mark-target! (fn [& args]
+                                             (swap! calls conj [:mark (vec args)])
+                                             true)
+                    ctx-mgr/push-channel-to-player! (fn [& args]
+                                                      (swap! calls conj [:fx (vec args)])
+                                                      true)
+                    ctx-mgr/push-channel-to-nearby-players! (fn [& args]
+                                                              (swap! calls conj [:fx-nearby (vec args)])
+                                                              true)]
+        (dp/schedule-electron-bomb-beam!
+         {:player-id "p1"
+          :ctx-id "ctx-1"
+          :damage 12.5
+          :ball-uuid "ball-9"
+          :delay-ticks 1})
+        (dp/tick-player! "p1")
+        ;; Raycast starts at the ball's orbit position, not the player's eye.
+        (is (= ["w" 1.5 63.0 2.2]
+               (vec (take 4 @raycast-args*))))
+        (is (= [[:fx ["p1"
+                      "ctx-1"
+                      :electron-bomb/fx-beam
+                      {:mode :perform
+                       :start {:x 1.5 :y 63.0 :z 2.2}
+                       :end {:x 1.0 :y 64.0 :z 17.0}
+                       :hit-distance 15.0
+                       :performed? true
+                       :target-uuid "target-1"}]]
+                [:fx-nearby ["p1"
+                             "ctx-1"
+                             :electron-bomb/fx-beam
+                             {:mode :perform
+                              :start {:x 1.5 :y 63.0 :z 2.2}
+                              :end {:x 1.0 :y 64.0 :z 17.0}
+                              :hit-distance 15.0
+                              :performed? true
+                              :target-uuid "target-1"}]]]
+               (filter #(#{:fx :fx-nearby} (first %)) @calls)))))))
 
 (deftest electron-bomb-settlement-without-look-vector-is-noop-test
   (let [calls (atom [])]
@@ -134,8 +194,8 @@
                   ctx-mgr/push-channel-to-player! (fn [player-id ctx-id ch payload]
                                                    (swap! calls conj [:fx player-id ctx-id ch payload])
                                                    true)
-                  ctx-mgr/push-channel-to-nearby-players! (fn [ctx-id ch payload]
-                                                           (swap! calls conj [:fx-nearby ctx-id ch payload])
+                  ctx-mgr/push-channel-to-nearby-players! (fn [player-id ctx-id ch payload]
+                                                           (swap! calls conj [:fx-nearby player-id ctx-id ch payload])
                                                            true)]
       (dp/schedule-scatter-bomb-beam!
        {:player-id "p1"

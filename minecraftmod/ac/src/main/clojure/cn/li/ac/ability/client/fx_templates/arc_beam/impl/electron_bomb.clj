@@ -47,8 +47,11 @@
 																 (merge base-meta
 																				{:start (vec3/map->v3 start)
 																				 :end (vec3/map->v3 end)
-																				 :ttl 8
-																				 :max-ttl 8
+																				 ;; Original EntityMdRaySmall: life 14 ticks (700ms),
+																				 ;; 200ms blend-in / 400ms blend-out — beam-flash-ops
+																				 ;; fade fractions (0.28/0.57) are tuned for this.
+																				 :ttl 14
+																				 :max-ttl 14
 																				 :performed? (boolean (:performed? payload))
 																				 :target-uuid (:target-uuid payload)}))
 											store*)]

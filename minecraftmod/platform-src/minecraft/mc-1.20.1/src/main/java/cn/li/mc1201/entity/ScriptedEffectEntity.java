@@ -1,5 +1,7 @@
 package cn.li.mc1201.entity;
 
+import cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook;
+import cn.li.mc1201.entity.hook.effect.ScriptedEffectHook;
 import cn.li.mc1201.entity.hook.effect.ScriptedEffectHooks;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
@@ -208,7 +210,13 @@ public class ScriptedEffectEntity extends Entity {
         String effectHook = normalizeHook(spec == null ? null : spec.getEffectHook());
 
         Player owner = ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
-        if ((spec == null || spec.isFollowOwner()) && owner != null) {
+        ScriptedEffectHook hook = ScriptedEffectHooks.resolve(effectHook);
+        // Server-authoritative hooks (OwnerOrbitEffectHook) drive the position
+        // on the server-owned instance; the client renders the vanilla-synced
+        // position and must not snap or re-compute it.
+        boolean serverDrivenHook = hook instanceof OwnerOrbitEffectHook;
+        if ((spec == null || spec.isFollowOwner()) && owner != null
+                && !(serverDrivenHook && level().isClientSide())) {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
             setYRot(owner.getYRot());
             setXRot(owner.getXRot());
@@ -219,8 +227,14 @@ public class ScriptedEffectEntity extends Entity {
             discardedByMotionProfile = tickVerticalBallisticMotion(spec, owner);
         }
 
-        if (!discardedByMotionProfile && level().isClientSide() && level() instanceof ClientLevel clientLevel) {
-            ScriptedEffectHooks.resolve(effectHook).onClientTick(this, clientLevel);
+        if (!discardedByMotionProfile) {
+            if (level().isClientSide() && level() instanceof ClientLevel clientLevel) {
+                if (!serverDrivenHook) {
+                    hook.onClientTick(this, clientLevel);
+                }
+            } else {
+                hook.onServerTick(this, level());
+            }
         }
 
         if (discardedByMotionProfile) {
