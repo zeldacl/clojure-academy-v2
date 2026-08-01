@@ -532,7 +532,7 @@
                       (-> skill-slot-shape
                   (hud/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
                                         :skill-exps skill-exps})
-                          (hud/patch-skill-slot-visual contexts player-uuid)))
+                          (hud/patch-skill-slot-visual contexts player-uuid now-ms)))
         preset-indicators (hud/build-preset-indicators-data preset-state now-ms)
         numbers-texts (hud/build-numbers-texts-data hud-model showing-numbers? last-show-ms now-ms)
         vm (scan-vm-state contexts)

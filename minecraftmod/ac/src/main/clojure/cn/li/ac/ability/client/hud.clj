@@ -149,10 +149,12 @@
 (defn patch-skill-slot-visual
   "Refresh per-slot delegate-state visual fields from active-contexts —
    changes only on ability context lifecycle events, callers may cache
-   this keyed on a context snapshot token."
-  [slot-shapes active-contexts player-uuid]
+   this keyed on a context snapshot token. now-ms (optional) is forwarded
+   to skill-specific delegate hooks that need a clock (e.g. railgun coin QTE)."
+  [slot-shapes active-contexts player-uuid & [now-ms]]
   (mapv (fn [s]
-          (let [visual (dstate/delegate-state-for-slot active-contexts (:skill-id s) player-uuid)]
+          (let [visual (dstate/delegate-state-for-slot active-contexts (:skill-id s)
+                                                       player-uuid now-ms)]
             (assoc s
                    :visual-state (:state visual)
                    :alpha (:alpha visual)

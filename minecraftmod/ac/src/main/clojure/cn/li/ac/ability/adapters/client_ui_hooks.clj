@@ -418,7 +418,9 @@
        :charge-ratio (max 0.0 (min 1.0 (- 1.0 (/ (double charge-ticks) max-charge-ticks))))}
       (let [owner-key (client-ui-owner-key player-uuid)
             {:keys [start-ms window-ms]} (get (charge-coin-state-snapshot) owner-key)
-            has-window? (and start-ms window-ms)
+            ;; now-ms is required to compute the window; paths without a clock
+            ;; (e.g. :client-slot-visual-state) degrade to the inactive branch.
+            has-window? (and now-ms start-ms window-ms)
             elapsed (if has-window? (- (long now-ms) (long start-ms)) 0)
             progress (if has-window?
                        (/ (double (max 0 elapsed)) (double (max 1 (long window-ms))))
@@ -931,7 +933,7 @@
                       (-> (cached-skill-slot-shapes owner-key hud-model screen-width screen-height preset-data)
                           (hud-renderer/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
                                                      :skill-exps skill-exps})
-                          (hud-renderer/patch-skill-slot-visual active-contexts player-uuid)))
+                          (hud-renderer/patch-skill-slot-visual active-contexts player-uuid now-ms)))
         hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
                                   (pos? last-show-value-change-ms))
                           {:cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))

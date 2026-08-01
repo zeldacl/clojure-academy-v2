@@ -39,10 +39,14 @@
   "Look up the active context for a slot (by skill-id binding) and derive visual state.
   active-contexts: seq of context maps for the player
   slot-skill-id:   the skill-id bound to this slot (keyword or nil)
-  player-uuid:     optional player UUID string for skill-specific override queries"
+  player-uuid:     optional player UUID string for skill-specific override queries
+  now-ms:          optional game-time ms, forwarded to skill-specific override
+                   hooks that need a clock (e.g. railgun coin QTE window)"
   ([active-contexts slot-skill-id]
-   (delegate-state-for-slot active-contexts slot-skill-id nil))
+   (delegate-state-for-slot active-contexts slot-skill-id nil nil))
   ([active-contexts slot-skill-id player-uuid]
+   (delegate-state-for-slot active-contexts slot-skill-id player-uuid nil))
+  ([active-contexts slot-skill-id player-uuid now-ms]
    (if (nil? slot-skill-id)
      (delegate-state-for-context nil)
      (let [matched (first (filter #(and (= (:skill-id %) slot-skill-id)
@@ -52,6 +56,7 @@
        (if-let [override-kw (when player-uuid
                               (runtime-hooks/client-visual-state
                                (keyword "ac.delegate-state" (name slot-skill-id))
-                               {:player-uuid player-uuid}))]
+                               (cond-> {:player-uuid player-uuid}
+                                 now-ms (assoc :now-ms now-ms))))]
          (assoc (state-visual-params-for-state override-kw) :state override-kw)
          (delegate-state-for-context matched))))))
