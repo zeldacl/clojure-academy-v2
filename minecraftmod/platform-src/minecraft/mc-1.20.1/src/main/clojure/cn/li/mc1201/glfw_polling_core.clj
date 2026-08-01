@@ -9,7 +9,8 @@
    - Fabric: call poll-all-inputs! in client tick event (primary input mechanism)"
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
-            [cn.li.mcmod.spi.key-scheme-provider :as key-provider]))
+            [cn.li.mcmod.spi.key-scheme-provider :as key-provider]
+            [cn.li.ac.ability.client.input-state-machine :as input-state-machine]))
 
 ;; GLFW key codes (shared constants)
 (def GLFW_KEY_C 67)
@@ -34,13 +35,27 @@
    process — no multiplayer owner-key concern on this side)."
   (atom {}))
 
-(def ^:private key-down-time
-  "Timestamp (System/currentTimeMillis) when the V key was last pressed.
-   Upstream AcademyCraft ClientHandler.keyActivate: toggle fires on KEY
-   RELEASE only if held < 300ms (ClientHandler.java onKeyUp/onKeyDown).
-   V is a standalone toggle key upstream — it is not reused for any ability
-   slot (those default to mouse-left/mouse-right/R/F)."
-  (atom 0))
+(def ^:private v-toggle-threshold-ns (* 300 1000 1000))
+
+(def ^:private v-toggle-state
+  (atom (input-state-machine/initial-button-state)))
+
+(defn handle-v-toggle-input!
+  [state-atom is-down {:keys [player-uuid client-session-id suppress-triggers?
+                               emit-fn now-ns short-press-threshold-ns]
+                        :or {now-ns (System/nanoTime)
+                             short-press-threshold-ns v-toggle-threshold-ns}}]
+  (input-state-machine/handle-button-state!
+    state-atom is-down
+    {:now-ns now-ns
+     :short-press-threshold-ns short-press-threshold-ns
+     :screen-open? (boolean suppress-triggers?)
+     :on-short-up (fn []
+                    (when emit-fn
+                      (emit-fn :content/toggle-primary-state
+                               {:player-uuid player-uuid
+                                :client-session-id client-session-id
+                                :logical-side :client})))}))
 
 (defn poll-all-inputs!
   "Poll hardcoded key inputs and emit keyboard events.
@@ -88,23 +103,18 @@
        (swap! last-poll-time assoc :cycle-selection is-pressed))
 
      ;; Toggle primary state (V key — mode switch, upstream KEY_ACTIVATE_ABILITY)
-     ;; Upstream AcademyCraft ClientHandler: toggle fires on KEY RELEASE
-     ;; only if held < 300ms.
+     ;; This is the platform-side timing boundary for the client input chain.
+     ;; Only a short release emits the toggle event; a long hold is suppressed
+     ;; so the AC business layer never sees a toggle request for that gesture.
      (let [key-code GLFW_KEY_V
-           is-pressed (is-key-pressed? :original key-code)
-           was-pressed (get @last-poll-time :toggle-primary-state false)]
-       (when is-pressed
-         (when-not was-pressed
-           (reset! key-down-time (System/currentTimeMillis))))
-       (when (and (not suppress-triggers?)
-                  was-pressed (not is-pressed)  ;; transition pressed→released
-                  (< (- (System/currentTimeMillis) @key-down-time) 300))
-         (kb-proto/emit-keyboard-input!
-           :content/toggle-primary-state
-           {:player-uuid player-uuid
-            :client-session-id client-session-id
-            :logical-side :client}))
-       (swap! last-poll-time assoc :toggle-primary-state is-pressed))
+           is-pressed (is-key-pressed? :original key-code)]
+       (handle-v-toggle-input! v-toggle-state is-pressed
+         {:player-uuid player-uuid
+          :client-session-id client-session-id
+          :suppress-triggers? suppress-triggers?
+          :emit-fn (fn [input-id context]
+                     (kb-proto/emit-keyboard-input! input-id context))
+          :now-ns (System/nanoTime)}))
 
      ;; Toggle debug overlay (F4 key — upstream DebugConsole KEY_F4, cycles
      ;; none -> normal -> show-exp -> none on key-down, fires once per press).
@@ -143,6 +153,7 @@
   "Reset debounce state (for testing or platform restart)"
   []
   (reset! last-poll-time {})
+  (reset! v-toggle-state (input-state-machine/initial-button-state))
   nil)
 
 ;; ============================================================================

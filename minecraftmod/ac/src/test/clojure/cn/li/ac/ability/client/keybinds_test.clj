@@ -7,7 +7,8 @@
             [cn.li.ac.ability.client.keybinds :as keybinds]            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.ac.ability.client.input-state-machine :as input-state-machine]))
 
 (defn- reset-fixture [f]
   (ps-fix/with-test-player-state-owner
@@ -117,20 +118,17 @@
 (deftest default-abort-handler-uses-client-abort-hook-test
   (let [aborted (atom [])]
     (keybinds/install-default-handlers!)
-    ;; Simulate a held skill key so the upstream-style active-delegate handler
-    ;; wins over default toggle.
-    (binding [keybinds/*client-session-id* :session-a]
+    (binding [keybinds/*client-session-id* :session-a
+              keybinds/*get-player-uuid-fn* (constantly "p1")]
       (keybinds/on-skill-key-event 0 true))
     (with-redefs [read-model/get-player-state (fn [& _] {:ability-data {:category-id :test-cat}})
                   runtime-hooks/client-abort-all! (fn [] (swap! aborted conj :abort-hook))
                   runtime-hooks/set-client-overlay-activated! (fn [_ _] nil)
-                  ;; the default toggle handler now round-trips through the
-                  ;; server; there is no network transport in a unit test
                   client-api/req-set-activated! (fn [& _] nil)
                   ctx/abort-all-contexts-for-player! (fn [& _]
                                                        (throw (ex-info "legacy abort path should not be used" {})))]
-      ;; keybind owner resolution needs an explicit client session in tests
-      (binding [keybinds/*client-session-id* :session-a]
+      (binding [keybinds/*client-session-id* :session-a
+                keybinds/*get-player-uuid-fn* (constantly "p1")]
         (keybinds/trigger-mode-switch! "p1")))
     (is (= [:abort-hook] @aborted))))
 
@@ -153,6 +151,26 @@
     (is (empty? @aborted))
     (is (= [false] @toggled))
     (is (= [["p1" false]] @overlay))))
+
+(deftest shared-v-toggle-helper-emits-on-short-release-and-suppresses-long-hold-test
+  (let [state (atom (input-state-machine/initial-button-state))
+        emitted (atom [])]
+    (input-state-machine/handle-button-state! state true
+      {:now-ns 0
+       :on-down (fn [] nil)})
+    (input-state-machine/handle-button-state! state false
+      {:now-ns (* 200 1000 1000)
+       :on-short-up (fn [] (swap! emitted conj :short-up))})
+    (is (= [:short-up] @emitted)))
+  (let [state (atom (input-state-machine/initial-button-state))
+        emitted (atom [])]
+    (input-state-machine/handle-button-state! state true
+      {:now-ns 0
+       :on-down (fn [] nil)})
+    (input-state-machine/handle-button-state! state false
+      {:now-ns (* 500 1000 1000)
+       :on-short-up (fn [] (swap! emitted conj :short-up))})
+    (is (empty? @emitted))))
 
 
 

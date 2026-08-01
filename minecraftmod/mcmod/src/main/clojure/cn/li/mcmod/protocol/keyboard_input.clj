@@ -63,10 +63,10 @@
   "Dispatch a keyboard input event to its registered handler.
 
    Invocation chain:
-   1. GLFW polling (platform-specific)
-   2. Forge/Fabric event routing
-   3. emit-keyboard-input! (this function)
-   4. AC handler execution
+   1. Platform polling / Forge-Fabric event routing decide the gesture timing
+      (e.g. short press vs. long hold)
+   2. emit-keyboard-input! (this function) dispatches the filtered event
+   3. AC handler execution consumes the input and runs business logic
 
    Args:
    - input-id: keyword identifying the input

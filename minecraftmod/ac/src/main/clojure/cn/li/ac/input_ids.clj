@@ -41,7 +41,11 @@
     (keybinds/switch-preset! player-uuid)))
 
 (defn- on-toggle-primary-state
-  "Handle primary state toggle (V key press) — toggle ability mode on/off."
+  "Handle primary state toggle (V key input) — toggle ability mode on/off.
+
+   This handler is intentionally thin. Platform input layers decide whether the
+   gesture is a short press or a long hold before they emit this input; AC only
+   consumes the already-filtered event and executes the business action."
   [{:keys [player-uuid]}]
   (log/debug "Toggle primary state — toggling ability mode" {:uuid player-uuid})
   (when player-uuid

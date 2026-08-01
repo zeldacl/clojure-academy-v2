@@ -19,6 +19,7 @@
 - Cross-system access goes through documented public APIs, such as `cn.li.ac.wireless.api` and `cn.li.ac.energy.operations`.
 - Public APIs should be direct and meaningful; do not add pass-through namespaces.
 - Platform behavior is injected through `mcmod` contracts or explicit platform adapters.
+- For input timing, the platform/input-protocol layer owns the decision of short press vs. long hold; the `ac` business layer only consumes the already-filtered event and executes the corresponding action.
 
 ## Verification
 

@@ -7,6 +7,7 @@
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mc1201.glfw-polling-core :as glfw-polling]
             [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
@@ -15,13 +16,8 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
 
-(def ^:private ^:const v-toggle-threshold-ms 300)
-
-(def ^:private v-key-down-time-atom
-  "Atom holding Long — timestamp when V was last pressed. Toggle fires on
-   RELEASE only if held < 300ms. Matching upstream AcademyCraft
-   ClientHandler.onKeyUp()."
-  (atom 0))
+(def ^:private v-toggle-state-atom
+  (atom (cn.li.ac.ability.client.input-state-machine/initial-button-state)))
 
 ;; ===== Forge Event Handler Registration =====
 
@@ -52,7 +48,9 @@
 
    V key (toggle-primary-state) uses release-based timing: the toggle fires
    on RELEASE only when held < 300ms — matching upstream AcademyCraft
-   ClientHandler.  Holding V longer activates slot-3 skill without toggle."
+   ClientHandler. This is the platform-side timing gate for the client input
+   chain; the AC business layer only sees a filtered input event after the
+   timing decision has been made."
   [^InputEvent$Key event]
   (try
     (let [player-uuid (get-current-player-uuid)
@@ -67,13 +65,16 @@
           ;; on either the old or the new key.
           ^KeyMapping v-mapping (key-mapping-adapter/get-key-mapping :content/toggle-primary-state)
           v-key-code (when v-mapping (.getValue (.getKey v-mapping)))]
-      ;; Track press timestamp for release-based toggle
+      ;; Track V-key transitions and emit only on short release.
       (when (and v-key-code (= (int v-key-code) (.getKey event)))
-        (case (.getAction event)
-          1 (reset! v-key-down-time-atom (System/currentTimeMillis))  ;; press
-          0 (when (< (- (System/currentTimeMillis) @v-key-down-time-atom) v-toggle-threshold-ms)
-              (kb-proto/emit-keyboard-input! :content/toggle-primary-state context))  ;; short release
-          nil))
+        (glfw-polling/handle-v-toggle-input! v-toggle-state-atom
+          (= 1 (.getAction event))
+          {:player-uuid player-uuid
+           :client-session-id session-id
+           :suppress-triggers? false
+           :emit-fn (fn [input-id ctx]
+                      (kb-proto/emit-keyboard-input! input-id ctx))
+           :now-ns (System/nanoTime)}))
       ;; Dispatch other consumed Forge KeyMappings from AC :alternative scheme
       ;; (skip toggle-primary-state — handled above with release-based timing).
       (doseq [[input-id ^KeyMapping key-mapping] (key-mapping-adapter/get-key-mappings-by-input-id)]

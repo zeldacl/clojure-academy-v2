@@ -76,6 +76,12 @@
 ;; ============================================================================
 ;; Input command execution (activate toggle / preset switch)
 ;; ============================================================================
+;; Note on responsibility split:
+;; - Platform polling / Forge event handlers decide whether an input is a
+;;   short press, a long hold, or a regular press/release transition.
+;; - This processor only consumes the already-decided event and forwards it to
+;;   AC business logic (keybinds / runtime / API). No timing policy should be
+;;   added here.
 
 (defn execute-input-command!
   "Execute an input command map (from input_command_builder.clj).

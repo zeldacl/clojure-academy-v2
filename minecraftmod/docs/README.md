@@ -25,7 +25,7 @@
 | `06-gui` | GUI DSL 与分层 | [GUI_DSL.md](06-gui/GUI_DSL.md)、[GUI_Architecture_Refactoring.md](06-gui/GUI_Architecture_Refactoring.md) |
 | `07-ability` | 能力系统规范 | [ABILITY_CORE_SPEC_V2.md](07-ability/ABILITY_CORE_SPEC_V2.md) |
 | `testing` | 当前测试与验证边界 | [IMPLEMENTATION_SCOPE.md](testing/IMPLEMENTATION_SCOPE.md)、[MULTI_LOADER_VERIFICATION.md](testing/MULTI_LOADER_VERIFICATION.md) |
-| `dev` | 开发、Agent、构建、治理文档 | [BUILD_AND_VERIFY_PLAYBOOK.md](dev/BUILD_AND_VERIFY_PLAYBOOK.md)、[ADD_NEW_LOADER_OR_VERSION.md](dev/ADD_NEW_LOADER_OR_VERSION.md)、[AGENT_AND_TOOLING.md](dev/AGENT_AND_TOOLING.md) |
+| `dev` | 开发、Agent、构建、治理文档 | [BUILD_AND_VERIFY_PLAYBOOK.md](dev/BUILD_AND_VERIFY_PLAYBOOK.md)、[ADD_NEW_LOADER_OR_VERSION.md](dev/ADD_NEW_LOADER_OR_VERSION.md)、[AGENT_AND_TOOLING.md](dev/AGENT_AND_TOOLING.md)、[CLIENT_INPUT_PROTOCOL_PLAYBOOK.md](dev/CLIENT_INPUT_PROTOCOL_PLAYBOOK.md) |
 
 ## 常用入口
 
