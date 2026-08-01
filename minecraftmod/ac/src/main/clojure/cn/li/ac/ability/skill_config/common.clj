@@ -4,7 +4,13 @@
   skill-definitions is the single source of truth for :level and
   :controllable? — defskill (dsl.clj) rejects declaring either, and
   registry/skill.clj register-skill! fills them in from here at registration
-  time. Edit the entry here, not in a skill's content namespace.")
+  time. Edit the entry here, not in a skill's content namespace.
+
+  :controllable? mirrors upstream Skill.canControl (Skill.java, default true)
+  — it gates the skill from the preset/N-key selection list. Only skills that
+  set canControl = false upstream may declare false here:
+  RadiationIntensify, DimFoldingTheorem, SpaceFluctuation, and the generic
+  brain/mind course chain (course_chain.clj).")
 
 (def category-ids
   [:electromaster :meltdowner :teleporter :vecmanip])
@@ -26,7 +32,7 @@
   {:id :thunder-bolt :category-id :electromaster :level 4 :controllable? true}
    {:id :thunder-clap :category-id :electromaster :level 5 :controllable? true}
 
-   {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? false}
+   {:id :electron-bomb :category-id :meltdowner :level 1 :controllable? true}
    ;; electron-missile's own defskill already declares 1.0/1.0 — the override
    ;; here was silently overruling it and zeroing its :cost block.
    {:id :electron-missile :category-id :meltdowner :level 5 :controllable? true}
@@ -47,13 +53,13 @@
    {:id :mine-ray-expert :category-id :meltdowner :level 4 :controllable? true}
    {:id :mine-ray-luck :category-id :meltdowner :level 5 :controllable? true}
    {:id :rad-intensify :category-id :meltdowner :level 1 :controllable? false}
-   {:id :ray-barrage :category-id :meltdowner :level 4 :controllable? false}
+   {:id :ray-barrage :category-id :meltdowner :level 4 :controllable? true}
    {:id :scatter-bomb :category-id :meltdowner :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
 
    {:id :dim-folding-theorem :category-id :teleporter :level 1 :controllable? false}
    {:id :flashing :category-id :teleporter :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :flesh-ripping :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :location-teleport :category-id :teleporter :level 3 :controllable? false :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :location-teleport :category-id :teleporter :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :mark-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :penetrate-teleport :category-id :teleporter :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :shift-teleport :category-id :teleporter :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
@@ -61,12 +67,12 @@
    {:id :threatening-teleport :category-id :teleporter :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
 
    {:id :blood-retrograde :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :directed-blastwave :category-id :vecmanip :level 3 :controllable? false}
-   {:id :directed-shock :category-id :vecmanip :level 1 :controllable? false}
-   {:id :groundshock :category-id :vecmanip :level 1 :controllable? false :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :plasma-cannon :category-id :vecmanip :level 5 :controllable? false :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :directed-blastwave :category-id :vecmanip :level 3 :controllable? true}
+   {:id :directed-shock :category-id :vecmanip :level 1 :controllable? true}
+   {:id :groundshock :category-id :vecmanip :level 1 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
+   {:id :plasma-cannon :category-id :vecmanip :level 5 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :storm-wing :category-id :vecmanip :level 3 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
-   {:id :vec-accel :category-id :vecmanip :level 2 :controllable? false}
+   {:id :vec-accel :category-id :vecmanip :level 2 :controllable? true}
    {:id :vec-deviation :category-id :vecmanip :level 2 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}
    {:id :vec-reflection :category-id :vecmanip :level 4 :controllable? true :cp-consume-speed 0.0 :overload-consume-speed 0.0}])
 

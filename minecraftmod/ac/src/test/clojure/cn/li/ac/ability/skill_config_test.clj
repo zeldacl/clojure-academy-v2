@@ -183,7 +183,7 @@
                     (skill-config/config-key :railgun :cp-consume-speed))))
     (is (= 0.0 (get (get skill-config/default-values-by-category :teleporter)
                     (skill-config/config-key :flashing :overload-consume-speed))))
-    (is (false? (get (get skill-config/default-values-by-category :vecmanip)
+    (is (true? (get (get skill-config/default-values-by-category :vecmanip)
                      (skill-config/config-key :plasma-cannon :controllable))))
     (is (= 5 (get (get skill-config/default-values-by-category :meltdowner)
                   (skill-config/config-key :electron-missile :level))))))
@@ -289,7 +289,7 @@
                (skill-config/tunable-double-list :railgun :beam.damage)))
         (is (= 0.9 (skill-config/tunable-double :railgun :beam.step)))
         (is (= 0.6 (skill-config/probability :railgun :qte.coin-active-threshold)))
-        (is (= 1000 (skill-config/tunable-int :railgun :qte.coin-window-ms)))
+        (is (= 1600 (skill-config/tunable-int :railgun :qte.coin-window-ms)))
 
         (config-reg/set-config-values!
           domain
