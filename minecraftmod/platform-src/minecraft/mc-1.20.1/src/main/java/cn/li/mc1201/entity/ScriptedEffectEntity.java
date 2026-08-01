@@ -1,6 +1,5 @@
 package cn.li.mc1201.entity;
 
-import cn.li.mc1201.entity.hook.effect.GenericArcEffectHook;
 import cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook;
 import cn.li.mc1201.entity.hook.effect.ScriptedEffectHook;
@@ -231,9 +230,7 @@ public class ScriptedEffectEntity extends Entity {
         // player) whenever the owner lookup hiccuped, blinking it. The
         // client-spawned JetEngine diamond shield stays client-driven.
         boolean serverDrivenHook = hook instanceof OwnerOrbitEffectHook
-                || hook instanceof GenericArcEffectHook
-                || (hook instanceof OwnerOffsetEffectHook
-                    && ("md-shield".equals(effectHook) || "surround-arc".equals(effectHook)));
+                || ("md-shield".equals(effectHook) && hook instanceof OwnerOffsetEffectHook);
         if ((spec == null || spec.isFollowOwner()) && owner != null
                 && !(serverDrivenHook && level().isClientSide())) {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());

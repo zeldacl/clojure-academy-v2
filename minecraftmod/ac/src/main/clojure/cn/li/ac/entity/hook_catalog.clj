@@ -8,22 +8,14 @@
   {"intensify-arcs" :tiered-arcs
    "diamond-shield" :owner-offset
    "md-shield" :owner-offset
-   "surround-arc" :owner-offset
-   "generic-arc" :generic-arc
-  "md-ball" :owner-orbit
-   "ripple-mark" :noop
+   "md-ball" :owner-orbit
    "blood-splash" :noop
-  "vertical-ballistic" :vertical-ballistic})
+   "vertical-ballistic" :vertical-ballistic})
 
 (def ^:private ray-hook->impl-key
-  {"mine-ray-basic" :owner-follow
-   "mine-ray-expert" :owner-follow
-   "mine-ray-luck" :owner-follow
-   "md-ray" :owner-follow
-   "md-ray-small" :owner-follow
+  {"md-ray-small" :owner-follow
    "md-ray-barrage" :owner-follow
-   "barrage-ray-pre" :owner-follow
-   "railgun-fx" :owner-follow})
+   "barrage-ray-pre" :owner-follow})
 
 (def ^:private marker-hook->impl-key
   {"tp-marking" :owner-follow-marker

@@ -133,94 +133,6 @@
     ;; Ray family (Forge adapter shells + renderer-id dispatch).
     (edsl/register-entity!
       (edsl/create-entity-spec
-        "entity_md_ray"
-        {:entity-kind :scripted-ray
-         :category :misc
-         :width 0.2
-         :height 0.2
-         :client-tracking-range 96
-         :update-interval 1
-         :properties {:ray {:life-ticks 50
-                            :length 15.0
-                            :blend-in-ms 200.0
-                            :blend-out-ms 700.0
-                            :inner-width 0.17
-                            :outer-width 0.22
-                            :glow-width 1.5
-                            :start-color 0xD8F8D8
-                            :end-color 0x6AF26A
-                            :renderer-id "ray-composite"
-                            :hook :md-ray
-                            :hook-params {:eye-offset-y 0.1}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_mine_ray_basic"
-        {:entity-kind :scripted-ray
-         :category :misc
-         :width 0.2
-         :height 0.2
-         :client-tracking-range 96
-         :update-interval 1
-         :properties {:ray {:life-ticks 233333
-                            :length 15.0
-                            :blend-in-ms 200.0
-                            :blend-out-ms 400.0
-                            :inner-width 0.03
-                            :outer-width 0.045
-                            :glow-width 0.3
-                            :start-color 0xD8F8D8
-                            :end-color 0x6AF26A
-                            :renderer-id "ray-composite"
-                            :hook :mine-ray-basic
-                            :hook-params {:eye-offset-y 0.1}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_mine_ray_expert"
-        {:entity-kind :scripted-ray
-         :category :misc
-         :width 0.2
-         :height 0.2
-         :client-tracking-range 96
-         :update-interval 1
-         :properties {:ray {:life-ticks 233333
-                            :length 15.0
-                            :blend-in-ms 200.0
-                            :blend-out-ms 400.0
-                            :inner-width 0.045
-                            :outer-width 0.056
-                            :glow-width 0.5
-                            :start-color 0xD8F8D8
-                            :end-color 0x6AF26A
-                            :renderer-id "ray-composite"
-                            :hook :mine-ray-expert
-                            :hook-params {:eye-offset-y 0.1}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_mine_ray_luck"
-        {:entity-kind :scripted-ray
-         :category :misc
-         :width 0.2
-         :height 0.2
-         :client-tracking-range 96
-         :update-interval 1
-         :properties {:ray {:life-ticks 233333
-                            :length 15.0
-                            :blend-in-ms 100.0
-                            :blend-out-ms 300.0
-                            :inner-width 0.04
-                            :outer-width 0.05
-                            :glow-width 0.45
-                            :start-color 0xF1E5F7
-                            :end-color 0xCDA6E8
-                            :renderer-id "ray-composite"
-                            :hook :mine-ray-luck
-                            :hook-params {:eye-offset-y 0.1}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
         "entity_md_ray_small"
         {:entity-kind :scripted-ray
          :category :misc
@@ -283,28 +195,6 @@
                             :end-color 0x6AF26A
                             :renderer-id "ray-composite"
                             :hook :barrage-ray-pre
-                            :hook-params {:eye-offset-y 0.1}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_railgun_fx"
-        {:entity-kind :scripted-ray
-         :category :misc
-         :width 0.2
-         :height 0.2
-         :client-tracking-range 96
-         :update-interval 1
-         :properties {:ray {:life-ticks 50
-                            :length 15.0
-                            :blend-in-ms 150.0
-                            :blend-out-ms 1000.0
-                            :inner-width 0.09
-                            :outer-width 0.13
-                            :glow-width 1.1
-                            :start-color 0xF1F0DE
-                            :end-color 0xECAA5D
-                            :renderer-id "ray-composite"
-                            :hook :railgun-fx
                             :hook-params {:eye-offset-y 0.1}}}}))
 
     ;; Marker/UI family.
@@ -375,86 +265,6 @@
 
     (edsl/register-entity!
       (edsl/create-entity-spec
-        "entity_surround_arc"
-        {:entity-kind :scripted-effect
-         :category :misc
-         :width 1.0
-         :height 1.0
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:effect {:life-ticks 100
-                               :follow-owner? false
-                               :renderer-id "surround-arc"
-                               :hook :surround-arc
-                               :hook-params {:forward 1.0
-                                             :vertical 1.1}}}}))
-
-    ;; THIN surround arc: 1 ring (item mode), matching EntitySurroundArc(THIN).
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_surround_arc_thin"
-        {:entity-kind :scripted-effect
-         :category :misc
-         :width 0.6
-         :height 0.6
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:effect {:life-ticks 100
-                               :follow-owner? false
-                               :renderer-id "surround-arc-thin"
-                               :hook :surround-arc
-                               :hook-params {:forward 0.8
-                                             :vertical 1.0}}}}))
-
-    ;; Long-lived charging arc for current_charging block/item mode.
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_charging_arc"
-        {:entity-kind :scripted-effect
-         :category :misc
-         :width 0.8
-         :height 0.8
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:effect {:life-ticks 100000
-                               :follow-owner? false
-                               :renderer-id "charging-arc"
-                               :hook :generic-arc
-                               :hook-params {:forward 0.9
-                                             :vertical 1.0}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_arc"
-        {:entity-kind :scripted-effect
-         :category :misc
-         :width 0.8
-         :height 0.8
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:effect {:life-ticks 20
-                               :follow-owner? false
-                               :renderer-id "arc-generic"
-                               :hook :generic-arc
-                               :hook-params {:forward 0.8
-                                             :vertical 1.0}}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_ripple_mark"
-        {:entity-kind :scripted-effect
-         :category :misc
-         :width 2.0
-         :height 2.0
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:effect {:life-ticks 20
-                               :follow-owner? false
-                               :renderer-id "ripple-mark"
-                               :hook :ripple-mark}}}))
-
-    (edsl/register-entity!
-      (edsl/create-entity-spec
         "entity_blood_splash"
         {:entity-kind :scripted-effect
          :category :misc
@@ -507,22 +317,6 @@
                                              :render-core-size-factor 0.25}}}}))
 
     ;; Block-body family.
-    (edsl/register-entity!
-      (edsl/create-entity-spec
-        "entity_block_body"
-        {:entity-kind :scripted-block-body
-         :category :misc
-         :width 1.0
-         :height 1.0
-         :client-tracking-range 64
-         :update-interval 1
-         :properties {:block-body {:default-block-id "minecraft:stone"
-                                   :gravity 0.05
-                                   :damage 4.0
-                                   :place-when-collide? true
-                                   :renderer-id "block-body"
-                                   :hook :entity-block}}}))
-
     (edsl/register-entity!
       (edsl/create-entity-spec
         "entity_magmanip_block_body"

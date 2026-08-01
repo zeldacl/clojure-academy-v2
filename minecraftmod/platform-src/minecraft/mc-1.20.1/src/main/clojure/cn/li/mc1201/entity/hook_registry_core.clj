@@ -85,7 +85,6 @@
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :effect %)
             :impl-key->hook-class {:tiered-arcs "cn.li.mc1201.entity.hook.effect.TieredArcsEffectHook"
                                    :owner-offset "cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook"
-                                   :generic-arc "cn.li.mc1201.entity.hook.effect.GenericArcEffectHook"
                                    :owner-orbit "cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook"
                                    :noop "cn.li.mc1201.entity.hook.effect.NoopEffectHook"
                                    :vertical-ballistic "cn.li.mc1201.entity.hook.effect.NoopEffectHook"}
