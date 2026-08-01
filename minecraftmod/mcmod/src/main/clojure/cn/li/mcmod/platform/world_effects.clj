@@ -53,3 +53,9 @@
 (defn trigger-behavior-hit!
   [world-id entity-uuid]
   (boolean (call :trigger-behavior-hit! world-id entity-uuid)))
+
+(defn discard-entity-by-uuid!
+  "Server-side discard of an entity by uuid (e.g. removing a spawned effect
+  entity when its ability context ends)."
+  [world-id entity-uuid]
+  (boolean (call :discard-entity-by-uuid! world-id entity-uuid)))

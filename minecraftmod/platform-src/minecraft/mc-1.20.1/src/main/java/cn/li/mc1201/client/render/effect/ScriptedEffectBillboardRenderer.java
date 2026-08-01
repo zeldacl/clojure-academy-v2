@@ -110,6 +110,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
             case "spinning-double-sided" -> renderSpinningDoubleSided(
                     entity, rendererId, partialTick, poseStack, bufferSource, packedLight);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
+            case "spinning-shield" -> renderSpinningShield(entity, rendererId, partialTick, poseStack, bufferSource);
             default -> throw new IllegalArgumentException("Unsupported renderer key for effect rendererId="
                     + rendererId + ": " + rendererKey);
         }
@@ -119,6 +120,89 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     private static final int BILLBOARD_CROSS_DEFAULT_R = 180;
     private static final int BILLBOARD_CROSS_DEFAULT_G = 220;
     private static final int BILLBOARD_CROSS_DEFAULT_B = 255;
+
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ScriptedEffectBillboardRenderer.class);
+    private static final java.util.Map<java.util.UUID, Integer> SHIELD_TRACE_COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static final float SHIELD_DEFAULT_SCALE = 1.8F;
+    // Original RenderMdShield spins at lerpf(0.8, 2, ...) degrees PER SECOND
+    // (GameTimer seconds) — a full turn takes minutes, so the shield is
+    // visually static. A fast spin makes the diamond's bounding width
+    // oscillate ~41% (45-degree corners), reading as "suddenly smaller then
+    // restored".
+    private static final float SHIELD_DEFAULT_SPIN_DEG_PER_TICK = 0.1F;
+
+    /**
+     * LightShield / JetEngine shield (matching original RenderMdShield):
+     * one translucent quad, oriented to the owner's yaw/pitch, spinning
+     * around its own normal (in-plane — never edge-on like the coin
+     * renderer), SIZE grows from 0.2x over 15 ticks, alpha fades in over
+     * 6 ticks.
+     */
+    private void renderSpinningShield(T entity,
+                                      String rendererId,
+                                      float partialTick,
+                                      PoseStack poseStack,
+                                      MultiBufferSource bufferSource) {
+        String textureId = drawPlanParamString(rendererId, "texture", "");
+        ResourceLocation texture = ResourceLocation.tryParse(textureId);
+        if (texture == null) {
+            return;
+        }
+        Player owner = entity instanceof ScriptedEffectEntity effect ? effect.getOwnerPlayer() : null;
+        if (owner == null) {
+            return;
+        }
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
+        float growth = Mth.clamp(age / 15.0F, 0.0F, 1.0F);
+        int renderCount = SHIELD_TRACE_COUNTS.merge(entity.getUUID(), 1, Integer::sum);
+        if (renderCount <= 2 || ((int) age) % 20 == 0) {
+            LOGGER.info("SHIELD-TRACE uuid={} render#{} age={} size={} pos=({},{},{})",
+                    entity.getUUID(), renderCount, age,
+                    SHIELD_DEFAULT_SCALE * (0.2F + 0.8F * growth),
+                    entity.getX(), entity.getY(), entity.getZ());
+        }
+        float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", SHIELD_DEFAULT_SCALE))
+                * (0.2F + 0.8F * growth);
+        float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
+        float rotation = (age * drawPlanParamFloat(rendererId, "spin-deg-per-tick", SHIELD_DEFAULT_SPIN_DEG_PER_TICK))
+                % 360.0F;
+
+        float yaw = owner.yBodyRot;
+        float pitch = owner.getXRot();
+        if (owner == Minecraft.getInstance().player
+                && Minecraft.getInstance().options.getCameraType().isFirstPerson()) {
+            yaw = owner.getYRot();
+        }
+
+        poseStack.pushPose();
+        poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));
+        poseStack.mulPose(Axis.XP.rotationDegrees(pitch));
+        poseStack.mulPose(Axis.ZP.rotationDegrees(rotation));
+        poseStack.scale(size, size, 1.0F);
+
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat = pose.pose();
+        Matrix3f normal = pose.normal();
+        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
+        int a = (int) (255.0F * alpha);
+        int fullBright = 0x00F000F0;
+
+        vc.vertex(mat, -0.5F, -0.5F, 0.0F).color(255, 255, 255, a)
+                .uv(0.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, 0.5F, -0.5F, 0.0F).color(255, 255, 255, a)
+                .uv(1.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, 0.5F, 0.5F, 0.0F).color(255, 255, 255, a)
+                .uv(1.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, -0.5F, 0.5F, 0.0F).color(255, 255, 255, a)
+                .uv(0.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+
+        poseStack.popPose();
+    }
 
     private void renderSpinningDoubleSided(T entity,
                                            String rendererId,

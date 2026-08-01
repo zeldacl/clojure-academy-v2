@@ -11,6 +11,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
@@ -39,12 +40,13 @@
 
 (defn- ring-segments-local
   "Ring segment endpoints relative to center, depending only on the per-owner
-  tick counter (rotation phase + pulse radius) — precomputed once per tick
-  here instead of once per frame in build-plan (24 segments x 2 trig calls x
-  2 line-ops per frame -> per tick, i.e. at most 20/s)."
+  tick counter (rotation phase) — precomputed once per tick here instead of
+  once per frame in build-plan (24 segments x 2 trig calls x 2 line-ops per
+  frame -> per tick, i.e. at most 20/s). Radius is constant: a pulsing
+  radius read as the shield shrinking/restoring, which it never should."
   [ticks]
   (let [angle (* 0.12 (double ticks))
-        ring-radius (+ 0.82 (* 0.06 (Math/sin (* 0.17 (double ticks)))))
+        ring-radius 0.82
         segments 24]
     (vec
       (for [idx (range segments)
@@ -79,7 +81,7 @@
                 (assoc acc owner-key (assoc st
                                        :ticks ticks
                                        :ring-segments-local (ring-segments-local ticks)
-                                       :glow-half-size (+ 0.44 (* 0.07 (Math/sin (* 0.23 (double ticks))))))))))
+                                       :glow-half-size 0.44)))))
           {}
           states)))))
 
@@ -91,6 +93,10 @@
   (when hand-center-pos
     (when-let [active (some #(when (:active? %) %)
                             (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :light-shield))))]
+      (when (zero? (mod (long (or (:ticks active) 0)) 20))
+        (log/info "LS-FX-TRACE render" {:ticks (:ticks active)
+                                         :glow (:glow-half-size active)
+                                         :rings (count (:ring-segments-local active))}))
       (let [^V3 center (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
             ^V3 camera-pos (vec3/map->v3 camera-pos)
             cx (.-x center) cy (.-y center) cz (.-z center)

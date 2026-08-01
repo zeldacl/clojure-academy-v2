@@ -41,18 +41,26 @@
 	     :color-a [140 220 255]
 	     :color-b [240 250 255]}}
 
-   ;; Diamond shield for LightShield (matching original EntityMdShield)
+   ;; Diamond shield for LightShield (matching original EntityMdShield +
+   ;; RenderMdShield: single translucent quad, oriented to the owner's
+   ;; yaw/pitch, spinning around its own normal — never edge-on — SIZE 1.8
+   ;; grown from 0.2x over 15 ticks, alpha fade-in over 6 ticks).
+   ;; JetEngine's diamond shield reuses the same visual with its own texture.
    {:id "md-shield"
-    :kind :ring-lines
-    :state {:layer :lines
-            :blend :alpha}
-    :params {:rings 5
-             :segments 24
-             :radius-start 0.5
-             :radius-step 0.15
-             :y 0.02
-             :color-a [120 240 255]
-             :color-b [60 180 220]}}
+    :kind :spinning-shield
+    :state {:layer :translucent
+            :blend :alpha
+            :cull :off}
+    :params {:texture (modid/namespaced-path "textures/effects/md_shield/0.png")
+             :scale 1.8}}
+
+   {:id "diamond-shield"
+    :kind :spinning-shield
+    :state {:layer :translucent
+            :blend :alpha
+            :cull :off}
+    :params {:texture (modid/namespaced-path "textures/effects/diamond_shield.png")
+             :scale 1.8}}
 
    {:id "marker-billboard"
     :kind :billboard-cross
@@ -183,7 +191,7 @@
                :offset-z 0.0}}])
 
 (def ^:private ac-effect-kinds
-  #{:intensify-arcs})
+  #{:intensify-arcs :spinning-shield})
 
 (defn init-render-profiles!
   []
@@ -194,4 +202,5 @@
     ;; Map content-owned kind keywords to platform-neutral renderer keys
     ;; so the Minecraft component can dispatch without hardcoding content-specific strings.
     (script-abi/register-kind-renderer-key! :intensify-arcs :tiered-zigzag)
+    (script-abi/register-kind-renderer-key! :spinning-shield :spinning-shield)
     (script-registry/register-profiles! v1-effect-profiles))))

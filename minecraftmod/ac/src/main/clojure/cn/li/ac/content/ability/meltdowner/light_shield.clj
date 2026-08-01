@@ -19,6 +19,7 @@
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.entity :as entity]
@@ -130,10 +131,22 @@
     (set-shield-state-path! ctx-id [:ticks] 0)
     (set-shield-state-path! ctx-id [:last-absorb-tick] -1)
     (set-shield-state-path! ctx-id [:overload-floor] overload-floor)
-    ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player))
+    ;; Spawn EntityMdShield visual (matching original c_spawn: new EntityMdShield(player)).
+    ;; Tracked spawn keeps the uuid so end-shield! can remove the shield entity
+    ;; when the toggle ends (original shield.setDead() in s_onEnd) — the entity
+    ;; life alone would either linger after a short hold or vanish mid-hold.
     (when player-ref
-      (entity/player-spawn-entity-by-id! player-ref (modid/namespaced-path "entity_md_shield") 0.0)))
-  (log/info "LightShield: Activated"))
+      ;; Entity life = max-active + margin so the toggle timeout (which
+      ;; discards the shield and applies slowness+cooldown together) always
+      ;; fires BEFORE the entity would expire on its own — otherwise the
+      ;; shield vanishes a tick early and the buff/cooldown land later.
+      (when-let [shield-uuid (entity/player-spawn-tracked-entity-by-id!
+                               player-ref
+                               (modid/namespaced-path "entity_md_shield")
+                               0.0
+                               (+ (long (second (cfg-double-list :timing.max-active-ticks))) 20))]
+        (set-shield-state-path! ctx-id [:shield-uuid] shield-uuid)))
+  (log/info "LightShield: Activated")))
 
 ;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp): cooldown scales
 ;; with how long the shield was actually held (ticks), not a flat exp range.
@@ -146,7 +159,17 @@
 ;; application, regardless of which path ended the toggle.
 (defn- end-shield!
   [ctx-id player-id exp]
-  (let [ticks (shield-ticks (ctx-skill/get-context ctx-id))]
+  (let [ctx-data (ctx-skill/get-context ctx-id)
+        ticks (shield-ticks ctx-data)]
+    (log/info "LS-TRACE end-shield" {:ticks ticks :exp exp})
+    ;; Remove the shield entity (original shield.setDead() in s_onEnd) — the
+    ;; entity life alone would either linger after a short hold or vanish
+    ;; mid-hold.
+    (when-let [shield-uuid (get-in ctx-data (state-path :shield-uuid))]
+      (when (world-effects/available?)
+        (world-effects/discard-entity-by-uuid!
+          (geom/world-id-of player-id)
+          shield-uuid)))
     (when (potion-effects/available?)
       (potion-effects/apply-effect!
         player-id :slowness
@@ -204,6 +227,8 @@
             look-vec (get-player-look-vector player-id)]
         (set-shield-state-path! ctx-id [:ticks] next-ticks)
         (enforce-overload-floor! player-id ctx-data)
+        (when (zero? (mod next-ticks 20))
+          (log/info "LS-TRACE tick" {:ticks next-ticks :max-active max-active}))
         ;; Original continues the rest of s_tick after requesting termination:
         ;; per-tick exp and contact damage still happen on the timeout/failing
         ;; tick before the unified end callback settles cooldown/slowness.
@@ -217,6 +242,7 @@
           :world-id world-id
           :look-vec look-vec})
         (when (> next-ticks max-active)
+          (log/info "LS-TRACE timeout" {:ticks next-ticks :max-active max-active})
           (toggle/remove-toggle! ctx-id :light-shield)
           (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil)
           (ctx/terminate-context! ctx-id nil))))))

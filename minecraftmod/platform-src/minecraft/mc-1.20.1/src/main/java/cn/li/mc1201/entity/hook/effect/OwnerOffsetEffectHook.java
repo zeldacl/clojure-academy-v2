@@ -4,6 +4,7 @@ import cn.li.mc1201.entity.ScriptedEffectEntity;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 public final class OwnerOffsetEffectHook implements ScriptedEffectHook {
@@ -12,6 +13,19 @@ public final class OwnerOffsetEffectHook implements ScriptedEffectHook {
 
     @Override
     public void onClientTick(ScriptedEffectEntity entity, ClientLevel level) {
+        // Client-spawned effects (JetEngine's diamond shield) have no
+        // server-owned twin, so the client positions them. Server-spawned
+        // effects use onServerTick + vanilla sync instead (see
+        // ScriptedEffectEntity.serverDrivenHook).
+        offsetTick(entity);
+    }
+
+    @Override
+    public void onServerTick(ScriptedEffectEntity entity, Level level) {
+        offsetTick(entity);
+    }
+
+    private void offsetTick(ScriptedEffectEntity entity) {
         Player owner = entity.getOwnerPlayer();
         if (owner == null) {
             return;

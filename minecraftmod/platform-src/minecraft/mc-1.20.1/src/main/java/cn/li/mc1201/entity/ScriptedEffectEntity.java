@@ -1,5 +1,7 @@
 package cn.li.mc1201.entity;
 
+import cn.li.mc1201.entity.hook.effect.GenericArcEffectHook;
+import cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook;
 import cn.li.mc1201.entity.hook.effect.ScriptedEffectHook;
 import cn.li.mc1201.entity.hook.effect.ScriptedEffectHooks;
@@ -9,6 +11,9 @@ import cn.li.mc1201.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
@@ -22,11 +27,16 @@ import clojure.lang.IFn;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public class ScriptedEffectEntity extends Entity {
     private static final int BALLISTIC_MAX_LIFE = 120;
     private static final String LIFE_TICKS_OVERRIDE_TAG = "lifeTicksOverride";
+    private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_UUID =
+        SynchedEntityData.defineId(ScriptedEffectEntity.class, EntityDataSerializers.OPTIONAL_UUID);
+    private static final EntityDataAccessor<Integer> DATA_LIFE_TICKS_OVERRIDE =
+        SynchedEntityData.defineId(ScriptedEffectEntity.class, EntityDataSerializers.INT);
     private UUID ownerUuid;
     private int age;
     private int lifeTicksOverride = -1;
@@ -48,7 +58,7 @@ public class ScriptedEffectEntity extends Entity {
             ScriptedEntitySpecAccess.requireEntityType(entityRegistryName, ScriptedEffectEntity.class),
                 level
         );
-        entity.ownerUuid = owner.getUUID();
+        entity.setOwnerPlayer(owner);
         entity.setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
         return entity;
     }
@@ -67,12 +77,14 @@ public class ScriptedEffectEntity extends Entity {
 
     @Override
     protected void defineSynchedData() {
+        this.entityData.define(DATA_OWNER_UUID, Optional.empty());
+        this.entityData.define(DATA_LIFE_TICKS_OVERRIDE, -1);
     }
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         if (tag.hasUUID("owner")) {
-            ownerUuid = tag.getUUID("owner");
+            setOwnerUuid(tag.getUUID("owner"));
         }
         age = tag.getInt("age");
         ballisticStateInitialized = tag.getBoolean("motionStateInitialized");
@@ -209,12 +221,19 @@ public class ScriptedEffectEntity extends Entity {
         ScriptedEffectSpec spec = getSpec();
         String effectHook = normalizeHook(spec == null ? null : spec.getEffectHook());
 
-        Player owner = ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
+        Player owner = getOwnerPlayer();
         ScriptedEffectHook hook = ScriptedEffectHooks.resolve(effectHook);
-        // Server-authoritative hooks (OwnerOrbitEffectHook) drive the position
-        // on the server-owned instance; the client renders the vanilla-synced
-        // position and must not snap or re-compute it.
-        boolean serverDrivenHook = hook instanceof OwnerOrbitEffectHook;
+        // Server-authoritative hooks (OwnerOrbitEffectHook; the server-spawned
+        // LightShield shield's OwnerOffsetEffectHook) drive the position on
+        // the server-owned instance; the client renders the vanilla-synced
+        // position and must not snap or re-compute it — client-side
+        // re-computation left the shield at its spawn point (inside the
+        // player) whenever the owner lookup hiccuped, blinking it. The
+        // client-spawned JetEngine diamond shield stays client-driven.
+        boolean serverDrivenHook = hook instanceof OwnerOrbitEffectHook
+                || hook instanceof GenericArcEffectHook
+                || (hook instanceof OwnerOffsetEffectHook
+                    && ("md-shield".equals(effectHook) || "surround-arc".equals(effectHook)));
         if ((spec == null || spec.isFollowOwner()) && owner != null
                 && !(serverDrivenHook && level().isClientSide())) {
             setPos(owner.getX(), owner.getY() + 1.0, owner.getZ());
@@ -244,7 +263,12 @@ public class ScriptedEffectEntity extends Entity {
         age++;
         int lifeTicks;
         if (spec != null) {
-            lifeTicks = lifeTicksOverride > 0 ? lifeTicksOverride : spec.getLifeTicks();
+            // Read the synced override — the client-owned instance must die at
+            // the same tick as the server one (spawn-time life overrides like
+            // the LightShield shield's max-active+margin would otherwise be
+            // lost client-side, killing the shield early).
+            int syncedOverride = this.entityData.get(DATA_LIFE_TICKS_OVERRIDE);
+            lifeTicks = syncedOverride > 0 ? syncedOverride : spec.getLifeTicks();
         } else if (this instanceof ScriptedRayEntity rayEntity) {
             ScriptedRaySpec raySpec = rayEntity.getRaySpec();
             lifeTicks = raySpec == null ? 15 : raySpec.getLifeTicks();
@@ -276,19 +300,26 @@ public class ScriptedEffectEntity extends Entity {
     }
 
     public Player getOwnerPlayer() {
-        return ownerUuid == null ? null : level().getPlayerByUUID(ownerUuid);
+        UUID ownerId = getOwnerUuid();
+        return ownerId == null ? null : level().getPlayerByUUID(ownerId);
     }
 
     public UUID getOwnerUuid() {
-        return ownerUuid;
+        return this.entityData.get(DATA_OWNER_UUID).orElse(null);
     }
 
     public void setOwnerPlayer(Player owner) {
-        ownerUuid = owner == null ? null : owner.getUUID();
+        setOwnerUuid(owner == null ? null : owner.getUUID());
+    }
+
+    public void setOwnerUuid(UUID uuid) {
+        ownerUuid = uuid;
+        this.entityData.set(DATA_OWNER_UUID, Optional.ofNullable(uuid));
     }
 
     public void setLifeTicksOverride(int lifeTicks) {
         this.lifeTicksOverride = Math.max(1, lifeTicks);
+        this.entityData.set(DATA_LIFE_TICKS_OVERRIDE, Math.max(1, lifeTicks));
     }
 
     public static final class ArcData {

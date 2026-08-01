@@ -122,7 +122,17 @@
                                    (boolean (core/trigger-behavior-hit-in-level! level entity-uuid get-entity-by-uuid-fn))))
                                (catch Exception e
                                  (log/warn "Failed to trigger behavior hit:" (ex-message e))
-                                 false)))}))  ;; close fn, map, let, defn
+                                 false)))
+     :discard-entity-by-uuid! (fn [world-id entity-uuid]
+                                (try
+                                  (when-let [^MinecraftServer server (server-fn)]
+                                    (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                      (when-let [^Entity entity (get-entity-by-uuid-fn level (str entity-uuid))]
+                                        (.discard entity)
+                                        true)))
+                                  (catch Exception e
+                                    (log/warn "Failed to discard entity:" (ex-message e))
+                                    false)))}))  ;; close fn, map, let, defn
 
 (defn install-world-effects!
   [world-effects label]
