@@ -2,7 +2,7 @@
   "Electromaster skill action tunables for player-facing skill config.")
 
 (def skill-tunable-definitions
-  [{:skill-id :railgun :id :qte.coin-window-ms :path "qte.coin-window-ms" :section-suffix "qte" :type :int :min 1 :default 1000 :comment "Railgun coin QTE window duration in milliseconds."}
+  [{:skill-id :railgun :id :qte.coin-window-ms :path "qte.coin-window-ms" :section-suffix "qte" :type :int :min 1 :default 1600 :comment "Railgun coin QTE window duration in milliseconds. Must cover the coin's full flight (~1530 ms at init-vel 0.92 / gravity 0.06); the perform phase (flight progress > 0.7) starts at ~1250 ms."}
    {:skill-id :railgun :id :qte.coin-active-threshold :path "qte.coin-active-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.6 :comment "Railgun coin QTE progress threshold at which the window becomes active."}
    {:skill-id :railgun :id :qte.coin-perform-threshold :path "qte.coin-perform-threshold" :section-suffix "qte" :type :double :min 0.0 :max 1.0 :default 0.7 :comment "Railgun coin QTE progress value that must be strictly exceeded to fire immediately."}
    {:skill-id :railgun :id :charge.item-charge-ticks :path "charge.item-charge-ticks" :section-suffix "charge" :type :int :min 1 :default 20 :comment "Ticks required for the iron-item charge fallback path."}

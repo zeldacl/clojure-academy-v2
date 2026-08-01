@@ -119,9 +119,12 @@
         (is (= :performed (get-in (ctx/get-context "ctx-tick") [:skill-state :mode])))))))
 
 (deftest coin-progress-threshold-status-test
+  ;; perform threshold is clamped to ≤ the active threshold (the gold zone IS
+  ;; the fire zone — the display curve leads the server coin by ~1 spawn tick,
+  ;; so a strict 0.7 boundary made the QTE miss at the displayed 70-80 %).
   (let [below (#'railgun/qte-status 0.59)
         active (#'railgun/qte-status 0.6)
-        edge (#'railgun/qte-status 0.7)
+        edge (#'railgun/qte-status 0.61)
         perform (#'railgun/qte-status 0.71)]
     (is (true? (:has-window? below)))
     (is (false? (:active? below)))
@@ -131,7 +134,7 @@
     (is (false? (:perform? active)))
 
     (is (true? (:active? edge)))
-    (is (false? (:perform? edge)))
+    (is (true? (:perform? edge)))
 
     (is (true? (:active? perform)))
     (is (true? (:perform? perform)))))

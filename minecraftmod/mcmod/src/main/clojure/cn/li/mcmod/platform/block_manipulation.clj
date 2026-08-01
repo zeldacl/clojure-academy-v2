@@ -1,6 +1,31 @@
 (ns cn.li.mcmod.platform.block-manipulation
   (:require [cn.li.mcmod.framework :as fw]))
 
+;; Ability-internal breaking exemption: while the ability runtime is activated
+;; (V mode), the platform cancels player block-break events (the "ability
+;; mode" interaction lock). The beam/groundshock permission checks post
+;; synthetic BreakEvents of their own, which that lock then cancels — so
+;; ability breaking must mark itself and have the lock skip it.
+(def ^:private ^ThreadLocal internal-break-flag (ThreadLocal.))
+
+(defn with-internal-break!
+  "Run thunk with the ability-internal breaking flag set; the runtime-active
+  interaction lock (event-handlers/runtime-active-event?) skips events raised
+  while it is set."
+  [thunk]
+  (let [old (.get internal-break-flag)]
+    (.set internal-break-flag Boolean/TRUE)
+    (try
+      (thunk)
+      (finally
+        (if (nil? old)
+          (.remove internal-break-flag)
+          (.set internal-break-flag old))))))
+
+(defn internal-break?
+  []
+  (boolean (.get internal-break-flag)))
+
 (defn available?
   []
   (boolean (get-in @(fw/fw-atom) [:platform :block-manipulation])))
@@ -33,10 +58,12 @@
 (defn break-block!
   ([player-id world-id x y z drop?]
    (when (destroy-allowed?)
-     (call :break-block! player-id world-id x y z drop?)))
+     (with-internal-break!
+       (fn [] (call :break-block! player-id world-id x y z drop?)))))
   ([player-id world-id x y z drop? fortune-level]
    (when (destroy-allowed?)
-     (call :break-block! player-id world-id x y z drop? fortune-level))))
+     (with-internal-break!
+       (fn [] (call :break-block! player-id world-id x y z drop? fortune-level))))))
 
 (defn set-block!
   [world-id x y z block-id]
@@ -56,7 +83,8 @@
 
 (defn can-break-block?
   [player-id world-id x y z]
-  (call :can-break-block? player-id world-id x y z))
+  (with-internal-break!
+    (fn [] (call :can-break-block? player-id world-id x y z))))
 
 (defn requires-high-tier-tool?
   [world-id x y z]

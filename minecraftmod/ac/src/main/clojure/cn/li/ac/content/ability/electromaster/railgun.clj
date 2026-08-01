@@ -36,7 +36,14 @@
   #{"minecraft:iron_ingot" "minecraft:iron_block"})
 
 (defn- coin-active-threshold [] (cfg-double :qte.coin-active-threshold))
-(defn- coin-perform-threshold [] (cfg-double :qte.coin-perform-threshold))
+(defn- coin-perform-threshold
+  "Fire threshold, clamped to ≤ the active threshold: the client ring's gold
+  zone IS the fire zone. The display curve leads the server coin's real
+  progress by ~1 spawn tick (~50 ms), so a strict 0.7 boundary made presses
+  at the displayed 70-80 % land below it — unstable. (Also self-heals any
+  persisted qte.coin-perform-threshold above the active threshold.)"
+  []
+  (min (cfg-double :qte.coin-perform-threshold) (coin-active-threshold)))
 (defn- item-charge-ticks [] (cfg-int :charge.item-charge-ticks))
 (defn- reflection-distance [] (cfg-double :reflection.distance))
 (defn- reflection-damage [] (cfg-double :reflection.damage))
@@ -253,6 +260,25 @@
 ;; Main beam shot
 ;; ---------------------------------------------------------------------------
 
+(defn- hand-muzzle-pos
+  "First-person railgun muzzle at the caster's hand, not the eye.
+
+  Upstream EntityRailgunFX spawns at eye height, but its first-person solid
+  look relies on the RendererRayCylinder paraboloid head; the port's closest
+  equivalent is a hand start (like current-charging's hand-center beam): the
+  camera leaves the beam axis, so the flat halo billboard and the tube ray
+  are both visible and read as a solid rod instead of an on-axis hollow pipe.
+  Hand ≈ eye + forward·0.35 + right·0.3 − up·0.15."
+  [eye-pos look-vec]
+  (let [lx (double (or (:x look-vec) 0.0))
+        ly (double (or (:y look-vec) 0.0))
+        lz (double (or (:z look-vec) 1.0))
+        dir (geom/vnorm {:x lx :y ly :z lz})
+        [right up] (geom/orthonormal-basis dir)]
+    (geom/v+ (geom/v+ (geom/v+ eye-pos (geom/v* dir 0.35))
+                      (geom/v* right 0.3))
+             (geom/v* up -0.15))))
+
 (defn- perform-main-shot!
   "Fires the railgun beam. Returns :beam-result map (or {:performed? false})."
   [player-id ctx-id exp]
@@ -263,7 +289,8 @@
                     (raycast/player-look-vector player-id))]
     (if-not look-vec
       {:performed? false}
-      (let [damage   (cfg-lerp :beam.damage exp)
+      (let [muzzle (hand-muzzle-pos eye look-vec)
+            damage   (cfg-lerp :beam.damage exp)
             reflection (vec-reflect/build-reflection-callbacks
                          {:ctx-id ctx-id
                           :reflect-shot-fn perform-reflection-shot!})
@@ -271,7 +298,7 @@
                     (merge {:player-id       player-id
                             :ctx-id          ctx-id
                             :world-id        world-id
-                            :eye-pos         eye
+                            :eye-pos         muzzle
                             :trace-pos       trace-pos
                             :look-dir        look-vec}
                            reflection)                    {:radius          (cfg-double :beam.radius)

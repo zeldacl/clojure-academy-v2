@@ -329,8 +329,10 @@
   [camera-pos beam style]
   (let [templates (ensure-templates)
         {:keys [start end ttl max-ttl]} beam
-        ;; EntityRailgunFX clears its arc templates at age 30 ticks.
-        alive? (> ttl (- max-ttl 30))
+        ;; Upstream EntityRailgunFX clears its arc templates at age 30 ticks —
+        ;; the port keeps them for the beam's full life so the lightning
+        ;; follows the ray instead of vanishing while the beam continues.
+        alive? (pos? (long (or ttl 0)))
         num-templates (count templates)
         beam-length (v-length (v- end start))]
     (when (and alive? (seq templates) (> beam-length 1.0e-5))

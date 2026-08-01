@@ -226,7 +226,11 @@
     (dsl/glow-line {:id (preset-box-id idx "glow") :x 0 :y 0 :visible? false})))
 
 (defn- coin-dot-template []
-  (dsl/box {:id :dot :w 6 :h 6 :fill 0x80FFD700}))
+  ;; Round soft glow sprite instead of a square box — 36 of them sweep a
+  ;; smooth golden arc around the ring instead of reading as clock ticks.
+  (dsl/image {:id :dot :w 6 :h 6
+              :src (modid/asset-path "textures" "effects/glow_circle.png")
+              :alpha 0.0}))
 
 (defn- vm-wave-template []
   (dsl/image {:id :wave :w 16 :h 16 :src (modid/asset-path "textures" "effects/glow_circle.png") :alpha 0.0}))
@@ -815,7 +819,14 @@
               (update-vm-wave-item! r item arc))))))))
 
 (defn- update-coin-qte-dot! [r item dot]
-  (set-box-node-at! r (ui/item-node item :dot) (:x dot) (:y dot) (:w dot) (:h dot) (:color dot)))
+  (let [^INode img (ui/item-node item :dot)]
+    (.setX img (double (:x dot)))
+    (.setY img (double (:y dot)))
+    (.setW img (double (:w dot)))
+    (.setH img (double (:h dot)))
+    (ui/set-node-prop! r img :tint (or (:tint dot) 0xFFFFD700))
+    (.setDSlot img 0 (double (or (:alpha dot) 0.0)))
+    (.setFlag img node/FLAG-RENDER-DIRTY)))
 
 (defn- update-coin-qte-layer! [r snapshot]
   (if-let [qte (:coin-qte snapshot)]

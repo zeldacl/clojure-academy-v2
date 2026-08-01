@@ -15,19 +15,24 @@
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
             [cn.li.ac.tutorial.client.notification :as tutorial-notification]
-            [cn.li.mcmod.client.platform-bridge :as bridge])
+            [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.hooks.core :as runtime-hooks])
   (:import [java.util ArrayList HashMap]))
 
 (def ^:private vm-wave-glow (modid/asset-path "textures" "effects/glow_circle.png"))
-(def ^:private coin-dot-count 12)
+(def ^:private coin-dot-glow vm-wave-glow)
+(def ^:private coin-dot-count 36)
 
 (defn- owner-key [player-uuid]
   (read-model/owner-key {:player-uuid player-uuid} nil))
 
 (defn- body-intensify-charge-state
   [player-uuid]
-  (or (bridge/call-adapter :client-visual-state :ac/body-intensify-charge
-                           {:player-uuid player-uuid})
+  ;; AC adapter hooks live in hooks-core, not the platform bridge — the
+  ;; bridge has no :client-visual-state op, so call-adapter silently returned
+  ;; nil and this layer never rendered.
+  (or (runtime-hooks/client-visual-state :ac/body-intensify-charge
+                                         {:player-uuid player-uuid})
       {:active? false :charge-ticks 0 :charge-ratio 0.0}))
 
 (defonce ^:private ^HashMap vm-waves-by-owner (HashMap.))
@@ -215,8 +220,9 @@
   (skill-config/tunable-double :railgun :qte.coin-active-threshold))
 
 (defn- coin-qte-visual-state [player-uuid now-ms]
-  (or (bridge/call-adapter :client-visual-state :ac/charge-coin
-                           {:player-uuid player-uuid :now-ms now-ms})
+  ;; Same as body-intensify-charge-state: hooks-core adapter, not the bridge.
+  (or (runtime-hooks/client-visual-state :ac/charge-coin
+                                         {:player-uuid player-uuid :now-ms now-ms})
       {:active? false :coin-active? false :coin-progress 0.0}))
 
 (defn- build-charging-layer [player-uuid _screen-w _screen-h now-ms]
@@ -241,13 +247,10 @@
             progress (double (:coin-progress coin-state))
             coin-active? (boolean (:coin-active? coin-state))
             threshold (double (railgun-coin-active-threshold))
-            ring-radius 24
-            dot-size 3
-            window-color (if coin-active?
-                           {:r 255 :g 215 :b 0 :a 220}
-                           {:r 180 :g 150 :b 50 :a 160})
-            threshold-color {:r 255 :g 220 :b 80 :a 240}
-            bg-color {:r 20 :g 18 :b 10 :a 100}
+            ring-radius 34
+            dot-size 4
+            threshold-color {:r 255 :g 235 :b 120 :a 255}
+            bg-color {:r 20 :g 18 :b 10 :a 150}
             dots (for [i (range coin-dot-count)
                        :let [angle (* 2.0 Math/PI (/ i coin-dot-count))
                              dot-active? (< (/ i coin-dot-count) progress)
@@ -257,13 +260,15 @@
                     :y (+ cy dy (- dot-size))
                     :w (* 2 dot-size)
                     :h (* 2 dot-size)
-                    :color (if dot-active?
-                             (update window-color :a #(int (* % (if coin-active? 1.0 0.6))))
-                             (assoc window-color :a 40))})
+                    :src coin-dot-glow
+                    :tint (if coin-active?
+                            (if dot-active? [255 215 0] [255 230 150])
+                            (if dot-active? [230 190 70] [180 150 60]))
+                    :alpha (if dot-active? 1.0 0.22)})
             threshold-angle (* 2.0 Math/PI threshold)
             tx (int (* ring-radius (Math/cos threshold-angle)))
             ty (int (* ring-radius (Math/sin threshold-angle)))
-            marker-size 2]
+            marker-size 3]
         {:cx cx :cy cy
          :bg-disc {:x (- cx ring-radius) :y (- cy ring-radius)
                    :w (* 2 ring-radius) :h (* 2 ring-radius) :color bg-color}
@@ -274,7 +279,7 @@
                     :text (str (int (* 100.0 progress)) "%")
                     :color (if coin-active?
                              {:r 255 :g 215 :b 0 :a 255}
-                             {:r 180 :g 150 :b 50 :a 200})}}))))
+                             {:r 230 :g 190 :b 70 :a 230})}}))))
 
 (defn- spawn-vm-wave-circle [screen-w screen-h now-ms]
   (let [cx (/ (double screen-w) 2.0)

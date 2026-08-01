@@ -389,13 +389,46 @@
 (defn- railgun-coin-window-ms []
   (skill-config/tunable-int :railgun :qte.coin-window-ms))
 
+(def ^:private coin-flight-init-vel 0.92)
+(def ^:private coin-flight-gravity 0.06)
+(def ^:private coin-flight-end-ms
+  ;; Full flight back to launch height: t = 2·v0/g ticks → ms.
+  (* 50.0 (/ (* 2.0 coin-flight-init-vel) coin-flight-gravity)))
+
+(defn- coin-flight-progress
+  "Analytic port of upstream EntityCoinThrowing#getProgress for the port's
+  coin (vertical-ballistic, init-vel 0.92 / gravity 0.06, entities/all.clj
+  entity_coin_throwing :hook-params). Rising half 0→0.5 to the apex
+  (t = v0/g ≈ 767 ms), falling half 0.5→1.0 back to launch height
+  (t = 2·v0/g ≈ 1533 ms). Mirrors the server-side judge
+  (railgun.clj read-coin-qte-status) so the client window and the fire check
+  share one clock — a linear time window expired before the perform phase
+  (progress > 0.7 ≈ 1.25 s) ever started."
+  [elapsed-ms]
+  (let [v0 (double coin-flight-init-vel)
+        g  (double coin-flight-gravity)
+        apex-ms (* 50.0 (/ v0 g))
+        t (double (max 0.0 elapsed-ms))]
+    (if (<= t apex-ms)
+      (* 0.5 (/ t apex-ms))
+      (let [fall-ratio (/ (- t apex-ms) apex-ms)]
+        (min 1.0 (+ 0.5 (* 0.5 fall-ratio fall-ratio)))))))
+
 (defn- notify-charge-coin-throw!
-  [player-uuid now-ms]
-  (.put charge-coin-state
-        (client-ui-owner-key player-uuid)
-        {:start-ms (long now-ms)
-         :window-ms (max 1 (long (railgun-coin-window-ms)))})
-  nil)
+  [player-uuid payload-now-ms]
+  ;; Window timestamps use GAME time (the item handler's :now-ms = ticks×50 +
+  ;; partial tick, matching the coin entity's tick-driven flight and the
+  ;; server-side motion-progress judge). The overlay's per-frame now-ms is
+  ;; wall clock, so charge-coin-visual-state converts it to game time via
+  ;; client-bridge/game-time-ms; using wall time here made the displayed
+  ;; progress drift from the coin's real flight and the QTE miss at the
+  ;; perform boundary.
+  (let [window-ms (max 1 (long (railgun-coin-window-ms)))]
+    (.put charge-coin-state
+          (client-ui-owner-key player-uuid)
+          {:start-ms (long (or payload-now-ms (client-bridge/game-time-ms)))
+           :window-ms window-ms})
+    nil))
 
 (defn- charge-coin-visual-state
   [player-uuid now-ms]
@@ -421,11 +454,30 @@
             ;; now-ms is required to compute the window; paths without a clock
             ;; (e.g. :client-slot-visual-state) degrade to the inactive branch.
             has-window? (and now-ms start-ms window-ms)
-            elapsed (if has-window? (- (long now-ms) (long start-ms)) 0)
+            ;; The overlay passes wall-clock now-ms, but the window is
+            ;; game-time (start-ms from the item handler) and the coin's
+            ;; flight is tick-driven — compute the elapsed on the game clock
+            ;; (sub-tick precision via partial ticks) so the displayed
+            ;; progress tracks the server-side motion-progress judge.
+            elapsed (if has-window?
+                      (- (long (or (try (client-bridge/game-time-ms)
+                                        (catch Exception _ nil))
+                                   now-ms))
+                         (long start-ms))
+                      0)
+            ;; The window must stay open until the coin's perform phase ends —
+            ;; a persisted qte.coin-window-ms shorter than the flight (e.g. the
+            ;; old 1000 ms default) would close the window before progress 0.7
+            ;; (≈1250 ms) ever arrived and made the QTE unfireable. Floor the
+            ;; limit at the flight time; the config only ever extends it.
+            window-limit (if has-window?
+                           (max (long (Math/ceil coin-flight-end-ms))
+                                (max 1 (long window-ms)))
+                           1)
             progress (if has-window?
-                       (/ (double (max 0 elapsed)) (double (max 1 (long window-ms))))
+                       (coin-flight-progress (max 0 (min elapsed window-limit)))
                        0.0)
-            active-window? (and has-window? (<= progress 1.0))
+            active-window? (and has-window? (<= elapsed window-limit))
             ratio (max 0.0 (min 1.0 progress))
             coin-active? (and active-window? (>= ratio (railgun-coin-active-threshold)))]
         (when (and has-window? (not active-window?))

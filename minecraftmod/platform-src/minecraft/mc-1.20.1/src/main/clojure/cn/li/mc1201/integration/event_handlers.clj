@@ -3,7 +3,8 @@
   
   Platform-specific dispatchers and handlers are passed as function parameters
   to enable both Forge and Fabric to use identical core event processing logic."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.platform.block-manipulation :as block-manip]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.query :as bquery]
             [cn.li.mc1201.integration.event-feedback :as event-feedback]
             [cn.li.mc1201.integration.event-helpers-core :as event-helpers])
@@ -24,13 +25,14 @@
 (defn runtime-active-event?
   [event-data]
   (boolean
-    (when-let [player (:player event-data)]
-      (when (instance? Player player)
-        (try
-          (event-helpers/runtime-activated? player)
-          (catch Throwable t
-            (log/debug "Runtime active check skipped:" (.getMessage t))
-            false))))))
+    (and (not (block-manip/internal-break?))
+         (when-let [player (:player event-data)]
+           (when (instance? Player player)
+             (try
+               (event-helpers/runtime-activated? player)
+               (catch Throwable t
+                 (log/debug "Runtime active check skipped:" (.getMessage t))
+                 false)))))))
 
 (defn- identify-block-id
   [block]

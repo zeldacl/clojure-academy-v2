@@ -21,12 +21,14 @@
     (+ shrink wiggle)))
 
 (def ^:private railgun-beam-style
-  {:width       (fn [beam life] (* 0.13 (width-factor beam life)))
-   :core-width  (fn [beam life] (* 0.09 (width-factor beam life)))
+  ;; Flat billboard widths are apparent width (viewed at an angle), so they
+  ;; read thinner than upstream's cylinders — beefed up to stay visible.
+  {:width       (fn [beam life] (* 0.45 (width-factor beam life)))
+   :core-width  (fn [beam life] (* 0.28 (width-factor beam life)))
    :outer-rgb   {:r 236 :g 170 :b 93}
-   :outer-alpha (fn [_ life] (* 60.0 (fade-out-factor life)))
+   :outer-alpha (fn [_ life] (* 90.0 (fade-out-factor life)))
    :inner-rgb   {:r 241 :g 240 :b 222}
-   :inner-alpha (fn [_ life] (* 200.0 (fade-out-factor life)))
+   :inner-alpha (fn [_ life] (* 230.0 (fade-out-factor life)))
    ;; Retain the port's enhanced cyan center highlight in addition to the
    ;; original inner/outer cylinders.
    :line-rgb    {:r 165 :g 230 :b 255}
@@ -129,13 +131,6 @@
                               [owner-key (assoc st :ttl ttl)]))))
                   by-owner))))))
 
-(def ^:private glow-start-texture
-  (modid/asset-path "textures" "effects/railgun/blend_in.png"))
-(def ^:private glow-tile-texture
-  (modid/asset-path "textures" "effects/railgun/tile.png"))
-(def ^:private glow-end-texture
-  (modid/asset-path "textures" "effects/railgun/blend_out.png"))
-
 (defn- visible-beam [beam]
   ;; EntityRayBase grows to full length over the first 150 ms.
   (let [age (- (double (:max-ttl beam)) (double (:ttl beam)))
@@ -144,62 +139,63 @@
     (assoc beam :end
       (vec3/v+ start (vec3/v* (vec3/v- (:end beam) start) blend-in)))))
 
-(defn- glow-quad [texture start end right color]
-  (ru/quad-op texture
-    (vec3/v- start right)
-    (vec3/v- end right)
-    (vec3/v+ end right)
-    (vec3/v+ start right)
-    color))
+(def ^:private glow-halo-texture
+  (modid/asset-path "textures" "effects/glow_circle.png"))
 
-(defn- railgun-glow-ops [^V3 camera-pos beam]
+(defn- railgun-glow-ops [^V3 cam-pos beam]
+  ;; Wide flat halo (upstream glow width 1.1). The beam starts at the caster's
+  ;; hand (hand-muzzle-pos in railgun.clj), so the camera is off the beam axis
+  ;; and the billboard is visible in first person too — an eye-start beam sat
+  ;; exactly on the axis (edge-on billboard / camera-inside-tube).
   (let [start (:start beam)
         end (:end beam)
-        delta (vec3/v- end start)
-        length (vec3/vlen delta)]
-    (when (> length 1.0e-5)
-      (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
-            dir (vec3/vnorm delta)
-            glow-start (vec3/v+ start (vec3/v* dir -0.3))
-            glow-end (vec3/v+ end (vec3/v* dir 0.3))
-            total-length (vec3/vlen (vec3/v- glow-end glow-start))
-            cap-length (min 1.1 (/ total-length 3.0))
-            cap-start-end (vec3/v+ glow-start (vec3/v* dir cap-length))
-            cap-end-start (vec3/v- glow-end (vec3/v* dir cap-length))
-            seed (double (or (:wiggle-seed beam) 0.0))
-            glow-wiggle (+ 0.9 (* 0.1
-                                  (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
-            half-width (* 1.1 (width-factor beam life) glow-wiggle)
-            right (vec3/v* (ru/beam-right-axis glow-start glow-end camera-pos)
-                           half-width)
-            alpha (int (* 255.0
-                          (fade-out-factor life)
-                          (fade-out-factor life)
-                          glow-wiggle))
-            color {:r 255 :g 255 :b 255 :a alpha}]
-        [(glow-quad glow-start-texture glow-start cap-start-end right color)
-         (glow-quad glow-tile-texture cap-start-end cap-end-start right color)
-         (glow-quad glow-end-texture cap-end-start glow-end right color)]))))
+        dir (vec3/vnorm (vec3/v- end start))
+        life (/ (double (:ttl beam)) (double (:max-ttl beam)))
+        fade (fade-out-factor life)
+        seed (double (or (:wiggle-seed beam) 0.0))
+        glow-wiggle (+ 0.9 (* 0.1
+                              (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
+        half-width (* 1.5 (width-factor beam life) glow-wiggle)
+        right (vec3/v* (ru/beam-right-axis start end cam-pos) half-width)
+        gs (vec3/v+ start (vec3/v* dir -0.3))
+        ge (vec3/v+ end (vec3/v* dir 0.3))
+        alpha (int (* 170.0 fade fade glow-wiggle))
+        color {:r 255 :g 255 :b 255 :a alpha}]
+    [(ru/quad-op glow-halo-texture
+                 (vec3/v- gs right) (vec3/v- ge right)
+                 (vec3/v+ ge right) (vec3/v+ gs right)
+                 color)]))
 
-(defn- impact-ring-ops [^V3 end ttl max-ttl]
-  ;; Enhanced port effect: expanding cyan ring at the shot endpoint. It is
-  ;; deliberately additive to the original beam visuals, not a gameplay hit
-  ;; indicator, so reflected and unobstructed shots can render it as well.
+(defn- railgun-beam-ops [^V3 cam-pos beam]
+  ;; Flat billboard ray (billboard-beam-ops). The beam starts at the caster's
+  ;; hand (hand-muzzle-pos in railgun.clj), so the camera is off the beam axis
+  ;; and the billboard faces it — a tube around the axis read as a transparent
+  ;; hollow pipe in first person, a flat beam reads solid.
+  (fx-beam/fading-beam-ops cam-pos beam railgun-beam-style))
+
+(defn- impact-ring-ops [^V3 cam-pos ^V3 end ttl max-ttl]
+  ;; Enhanced port effect: expanding cyan ring at the shot endpoint, oriented
+  ;; to face the camera — the beam-perpendicular ring is edge-on from the
+  ;; caster's first-person view. Deliberately additive to the original beam
+  ;; visuals, not a gameplay hit indicator.
   (let [life (/ (double ttl) (double (max 1 max-ttl)))
         radius (+ 0.12 (* 0.22 (- 1.0 life)))
         color (ru/with-alpha {:r 188 :g 252 :b 238} (+ 20 (* 160 life)))
         segments 12
-        ex (.-x end) ey (.-y end) ez (.-z end)]
+        to-cam (vec3/vnorm (vec3/v- cam-pos end))
+        candidate (if (< (Math/abs (.-y ^V3 to-cam)) 0.9) vec3/unit-y vec3/unit-x)
+        right (vec3/vnorm (vec3/vcross candidate to-cam))
+        up (vec3/vnorm (vec3/vcross to-cam right))]
     (vec
       (for [idx (range segments)
             :let [t0 (/ (* 2.0 Math/PI idx) segments)
                   t1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                  p0 (vec3/v3 (+ ex (* radius (Math/cos t0)))
-                              ey
-                              (+ ez (* radius (Math/sin t0))))
-                  p1 (vec3/v3 (+ ex (* radius (Math/cos t1)))
-                              ey
-                              (+ ez (* radius (Math/sin t1))))]]
+                  p0 (vec3/v+ end
+                               (vec3/v+ (vec3/v* right (* radius (Math/cos t0)))
+                                        (vec3/v* up (* radius (Math/sin t0)))))
+                  p1 (vec3/v+ end
+                               (vec3/v+ (vec3/v* right (* radius (Math/cos t1)))
+                                        (vec3/v* up (* radius (Math/sin t1)))))]]
         (ru/line-op p0 p1 color)))))
 
 (defn- charge-hand-ops [^V3 hand-center charge-state]
@@ -245,11 +241,11 @@
                               (concat
                               ;; Arc/lightning branches
                               (arc-fx/railgun-arc-ops cam-v beam {})
+                              ;; Wide halo + flat solid ray
                               (railgun-glow-ops cam-v visible)
-                              (fx-beam/fading-beam-ops
-                                cam-v visible railgun-beam-style)
+                              (railgun-beam-ops cam-v visible)
                               (impact-ring-ops
-                                (:end beam) (:ttl beam) (:max-ttl beam)))))
+                                cam-v (:end visible) (:ttl beam) (:max-ttl beam)))))
                           beams)
         charge-plan (if (and hand-center-pos charge-state)
                       (charge-hand-ops
