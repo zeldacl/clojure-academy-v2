@@ -161,7 +161,6 @@
   [ctx-id player-id exp]
   (let [ctx-data (ctx-skill/get-context ctx-id)
         ticks (shield-ticks ctx-data)]
-    (log/info "LS-TRACE end-shield" {:ticks ticks :exp exp})
     ;; Remove the shield entity (original shield.setDead() in s_onEnd) — the
     ;; entity life alone would either linger after a short hold or vanish
     ;; mid-hold.
@@ -227,8 +226,6 @@
             look-vec (get-player-look-vector player-id)]
         (set-shield-state-path! ctx-id [:ticks] next-ticks)
         (enforce-overload-floor! player-id ctx-data)
-        (when (zero? (mod next-ticks 20))
-          (log/info "LS-TRACE tick" {:ticks next-ticks :max-active max-active}))
         ;; Original continues the rest of s_tick after requesting termination:
         ;; per-tick exp and contact damage still happen on the timeout/failing
         ;; tick before the unified end callback settles cooldown/slowness.
@@ -242,7 +239,6 @@
           :world-id world-id
           :look-vec look-vec})
         (when (> next-ticks max-active)
-          (log/info "LS-TRACE timeout" {:ticks next-ticks :max-active max-active})
           (toggle/remove-toggle! ctx-id :light-shield)
           (light-shield-deactivate! ctx-id player-id nil exp cost-ok? 0 nil nil)
           (ctx/terminate-context! ctx-id nil))))))

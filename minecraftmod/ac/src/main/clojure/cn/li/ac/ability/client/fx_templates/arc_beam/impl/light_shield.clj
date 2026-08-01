@@ -11,7 +11,6 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
@@ -93,10 +92,6 @@
   (when hand-center-pos
     (when-let [active (some #(when (:active? %) %)
                             (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :light-shield))))]
-      (when (zero? (mod (long (or (:ticks active) 0)) 20))
-        (log/info "LS-FX-TRACE render" {:ticks (:ticks active)
-                                         :glow (:glow-half-size active)
-                                         :rings (count (:ring-segments-local active))}))
       (let [^V3 center (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
             ^V3 camera-pos (vec3/map->v3 camera-pos)
             cx (.-x center) cy (.-y center) cz (.-z center)

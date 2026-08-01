@@ -121,9 +121,6 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     private static final int BILLBOARD_CROSS_DEFAULT_G = 220;
     private static final int BILLBOARD_CROSS_DEFAULT_B = 255;
 
-    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(ScriptedEffectBillboardRenderer.class);
-    private static final java.util.Map<java.util.UUID, Integer> SHIELD_TRACE_COUNTS = new java.util.concurrent.ConcurrentHashMap<>();
-
     private static final float SHIELD_DEFAULT_SCALE = 1.8F;
     // Original RenderMdShield spins at lerpf(0.8, 2, ...) degrees PER SECOND
     // (GameTimer seconds) — a full turn takes minutes, so the shield is
@@ -155,13 +152,6 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         }
         float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float growth = Mth.clamp(age / 15.0F, 0.0F, 1.0F);
-        int renderCount = SHIELD_TRACE_COUNTS.merge(entity.getUUID(), 1, Integer::sum);
-        if (renderCount <= 2 || ((int) age) % 20 == 0) {
-            LOGGER.info("SHIELD-TRACE uuid={} render#{} age={} size={} pos=({},{},{})",
-                    entity.getUUID(), renderCount, age,
-                    SHIELD_DEFAULT_SCALE * (0.2F + 0.8F * growth),
-                    entity.getX(), entity.getY(), entity.getZ());
-        }
         float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", SHIELD_DEFAULT_SCALE))
                 * (0.2F + 0.8F * growth);
         float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
