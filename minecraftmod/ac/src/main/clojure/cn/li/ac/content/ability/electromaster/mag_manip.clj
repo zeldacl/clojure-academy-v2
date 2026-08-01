@@ -450,10 +450,10 @@
   :ctrl-id :mag-manip
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [{:keys [player-id]}]
+  :cooldown-ticks (fn [{:keys [exp]}]
                     (skill-config/lerp-int mag-manip-skill-id
                                            :cooldown.ticks
-                                           (skill-exp player-id)))
+                                           (double (or exp 0.0))))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :cost {:up {:cp cost-up-cp

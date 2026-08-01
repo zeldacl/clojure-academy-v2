@@ -285,7 +285,7 @@
                                       (cfg-lerp :cost.down.cp (skill-exp player-id)))
                           :overload (fn [{:keys [player-id]}]
                                       (cfg-lerp :cost.down.overload (skill-exp player-id)))} }
-  :cooldown-ticks (fn [{:keys [player-id]}]
-                    (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :actions        {:perform! ray-barrage-perform!}
   :prerequisites  [{:skill-id :meltdowner :min-exp 0.5}])

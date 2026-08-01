@@ -323,10 +323,9 @@
   ;; Matches original getCooldown(ct) = lerp(2*ct, ct, exp) — cooldown scales
   ;; with actual shield uptime, so this display estimate is 0 before the
   ;; shield has ever been held (ticks defaults to 0).
-  :cooldown-ticks (fn [{:keys [player-id ctx-id]}]
-                    (let [exp (skill-exp player-id)
-                          ticks (long (or (some-> ctx-id ctx-skill/get-context (get-in [:skill-state light-shield-state-key :ticks])) 0))]
-                      (toggle-cooldown-ticks ticks exp)))
+  :cooldown-ticks (fn [{:keys [exp ctx-id]}]
+                    (let [ticks (long (or (some-> ctx-id ctx-skill/get-context (get-in [:skill-state light-shield-state-key :ticks])) 0))]
+                      (toggle-cooldown-ticks ticks (double (or exp 0.0)))))
   :pattern        :toggle
   :cooldown       {:mode :manual}
   :cost           {:down {:overload (fn [{:keys [player-id]}]

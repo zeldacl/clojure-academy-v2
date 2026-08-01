@@ -348,8 +348,8 @@
   :ctrl-id :location-teleport
   :cp-consume-speed 0.0
   :overload-consume-speed 0.0
-  :cooldown-ticks (fn [player-id _skill-id _exp]
-                    (compute-cooldown (skill-exp player-id)))
+  :cooldown-ticks (fn [_player-id _skill-id exp]
+                    (compute-cooldown (double (or exp 0.0))))
   :pattern :release-cast
   :cooldown {:mode :manual}
   :actions {:down! location-teleport-on-key-down

@@ -477,9 +477,9 @@
 
   :overload-consume-speed 0.0
 
-  :cooldown-ticks (fn [player-id _skill-id _exp]
+  :cooldown-ticks (fn [_player-id _skill-id exp]
 
-                    (cooldown-ticks (skill-exp player-id)))
+                    (cooldown-ticks (double (or exp 0.0))))
 
   :pattern :release-cast
 

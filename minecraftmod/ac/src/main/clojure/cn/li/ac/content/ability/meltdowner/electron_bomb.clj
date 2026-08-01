@@ -97,8 +97,8 @@
   :ctrl-id        :electron-bomb
   :pattern        :instant
   :cooldown       {:mode :manual}
-  :cooldown-ticks (fn [{:keys [player-id]}]
-                    (cfg-lerp-int :cooldown.ticks (skill-exp player-id)))
+  :cooldown-ticks (fn [{:keys [exp]}]
+                    (cfg-lerp-int :cooldown.ticks (double (or exp 0.0))))
   :actions        {:perform! electron-bomb-perform!}
   :prerequisites  [])
 
