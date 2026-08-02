@@ -3,6 +3,7 @@
   (:require [cn.li.mc1201.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [cn.li.mc1201.client.render ModRenderTypes]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.core BlockPos]
@@ -15,6 +16,7 @@
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState]
            [net.minecraft.world.phys Vec3]
+           [org.joml Matrix4f Vector3f]
            [cn.li.mcmod.math V3]))
 
 (def ^:private full-bright-uv2 15728880)
@@ -360,13 +362,115 @@
     {:lines [] :quads {} :plasma []}
     ops))
 
+;; ---------------------------------------------------------------------------
+;; Plasma-body ray-march shader (vanilla Minecraft API only)
+;; ---------------------------------------------------------------------------
+
+(defn- map->v3
+  "Convert a {:x :y :z} map (crossing from the shared map-based level-effect
+  plan context) into a V3 for zero-allocation local math."
+  ^V3 [{:keys [x y z]}]
+  (V3. (double (or x 0.0)) (double (or y 0.0)) (double (or z 0.0))))
+
+(def ^:private ball-matrix-uniform-names
+  "Precomputed \"balls0\".. \"balls3\" uniform names — avoids 4 string
+  concatenations per frame in `set-plasma-uniforms!`. 16 balls are packed as
+  4 mat4 uniforms (one vec4 ball per column): the vanilla 1.20.1
+  ShaderInstance JSON loader only recognizes int/float/matrix uniform types."
+  (mapv (fn [i] (str "balls" i)) (range 4)))
+
+(defn- set-plasma-uniforms!
+  "Set the plasma ray-march uniforms. Ball positions are WORLD coordinates
+  transformed into camera space by the ModelView matrix — matching upstream
+  PlasmaBodyEffect's Matrix4f.transform(pos) + negated z, so the density
+  field lives in the same space as the fragment's `camspace`."
+  [^Matrix4f mat {:keys [alpha balls]}]
+  (when-let [shader (ModRenderTypes/getPlasmaBodyShader)]
+    ;; `balls` may be a lazy seq upstream — vec once so the 16x `nth` below is O(1)
+    ;; each, not O(n) per call against a non-indexed seq.
+    (let [balls-vec (vec (take 16 (or balls [])))
+          ball-count (count balls-vec)]
+      (when-let [uniform (.getUniform shader "ballCount")]
+        (.set uniform (int ball-count)))
+      (when-let [uniform (.getUniform shader "alpha")]
+        (.set uniform (float (double (or alpha 0.0)))))
+      (doseq [mat-idx (range 4)]
+        (when-let [uniform (.getUniform shader (nth ball-matrix-uniform-names mat-idx))]
+          (let [row (float-array 16)]
+            (doseq [col (range 4)]
+              (let [ball-idx (+ (* mat-idx 4) col)
+                    {:keys [x y z size]} (or (nth balls-vec ball-idx nil) {})
+                    base (* col 4)
+                    cam (doto (Vector3f. (float (double (or x 0.0)))
+                                         (float (double (or y 0.0)))
+                                         (float (double (or z 0.0))))
+                          (.mulPosition mat))]
+                (aset row base (.-x cam))
+                (aset row (inc base) (.-y cam))
+                (aset row (+ base 2) (float (- (.-z cam))))
+                (aset row (+ base 3) (float (double (or size 0.0))))))
+            ;; setMat4x4 uploads a SINGLE matrix (glUniformMatrix4fv count 1);
+            ;; set(float[]) would upload `count` matrices and corrupt the
+            ;; uniform value.
+            (.setMat4x4 uniform
+                       (aget row 0) (aget row 1) (aget row 2) (aget row 3)
+                       (aget row 4) (aget row 5) (aget row 6) (aget row 7)
+                       (aget row 8) (aget row 9) (aget row 10) (aget row 11)
+                       (aget row 12) (aget row 13) (aget row 14) (aget row 15))))))))
+
+(defn- emit-plasma-vertex! [^VertexConsumer vc mat ^V3 p]
+  (-> vc
+      (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
+      (.endVertex)))
+
+(def ^:private world-up (V3. 0.0 1.0 0.0))
+(def ^:private axis-x (V3. 1.0 0.0 0.0))
+
+(defn- emit-plasma-quad!
+  [^VertexConsumer vc mat cam-pos {:keys [center]}]
+  (let [^V3 cam (map->v3 cam-pos)
+        ^V3 center (if center (map->v3 center) cam)
+        to-cam (V3/normalize (V3/sub cam center))
+        right-raw (V3/cross world-up to-cam)
+        right (if (< (+ (Math/abs (.-x right-raw))
+                        (Math/abs (.-y right-raw))
+                        (Math/abs (.-z right-raw)))
+                     1.0e-6)
+                axis-x
+                (V3/normalize right-raw))
+        up (V3/normalize (V3/cross to-cam right))
+        ;; Fixed 20-block half-size (upstream's size=22): the quad is the
+        ;; ray-march SAMPLING WINDOW, not the ball itself — the ball renders
+        ;; inside it as a 3D density field. A ball-sized quad reads as a flat
+        ;; square instead of a floating orb.
+        half-size 20.0
+        side (V3/scale right half-size)
+        lift (V3/scale up half-size)
+        p0 (V3/add (V3/sub center side) lift)
+        p1 (V3/add (V3/add center side) lift)
+        p2 (V3/sub (V3/add center side) lift)
+        p3 (V3/sub (V3/sub center side) lift)]
+    ;; ModRenderTypes/plasmaBody is a QUADS render type — 4 vertices per
+    ;; primitive, not a triangle pair.
+    (emit-plasma-vertex! vc mat p0)
+    (emit-plasma-vertex! vc mat p1)
+    (emit-plasma-vertex! vc mat p2)
+    (emit-plasma-vertex! vc mat p3)))
+
+(defn- render-plasma-op!
+  [{:keys [^MultiBufferSource$BufferSource buffer-source mat camera-pos op]}]
+  (set-plasma-uniforms! mat op)
+  (let [rtype (ModRenderTypes/plasmaBody)
+        ^VertexConsumer plasma-vc (.getBuffer buffer-source rtype)]
+    (emit-plasma-quad! plasma-vc mat camera-pos op)
+    (.endBatch buffer-source rtype)))
+
 (defn render-level-plan!
   [{:keys [^LocalPlayer player
            ^PoseStack pose-stack
            ^MultiBufferSource$BufferSource buffer-source
            camera-pos
-           tick
-           render-plasma-op!]}]
+           tick]}]
   (let [owner (client-session/current-local-player-owner)
         ;; Skip hand-center-pos/query-fn allocation and the plan build itself
         ;; when no level effect is active (idle skill) — checked first so the
@@ -393,7 +497,7 @@
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                 (doseq [op texture-ops]
                   (emit-quad! quad-vc mat op)))))
-          (when (and render-plasma-op! (seq plasma))
+          (when (seq plasma)
             (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source
                                   :mat mat

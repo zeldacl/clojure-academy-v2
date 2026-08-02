@@ -249,8 +249,19 @@
    escape analysis can cheaply stack-allocate or aggressively reclaim it.
    Carries the live ServerPlayer so :tick! callbacks that spawn entities
    (scatter-bomb / electron-missile balls) get a player ref — the network
-   key-tick payload doesn't flow here, this tick is server-driven."
+   key-tick payload doesn't flow here, this tick is server-driven.
+
+   Server-driven ticks REFRESH the keepalive: the client only sends
+   keepalives while a key is held, but post-release skills (plasma-cannon's
+   flight) keep the context alive and ticked without any held key — without
+   this refresh the keepalive timeout would terminate the context mid-flight."
   [owner callback player {:keys [id skill-id]}]
+  (when-let [session-id (owner/store-session-id owner)]
+    (command-rt/run-command-in-session!
+     session-id
+     (str (:player-uuid owner))
+     {:command :touch-context-keepalive
+      :ctx-id id}))
   (ctx-state/handle-key-tick! owner id {:ctx-id id
                                         :skill-id skill-id
                                         :player player}

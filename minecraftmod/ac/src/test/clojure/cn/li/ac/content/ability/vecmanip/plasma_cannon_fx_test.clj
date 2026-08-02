@@ -1,11 +1,17 @@
 (ns cn.li.ac.content.ability.vecmanip.plasma-cannon-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            ;; arc-beam MUST precede the impl (AOT classes don't self-require)
+            ;; so the [:plasma-cannon :level] defmethods are registered before
+            ;; the stateful tests enqueue — otherwise effect-initial-state
+            ;; falls through to the :default arc state.
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.plasma-cannon]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as pcfx]))
+            [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as pcfx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
   (try
@@ -86,7 +92,8 @@
 (deftest tick-build-plan-and-perform-effects-test
   (let [
         sound-calls* (atom [])
-        particle-calls* (atom [])]
+        particle-calls* (atom [])
+        bridge-calls* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-test"})
                   client-sounds/queue-sound-effect! (fn [& args]
                                                       (swap! sound-calls* conj args)
@@ -94,6 +101,9 @@
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particle-calls* conj args)
                                                             nil)
+                  client-bridge/run-client-effect! (fn [& args]
+                                                     (swap! bridge-calls* conj args)
+                                                     nil)
                   rand (fn [] 0.5)]
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}})
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :update
@@ -107,13 +117,20 @@
         (level-effects/update-effect-state! :plasma-cannon
           (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
       (let [plan (arc-beam/effect-build-plan :plasma-cannon nil nil 0)]
-        (is (= 3 (count @sound-calls*)))
+        ;; charge loop is a FollowEntitySound started once via the bridge —
+        ;; only the fully-charged cue goes through the sound queue
+        (is (= [[:mcmod/start-loop-sound-at-player
+                 {:key "plasma-cannon/ctx-main" :sound-id "my_mod:vecmanip.plasma_cannon"
+                  :owner-uuid "" :volume 0.5 :pitch 1.0}]]
+               @bridge-calls*))
+        (is (= 1 (count @sound-calls*)))
         (is (= 10 (count @particle-calls*)))
         (is (= 1 (count (:ops plan))))
         (is (= 10 (get-in (pcfx/fx-snapshot)
                           [:effect-state [:ctx "ctx-main"] :ticks]))))
       (reset! sound-calls* [])
       (reset! particle-calls* [])
+      (reset! bridge-calls* [])
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-main" :plasma-cannon/fx-update {:mode :perform :pos {:x 2.0 :y 65.0 :z 2.0}})
       (is (= 1 (count @sound-calls*)))
       (is (= 13 (count @particle-calls*))))))

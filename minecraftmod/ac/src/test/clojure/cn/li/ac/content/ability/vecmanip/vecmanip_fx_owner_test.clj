@@ -6,7 +6,8 @@
             [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as plasma-cannon-fx]
             [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as storm-wing-fx]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx :as vec-accel-fx]
-            [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]))
+            [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vec-deviation-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
   (vec-deviation-fx/init!)
@@ -93,7 +94,8 @@
 (deftest plasma-cannon-keeps-charge-state-per-owner-test
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-owner"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)
-                client-particles/queue-particle-effect! (fn [& _] nil)]
+                client-particles/queue-particle-effect! (fn [& _] nil)
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (dispatch! :plasma-cannon (event "ctx-a" :plasma-cannon/fx-start
                                     {:mode :start :charge-pos {:x 1.0 :y 64.0 :z 1.0}}))
     (dispatch! :plasma-cannon (event "ctx-b" :plasma-cannon/fx-start

@@ -30,8 +30,7 @@
               :pose-stack pose-stack
               :buffer-source buffer-source
               :camera-pos cam-pos
-              :tick tick
-              :render-plasma-op! nil})))))
+              :tick tick})))))
     (catch Exception e
       (log/error "Fabric level effect render failed" e))))
 

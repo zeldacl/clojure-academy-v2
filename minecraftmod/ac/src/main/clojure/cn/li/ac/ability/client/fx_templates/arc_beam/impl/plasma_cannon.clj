@@ -11,10 +11,12 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]))
 
 (def ^:private loop-sound (modid/namespaced-path "vecmanip.plasma_cannon"))
 (def ^:private charged-sound (modid/namespaced-path "vecmanip.plasma_cannon_t"))
+(defn- loop-sound-key [ctx-id] (str "plasma-cannon/" ctx-id))
 
 
 
@@ -39,8 +41,15 @@
 		(case mode
 			:start
 			(do
-				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-					{:type :sound :sound-id loop-sound :volume 0.5 :pitch 1.0})
+				;; Original c_begin: FollowEntitySound charge loop attached to
+				;; the caster until the context ends — not a re-queued one-shot.
+				(client-bridge/run-client-effect!
+				 :mcmod/start-loop-sound-at-player
+				 {:key (loop-sound-key ctx-id)
+				  :sound-id loop-sound
+				  :owner-uuid (str source-player-id)
+				  :volume 0.5
+				  :pitch 1.0})
 				(assoc-in store* [:effect-state owner-key*]
 									(merge base-meta
 												 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
@@ -59,7 +68,12 @@
 													 :flight-ticks (long (or flight-ticks 0))
 													 :state (or state :charging)
 													 :charge-pos (or charge-pos (get-in store* [:effect-state owner-key* :charge-pos]))
-													 :destination (or destination (get-in store* [:effect-state owner-key* :destination]))))]
+													 :destination (or destination (get-in store* [:effect-state owner-key* :destination]))
+ ;; Server sync landed: keep the previous authoritative position so the
+ ;; renderer can interpolate BETWEEN the last two syncs (standard two-sample
+ ;; interpolation) — continuous glide, no jump when a new sync arrives.
+ :prev-charge-pos (get-in store* [:effect-state owner-key* :charge-pos])
+ :sync-ms (System/currentTimeMillis)))]
 					(when (boolean fully-charged?)
 						(client-sounds/queue-sound-effect! (:queue-owner base-meta)
 							{:type :sound :sound-id charged-sound :volume 0.5 :pitch 1.0}))
@@ -85,8 +99,13 @@
 							 :volume 3.0 :pitch 0.8 :x tx :y ty :z tz})))
 				store*)
 			:end
-			(assoc-in store* [:effect-state owner-key*]
-									(merge base-meta {:active? false :performed? (boolean performed?)}))
+			(do
+				;; Original c_terminate: sound.stop()
+				(client-bridge/run-client-effect!
+				 :mcmod/stop-loop-sound
+				 {:key (loop-sound-key ctx-id)})
+				(assoc-in store* [:effect-state owner-key*]
+									(merge base-meta {:active? false :performed? (boolean performed?)})))
 			store*)))
 
 (defn- tick-state!
@@ -99,9 +118,8 @@
 						(if-not (:active? st)
 							acc
 							(let [ticks (inc (long (or (:ticks st) 0)))]
-								(when (and (pos? ticks) (zero? (mod ticks 10)))
-									(client-sounds/queue-sound-effect! (:queue-owner st)
-										{:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+								;; The charge loop is a continuous FollowEntitySound
+								;; started on :start and stopped on :end — no re-queue.
 								(let [cp (:charge-pos st)]
 									(when (and cp (= :go (:state st)))
 										(client-particles/queue-particle-effect! (:queue-owner st)
@@ -109,6 +127,14 @@
 											 :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
 											 :count 4 :speed 0.2
 											 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+								;; GO flight client-side interpolation: upstream
+								;; c_tick runs tryMove() every tick (1 block toward
+								;; the destination) so the plasma GLIDES between the
+								;; server's 5-tick syncs instead of teleporting.
+								;; GO flight interpolation happens on the RENDER path
+								;; (build-plan, per frame, wall-clock based) so the
+								;; plasma glides smoothly instead of stepping at
+								;; 20Hz — see build-plan below.
 								(assoc acc owner-key (assoc st :ticks ticks)))))
 					{}
 					states)))))
@@ -159,11 +185,35 @@
 				:alpha (double alpha)
 				:balls balls}])))
 
+(defn- rendered-charge-pos
+	"Standard two-sample interpolation between the last two server syncs
+	(prev-charge-pos -> charge-pos over the 250ms sync interval). The render
+	position always lives BETWEEN two authoritative syncs, so it is continuous
+	when a new sync lands — the earlier wall-clock extrapolation jumped back
+	to the fresh sync position every 5 ticks, reading as a stutter."
+	[st]
+	(let [prev (:prev-charge-pos st)
+				cur (:charge-pos st)
+				sync-ms (long (or (:sync-ms st) 0))
+				now (System/currentTimeMillis)
+				t (max 0.0 (min 1.0 (/ (double (- now sync-ms)) 250.0)))]
+		(if (and prev cur (pos? (- (long now) (long sync-ms))))
+			{:x (+ (double (:x prev)) (* t (- (double (:x cur)) (double (:x prev)))))
+			 :y (+ (double (:y prev)) (* t (- (double (:y cur)) (double (:y prev)))))
+			 :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))}
+			cur)))
+
 (defn- build-plan
 	[_camera-pos _hand-center-pos _tick]
-	(let [ops (mapcat plasma-state-ops (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon))))]
+	(let [state (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)))
+				;; Render at the interpolated position without writing it back —
+				;; the state stays authoritative (server syncs only).
+				ops (mapcat (fn [st]
+												(plasma-state-ops (assoc st :charge-pos (rendered-charge-pos st))))
+										state)]
 		(when (seq ops)
 			{:ops (vec ops)})))
+
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:plasma-cannon :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:plasma-cannon :level]
@@ -173,4 +223,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :plasma-cannon [_ store owner-key]
+  (client-bridge/run-client-effect!
+   :mcmod/stop-loop-sound
+   {:key (loop-sound-key (second owner-key))})
   (update store :effect-state dissoc owner-key))

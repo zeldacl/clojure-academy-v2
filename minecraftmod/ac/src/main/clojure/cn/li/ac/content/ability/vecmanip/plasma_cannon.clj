@@ -255,7 +255,8 @@
          ctx-id
          {:topic :plasma-cannon/fx-start :mode :start}
          nil
-         {:charge-pos spawn-pos})
+         {:charge-pos spawn-pos
+          :player-id player-id})
         (fx/send-local-and-nearby!
          ctx-id
          {:topic :plasma-cannon/fx-update :mode :update}
@@ -263,7 +264,8 @@
          {:state :charging
           :charge-pos spawn-pos
           :charge-ticks 0
-          :fully-charged? false})
+          :fully-charged? false
+          :player-id player-id})
         (log/debug
          "PlasmaCannon: Charge started, need"
          charge-time
@@ -303,7 +305,8 @@
          {:charge-ticks next-ticks
           ;; Charged cue is at chargeTime.toInt; readiness uses the float.
           :fully-charged? (= next-ticks (int charge-time))
-          :release-ready? (>= next-ticks charge-time)})))))
+          :release-ready? (>= next-ticks charge-time)
+          :player-id player-id})))))
 
 (defn- finish-flight!
   [ctx-id player-id world-id destination exp explosion-count]
@@ -315,7 +318,8 @@
    ctx-id
    {:topic :plasma-cannon/fx-perform :mode :perform}
    nil
-   {:pos destination})
+   {:pos destination
+    :player-id player-id})
   (send-end-and-terminate! ctx-id true))
 
 (defn- tick-flight! [ctx-id player-id exp skill-state]
@@ -363,7 +367,8 @@
                {:topic :plasma-cannon/fx-update :mode :update}
                nil
                {:charge-pos new-pos
-                :flight-ticks next-flight}))))))))
+                :flight-ticks next-flight
+                :player-id player-id}))))))))
 
 (defn plasma-cannon-on-key-tick
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
@@ -438,7 +443,8 @@
              nil
              {:state :go
               :charge-pos (:charge-pos skill-state)
-              :destination destination})
+              :destination destination
+              :player-id player-id})
             (log/info
              "PlasmaCannon: Fired - destination"
              [(int (:x destination))
