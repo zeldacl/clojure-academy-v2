@@ -117,7 +117,13 @@
                             :y (+ (double y) (double (or eye-height 0.0)))
                             :z (double z)})
                          victims)
-        main-end (attack/fallback-end-point eye look range)
+        ;; Original getAttackData: end = result.hitVec on a hit, the
+        ;; full-range miss point otherwise — the main arcs terminate exactly
+        ;; where the crosshair's trace lands, not run through the target.
+        main-end (case hit-kind
+                   :entity impact
+                   :block impact
+                   (attack/fallback-end-point eye look range))
         effective? (boolean (or target-uuid (seq victims)))]
     (when target-uuid
       (attack-target! player-id world-id target-uuid direct-damage)

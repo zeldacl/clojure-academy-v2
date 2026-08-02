@@ -98,6 +98,7 @@
                                              {:hit-type :entity
                                               :uuid "mob-1"
                                               :x 10.0 :y 64.0 :z 10.0
+                                              :hit-x 10.2 :hit-y 65.0 :hit-z 10.2
                                               :eye-height 1.8})
                   world-effects/find-entities-in-radius (fn [& _]
                                                           [{:uuid "mob-1" :x 10.0 :y 64.0 :z 10.0 :living? true}
@@ -142,8 +143,10 @@
       (is (= ["p2" :thunder-bolt 0.005] (first @exp*)))
       (let [[_ _ payload] (first @fx*)]
         (is (= :entity (:hit-kind payload)))
-        (is (= {:x 1.0 :y 66.0 :z 21.0} (:end payload)))
-        (is (= {:x 10.0 :y 65.8 :z 10.0} (:aoe-origin payload)))
+        ;; main arcs terminate on the trace's hit point (upstream
+        ;; end = result.hitVec), same point the AOE arcs originate from
+        (is (= {:x 10.2 :y 65.0 :z 10.2} (:end payload)))
+        (is (= {:x 10.2 :y 65.0 :z 10.2} (:aoe-origin payload)))
         (is (= 1 (count (:aoe-points payload))))))))
 
 (deftest block-hit-applies-aoe-and-effective-exp-test

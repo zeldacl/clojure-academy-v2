@@ -27,11 +27,14 @@
    :z (double (or (:hit-z hit) (:z hit) 0.0))})
 
 (defn entity-impact-point
+  "The point where the trace intersects the target's bounding box (upstream
+  AttackData.point = result.hitVec). Using the entity CENTER (or center +
+  eye-height) leaves a visible gap between the ray/arc tip and the target
+  from a side view, and shifts the AOE arc origin off the hit spot."
   [hit]
-  {:x (double (or (:x hit) (:hit-x hit) 0.0))
-   :y (+ (double (or (:y hit) (:hit-y hit) 0.0))
-         (double (or (:eye-height hit) 0.0)))
-   :z (double (or (:z hit) (:hit-z hit) 0.0))})
+  {:x (double (or (:hit-x hit) (:x hit) 0.0))
+   :y (double (or (:hit-y hit) (:y hit) 0.0))
+   :z (double (or (:hit-z hit) (:z hit) 0.0))})
 
 (defn fallback-end-point
   "eye + look*range, defaulting look to +Z when the player has no look vector
