@@ -161,6 +161,26 @@
                     (rv3/v* up up-o))
             (rv3/v* right right-o))))
 
+(defn view-fix-rays
+  "Original ViewOptimize fix applied to ray endpoints: translate each ray by
+  the viewer-dependent hand offset so the ray issues from the hand, not the
+  eye. The viewer's own first-person view gets the small eye-adjacent offset,
+  everyone else (F5, remote viewers) the model-hand offset — the same pairing
+  the original's isFirstPerson() uses. Rays whose :source-player-id matches
+  the viewer match first-person; opaque rays (no :source-player-id) always
+  get the third-person offset."
+  [view-ctx rays]
+  (mapv (fn [beam]
+          (let [own? (and (:first-person? view-ctx)
+                          (= (str (:player-uuid view-ctx))
+                             (str (:source-player-id beam))))
+                offset (if own? first-person-view-offset third-person-view-offset)
+                fix (local-frame-offset (:start beam) (:end beam) offset)]
+            (-> beam
+                (update :start rv3/v+ fix)
+                (update :end rv3/v+ fix))))
+        rays))
+
 (defn- arc-item
   "Precompute the zigzag vertex path once per arc, at enqueue time."
   [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type hand-origin?]}]

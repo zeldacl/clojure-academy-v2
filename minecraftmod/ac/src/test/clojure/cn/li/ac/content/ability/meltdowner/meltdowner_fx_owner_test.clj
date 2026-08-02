@@ -103,10 +103,14 @@
     (dispatch! :mine-ray (event "ctx-b" :mine-ray/fx-progress
                               {:mode :progress :x 2 :y 64 :z 2 :progress 0.75}))
 
-    (dispatch! :ray-barrage (event "ctx-a" :ray-barrage/fx-beam
-                                 {:from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 1.0 :to-y 64.0 :to-z 0.0}))
-    (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-beam
-                                 {:from-x 0.0 :from-y 65.0 :from-z 0.0 :to-x 1.0 :to-y 65.0 :to-z 0.0}))
+    (dispatch! :ray-barrage (event "ctx-a" :ray-barrage/fx-preray
+                                 {:mode :preray :start p0 :end p1}))
+    (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-preray
+                                 {:mode :preray :start p1 :end p2}))
+    (dispatch! :ray-barrage (event "ctx-a" :ray-barrage/fx-barrage
+                                 {:mode :barrage :silbarn p0 :yaw 0.0 :pitch 0.0}))
+    (dispatch! :ray-barrage (event "ctx-b" :ray-barrage/fx-barrage
+                                 {:mode :barrage :silbarn p1 :yaw 10.0 :pitch -5.0}))
 
     (dispatch! :scatter-bomb (event "ctx-a" :scatter-bomb/fx-start {:mode :start}))
     (dispatch! :scatter-bomb (event "ctx-b" :scatter-bomb/fx-start {:mode :start}))
@@ -129,8 +133,12 @@
     (is (= 1 (count (get-in (meltdowner-fx/fx-snapshot) [:rays [:ctx "ctx-b"]]))))
     (is (= 0.25 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-a"] :progress])))
     (is (= 0.75 (get-in (mine-ray-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-b"] :progress])))
-    (is (= 1 (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-a"]]))))
-    (is (= 1 (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-b"]]))))
+    (let [a-count (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-a"]]))
+          b-count (count (get-in (ray-barrage-fx/fx-snapshot) [:beam-queue [:ctx "ctx-b"]]))]
+      ;; per-owner isolation, and the queue is NOT merged across owners even
+      ;; though both happen to hold 1 preray + a random 25~30 sub rays
+      (is (<= 26 a-count 31))
+      (is (<= 26 b-count 31)))
     (is (= 3 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :balls])))
     (is (= 5 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :balls])))))
 

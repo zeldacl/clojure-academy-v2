@@ -256,31 +256,6 @@
 ;; Build plan
 ;; ---------------------------------------------------------------------------
 
-(defn- ray-view-fix
-  "Original ViewOptimize fix for one ray, resolved against the beam's own
-  axes (arc-beam/local-frame-offset): the viewer's own first-person view
-  gets the small eye-adjacent offset, everyone else (F5, remote viewers)
-  the model-hand offset — same pairing the original's isFirstPerson() uses."
-  [view-ctx beam]
-  (let [own? (and (:first-person? view-ctx)
-                  (= (str (:player-uuid view-ctx))
-                     (str (:source-player-id beam))))
-        offset (if own? arc-beam/first-person-view-offset arc-beam/third-person-view-offset)]
-    (arc-beam/local-frame-offset (:start beam) (:end beam) offset)))
-
-(defn- view-fixed-rays
-  "Translate every live ray by its viewer-dependent fix so the beam issues
-  from the hand, not the eye — the original's ViewOptimize: the cylinders
-  AND the glow board start at the hand, which is what makes the whole ray
-  visible from the caster's own on-axis first-person camera."
-  [view-ctx rays]
-  (mapv (fn [beam]
-          (let [fix (ray-view-fix view-ctx beam)]
-            (-> beam
-                (update :start vec3/v+ fix)
-                (update :end vec3/v+ fix))))
-        rays))
-
 (defn- build-plan
   "Ray :start/:end are precomputed to V3 at enqueue time (see :perform /
   :reflect above) — a ray's endpoints never change after it's fired, so
@@ -289,7 +264,10 @@
   [camera-pos hand-center-pos _tick]
   (let [md (matching-active-state hand-center-pos)
         current-rays (all-rays)
-        fixed-rays (view-fixed-rays hand-center-pos current-rays)
+        ;; Original ViewOptimize: translate rays to the hand so the tube AND
+        ;; glow board issue from off the caster's view axis and stay visible
+        ;; in first person.
+        fixed-rays (arc-beam/view-fix-rays hand-center-pos current-rays)
         ^V3 cam-v (vec3/map->v3 camera-pos)
         charge-plan (if (and hand-center-pos md (:active? md) (seq (:charge-ring-segments-local md)))
                       (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))

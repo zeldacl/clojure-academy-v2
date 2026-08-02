@@ -1,41 +1,101 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.ray-barrage
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
-            [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]))
+  "Ray-barrage client FX: green tube rays (RendererRayComposite style).
 
-(defn- all-beams
+  Original visuals:
+  - MSG_EFFECT_PRERAY spawns EntityBarrageRayPre — ONE small green ray from
+    the caster's eye to the aim target (life 30, or 50 when it hit a
+    silbarn).
+  - MSG_EFFECT_BARRAGE spawns EntityMdRayBarrage at the silbarn position —
+    25~30 small green rays scattered around the caster's CURRENT aim
+    (yaw ±50~60deg, pitch ±25~30deg), life 50.
+
+  Both render with the same mdray_small composite (inner 216,248,216 /
+  outer 106,242,106 / soft glow); the port renders them as tube + glow
+  board ops (see beam-ops) so they are visible from any camera, including
+  the caster's own on-axis first-person view. The preray applies the
+  ViewOptimize hand fix like the original; the barrage does not
+  (EntityMdRayBarrage.needsViewOptimize() == false)."
+  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.mcmod.util.log :as log]))
+
+(def ^:private ray-style
+  {:width 0.052
+   :core-ratio 0.86
+   :outer-rgb {:r 106 :g 242 :b 106}
+   :outer-alpha (fn [_ life] (int (* 60 (+ 0.2 (* 0.8 life)))))
+   :inner-rgb {:r 216 :g 248 :b 216}
+   :inner-alpha (fn [_ life] (int (* 230 (+ 0.15 (* 0.85 life)))))})
+
+(defn- all-rays
   []
   (mapcat val (:beam-queue (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :ray-barrage))))
+
+(defn- look-dir-from-yaw-pitch
+  "Minecraft look vector from yaw/pitch in degrees."
+  [yaw-deg pitch-deg]
+  (let [yaw (Math/toRadians (double yaw-deg))
+        pitch (Math/toRadians (double pitch-deg))
+        cp (Math/cos pitch)]
+    {:dx (* -1.0 (Math/sin yaw) cp)
+     :dy (Math/sin pitch)
+     :dz (* (Math/cos yaw) cp)}))
+
+(defn- barrage-sub-rays
+  "25~30 sub rays from the silbarn position, scattered around the caster's
+  aim by the original's SubRay offsets (yaw ±uniform(50,60)deg,
+  pitch ±uniform(25,30)deg), length 15."
+  [silbarn-pos yaw pitch]
+  (let [count (long (+ 25 (rand-int 6)))
+        max-angle (+ 50.0 (rand 10.0))
+        base (vec3/map->v3 silbarn-pos)
+        length 15.0]
+    (vec
+      (for [_ (range count)]
+        (let [yaw-offset (- (rand (* 2.0 max-angle)) max-angle)
+              pitch-offset (- (rand max-angle) (/ max-angle 2.0))
+              dir (look-dir-from-yaw-pitch (+ (double (or yaw 0.0)) yaw-offset)
+                                           (+ (double (or pitch 0.0)) pitch-offset))]
+          {:start base
+           :end (vec3/v+ base (vec3/v3 (* length (:dx dir))
+                                       (* length (:dy dir))
+                                       (* length (:dz dir))))
+           :ttl 50 :max-ttl 50
+           :barrage? true})))))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:beam-queue {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [source-player-id world-id]} (or payload {})
+        {:keys [mode source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
                    :world-id world-id}
-        beam (merge base-meta (or payload {}) {:ttl 12})]
-    (update store* :beam-queue
-      (fn [by-owner]
-        (let [q (vec (get by-owner owner-key*))
-              q* (if (> (count q) 10)
-                   (subvec q (- (count q) 10))
-                   q)]
-          (assoc by-owner owner-key* (conj q* beam)))))))
+        rays (case mode
+               ;; Original c_spawnPreRay: one ray from the caster's eye
+               ;; (y + 1.6) to the aim point; life 50 when it hit a silbarn.
+               :preray
+               (when (and (map? (:start payload)) (map? (:end payload)))
+                 (let [life (if (true? (:hit? payload)) 50 30)]
+                   [(merge base-meta
+                           {:start (vec3/map->v3 (:start payload))
+                            :end (vec3/map->v3 (:end payload))
+                            :ttl life :max-ttl life})]))
+               ;; Original c_spawnBarrage: sub rays from the silbarn position
+               ;; around the caster's aim, no view optimization.
+               :barrage
+               (barrage-sub-rays (:silbarn payload)
+                                 (:yaw payload) (:pitch payload))
+               nil)]
+    (if (seq rays)
+      (update store* :beam-queue
+        (fn [by-owner]
+          (assoc by-owner owner-key* (vec (concat (get by-owner owner-key*) rays)))))
+      store*)))
 
 (defn- tick-state!
   [store]
@@ -53,31 +113,25 @@
               by-owner)))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
-  (when-let [beams (seq (all-beams))]
-    {:ops (mapcat
-            (fn [beam]
-              (let [{:keys [from-x from-y from-z to-x to-y to-z ttl]} beam
-                    alpha (int (* 180 (/ (double ttl) 12.0)))
-                    col {:r 255 :g 100 :b 50 :a alpha}]
-                [(ru/line-op (vec3/v3 from-x from-y from-z)
-                             (vec3/v3 to-x to-y to-z)
-                             col)]))
-            beams)}))
-
-(defn- preray-sound! [_ctx-id _channel _payload]
-  (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id (modid/namespaced-path "md.ray_barrage") :volume 0.35 :pitch 0.95})
-  ;; Spawn EntityBarrageRayPre equivalent
-  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
-    {:effect-id "entity_barrage_ray_pre"}))
-
-(defn- barrage-sound! [_ctx-id _channel _payload]
-  (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id (modid/namespaced-path "md.ray_barrage") :volume 0.45 :pitch 1.1})
-  ;; Spawn EntityMdRayBarrage equivalent
-  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect
-    {:effect-id "entity_md_ray_barrage"}))
+  [camera-pos hand-center-pos _tick]
+  (when-let [rays (seq (all-rays))]
+    (let [first-person? (boolean (:first-person? hand-center-pos))
+          ;; Preray follows the original's needsViewOptimize (hand fix for
+          ;; every viewer); barrage rays are not view-optimized (they issue
+          ;; from the silbarn, off the caster's view axis already).
+          preray-fixed (arc-beam/view-fix-rays hand-center-pos
+                                               (filterv #(not (:barrage? %)) rays))
+          barrage (filterv :barrage? rays)
+          fixed (into preray-fixed barrage)]
+      {:ops (vec
+             (mapcat
+              (fn [beam]
+                (concat
+                 (fx-beam/fading-tube-beam-ops beam ray-style)
+                 (fx-beam/fading-glow-board-ops
+                  camera-pos beam ray-style
+                  {:first-person? (and first-person? (not (:barrage? beam)))})))
+              fixed))})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {:beam-queue {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]

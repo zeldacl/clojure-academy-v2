@@ -89,7 +89,6 @@
     ;; send-local-and-nearby! fans out to owner + nearby, so each topic
     ;; appears twice.
     (is (= 2 (count (filter #{:ray-barrage/fx-preray} @fx*))))
-    (is (= 2 (count (filter #{:ray-barrage/fx-beam} @fx*))))
     (is (empty? (filter #{:ray-barrage/fx-barrage} @fx*)))))
 
 (deftest ray-barrage-plain-branch-miss-still-grants-cooldown-and-exp-test

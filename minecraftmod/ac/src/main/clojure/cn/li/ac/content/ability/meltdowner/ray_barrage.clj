@@ -154,20 +154,18 @@
                                 :hit? (boolean hit?)}))
 
 (defn- send-barrage-fx!
-  [ctx-id silbarn-hit]
+  [ctx-id silbarn-hit look-dir]
+  ;; The caster's aim travels in the payload so EVERY viewer's client can
+  ;; scatter the sub rays around the right direction (original's
+  ;; c_spawnBarrage reads player.rotationYaw/Pitch on the caster's client).
   (fx/send-local-and-nearby! ctx-id {:topic :ray-barrage/fx-barrage} nil
                                {:silbarn {:x (double (or (:x silbarn-hit) (:hit-x silbarn-hit) 0.0))
                                           :y (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
-                                          :z (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))}}))
-
-;; Purely visual — an extra glowing beam line on top of original's own
-;; preray/barrage entity effects. Sent independently of damage so removing
-;; the old beam/execute-beam! damage mechanic doesn't lose this upgrade.
-(defn- send-beam-line-fx!
-  [ctx-id start end]
-  (fx/send-local-and-nearby! ctx-id {:topic :ray-barrage/fx-beam} nil
-                               {:start {:x (:x start) :y (:y start) :z (:z start)}
-                                :end {:x (:x end) :y (:y end) :z (:z end)}}))
+                                          :z (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))}
+                                :yaw (yaw-degrees (double (:dx look-dir)) (double (:dz look-dir)))
+                                :pitch (pitch-degrees (double (:dx look-dir))
+                                                      (double (:dy look-dir))
+                                                      (double (:dz look-dir)))}))
 
 (defn- attack!
   "Matches original's MDDamageHelper.attack: apply damage, then let the
@@ -238,12 +236,11 @@
             (do
               (world-effects/trigger-behavior-hit! world-id (str (:uuid front-hit)))
               (send-preray-fx! ctx-id body front-hit true)
-              (send-barrage-fx! ctx-id front-hit)
+              (send-barrage-fx! ctx-id front-hit look-dir)
               (let [targets (cone-scatter-targets world-id player-id (str (:uuid front-hit))
                                                   body eye look-dir)]
-                (doseq [{:keys [uuid x y z]} targets]
-                  (attack! player-id ctx-id world-id uuid scatter-damage)
-                  (send-beam-line-fx! ctx-id eye {:x x :y y :z z})))
+                (doseq [{:keys [uuid]} targets]
+                  (attack! player-id ctx-id world-id uuid scatter-damage)))
               (skill-effects/set-main-cooldown! player-id ray-barrage-skill-id
                                                 (cfg-lerp-int :cooldown.ticks exp))
               (skill-effects/add-skill-exp! player-id ray-barrage-skill-id
@@ -259,7 +256,6 @@
               (when hit-uuid
                 (attack! player-id ctx-id world-id hit-uuid plain-damage))
               (send-preray-fx! ctx-id body hit-end false)
-              (send-beam-line-fx! ctx-id eye hit-end)
               (skill-effects/set-main-cooldown! player-id ray-barrage-skill-id
                                                 (cfg-lerp-int :cooldown.ticks exp))
               (skill-effects/add-skill-exp! player-id ray-barrage-skill-id
