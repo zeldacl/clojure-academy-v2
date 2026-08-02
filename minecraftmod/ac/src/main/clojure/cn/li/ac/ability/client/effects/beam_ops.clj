@@ -7,7 +7,9 @@
   used by trajectory previews."
   (:require
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.beam-render :as beam-render]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.render-util :as ru])
+  (:import [cn.li.mcmod.math V3]))
 
 (def default-glow-line-texture
   (modid/asset-path "textures" "effects/glow_line.png"))
@@ -73,6 +75,66 @@
   "Build fading beam/ray ops for a collection of beam state maps."
   [cam-pos beams style]
   (mapcat #(fading-beam-ops cam-pos % style) beams))
+
+(defn fading-tube-beam-ops
+  "Build fading TUBE (cylinder) beam ops for one beam state.
+
+  A billboard quad is edge-on — zero projected area — for a camera sitting on
+  the beam axis, which is exactly the caster's own first-person view of a ray
+  fired from their eye. Upstream renders these rays as RendererRayCylinder
+  (DIV=12) tubes for that reason; the outer tube carries the translucent
+  :outer color at style :width radius, the inner tube the bright core at
+  :width * :core-ratio."
+  [beam style]
+  (let [life (beam-render/life-ratio (:ttl beam) (:max-ttl beam))
+        resolve-value (fn [value]
+                        (if (fn? value) (value beam life) value))
+        resolved (render-style style)
+        outer-color (resolve-value (:outer-color resolved))
+        inner-color (resolve-value (:inner-color resolved))
+        outer-r (double (or (resolve-value (:width resolved)) 0.1))
+        inner-r (* outer-r (double (or (resolve-value (:core-ratio resolved)) 0.45)))]
+    (concat
+     (beam-render/cylinder-beam-ops (:start beam) (:end beam)
+       {:radius outer-r :color outer-color})
+     (beam-render/cylinder-beam-ops (:start beam) (:end beam)
+       {:radius inner-r :color inner-color}))))
+
+(defn fading-glow-board-ops
+  "Upstream RendererRayGlow board: one wide soft quad along the (already
+  hand-fixed) beam, `glow-width` wide (upstream MDRay: 1.5), tinted with the
+  resolved :outer color.
+
+  The board's lateral axis is what keeps it visible from the caster's own
+  first-person camera, which sits ON the beam axis: first person uses the
+  FIXED up-and-back axis (0,1,-0.5) — any axis derived from the beam or view
+  direction is parallel to the view ray there, so the board would be edge-on
+  — and the hand-fixed start sits off that axis. Third person uses the
+  view-perpendicular axis (upstream cross(perpViewDir, dir))."
+  ([cam-pos beam style]
+   (fading-glow-board-ops cam-pos beam style {}))
+  ([cam-pos beam style {:keys [glow-width first-person?] :or {glow-width 1.5
+                                                              first-person? false}}]
+   (let [life (beam-render/life-ratio (:ttl beam) (:max-ttl beam))
+         resolve-value (fn [value]
+                         (if (fn? value) (value beam life) value))
+         outer-color (resolve-value (:outer-color (render-style style)))
+         start (:start beam)
+         end (:end beam)
+         dir (vec3/vnorm (vec3/v- end start))
+         axis (if first-person?
+                (vec3/vnorm (vec3/v3 0.0 1.0 -0.5))
+                (let [to-beam (vec3/v- start (vec3/map->v3 cam-pos))
+                      perp (vec3/vcross to-beam dir)]
+                  (if (> (vec3/vlen perp) 1.0e-5)
+                    (vec3/vnorm perp)
+                    vec3/unit-x)))
+         half (* 0.5 (double glow-width))
+         p0 (vec3/v+ start (vec3/v* axis half))
+         p1 (vec3/v- start (vec3/v* axis half))
+         p2 (vec3/v- end (vec3/v* axis half))
+         p3 (vec3/v+ end (vec3/v* axis half))]
+     [(ru/quad-op default-glow-line-texture p0 p1 p2 p3 outer-color)])))
 
 (defn fade-alpha
   "Return an indexed fade alpha compatible with trajectory/ribbon previews.

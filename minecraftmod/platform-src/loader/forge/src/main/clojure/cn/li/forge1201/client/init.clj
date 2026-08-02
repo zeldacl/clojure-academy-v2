@@ -39,6 +39,7 @@
             [cn.li.forge1201.runtime.owner :as runtime-owner]
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
+            [cn.li.forge1201.client.fov-renderer :as fov-renderer]
             [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
             [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
@@ -422,6 +423,7 @@
   (media-playback-bridge/install-media-playback-bridge!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)
+  (fov-renderer/init!)
   (request-bridge/init!)
 
   (energy-item-model-properties/register!)

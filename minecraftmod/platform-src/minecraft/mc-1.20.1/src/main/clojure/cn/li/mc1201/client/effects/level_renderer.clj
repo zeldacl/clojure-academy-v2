@@ -86,6 +86,13 @@
   []
   (power-runtime/client-tick-level-effects!))
 
+(defn current-fov-offset
+  "Per-frame camera FOV offset (degrees) contributed by the local player's
+  active level effects (meltdowner charge zoom). Read by the loader's
+  ComputeFov handler."
+  [player-uuid]
+  (power-runtime/client-level-effect-fov-offset player-uuid))
+
 (defn set-local-walk-speed!
   [^LocalPlayer player speed]
   (try

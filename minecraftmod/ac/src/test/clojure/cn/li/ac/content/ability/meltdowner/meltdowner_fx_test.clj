@@ -5,6 +5,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as md-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -89,7 +90,7 @@
              @enqueued*)))))
 
 (deftest start-update-perform-end-manage-state-test
-  (do
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
     (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-start {:mode :start :source-player-id "player-a"})
     (arc-beam/enqueue-for-test! :meltdowner "ctx-a" :meltdowner/fx-update {:mode :update
                                              :ticks 10
@@ -112,8 +113,12 @@
 
 (deftest build-plan-and-tick-state-test
   (let [
-        sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [& args]
+        sounds* (atom [])
+        bridge* (atom [])]
+    (with-redefs [client-bridge/run-client-effect! (fn [& args]
+                                                     (swap! bridge* conj args)
+                                                     nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
                                                        (swap! sounds* conj args)
                                                        nil)
                   client-sounds/current-effect-owner (fn [] :test-owner)
@@ -127,20 +132,30 @@
                                                    :start {:x 0.0 :y 64.0 :z 0.0}
                                                    :end {:x 2.0 :y 64.0 :z 2.0}
                                                    :source-player-id "player-a"})
+      (is (= [[:mcmod/start-loop-sound-at-player
+               {:key "meltdowner/ctx-main" :sound-id "my_mod:md.md_charge"
+                :owner-uuid "player-a" :volume 1.0 :pitch 1.0}]]
+             @bridge*)
+          ":start starts the FollowEntitySound loop attached to the caster")
       (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              0)))
       (level-effects/update-effect-state! :meltdowner
         (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store)))
-      (is (seq @sounds*))
+      (is (seq @sounds*) "fire sound queued from :perform")
+      (is (= 1 (count @bridge*)) "no loop re-queue on tick")
       (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              1))))))
 
-(deftest charge-loop-cadence-and-ray-expiry-test
+(deftest charge-loop-lifecycle-and-ray-expiry-test
   (let [
-        sounds* (atom [])]
-    (with-redefs [client-sounds/queue-sound-effect! (fn [& args]
+        sounds* (atom [])
+        bridge* (atom [])]
+    (with-redefs [client-bridge/run-client-effect! (fn [& args]
+                                                     (swap! bridge* conj args)
+                                                     nil)
+                  client-sounds/queue-sound-effect! (fn [& args]
                                                        (swap! sounds* conj args)
                                                        nil)
                   client-sounds/current-effect-owner (fn [] :test-owner)
@@ -151,18 +166,26 @@
                                                       :end {:x 2.0 :y 64.0 :z 2.0}
                                                       :source-player-id "player-a"})
 
-      ;; one immediate charge sound from :start, then one loop sound every 10 ticks while active
-      (dotimes [_ 20]
-        (level-effects/update-effect-state! :meltdowner
-          (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
-      (is (= 4 (count @sounds*))
-          "start + perform fire + loop sounds at tick 10 and tick 20")
-
-      ;; perform ray gets deterministic ttl 16 when rand-int is stubbed to 0
-      (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
-                             {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
-                             20)))
+      ;; FollowEntitySound: started once on :start, never re-queued while
+      ;; charging, stopped on :end (original c_terminate's sound.stop()).
+      ;; The perform ray has deterministic ttl 16 when rand-int is stubbed 0.
       (dotimes [_ 16]
         (level-effects/update-effect-state! :meltdowner
           (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
-      (is (nil? (get-in (md-fx/fx-snapshot) [:rays [:ctx "ctx-cadence"]]))))))
+      (is (= 1 (count @bridge*))
+          "loop sound started once, no per-tick re-queue")
+      (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
+                             {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
+                             16))
+          "charge plan still builds while active")
+      (is (nil? (get-in (md-fx/fx-snapshot) [:rays [:ctx "ctx-cadence"]]))
+          "ray expired after its ttl")
+
+      (arc-beam/enqueue-for-test! :meltdowner "ctx-cadence" :meltdowner/fx-end
+        {:mode :end :performed? true :source-player-id "player-a"})
+      (is (= [[:mcmod/start-loop-sound-at-player
+               {:key "meltdowner/ctx-cadence" :sound-id "my_mod:md.md_charge"
+                :owner-uuid "player-a" :volume 1.0 :pitch 1.0}]
+              [:mcmod/stop-loop-sound {:key "meltdowner/ctx-cadence"}]]
+             @bridge*)
+          "loop stopped on :end"))))

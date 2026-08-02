@@ -77,3 +77,26 @@
   (is (true? (level-effects/any-level-effect-active?)))
   (is (= {:ops [{:op :scalar}] :local-walk-speed nil}
          (level-effects/build-level-effect-plan nil nil 0 nil))))
+
+(deftest current-fov-offset-aggregates-registered-contributors-test
+  (level-effects/register-level-effect!
+    :no-fov {:initial-state {:x [1]}
+             :enqueue-state-fn (fn [state _ _ _ _] state)
+             :tick-state-fn (fn [state] state)
+             :build-plan-fn (fn [_ _ _ _] {:ops []})})
+  (level-effects/register-level-effect!
+    :fov-a {:initial-state {:x [1]}
+            :enqueue-state-fn (fn [state _ _ _ _] state)
+            :tick-state-fn (fn [state] state)
+            :build-plan-fn (fn [_ _ _ _] {:ops []})
+            :fov-offset-fn (fn [player-uuid]
+                             (when (= "p1" (str player-uuid)) 6.5))})
+  (level-effects/register-level-effect!
+    :fov-b {:initial-state {:x [1]}
+            :enqueue-state-fn (fn [state _ _ _ _] state)
+            :tick-state-fn (fn [state] state)
+            :build-plan-fn (fn [_ _ _ _] {:ops []})
+            :fov-offset-fn (fn [_] 3.0)})
+  (is (= 6.5 (level-effects/current-fov-offset "p1")) "max contribution wins")
+  (is (= 3.0 (level-effects/current-fov-offset "other")) "unmatched contributor falls back to the unconditional one")
+  (is (= 3.0 (level-effects/current-fov-offset nil)) "nil player uuid keeps unconditional contributions"))

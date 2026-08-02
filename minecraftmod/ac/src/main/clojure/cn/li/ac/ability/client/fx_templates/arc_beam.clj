@@ -11,7 +11,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mcmod.math V3]))
 
 ;; ---------------------------------------------------------------------------
 ;; Effect registry (populated by build-spec)
@@ -143,10 +144,12 @@
 (def third-person-view-offset [0.15 -0.8 0.23])
 
 (defn local-frame-offset
-  "Resolve one [forward up right] offset triple against the arc's own axes."
+  "Resolve one [forward up right] offset triple against the arc's/beam's own
+  axes. Accepts either map positions (crossing from network state) or
+  already-converted V3s (the beam impls' ray endpoints)."
   [start end [forward-o up-o right-o]]
-  (let [start-v3 (rv3/map->v3 start)
-        end-v3 (rv3/map->v3 end)
+  (let [start-v3 (if (instance? V3 start) start (rv3/map->v3 start))
+        end-v3 (if (instance? V3 end) end (rv3/map->v3 end))
         forward (rv3/vnorm (rv3/v- end-v3 start-v3))
         right-raw (rv3/vcross forward rv3/unit-y)
         ;; Straight up/down leaves "right" undefined; any perpendicular does.
@@ -468,6 +471,8 @@
   Required: `:effect-id`, `:channels`
   Runtime: `:runtime` — :level (default), :hand, :both, :none
   State: `:initial-state`, or `:level-initial-state` / `:hand-initial-state` for :both
+  FOV: `:fov-offset-fn` — optional (fn [player-uuid] -> number|nil), queried
+  per frame by level-effects/current-fov-offset for the camera zoom
   Arc opts (default impl): `:sound-id`, `:arc-life`, `:arc-pattern`, `:aoe-points?`,
   `:hand-origin?` (arc is cast from the player — shift it out of their eye into
   their hand, as the original's ViewOptimize.fix does)
@@ -497,12 +502,14 @@
           (not= runtime :none)
           (as-> spec spec
                 (if (contains? #{:level :both} runtime)
-                  (assoc spec :level
-                         {:initial-state (resolve-initial-state opts :level)
-                          :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
-                          :tick-state-fn #(dispatch-tick! :level effect-id %1)
-                          :build-plan-fn (fn [cam pos tick query-fn]
-                                          (effect-build-plan effect-id cam pos tick query-fn))})
+                  (let [level-handler (cond-> {:initial-state (resolve-initial-state opts :level)
+                                               :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
+                                               :tick-state-fn #(dispatch-tick! :level effect-id %1)
+                                               :build-plan-fn (fn [cam pos tick query-fn]
+                                                               (effect-build-plan effect-id cam pos tick query-fn))}
+                                        (:fov-offset-fn opts)
+                                        (assoc :fov-offset-fn (:fov-offset-fn opts)))]
+                    (assoc spec :level level-handler))
                   spec)
                 (if (contains? #{:hand :both} runtime)
                   (assoc spec :hand

@@ -52,7 +52,7 @@
   (when level
     (level-effects/register-level-effect!
       effect-id
-      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn :build-plan-fn :empty-state?])))
+      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn :build-plan-fn :empty-state? :fov-offset-fn])))
   (when hand
     (hand-effects/register-hand-effect!
       effect-id

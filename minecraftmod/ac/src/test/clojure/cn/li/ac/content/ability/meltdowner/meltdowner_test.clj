@@ -31,6 +31,7 @@
         beam-params* (atom nil)]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
+                  ctx-skill/get-context (fn [& _] {:skill-state {:hold-ticks 10}})
                   skill-effects/skill-exp (fn [_ _] 0.3)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args))
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
@@ -40,7 +41,7 @@
                                                :charge.max-ticks 40
                                                :charge.max-tolerant-ticks 100
                                                0))]
-      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 10)
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-1")
       (is (= [{:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}
               {:ctx-id "ctx-1" :topic :meltdowner/fx-end :payload {:performed? false}}]
              @messages*) "fanned out to owner + nearby")
@@ -55,6 +56,7 @@
         beam-params* (atom nil)]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
+                  ctx-skill/get-context (fn [& _] {:skill-state {:hold-ticks 30}})
                   skill-effects/skill-exp (fn [_ _] 0.6)
                   skill-effects/add-skill-exp! (fn [& args] (swap! exp-calls* conj args))
                   skill-effects/set-main-cooldown! (fn [& args] (swap! cooldown-calls* conj args))
@@ -90,7 +92,7 @@
                                        {:beam-result {:performed? true :reflection-hit? false}})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})]
-      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 30)
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-up! :player-id "p1" :ctx-id "ctx-2")
       (is (= [["p1" :meltdowner 0.0022]] @exp-calls*))
       (is (= [["p1" :meltdowner 264]] @cooldown-calls*))
       (is (= {:x 0.0 :y 62.38 :z 0.0} (:trace-pos @beam-params*)))
@@ -104,7 +106,8 @@
         overload-calls* (atom [])]
     (with-redefs [fx/send! fx-send!
                   ctx/terminate-context! terminate!
-                  ctx-skill/get-context (fn [& _] {:skill-state {:overload-floor 123.0}})
+                  ctx-skill/get-context (fn [& _] {:skill-state {:hold-ticks 100 :overload-floor 123.0}})
+                  ctx-skill/assoc-skill-state! (fn [& _] nil)
                   skill-effects/enforce-overload-floor! (fn [player-id floor]
                                                           (swap! overload-calls* conj [player-id floor]))
                   skill-config/tunable-int (fn [_ field-id]
@@ -113,11 +116,13 @@
                                                :charge.max-ticks 40
                                                :charge.max-tolerant-ticks 100
                                                0))]
-      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick! :player-id "p1" :ctx-id "ctx-3" :hold-ticks 101)
+      (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick! :player-id "p1" :ctx-id "ctx-3")
       (is (= [["p1" 123.0]] @overload-calls*))
-      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}
+      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-update :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"}}
+              {:ctx-id "ctx-3" :topic :meltdowner/fx-update :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"}}
+              {:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}
               {:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}]
-             @messages*) "fanned out to owner + nearby")
+             @messages*) "charge update + fanned-out end")
       (is (= [["ctx-3" nil]] @terminated*)))))
 
 (deftest reflection-shot-supports-delta-look-vector-test

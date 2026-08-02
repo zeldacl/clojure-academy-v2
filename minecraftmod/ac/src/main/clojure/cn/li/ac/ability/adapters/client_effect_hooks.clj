@@ -31,6 +31,10 @@
    (fn []
      (level-effects/tick-level-effects!))
 
+   :client-level-effect-fov-offset
+   (fn [player-uuid]
+     (level-effects/current-fov-offset player-uuid))
+
    :client-tick-keys!
    (fn [key-state-fn get-player-uuid-fn]
      (binding [cn.li.ac.ability.client.keybinds/*get-player-uuid-fn* get-player-uuid-fn]

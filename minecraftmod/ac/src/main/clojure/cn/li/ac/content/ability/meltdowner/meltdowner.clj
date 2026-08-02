@@ -162,12 +162,27 @@
     ;; — a player who already carried overload before activating must keep
     ;; that base amount reflected in the floor.
     (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
-      (set-skill-state! ctx-id [:overload-floor] overload-floor))))
+      (set-skill-state! ctx-id [:overload-floor] overload-floor)
+      ;; Charge visual start (original c_start: charge loop sound + the
+      ;; client-side charge state that drives the ring/particles/walk-speed).
+      (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-start} nil
+        {:mode :start :player-id player-id}))))
 
 (defn- meltdowner-on-tick!
-  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (let [ticks (long (or hold-ticks 0))]
-    (when-let [floor (get-in (ctx-skill/get-context ctx-id) [:skill-state :overload-floor])]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ctx-data (ctx-skill/get-context ctx-id)
+        ;; The key-tick payload carries no hold duration — the server-driven
+        ;; per-tick advancement increments the charge counter here (original
+        ;; g_tick's ticks += 1, which ran on both sides and fed l_keyUp).
+        ticks (inc (long (or (get-in ctx-data [:skill-state :hold-ticks]) 0)))]
+    (set-skill-state! ctx-id [:hold-ticks] ticks)
+    ;; Charge visual update (original c_tick: charge ring pulse, particles,
+    ;; walk-speed slow-down all scale with the charge ticks).
+    (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-update} nil
+              {:ticks ticks
+               :charge-ratio (max 0.0 (min 1.0 (/ (double ticks) (double (ticks-max)))))
+               :player-id player-id})
+    (when-let [floor (get-in ctx-data [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))
       (send-end-fx! ctx-id false)
@@ -175,8 +190,8 @@
       (log/debug "Meltdowner aborted: over tolerant ticks" ticks))))
 
 (defn- meltdowner-on-up!
-  [ctx-id player-id _skill-id exp _cost-ok? hold-ticks _cost-stage _player-ref]
-  (let [ticks (long (or hold-ticks 0))]
+  [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (let [ticks (long (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :hold-ticks]) 0))]
     (if (< ticks (ticks-min))
       (do
         (send-end-fx! ctx-id false)

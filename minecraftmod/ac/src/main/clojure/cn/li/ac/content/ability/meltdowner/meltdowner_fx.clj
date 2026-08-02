@@ -1,12 +1,15 @@
 (ns cn.li.ac.content.ability.meltdowner.meltdowner-fx
   (:require [cn.li.ac.ability.client.effects.beam-ops :as beam-ops]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner :as meltdowner-impl]))
 
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :meltdowner
      :initial-state (fn [] {:effect-state {} :rays {}})
+     ;; Charge camera zoom: per-frame query into the impl's eased offset.
+     :fov-offset-fn (fn [player-uuid] (meltdowner-impl/current-fov-offset player-uuid))
      :channels {:start {:topic :meltdowner/fx-start :mode :start}
                 :update {:topic :meltdowner/fx-update :mode :update
                          :level-payload (fn [_ _ p]

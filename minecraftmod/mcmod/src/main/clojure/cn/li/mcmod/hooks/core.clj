@@ -81,6 +81,7 @@
    :client-build-level-effect-plan (fn [_ _ _ _] nil)
    :client-level-effects-active? (fn [] false)
    :client-tick-level-effects! noop
+   :client-level-effect-fov-offset (fn [_player-uuid] 0.0)
    :client-slot-visual-state (fn [_ _] :idle)
    :client-visual-state (fn [_ _] nil)
    :client-on-slot-key-down! noop
@@ -685,6 +686,12 @@
 (defn client-tick-level-effects!
   []
   ((:client-tick-level-effects! (hooks-core-state-snapshot))))
+
+(defn client-level-effect-fov-offset
+  "Per-frame camera FOV offset (degrees) from active level effects, for the
+  local player (ComputeFov event handler)."
+  [player-uuid]
+  ((:client-level-effect-fov-offset (hooks-core-state-snapshot)) player-uuid))
 
 (defn client-slot-visual-state
   [player-uuid key-idx]

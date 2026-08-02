@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner
   (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
@@ -11,6 +12,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
@@ -20,6 +22,7 @@
   (apply level-effects/update-effect-state! :meltdowner f args))
 (def ^:private charge-loop-sound (modid/namespaced-path "md.md_charge"))
 (def ^:private fire-sound (modid/namespaced-path "md.meltdowner"))
+(defn- loop-sound-key [ctx-id] (str "meltdowner/" ctx-id))
 (def ^:private meltdowner-ray-style
   {:width (fn [{:keys [is-reflect?]} life]
             (if is-reflect?
@@ -43,18 +46,29 @@
 (defn- enqueue! [store ctx-id channel owner-key payload]
   (let [store* (or store {:effect-state {} :rays {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id world-id]} (or payload {})
+        {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id player-id world-id]} (or payload {})
+        ;; The content sends :player-id (the caster) on every charge event —
+        ;; attribute the state to the caster so per-frame queries (walk-speed,
+        ;; FOV zoom) can match their OWN charge instead of any nearby charge.
+        source-player-id* (or source-player-id player-id)
         base-meta {:owner-key owner-key*
                    :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
-                   :source-player-id source-player-id
+                   :source-player-id source-player-id*
                    :world-id world-id}]
     (case mode
       :start
       (do
-        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id charge-loop-sound :volume 1.0 :pitch 1.0})
+        ;; Original c_start: FollowEntitySound loop (AMBIENT, volume 1.0)
+        ;; attached to the caster until stopped — not a re-queued one-shot.
+        (client-bridge/run-client-effect!
+         :mcmod/start-loop-sound-at-player
+         {:key (loop-sound-key ctx-id)
+          :sound-id charge-loop-sound
+          :owner-uuid (str source-player-id*)
+          :volume 1.0
+          :pitch 1.0})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false})))
       :update
@@ -71,10 +85,16 @@
                         :charge-ratio (double (or charge-ratio 0.0))
                         :performed? false}))
       :end
-      (assoc-in store* [:effect-state owner-key*]
-                (merge base-meta
-                       {:active? false :performed? (boolean performed?)
-                        :ticks 0 :charge-ratio 0.0}))
+      (do
+        ;; Original c_terminate: sound.stop() — the charge loop follows the
+        ;; caster until the context ends, however it ends.
+        (client-bridge/run-client-effect!
+         :mcmod/stop-loop-sound
+         {:key (loop-sound-key ctx-id)})
+        (assoc-in store* [:effect-state owner-key*]
+                  (merge base-meta
+                         {:active? false :performed? (boolean performed?)
+                          :ticks 0 :charge-ratio 0.0})))
       :perform
       (let [store* (if (and start end)
                       (let [life (+ 16 (rand-int 8))]
@@ -129,9 +149,8 @@
                             (keep (fn [[owner-key st]]
                                     (when (:active? st)
                                       (let [ticks (inc (long (or (:ticks st) 0)))]
-                                        (when (zero? (mod ticks 10))
-                                          (client-sounds/queue-sound-effect! (:queue-owner st)
-                                            {:type :sound :sound-id charge-loop-sound :volume 0.75 :pitch 1.0}))
+                                        ;; The charge loop is a continuous FollowEntitySound
+                                        ;; started on :start and stopped on :end — no re-queue.
                                         ;; MdParticleFactory particles (matching original: 2-3 per tick)
                                         (dotimes [_ (+ 2 (rand-int 2))]
                                           (let [r (+ 0.7 (rand 0.3))
@@ -206,8 +225,61 @@
   (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :meltdowner)))))
 
 ;; ---------------------------------------------------------------------------
+;; Charge camera zoom (original's charge pull-back, restored on release)
+;; ---------------------------------------------------------------------------
+
+(def ^:private fov-zoom-max-degrees 24.0)
+(def ^:private fov-ease-rate 0.12)
+(def ^:private fov-offset-eased* (atom 0.0))
+
+(defn current-fov-offset
+  "Smooth camera FOV offset (degrees) for the LOCAL player's own meltdowner
+  charge: eases toward charge-ratio * fov-zoom-max-degrees while charging,
+  back to 0 after release/abort. Per-frame (ComputeFov); the easing state is
+  a module atom because it must keep decaying after the effect state's
+  :end/abort has already cleared the :active? entry."
+  [player-uuid]
+  (let [md (matching-active-state {:player-uuid (str player-uuid)})
+        target (if md
+                 (* fov-zoom-max-degrees (double (or (:charge-ratio md) 0.0)))
+                 0.0)]
+    (swap! fov-offset-eased*
+           (fn [cur] (+ (* cur (- 1.0 fov-ease-rate))
+                        (* target fov-ease-rate))))
+    @fov-offset-eased*))
+
+(defn reset-fov-offset-for-test! []
+  (reset! fov-offset-eased* 0.0)
+  nil)
+
+;; ---------------------------------------------------------------------------
 ;; Build plan
 ;; ---------------------------------------------------------------------------
+
+(defn- ray-view-fix
+  "Original ViewOptimize fix for one ray, resolved against the beam's own
+  axes (arc-beam/local-frame-offset): the viewer's own first-person view
+  gets the small eye-adjacent offset, everyone else (F5, remote viewers)
+  the model-hand offset — same pairing the original's isFirstPerson() uses."
+  [view-ctx beam]
+  (let [own? (and (:first-person? view-ctx)
+                  (= (str (:player-uuid view-ctx))
+                     (str (:source-player-id beam))))
+        offset (if own? arc-beam/first-person-view-offset arc-beam/third-person-view-offset)]
+    (arc-beam/local-frame-offset (:start beam) (:end beam) offset)))
+
+(defn- view-fixed-rays
+  "Translate every live ray by its viewer-dependent fix so the beam issues
+  from the hand, not the eye — the original's ViewOptimize: the cylinders
+  AND the glow board start at the hand, which is what makes the whole ray
+  visible from the caster's own on-axis first-person camera."
+  [view-ctx rays]
+  (mapv (fn [beam]
+          (let [fix (ray-view-fix view-ctx beam)]
+            (-> beam
+                (update :start vec3/v+ fix)
+                (update :end vec3/v+ fix))))
+        rays))
 
 (defn- build-plan
   "Ray :start/:end are precomputed to V3 at enqueue time (see :perform /
@@ -216,17 +288,29 @@
   otherwise-per-frame allocation for every live ray."
   [camera-pos hand-center-pos _tick]
   (let [md (matching-active-state hand-center-pos)
-        ^V3 cam-v (vec3/map->v3 camera-pos)
         current-rays (all-rays)
+        fixed-rays (view-fixed-rays hand-center-pos current-rays)
+        ^V3 cam-v (vec3/map->v3 camera-pos)
         charge-plan (if (and hand-center-pos md (:active? md) (seq (:charge-ring-segments-local md)))
                       (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
                                   (:charge-ring-segments-local md))
                       [])
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
-        ray-plan (fx-beam/fading-beams-ops cam-v current-rays meltdowner-ray-style)]
-    (when (or (seq charge-plan) (seq ray-plan) ws)
-      {:ops (vec (concat charge-plan ray-plan))
+        ;; Tube (RendererRayCylinder-style) rays, from the hand-fixed start —
+        ;; the near tube walls are then off the caster's view axis and stay
+        ;; visible in first person.
+        ray-plan (mapcat #(fx-beam/fading-tube-beam-ops % meltdowner-ray-style) fixed-rays)
+        ;; Original RendererRayGlow board: the wide soft quad that carries the
+        ;; first-person look (fixed up-and-back axis (0,1,-0.5) + hand-fixed
+        ;; start keep it off the view ray; third person uses the
+        ;; view-perpendicular axis).
+        glow-plan (mapcat #(fx-beam/fading-glow-board-ops
+                            cam-v % meltdowner-ray-style
+                            {:first-person? (boolean (:first-person? hand-center-pos))})
+                          fixed-rays)]
+    (when (or (seq charge-plan) (seq ray-plan) (seq glow-plan) ws)
+      {:ops (vec (concat charge-plan ray-plan glow-plan))
        :local-walk-speed ws})))
 
 ;; ---------------------------------------------------------------------------
@@ -241,4 +325,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
+  (client-bridge/run-client-effect!
+   :mcmod/stop-loop-sound
+   {:key (loop-sound-key (second owner-key))})
   (-> store (update :effect-state dissoc owner-key) (update :rays dissoc owner-key)))

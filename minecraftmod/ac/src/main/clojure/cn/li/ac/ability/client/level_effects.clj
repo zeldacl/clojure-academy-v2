@@ -33,7 +33,8 @@
   (when-not (and (keyword? effect-id) (map? handler-map)
                  (fn? (:enqueue-state-fn handler-map))
                  (fn? (:tick-state-fn handler-map))
-                 (or (nil? (:empty-state? handler-map)) (fn? (:empty-state? handler-map))))
+                 (or (nil? (:empty-state? handler-map)) (fn? (:empty-state? handler-map)))
+                 (or (nil? (:fov-offset-fn handler-map)) (fn? (:fov-offset-fn handler-map))))
     (throw (IllegalArgumentException.
              "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
@@ -126,6 +127,21 @@
           (when (or (seq ops-v) walk-speed)
             {:ops ops-v
              :local-walk-speed (when walk-speed (float walk-speed))}))))))
+
+(defn current-fov-offset
+  "Per-frame camera FOV offset (degrees) contributed by active level effects.
+
+  Each registered effect may supply an optional `:fov-offset-fn`
+  (fn [player-uuid] -> number|nil); the maximum non-nil contribution wins
+  (only meltdowner's charge supplies one today). Called from the platform's
+  ComputeFov event on the render thread."
+  [player-uuid]
+  (loop [i 0, acc 0.0]
+    (if (< i (.size effect-order))
+      (let [fov-offset-fn (:fov-offset-fn (.get registry (.get effect-order i)))
+            contribution (when fov-offset-fn (fov-offset-fn player-uuid))]
+        (recur (inc i) (max acc (double (or contribution 0.0)))))
+      acc)))
 
 (defn registered-effects []
   (set (.keySet registry)))
