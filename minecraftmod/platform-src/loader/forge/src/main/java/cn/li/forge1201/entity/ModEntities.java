@@ -316,9 +316,22 @@ public final class ModEntities {
                                                      String rendererId,
                                                      String hookId,
                                                      String behaviorId) {
+        registerScriptedBlockBodySpec(registryName, defaultBlockId, gravity, damage,
+                placeWhenCollide, rendererId, hookId, behaviorId, 1.0D);
+    }
+
+    public static void registerScriptedBlockBodySpec(String registryName,
+                                                     String defaultBlockId,
+                                                     double gravity,
+                                                     double damage,
+                                                     boolean placeWhenCollide,
+                                                     String rendererId,
+                                                     String hookId,
+                                                     String behaviorId,
+                                                     double drag) {
         SCRIPTED_BLOCK_BODY_SPECS.put(
                 registryName,
-                new ScriptedBlockBodySpec(defaultBlockId, gravity, damage, placeWhenCollide, rendererId, hookId, behaviorId)
+                new ScriptedBlockBodySpec(defaultBlockId, gravity, damage, placeWhenCollide, rendererId, hookId, behaviorId, drag)
         );
     }
 

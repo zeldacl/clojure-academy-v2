@@ -168,18 +168,26 @@
   everyone else (F5, remote viewers) the model-hand offset — the same pairing
   the original's isFirstPerson() uses. Rays whose :source-player-id matches
   the viewer match first-person; opaque rays (no :source-player-id) always
-  get the third-person offset."
-  [view-ctx rays]
-  (mapv (fn [beam]
-          (let [own? (and (:first-person? view-ctx)
-                          (= (str (:player-uuid view-ctx))
-                             (str (:source-player-id beam))))
-                offset (if own? first-person-view-offset third-person-view-offset)
-                fix (local-frame-offset (:start beam) (:end beam) offset)]
-            (-> beam
-                (update :start rv3/v+ fix)
-                (update :end rv3/v+ fix))))
-        rays))
+  get the third-person offset.
+
+  `:fix-end?` defaults true (translate the whole ray, meltdowner's beam);
+  pass false to keep the END anchored on the aim point — the original's
+  \"Don't fix end to get accurate pointing direction\" (preray rays must
+  terminate exactly where the crosshair points, or the ray visibly misses
+  its target from the side)."
+  ([view-ctx rays]
+   (view-fix-rays view-ctx rays {}))
+  ([view-ctx rays {:keys [fix-end?] :or {fix-end? true}}]
+   (mapv (fn [beam]
+           (let [own? (and (:first-person? view-ctx)
+                           (= (str (:player-uuid view-ctx))
+                              (str (:source-player-id beam))))
+                 offset (if own? first-person-view-offset third-person-view-offset)
+                 fix (local-frame-offset (:start beam) (:end beam) offset)]
+             (cond-> beam
+               true (update :start rv3/v+ fix)
+               fix-end? (update :end rv3/v+ fix))))
+         rays)))
 
 (defn- arc-item
   "Precompute the zigzag vertex path once per arc, at enqueue time."

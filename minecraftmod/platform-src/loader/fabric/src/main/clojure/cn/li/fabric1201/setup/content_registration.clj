@@ -214,7 +214,8 @@
                (not (false? (:place-when-collide? block-body)))
                (edsl/resolve-render-profile-key entity-spec :block-body "block-body")
                (name (or (:hook block-body) :none))
-               (name (or (:behavior block-body) :none)))]
+               (name (or (:behavior block-body) :none))
+               (double (or (:drag block-body) 1.0)))]
     (FabricScriptedEntityAccess/registerScriptedBlockBodySpec
       (str registry-name)
       spec))

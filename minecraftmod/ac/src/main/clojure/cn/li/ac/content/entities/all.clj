@@ -352,9 +352,21 @@
                                    :gravity 0.12
                                    :damage 0.0
                                    :place-when-collide? false
-                                   :renderer-id "block-body"
+                                   ;; Not "block-body": the silbarn is a
+                                   ;; behavior-driven OBJ model (upstream
+                                   ;; EntitySilbarn$RenderSibarn), resolved per
+                                   ;; entity by BehaviorObjRenderer from the
+                                   ;; hook -> render-ns registry.
+                                   :renderer-id "silbarn"
                                    :hook :silbarn
-                                   :behavior :impact-detonation}}}))
+                                   :behavior :impact-detonation
+                                   ;; Original's Rigidbody linearDrag 0.8 —
+                                   ;; strong per-tick drag: the silbarn
+                                   ;; glides ~5 blocks then hovers while the
+                                   ;; 50-tick gravity delay (see
+                                   ;; ScriptedBlockBodyEntity.getGravity)
+                                   ;; keeps it airborne.
+                                   :drag 0.8}}}))
 
     ;; Minimal scripted-mob for bundle pipeline /summon smoke (dev only).
     (edsl/register-entity!

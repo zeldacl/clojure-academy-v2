@@ -215,9 +215,15 @@ public final class RaycastShared {
         Map<String, Object> nearest = null;
         double nearestDistance = Double.MAX_VALUE;
 
-        List<LivingEntity> entities = level.getEntitiesOfClass(LivingEntity.class, searchBox);
+        // Original LambdaLib2 Raytrace.rayTraceEntities selects every entity
+        // whose canBeCollidedWith() is true (1.20: isPickable()) — the
+        // silbarn (a non-LivingEntity scripted block body) must be hittable
+        // by ray-barrage. LivingEntity stays as a baseline so the trace
+        // never regresses for mobs/players regardless of their pickability.
+        List<Entity> entities = level.getEntitiesOfClass(Entity.class, searchBox,
+                e -> e.isPickable() || e instanceof LivingEntity);
 
-        for (LivingEntity entity : entities) {
+        for (Entity entity : entities) {
             Optional<Vec3> optionalHit = entity.getBoundingBox().clip(start, end);
 
             if (optionalHit.isEmpty()) {

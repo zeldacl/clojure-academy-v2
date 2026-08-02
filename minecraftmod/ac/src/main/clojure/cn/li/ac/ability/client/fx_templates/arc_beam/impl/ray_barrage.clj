@@ -112,16 +112,36 @@
                           [owner-key live]))))
               by-owner)))))
 
+(defn- expanding-barrage-beam
+  "Barrage sub rays grow OUT of the silbarn: the endpoint starts at the
+  silbarn and extends to full length over the first 10 ticks (upstream's
+  200ms blend-in), so the burst reads as rays SHOOTING from the silbarn
+  instead of a full-length fan popping in instantly."
+  [beam]
+  (if-not (:barrage? beam)
+    beam
+    (let [ttl (long (:ttl beam))
+          max-ttl (long (:max-ttl beam))
+          scale (max 0.0 (min 1.0 (/ (double (- max-ttl ttl)) 10.0)))
+          start (:start beam)
+          end (:end beam)]
+      (if (>= scale 1.0)
+        beam
+        (assoc beam :end (vec3/v+ start (vec3/v* (vec3/v- end start) scale)))))))
+
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
   (when-let [rays (seq (all-rays))]
     (let [first-person? (boolean (:first-person? hand-center-pos))
-          ;; Preray follows the original's needsViewOptimize (hand fix for
-          ;; every viewer); barrage rays are not view-optimized (they issue
-          ;; from the silbarn, off the caster's view axis already).
+          ;; Preray follows the original's needsViewOptimize: hand-fix the
+          ;; START only, keeping the END anchored on the aim point ("Don't
+          ;; fix end to get accurate pointing direction"); barrage rays are
+          ;; not view-optimized (they issue from the silbarn, off the
+          ;; caster's view axis already).
           preray-fixed (arc-beam/view-fix-rays hand-center-pos
-                                               (filterv #(not (:barrage? %)) rays))
-          barrage (filterv :barrage? rays)
+                                               (filterv #(not (:barrage? %)) rays)
+                                               {:fix-end? false})
+          barrage (map expanding-barrage-beam (filterv :barrage? rays))
           fixed (into preray-fixed barrage)]
       {:ops (vec
              (mapcat

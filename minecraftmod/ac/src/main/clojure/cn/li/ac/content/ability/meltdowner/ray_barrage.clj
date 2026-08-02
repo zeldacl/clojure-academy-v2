@@ -133,14 +133,18 @@
                               (double (cfg-double :targeting.range)))))
 
 (defn- front-hit-end
+  "The preray's aim point. Original getLookingPos returns the trace's
+  hitVec — the point where the ray intersects the target's bounding box —
+  NOT the entity's center position: using the center would leave a visible
+  gap between the ray tip and the silbarn from a side view."
   [eye look-dir front-hit]
   (if (and (map? front-hit)
-           (some? (or (:x front-hit) (:hit-x front-hit)))
-           (some? (or (:y front-hit) (:hit-y front-hit)))
-           (some? (or (:z front-hit) (:hit-z front-hit))))
-    {:x (double (or (:x front-hit) (:hit-x front-hit)))
-     :y (double (or (:y front-hit) (:hit-y front-hit)))
-     :z (double (or (:z front-hit) (:hit-z front-hit)))}
+           (some? (or (:hit-x front-hit) (:x front-hit)))
+           (some? (or (:hit-y front-hit) (:y front-hit)))
+           (some? (or (:hit-z front-hit) (:z front-hit))))
+    {:x (double (or (:hit-x front-hit) (:x front-hit)))
+     :y (double (or (:hit-y front-hit) (:y front-hit)))
+     :z (double (or (:hit-z front-hit) (:z front-hit)))}
     (let [dist (double (cfg-double :targeting.range))]
       {:x (+ (double (:x eye)) (* dist (double (:dx look-dir))))
        :y (+ (double (:y eye)) (* dist (double (:dy look-dir))))
@@ -158,10 +162,13 @@
   ;; The caster's aim travels in the payload so EVERY viewer's client can
   ;; scatter the sub rays around the right direction (original's
   ;; c_spawnBarrage reads player.rotationYaw/Pitch on the caster's client).
+  ;; The origin is the trace's HIT POINT — the same point the preray ray
+  ;; terminates on — so the burst starts exactly where the main ray lands,
+  ;; not at the silbarn's center (a ~0.2 block gap from the side view).
   (fx/send-local-and-nearby! ctx-id {:topic :ray-barrage/fx-barrage} nil
-                               {:silbarn {:x (double (or (:x silbarn-hit) (:hit-x silbarn-hit) 0.0))
-                                          :y (double (or (:y silbarn-hit) (:hit-y silbarn-hit) 0.0))
-                                          :z (double (or (:z silbarn-hit) (:hit-z silbarn-hit) 0.0))}
+                               {:silbarn {:x (double (or (:hit-x silbarn-hit) (:x silbarn-hit) 0.0))
+                                          :y (double (or (:hit-y silbarn-hit) (:y silbarn-hit) 0.0))
+                                          :z (double (or (:hit-z silbarn-hit) (:z silbarn-hit) 0.0))}
                                 :yaw (yaw-degrees (double (:dx look-dir)) (double (:dz look-dir)))
                                 :pitch (pitch-degrees (double (:dx look-dir))
                                                       (double (:dy look-dir))
@@ -235,7 +242,12 @@
             silbarn-ready?
             (do
               (world-effects/trigger-behavior-hit! world-id (str (:uuid front-hit)))
-              (send-preray-fx! ctx-id body front-hit true)
+              ;; Original c_spawnPreRay: setFromTo(player pos + 1.6 eye,
+              ;; target hit point) — the ray must issue from the EYE (not
+              ;; the feet, or it spawns underground) and terminate on the
+              ;; trace's hit point (not the entity center, or a side view
+              ;; shows a gap between ray tip and silbarn).
+              (send-preray-fx! ctx-id eye (front-hit-end eye look-dir front-hit) true)
               (send-barrage-fx! ctx-id front-hit look-dir)
               (let [targets (cone-scatter-targets world-id player-id (str (:uuid front-hit))
                                                   body eye look-dir)]
@@ -255,7 +267,7 @@
                   hit-uuid (when (= :entity (:hit-type front-hit)) (:uuid front-hit))]
               (when hit-uuid
                 (attack! player-id ctx-id world-id hit-uuid plain-damage))
-              (send-preray-fx! ctx-id body hit-end false)
+              (send-preray-fx! ctx-id eye hit-end false)
               (skill-effects/set-main-cooldown! player-id ray-barrage-skill-id
                                                 (cfg-lerp-int :cooldown.ticks exp))
               (skill-effects/add-skill-exp! player-id ray-barrage-skill-id

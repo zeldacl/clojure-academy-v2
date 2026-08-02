@@ -8,6 +8,8 @@ public final class ScriptedBlockBodySpec {
     private final String rendererId;
     private final String hookId;
     private final String behaviorId;
+    /** Per-tick velocity scale (1.0 = no drag); <1.0 glides to a halt. */
+    private final double drag;
 
     public ScriptedBlockBodySpec(String defaultBlockId,
                                  double gravity,
@@ -16,6 +18,17 @@ public final class ScriptedBlockBodySpec {
                                  String rendererId,
                                  String hookId,
                                  String behaviorId) {
+        this(defaultBlockId, gravity, damage, placeWhenCollide, rendererId, hookId, behaviorId, 1.0D);
+    }
+
+    public ScriptedBlockBodySpec(String defaultBlockId,
+                                 double gravity,
+                                 double damage,
+                                 boolean placeWhenCollide,
+                                 String rendererId,
+                                 String hookId,
+                                 String behaviorId,
+                                 double drag) {
         this.defaultBlockId = defaultBlockId == null ? "minecraft:stone" : defaultBlockId;
         this.gravity = gravity;
         this.damage = damage;
@@ -23,6 +36,7 @@ public final class ScriptedBlockBodySpec {
         this.rendererId = rendererId == null ? "" : rendererId;
         this.hookId = hookId == null ? "" : hookId;
         this.behaviorId = behaviorId == null ? "" : behaviorId;
+        this.drag = drag <= 0.0D ? 1.0D : drag;
     }
 
     public String getDefaultBlockId() {
@@ -51,5 +65,9 @@ public final class ScriptedBlockBodySpec {
 
     public String getBehaviorId() {
         return behaviorId;
+    }
+
+    public double getDrag() {
+        return drag;
     }
 }

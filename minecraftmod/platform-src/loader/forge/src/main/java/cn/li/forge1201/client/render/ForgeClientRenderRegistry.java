@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
+import cn.li.mc1201.client.render.effect.BehaviorObjRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
@@ -95,6 +96,11 @@ public final class ForgeClientRenderRegistry {
             String rendererId = spec == null ? "block-body" : spec.getRendererId();
             if ("block-body".equals(rendererId)) {
                 event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
+            } else {
+                // Behavior-driven block-body entities (e.g. the silbarn)
+                // render their own model: BehaviorObjRenderer resolves the
+                // content render namespace from the spec's hook id.
+                event.registerEntityRenderer(blockBodyType, BehaviorObjRenderer::new);
             }
         }
 

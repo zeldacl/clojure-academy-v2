@@ -72,6 +72,14 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     public void tick() {
         ensureSyncedFields();
         super.tick();
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        double drag = spec == null ? 1.0D : spec.getDrag();
+        if (drag < 1.0D) {
+            // Per-spec linear drag (silbarn: original's Rigidbody linearDrag
+            // 0.8) — glide to a halt and hover (gravity is also delayed 50
+            // ticks, see getGravity) so the caster can hit it mid-air.
+            this.setDeltaMovement(this.getDeltaMovement().scale(drag));
+        }
         if (behaviorDespawnCountdown > 0) {
             behaviorDespawnCountdown--;
             if (behaviorDespawnCountdown == 0 && !this.level().isClientSide) {
