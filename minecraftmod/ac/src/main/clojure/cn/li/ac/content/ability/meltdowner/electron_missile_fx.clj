@@ -115,9 +115,10 @@
            :z (+ (double (:target-z impact)) 0.5)
            :count 2 :speed 0.2
            :offset-x 0.25 :offset-y 0.25 :offset-z 0.25})))
-    ;; Orbiting particles during charge (matching original MSG_EFFECT_UPDATE)
+    ;; Orbiting particles during charge (matching original MSG_EFFECT_UPDATE —
+    ;; sent every tick unconditionally, with or without stored balls)
     (doseq [[_ st] (:charge-state store*)]
-      (when (and (:active? st) (pos? (long (:balls st 0))))
+      (when (:active? st)
         (dotimes [_ (inc (rand-int 2))]
           (let [r (+ 0.5 (rand 0.5))
                 theta (rand (* 2 Math/PI))

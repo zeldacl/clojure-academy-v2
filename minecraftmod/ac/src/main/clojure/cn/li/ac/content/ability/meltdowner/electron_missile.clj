@@ -170,28 +170,36 @@
                     (if (and target (try-pay-attack-cost! player-id exp))
                       (let [ball-index (rand-int (count ball-ids-after-spawn))
                             ball-id (nth ball-ids-after-spawn ball-index)
-                            ball-pos (or (when (motion-effects/entity-motion-available?)
-                                           (motion-effects/entity-position world-id ball-id))
-                                         (geom/eye-pos player-id))]
-                        (when (and (entity-damage/available?) (:uuid target))
-                          (entity-damage/apply-direct-damage!
-                            world-id
-                            (:uuid target)
-                            (cfg-lerp :combat.damage exp)
-                            :magic
-                            {:reset-invulnerable-time? true})
-                          (md-damage/mark-target! player-id (:uuid target)
-                            {:ctx-id ctx-id
-                             :target-pos {:x (:x target)
-                                          :y (:y target)
-                                          :z (:z target)}})
-                          (skill-effects/add-skill-exp! player-id
-                                                       electron-missile-skill-id
-                                                       (cfg-double :progression.exp-hit)))
-                        (send-fire-fx! ctx-id ball-pos target)
-                        (when (motion-effects/entity-motion-available?)
-                          (motion-effects/discard-entity! world-id ball-id))
-                        (remove-vector-index ball-ids-after-spawn ball-index))
+                            ;; No fallback to the eye: the ray must originate
+                            ;; from the ACTUAL ball or not fire at all — a
+                            ;; missing ball is a bug to surface, not something
+                            ;; to silently redirect through the caster.
+                            ball-pos (when (motion-effects/entity-motion-available?)
+                                       (motion-effects/entity-position world-id ball-id))]
+                        (if-not ball-pos
+                          (do
+                            (log/warn "ElectronMissile: ball entity missing, skipping shot" ball-id)
+                            ball-ids-after-spawn)
+                          (do
+                            (when (and (entity-damage/available?) (:uuid target))
+                              (entity-damage/apply-direct-damage!
+                                world-id
+                                (:uuid target)
+                                (cfg-lerp :combat.damage exp)
+                                :magic
+                                {:reset-invulnerable-time? true})
+                              (md-damage/mark-target! player-id (:uuid target)
+                                {:ctx-id ctx-id
+                                 :target-pos {:x (:x target)
+                                              :y (:y target)
+                                              :z (:z target)}})
+                              (skill-effects/add-skill-exp! player-id
+                                                           electron-missile-skill-id
+                                                           (cfg-double :progression.exp-hit)))
+                            (send-fire-fx! ctx-id ball-pos target)
+                            (when (motion-effects/entity-motion-available?)
+                              (motion-effects/discard-entity! world-id ball-id))
+                            (remove-vector-index ball-ids-after-spawn ball-index))))
                       ball-ids-after-spawn)))]
             (send-update-fx! ctx-id ticks (count ball-ids-after-fire))
             (ctx-skill/replace-skill-state! ctx-id

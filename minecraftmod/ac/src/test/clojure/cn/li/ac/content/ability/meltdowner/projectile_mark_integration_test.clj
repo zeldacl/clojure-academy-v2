@@ -189,8 +189,11 @@
                                                            :x 3.0 :y 64.0 :z 0.0
                                                            :eye-height 1.6
                                                            :living? true}])
-                  ;; no live entity runtime: the ball position falls back to the eye
-                  motion-effects/entity-motion-available? (constantly false)
+                  ;; the ray originates from the ACTUAL ball entity (no
+                  ;; fallback to the eye)
+                  motion-effects/entity-motion-available? (constantly true)
+                  motion-effects/entity-position (fn [& _] {:x 1.0 :y 64.0 :z 0.0})
+                  motion-effects/discard-entity! (fn [& _] nil)
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)
                   entity-damage/apply-aoe-damage! (fn [& _] [])
