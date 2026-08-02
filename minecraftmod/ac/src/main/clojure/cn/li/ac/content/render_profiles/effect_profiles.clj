@@ -28,8 +28,12 @@
     :params {:texture (modid/namespaced-path "textures/effects/md_shield/0.png")
              :scale 1.8}}
 
+   ;; JetEngine's diamond shield (matching original EntityDiamondShield +
+   ;; RenderDiamondShield): a 3D DIAMOND PYRAMID — four triangle faces from
+   ;; the apex (0,0,1) to the rim of the diamond base, oriented to the
+   ;; owner's yaw/pitch — NOT the flat spinning quad the light-shield uses.
    {:id "diamond-shield"
-    :kind :spinning-shield
+    :kind :diamond-pyramid
     :state {:layer :translucent
             :blend :alpha
             :cull :off}
@@ -127,7 +131,7 @@
                :offset-z 0.0}}])
 
 (def ^:private ac-effect-kinds
-  #{:intensify-arcs :spinning-shield})
+  #{:intensify-arcs :spinning-shield :diamond-pyramid})
 
 (defn init-render-profiles!
   []
@@ -139,4 +143,5 @@
     ;; so the Minecraft component can dispatch without hardcoding content-specific strings.
     (script-abi/register-kind-renderer-key! :intensify-arcs :tiered-zigzag)
     (script-abi/register-kind-renderer-key! :spinning-shield :spinning-shield)
+    (script-abi/register-kind-renderer-key! :diamond-pyramid :diamond-pyramid)
     (script-registry/register-profiles! v1-effect-profiles))))

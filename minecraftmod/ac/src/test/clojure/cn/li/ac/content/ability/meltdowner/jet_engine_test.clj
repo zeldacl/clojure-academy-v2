@@ -114,7 +114,7 @@
                                                                                                             :trigger-ticks 0
                                                                                                             :hit-uuids #{}}})
         damage-calls* (atom [])
-        teleport-calls* (atom [])
+        velocity-calls* (atom [])
         dismount-calls* (atom 0)
         marks* (atom [])]
     (with-redefs [ctx/get-context get-context
@@ -125,18 +125,17 @@
                   md-damage/mark-target! (fn [player-id target-id fx-context]
                                            (swap! marks* conj [player-id target-id fx-context])
                                            true)
-                  motion-effects/teleportation-available? (constantly true)
-                  motion-effects/teleport-player! (fn [& args]
-                                                    (when (>= (count args) 5)
-                                                      (swap! teleport-calls* conj [(nth args 2) (nth args 3) (nth args 4)]))
-                                                    true)
+                  motion-effects/teleportation-available? (constantly false)
+                  motion-effects/teleport-player! (fn [& _] true)
                   motion-effects/reset-fall-damage! (fn [& _] true)
                   motion-effects/player-motion-available? (constantly true)
                   motion-effects/dismount-riding! (fn [& _]
                                                     (swap! dismount-calls* inc)
                                                     true)
                   motion-effects/player-velocity (fn [& _] {:x 0.0 :y 0.0 :z 0.0})
-                  motion-effects/set-player-velocity! (fn [& _] true)
+                  motion-effects/set-player-velocity! (fn [& args]
+                                                        (swap! velocity-calls* conj [(nth args 1) (nth args 2) (nth args 3)])
+                                                        true)
                   raycast/available? (constantly true)
                   raycast/raycast-entities (fn [& _] {:uuid "target-1"})
                   entity-damage/available? (constantly true)
@@ -147,7 +146,8 @@
       (cb/apply-invoke jet/jet-engine-tick! :player-id "p1" :ctx-id "ctx-1" :hold-ticks 2)
       (is (= ["target-1" "target-1"] @damage-calls*))
       (is (= 2 @dismount-calls*))
-      (is (= 2 (count @teleport-calls*)))
+      (is (= [[0.5 0.0 0.0] [0.5 0.0 0.0]] @velocity-calls*)
+          "dash driven by constant velocity (no teleport)")
       (is (= [["p1" "target-1" {:ctx-id "ctx-1"
                                   :target-pos {:x nil :y nil :z nil}}]
               ["p1" "target-1" {:ctx-id "ctx-1"

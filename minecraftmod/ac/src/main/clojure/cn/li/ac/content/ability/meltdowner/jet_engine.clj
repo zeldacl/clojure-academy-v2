@@ -68,10 +68,13 @@
                                                 (:x eye) (:y eye) (:z eye)
                                                 (:x dir) (:y dir) (:z dir)
                                                 jet-target-range))]
+        ;; Original getLookingPos returns result.hitVec — the precise
+        ;; intersection point, not the integer block coordinate: the marker
+        ;; and dash target must sit exactly where the crosshair lands.
         (if block-hit
-          {:x (double (:x block-hit))
-           :y (double (:y block-hit))
-           :z (double (:z block-hit))}
+          {:x (double (or (:hit-x block-hit) (:x block-hit)))
+           :y (double (or (:hit-y block-hit) (:y block-hit)))
+           :z (double (or (:hit-z block-hit) (:z block-hit)))}
           (geom/v+ eye (geom/v* dir jet-target-range)))))))
 
 (defn- get-player-pos [player-id]
@@ -161,16 +164,16 @@
         segment-dir (geom/vnorm segment)]
         (when (motion-effects/player-motion-available?)
           (motion-effects/dismount-riding! player-id))
-        (when (motion-effects/teleportation-available?)
-          (motion-effects/teleport-player! player-id
-                                         world-id
-                                         (:x next-pos)
-                                         (:y next-pos)
-                                         (:z next-pos))
-          (motion-effects/reset-fall-damage! player-id))
-        (when (and (motion-effects/player-motion-available?)
-                   (:velocity st))
-          (let [{:keys [x y z]} (:velocity st)]
+        (when (motion-effects/player-motion-available?)
+          ;; Drive the dash by VELOCITY, not teleport: the client then moves
+          ;; the player through normal physics, which plays the walk/run
+          ;; animation in third person (the original's c_triggerTick sets
+          ;; motionX/Y/Z for the same reason). The constant per-tick velocity
+          ;; reaches the target at tick 8 and keeps extrapolating past it for
+          ;; the remaining lifetime, matching the original's
+          ;; lerp(start, target, ticks/TIME).
+          (motion-effects/reset-fall-damage! player-id)
+          (when-let [{:keys [x y z]} (:velocity st)]
             (motion-effects/set-player-velocity! player-id x y z)))
         (let [hit (when (and (raycast/available?)
                              (> segment-distance min-segment-distance))

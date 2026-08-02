@@ -155,14 +155,23 @@
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:fx-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start target pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})]
+        {:keys [mode start target pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})
+        ;; Capture the effect owner at enqueue time (fx events run with the
+        ;; client session bound) so the per-tick particle queueing in
+        ;; tick-state! can resolve its session partition — the ClientTick
+        ;; path that drives tick-state! has no session context of its own.
+        queue-owner (client-particles/current-effect-owner)]
     (case mode
       :mark-start
       (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id (modid/namespaced-path "md.jet_charge") :volume 0.45 :pitch 1.0})
+        ;; TODO(sound): original JetEngine plays no skill sound; the previous
+        ;; md.jet_charge loop was an unverified placeholder — restore once a
+        ;; fitting sound is found.
+        #_(client-sounds/queue-current-sound-effect!
+           {:type :sound :sound-id (modid/namespaced-path "md.jet_charge") :volume 0.45 :pitch 1.0})
         (assoc-in store* [:fx-state owner-key*]
-                  {:phase :marking
+                  {:queue-owner queue-owner
+                   :phase :marking
                    :target target
                    :hold-ticks (long (or hold-ticks 0))
                    :ttl mark-ttl}))
@@ -170,7 +179,8 @@
       :mark-update
       (assoc-in store* [:fx-state owner-key*]
                 (merge (get-in store* [:fx-state owner-key*])
-                       {:phase :marking
+                       {:queue-owner queue-owner
+                        :phase :marking
                         :target target
                         :hold-ticks (long (or hold-ticks 0))
                         :ttl mark-ttl}))
@@ -188,11 +198,14 @@
                            ;; Keep parity with upstream JetEngine: spawn diamond-shield once on trigger phase entry.
                            (spawn-diamond-shield!))]
         (when entering-trigger?
-          (client-sounds/queue-current-sound-effect!
-            {:type :sound :sound-id (modid/namespaced-path "md.jet_engine") :volume 0.8 :pitch 1.0}))
+          ;; TODO(sound): original JetEngine plays no skill sound — restore
+          ;; once a fitting sound is found.
+          #_(client-sounds/queue-current-sound-effect!
+             {:type :sound :sound-id (modid/namespaced-path "md.jet_engine") :volume 0.8 :pitch 1.0}))
         (assoc-in store* [:fx-state owner-key*]
                   (merge prev-state
-                         {:phase :triggering
+                         {:queue-owner (or (:queue-owner prev-state) queue-owner)
+                          :phase :triggering
                           :start start
                           :target target
                           :pos (or pos start)

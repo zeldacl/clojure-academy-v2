@@ -32,6 +32,21 @@
   (when-let [^Entity attacker (.getEntity damage-source)]
     (str (.getUUID attacker))))
 
+(defn- with-damaged-player-owner
+  "Bind the damaged player's server owner for the duration of f.
+
+  Hurt events fire on the server thread OUTSIDE any player action context —
+  content damage handlers (vec-reflection's attack precheck, etc.) resolve
+  the victim's player-state via :player-state-owner/:client-session-id, so
+  without this binding they throw 'requires bound session-id' and the
+  handler silently degrades. The server session id matches the one
+  lifecycle-core's server-owner builds ([:server identityHashCode])."
+  [^ServerPlayer player f]
+  (damage-hooks/with-client-ctx-fn
+    {:player-owner {:server-session-id [:server (System/identityHashCode (.getServer player))]
+                    :player-uuid (str (.getUUID player))}}
+    f))
+
 (defn attack-precheck-result
   "Return shared attack precheck result for player damage, or nil when the
   damaged entity is not a server player. Platform event layers decide how to
@@ -42,11 +57,15 @@
           player-id (str (.getUUID player))
           original-damage (double amount)
           attacker-id (attacker-id damage-source)
-          allow? (should-allow-attack?
-                   player-id attacker-id original-damage damage-source)]
+          allow? (with-damaged-player-owner
+                   player
+                   #(should-allow-attack?
+                      player-id attacker-id original-damage damage-source))]
       (when-not allow?
-        (damage-hooks/run-attack-precheck-side-effects!
-          player-id attacker-id original-damage damage-source))
+        (with-damaged-player-owner
+          player
+          #(damage-hooks/run-attack-precheck-side-effects!
+             player-id attacker-id original-damage damage-source)))
       {:player-id player-id
        :attacker-id attacker-id
        :original-damage original-damage
@@ -67,8 +86,10 @@
           player-id (str (.getUUID player))
           original-damage (double amount)
           attacker-id (attacker-id damage-source)
-          next-damage (process-damage
-                        player-id attacker-id original-damage damage-source)]
+          next-damage (with-damaged-player-owner
+                        player
+                        #(process-damage
+                           player-id attacker-id original-damage damage-source))]
       {:player-id player-id
        :attacker-id attacker-id
        :original-damage original-damage

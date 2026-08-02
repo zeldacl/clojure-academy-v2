@@ -73,7 +73,8 @@
       (dotimes [_ 20]
         (level-effects/tick-level-effects!))
       (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 2)))
-      (is (seq @sounds*))
+      ;; Skill sounds are commented out until fitting ones are found.
+      (is (empty? @sounds*))
             (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
               [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-1"}]]
               @local-effects*)))))

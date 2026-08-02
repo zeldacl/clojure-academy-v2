@@ -111,6 +111,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
                     entity, rendererId, partialTick, poseStack, bufferSource, packedLight);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "spinning-shield" -> renderSpinningShield(entity, rendererId, partialTick, poseStack, bufferSource);
+            case "diamond-pyramid" -> renderDiamondPyramid(entity, rendererId, partialTick, poseStack, bufferSource);
             default -> throw new IllegalArgumentException("Unsupported renderer key for effect rendererId="
                     + rendererId + ": " + rendererKey);
         }
@@ -190,6 +191,76 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         vc.vertex(mat, -0.5F, 0.5F, 0.0F).color(255, 255, 255, a)
                 .uv(0.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
                 .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+
+        poseStack.popPose();
+    }
+
+    /**
+     * JetEngine's diamond shield (matching original EntityDiamondShield +
+     * RenderDiamondShield): a 3D DIAMOND PYRAMID — four triangle faces from
+     * the apex (0,0,1) to the four rim vertices of the diamond base
+     * (-1,0,0)(0,-1,0)(1,0,0)(0,1,0), oriented to the owner's yaw/pitch.
+     * SIZE grows from 0.2x over 15 ticks and alpha fades in over 6 ticks
+     * (same growth as the light-shield). Each face is emitted as a
+     * degenerate QUAD (apex repeated) since entityTranslucent is QUADS.
+     */
+    private void renderDiamondPyramid(T entity,
+                                      String rendererId,
+                                      float partialTick,
+                                      PoseStack poseStack,
+                                      MultiBufferSource bufferSource) {
+        String textureId = drawPlanParamString(rendererId, "texture", "");
+        ResourceLocation texture = ResourceLocation.tryParse(textureId);
+        if (texture == null) {
+            return;
+        }
+        Player owner = entity instanceof ScriptedEffectEntity effect ? effect.getOwnerPlayer() : null;
+        if (owner == null) {
+            return;
+        }
+        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
+        float growth = Mth.clamp(age / 15.0F, 0.0F, 1.0F);
+        float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", 1.8F))
+                * (0.2F + 0.8F * growth);
+        float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
+
+        float yaw = owner.yBodyRot;
+        float pitch = owner.getXRot();
+        if (owner == Minecraft.getInstance().player
+                && Minecraft.getInstance().options.getCameraType().isFirstPerson()) {
+            yaw = owner.getYRot();
+        }
+
+        poseStack.pushPose();
+        poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));
+        poseStack.mulPose(Axis.XP.rotationDegrees(pitch));
+        poseStack.scale(size, size, size);
+
+        PoseStack.Pose pose = poseStack.last();
+        Matrix4f mat = pose.pose();
+        Matrix3f normal = pose.normal();
+        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
+        int a = (int) (255.0F * alpha);
+        int fullBright = 0x00F000F0;
+
+        // Upstream mesh UVs: {0,0}{1,1}{0,0}{1,1} for the four rim vertices,
+        // {0,1} for the shared apex — the diamond texture runs continuously
+        // ACROSS the faces (each face reuses the apex UV), so the pyramid
+        // reads as one solid gem, not four independent texture-stretched
+        // triangles.
+        float[][] rim = {{-1.0F, 0.0F, 0.0F}, {0.0F, -1.0F, 0.0F}, {1.0F, 0.0F, 0.0F}, {0.0F, 1.0F, 0.0F}};
+        float[][] rimUvs = {{0.0F, 0.0F}, {1.0F, 1.0F}, {0.0F, 0.0F}, {1.0F, 1.0F}};
+        float[] apex = {0.0F, 0.0F, 1.0F};
+        float[] apexUv = {0.0F, 1.0F};
+        for (int f = 0; f < 4; f++) {
+            float[][] face = {rim[f], rim[(f + 1) % 4], apex, apex};
+            float[][] faceUvs = {rimUvs[f], rimUvs[(f + 1) % 4], apexUv, apexUv};
+            for (int i = 0; i < 4; i++) {
+                vc.vertex(mat, face[i][0], face[i][1], face[i][2]).color(255, 255, 255, a)
+                        .uv(faceUvs[i][0], faceUvs[i][1]).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                        .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+            }
+        }
 
         poseStack.popPose();
     }

@@ -10,7 +10,8 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as owner]
             [cn.li.mcmod.util.log :as log])
-  (:import [java.util HashMap HashSet]))
+  (:import [java.util HashMap HashSet]
+           [java.util.concurrent ConcurrentHashMap]))
 
 (def STATUS-CONSTRUCTED context-domain/status-constructed)
 (def STATUS-ALIVE context-domain/status-alive)
@@ -48,9 +49,14 @@
   (^Object serverCounters [])
   (^Object deadlineBuckets []))
 
+;; ConcurrentHashMaps throughout: context transport state is mutated from
+;; the network/server threads while client ticks snapshot it (scan_vm_contexts
+;; -> get_all_contexts) — a plain HashMap threw ConcurrentModificationException
+;; mid-iteration. The weakly-consistent iterators never fail on concurrent
+;; writes, and in-place reads (get/put/remove) stay O(1) lock-free.
 (deftype DispatcherRuntime
-  [^HashMap transport-contexts ^HashMap player-index ^HashMap route-fns
-   ^HashMap client-counters ^HashMap server-counters ^HashMap deadline-buckets]
+  [^ConcurrentHashMap transport-contexts ^ConcurrentHashMap player-index ^ConcurrentHashMap route-fns
+   ^ConcurrentHashMap client-counters ^ConcurrentHashMap server-counters ^ConcurrentHashMap deadline-buckets]
   IDispatcherRuntime
   (contexts [_] transport-contexts)
   (playerIndex [_] player-index)
@@ -61,7 +67,8 @@
 
 (defn create-dispatcher-runtime
   ^IDispatcherRuntime []
-  (DispatcherRuntime. (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.) (HashMap.)))
+  (DispatcherRuntime. (ConcurrentHashMap.) (ConcurrentHashMap.) (ConcurrentHashMap.)
+                      (ConcurrentHashMap.) (ConcurrentHashMap.) (ConcurrentHashMap.)))
 
 (defonce ^:private default-runtime (create-dispatcher-runtime))
 (def ^:dynamic *dispatcher-runtime* nil)
@@ -112,8 +119,8 @@
 (defn- assoc-transport!
   [key ctx]
   (let [^IDispatcherRuntime runtime (current-runtime)
-        ^HashMap registry (.contexts runtime)
-        ^HashMap index (.playerIndex runtime)
+        ^ConcurrentHashMap registry (.contexts runtime)
+        ^ConcurrentHashMap index (.playerIndex runtime)
         index-key (context-player-index-key ctx)
         ^HashSet keys (or (.get index index-key)
                           (let [created (HashSet.)]
@@ -125,7 +132,7 @@
 
 (defn- update-transport-if-present!
   [key f & args]
-  (let [^HashMap registry (.contexts (current-runtime))]
+  (let [^ConcurrentHashMap registry (.contexts (current-runtime))]
     (when-let [current (.get registry key)]
       (.put registry key (apply f current args))))
   nil)
@@ -133,8 +140,8 @@
 (defn- dissoc-transport!
   [key]
   (let [^IDispatcherRuntime runtime (current-runtime)
-        ^HashMap registry (.contexts runtime)
-        ^HashMap index (.playerIndex runtime)]
+        ^ConcurrentHashMap registry (.contexts runtime)
+        ^ConcurrentHashMap index (.playerIndex runtime)]
     (when-let [ctx (.remove registry key)]
       (unschedule-deadline! ctx)
       (let [index-key (context-player-index-key ctx)
@@ -147,12 +154,12 @@
 
 (defn- clear-route-fns!
   []
-  (.clear ^HashMap (.routeFns (current-runtime)))
+  (.clear ^ConcurrentHashMap (.routeFns (current-runtime)))
   nil)
 
 (defn- register-route-fns-entry!
   [owner-key routes]
-  (.put ^HashMap (.routeFns (current-runtime)) owner-key routes)
+  (.put ^ConcurrentHashMap (.routeFns (current-runtime)) owner-key routes)
   nil)
 
 (defn- context-logical-side
@@ -195,7 +202,7 @@
 (defn- unschedule-deadline!
   [ctx]
   (when-let [bucket (:deadline-bucket ctx)]
-    (let [^HashMap buckets (.deadlineBuckets (current-runtime))
+    (let [^ConcurrentHashMap buckets (.deadlineBuckets (current-runtime))
           ^HashSet keys (.get buckets (long bucket))]
       (when keys
         (.remove keys (context-registry-key ctx))
@@ -211,7 +218,7 @@
   [ctx deadline-ms]
   (unschedule-deadline! ctx)
   (let [bucket (deadline-bucket-key (long deadline-ms))
-        ^HashMap buckets (.deadlineBuckets (current-runtime))
+        ^ConcurrentHashMap buckets (.deadlineBuckets (current-runtime))
         ^HashSet keys (or (.get buckets bucket)
                           (let [created (HashSet.)]
                             (.put buckets bucket created)
@@ -255,7 +262,7 @@
    `now`, removing those buckets. O(number of currently populated buckets
    at-or-before now), independent of total registered context count."
   [now]
-  (let [^HashMap buckets (.deadlineBuckets (current-runtime))
+  (let [^ConcurrentHashMap buckets (.deadlineBuckets (current-runtime))
         current-bucket (deadline-bucket-key (long now))
         due-buckets (java.util.ArrayList.)]
     (doseq [b (.keySet buckets)]
@@ -292,7 +299,7 @@
 (defn- next-context-id!
   [counter-key owner prefix]
   (let [^IDispatcherRuntime runtime (current-runtime)
-        ^HashMap counters (if (= counter-key :client-id-counter)
+        ^ConcurrentHashMap counters (if (= counter-key :client-id-counter)
                             (.clientCounters runtime)
                             (.serverCounters runtime))
         next-counter (unchecked-inc (long (or (.get counters owner) 0)))]
@@ -457,8 +464,8 @@
   ([owner player-uuid]
    (let [[logical-side route-key] (route-owner-key owner)
          ^IDispatcherRuntime runtime (current-runtime)
-         ^HashMap registry (.contexts runtime)
-         ^HashSet keys (.get ^HashMap (.playerIndex runtime)
+         ^ConcurrentHashMap registry (.contexts runtime)
+         ^HashSet keys (.get ^ConcurrentHashMap (.playerIndex runtime)
                              [logical-side route-key (str player-uuid)])]
      (loop [remaining (seq keys)
             result (transient [])]
@@ -512,14 +519,14 @@
   (let [owner-key (route-owner-key owner)
         ^IDispatcherRuntime runtime (current-runtime)
         doomed (java.util.ArrayList.)]
-    (doseq [[registry-key ctx-map] (.entrySet ^HashMap (.contexts runtime))]
+    (doseq [[registry-key ctx-map] (.entrySet ^ConcurrentHashMap (.contexts runtime))]
       (when (= owner-key [(context-logical-side ctx-map)
                           (owner/transport-route-key ctx-map)])
         (.add doomed registry-key)))
     (doseq [registry-key doomed]
       (dissoc-transport! registry-key))
-    (.remove ^HashMap (.clientCounters runtime) owner-key)
-    (.remove ^HashMap (.serverCounters runtime) owner-key))
+    (.remove ^ConcurrentHashMap (.clientCounters runtime) owner-key)
+    (.remove ^ConcurrentHashMap (.serverCounters runtime) owner-key))
   nil)
 
 (defn clear-store-session-contexts!
@@ -527,12 +534,12 @@
   [store-session-id]
   (let [^IDispatcherRuntime runtime (current-runtime)
         doomed (java.util.ArrayList.)]
-    (doseq [[registry-key ctx-map] (.entrySet ^HashMap (.contexts runtime))]
+    (doseq [[registry-key ctx-map] (.entrySet ^ConcurrentHashMap (.contexts runtime))]
       (when (= store-session-id (context-store-session-id ctx-map))
         (.add doomed registry-key)))
     (doseq [registry-key doomed]
       (dissoc-transport! registry-key))
-    (doseq [^HashMap counters [(.clientCounters runtime) (.serverCounters runtime)]]
+    (doseq [^ConcurrentHashMap counters [(.clientCounters runtime) (.serverCounters runtime)]]
       (let [iterator (.iterator (.keySet counters))]
         (while (.hasNext iterator)
           (let [[_side route-key] (.next iterator)
@@ -546,11 +553,11 @@
    (reset-contexts-for-test! {}))
   ([contexts]
    (let [^IDispatcherRuntime runtime (current-runtime)]
-     (.clear ^HashMap (.contexts runtime))
-     (.clear ^HashMap (.playerIndex runtime))
-     (.clear ^HashMap (.clientCounters runtime))
-     (.clear ^HashMap (.serverCounters runtime))
-     (.clear ^HashMap (.deadlineBuckets runtime))
+     (.clear ^ConcurrentHashMap (.contexts runtime))
+     (.clear ^ConcurrentHashMap (.playerIndex runtime))
+     (.clear ^ConcurrentHashMap (.clientCounters runtime))
+     (.clear ^ConcurrentHashMap (.serverCounters runtime))
+     (.clear ^ConcurrentHashMap (.deadlineBuckets runtime))
      (doseq [[registry-key ctx-map] contexts]
        (assoc-transport! registry-key ctx-map)))
    nil))
