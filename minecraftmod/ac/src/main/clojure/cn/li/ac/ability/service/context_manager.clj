@@ -246,10 +246,14 @@
    Extracted to top-level defn- so AOT emits exactly one static class —
    zero per-tick closure capture, zero JIT class generation.
    The payload map is created inside this static function where JVM
-   escape analysis can cheaply stack-allocate or aggressively reclaim it."
-  [owner callback {:keys [id skill-id]}]
+   escape analysis can cheaply stack-allocate or aggressively reclaim it.
+   Carries the live ServerPlayer so :tick! callbacks that spawn entities
+   (scatter-bomb / electron-missile balls) get a player ref — the network
+   key-tick payload doesn't flow here, this tick is server-driven."
+  [owner callback player {:keys [id skill-id]}]
   (ctx-state/handle-key-tick! owner id {:ctx-id id
-                                        :skill-id skill-id}
+                                        :skill-id skill-id
+                                        :player player}
                               callback))
 
 (defn tick-player-contexts!
@@ -257,16 +261,18 @@
   Early-exits when the player has no context-registry entries at all — the
   common case for idle players — avoiding the global registry snapshot,
   owner map allocation, and :purge-terminated-contexts command dispatch."
-  [player-uuid]
-  (when-let [registry (not-empty (:context-registry (server-player-state player-uuid)))]
-    (let [owner (server-context-owner player-uuid)]
-      (doseq [spec (active-server-contexts-for-player owner player-uuid registry)]
-        (tick-context-entry! owner send-terminated-context! spec))
-      (when-let [server-session-id (owner/store-session-id owner)]
-        (command-rt/run-command-in-session!
-         server-session-id
-         player-uuid
-         {:command :purge-terminated-contexts})))))
+  ([player-uuid]
+   (tick-player-contexts! player-uuid nil))
+  ([player-uuid player]
+   (when-let [registry (not-empty (:context-registry (server-player-state player-uuid)))]
+     (let [owner (server-context-owner player-uuid)]
+       (doseq [spec (active-server-contexts-for-player owner player-uuid registry)]
+         (tick-context-entry! owner send-terminated-context! player spec))
+       (when-let [server-session-id (owner/store-session-id owner)]
+         (command-rt/run-command-in-session!
+          server-session-id
+          player-uuid
+          {:command :purge-terminated-contexts}))))))
 
 (defn tick-context-manager!
   "Process only deadline-bucket entries due as of this tick — O(due entries),

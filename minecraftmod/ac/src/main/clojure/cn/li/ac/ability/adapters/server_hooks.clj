@@ -272,12 +272,12 @@
      (ctx-mgr/tick-context-manager!))
 
    :on-player-tick!
-   (fn [player-uuid]
+   (fn [player-uuid player]
      (runtime-get-or-create-player-state! player-uuid)
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
-     (ctx-mgr/tick-player-contexts! player-uuid)
+     (ctx-mgr/tick-player-contexts! player-uuid player)
      (delayed-projectiles/tick-player! player-uuid))
 
    :on-server-tick-end!

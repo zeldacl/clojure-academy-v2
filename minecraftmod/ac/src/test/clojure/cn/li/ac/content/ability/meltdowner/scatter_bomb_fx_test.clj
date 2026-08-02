@@ -75,8 +75,15 @@
                                                  :start {:x 1.0 :y 64.0 :z 2.0}
                                                  :end {:x 2.0 :y 64.0 :z 3.0}
                                                  :source-player-id "player-a"})
+      ;; The release beam is stored and renders billboard ops (replacing the
+      ;; old fixed-direction md_ray_small entity spawn).
+      (is (= 1 (count (get-in (sb-fx/scatter-bomb-fx-snapshot) [:beams [:ctx "ctx-sb"]]))))
+      (let [plan ((var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/build-plan)
+                  {:x 0.0 :y 65.0 :z 0.0} nil 0)]
+        (is (seq (:ops plan))))
       (enqueue! enqueue-state! "ctx-sb" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-sb"]])))
+      (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:beams [:ctx "ctx-sb"]])))
       (is (seq @particles*))
       (is (seq @sounds*)))))
 

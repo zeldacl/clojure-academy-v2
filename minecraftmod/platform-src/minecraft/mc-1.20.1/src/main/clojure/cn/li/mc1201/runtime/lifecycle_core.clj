@@ -185,7 +185,7 @@
   (let [uuid (cached-player-uuid runtime player)
         hooks (.hooks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)
         callbacks (.callbacks ^cn.li.mc1201.runtime.server_runtime.IServerRuntime runtime)]
-    ((get hooks :on-player-tick!) uuid)
+    ((get hooks :on-player-tick!) uuid player)
     (when ((get hooks :player-state-dirty?) uuid)
       (when-let [mark-dirty! (get callbacks :mark-player-dirty!)]
         (mark-dirty! owner uuid))))

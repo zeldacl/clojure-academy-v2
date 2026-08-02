@@ -36,9 +36,12 @@
     (let [calls (atom [])]
       (with-redefs [raycast/available? (constantly true)
                     entity-damage/available? (constantly true)
+                    world-effects/available? (constantly true)
                     geom/world-id-of (fn [_] "w")
                     geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                     raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    world-effects/find-entities-in-aabb
+                    (fn [& _] [{:uuid "ball-9" :x 1.5 :y 63.0 :z 2.2}])
                     raycast/raycast-entities (fn [& _]
                                                {:uuid "target-1"
                                                 :x 4.0
@@ -64,6 +67,7 @@
          {:player-id "p1"
           :ctx-id "ctx-1"
           :damage 12.5
+          :ball-uuid "ball-9"
           :delay-ticks 1})
         (dp/tick-player! "p1")
         ;; Exp is no longer granted here — original grants it unconditionally
@@ -75,7 +79,7 @@
                       "ctx-1"
                       :electron-bomb/fx-beam
                       {:mode :perform
-                       :start {:x 1.0 :y 64.0 :z 2.0}
+                       :start {:x 1.5 :y 63.0 :z 2.2}
                        :end {:x 1.0 :y 64.0 :z 17.0}
                        :hit-distance 15.0
                        :performed? true
@@ -84,7 +88,7 @@
                        "ctx-1"
                        :electron-bomb/fx-beam
                        {:mode :perform
-                        :start {:x 1.0 :y 64.0 :z 2.0}
+                        :start {:x 1.5 :y 63.0 :z 2.2}
                         :end {:x 1.0 :y 64.0 :z 17.0}
                         :hit-distance 15.0
                         :performed? true

@@ -109,9 +109,9 @@
                                                           (swap! floor-calls* conj [player-id floor])
                                                           nil)
                   geom/world-id-of (fn [_] "w")
-                  entity/player-spawn-entity-by-id! (fn [& args]
-                                                      (swap! spawn-calls* conj args)
-                                                      true)
+                  entity/player-spawn-tracked-entity-by-id! (fn [& args]
+                                                              (swap! spawn-calls* conj args)
+                                                              "ball-uuid-1")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
@@ -120,14 +120,17 @@
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"})))
     (is (= [["p1" 120.0]] @floor-calls*))
     (is (empty? @damage-calls*))
-    (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]] @spawn-calls*))
+    ;; Tracked spawn with a life override covering the whole hold window.
+    (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0 120]] @spawn-calls*))
     (is (= 20 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 1 (get-in @ctx* [:skill-state :balls])))
+    (is (= ["ball-uuid-1"] (get-in @ctx* [:skill-state :ball-uuids])))
     (is (= :scatter-bomb/fx-ball (second (first @messages*))))))
 
 (deftest scatter-bomb-tick-anti-afk-damages-and-terminates-test
   (let [{:keys [ctx* get-context update-skill-state-root! assoc-skill-state! send! messages*]}
-        (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0}})
+        (context-mocks {:skill-state {:balls 2 :hold-ticks 199 :overload-floor 120.0
+                                      :ball-uuids ["ball-1" "ball-2"]}})
         damage-calls* (atom [])
         scheduled* (atom [])
         terminate-calls* (atom [])]
@@ -146,6 +149,11 @@
                   skill-effects/add-skill-exp! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  world-effects/available? (constantly true)
+                  world-effects/find-entities-in-aabb
+                  (fn [& _] [{:uuid "ball-1" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-2" :x 1.0 :y 64.0 :z 2.0}])
+                  world-effects/discard-entity-by-uuid! (fn [& _] true)
                   motion-effects/teleportation-available? (constantly true)
                   motion-effects/player-position (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   raycast/available? (constantly true)
@@ -154,7 +162,7 @@
                   scatter/*scatter-dest-sampler* (fn [_ _] {:x 1.0 :y 64.0 :z 30.0})
                   delayed-projectiles/schedule-scatter-bomb-beam! (fn [task]
                                                                     (swap! scheduled* conj task))
-                  entity/player-spawn-entity-by-id! (fn [& _] true)
+                  entity/player-spawn-tracked-entity-by-id! (fn [& _] "ball-uuid")
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [world-id entity-uuid damage source-type]
                                                        (swap! damage-calls* conj [world-id entity-uuid damage source-type])
@@ -178,9 +186,9 @@
                   skill-config/tunable-double stub-tunable-double
                   skill-effects/enforce-overload-floor! (fn [& _] nil)
                   geom/world-id-of (fn [_] "w")
-                  entity/player-spawn-entity-by-id! (fn [& args]
-                                                      (swap! spawn-calls* conj args)
-                                                      true)
+                  entity/player-spawn-tracked-entity-by-id! (fn [& args]
+                                                              (swap! spawn-calls* conj args)
+                                                              "ball-uuid")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [_ _ _ _ _] true)]
@@ -194,7 +202,8 @@
   ;; Matches original: no cooldown is ever set (ScatterBomb.scala never calls
   ;; ctx.setCooldown), and exp is flat 0.001/ball.
   (let [{:keys [get-context send! messages*]}
-        (context-mocks {:skill-state {:balls 3 :hold-ticks 50 :overload-floor 120.0}})
+        (context-mocks {:skill-state {:balls 3 :hold-ticks 50 :overload-floor 120.0
+                                      :ball-uuids ["ball-1" "ball-2" "ball-3"]}})
         scheduled* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
@@ -221,6 +230,12 @@
                                                     {:x 5.0 :y 64.0 :z 12.0})
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                  world-effects/available? (constantly true)
+                  world-effects/find-entities-in-aabb
+                  (fn [& _] [{:uuid "ball-1" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-2" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-3" :x 1.0 :y 64.0 :z 2.0}])
+                  world-effects/discard-entity-by-uuid! (fn [& _] true)
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})]
          (cb/apply-invoke scatter/scatter-bomb-up! :player-id "p1" :ctx-id "ctx-3")))
@@ -236,7 +251,8 @@
   ;; Matches original: exp>0.5 redirects floor(balls*exp) balls to a random
   ;; nearby living entity's eye position instead of the randomized cone dest.
   (let [{:keys [get-context send!]}
-        (context-mocks {:skill-state {:balls 4 :hold-ticks 50 :overload-floor 120.0}})
+        (context-mocks {:skill-state {:balls 4 :hold-ticks 50 :overload-floor 120.0
+                                      :ball-uuids ["ball-1" "ball-2" "ball-3" "ball-4"]}})
         scheduled* (atom [])]
     (with-scatter-env
       #(with-redefs [ctx/get-context get-context
@@ -259,6 +275,12 @@
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   world-effects/available? (constantly true)
+                  world-effects/find-entities-in-aabb
+                  (fn [& _] [{:uuid "ball-1" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-2" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-3" :x 1.0 :y 64.0 :z 2.0}
+                             {:uuid "ball-4" :x 1.0 :y 64.0 :z 2.0}])
+                  world-effects/discard-entity-by-uuid! (fn [& _] true)
                   world-effects/find-entities-in-radius (fn [& _]
                                                           [{:uuid "target-1" :x 3.0 :y 64.0 :z 3.0
                                                             :eye-height 1.6 :living? true}])]

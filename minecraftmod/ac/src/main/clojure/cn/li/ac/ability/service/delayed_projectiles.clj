@@ -106,11 +106,13 @@
   [{:keys [player-id] :as task}]
   (schedule-task! player-id (:delay-ticks task) (assoc task :kind :scatter-bomb-beam)))
 
-(defn- resolve-ball-position
+(defn resolve-ball-position
   "Locate the spawned MdBall entity by uuid at settle time. The ball orbits
   the caster (body-level, radius 0.8-1.3), so a small AABB around the caster's
   eye covers it. Returns the ball's world position map, or nil when the ball
-  is gone (world unloaded) — callers then fall back to the caster's eye."
+  is gone (world unloaded) — callers then fall back to the caster's eye.
+  Shared by electron-bomb and scatter-bomb so release rays originate from
+  the balls' actual orbit positions."
   [world-id player-id ball-uuid]
   (when (and ball-uuid (world-effects/available?))
     (let [eye (geom/eye-pos player-id)
@@ -136,9 +138,8 @@
             eye (geom/eye-pos player-id)
             look-vec (raycast/player-look-vector player-id)]
         (when look-vec
-          (let [ball-pos (resolve-ball-position world-id player-id ball-uuid)
-                origin (or ball-pos eye)
-                dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
+          (when-let [origin (resolve-ball-position world-id player-id ball-uuid)]
+            (let [dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
                                  :y (double (or (:y look-vec) 0.0))
                                  :z (double (or (:z look-vec) 0.0))})
                 dest (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
@@ -175,7 +176,7 @@
                                                     :z (:z hit)}}))
             ;; Original broadcasts the small ray even when it hits no entity.
             (ctx-mgr/push-channel-to-player! player-id ctx-id :electron-bomb/fx-beam payload)
-            (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :electron-bomb/fx-beam payload)))))
+            (ctx-mgr/push-channel-to-nearby-players! player-id ctx-id :electron-bomb/fx-beam payload))))))
     (catch Exception e
       (log/warn "Delayed ElectronBomb settle failed:" (ex-message e)))))
 

@@ -140,6 +140,9 @@
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   raycast/raycast-entities (fn [& _]
                                               {:uuid victim :x 0.0 :y 64.0 :z 8.0 :distance 8.0})
+                  world-effects/available? (constantly true)
+                  world-effects/find-entities-in-aabb
+                  (fn [& _] [{:uuid "ball-eb" :x 0.0 :y 64.0 :z 0.0}])
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)
                   entity-damage/apply-aoe-damage! (fn [& _] [])
@@ -148,10 +151,8 @@
        {:player-id attacker
         :ctx-id "ctx-eb"
         :world-id "w"
-        :eye {:x 0.0 :y 64.0 :z 0.0}
-        :look-dir {:x 0.0 :y 0.0 :z 1.0}
+        :ball-uuid "ball-eb"
         :damage 12.0
-        :exp-gain 0.003
         :delay-ticks 1})
       (dp/tick-player! attacker)
       (is (= 1.75 (:rate (get (dh/marks-snapshot) victim))))

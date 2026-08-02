@@ -90,14 +90,17 @@
   random-scatter-dest)
 
 (defn- random-ball-offset
-  "Approximate EntityMdBall's original player-relative spawn offset."
+  "Approximate EntityMdBall's original player-relative spawn offset. The Y
+  range matches the raised md-ball orbit (y-from 0.2, y-to 1.6) — the old
+  -1.2..0.2 range put the release ray origins below the ground, hiding them
+  in the terrain."
   [look-vec]
   (let [base-theta (Math/atan2 (double (or (:x look-vec) 0.0))
                                 (double (or (:z look-vec) 1.0)))
         theta (+ base-theta (* (- (rand) 0.5) 0.9 Math/PI))
         radius (+ 0.8 (* (rand) 0.5))]
     {:x (* (Math/sin theta) radius)
-     :y (+ -1.2 (* (rand) 1.4))
+     :y (+ 0.2 (* (rand) 1.4))
      :z (* (Math/cos theta) radius)}))
 
 (def ^:dynamic *ball-offset-sampler*
@@ -176,20 +179,51 @@
                                    []))]
               (set-skill-state! ctx-id [:ball-offsets]
                                 (conj offsets (*ball-offset-sampler* look-vec))))
+            ;; Tracked spawn keeps the ball uuid so settle-scatter-bomb! can
+            ;; remove the balls (original ball.setDead() on release) — the
+            ;; spec life alone (50) would let early balls die mid-hold. Life
+            ;; override covers the whole hold window.
             (when player-ref
-              (entity/player-spawn-entity-by-id! player-ref mdball-entity-id 0.0))
+              (when-let [ball-uuid (entity/player-spawn-tracked-entity-by-id!
+                                     player-ref
+                                     mdball-entity-id
+                                     0.0
+                                     (+ (cfg-int :projectile.max-hold-ticks) 40))]
+                (set-skill-state! ctx-id [:ball-uuids]
+                                  (conj (vec (or (get-in (ctx-skill/get-context ctx-id)
+                                                          [:skill-state :ball-uuids])
+                                                 []))
+                                        ball-uuid))))
             (let [eye (geom/eye-pos player-id)]
               (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-ball} nil
                         {:x (:x eye) :y (:y eye) :z (:z eye)
                          :count new-balls}))))))))
 
+(defn- discard-balls!
+  "Remove the spawned ball entities (original ball.setDead() on release)."
+  [ctx-id player-id]
+  (when (world-effects/available?)
+    (let [world-id (geom/world-id-of player-id)
+          uuids (vec (or (get-in (ctx-skill/get-context ctx-id) [:skill-state :ball-uuids]) []))]
+      (doseq [uuid uuids]
+        (world-effects/discard-entity-by-uuid! world-id uuid)))))
+
 (defn- settle-scatter-bomb!
   [ctx-id player-id exp]
   (let [ctx-data (ctx-skill/get-context ctx-id)
-        balls (int (or (get-in ctx-data [:skill-state :balls]) 0))]
+        balls (int (or (get-in ctx-data [:skill-state :balls]) 0))
+        world-id (geom/world-id-of player-id)
+        ball-uuids (vec (or (get-in ctx-data [:skill-state :ball-uuids]) []))
+        ;; Resolve each ball's ACTUAL orbit position BEFORE discarding them —
+        ;; the rays must originate from the visible balls (original
+        ;; ball.getPositionEyes), not the stored offset approximation.
+        ball-positions (mapv (fn [uuid]
+                               (delayed-projectiles/resolve-ball-position
+                                 world-id player-id uuid))
+                             ball-uuids)]
+    (discard-balls! ctx-id player-id)
     (when (pos? balls)
-      (let [world-id   (geom/world-id-of player-id)
-            eye        (geom/eye-pos player-id)
+      (let [eye        (geom/eye-pos player-id)
             player-pos (or (when (motion-effects/teleportation-available?)
                              (motion-effects/player-position player-id))
                            eye)
@@ -199,11 +233,7 @@
             auto-aim?  (> (double exp) (double (cfg-double :targeting.auto-aim-exp-threshold)))
             targets    (if auto-aim? (auto-aim-targets world-id player-id player-pos) [])
             auto-count (if auto-aim? (long (* balls (double exp))) 0)
-            auto-count* (long-array 1 auto-count)
-            stored-offsets (vec (or (get-in ctx-data [:skill-state :ball-offsets]) []))
-            offsets (vec (take balls
-                               (concat stored-offsets
-                                       (repeatedly #(*ball-offset-sampler* look-vec)))))]
+            auto-count* (long-array 1 auto-count)]
         (when look-vec
           (dotimes [i balls]
             (let [auto-target (when (and (pos? (aget auto-count* 0)) (seq targets))
@@ -214,21 +244,22 @@
                           :y (+ (double (:y auto-target)) (double (or (:eye-height auto-target) 0.0)))
                           :z (double (:z auto-target))}
                          (*scatter-dest-sampler* eye look-vec))
-                  offset (nth offsets i)
-                  origin {:x (+ (double (:x player-pos)) (double (:x offset)))
-                          :y (+ (double (:y player-pos)) (double (:y offset)))
-                          :z (+ (double (:z player-pos)) (double (:z offset)))}]
-              (delayed-projectiles/schedule-scatter-bomb-beam!
-                {:player-id   player-id
-                 :ctx-id      ctx-id
-                 :world-id    world-id
-                 :origin      origin
-                 :dest        dest
-                 :damage      damage
-                 :delay-ticks 1}))))
+                  actual-pos (nth ball-positions i nil)]
+              (if actual-pos
+                (delayed-projectiles/schedule-scatter-bomb-beam!
+                  {:player-id   player-id
+                   :ctx-id      ctx-id
+                   :world-id    world-id
+                   :origin      actual-pos
+                   :dest        dest
+                   :damage      damage
+                   :delay-ticks 1})
+                ;; No silent fallback: a missing ball is a bug and must surface.
+                (log/warn "ScatterBomb: ball entity not found for ray origin"
+                          {:index i :ball-uuid (nth ball-uuids i nil)}))))))
         (skill-effects/add-skill-exp! player-id scatter-bomb-skill-id
                                       (* (cfg-double :progression.exp-per-ball) balls))
-        (log/debug "ScatterBomb: fired" balls "balls")))
+        (log/debug "ScatterBomb: fired" balls "balls"))
     (fx/send-local-and-nearby! ctx-id {:topic :scatter-bomb/fx-end} nil {:balls balls})))
 
 (defn scatter-bomb-up!

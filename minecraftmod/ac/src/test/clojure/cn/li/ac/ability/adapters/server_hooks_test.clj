@@ -187,7 +187,7 @@
                   ps-tick/server-tick-player-in-session! (fn [session-id uuid payload]
                                                            (swap! calls conj [:player-state-tick session-id uuid payload])
                                                            nil)
-                  ctx-mgr/tick-player-contexts! (fn [uuid]
+                  ctx-mgr/tick-player-contexts! (fn [uuid _player]
                                                  (swap! calls conj [:context-tick uuid])
                                                  nil)
                   md-damage/tick-marks! (fn [] (swap! calls conj [:marks]) nil)
@@ -198,7 +198,7 @@
                                                  (swap! calls conj [:context-manager])
                                                  nil)]
       (start! 1)
-      (tick! "p1")
+      (tick! "p1" (Object.))
       (is (= [[:marks]
               [:context-manager]
               [:ensure-state :test-session "p1"]

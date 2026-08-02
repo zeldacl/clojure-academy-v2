@@ -161,7 +161,7 @@
       (with-server-player-owner "p1"
         #(cm/tick-player-contexts! "p1"))
       (is (= [{:ctx-id "cid-1"
-               :payload {:ctx-id "cid-1" :skill-id :arc-gen}
+               :payload {:ctx-id "cid-1" :skill-id :arc-gen :player nil}
                :owner (server-owner "p1")
                :terminate-fn true}]
              @calls)))))
