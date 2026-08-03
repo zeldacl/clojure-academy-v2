@@ -4,6 +4,7 @@
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -260,18 +261,44 @@
    ctx-id {:topic :storm-wing/fx-end :mode :end} nil nil)
   (ctx-skill/clear-skill-state! ctx-id)
   (when terminate?
-    (ctx/terminate-context! ctx-id nil))
+    ;; Notify the client so its mirror context is cleaned up (and the
+    ;; movement-key hints stop showing) — plain terminate-context! with nil
+    ;; leaves the client-side context registered forever.
+    (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
   (log/info "StormWing: Terminated" reason)
   nil)
 
+(defn- active-storm-wing-ctx-id
+  "First storm-wing context of `player-id` in :charging/:flying, optionally
+  excluding `exclude-ctx-id`."
+  ([player-id]
+   (active-storm-wing-ctx-id player-id nil))
+  ([player-id exclude-ctx-id]
+   (->> (ctx/get-all-contexts)
+        (filter (fn [[ctx-id ctx-data]]
+                  (and (not= ctx-id exclude-ctx-id)
+                       (= (:player-uuid ctx-data) player-id)
+                       (contains? #{:charging :flying}
+                                  (get-in ctx-data [:skill-state :phase])))))
+        first
+        first)))
+
 (defn storm-wing-on-key-down
+  "Press-to-toggle like the original StormWing onKeyDown: the client's slot
+  ctx-id is cleared at key-up, so the second press arrives on a NEW context
+  - deactivate the still-active context of the previous press (and this
+  one); otherwise activate."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (let [ctx-data (ctx-skill/get-context ctx-id)
           phase (get-in ctx-data [:skill-state :phase])
           exp (double (or exp 0.0))]
-      (if (#{:charging :flying} phase)
-        (finish! ctx-id player-id exp true :manual)
+      (if (or (#{:charging :flying} phase)
+              (active-storm-wing-ctx-id player-id ctx-id))
+        (do
+          (finish! ctx-id player-id exp true :manual)
+          (when-let [active-ctx-id (active-storm-wing-ctx-id player-id ctx-id)]
+            (finish! active-ctx-id player-id exp true :manual)))
         (let [charge-time (cfg-lerp :charge.time exp)
               previous-can-fly?
               (motion-effects/player-can-fly? player-id)]

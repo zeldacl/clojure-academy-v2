@@ -34,7 +34,8 @@
                  (fn? (:enqueue-state-fn handler-map))
                  (fn? (:tick-state-fn handler-map))
                  (or (nil? (:empty-state? handler-map)) (fn? (:empty-state? handler-map)))
-                 (or (nil? (:fov-offset-fn handler-map)) (fn? (:fov-offset-fn handler-map))))
+                 (or (nil? (:fov-offset-fn handler-map)) (fn? (:fov-offset-fn handler-map)))
+                 (or (nil? (:clear-owner-fn handler-map)) (fn? (:clear-owner-fn handler-map))))
     (throw (IllegalArgumentException.
              "register-level-effect!: invalid effect-id or handler-map")))
   (assert-registry-open!)
@@ -90,6 +91,22 @@
         (enqueue-state-fn (.get effect-states effect-id)
                           ctx-id channel owner-key* payload)))
     (log/warn "No level effect registered for" effect-id)))
+
+(defn clear-effect-owner!
+  "Remove the fx state owned by `owner-key` from every registered effect.
+
+  Called when a client context terminates: externally aborted contexts
+  (overload stun, category change, death) never get their skill's :end
+  channel, so a persistent effect like storm-wing's wings/loop sound would
+  otherwise keep rendering forever. Each effect supplies its own
+  :clear-owner-fn (fx-spec wire-through / arc-beam dispatch); effects
+  without one keep their state (single-shot effects own their lifecycle)."
+  [owner-key]
+  (doseq [eid effect-order]
+    (when-let [clear-owner-fn (:clear-owner-fn (.get registry eid))]
+      (when-some [store (.get effect-states eid)]
+        (put-effect-state! eid (clear-owner-fn store owner-key)))))
+  nil)
 
 (defn tick-level-effects! []
   (dotimes [i (.size effect-order)]

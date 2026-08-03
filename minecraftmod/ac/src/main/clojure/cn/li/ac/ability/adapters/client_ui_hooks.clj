@@ -10,6 +10,7 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.hud :as hud-renderer]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
@@ -638,7 +639,8 @@
       (with-client-context-owner player-uuid
         (fn [_owner]
           (ctx/with-context-owner (client-context-owner player-uuid)
-            (ctx/terminate-context! ctx-id nil))))
+            (ctx/terminate-context! ctx-id nil)
+            (level-effects/clear-effect-owner! [:ctx ctx-id]))))
       ctx-id)))
 
 (defn- clear-slot-key-ticks!
@@ -713,19 +715,18 @@
 
 (defn- active-context-ids-for-skill
   [player-uuid skill-id]
-  (let [owner-key (client-ui-owner-key player-uuid)]
-    (->> (slot-context-ids-snapshot)
-       (keep (fn [[slot-key ctx-id]]
-               (when (= owner-key (slot-key-owner slot-key))
-                 (let [ctx-data (with-client-context-owner
-                                  player-uuid
-                                  (fn [owner]
-                                    (ctx/get-context owner ctx-id)))]
-                   (when (and (= skill-id (:skill-id ctx-data))
-                              (ctx/active-context? ctx-data))
-                     ctx-id)))))
+  ;; Scan the CLIENT context registry, not the slot map: the slot entry is
+  ;; cleared at key-up, so keep-active contexts (storm-wing / flashing) are
+  ;; never found there — their movement sub-keys would silently go dead
+  ;; (float with no way to steer) and the HUD hint column would never show.
+  (->> (ctx/get-all-contexts)
+       (keep (fn [[_key ctx-data]]
+               (when (and (= (str player-uuid) (:player-uuid ctx-data))
+                          (= skill-id (:skill-id ctx-data))
+                          (ctx/active-context? ctx-data))
+                 (:id ctx-data))))
        distinct
-       vec)))
+       vec))
 
 (defn- send-movement-message!
   [player-uuid transition movement-key]
@@ -828,13 +829,15 @@
                            (when (> pct 0.8)
                              {:kind :overload-pulse
                               :intensity (* (- pct 0.8) 5.0)})))
-        numbers-texts (or (:numbers-texts hud-render-data) [])]
+        numbers-texts (or (:numbers-texts hud-render-data) [])
+        movement-hints (some-> (:movement-hints hud-render-data) (dissoc :type))]
                 (persistent!
                   (let [out (transient [])]
                     (doseq [x (keep identity [cp-bar overload-bar activation-indicator combat-notice overload-pulse])]
                       (conj! out x))
                     (doseq [x preset-indicators] (conj! out x))
                     (doseq [x skill-slots] (conj! out x))
+                    (when movement-hints (conj! out movement-hints))
                     (doseq [x numbers-texts] (conj! out x))
                     out))))
 
@@ -986,12 +989,15 @@
                           (hud-renderer/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
                                                      :skill-exps skill-exps})
                           (hud-renderer/patch-skill-slot-visual active-contexts player-uuid now-ms)))
+        movement-hints (reactive-hud/build-movement-hints-data
+                        player-uuid active-contexts screen-width screen-height)
         hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
                                   (pos? last-show-value-change-ms))
                           {:cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))
                            :overload-bar (when (:activated hud-model)
                                            (hud-renderer/build-overload-bar-render-data hud-model now-ms))
                            :skill-slots skill-slots
+                           :movement-hints movement-hints
                            :activation-indicator (when (:activated hud-model)
                                                     (hud-renderer/build-activation-indicator-data hud-model activate-hint))
                            :combat-notice nil
@@ -1068,11 +1074,16 @@
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATE
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
-        (ctx/terminate-context! ctx-id nil)))
+        (ctx/terminate-context! ctx-id nil)
+        ;; Externally aborted contexts (overload stun, death, category change)
+        ;; never get their skill's :end channel — release the fx state so
+        ;; persistent effects (storm-wing wings/loop sound) stop rendering.
+        (level-effects/clear-effect-owner! [:ctx ctx-id])))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATED
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
-        (ctx/terminate-context! ctx-id nil)))
+        (ctx/terminate-context! ctx-id nil)
+        (level-effects/clear-effect-owner! [:ctx ctx-id])))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
     ;; Side-effect cleanup moved out of render path into tick hooks
     (content-actions/register-client-tick-hook!
@@ -1117,7 +1128,8 @@
      :client-terminate-context!
      (fn [ctx-id _reason]
        (remove-slot-context! ctx-id)
-       (ctx/terminate-context! ctx-id nil))
+       (ctx/terminate-context! ctx-id nil)
+       (level-effects/clear-effect-owner! [:ctx ctx-id]))
 
      :client-transition-to-alive!
      (fn [ctx-id server-id payload]

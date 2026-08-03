@@ -5,9 +5,11 @@
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as keybinds]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]
+            [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -511,6 +513,46 @@
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
     contexts))
 
+(def ^:private movement-hint-keys
+  "Upstream StormWing/Flashing key-group order: forward/back/left/right with
+  the vanilla WASD keycap labels."
+  [[:forward "W" "前"]
+   [:back "S" "后"]
+   [:left "A" "左"]
+   [:right "D" "右"]])
+
+(defn build-movement-hints-data
+  "Upstream KeyHintUI's key-group column: when storm-wing is charging or
+  flying, show the four WASD hints in a column to the LEFT of the skill-slot
+  hints, highlighting the key currently held.
+
+  Driven by the storm-wing LEVEL FX state (the same state that renders the
+  wings), not the client context mirror — the mirror is not reliably synced
+  with the skill-state phase."
+  [player-uuid _contexts screen-w screen-h]
+  (let [sw-storm
+        (some (fn [st]
+                (when (and (:active? st)
+                           (contains? #{:charging :flying} (:phase st))
+                           (or (nil? (:source-player-id st))
+                               (= (str player-uuid)
+                                  (str (:source-player-id st)))))
+                  :storm-wing))
+              (vals (:effect-state
+                     (level-effects/effect-state-snapshot :storm-wing))))
+        key-state (keybinds/key-state-snapshot player-uuid)]
+    (when sw-storm
+      {:kind :movement-hints
+       :x (- screen-w 165)
+       :y (- screen-h 100)
+       :skill-icon (skill-query/get-skill-icon-path sw-storm)
+       :items (mapv (fn [[movement-key key-label dir-label]]
+                      {:key-label key-label
+                       :label dir-label
+                       :active? (boolean (get-in key-state
+                                                 [:movement-keys movement-key]))})
+                    movement-hint-keys)})))
+
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.
    opts: {:activated-override :showing-numbers? :last-show-value-change-ms :active-overlay-app :now-ms}"
@@ -557,6 +599,7 @@
      :overload-bar overload-bar
      :cp-full-glow? (boolean (:full-glow? cp-bar))
      :skill-slots (or skill-slots [])
+     :movement-hints (build-movement-hints-data player-uuid contexts screen-w screen-h)
      :activation-indicator (when (:activated hud-model)
                              (hud/build-activation-indicator-data hud-model activate-hint))
      :preset-indicators (or preset-indicators [])

@@ -161,6 +161,30 @@
         (.blit graphics loc (int x) (int y) u v (int w) (int h) tw th)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
 
+(defn- render-movement-hints!
+  "Upstream KeyHintUI key-group column: one box per movement sub-key, the
+  held key highlighted like an active skill slot."
+  [^GuiGraphics graphics {:keys [x y skill-icon items]}]
+  (doseq [[idx {:keys [key-label label active?]}] (map-indexed vector items)]
+    (let [ix (int (+ (long x) 0))
+          iy (int (+ (long y) (* (long idx) 22)))
+          active? (boolean active?)
+          bg-color (if active?
+                     (rgb-vec->argb [70 179 255] 0.4)
+                     (unchecked-int (rgb-vec->argb [0 0 0] 0.5)))]
+      (.fill graphics ix iy (+ ix 20) (+ iy 20) bg-color)
+      (when active?
+        (let [border-color (rgb-vec->argb [70 179 255] 0.6)]
+          (.fill graphics (dec ix) (dec iy) (+ ix 21) iy border-color)
+          (.fill graphics (dec ix) (+ iy 20) (+ ix 21) (+ iy 21) border-color)
+          (.fill graphics (dec ix) iy ix (+ iy 20) border-color)
+          (.fill graphics (+ ix 20) iy (+ ix 21) (+ iy 20) border-color)))
+      (draw-string! graphics (str key-label) (+ ix 2) (+ iy 2) 0xFFFFFF)
+      (when skill-icon
+        (when-let [icon-loc (ResourceLocation/tryParse (normalize-texture-path skill-icon))]
+          (.blit graphics icon-loc (+ ix 25) iy 0 0 16 16 16 16)))
+      (draw-string! graphics (str label) (+ ix 45) (+ iy 6) 0xFFFFFF))))
+
 (defn render-element!
   [^GuiGraphics graphics element screen-width screen-height]
   (case (:kind element)
@@ -169,6 +193,7 @@
                             (draw-string! graphics "*" (:x element) (:y element) 0x00FF00)
                             (when-let [hint (:hint element)]
                               (draw-string! graphics (str hint) (+ (:x element) 12) (:y element) 0xCCCCCC)))
+    :movement-hints (render-movement-hints! graphics element)
     :content-slot (render-skill-slot! graphics element)
     :skill-slot (render-skill-slot! graphics element)
     :content-crosshair (render-crosshair! graphics element)

@@ -525,7 +525,8 @@
                                                :enqueue-state-fn #(dispatch-enqueue! :level effect-id %1 %2 %3 %4 %5)
                                                :tick-state-fn #(dispatch-tick! :level effect-id %1)
                                                :build-plan-fn (fn [cam pos tick query-fn]
-                                                               (effect-build-plan effect-id cam pos tick query-fn))}
+                                                               (effect-build-plan effect-id cam pos tick query-fn))
+                                               :clear-owner-fn #(dispatch-clear-owner! effect-id %1 %2)}
                                         (:fov-offset-fn opts)
                                         (assoc :fov-offset-fn (:fov-offset-fn opts)))]
                     (assoc spec :level level-handler))

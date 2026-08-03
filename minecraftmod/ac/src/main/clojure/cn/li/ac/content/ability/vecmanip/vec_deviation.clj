@@ -8,6 +8,7 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -74,13 +75,19 @@
     (when-not (excluded-entity? entity)
       (double (get (affected-entity-difficulty) entity-id 1.0)))))
 
-(defn- active-vec-deviation-ctx-id [player-id]
-  (->> (ctx/get-all-contexts)
-       (filter (fn [[_ctx-id ctx-data]]
-                 (and (= (:player-uuid ctx-data) player-id)
-                      (toggle/is-toggle-active? ctx-data :vec-deviation))))
-       first
-       first))
+(defn- active-vec-deviation-ctx-id
+  "First context of `player-id` whose vec-deviation toggle is active,
+  optionally excluding `exclude-ctx-id`."
+  ([player-id]
+   (active-vec-deviation-ctx-id player-id nil))
+  ([player-id exclude-ctx-id]
+   (->> (ctx/get-all-contexts)
+        (filter (fn [[ctx-id ctx-data]]
+                  (and (not= ctx-id exclude-ctx-id)
+                       (= (:player-uuid ctx-data) player-id)
+                       (toggle/is-toggle-active? ctx-data :vec-deviation))))
+        first
+        first)))
 
 (defn- set-skill-state-key! [ctx-id k v]
   (ctx-skill/assoc-skill-state! ctx-id k v))
@@ -129,17 +136,27 @@
   (toggle/remove-toggle! ctx-id :vec-deviation)
   (clear-vec-deviation-state! ctx-id)
   (fx/send! ctx-id {:topic :vec-deviation/fx-end :mode :end})
-  (ctx/terminate-context! ctx-id nil)
+  ;; Notify the client so its mirror context (and the wave-ring scan) is
+  ;; cleaned up — plain terminate-context! with nil leaves the client-side
+  ;; context registered forever.
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
   (log/info "VecDeviation: Deactivated" reason)
   nil)
 
 (defn vec-deviation-on-key-down
-  "Activate on the first press and terminate the context on the next press."
+  "Activate on the first press and terminate the context on the next press.
+
+  The client's slot ctx-id is cleared at key-up, so the second press arrives
+  on a NEW context — deactivate the still-toggle-active context of a previous
+  press instead (the original's press-again-to-exit, ActivateHandlers
+  terminatesContext)."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (if (toggle/is-toggle-active? ctx-data :vec-deviation)
-        (deactivate-and-terminate! ctx-id :manual)
+      (if-let [active-ctx-id (active-vec-deviation-ctx-id player-id ctx-id)]
+        (do
+          (deactivate-and-terminate! active-ctx-id :manual)
+          (deactivate-and-terminate! ctx-id :manual))
         (let [activation-overload
               (cfg-lerp :cost.activation.overload (double (or exp 0.0)))]
           (toggle/activate-toggle! ctx-id :vec-deviation)

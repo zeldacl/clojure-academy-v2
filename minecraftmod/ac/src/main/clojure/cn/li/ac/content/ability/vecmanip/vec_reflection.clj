@@ -6,6 +6,7 @@
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
@@ -204,13 +205,18 @@
   (contains? visited (str (:uuid entity))))
 
 (defn- active-vec-reflection-ctx-id
-  [player-id]
-  (->> (ctx/get-all-contexts)
-       (filter (fn [[_ctx-id ctx-data]]
-                 (and (= (:player-uuid ctx-data) player-id)
-                      (toggle/is-toggle-active? ctx-data :vec-reflection))))
-       first
-       first))
+  "First context of `player-id` whose vec-reflection toggle is active,
+  optionally excluding `exclude-ctx-id`."
+  ([player-id]
+   (active-vec-reflection-ctx-id player-id nil))
+  ([player-id exclude-ctx-id]
+   (->> (ctx/get-all-contexts)
+        (filter (fn [[ctx-id ctx-data]]
+                  (and (not= ctx-id exclude-ctx-id)
+                       (= (:player-uuid ctx-data) player-id)
+                       (toggle/is-toggle-active? ctx-data :vec-reflection))))
+        first
+        first)))
 
 (defn- set-skill-state-key!
   [ctx-id k v]
@@ -219,6 +225,20 @@
 (defn- update-skill-state-root!
   [ctx-id f]
   (ctx-skill/update-skill-state-root! ctx-id f))
+
+(defn- deactivate-and-terminate!
+  [ctx-id reason]
+  (toggle/remove-toggle! ctx-id :vec-reflection)
+  (update-skill-state-root!
+   ctx-id
+   #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
+  (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
+  ;; Notify the client so its mirror context is cleaned up — plain
+  ;; terminate-context! with nil leaves the client-side context registered
+  ;; forever.
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
+  (log/info "VecReflection: Deactivated" reason)
+  nil)
 
 (defn- add-exp! [player-id amount]
   (fx-common/add-skill-exp! player-id vec-reflection-skill-id amount))
@@ -329,32 +349,33 @@
         (entity-damage/vec-reflection-damage-source? damage-source))))
 
 (defn vec-reflection-on-key-down
-  "Activate or deactivate toggle skill."
+  "Activate on the first press and terminate the context on the next press.
+
+  The client's slot ctx-id is cleared at key-up, so the second press arrives
+  on a NEW context — deactivate the still-toggle-active context of a previous
+  press instead (the original's press-again-to-exit, ActivateHandlers
+  terminatesContext)."
   [ctx-id player-id _skill-id exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (try
     (when-let [ctx-data (ctx-skill/get-context ctx-id)]
-      (let [is-active? (toggle/is-toggle-active? ctx-data :vec-reflection)
-            exp (double (or exp 0.0))]
-        (if is-active?
-          (do
-            (toggle/remove-toggle! ctx-id :vec-reflection)
-            (update-skill-state-root! ctx-id #(dissoc % :vec-reflection-visited :vec-reflection-visited-map :vec-reflection-overload-keep))
-            (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
-            (log/info "VecReflection: Deactivated"))
-          (do
-            (toggle/activate-toggle! ctx-id :vec-reflection)
-            (set-skill-state-key! ctx-id :vec-reflection-visited-map {})
-            (let [overload-cost (cfg-lerp :cost.overload-keep exp)]
-              (fx-common/perform-resource! player-id overload-cost 0.0 false)
-              (let [overload-keep (double
-                                   (fx-common/player-path
-                                    player-id
-                                    [:resource-data :cur-overload]
-                                    overload-cost))]
-                (set-skill-state-key! ctx-id :vec-reflection-overload-keep overload-keep)
-                (enforce-overload-floor! player-id overload-keep)))
-            (fx/send! ctx-id {:topic :vec-reflection/fx-start :mode :start})
-            (log/info "VecReflection: Activated")))))
+      (if-let [active-ctx-id (active-vec-reflection-ctx-id player-id ctx-id)]
+        (do
+          (deactivate-and-terminate! active-ctx-id :manual)
+          (deactivate-and-terminate! ctx-id :manual))
+        (let [exp (double (or exp 0.0))]
+          (toggle/activate-toggle! ctx-id :vec-reflection)
+          (set-skill-state-key! ctx-id :vec-reflection-visited-map {})
+          (let [overload-cost (cfg-lerp :cost.overload-keep exp)]
+            (fx-common/perform-resource! player-id overload-cost 0.0 false)
+            (let [overload-keep (double
+                                 (fx-common/player-path
+                                  player-id
+                                  [:resource-data :cur-overload]
+                                  overload-cost))]
+              (set-skill-state-key! ctx-id :vec-reflection-overload-keep overload-keep)
+              (enforce-overload-floor! player-id overload-keep)))
+          (fx/send! ctx-id {:topic :vec-reflection/fx-start :mode :start})
+          (log/info "VecReflection: Activated"))))
     (catch Exception e
       (log/warn "VecReflection key-down failed:" (ex-message e)))))
 
@@ -368,9 +389,7 @@
         (enforce-overload-floor! player-id overload-keep)
 
         (when-not cost-ok?
-          (toggle/deactivate-toggle! ctx-id :vec-reflection)
-          (fx/send! ctx-id {:topic :vec-reflection/fx-end :mode :end})
-          (log/info "VecReflection: Deactivated (insufficient CP)"))
+          (deactivate-and-terminate! ctx-id :insufficient-cp))
 
         (when (and cost-ok?
                    (toggle/is-toggle-active? (or (ctx-skill/get-context ctx-id) ctx-data) :vec-reflection))
@@ -579,6 +598,8 @@
   :overload-consume-speed 0.0
   :cooldown-ticks 0
   :pattern :release-cast
+  :input-policy {:terminate-on-key-up? false
+                 :keep-active-on-key-up? true}
   :cost {:tick {:cp vec-reflection-cost-tick-cp}}
   :actions {:down! vec-reflection-on-key-down
             :tick! vec-reflection-on-key-tick

@@ -305,3 +305,36 @@
       (is (= 1 (count @floor-calls)) "enforce-overload-floor! called once")
       (is (= "p1" (:player-id (first @floor-calls))))
       (is (= 130.0 (:floor (first @floor-calls))) "floor value matches stored skill-state value"))))
+
+;; ---------------------------------------------------------------------------
+;; key-down -- second press deactivates the previous press's context
+;; ---------------------------------------------------------------------------
+
+(deftest second-key-down-deactivates-previous-press-toggle-test
+  (testing "a fresh press context deactivates and terminates the still-toggle-active context of the previous press"
+    (let [removed    (atom [])
+          terminated (atom [])
+          fx-sent    (atom [])
+          owner      {:logical-side :server :server-session-id :test-session :player-uuid "p1"}]
+      (with-redefs [cn.li.ac.content.ability.vecmanip.vec-deviation/update-skill-state-root!
+                    (fn [_ctx-id _f] nil)
+                    toggle/remove-toggle! (fn [ctx-id _skill-id] (swap! removed conj ctx-id) nil)
+                    ctx/terminate-context! (fn [ctx-id _fn] (swap! terminated conj ctx-id) nil)
+                    fx/send! (fn [ctx-id & _] (swap! fx-sent conj ctx-id) nil)]
+        (ctx/with-context-owner owner
+          (ctx/register-context!
+           (assoc (ctx/new-server-context "p1" :vec-deviation "old-ctx" owner)
+                  :skill-state {:toggle {:vec-deviation {:active true}}}))
+          (ctx/register-context!
+           (assoc (ctx/new-server-context "p1" :vec-deviation "new-ctx" owner)
+                  :skill-state {}))
+          (vd/vec-deviation-on-key-down "new-ctx" "p1" :vec-deviation 0.0 true 0 nil nil)
+          (let [old-id (->> (ctx/get-all-contexts)
+                            (filter (fn [[_k v]] (toggle/is-toggle-active? v :vec-deviation)))
+                            first
+                            key)]
+            (is (some? old-id) "previous press context is registered with its toggle active")
+            (is (= 2 (count @removed)) "toggle removed from the previous press context and the new press context")
+            (is (contains? (set @removed) old-id) "deactivation targets the previous press's context")
+            (is (= 2 (count @terminated)) "both contexts terminated")
+            (is (= 2 (count @fx-sent)) "fx-end sent for both contexts")))))))

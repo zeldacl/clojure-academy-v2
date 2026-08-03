@@ -1,10 +1,11 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [clojure.string :as str]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as swfx]))
+            [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as swfx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
   (try
@@ -53,12 +54,12 @@
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/tick-state!)
         build-plan (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/build-plan)
-        sound-calls* (atom [])
+        client-effects* (atom [])
         particle-calls* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-test"})
-                  client-sounds/queue-sound-effect! (fn [& args]
-                                                      (swap! sound-calls* conj args)
-                                                      nil)
+                  client-bridge/run-client-effect! (fn [effect & args]
+                                                     (swap! client-effects* conj [effect (vec args)])
+                                                     nil)
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particle-calls* conj args)
                                                             nil)
@@ -68,10 +69,30 @@
       (dotimes [_ 10]
         (tick! tick-state!))
       (let [plan (build-plan nil {:x 0.0 :y 64.0 :z 0.0 :player-uuid "player-a"} 0 nil)]
-        (is (= 2 (count @sound-calls*)))
+        (is (= 1 (count @client-effects*)) "loop sound started once via client bridge")
+        (is (= :mcmod/start-loop-sound-at-player (ffirst @client-effects*)))
+        (is (str/includes? (str (get-in (first @client-effects*) [1 0 :sound-id]))
+                           "vecmanip.storm_wing"))
         (is (= 12 (count @particle-calls*)))
-        (is (= 40 (count (:ops plan))))
+        (is (pos? (count (:ops plan))) "tornado ring quads emitted")
         (is (= 10 (get-in (swfx/storm-wing-fx-snapshot)
                           [:effect-state [:ctx "ctx-main"] :ticks])))))))
+
+(deftest end-stops-loop-sound-test
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/enqueue-state!)
+        client-effects* (atom [])]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-test"})
+                  client-bridge/run-client-effect! (fn [effect & args]
+                                                     (swap! client-effects* conj [effect (vec args)])
+                                                     nil)]
+      (enqueue! enqueue-state! "ctx-main" {:mode :start :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-main" {:mode :end :performed? true :source-player-id "player-a"})
+      (tick! (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/tick-state!))
+      (is (= [:mcmod/start-loop-sound-at-player :mcmod/stop-loop-sound]
+             (mapv first @client-effects*)))
+      (is (= "storm-wing/ctx-main" (get-in (second @client-effects*) [1 0 :key])))
+      (is (nil? (get-in (swfx/storm-wing-fx-snapshot)
+                        [:effect-state [:ctx "ctx-main"] :active?]))
+          "inactive state entry is dropped on the next tick"))))
 
 

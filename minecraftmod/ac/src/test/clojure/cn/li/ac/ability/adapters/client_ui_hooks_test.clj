@@ -554,6 +554,13 @@
                   ctx/get-context (fn [_owner ctx-id]
                                     (when (= ctx-id "ctx-flashing")
                                       {:id "ctx-flashing" :skill-id :flashing}))
+                  ;; active-context-ids-for-skill scans the client context
+                  ;; registry (not the slot map) for keep-active contexts.
+                  ctx/get-all-contexts (fn []
+                                         {"ctx-flashing" {:id "ctx-flashing"
+                                                          :player-uuid "p1"
+                                                          :skill-id :flashing
+                                                          :status :alive}})
                   net-client/send-to-server (network-support/capture-send-to-server! sent)]
       ((:client-on-slot-key-down! hooks) "p1" 0)
       ((:client-on-movement-key-down! hooks) "p1" :forward)

@@ -76,7 +76,8 @@
 
 (deftest storm-wing-keeps-state-per-owner-test
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "storm-wing-owner"})
-                client-sounds/queue-sound-effect! (fn [& _] nil)]
+                client-sounds/queue-sound-effect! (fn [& _] nil)
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (dispatch! :storm-wing (event "ctx-a" :storm-wing/fx-start {:mode :start :charge-ticks 70}))
     (dispatch! :storm-wing (event "ctx-b" :storm-wing/fx-start {:mode :start :charge-ticks 40}))
     (dispatch! :storm-wing (event "ctx-a" :storm-wing/fx-update
