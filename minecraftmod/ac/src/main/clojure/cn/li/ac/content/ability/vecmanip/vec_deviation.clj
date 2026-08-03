@@ -33,7 +33,7 @@
   valid configured class receives its configured difficulty."
   []
   (into {}
-        (take 1 (keep parse-difficulty-entry))
+        (comp (keep parse-difficulty-entry) (take 1))
         (skill-config/tunable-string-list
          vec-deviation-skill-id
          :targeting.affected-entity-difficulty)))

@@ -19,6 +19,8 @@ Use only the current target catalog architecture. Do not add root platform modul
 ## Common commands
 
 - Architecture gate: `cmd /c .\gradlew.bat verifyCurrentPlatforms`
+- Install clj-kondo binary: `cmd /c .\gradlew.bat downloadCljKondo`
+- Clojure lint gate: `cmd /c .\gradlew.bat lintClojureNative` (depends on `downloadCljKondo`; also runs before `:*:compileClojure` / packaging)
 - Forge compile: `.`\\scripts\\target-gradle.ps1 forge-1.20.1``
 - Fabric compile: `.`\\scripts\\target-gradle.ps1 fabric-1.20.1``
 - Forge client: `.`\\scripts\\target-gradle.ps1 forge-1.20.1``

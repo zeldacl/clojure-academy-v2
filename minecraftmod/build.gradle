@@ -1,5 +1,6 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
+import org.gradle.internal.os.OperatingSystem
 
 plugins {
     id "dev.architectury.loom" version "1.13.469" apply false
@@ -521,6 +522,113 @@ tasks.register("verifySingleApiBoundary") {
         }
         if (!buildLogicText.contains('project(":api")')) {
             throw new GradleException("platform build must consume the :api project artifact")
+        }
+    }
+}
+
+// ============================================================================
+// clj-kondo native static lint — packaging gate via compileClojure
+// ============================================================================
+
+def cljKondoVersion = "2025.10.15"
+def kondoDir = layout.buildDirectory.dir("clj-kondo-bin").get().asFile
+def kondoExt = OperatingSystem.current().isWindows() ? ".exe" : ""
+def kondoExe = new File(kondoDir, "clj-kondo${kondoExt}")
+
+tasks.register("downloadCljKondo") {
+    group = "verification"
+    description = "Install/download the clj-kondo native binary for this OS (standalone)."
+    outputs.file(kondoExe)
+    doLast {
+        if (kondoExe.exists()) {
+            return
+        }
+        kondoDir.mkdirs()
+        def os = OperatingSystem.current()
+        def archiveExt = ".zip"
+        def arch = System.getProperty("os.arch").toLowerCase()
+        def arm = arch.contains("aarch64") || arch.contains("arm64")
+        def platform =
+            os.windows ? "windows-amd64"
+            : os.macOsX ? (arm ? "macos-aarch64" : "macos-amd64")
+            : (arm ? "linux-aarch64" : "linux-amd64")
+        if (!os.windows && !os.macOsX) {
+            archiveExt = ".tar.gz"
+        }
+        def url = "https://github.com/clj-kondo/clj-kondo/releases/download/v${cljKondoVersion}/clj-kondo-${cljKondoVersion}-${platform}${archiveExt}"
+        logger.lifecycle("[clj-kondo] downloading {}", url)
+        def archiveFile = new File(kondoDir, "download${archiveExt}")
+        new URI(url).toURL().withInputStream { input ->
+            archiveFile.withOutputStream { output -> output << input }
+        }
+        if (archiveExt == ".zip") {
+            copy { from zipTree(archiveFile); into kondoDir }
+        } else {
+            copy { from tarTree(resources.gzip(archiveFile)); into kondoDir }
+        }
+        archiveFile.delete()
+        if (!OperatingSystem.current().isWindows()) {
+            exec { commandLine "chmod", "+x", kondoExe.absolutePath }
+        }
+        logger.lifecycle("[clj-kondo] ready: {}", kondoExe)
+    }
+}
+
+tasks.register("lintClojureNative") {
+    group = "verification"
+    description = "Run clj-kondo and fail the build on lint errors."
+    dependsOn tasks.named("downloadCljKondo")
+    def lintLog = layout.buildDirectory.file("reports/clj-kondo-lint.log")
+    outputs.file(lintLog)
+    doLast {
+        def dirs = []
+        subprojects { sp ->
+            sp.plugins.withId("dev.clojurephant.clojure") {
+                sp.sourceSets.main.clojure.srcDirs.each { File dir ->
+                    if (dir.directory) {
+                        dirs << dir.absolutePath
+                    }
+                }
+            }
+        }
+        if (dirs.isEmpty()) {
+            logger.lifecycle("[clj-kondo] no Clojure source directories")
+            return
+        }
+        def configFile = file(".clj-kondo/config.edn")
+        def kondoArgs = ["--lint"]
+        kondoArgs.addAll(dirs)
+        if (configFile.isFile()) {
+            kondoArgs.addAll(["--config", configFile.absolutePath])
+        }
+        kondoArgs.addAll(["--fail-level", "error"])
+        def out = new ByteArrayOutputStream()
+        def result = exec {
+            workingDir = rootProject.projectDir
+            executable = kondoExe.absolutePath
+            args kondoArgs
+            standardOutput = out
+            errorOutput = out
+            ignoreExitValue = true
+        }
+        def log = out.toString("UTF-8")
+        def logFile = lintLog.get().asFile
+        logFile.parentFile.mkdirs()
+        logFile.text = log
+        if (result.exitValue != 0) {
+            logger.error("[clj-kondo] failed; see {}", logFile)
+            throw new GradleException("clj-kondo check failed (exit ${result.exitValue}); details: ${logFile}")
+        }
+        logger.lifecycle("[clj-kondo] passed ({} source roots)", dirs.size())
+    }
+}
+
+gradle.projectsEvaluated {
+    subprojects { sp ->
+        sp.plugins.withId("dev.clojurephant.clojure") {
+            sp.tasks.matching { it.name == "compileClojure" }.configureEach {
+                dependsOn rootProject.tasks.named("lintClojureNative")
+            }
         }
     }
 }
