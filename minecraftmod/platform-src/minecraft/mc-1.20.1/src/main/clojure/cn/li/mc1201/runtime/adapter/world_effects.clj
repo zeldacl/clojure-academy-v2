@@ -20,7 +20,7 @@
     (resolve-level-fn server world-id)))
 
 (defn create-world-effects
-  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn combat-parent-fn]
+  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
                    get-entity-by-uuid-fn query-core/get-entity-by-uuid
                    resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
@@ -34,7 +34,7 @@
                                 (core/spawn-projectile-in-level!
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))
-        multipart-entity? #(multipart/multipart? % combat-parent-fn)]
+        multipart-entity? multipart/multipart?]
     {:spawn-lightning! (fn spawn-lightning-adapter!
                          ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
                          ([world-id x y z visual-only?]

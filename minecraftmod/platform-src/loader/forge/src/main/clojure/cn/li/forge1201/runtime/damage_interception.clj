@@ -19,23 +19,25 @@
                 false
                 LivingAttackEvent
                 (reify java.util.function.Consumer
-                  (accept [_ ^LivingAttackEvent evt]
-                    (core/apply-attack-result!
-                     (.getEntity evt)
-                     (.getSource evt)
-                     (.getAmount evt)
-                     #(.setCanceled evt (boolean %))))))
+                  (accept [_ event]
+                    (let [^LivingAttackEvent evt event]
+                      (core/apply-attack-result!
+                       (.getEntity evt)
+                       (.getSource evt)
+                       (.getAmount evt)
+                       #(.setCanceled evt (boolean %)))))))
 
   (.addListener (MinecraftForge/EVENT_BUS)
                 EventPriority/LOWEST ; Apply after other mutable-damage handlers.
                 false
                 LivingHurtEvent
                 (reify java.util.function.Consumer
-                  (accept [_ ^LivingHurtEvent evt]
-                    (core/apply-damage-result!
-                     (.getEntity evt)
-                     (.getSource evt)
-                     (.getAmount evt)
-                     #(.setAmount evt (float %))))))
+                  (accept [_ event]
+                    (let [^LivingHurtEvent evt event]
+                      (core/apply-damage-result!
+                       (.getEntity evt)
+                       (.getSource evt)
+                       (.getAmount evt)
+                       #(.setAmount evt (float %)))))))
 
   (log/info "Forge damage interception installed"))

@@ -1,27 +1,55 @@
 (ns cn.li.mc1201.runtime.multipart-entity
   "Shared multipart entity normalization."
-  (:import [net.minecraft.world.entity Entity]
+  (:import [cn.li.acapi.entity MultipartEntityApi MultipartEntityApi$ParentValidator MultipartEntityPart]
+           [net.minecraft.world.entity Entity]
            [net.minecraft.world.entity.boss EnderDragonPart]))
 
+(def ^:private ^MultipartEntityApi$ParentValidator entity-parent-validator
+  (reify MultipartEntityApi$ParentValidator
+    (isValid [_ candidate]
+      (instance? Entity candidate))))
+
+(defn- valid-parent
+  [entity candidate]
+  (when (and (instance? Entity candidate)
+             (not (identical? entity candidate)))
+    candidate))
+
+(defn- api-contract-parent
+  [entity]
+  (when (instance? MultipartEntityPart entity)
+    (try
+      (valid-parent entity
+                    (.getMultipartParent ^MultipartEntityPart entity))
+      (catch Exception _
+        nil)
+      (catch LinkageError _
+        nil))))
+
+(defn- registered-parent
+  [entity]
+  (valid-parent entity
+                (MultipartEntityApi/resolveParent
+                  entity
+                  ^MultipartEntityApi$ParentValidator entity-parent-validator)))
+
 (defn parent
-  [entity loader-parent-fn]
-  (try
-    (let [candidate (or (when (instance? EnderDragonPart entity)
-                          (.-parentMob ^EnderDragonPart entity))
-                        (when loader-parent-fn
-                          (loader-parent-fn entity)))]
-      (when (instance? Entity candidate)
-        candidate))
-    (catch Exception _
-      nil)))
+  "Resolve an immediate multipart parent through vanilla, cross-loader API,
+   and registered compatibility contracts, in that order."
+  [entity]
+  (when entity
+    (or (when (instance? EnderDragonPart entity)
+          (valid-parent entity (.-parentMob ^EnderDragonPart entity)))
+        (api-contract-parent entity)
+        (registered-parent entity))))
 
 (defn multipart?
-  [entity loader-parent-fn]
-  (boolean (and entity (parent entity loader-parent-fn))))
+  [entity]
+  (boolean (and entity (parent entity))))
 
 (defn combat-root
   "Resolve nested multipart graphs to a stable root."
-  [entity loader-parent-fn]
+  [entity]
   (loop [^Entity current entity
          depth 0
          seen []]
@@ -29,6 +57,6 @@
             (>= depth 8)
             (some #(identical? current %) seen))
       current
-      (if-let [^Entity parent-entity (parent current loader-parent-fn)]
+      (if-let [^Entity parent-entity (parent current)]
         (recur parent-entity (inc depth) (conj seen current))
         current))))

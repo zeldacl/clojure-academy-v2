@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.adapters.registry
   "Declarative Forge runtime adapter registry."
   (:require [cn.li.forge1201.runtime.entity-damage :as entity-damage]
+            [cn.li.forge1201.runtime.multipart-entity :as multipart-entity]
             [cn.li.forge1201.runtime.world-effects :as world-effects]
             [cn.li.forge1201.runtime.block-manipulation :as block-manipulation]
             [cn.li.forge1201.runtime.damage-interception :as damage-interception]
@@ -19,7 +20,9 @@
             [cn.li.mcmod.platform.entity :as pentity]))
 
 (def runtime-install-steps
-  [(adapter-registry/step :entity-damage
+  [(adapter-registry/step :multipart-entity-parent-resolver
+                          multipart-entity/register-parent-resolver!)
+   (adapter-registry/step :entity-damage
                           entity-damage/install-entity-damage!)
    (adapter-registry/step :raycast
                           #(when-let [fw-atom (fw/fw-atom)]

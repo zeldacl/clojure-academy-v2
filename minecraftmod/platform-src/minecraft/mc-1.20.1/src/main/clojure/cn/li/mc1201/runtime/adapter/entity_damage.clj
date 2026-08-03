@@ -10,7 +10,8 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.server MinecraftServer]
+  (:import [cn.li.mc1201.runtime DamageSourceShared]
+           [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity LivingEntity]
@@ -41,7 +42,7 @@
   "Return a function map implementing the entity-damage contract.
 
    Keys: :apply-direct-damage! :apply-aoe-damage! :apply-reflection-damage!"
-  [server-fn {:keys [resolve-level-fn get-entity-by-uuid-fn get-living-entities-in-aabb-fn living-entity?-fn apply-hurt-fn combat-parent-fn]
+  [server-fn {:keys [resolve-level-fn get-entity-by-uuid-fn get-living-entities-in-aabb-fn living-entity?-fn apply-hurt-fn]
               :or {resolve-level-fn query-core/resolve-level
                    get-entity-by-uuid-fn query-core/get-entity-by-uuid
                    living-entity?-fn (fn [entity] (instance? LivingEntity entity))
@@ -64,9 +65,9 @@
        (when (instance? DamageSource damage-source)
          (let [^DamageSource source damage-source
                causing-root (some-> (.getEntity source)
-                                    (multipart/combat-root combat-parent-fn))
+                                    (multipart/combat-root))
                direct-root (some-> (.getDirectEntity source)
-                                   (multipart/combat-root combat-parent-fn))
+                                   (multipart/combat-root))
                ^Entity target (cond
                                 (and causing-root (living? causing-root)) causing-root
                                 (and direct-root (living? direct-root)) direct-root
