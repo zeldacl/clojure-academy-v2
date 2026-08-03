@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.thunder-clap
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -93,34 +94,9 @@
   [store]
   (let [store* (or store {:effect-state {} :tails {} :impacts {}})]
     (-> store*
-        (update :effect-state
-          (fn [states]
-            (into {}
-                  (keep (fn [[owner-key st]]
-                          (when (:active? st)
-                            [owner-key (update st :ticks (fnil inc 0))])))
-                  states)))
-        (update :tails
-          (fn [tails]
-            (into {}
-                  (keep (fn [[owner-key st]]
-                          (let [next-ttl (dec (long (or (:ttl st) 0)))]
-                            (when (pos? next-ttl)
-                              [owner-key (assoc st
-                                                :ttl next-ttl
-                                                :ticks (inc (long (or (:ticks st) 0))))]))))
-                  tails)))
-        (update :impacts
-          (fn [by-owner]
-            (into {}
-                  (keep (fn [[owner-key impacts]]
-                          (let [live (->> impacts
-                                          (map #(update % :ttl dec))
-                                          (filter #(pos? (long (or (:ttl %) 0))))
-                                          vec)]
-                            (when (seq live)
-                              [owner-key live]))))
-                  by-owner))))))
+        (update :effect-state store-tick/keep-active-inc-ticks)
+        (update :tails #(store-tick/tick-ttl-states-by-owner % true))
+        (update :impacts store-tick/tick-ttl-items-by-owner))))
 
 (defn- surround-ops [player-center ticks]
   (let [radius (+ 0.55 (* 0.25 (Math/sin (* 0.22 (double ticks)))))

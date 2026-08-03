@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -99,16 +100,7 @@
 																[owner-key (assoc st :ticks ticks)])))))
 												states)))
 				(update :beams
-					(fn [by-owner]
-						(into {}
-									(keep (fn [[owner-key beams]]
-													(let [live (->> beams
-																					(map #(update % :ttl dec))
-																					(filter #(pos? (long (:ttl %))))
-																					vec)]
-														(when (seq live)
-															[owner-key live]))))
-									by-owner))))))
+					store-tick/tick-ttl-items-by-owner))))
 
 (defn- active-state-ops [st]
 	(let [ticks (long (or (:ticks st) 0))

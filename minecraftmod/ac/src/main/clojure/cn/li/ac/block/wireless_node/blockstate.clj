@@ -59,6 +59,30 @@
         :max (:max bs)
         :default (:default bs)}])))
 
+(defn- node-state-part
+  "One mutually-exclusive multipart entry for (energy, connected)."
+  [registry-name level connected?]
+  {:condition {:energy (str level)
+               :connected (str connected?)}
+   :models [(str (mod-id)
+                 ":block/"
+                 registry-name
+                 "_energy_"
+                 level
+                 (when connected? "_connected"))]})
+
+(defn- node-state-parts
+  "Eager (energy × connected) parts — avoids nested `for` class-name stacking."
+  [registry-name energy-min energy-max]
+  (persistent!
+   (reduce (fn [out level]
+             (reduce (fn [out' connected?]
+                       (conj! out' (node-state-part registry-name level connected?)))
+                     out
+                     [false true]))
+           (transient [])
+           (range energy-min (inc energy-max)))))
+
 (defn get-all-node-definitions
   "Generate BlockStateDefinition records for all node types.
 
@@ -73,34 +97,25 @@
         energy-min (get-in props [:energy :min])
         energy-max (get-in props [:energy :max])
         connected-type (get-in props [:connected :type])]
+    ;; IMPORTANT:
+    ;; Keep node parts mutually-exclusive. Using an unconditional base part
+    ;; plus conditional full-cube parts causes model stacking/z-fighting,
+    ;; which makes runtime appearance look "stuck" to one shape.
+    ;;
+    ;; We instead generate one model per (energy, connected) tuple.
     (into {}
-      (for [node-type (node-types*)
-                :let [node-type-name (name node-type)
-                      block-key (keyword (str "wireless-node-" node-type-name))
-                      registry-name (str "node_" node-type-name)
-            ;; IMPORTANT:
-            ;; Keep node parts mutually-exclusive. Using an unconditional base part
-            ;; plus conditional full-cube parts causes model stacking/z-fighting,
-            ;; which makes runtime appearance look "stuck" to one shape.
-            ;;
-            ;; We instead generate one model per (energy, connected) tuple.
-            state-models (vec
-              (for [level (range energy-min (inc energy-max))
-                connected? [false true]]
-                {:condition {:energy (str level)
-                     :connected (str connected?)}
-                 :models [(str (mod-id)
-                       ":block/"
-                       registry-name
-                       "_energy_"
-                       level
-                       (when connected? "_connected"))]}))]]
-            [block-key
-             (BlockStateDefinition.
-              registry-name
-              {:energy {:min energy-min :max energy-max}
-               :connected {:type connected-type}}
-        state-models)]))))
+          (map (fn [node-type]
+                 (let [node-type-name (name node-type)
+                       block-key (keyword (str "wireless-node-" node-type-name))
+                       registry-name (str "node_" node-type-name)
+                       state-models (node-state-parts registry-name energy-min energy-max)]
+                   [block-key
+                    (BlockStateDefinition.
+                     registry-name
+                     {:energy {:min energy-min :max energy-max}
+                      :connected {:type connected-type}}
+                     state-models)]))
+               (node-types*)))))
 
 (defn get-node-blockstate-definition
   "Get BlockState definition for a specific node block.

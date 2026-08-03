@@ -111,6 +111,53 @@
           (< (double exp) (cfg-double :breaking.hardness-mid-threshold)) mid-cap
           :else high-cap)))
 
+(defn- try-break-blastwave-block!
+  [player-id world-id x0 y0 z0 x y z hard-cap p-break p-drop full-exp?]
+  (let [dx (- x x0) dy (- y y0) dz (- z z0)
+        dist-sq (+ (* dx dx) (* dy dy) (* dz dz))]
+    (when (and (<= dist-sq 6)
+               (or (zero? dist-sq) (< (rand) p-break)))
+      (let [hardness (block-manip/get-block-hardness world-id x y z)
+            block-id (block-manip/get-block world-id x y z)
+            breakable? (and (number? hardness)
+                            (>= (double hardness) 0.0)
+                            (<= (double hardness) (double hard-cap))
+                            (some? block-id)
+                            (block-manip/can-break-block? player-id world-id x y z))]
+        (when breakable?
+          (if full-exp?
+            (do
+              ;; Exact mastery uses one ItemStack of the block itself,
+              ;; rather than the block's normal loot table.
+              (when (server-bridge/server-bridge-available?)
+                (server-bridge/spawn-item-stack-at!
+                 world-id x y z block-id 1))
+              (block-manip/break-block! player-id world-id x y z false))
+            (block-manip/break-block!
+             player-id world-id x y z (< (rand) p-drop))))))))
+
+(defn- break-blastwave-column!
+  "Named Z-axis walk — keeps AOT class names short without materializing coords."
+  [player-id world-id x0 y0 z0 x y z-lo z-hi hard-cap p-break p-drop full-exp?]
+  (let [z-lo (long z-lo)
+        z-hi (long z-hi)]
+    (loop [z z-lo]
+      (when (< z z-hi)
+        (try-break-blastwave-block!
+         player-id world-id x0 y0 z0 x y z hard-cap p-break p-drop full-exp?)
+        (recur (unchecked-inc z))))))
+
+(defn- break-blastwave-slice!
+  [player-id world-id x0 y0 z0 x y-lo y-hi z-lo z-hi
+   hard-cap p-break p-drop full-exp?]
+  (let [y-lo (long y-lo)
+        y-hi (long y-hi)]
+    (loop [y y-lo]
+      (when (< y y-hi)
+        (break-blastwave-column!
+         player-id world-id x0 y0 z0 x y z-lo z-hi hard-cap p-break p-drop full-exp?)
+        (recur (unchecked-inc y))))))
+
 (defn- break-nearby-blocks! [player-id world-id pos exp]
   (when (block-manip/available?)
     (let [x0        (int (Math/round (double (:x pos))))
@@ -119,32 +166,17 @@
           hard-cap  (break-hardness exp)
           p-break   (cfg-lerp :breaking.break-probability exp)
           p-drop    (cfg-lerp :breaking.drop-probability exp)
-          full-exp? (= 1.0 (double exp))]
-      (doseq [x (range (- x0 3) (+ x0 3))
-              y (range (- y0 3) (+ y0 3))
-              z (range (- z0 3) (+ z0 3))]
-        (let [dx (- x x0) dy (- y y0) dz (- z z0)
-              dist-sq (+ (* dx dx) (* dy dy) (* dz dz))]
-          (when (and (<= dist-sq 6)
-                     (or (zero? dist-sq) (< (rand) p-break)))
-            (let [hardness (block-manip/get-block-hardness world-id x y z)
-                  block-id (block-manip/get-block world-id x y z)
-                  breakable? (and (number? hardness)
-                                  (>= (double hardness) 0.0)
-                                  (<= (double hardness) (double hard-cap))
-                                  (some? block-id)
-                                  (block-manip/can-break-block? player-id world-id x y z))]
-              (when breakable?
-                (if full-exp?
-                  (do
-                    ;; Exact mastery uses one ItemStack of the block itself,
-                    ;; rather than the block's normal loot table.
-                    (when (server-bridge/server-bridge-available?)
-                      (server-bridge/spawn-item-stack-at!
-                       world-id x y z block-id 1))
-                    (block-manip/break-block! player-id world-id x y z false))
-                  (block-manip/break-block!
-                   player-id world-id x y z (< (rand) p-drop)))))))))))
+          full-exp? (= 1.0 (double exp))
+          x-lo (- x0 3) x-hi (+ x0 3)
+          y-lo (- y0 3) y-hi (+ y0 3)
+          z-lo (- z0 3) z-hi (+ z0 3)]
+      ;; Primitive nested loops — no coord vector / range seq allocation.
+      (loop [x x-lo]
+        (when (< x x-hi)
+          (break-blastwave-slice!
+           player-id world-id x0 y0 z0 x y-lo y-hi z-lo z-hi
+           hard-cap p-break p-drop full-exp?)
+          (recur (unchecked-inc x)))))))
 
 (defn- directed-blastwave-down!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]

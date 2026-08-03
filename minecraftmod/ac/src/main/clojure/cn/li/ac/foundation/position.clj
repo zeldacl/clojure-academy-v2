@@ -91,6 +91,29 @@
 ;; Nearby Chunks Discovery
 ;; ============================================================================
 
+(defn- conj-chunk-keys-dz!
+  [out cx cy cz dx dy lo hi]
+  (let [cx (long cx) cy (long cy) cz (long cz)
+        dx (long dx) dy (long dy)
+        lo (long lo) hi (long hi)]
+    (loop [dz lo
+           out out]
+      (if (>= dz hi)
+        out
+        (recur (unchecked-inc dz)
+               (conj! out [(+ cx dx) (+ cy dy) (+ cz dz)]))))))
+
+(defn- conj-chunk-keys-dy!
+  [out cx cy cz dx lo hi]
+  (let [cx (long cx) cy (long cy) cz (long cz)
+        dx (long dx) lo (long lo) hi (long hi)]
+    (loop [dy lo
+           out out]
+      (if (>= dy hi)
+        out
+        (recur (unchecked-inc dy)
+               (conj-chunk-keys-dz! out cx cy cz dx dy lo hi))))))
+
 (defn nearby-chunk-keys
   "Find all chunks within a given search radius from position (x, y, z).
 
@@ -108,11 +131,18 @@
   [x y z search-radius]
   (let [radius (long search-radius)
         chunk-range (inc (quot radius 16))
-        [cx cy cz] (pos->chunk-key x y z)]
-    (vec (for [dx (range (- chunk-range) (inc chunk-range))
-              dy (range (- chunk-range) (inc chunk-range))
-              dz (range (- chunk-range) (inc chunk-range))]
-          [(+ cx dx) (+ cy dy) (+ cz dz)]))))
+        [cx cy cz] (pos->chunk-key x y z)
+        lo (- chunk-range)
+        hi (inc chunk-range)]
+    ;; Primitive nested loops + transient — avoids `for` class stacking and
+    ;; intermediate persistent vectors / range seqs on spatial queries.
+    (persistent!
+     (loop [dx lo
+            out (transient [])]
+       (if (>= dx hi)
+         out
+         (recur (unchecked-inc dx)
+                (conj-chunk-keys-dy! out cx cy cz dx lo hi)))))))
 
 (defn chunk-range
   "Calculate chunk range from center position and search radius.

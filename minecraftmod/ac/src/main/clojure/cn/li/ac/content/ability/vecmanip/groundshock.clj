@@ -380,6 +380,36 @@
 
           (recur (inc iter) next-plotter))))))
 
+(defn- try-break-mastery-cell!
+  [player-id world-id x y z energy* drop-rate* broken-blocks*]
+  (when-let [hardness (block-manip/get-block-hardness world-id x y z)]
+    (when (and (number? hardness)
+               (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
+      (break-with-force!
+       player-id world-id x y z
+       true energy* drop-rate* broken-blocks*))))
+
+(defn- break-mastery-column!
+  [player-id world-id x y energy* drop-rate* broken-blocks* z-lo z-hi]
+  (let [z-lo (long z-lo)
+        z-hi (long z-hi)]
+    (loop [z z-lo]
+      (when (< z z-hi)
+        (try-break-mastery-cell!
+         player-id world-id x y z energy* drop-rate* broken-blocks*)
+        (recur (unchecked-inc z))))))
+
+(defn- break-mastery-slice!
+  [player-id world-id x energy* drop-rate* broken-blocks*
+   y-lo y-hi z-lo z-hi]
+  (let [y-lo (long y-lo)
+        y-hi (long y-hi)]
+    (loop [y y-lo]
+      (when (< y y-hi)
+        (break-mastery-column!
+         player-id world-id x y energy* drop-rate* broken-blocks* z-lo z-hi)
+        (recur (unchecked-inc y))))))
+
 (defn- break-mastery-ring!
   [player-id world-id player-pos exp broken-blocks*]
   (when (and (>= (scaling/clamp-exp exp) (cfg-double :breaking.mastery-exp-threshold))
@@ -387,16 +417,19 @@
     (let [energy* (double-array [Double/MAX_VALUE])
           x0 (int (double (:x player-pos)))
           y0 (int (double (:y player-pos)))
-          z0 (int (double (:z player-pos)))]
-      (doseq [x (range (- x0 (cfg-int :breaking.mastery-radius)) (+ x0 (cfg-int :breaking.mastery-radius)))
-              y (range (- y0 1) (+ y0 1))
-          z (range (- z0 (cfg-int :breaking.mastery-radius)) (+ z0 (cfg-int :breaking.mastery-radius)))]
-        (when-let [hardness (block-manip/get-block-hardness world-id x y z)]
-          (when (and (number? hardness)
-             (<= (double hardness) (cfg-double :breaking.mastery-hardness-cap)))
-            (break-with-force!
-             player-id world-id x y z
-             true energy* (drop-rate exp) broken-blocks*)))))))
+          z0 (int (double (:z player-pos)))
+          radius (cfg-int :breaking.mastery-radius)
+          drop-rate* (drop-rate exp)
+          x-lo (- x0 radius) x-hi (+ x0 radius)
+          y-lo (- y0 1) y-hi (+ y0 1)
+          z-lo (- z0 radius) z-hi (+ z0 radius)]
+      ;; Primitive nested loops — no coord vector allocation on cast.
+      (loop [x x-lo]
+        (when (< x x-hi)
+          (break-mastery-slice!
+           player-id world-id x energy* drop-rate* broken-blocks*
+           y-lo y-hi z-lo z-hi)
+          (recur (unchecked-inc x)))))))
 
 (defn groundshock-on-key-up
   "Perform the ground slam."

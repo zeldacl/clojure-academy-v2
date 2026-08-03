@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.railgun-shot
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
@@ -112,24 +113,8 @@
   (let [store* (ensure-store store)]
     (-> store*
         (update :beam-effects
-          (fn [by-owner]
-            (into {}
-                  (keep (fn [[owner-key xs]]
-                          (let [live (->> xs
-                                          (map #(update % :ttl dec))
-                                          (filter #(pos? (long (:ttl %))))
-                                          vec)]
-                            (when (seq live)
-                              [owner-key live]))))
-                  by-owner)))
-        (update :charging
-          (fn [by-owner]
-            (into {}
-                  (keep (fn [[owner-key st]]
-                          (let [ttl (dec (long (or (:ttl st) 0)))]
-                            (when (pos? ttl)
-                              [owner-key (assoc st :ttl ttl)]))))
-                  by-owner))))))
+          store-tick/tick-ttl-items-by-owner)
+        (update :charging store-tick/tick-ttl-states-by-owner))))
 
 (defn- visible-beam [beam]
   ;; EntityRayBase grows to full length over the first 150 ms.

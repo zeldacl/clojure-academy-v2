@@ -117,9 +117,17 @@
   ([add-slot! ^Inventory player-inventory x-offset y-offset active?-fn]
    (let [slot-fn (if active?-fn
                    (fn [inv idx x y] (create-conditional-slot inv idx x y active?-fn))
-                   (fn [inv idx x y] (create-standard-slot inv idx x y)))]
-     (doseq [row (range 3)
-             col (range 9)]
+                   (fn [inv idx x y] (create-standard-slot inv idx x y)))
+         ;; Flatten 3×9 indices — avoids 2-binding `doseq` `$iter` nesting.
+         inv-cells (persistent!
+                    (reduce (fn [out row]
+                              (reduce (fn [out' col]
+                                        (conj! out' [row col]))
+                                      out
+                                      (range 9)))
+                            (transient [])
+                            (range 3)))]
+     (doseq [[row col] inv-cells]
        (let [slot-index (+ (* row 9) col 9)
              x (+ x-offset (* col 18))
              y (+ y-offset (* row 18))

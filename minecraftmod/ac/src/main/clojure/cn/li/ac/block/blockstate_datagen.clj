@@ -32,16 +32,34 @@
     :integer (vec (range (int (or min 0)) (inc (int (or max default 0)))))
     :else [default]))
 
+(defn- property-value-maps
+  "Eager single-property condition maps for one key (avoids nested lazy iters)."
+  [properties prop-key]
+  (mapv (fn [v] {prop-key v})
+        (property-domain (get properties prop-key))))
+
+(defn- merge-domain
+  "Cartesian-extend partials with one property domain. Eager — no nested `for`/`lazy-seq`."
+  [partials domain]
+  (persistent!
+   (reduce (fn [out partial]
+             (reduce (fn [out' value]
+                       (conj! out' (merge partial value)))
+                     out
+                     domain))
+           (transient [])
+           partials)))
+
 (defn- cartesian-conditions
-  "Build condition maps for every combination of `prop-keys` domains."
+  "Build condition maps for every combination of `prop-keys` domains.
+
+  Uses named eager helpers instead of nested `for` inside `reduce`, so the
+  Clojure compiler does not emit deeply concatenated `$iter$fn$iter` class names
+  (Windows MAX_PATH / Forge class-scan / stacktrace pain)."
   [properties prop-keys]
-  (let [domains (mapv (fn [k] (map (fn [v] {k v}) (property-domain (get properties k))))
-                      prop-keys)]
-    (reduce (fn [acc domain]
-              (for [partial acc, value domain]
-                (merge partial value)))
-            [{}]
-            domains)))
+  (reduce merge-domain
+          [{}]
+          (mapv #(property-value-maps properties %) prop-keys)))
 
 (defn- model-id
   [model-name]
@@ -63,10 +81,10 @@
 
 (defn- imag-fusor-parts
   [properties]
-  (vec
-    (for [{:keys [facing frame]} (cartesian-conditions properties [:facing :frame])]
-      {:condition {:facing facing :frame frame}
-       :models [(model-id (imag-fusor-model-name facing frame))]})))
+  (mapv (fn [{:keys [facing frame]}]
+          {:condition {:facing facing :frame frame}
+           :models [(model-id (imag-fusor-model-name facing frame))]})
+        (cartesian-conditions properties [:facing :frame])))
 
 (defn- imag-fusor-definition
   []
@@ -86,10 +104,10 @@
 
 (defn- metal-former-parts
   [properties]
-  (vec
-    (for [{:keys [facing]} (cartesian-conditions properties [:facing])]
-      {:condition {:facing facing}
-       :models [(model-id (metal-former-model-name facing))]})))
+  (mapv (fn [{:keys [facing]}]
+          {:condition {:facing facing}
+           :models [(model-id (metal-former-model-name facing))]})
+        (cartesian-conditions properties [:facing])))
 
 (defn- metal-former-definition
   []
@@ -138,8 +156,9 @@
   "Map of block-key -> plain definition map (registry-name, properties, parts)."
   []
   (into {}
-        (for [{:keys [block-key definition-fn]} complex-block-specs]
-          [block-key (definition-fn)])))
+        (map (fn [{:keys [block-key definition-fn]}]
+               [block-key (definition-fn)])
+             complex-block-specs)))
 
 (defn parse-imag-fusor-model-name
   [model-name]

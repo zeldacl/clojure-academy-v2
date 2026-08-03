@@ -34,53 +34,65 @@
   - matrix-bandwidth: transfer budget per balance tick
   - buffer0: current buffer
   - buffer-max: max buffer
+  - start (optional): rotated walk start index — same fairness as `rotated`
+    without allocating a rotated copy (hot tick path).
 
   Output:
   {:energies {id new-energy}
    :buffer new-buffer}"
-  [entries matrix-bandwidth buffer0 buffer-max]
-  (let [active (->> entries
-                    (filter #(pos? (double (:max-energy %))))
-                    vec)
-        max-sum (reduce + 0.0 (map #(double (get % :max-energy)) active))
-        buffer0 (clamp (double buffer0) 0.0 (double buffer-max))]
-    (if (or (empty? active) (not (pos? max-sum)))
-      {:energies {} :buffer buffer0}
-      (let [sum (+ (reduce + 0.0 (map #(double (get % :energy)) active)) buffer0)
-            percent (clamp (/ sum max-sum) 0.0 1.0)]
-        (loop [xs active
-               transfer-left (double matrix-bandwidth)
-               buffer buffer0
-               out {}]
-          (if (or (empty? xs) (not (pos? transfer-left)))
-            {:energies out
-             :buffer (clamp buffer 0.0 (double buffer-max))}
-            (let [{:keys [id energy max-energy bandwidth]} (first xs)
-                  energy (double energy)
-                  max-energy (double max-energy)
-                  bandwidth (max 0.0 (double bandwidth))
-                  target (* max-energy percent)
-                  delta (- target energy)
-                  room-in-buffer (- (double buffer-max) buffer)]
-              (cond
-                (and (pos? delta) (pos? buffer))
-                (let [give (min delta bandwidth transfer-left buffer)
-                      next-energy (min max-energy (+ energy give))]
-                  (recur (rest xs)
-                         (- transfer-left give)
-                         (- buffer give)
-                         (assoc out id next-energy)))
+  ([entries matrix-bandwidth buffer0 buffer-max]
+   (balance-plan entries matrix-bandwidth buffer0 buffer-max 0))
+  ([entries matrix-bandwidth buffer0 buffer-max start]
+   (let [active (into [] (filter #(pos? (double (:max-energy %)))) entries)
+         n (long (count active))
+         ^double max-sum (reduce (fn [^double s e]
+                                   (+ s (double (:max-energy e))))
+                                 0.0
+                                 active)
+         buffer0 (clamp (double buffer0) 0.0 (double buffer-max))
+         start (long start)]
+     (if (or (zero? n) (not (pos? max-sum)))
+       {:energies {} :buffer buffer0}
+       (let [^double sum (+ (reduce (fn [^double s e]
+                                      (+ s (double (:energy e))))
+                                    0.0
+                                    active)
+                            buffer0)
+             percent (clamp (/ sum max-sum) 0.0 1.0)
+             start' (if (pos? n) (Math/floorMod start n) 0)]
+         (loop [i 0
+                transfer-left (double matrix-bandwidth)
+                buffer buffer0
+                out (transient {})]
+           (if (or (>= i n) (not (pos? transfer-left)))
+             {:energies (persistent! out)
+              :buffer (clamp buffer 0.0 (double buffer-max))}
+             (let [{:keys [id energy max-energy bandwidth]} (nth active (rem (+ start' i) n))
+                   energy (double energy)
+                   max-energy (double max-energy)
+                   bandwidth (max 0.0 (double bandwidth))
+                   target (* max-energy percent)
+                   delta (- target energy)
+                   room-in-buffer (- (double buffer-max) buffer)]
+               (cond
+                 (and (pos? delta) (pos? buffer))
+                 (let [give (min delta bandwidth transfer-left buffer)
+                       next-energy (min max-energy (+ energy give))]
+                   (recur (inc i)
+                          (- transfer-left give)
+                          (- buffer give)
+                          (assoc! out id next-energy)))
 
-                (and (neg? delta) (pos? room-in-buffer))
-                (let [take (min (- delta) bandwidth transfer-left room-in-buffer)
-                      next-energy (max 0.0 (- energy take))]
-                  (recur (rest xs)
-                         (- transfer-left take)
-                         (+ buffer take)
-                         (assoc out id next-energy)))
+                 (and (neg? delta) (pos? room-in-buffer))
+                 (let [take (min (- delta) bandwidth transfer-left room-in-buffer)
+                       next-energy (max 0.0 (- energy take))]
+                   (recur (inc i)
+                          (- transfer-left take)
+                          (+ buffer take)
+                          (assoc! out id next-energy)))
 
-                :else
-                (recur (rest xs) transfer-left buffer (assoc out id energy))))))))))
+                 :else
+                 (recur (inc i) transfer-left buffer (assoc! out id energy)))))))))))
 
 (defn node-connection-capacity?
   [connection capacity]

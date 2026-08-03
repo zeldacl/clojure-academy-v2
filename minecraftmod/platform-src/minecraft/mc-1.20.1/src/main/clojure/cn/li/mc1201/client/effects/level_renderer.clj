@@ -349,18 +349,29 @@
 
 (defn- sort-ops
   "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
-  :plasma [...]} — replaces 3 filters + a group-by (4 traversals plus the
-  lazy-seq allocations each filter produces) with one reduce."
+  :plasma [...]} with transients / HashMap — avoids per-op persistent conj/update."
   [ops]
-  (reduce
-    (fn [acc op]
+  (let [lines (transient [])
+        plasma (transient [])
+        ^java.util.HashMap quads-t (java.util.HashMap.)]
+    (doseq [op ops]
       (case (:kind op)
-        :line (update acc :lines conj op)
-        :quad (update acc :quads update (:texture op) (fnil conj []) op)
-        :plasma-body (update acc :plasma conj op)
-        acc))
-    {:lines [] :quads {} :plasma []}
-    ops))
+        :line (conj! lines op)
+        :quad (let [tex (:texture op)
+                    bucket (or (.get quads-t tex)
+                               (let [b (transient [])]
+                                 (.put quads-t tex b)
+                                 b))]
+                (conj! bucket op))
+        :plasma-body (conj! plasma op)
+        nil))
+    {:lines (persistent! lines)
+     :quads (persistent!
+             (reduce (fn [m ^java.util.Map$Entry e]
+                       (assoc! m (.getKey e) (persistent! (.getValue e))))
+                     (transient {})
+                     (.entrySet quads-t)))
+     :plasma (persistent! plasma)}))
 
 ;; ---------------------------------------------------------------------------
 ;; Plasma-body ray-march shader (vanilla Minecraft API only)

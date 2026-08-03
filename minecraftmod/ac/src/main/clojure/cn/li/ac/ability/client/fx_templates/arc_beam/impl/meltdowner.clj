@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
@@ -145,41 +146,32 @@
 (defn- tick-state!
   [store]
   (let [store* (or store {:effect-state {} :rays {}})
-        effect-state* (into {}
-                            (keep (fn [[owner-key st]]
-                                    (when (:active? st)
-                                      (let [ticks (inc (long (or (:ticks st) 0)))]
-                                        ;; The charge loop is a continuous FollowEntitySound
-                                        ;; started on :start and stopped on :end — no re-queue.
-                                        ;; MdParticleFactory particles (matching original: 2-3 per tick)
-                                        (dotimes [_ (+ 2 (rand-int 2))]
-                                          (let [r (+ 0.7 (rand 0.3))
-                                                theta (rand (* 2 Math/PI))
-                                                h (+ -1.2 (rand 1.2))]
-                                            (client-particles/queue-particle-effect! (:queue-owner st)
-                                              {:type :particle :particle-type :electric-spark
-                                               :x (* r (Math/sin theta))
-                                               :y h
-                                               :z (* r (Math/cos theta))
-                                               :count 1 :speed 0.08
-                                               :offset-x 0.03 :offset-y 0.03 :offset-z 0.03
-                                               :motion-x (- (rand 0.06) 0.03)
-                                               :motion-y (+ 0.01 (rand 0.04))
-                                               :motion-z (- (rand 0.06) 0.03)})))
-                                        [owner-key (assoc st
-                                                     :ticks ticks
-                                                     :charge-ring-segments-local
-                                                     (charge-ring-segments-local ticks (double (or (:charge-ratio st) 0.0))))]))))
-                            (:effect-state store*))
-        rays* (into {}
-                    (keep (fn [[owner-key xs]]
-                            (let [live (->> xs
-                                            (map #(update % :ttl dec))
-                                            (filter #(pos? (long (:ttl %))))
-                                            vec)]
-                              (when (seq live)
-                                [owner-key live]))))
-                    (:rays store*))]
+        effect-state* (store-tick/map-active-states
+                       (:effect-state store*)
+                       (fn [_owner-key st]
+                         (let [ticks (inc (long (or (:ticks st) 0)))]
+                           ;; The charge loop is a continuous FollowEntitySound
+                           ;; started on :start and stopped on :end — no re-queue.
+                           ;; MdParticleFactory particles (matching original: 2-3 per tick)
+                           (dotimes [_ (+ 2 (rand-int 2))]
+                             (let [r (+ 0.7 (rand 0.3))
+                                   theta (rand (* 2 Math/PI))
+                                   h (+ -1.2 (rand 1.2))]
+                               (client-particles/queue-particle-effect! (:queue-owner st)
+                                 {:type :particle :particle-type :electric-spark
+                                  :x (* r (Math/sin theta))
+                                  :y h
+                                  :z (* r (Math/cos theta))
+                                  :count 1 :speed 0.08
+                                  :offset-x 0.03 :offset-y 0.03 :offset-z 0.03
+                                  :motion-x (- (rand 0.06) 0.03)
+                                  :motion-y (+ 0.01 (rand 0.04))
+                                  :motion-z (- (rand 0.06) 0.03)})))
+                           (assoc st
+                             :ticks ticks
+                             :charge-ring-segments-local
+                             (charge-ring-segments-local ticks (double (or (:charge-ratio st) 0.0)))))))
+        rays* (store-tick/tick-ttl-items-by-owner (:rays store*))]
     (assoc store* :effect-state effect-state* :rays rays*)))
 
 (defn- tick!

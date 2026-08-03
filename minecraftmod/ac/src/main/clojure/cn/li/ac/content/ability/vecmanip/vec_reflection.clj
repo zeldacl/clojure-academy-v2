@@ -446,17 +446,18 @@
                               (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
                               (send-fx-reflect-entity! ctx-id entity)
                               (log/debug "VecReflection: Reflected entity" entity-id))))))))
-                (let [visited-with-current (reduce (fn [acc entity]
-                                                     (if-let [uuid (:uuid entity)]
-                                                       (assoc acc (str uuid) now)
-                                                       acc))
-                                                   visited
-                                                   entities)
-                      visited-with-replacements (reduce (fn [acc uuid]
-                                                          (assoc acc uuid now))
-                                                        visited-with-current
-                                                        @replacement-ids)
-                      pruned (prune-visited-map visited-with-replacements now ttl-ms max-size)]
+                (let [visited'
+                      (persistent!
+                       (reduce (fn [acc uuid]
+                                 (assoc! acc uuid now))
+                               (reduce (fn [acc entity]
+                                         (if-let [uuid (:uuid entity)]
+                                           (assoc! acc (str uuid) now)
+                                           acc))
+                                       (transient visited)
+                                       entities)
+                               @replacement-ids))
+                      pruned (prune-visited-map visited' now ttl-ms max-size)]
                   (update-skill-state-root! ctx-id #(-> %
                                                         (assoc :vec-reflection-visited-map pruned)
                                                         (dissoc :vec-reflection-visited))))))))))))

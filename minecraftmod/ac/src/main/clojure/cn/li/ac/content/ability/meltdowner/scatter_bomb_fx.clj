@@ -5,7 +5,8 @@
   its scattered destination (original SBNetDelegate: EntityMdRaySmall
   setFromTo(ball.getPositionEyes, dest)) — a fixed-direction ray entity
   spawned at the player instead pointed wherever its rotation happened to be."
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -114,16 +115,7 @@
                             [owner-key (assoc st :ticks (inc (long (or (:ticks st) 0))))])))
                   states)))
         (update :beams
-          (fn [by-owner]
-            (into {}
-                  (keep (fn [[owner-key beams]]
-                          (let [live (->> beams
-                                          (map #(update % :ttl dec))
-                                          (filter #(pos? (long (:ttl %))))
-                                          vec)]
-                            (when (seq live)
-                              [owner-key live]))))
-                  by-owner))))))
+          store-tick/tick-ttl-items-by-owner))))
 
 (defn- beam-flash-ops
   "Green ray quads from ball position to dest, matching original

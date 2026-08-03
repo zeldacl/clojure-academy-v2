@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.blood-retrograde
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -98,32 +99,9 @@
 	[store]
 	(let [store* (or store {:effect-state {} :splashes {} :sprays {}})]
 		(assoc store*
-					 :effect-state
-					 (into {}
-								 (keep (fn [[owner-key st]]
-												 (when (:active? st)
-													 [owner-key (update st :ticks (fnil inc 0))])))
-								 (:effect-state store*))
-					 :splashes
-					 (into {}
-								 (keep (fn [[owner-key xs]]
-												 (let [live (->> xs
-																				 (map #(update % :ttl dec))
-																				 (filter #(pos? (long (:ttl %))))
-																				 vec)]
-													 (when (seq live)
-														 [owner-key live]))))
-								 (:splashes store*))
-					 :sprays
-					 (into {}
-								 (keep (fn [[owner-key xs]]
-												 (let [live (->> xs
-																				 (map #(update % :ttl dec))
-																				 (filter #(pos? (long (:ttl %))))
-																				 vec)]
-													 (when (seq live)
-														 [owner-key live]))))
-								 (:sprays store*)))))
+					 :effect-state (store-tick/keep-active-inc-ticks (:effect-state store*))
+					 :splashes (store-tick/tick-ttl-items-by-owner (:splashes store*))
+					 :sprays (store-tick/tick-ttl-items-by-owner (:sprays store*)))))
 
 (defn- splash-ops [^V3 cam-pos {:keys [x y z size ttl max-ttl]}]
 	(let [center (vec3/v3 (double x) (double y) (double z))

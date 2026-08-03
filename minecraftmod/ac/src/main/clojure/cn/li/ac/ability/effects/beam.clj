@@ -68,19 +68,31 @@
   (when (and (block-manip/available?) (pos? (double energy)) (pos? (double max-distance)))
     (let [[right up]      (geom/orthonormal-basis dir)
           processed       (HashSet.)
-          sample-points   (transient [])]
-      (doseq [s (range (- (double radius)) (+ (double radius) (double step)) (double step))
-              t (range (- (double radius)) (+ (double radius) (double step)) (double step))]
-        (when (<= (+ (* (double s) (double s)) (* (double t) (double t)))
-                  (* (double radius) (double radius)))
-          (let [offset (geom/v+ (geom/v* right s) (geom/v* up t))
-                origin (geom/v+ start-pos offset)
-                key    [(geom/floor-int (:x origin))
-                        (geom/floor-int (:y origin))
-                        (geom/floor-int (:z origin))]]
-            (when (.add processed key)
-              (conj! sample-points origin)))))
-      (let [origins         (persistent! sample-points)
+          s-vals (range (- (double radius)) (+ (double radius) (double step)) (double step))
+          t-vals s-vals
+          r2 (* (double radius) (double radius))
+          ;; Eager disk sample — avoids 2-binding `doseq` `$iter` class-name stacking.
+          sample-points
+          (persistent!
+           (reduce
+            (fn [out s]
+              (reduce
+               (fn [out' t]
+                 (if (<= (+ (* (double s) (double s)) (* (double t) (double t))) r2)
+                   (let [offset (geom/v+ (geom/v* right s) (geom/v* up t))
+                         origin (geom/v+ start-pos offset)
+                         key    [(geom/floor-int (:x origin))
+                                 (geom/floor-int (:y origin))
+                                 (geom/floor-int (:z origin))]]
+                     (cond-> out'
+                       (.add processed key)
+                       (conj! origin)))
+                   out'))
+               out
+               t-vals))
+            (transient [])
+            s-vals))]
+      (let [origins         sample-points
             line-energy     (if (seq origins)
                               (/ (double energy) (double (count origins)))
                               0.0)

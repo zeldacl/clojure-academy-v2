@@ -104,9 +104,13 @@
 
 (defn- descriptors-for-category
   [category-id]
-  (vec (for [skill-def (get skills-by-category category-id)
-             field-def (field-definitions-for-skill (:id skill-def))]
-         (descriptor-for skill-def field-def))))
+  ;; mapcat + map instead of 2-binding `for` (shorter AOT class names).
+  (into []
+        (mapcat (fn [skill-def]
+                  (map (fn [field-def]
+                         (descriptor-for skill-def field-def))
+                       (field-definitions-for-skill (:id skill-def))))
+                (get skills-by-category category-id))))
 
 (def descriptors-by-category
   (into {} (map (fn [category-id]

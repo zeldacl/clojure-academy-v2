@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.electron-missile-fx
   "Client FX for ElectronMissile: orbiting sparks + impact flash per fired ball."
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -148,27 +149,9 @@
                                   [owner-key st])))
                         states)))
         (update :beams
-                (fn [by-owner]
-                  (into {}
-                        (keep (fn [[owner-key q]]
-                                (let [live (->> q
-                                                (map #(update % :ttl dec))
-                                                (filter #(pos? (long (:ttl %))))
-                                                vec)]
-                                  (when (seq live)
-                                    [owner-key live]))))
-                        by-owner)))
+                store-tick/tick-ttl-items-by-owner)
         (update :impacts
-                (fn [by-owner]
-                  (into {}
-                        (keep (fn [[owner-key q]]
-                                (let [live (->> q
-                                                (map #(update % :ttl dec))
-                                                (filter #(pos? (long (:ttl %))))
-                                                vec)]
-                                  (when (seq live)
-                                    [owner-key live]))))
-                        by-owner))))))
+                store-tick/tick-ttl-items-by-owner))))
 
 (defn- build-plan
   "start/end/camera-pos cross in as {:x :y :z ...} maps (network payload,

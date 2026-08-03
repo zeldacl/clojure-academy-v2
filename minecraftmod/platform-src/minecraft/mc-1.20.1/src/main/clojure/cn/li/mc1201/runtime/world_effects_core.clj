@@ -55,22 +55,34 @@
 (defn find-blocks-in-radius-in-level
   [^Level level x y z radius block-predicate block-id-fn]
   (let [r (int radius)
-        results (transient [])]
-    (doseq [dx (range (- r) (inc r))
-            dy (range (- r) (inc r))
-            dz (range (- r) (inc r))]
-      (let [bx (+ (int x) dx)
-            by (+ (int y) dy)
-            bz (+ (int z) dz)
-            dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
-        (when (<= dist radius)
-          (let [pos (BlockPos. bx by bz)
-                block-state (.getBlockState level pos)
-                block (.getBlock block-state)
-                block-id (block-id-fn block block-state)]
-            (when (block-predicate block-id)
-              (conj! results {:x bx :y by :z bz :block-id block-id}))))))
-    (persistent! results)))
+        deltas (range (- r) (inc r))]
+    ;; Eager triple loop — avoids 3-binding `doseq` `$iter` class-name stacking.
+    (persistent!
+     (reduce
+      (fn [results dx]
+        (reduce
+         (fn [results' dy]
+           (reduce
+            (fn [results'' dz]
+              (let [bx (+ (int x) dx)
+                    by (+ (int y) dy)
+                    bz (+ (int z) dz)
+                    dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+                (if (<= dist radius)
+                  (let [pos (BlockPos. bx by bz)
+                        block-state (.getBlockState level pos)
+                        block (.getBlock block-state)
+                        block-id (block-id-fn block block-state)]
+                    (cond-> results''
+                      (block-predicate block-id)
+                      (conj! {:x bx :y by :z bz :block-id block-id})))
+                  results'')))
+            results'
+            deltas))
+         results
+         deltas))
+      (transient [])
+      deltas))))
 
 (def ^:private sound-source-map
   {:ambient SoundSource/AMBIENT

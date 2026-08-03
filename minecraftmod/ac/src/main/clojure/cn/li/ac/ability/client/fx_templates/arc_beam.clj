@@ -7,6 +7,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
+            [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
@@ -270,17 +271,7 @@
 
 (defn- tick-arc-state!
   [store]
-  (update (ensure-arc-store store) :arcs
-    (fn [by-owner]
-      (into {}
-            (keep (fn [[owner-key items]]
-                    (let [live (->> items
-                                    (map #(update % :ttl dec))
-                                    (filter #(pos? (long (:ttl %))))
-                                    vec)]
-                      (when (seq live)
-                        [owner-key live]))))
-            by-owner))))
+  (update (ensure-arc-store store) :arcs store-tick/tick-ttl-items-by-owner))
 
 (defn- view-origin-offset
   "Pick this viewer's ViewOptimize offset for one arc, or nil when the effect

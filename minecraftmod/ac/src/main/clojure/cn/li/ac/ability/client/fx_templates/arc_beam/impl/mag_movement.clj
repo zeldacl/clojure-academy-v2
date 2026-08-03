@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement
   (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
+            [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
@@ -44,17 +45,14 @@
                  {:effect-state {}})]
     (update store* :effect-state
       (fn [states]
-        (reduce-kv
-          (fn [acc owner-key st]
-            (if-not (:active? st)
-              acc
-              (let [ticks (inc (long (or (:ticks st) 0)))]
-                (when (zero? (mod ticks 10))
-                  (client-sounds/queue-sound-effect! (:queue-owner st)
-                    {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-                (assoc acc owner-key (assoc st :ticks ticks)))))
-          {}
-          states)))))
+        (store-tick/map-active-states
+         states
+         (fn [_owner-key st]
+           (let [ticks (inc (long (or (:ticks st) 0)))]
+             (when (zero? (mod ticks 10))
+               (client-sounds/queue-sound-effect! (:queue-owner st)
+                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
+             (assoc st :ticks ticks))))))))
 
 (def ^:private mag-movement-pattern
   (arc-patterns/get-pattern :thin-continuous))

@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx
   "Client FX for VecReflection: double ring + reflection wave billboards."
   (:require
+            [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -91,22 +92,8 @@
   [store]
   (let [state* (or store (default-vec-reflection-fx-runtime-state))]
     (assoc state*
-           :effect-state
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (update st :ticks (fnil inc 0))])))
-                 (:effect-state state*))
-           :wave-effects
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 (:wave-effects state*)))))
+           :effect-state (store-tick/keep-active-inc-ticks (:effect-state state*))
+           :wave-effects (store-tick/tick-ttl-items-by-owner (:wave-effects state*)))))
 
 (defn- matching-active-state
   [effect-state hand-center-pos]

@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -66,22 +67,8 @@
   [store]
   (let [state* (or store {:effect-state {} :wave-effects {}})]
     (assoc state*
-           :effect-state
-           (into {}
-                 (keep (fn [[owner-key st]]
-                         (when (:active? st)
-                           [owner-key (update st :ticks (fnil inc 0))])))
-                 (:effect-state state*))
-           :wave-effects
-           (into {}
-                 (keep (fn [[owner-key xs]]
-                         (let [live (->> xs
-                                         (map #(update % :ttl dec))
-                                         (filter #(pos? (long (:ttl %))))
-                                         vec)]
-                           (when (seq live)
-                             [owner-key live]))))
-                 (:wave-effects state*)))))
+           :effect-state (store-tick/keep-active-inc-ticks (:effect-state state*))
+           :wave-effects (store-tick/tick-ttl-items-by-owner (:wave-effects state*)))))
 
 (defn- matching-active-state
   [effect-state hand-center-pos]

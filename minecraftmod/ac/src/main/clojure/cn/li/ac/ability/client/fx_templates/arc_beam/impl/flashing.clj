@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.flashing
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -53,7 +54,8 @@
   (let [state* (or state {:fx-state {}})]
     (update state* :fx-state
             (fn [states]
-              (reduce-kv
+              (persistent!
+               (reduce-kv
                 (fn [acc owner-key st]
                   (doseq [b (:burst st)]
                     (let [{fx :x fy :y fz :z} (:from b) {tx :x ty :y tz :z} (:to b)]
@@ -64,9 +66,10 @@
                         (client-particles/queue-particle-effect! (:queue-owner st)
                           {:type :particle :particle-type :portal :x (double tx) :y (double ty) :z (double tz)
                            :count 2 :speed 0.05 :offset-x 0.35 :offset-y 0.5 :offset-z 0.35}))))
-                  (let [burst' (->> (:burst st) (map #(update % :ttl dec)) (filter #(pos? (long (:ttl %)))) vec)]
-                    (assoc acc owner-key (assoc st :burst burst'))))
-                {} states)))))
+                  (assoc! acc owner-key
+                          (assoc st :burst (store-tick/tick-ttl-vec (:burst st)))))
+                (transient {})
+                states))))))
 
 (defn- preview-to-payload [_ctx-id _channel p] {:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)})
 

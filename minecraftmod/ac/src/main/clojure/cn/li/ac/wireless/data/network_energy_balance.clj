@@ -24,22 +24,23 @@
   "Return active node entries; unlink nodes whose chunk is loaded but whose
   capability no longer resolves (block destroyed)."
   [network world cap-cache]
-  (loop [node-vbs (seq (network-state/get-nodes network))
-         acc []]
-    (if-not node-vbs
-      acc
-      (let [node-vb (first node-vbs)]
-        (if (vb/is-chunk-loaded? node-vb world)
-          (if-let [entry (node-entry cap-cache world node-vb)]
-            (recur (next node-vbs) (conj acc entry))
-            (do
-              (try
-                (store/unlink-node! (:world-data network) network node-vb)
-                (catch Exception e
-                  (log/warn "Failed to unlink missing node during balance"
-                            (vb/vblock-to-string node-vb) (ex-message e))))
-              (recur (next node-vbs) acc)))
-          (recur (next node-vbs) acc))))))
+  (persistent!
+   (loop [node-vbs (seq (network-state/get-nodes network))
+          acc (transient [])]
+     (if-not node-vbs
+       acc
+       (let [node-vb (first node-vbs)]
+         (if (vb/is-chunk-loaded? node-vb world)
+           (if-let [entry (node-entry cap-cache world node-vb)]
+             (recur (next node-vbs) (conj! acc entry))
+             (do
+               (try
+                 (store/unlink-node! (:world-data network) network node-vb)
+                 (catch Exception e
+                   (log/warn "Failed to unlink missing node during balance"
+                             (vb/vblock-to-string node-vb) (ex-message e))))
+               (recur (next node-vbs) acc)))
+           (recur (next node-vbs) acc)))))))
 
 (defn balance-energy!
   "Balance energy across linked wireless nodes using a buffer-based model.
@@ -54,11 +55,12 @@
                  cap-cache resolver/resolve-matrix-cap world (:matrix network))]
       (let [entries (collect-active-nodes! network world cap-cache)]
         (when (seq entries)
-          (let [entries (transfer/rotated entries (long game-time))
+          (let [start (transfer/rotate-start (count entries) (long game-time))
                 matrix-bandwidth (double (.getMatrixBandwidth matrix))
                 buffer-max (double (get cfg :network-buffer-max))
                 buffer0 (double (network-state/get-buffer network))
-                plan (transfer/balance-plan entries matrix-bandwidth buffer0 buffer-max)]
+                ;; rotate-start + balance-plan arity — no per-tick rotated vector alloc.
+                plan (transfer/balance-plan entries matrix-bandwidth buffer0 buffer-max start)]
             (effects/apply-node-energy-plan! entries (:energies plan))
             (when (not= buffer0 (double (:buffer plan)))
               (network-state/set-buffer! network (:buffer plan)))))))))

@@ -44,11 +44,15 @@
   [d]
   (if (empty? d)
     d
-    (->> d
-         (keep (fn [[k v]]
-                 (let [nv (dec v)]
-                   (when (pos? nv) [k nv]))))
-         (into {}))))
+    (persistent!
+     (reduce-kv
+      (fn [acc k v]
+        (let [nv (dec (long v))]
+          (if (pos? nv)
+            (assoc! acc k nv)
+            acc)))
+      (transient {})
+      d))))
 
 ;; ============================================================================
 ;; Serialization helpers

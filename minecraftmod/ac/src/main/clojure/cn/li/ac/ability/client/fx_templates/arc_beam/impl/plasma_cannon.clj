@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.plasma-cannon
-  (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -113,31 +114,20 @@
 	(let [store* (or store {:effect-state {}})]
 		(update store* :effect-state
 			(fn [states]
-				(reduce-kv
-					(fn [acc owner-key st]
-						(if-not (:active? st)
-							acc
-							(let [ticks (inc (long (or (:ticks st) 0)))]
-								;; The charge loop is a continuous FollowEntitySound
-								;; started on :start and stopped on :end — no re-queue.
-								(let [cp (:charge-pos st)]
-									(when (and cp (= :go (:state st)))
-										(client-particles/queue-particle-effect! (:queue-owner st)
-											{:type :particle :particle-type :flame
-											 :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
-											 :count 4 :speed 0.2
-											 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-								;; GO flight client-side interpolation: upstream
-								;; c_tick runs tryMove() every tick (1 block toward
-								;; the destination) so the plasma GLIDES between the
-								;; server's 5-tick syncs instead of teleporting.
-								;; GO flight interpolation happens on the RENDER path
-								;; (build-plan, per frame, wall-clock based) so the
-								;; plasma glides smoothly instead of stepping at
-								;; 20Hz — see build-plan below.
-								(assoc acc owner-key (assoc st :ticks ticks)))))
-					{}
-					states)))))
+				(store-tick/map-active-states
+				 states
+				 (fn [_owner-key st]
+					 (let [ticks (inc (long (or (:ticks st) 0)))]
+						 ;; The charge loop is a continuous FollowEntitySound
+						 ;; started on :start and stopped on :end — no re-queue.
+						 (let [cp (:charge-pos st)]
+							 (when (and cp (= :go (:state st)))
+								 (client-particles/queue-particle-effect! (:queue-owner st)
+									 {:type :particle :particle-type :flame
+										:x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
+										:count 4 :speed 0.2
+										:offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+						 (assoc st :ticks ticks))))))))
 
 (defn- plasma-balls
 	[{:keys [x y z]} ticks state]

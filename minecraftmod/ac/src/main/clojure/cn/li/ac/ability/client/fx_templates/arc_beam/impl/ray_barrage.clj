@@ -15,7 +15,8 @@
   the caster's own on-axis first-person view. The preray applies the
   ViewOptimize hand fix like the original; the barrage does not
   (EntityMdRayBarrage.needsViewOptimize() == false)."
-  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+  (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
+            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -101,16 +102,7 @@
   [store]
   (let [store* (or store {:beam-queue {}})]
     (update store* :beam-queue
-      (fn [by-owner]
-        (into {}
-              (keep (fn [[owner-key q]]
-                      (let [live (->> q
-                                      (map (fn [b] (update b :ttl dec)))
-                                      (filter (fn [b] (pos? (:ttl b))))
-                                      vec)]
-                        (when (seq live)
-                          [owner-key live]))))
-              by-owner)))))
+      store-tick/tick-ttl-items-by-owner)))
 
 (defn- expanding-barrage-beam
   "Barrage sub rays grow OUT of the silbarn: the endpoint starts at the

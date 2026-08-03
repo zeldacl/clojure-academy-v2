@@ -842,19 +842,30 @@
                                        vs))))
                            :else nil)]
         (if (seq sampled-grid)
-          (doseq [vj (range (dec (count sampled-grid)))
-                  ui (range (dec (count (nth sampled-grid vj))))]
-            (let [a (nth (nth sampled-grid vj) ui)
-                  b (nth (nth sampled-grid vj) (inc ui))
-                  c (nth (nth sampled-grid (inc vj)) ui)
-                  d (nth (nth sampled-grid (inc vj)) (inc ui))
-                  ia (add-generated-vertex! a)
-                  ib (add-generated-vertex! b)
-                  ic (add-generated-vertex! c)
-                  id (add-generated-vertex! d)]
-              (doseq [group groups]
-                (add-face! group display smoothing material ia ib ic)
-                (add-face! group display smoothing material ib id ic))))
+          ;; Flatten UV grid indices — avoids 2-binding `doseq` `$iter` nesting.
+          (let [v-count (dec (count sampled-grid))
+                quad-idxs (persistent!
+                           (reduce
+                            (fn [out vj]
+                              (let [u-count (dec (count (nth sampled-grid vj)))]
+                                (reduce (fn [out' ui]
+                                          (conj! out' [vj ui]))
+                                        out
+                                        (range u-count))))
+                            (transient [])
+                            (range v-count)))]
+            (doseq [[vj ui] quad-idxs]
+              (let [a (nth (nth sampled-grid vj) ui)
+                    b (nth (nth sampled-grid vj) (inc ui))
+                    c (nth (nth sampled-grid (inc vj)) ui)
+                    d (nth (nth sampled-grid (inc vj)) (inc ui))
+                    ia (add-generated-vertex! a)
+                    ib (add-generated-vertex! b)
+                    ic (add-generated-vertex! c)
+                    id (add-generated-vertex! d)]
+                (doseq [group groups]
+                  (add-face! group display smoothing material ia ib ic)
+                  (add-face! group display smoothing material ib id ic)))))
           (when (>= (count ctrl-all) 3)
             (let [idxs2 (mapv add-generated-vertex! ctrl-all)]
               (doseq [[ia ib ic] (fan-triplet-indices (count idxs2))]

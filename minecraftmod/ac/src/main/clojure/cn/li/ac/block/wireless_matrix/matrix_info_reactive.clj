@@ -142,6 +142,25 @@
     (catch Exception e
       (log/error "Error sending change-password:"(ex-message e)))))
 
+;; rebuild! is referenced by INIT response helpers defined above it.
+(declare rebuild!)
+
+(defn- refresh-after-init!
+  [rt container player]
+  (fn [success]
+    (when success
+      (send-gather-info container
+        (fn [new-data] (rebuild! rt container player new-data))))))
+
+(defn- make-init-button-handler
+  [rt container player ^INode ssid-n ^INode pass-n]
+  (fn []
+    (let [ssid (str (or (.getOSlot ssid-n 0) ""))
+          pass (str (or (.getOSlot pass-n 0) ""))]
+      (log/info "Matrix INIT ssid=" ssid)
+      (send-init-network container ssid pass
+        (refresh-after-init! rt container player)))))
+
 (defn rebuild!
   [^UiRt rt container player data]
   (try
@@ -189,15 +208,7 @@
               ^INode ssid-n (:value-node ssid-row)
               ^INode pass-n (:value-node pass-row)]
           (info-area/add-button! ctx "INIT"
-            (fn []
-              (let [ssid (str (or (.getOSlot ssid-n 0) ""))
-                    pass (str (or (.getOSlot pass-n 0) ""))]
-                (log/info "Matrix INIT ssid=" ssid)
-                (send-init-network container ssid pass
-                  (fn [success]
-                    (when success
-                      (send-gather-info container
-                        (fn [new-data] (rebuild! rt container player new-data))))))))))
+            (make-init-button-handler rt container player ssid-n pass-n)))
 
         (:show-noinit? policy)
         (info-area/add-sepline! ctx "wireless_noinit")

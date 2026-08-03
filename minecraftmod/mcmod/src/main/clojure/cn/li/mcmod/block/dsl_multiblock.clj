@@ -20,17 +20,29 @@
   [positions-or-spec origin]
   (if (and (map? positions-or-spec) (contains? positions-or-spec :width))
     ;; Regular shape with :width :height :depth
-    (let [{:keys [width height depth]} positions-or-spec]
-      (vec (for [x (range width)
-            y (range height)
-            z (range depth)]
-        {:x (+ (:x origin) x)
-         :y (+ (:y origin) y)
-         :z (+ (:z origin) z)
-         :relative-x x
-         :relative-y y
-         :relative-z z
-         :is-origin? (and (= x 0) (= y 0) (= z 0))})))
+    (let [{:keys [width height depth]} positions-or-spec
+          ox (:x origin)
+          oy (:y origin)
+          oz (:z origin)]
+      ;; Eager triple loop — avoids 3-binding `for` `$iter` class-name stacking.
+      (persistent!
+       (reduce (fn [out x]
+                 (reduce (fn [out' y]
+                           (reduce (fn [out'' z]
+                                     (conj! out''
+                                            {:x (+ ox x)
+                                             :y (+ oy y)
+                                             :z (+ oz z)
+                                             :relative-x x
+                                             :relative-y y
+                                             :relative-z z
+                                             :is-origin? (and (= x 0) (= y 0) (= z 0))}))
+                                   out'
+                                   (range depth)))
+                         out
+                         (range height)))
+               (transient [])
+               (range width))))
     ;; Irregular multi-blocks with custom positions
     (mapv (fn [pos]
           (let [[px py pz] (if (vector? pos)
@@ -314,22 +326,46 @@
    height: height of pyramid
    Returns: vector of positions"
   [base-size height]
-  (vec (for [y (range height)
-             :let [layer-size (max 1 (- base-size y))
-                   offset (quot y 2)]
-             x (range (- offset) (- layer-size offset))
-             z (range (- offset) (- layer-size offset))]
-         {:x x :y y :z z})))
+  ;; Eager loops — avoids 3-binding `for` `$iter` class-name stacking.
+  (persistent!
+   (reduce (fn [out y]
+             (let [layer-size (max 1 (- base-size y))
+                   offset (quot y 2)
+                   xs (range (- offset) (- layer-size offset))
+                   zs xs]
+               (reduce (fn [out' x]
+                         (reduce (fn [out'' z]
+                                   (conj! out'' {:x x :y y :z z}))
+                                 out'
+                                 zs))
+                       out
+                       xs)))
+           (transient [])
+           (range height))))
+
+(defn- hollow-cube-shell?
+  [size x y z]
+  (or (= x 0) (= x (dec size))
+      (= y 0) (= y (dec size))
+      (= z 0) (= z (dec size))))
 
 (defn create-hollow-cube
   "Create a hollow cube multi-block positions (only walls, no interior)
    size: edge length of cube
    Returns: vector of positions"
   [size]
-  (vec (for [x (range size)
-             y (range size)
-             z (range size)
-             :when (or (= x 0) (= x (dec size))
-                       (= y 0) (= y (dec size))
-                       (= z 0) (= z (dec size)))]
-         {:x x :y y :z z})))
+  ;; Eager triple loop — avoids 3-binding `for` `$iter` class-name stacking.
+  (let [coords (range size)]
+    (persistent!
+     (reduce (fn [out x]
+               (reduce (fn [out' y]
+                         (reduce (fn [out'' z]
+                                   (cond-> out''
+                                     (hollow-cube-shell? size x y z)
+                                     (conj! {:x x :y y :z z})))
+                                 out'
+                                 coords))
+                       out
+                       coords))
+             (transient [])
+             coords))))
