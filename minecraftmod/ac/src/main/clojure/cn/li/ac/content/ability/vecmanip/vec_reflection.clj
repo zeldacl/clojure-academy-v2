@@ -11,6 +11,7 @@
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as fx-common]
             [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
+            [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
                         [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -316,8 +317,15 @@
 (defn- reflection-target-id
   [attacker-id damage-source]
   (or (when (and damage-source (entity-damage/available?))
-        (entity-damage/direct-source-entity-id damage-source))
+        (entity-damage/reflection-target-entity-id damage-source))
       attacker-id))
+
+(defn- reflected-damage-source?
+  [damage-source]
+  (boolean
+   (and damage-source
+        (entity-damage/available?)
+        (entity-damage/vec-reflection-damage-source? damage-source))))
 
 (defn vec-reflection-on-key-down
   "Activate or deactivate toggle skill."
@@ -506,12 +514,12 @@
                         (let [world-id (or (get-in state [:position :world-id])
                                            (fx-common/player-path attacker-id [:position :world-id])
                                            "minecraft:overworld")]
-                           (entity-damage/apply-direct-damage!
-                                                               world-id
-                                                               attacker-id
-                                                               reflected-damage
-                                                               :skill
-                                                               {:attacker-uuid player-id})))
+                           (reflection-damage/enqueue!
+                            {:world-id world-id
+                             :caster-id player-id
+                             :target-id attacker-id
+                             :damage reflected-damage
+                             :chain-id chain-id})))
                       (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
                       (when ctx-id
                         (when-let [attacker-pos (and attacker-id (try-find-attacker-pos player-id attacker-id))]
@@ -528,25 +536,28 @@
 (defn can-cancel-attack?
   "Pure precheck for Attack-stage cancel semantics.
   Mirrors original passby gate: only cancels when reflection can actually perform."
-  [player-id _attacker-id original-damage]
-  (try
-    (if (fx-common/get-player-state player-id)
-      (let [ctx-id (active-vec-reflection-ctx-id player-id)
-            exp (skill-exp player-id)
-            reflected-damage (* original-damage (cfg-lerp :combat.damage-multiplier exp))
-            min-reflected-damage (cfg-double :combat.min-reflected-damage)]
-        (and ctx-id
-             (>= reflected-damage min-reflected-damage)))
-      false)
-    (catch Exception e
-      (log/warn "VecReflection can-cancel-attack failed:" (ex-message e))
-      false)))
+  ([player-id attacker-id original-damage]
+   (can-cancel-attack? player-id attacker-id original-damage nil))
+  ([player-id _attacker-id original-damage damage-source]
+   (try
+     (if (and (not (reflected-damage-source? damage-source))
+              (fx-common/get-player-state player-id))
+       (let [ctx-id (active-vec-reflection-ctx-id player-id)
+             exp (skill-exp player-id)
+             reflected-damage (* original-damage (cfg-lerp :combat.damage-multiplier exp))
+             min-reflected-damage (cfg-double :combat.min-reflected-damage)]
+         (and ctx-id
+              (>= reflected-damage min-reflected-damage)))
+       false)
+     (catch Exception e
+       (log/warn "VecReflection can-cancel-attack failed:" (ex-message e))
+       false))))
 
 (defn- on-precheck-cancel-side-effect!
   "Run reflection side-effects during precheck cancel path so platforms
   without mutable hurt-stage hooks still execute reflection behavior."
   [player-id attacker-id original-damage damage-source]
-  (when (can-cancel-attack? player-id attacker-id original-damage)
+  (when (can-cancel-attack? player-id attacker-id original-damage damage-source)
     (reflect-damage player-id
                     (reflection-target-id attacker-id damage-source)
                     original-damage)
@@ -579,9 +590,11 @@
     :vec-reflection-damage
     :vec-reflection
     (fn [player-id attacker-id damage damage-source]
-      (let [target-id (reflection-target-id attacker-id damage-source)
-            [_performed reduced-damage] (reflect-damage player-id target-id damage)]
-        [reduced-damage {:handler :vec-reflection}]))
+      (if (reflected-damage-source? damage-source)
+        [damage {:handler :vec-reflection :skipped :reflection-source}]
+        (let [target-id (reflection-target-id attacker-id damage-source)
+              [_performed reduced-damage] (reflect-damage player-id target-id damage)]
+          [reduced-damage {:handler :vec-reflection}])))
     60)
   (damage-handler/register-attack-cancel-check!
     :vec-reflection

@@ -144,7 +144,7 @@
 
 (defn register-attack-cancel-check!
   "Register a predicate that decides whether an attack should be cancelled.
-  Content skills call this at load time."
+  Predicate signature: [player-id attacker-id damage damage-source]."
   [check-id check-fn]
   (when-not (contains? (:cancel-checks (attack-check-registries-state-snapshot)) check-id)
     (assert-registries-open!)
@@ -153,11 +153,11 @@
 
 (defn should-cancel-attack?
   "Returns true if any registered check says the attack should be cancelled."
-  [player-id attacker-id damage _damage-source]
+  [player-id attacker-id damage damage-source]
   (boolean
     (some (fn [[_id check-fn]]
             (try
-              (check-fn player-id attacker-id damage)
+              (check-fn player-id attacker-id damage damage-source)
               (catch Exception e
                 (log/warn "Attack cancel check failed:" (ex-message e))
                 false)))

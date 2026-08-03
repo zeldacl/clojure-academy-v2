@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.skill-effects]
@@ -19,12 +20,14 @@
   (ps-fix/with-test-player-state-owner
     (fn []
       (store/reset-store!)
+      (reflection-damage/reset-for-test!)
       (ps-fix/seed-player-state! "p" {})
       (damage-handler/reset-attack-check-registries-for-test!)
       (try
         (f)
         (finally
           (damage-handler/reset-attack-check-registries-for-test!)
+          (reflection-damage/reset-for-test!)
           (vr/reset-reflection-runtime-for-test! "p"))))))
 
 (use-fixtures :each with-fresh-reflection-runtime)
@@ -47,7 +50,7 @@
 
 (deftest init-registers-precheck-side-effect-test
   (let [reflect-calls (atom [])]
-    (with-redefs [vr/can-cancel-attack? (fn [_ _ _] true)
+    (with-redefs [vr/can-cancel-attack? (fn [_ _ _ _] true)
                   vr/reflect-damage (fn [player-id attacker-id damage]
                                       (swap! reflect-calls conj [player-id attacker-id damage])
                                       [true 0.0])]
@@ -57,7 +60,7 @@
 
 (deftest precheck-side-effect-skips-when-cannot-cancel-test
   (let [reflect-calls (atom 0)]
-    (with-redefs [vr/can-cancel-attack? (fn [_ _ _] false)
+    (with-redefs [vr/can-cancel-attack? (fn [_ _ _ _] false)
                   vr/reflect-damage (fn [_ _ _]
                                       (swap! reflect-calls inc)
                                       [true 0.0])]
@@ -65,18 +68,41 @@
       (is (false? (damage-handler/run-attack-precheck-side-effects! "p" "a" 7.0 :src)))
       (is (= 0 @reflect-calls)))))
 
-(deftest reflection-target-prefers-direct-damage-source-entity-test
+(deftest reflection-target-prefers-normalized-causing-entity-test
   (with-redefs [cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                cn.li.mcmod.platform.entity-damage/direct-source-entity-id
+                cn.li.mcmod.platform.entity-damage/reflection-target-entity-id
                 (fn [damage-source]
-                  (when (= :projectile-source damage-source)
-                    "projectile"))]
-    (is (= "projectile"
+                  (when (= :dragon-part-source damage-source)
+                    "dragon-parent"))]
+    (is (= "dragon-parent"
            (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/reflection-target-id
-             "shooter" :projectile-source)))
+             "dragon-part" :dragon-part-source)))
     (is (= "shooter"
            (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/reflection-target-id
              "shooter" :melee-source)))))
+
+(deftest reflected-damage-source-cannot-trigger-reflection-test
+  (with-redefs [cn.li.mcmod.platform.entity-damage/available? (constantly true)
+                cn.li.mcmod.platform.entity-damage/vec-reflection-damage-source?
+                #(= :reflection-source %)
+                cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id
+                (fn [_] "ctx-1")
+                cn.li.ac.content.ability.vecmanip.vec-reflection/skill-exp (fn [_] 0.5)
+                cn.li.ac.content.ability.vecmanip.vec-reflection/current-cp (fn [_] 99.0)
+                cn.li.ac.content.ability.vecmanip.vec-reflection/cfg-lerp
+                (fn [field _]
+                  (case field
+                    :cost.damage.cp 1.0
+                    :combat.damage-multiplier 1.0
+                    0.0))
+                cn.li.ac.content.ability.vecmanip.vec-reflection/cfg-double
+                (fn [field]
+                  (case field
+                    :combat.min-reflected-damage 0.0
+                    0.0))
+                cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})]
+    (is (false? (vr/can-cancel-attack? "p" "a" 6.0 :reflection-source)))
+    (is (true? (vr/can-cancel-attack? "p" "a" 6.0 :ordinary-source)))))
 
 (deftest can-cancel-attack-precheck-threshold-test
   (with-redefs [cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-1")
@@ -131,8 +157,9 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
-                                                                            (swap! applied conj [world-id attacker-id damage]))
+                  reflection-damage/enqueue! (fn [task]
+                                               (swap! applied conj task)
+                                               true)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
       (binding [vr/*reflection-chain-id* "chain-guard"]
@@ -158,8 +185,9 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 2)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
-                                                                            (swap! applied conj [world-id attacker-id damage]))
+                  reflection-damage/enqueue! (fn [task]
+                                               (swap! applied conj task)
+                                               true)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] nil)]
       (binding [vr/*reflection-chain-id* "chain-depth"]
@@ -185,15 +213,22 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
-                                                                            (swap! applied conj [world-id attacker-id damage]))
+                  reflection-damage/enqueue! (fn [task]
+                                               (swap! applied conj task)
+                                               true)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (binding [vr/*reflection-chain-id* "chain-shared"]
         (vr/mark-reflecting-for-test! "p" "a" "ctx-other" "chain-shared")
         (ctx/with-context-owner (test-context-owner "p")
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
-      (is (= [["w" "a" 10.0]] @applied)))))
+      (is (= [{:world-id "w"
+               :caster-id "p"
+               :target-id "a"
+               :damage 10.0
+               :chain-id "chain-shared"}]
+             (mapv #(select-keys % [:world-id :caster-id :target-id :damage :chain-id])
+                   @applied))))))
 
 (deftest reflect-damage-recursion-state-isolated-by-chain-test
   (let [applied (atom [])]
@@ -213,15 +248,22 @@
                                                                                   0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage! (fn [world-id attacker-id damage _ & _]
-                                                                            (swap! applied conj [world-id attacker-id damage]))
+                  reflection-damage/enqueue! (fn [task]
+                                               (swap! applied conj task)
+                                               true)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [_ _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id (fn [_] "ctx-current")]
       (vr/mark-reflecting-for-test! "p" "a" "ctx-current" "chain-other")
       (binding [vr/*reflection-chain-id* "chain-current"]
         (ctx/with-context-owner (test-context-owner "p")
           (is (= [true 0.0] (vr/reflect-damage "p" "a" 10.0)))))
-      (is (= [["w" "a" 10.0]] @applied)))))
+      (is (= [{:world-id "w"
+               :caster-id "p"
+               :target-id "a"
+               :damage 10.0
+               :chain-id "chain-current"}]
+             (mapv #(select-keys % [:world-id :caster-id :target-id :damage :chain-id])
+                   @applied))))))
 
 (deftest reflect-damage-force-consumes-available-cp-test
   (let [consumed (atom [])
@@ -247,16 +289,19 @@
                       0.0))
                   cn.li.ac.content.ability.vecmanip.vec-reflection/max-reflections (fn [] 6)
                   cn.li.mcmod.platform.entity-damage/available? (constantly true)
-                  cn.li.mcmod.platform.entity-damage/apply-direct-damage!
-                  (fn [world-id attacker-id damage source-type opts]
-                    (swap! applied conj [world-id attacker-id damage source-type opts]))
+                  reflection-damage/enqueue!
+                  (fn [task]
+                    (swap! applied conj task)
+                    true)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/add-exp! (fn [& _] nil)
                   cn.li.ac.content.ability.vecmanip.vec-reflection/active-vec-reflection-ctx-id
                   (fn [_] nil)]
       (ctx/with-context-owner (test-context-owner "p")
         (is (= [true 5.0] (vr/reflect-damage "p" "a" 10.0))))
       (is (= [["p" 3.0]] @consumed))
-      (is (= [["w" "a" 5.0 :skill {:attacker-uuid "p"}]] @applied)))))
+      (is (= [{:world-id "w" :caster-id "p" :target-id "a" :damage 5.0}]
+             (mapv #(select-keys % [:world-id :caster-id :target-id :damage])
+                   @applied))))))
 
 (deftest vec-reflection-state-is-per-player-test
   (ps-fix/seed-player-state! "p2" {})

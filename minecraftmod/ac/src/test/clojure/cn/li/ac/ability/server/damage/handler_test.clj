@@ -12,13 +12,17 @@
 (use-fixtures :each reset-registries!)
 
 (deftest attack-cancel-check-any-true-test
-  (h/register-attack-cancel-check! :false-1 (fn [_ _ _] false))
-  (h/register-attack-cancel-check! :true-1 (fn [_ _ _] true))
-  (is (true? (h/should-cancel-attack? "p" "a" 5.0 :src))))
+  (let [source-seen (atom nil)]
+    (h/register-attack-cancel-check! :false-1 (fn [_ _ _ damage-source]
+                                                (reset! source-seen damage-source)
+                                                false))
+    (h/register-attack-cancel-check! :true-1 (fn [_ _ _ _] true))
+    (is (true? (h/should-cancel-attack? "p" "a" 5.0 :src)))
+    (is (= :src @source-seen))))
 
 (deftest attack-cancel-check-exception-isolated-test
-  (h/register-attack-cancel-check! :boom (fn [_ _ _] (throw (Exception. "boom"))))
-  (h/register-attack-cancel-check! :true-1 (fn [_ _ _] true))
+  (h/register-attack-cancel-check! :boom (fn [_ _ _ _] (throw (Exception. "boom"))))
+  (h/register-attack-cancel-check! :true-1 (fn [_ _ _ _] true))
   (is (true? (h/should-cancel-attack? "p" "a" 5.0 :src))))
 
 (deftest run-attack-precheck-side-effects-success-test
@@ -43,8 +47,8 @@
     (is (= 1 @calls))))
 
 (deftest attack-check-registry-duplicate-and-freeze-policy-test
-  (h/register-attack-cancel-check! :dup (fn [_ _ _] false))
-  (h/register-attack-cancel-check! :dup (fn [_ _ _] true))
+  (h/register-attack-cancel-check! :dup (fn [_ _ _ _] false))
+  (h/register-attack-cancel-check! :dup (fn [_ _ _ _] true))
   (is (false? (h/should-cancel-attack? "p" "a" 1.0 :src))
       "duplicate check id preserves the first registered predicate")
   (h/register-attack-precheck-side-effect! :fx (fn [_ _ _ _] false))
@@ -54,9 +58,7 @@
   (h/freeze-attack-check-registries!)
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Attack check registries are frozen"
-                        (h/register-attack-cancel-check! :new-check (fn [_ _ _] false))))
+                        (h/register-attack-cancel-check! :new-check (fn [_ _ _ _] false))))
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Attack check registries are frozen"
                         (h/register-attack-precheck-side-effect! :new-fx (fn [_ _ _ _] true)))))
-
-

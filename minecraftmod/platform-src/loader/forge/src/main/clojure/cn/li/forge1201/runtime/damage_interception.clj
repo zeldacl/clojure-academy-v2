@@ -43,14 +43,14 @@
 
   ;; Register event listener
   (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/HIGH  ; High priority to intercept early
+                EventPriority/LOWEST ; Let earlier compatibility handlers decide first.
                 false
                 LivingAttackEvent
                 (reify java.util.function.Consumer
                   (accept [_ evt] (on-living-attack evt))))
 
   (.addListener (MinecraftForge/EVENT_BUS)
-                EventPriority/HIGH  ; High priority to intercept early
+                EventPriority/LOWEST ; Apply after other mutable-damage handlers.
                 false
                 LivingHurtEvent
                 (reify java.util.function.Consumer

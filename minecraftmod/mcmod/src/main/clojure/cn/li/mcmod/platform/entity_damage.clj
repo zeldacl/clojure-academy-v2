@@ -70,6 +70,18 @@
   [damage-source]
   (call :direct-source-entity-id damage-source))
 
+(defn reflection-target-entity-id
+  "Return the UUID of the stable combat owner for reflected damage.
+  The causing entity is preferred over the direct projectile, and multipart
+  entities are normalized to their parent before the UUID is returned."
+  [damage-source]
+  (call :reflection-target-entity-id damage-source))
+
+(defn vec-reflection-damage-source?
+  "True when damage-source was created by VecReflection itself."
+  [damage-source]
+  (boolean (call :vec-reflection-damage-source? damage-source)))
+
 (defn apply-aoe-damage!
   [world-id x y z radius damage source-type falloff?]
   (call :apply-aoe-damage! world-id x y z radius damage source-type falloff?))

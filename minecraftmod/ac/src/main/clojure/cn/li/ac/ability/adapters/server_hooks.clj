@@ -15,6 +15,7 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
+            [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
@@ -228,6 +229,7 @@
    (fn [player-uuid]
      (ctx-mgr/abort-player-contexts! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
@@ -241,6 +243,7 @@
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (delayed-projectiles/clear-all-tasks!)
+     (reflection-damage/clear-all-tasks!)
      (md-damage/on-server-stop! session-id))
 
    :on-player-clone!
@@ -250,6 +253,7 @@
    :on-player-death!
    (fn [player-uuid]
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
@@ -257,6 +261,7 @@
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
      (delayed-projectiles/clear-player-tasks! player-uuid)
+     (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid))
@@ -282,7 +287,7 @@
 
    :on-server-tick-end!
    (fn [_tick-id]
-     nil)
+     (reflection-damage/drain!))
 
    :list-player-uuids
    (fn []
@@ -423,4 +428,3 @@
    :compute-reflected-damage
    (fn [current-damage]
      (entity-damage-runtime/compute-reflected-damage current-damage))})
-
