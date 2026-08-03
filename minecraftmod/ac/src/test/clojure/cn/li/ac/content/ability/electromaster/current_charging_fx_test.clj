@@ -200,7 +200,14 @@
      :caster-pos {:x 0.5 :y 65.62 :z 0.5}
      :target {:x 0.5 :y 64.5 :z 10.0}
      :block-pos [0 64 10]})
-  (let [parts*
+  (let [immediate-plan
+        (level-effects/build-level-effect-plan
+         {:x 0.5 :y 65.62 :z 0.5}
+         {:player-uuid "local-player"}
+         0
+         (fn [& _] []))
+        immediate-parts (set (keep :effect-part (:ops immediate-plan)))
+        parts*
         (reduce
          (fn [parts tick]
            (level-effects/tick-level-effects!)
@@ -212,6 +219,8 @@
              (into parts (keep :effect-part (:ops plan)))))
          #{}
          (range 1 13))]
+    (is (contains? immediate-parts :current-charging/beam))
+    (is (contains? immediate-parts :current-charging/surround))
     (is (contains? parts* :current-charging/beam))
     (is (contains? parts* :current-charging/surround))))
 

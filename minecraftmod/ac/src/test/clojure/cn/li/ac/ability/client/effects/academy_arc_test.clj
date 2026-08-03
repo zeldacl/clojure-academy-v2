@@ -51,6 +51,13 @@
                      state :normal salt tick))
                   initial
                   (range 1 11))
+        initial-ops (academy-arc/surround-arc-ops
+                     (v/v3 0.0 2.0 -3.0)
+                     {:x 0.5 :y 0.0 :z 0.5
+                      :width 1.0 :height 1.0 :depth 1.0}
+                     :normal
+                     initial
+                     salt)
         ops (academy-arc/surround-arc-ops
              (v/v3 0.0 2.0 -3.0)
              {:x 0.5 :y 0.0 :z 0.5
@@ -59,8 +66,31 @@
              advanced
              salt)]
     (is (= 6 (count (:sparks initial))))
-    (is (every? (complement :draw?) (:sparks initial)))
+    (is (= [true false false false false false]
+           (mapv :draw? (:sparks initial))))
+    (is (seq initial-ops))
+    (is (every? #(= :current-charging/surround (:effect-part %)) initial-ops))
     (is (= 6 (count (:sparks advanced))))
     (is (some :draw? (:sparks advanced)))
     (is (seq ops))
     (is (every? #(= :current-charging/surround (:effect-part %)) ops))))
+
+(deftest surround-batch-never-collapses-to-zero-geometry-test
+  (let [salt 20260803
+        body {:x 0.5 :y 0.0 :z 0.5
+              :width 1.0 :height 1.0 :depth 1.0}
+        states (reductions
+                (fn [state tick]
+                  (academy-arc/tick-surround-state
+                   state :normal salt tick))
+                (academy-arc/initial-surround-state :normal salt)
+                (range 1 201))]
+    (is (every?
+         (fn [state]
+           (seq (academy-arc/surround-arc-ops
+                 (v/v3 0.0 2.0 -3.0)
+                 body
+                 :normal
+                 state
+                 salt)))
+         states))))

@@ -9,7 +9,11 @@
             [cn.li.ac.energy.operations :as energy]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.test.support.skill-context :as skill-ctx]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.block.multiblock-core :as multiblock]
+            [cn.li.mcmod.platform.be :as platform-be]
+            [cn.li.mcmod.platform.position :as position]
+            [cn.li.mcmod.platform.raycast :as raycast]
+            [cn.li.mcmod.platform.world :as world]))
 
 (defn- skill-actions []
   (:actions (var-get (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
@@ -69,6 +73,30 @@
 
 (deftest pattern-is-hold-channel-test
   (is (= :hold-channel (:pattern (skill-def)))))
+
+(deftest developer-part-resolves-to-controller-energy-tile-test
+  (let [resolve-target
+        (var-get
+         (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
+                     'resolve-energy-target-tile))
+        routed* (atom [])]
+    (with-redefs [platform-be/be-get-world-safe (constantly :server-level)
+                  position/block-pos (constantly :developer-part-pos)
+                  platform-be/get-block-id (constantly "developer-normal-part")
+                  multiblock/resolve-controller-pos
+                  (fn [ctx]
+                    (swap! routed* conj ctx)
+                    :developer-controller-pos)
+                  world/get-tile-entity
+                  (fn [level pos]
+                    (when (= [level pos]
+                             [:server-level :developer-controller-pos])
+                      :developer-controller))]
+      (is (= :developer-controller (resolve-target :developer-part)))
+      (is (= [{:world :server-level
+               :pos :developer-part-pos
+               :block-id "developer-normal-part"}]
+             @routed*)))))
 
 (deftest down-action-initializes-state-and-starts-fx-test
   (let [ctx-id "ctx-1"

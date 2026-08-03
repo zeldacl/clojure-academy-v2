@@ -265,7 +265,11 @@
      (fn [idx]
        {:index idx
         :life 0
-        :draw? false
+        ;; EntitySurroundArc generates and ticks its SubArcs before the first
+        ;; useful render. Keep one spark visible in the freshly generated
+        ;; batch so an effective target never depends on a later/random
+        ;; client tick before any surround geometry can exist.
+        :draw? (zero? idx)
         :dead? false
         :template-id (.nextInt
                       (state-rng salt generation idx 0 :initial-template)
@@ -311,6 +315,25 @@
              :draw? draw?
              :template-id template-id))))
 
+(defn- keep-batch-visible
+  "Keep a live surround batch from collapsing to zero render geometry.
+
+  Upstream advances six independently flickering SubArcs as one entity. In
+  this render-plan port an all-hidden batch means the surround effect has no
+  ops at all for that frame, which is indistinguishable from a missing target
+  update. Preserve the individual transition probabilities, then promote the
+  first live spark only when the whole batch would otherwise be invisible."
+  [sparks]
+  (if (some #(and (:draw? %) (not (:dead? %))) sparks)
+    sparks
+    (if-let [visible-index
+             (first
+              (keep-indexed (fn [idx spark]
+                              (when-not (:dead? spark) idx))
+                            sparks))]
+      (assoc-in sparks [visible-index :draw?] true)
+      sparks)))
+
 (defn tick-surround-state
   "Advance SubArc exactly once per client tick.
 
@@ -322,17 +345,22 @@
   (let [state* (if (= arc-type (:arc-type state))
                  state
                  (initial-surround-state arc-type salt))
-        state* (if (every? :dead? (:sparks state*))
-                 (let [generation (inc (long (:generation state*)))]
-                   (assoc state*
-                          :generation generation
-                          :sparks (new-sparks arc-type salt generation)))
-                 state*)
-        generation (:generation state*)]
-    (update state* :sparks
-            #(mapv (fn [spark]
-                     (advance-spark spark arc-type salt generation visual-tick))
-                   %))))
+        generation (:generation state*)
+        advanced
+        (update state* :sparks
+                #(keep-batch-visible
+                  (mapv (fn [spark]
+                          (advance-spark spark arc-type salt generation visual-tick))
+                        %)))]
+    ;; Regenerate after advancing as well as for an already-expired incoming
+    ;; batch. Otherwise the tick that kills the final SubArc produces an empty
+    ;; render plan and the replacement is delayed until the following tick.
+    (if (every? :dead? (:sparks advanced))
+      (let [next-generation (inc (long generation))]
+        (assoc advanced
+               :generation next-generation
+               :sparks (new-sparks arc-type salt next-generation)))
+      advanced)))
 
 (defn- cube-surface-anchor
   ^V3 [{:keys [width height depth]} ^Random rng]
