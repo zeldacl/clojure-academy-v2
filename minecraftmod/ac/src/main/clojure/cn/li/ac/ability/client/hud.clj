@@ -22,6 +22,58 @@
       (or (bridge/call-adapter :settings-key-name key-code)
           (str "KEY_" key-code)))))
 
+(def ^:private cpbar-scale 0.2)
+
+(defn cpbar-layout
+  "Return the original AcademyCraft CPBar geometry in GUI-scaled screen pixels.
+
+   Upstream declares a 964x147 widget, scales it by 0.2, right-aligns it, then
+   applies pos(-12, 12). Values stay as doubles until the render adapter's
+   final pixel rounding."
+  [screen-width]
+  (let [s cpbar-scale
+        x (+ (- (double screen-width) (* 964.0 s)) -12.0)
+        y 12.0]
+    {:origin [x y]
+     :frame {:x x :y y :w (* 964.0 s) :h (* 147.0 s)}
+     :overload-preview {:x x :y (+ y (* 21.0 s))
+                        :w (* 943.0 s) :h (* 104.0 s)}
+     :overload-active {:x (+ x (* 30.0 s)) :y y
+                       :w (* 914.0 s) :h (* 147.0 s)}
+     :cp-lane {:x (+ x (* 47.0 s)) :y (+ y (* 30.0 s))
+               :w (* 883.0 s) :h (* 84.0 s)}
+     :category-icon {:x-offset (* (- 857.0 47.0) s)
+                     :y-offset (* (- 43.0 30.0) s)
+                     :w (* 65.0 s) :h (* 65.0 s)}
+     :cp-numbers {:x (+ x (* 110.0 s)) :y (+ y (* 55.0 s))
+                  :font-size (* 40.0 s)}
+     :ol-numbers {:x (+ x (* 110.0 s)) :y (+ y (* 85.0 s))
+                  :font-size (* 40.0 s)}
+     :activation-hint {:text-right-x (+ x (* 500.0 s))
+                       :text-y (+ y (* 140.0 s))
+                       :font-size (* 44.0 s)
+                       :margin (* 8.0 s)
+                       :box-y (+ y (* (- 140.0 8.0) s))
+                       :box-h (* (+ 44.0 16.0) s)
+                       :glow-size (* 5.0 s)}
+     :preset-row {:x (+ x (* 580.0 s)) :y (+ y (* 136.0 s))
+                  :box-size (* 52.0 s) :step (* 62.0 s)
+                  :font-size (* 46.0 s)
+                  :text-y-offset (* 5.0 s)}}))
+
+(defn cpbar-activation-hint-box
+  "Return the upstream activation-hint background/glow rectangle for a
+   measured text width in screen pixels."
+  [screen-width text-width]
+  (let [{:keys [text-right-x margin box-y box-h glow-size]}
+        (:activation-hint (cpbar-layout screen-width))
+        text-width (max 0.0 (double text-width))]
+    {:x (- text-right-x margin text-width)
+     :y box-y
+     :w (+ text-width (* 2.0 margin))
+     :h box-h
+     :glow-size glow-size}))
+
 (defn build-cp-bar-render-data
   "Build CP bar render data matching original AcademyCraft CPBar:
    - bg-texture (back_normal.png) drawn at full width as the bar frame

@@ -36,6 +36,24 @@
     (is (= "my_mod:textures/guis/cpbar/cp.png" (:fg-texture data)))
     (is (nil? (:bar-color data)))))
 
+(deftest cpbar-layout-matches-upstream-scaled-coordinates-test
+  (let [layout (hud/cpbar-layout 320)
+        hint-box (hud/cpbar-activation-hint-box 320 44.0)]
+    (is (< (Math/abs (- 115.2 (get-in layout [:frame :x]))) 1.0e-9))
+    (is (= 12.0 (get-in layout [:frame :y])))
+    (is (= 192.8 (get-in layout [:frame :w])))
+    (is (< (Math/abs (- 124.6 (get-in layout [:cp-lane :x]))) 1.0e-9))
+    (is (= {:x-offset 162.0 :y-offset 2.6 :w 13.0 :h 13.0}
+           (:category-icon layout)))
+    (is (= 8.0 (get-in layout [:cp-numbers :font-size])))
+    (is (< (Math/abs (- 231.2 (get-in layout [:preset-row :x]))) 1.0e-9))
+    (is (< (Math/abs (- 39.2 (get-in layout [:preset-row :y]))) 1.0e-9))
+    (is (< (Math/abs (- 169.6 (:x hint-box))) 1.0e-9))
+    (is (< (Math/abs (- 38.4 (:y hint-box))) 1.0e-9))
+    (is (< (Math/abs (- 47.2 (:w hint-box))) 1.0e-9))
+    (is (= 12.0 (:h hint-box)))
+    (is (= 1.0 (:glow-size hint-box)))))
+
 (deftest cp-bar-consumption-hint-reports-original-and-predicted-levels-test
   (let [data (hud/build-cp-bar-render-data
               {:cp {:cur 80.0 :max 100.0}

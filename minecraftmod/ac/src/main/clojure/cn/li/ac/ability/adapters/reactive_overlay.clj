@@ -1,6 +1,7 @@
 (ns cn.li.ac.ability.adapters.reactive-overlay
   "Reactive HUD overlay — native node tree + signals; no build-client-overlay-plan."
   (:require [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as bridge]
@@ -128,6 +129,7 @@
         (.setW n w*)
         (.setH n h*)
         (.setDSlot n 0 color)
+        (.setFlag n node/FLAG-LAYOUT-DIRTY)
         (.setFlag n node/FLAG-RENDER-DIRTY)))))
 
 (defn- set-box-rgba! [r id rgba]
@@ -211,6 +213,8 @@
 ;; @ the bar's 0.2 scale ≈ 10.4×10.4px, step 62×0.2≈12.4px between boxes.
 (def ^:private preset-box-size 10.4)
 (def ^:private preset-box-step 12.4)
+(def ^:private preset-font-size 9.2)
+(def ^:private preset-text-y-offset 1.0)
 
 (defn- preset-box-id [idx suffix]
   (keyword (str "preset-box-" idx "-" suffix)))
@@ -220,7 +224,9 @@
               :w preset-box-size :h preset-box-size}
     (dsl/box {:id (preset-box-id idx "back") :x 0 :y 0
               :w preset-box-size :h preset-box-size :fill 0x00303030})
-    (dsl/text {:id (preset-box-id idx "digit") :x 3.0 :y 0.5
+    (dsl/text {:id (preset-box-id idx "digit") :x 0 :y preset-text-y-offset
+               :w preset-box-size :h preset-font-size
+               :align :center :font-size preset-font-size
                :text (str (inc idx)) :color 0x00FFFFFF})
     ;; Glow border (ACRenderingHelper.drawGlow), shown only on the active preset.
     (dsl/glow-line {:id (preset-box-id idx "glow") :x 0 :y 0 :visible? false})))
@@ -242,10 +248,23 @@
   (let [[cp-dx cp-dy] (gameplay/hud-position :cpbar)
         [key-dx key-dy] (gameplay/hud-position :keyhint)
         [notif-dx notif-dy] (gameplay/hud-position :notification)
-        bar-x (- sw 205)   ;; screenW - 193 - 12 = right-aligned, 12px from edge
-        bar-y 12
-        bar-w 193           ;; 964 * 0.2
-        bar-h 29]           ;; 147 * 0.2
+        cp-layout (hud/cpbar-layout sw)
+        frame (:frame cp-layout)
+        cp-lane (:cp-lane cp-layout)
+        normal-ol (:overload-preview cp-layout)
+        active-ol (:overload-active cp-layout)
+        category-icon (:category-icon cp-layout)
+        cp-numbers (:cp-numbers cp-layout)
+        ol-numbers (:ol-numbers cp-layout)
+        activation-hint (:activation-hint cp-layout)
+        preset-row (:preset-row cp-layout)
+        ;; Full-frame textures use Minecraft's integer blit path. Round only
+        ;; at this final raster boundary; source-space offsets above retain the
+        ;; exact original 0.2-scaled coordinates.
+        bar-x (double (Math/round (double (:x frame))))
+        bar-y (double (Math/round (double (:y frame))))
+        bar-w (double (Math/round (double (:w frame))))
+        bar-h (double (Math/round (double (:h frame))))]
     (dsl/group {:id :root :w sw :h sh}
       ;; Vignette (upstream AC screen mask): edge glow tinted by category
       ;; color; alpha/tint driven per-frame by the smoothed bg color signal.
@@ -298,7 +317,11 @@
         ;;   W=943,H=104 → ×0.2), while drawOverload fills the WHOLE frame
         ;;   (x0=30,y=0,W=914,H=147 → ×0.2 = +6,+0,183,29) — so the two lanes
         ;;   have DIFFERENT geometry, matching upstream.
-        (dsl/progress {:id :overload-preview :x bar-x :y (+ bar-y 4) :w 189 :h 21
+        (dsl/progress {:id :overload-preview
+                       :x (Math/round (double (:x normal-ol)))
+                       :y (Math/round (double (:y normal-ol)))
+                       :w (Math/round (double (:w normal-ol)))
+                       :h (Math/round (double (:h normal-ol)))
                        :fg-src (modid/asset-path "textures" "guis/cpbar/mask.png")
                        :color-stops overload-preview-color-stops
                        :uv-region [0.0 (/ 21.0 147.0) (/ 943.0 964.0) (/ 125.0 147.0)]
@@ -306,7 +329,11 @@
         ;; Forge uses the original two-sampler mask shader. Other loaders keep
         ;; the same full-width overload layer through renderer's texture fallback.
         (dsl/shader-progress
-          {:id :overload-bar :x (+ bar-x 6) :y bar-y :w (- bar-w 10) :h bar-h
+          {:id :overload-bar
+           :x (Math/round (double (:x active-ol)))
+           :y (Math/round (double (:y active-ol)))
+           :w (Math/round (double (:w active-ol)))
+           :h (Math/round (double (:h active-ol)))
            :shader-props
            {:shader-id :cpbar-overload
             :texture-0 (modid/asset-path "textures" "guis/cpbar/front_overload.png")
@@ -320,7 +347,11 @@
         ;; top) — :cp-bar-ghost is the pulsing current-level bar (hidden unless a
         ;; skill's CP cost is being previewed), :cp-bar is the solid bar showing
         ;; either the predicted level (hint active) or the plain current level.
-        (dsl/progress {:id :cp-bar-ghost :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
+        (dsl/progress {:id :cp-bar-ghost
+                       :x (Math/round (double (:x cp-lane)))
+                       :y (Math/round (double (:y cp-lane)))
+                       :w (Math/round (double (:w cp-lane)))
+                       :h (Math/round (double (:h cp-lane)))
                        :corner 0.852
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
@@ -330,7 +361,11 @@
                        :fill-remap [0.16 0.8]
                        :anchor :right    ;; upstream fixes the right (icon-side) edge
                        :visible? false})
-        (dsl/progress {:id :cp-bar :x (+ bar-x 9) :y (+ bar-y 6) :w 177 :h 17
+        (dsl/progress {:id :cp-bar
+                       :x (Math/round (double (:x cp-lane)))
+                       :y (Math/round (double (:y cp-lane)))
+                       :w (Math/round (double (:w cp-lane)))
+                       :h (Math/round (double (:h cp-lane)))
                        :corner 0.852    ;; 103*sin(44°)/84 — diagonal on left edge (matching upstream OFF/HEIGHT)
                        :fg-src (modid/asset-path "textures" "guis/cpbar/cp.png")
                        :color-stops cp-color-stops
@@ -339,25 +374,46 @@
                        :fill-remap [0.16 0.8]    ;; upstream drawCPBar prog = 0.16 + prog*0.8
                        :anchor :right            ;; upstream fixes the right (icon-side) edge
                        :icon-src ""     ;; set per-frame to category icon
-                       :icon-cutout {:x-offset 161 :w 16 :y-offset 0 :h 17}})
+                       :icon-cutout
+                       {:x-offset (Math/round (double (:x-offset category-icon)))
+                        :y-offset (Math/round (double (:y-offset category-icon)))
+                        :w (Math/round (double (:w category-icon)))
+                        :h (Math/round (double (:h category-icon)))}})
         ;; Overload highlight (pulsing overlay when overloaded)
         (dsl/image {:id :overload-highlight :x bar-x :y bar-y :w bar-w :h bar-h
                     :src (modid/asset-path "textures" "guis/cpbar/highlight_overload.png")
                     :visible? false :alpha 0.0})
         ;; ===== CP/OL Numbers (within bar area) =====
-        (dsl/text {:id :cp-numbers :x (- sw 183) :y 23 :text "" :color 0xFFFFFFFF :visible? false})
-        (dsl/text {:id :ol-numbers :x (- sw 183) :y 29 :text "" :color 0xFFFFFFFF :visible? false})
+        (dsl/text {:id :cp-numbers
+                   :x (Math/round (double (:x cp-numbers)))
+                   :y (Math/round (double (:y cp-numbers)))
+                   :font-size (:font-size cp-numbers)
+                   :text "" :color 0xFFFFFFFF :visible? false})
+        (dsl/text {:id :ol-numbers
+                   :x (Math/round (double (:x ol-numbers)))
+                   :y (Math/round (double (:y ol-numbers)))
+                   :font-size (:font-size ol-numbers)
+                   :text "" :color 0xFFFFFFFF :visible? false})
         ;; ===== Activation hint (within bar area, with background box) =====
-        (dsl/group {:id :activation-hint-group :x (- sw 260) :y 34 :w 160 :h 40 :visible? false}
-          (dsl/box  {:id :activation-hint-bg :x -8 :y -4 :w 160 :h 40 :fill 0x46414141})
+        (dsl/group {:id :activation-hint-group :x bar-x :y bar-y
+                    :w bar-w :h bar-h :visible? false}
+          (dsl/box  {:id :activation-hint-bg :x 0 :y 0 :w 0 :h 0 :fill 0x46414141})
           ;; Glow border (ACRenderingHelper.drawGlow, upstream CRL_KH_GLOW =
-          ;; white @ alpha 40/255) — static geometry, set once in
-          ;; attach-overlay-bindings!; visibility follows the parent group.
-          (dsl/glow-line {:id :activation-hint-glow :x -8 :y -4})
-          (dsl/text {:id :activation-hint :x 4 :y 10 :text "" :color 0xA0FFFFFF}))
+          ;; white @ alpha 40/255). Its rectangle follows the measured hint
+          ;; width, while visibility follows the parent group.
+          (dsl/glow-line {:id :activation-hint-glow :x 0 :y 0})
+          (dsl/text {:id :activation-hint
+                     :x 0
+                     :y (- (double (:text-y activation-hint)) bar-y)
+                     :w (- (double (:text-right-x activation-hint)) bar-x)
+                     :h (:font-size activation-hint)
+                     :align :right :font-size (:font-size activation-hint)
+                     :text "" :color 0xA0FFFFFF}))
         ;; ===== Preset indicators — upstream drawPresetHint is also a CPBar
         ;; method, called from the same jittered FrameEvent block. =====
-        (dsl/group {:id :preset-row :x (- sw 89) :y 39
+        (dsl/group {:id :preset-row
+                    :x (Math/round (double (:x preset-row)))
+                    :y (Math/round (double (:y preset-row)))
                     :w (+ preset-box-size (* 3.0 preset-box-step)) :h preset-box-size
                     :visible? false}
           (preset-box-template 0) (preset-box-template 1)
@@ -459,19 +515,6 @@
     (ui/bind! r :overload-bar :progress ol-scroll)
     ;; Overload highlight: breathing alpha
     (ui/bind! r :overload-highlight :alpha hl-alpha)
-    ;; Activation-key hint glow border: static geometry matching
-    ;; activation-hint-bg (x=-8,y=-4,w=160,h=40); only visibility changes,
-    ;; inherited from the parent group, so dslots are set once here.
-    (when-let [^INode hint-glow (ui/node r :activation-hint-glow)]
-      (.setDSlot hint-glow 0 0.0)    ;; x0
-      (.setDSlot hint-glow 1 160.0)  ;; x1 (= bg width)
-      (.setDSlot hint-glow 2 20.0)   ;; y (= bg height / 2, box vertical center)
-      (.setDSlot hint-glow 3 40.0)   ;; line-w (= bg height)
-      (.setDSlot hint-glow 4 5.0)    ;; glow-sz (upstream ACRenderingHelper size=5)
-      ;; CRL_KH_GLOW = white @ alpha 40/255
-      (.setDSlot hint-glow 5 (double (unchecked-int 0x28FFFFFF)))
-      (.setDSlot hint-glow 6 1.0)    ;; no-center
-      (.setFlag hint-glow node/FLAG-RENDER-DIRTY))
     r))
 
 (defn build-overlay-runtime
@@ -518,7 +561,7 @@
       (let [[a _rr _gg _bb] (sample-argb-stops overload-preview-stops ol-pct)]
         (ui/set-prop! r :overload-preview :alpha (/ (double a) 255.0))))))
 
-(defn- update-activation-indicator! [r snapshot]
+(defn- update-activation-indicator! [r snapshot sw]
   (let [ind       (:activation-indicator snapshot)
         activated (:activated snapshot)
         hint      (:hint ind)]
@@ -527,7 +570,44 @@
     (set-visible! r :cpbar-bg (:activated? snapshot))
     (set-visible! r :activation-hint-group (boolean (and activated hint)))
     (when hint
-      (ui/set-prop! r :activation-hint :text (str hint)))))
+      (let [layout (hud/cpbar-layout sw)
+            text (str hint)
+            font-size (get-in layout [:activation-hint :font-size])
+            text-width (double
+                         (or (bridge/call-adapter :font-text-width {} text font-size)
+                             (bridge/call-adapter :font-width text)
+                             (* 0.5 font-size (count text))))
+            box (hud/cpbar-activation-hint-box sw text-width)
+            frame (:frame layout)
+            group-x (double (Math/round (double (:x frame))))
+            group-y (double (Math/round (double (:y frame))))
+            local-x (- (double (:x box)) group-x)
+            local-y (- (double (:y box)) group-y)
+            box-w (double (:w box))
+            box-h (double (:h box))]
+        (ui/set-prop! r :activation-hint :text text)
+        (set-box-at! r :activation-hint-bg local-x local-y box-w box-h
+                     {:r 65 :g 65 :b 65 :a 70})
+        (when-let [^INode glow (ui/node r :activation-hint-glow)]
+          (let [center-y (/ box-h 2.0)
+                glow-size (double (:glow-size box))]
+            (when (or (not= local-x (.getX glow))
+                      (not= local-y (.getY glow))
+                      (not= box-w (.getDSlot glow 1))
+                      (not= center-y (.getDSlot glow 2))
+                      (not= box-h (.getDSlot glow 3))
+                      (not= glow-size (.getDSlot glow 4)))
+              (.setX glow local-x)
+              (.setY glow local-y)
+              (.setDSlot glow 0 0.0)
+              (.setDSlot glow 1 box-w)
+              (.setDSlot glow 2 center-y)
+              (.setDSlot glow 3 box-h)
+              (.setDSlot glow 4 glow-size)
+              (.setDSlot glow 5 (double (unchecked-int 0x28FFFFFF)))
+              (.setDSlot glow 6 1.0)
+              (.setFlag glow node/FLAG-LAYOUT-DIRTY)
+              (.setFlag glow node/FLAG-RENDER-DIRTY))))))))
 
 (defn- update-numbers! [r snapshot]
   (let [texts (:numbers-texts snapshot)]
@@ -552,7 +632,7 @@
         (set-node-visible! r glow true)
         (.setDSlot glow 0 0.0) (.setDSlot glow 1 preset-box-size)
         (.setDSlot glow 2 (/ preset-box-size 2.0)) (.setDSlot glow 3 preset-box-size)
-        (.setDSlot glow 4 2.0)
+        (.setDSlot glow 4 1.0)
         (.setDSlot glow 5 (double (unchecked-int
                                    (bit-or (bit-shift-left (int (* 200.0 intensity)) 24)
                                            0x00FFFFFF))))
@@ -568,7 +648,13 @@
         curr (last indicators)
         visible? (boolean curr)]
     (when-let [^INode row (ui/node r :preset-row)]
-      (.setX row (double (- sw 89))))
+      (let [{:keys [x y]} (:preset-row (hud/cpbar-layout sw))]
+        (let [x (double (Math/round (double x)))
+              y (double (Math/round (double y)))]
+          (when (or (not= x (.getX row)) (not= y (.getY row)))
+            (.setX row x)
+            (.setY row y)
+            (.setFlag row node/FLAG-LAYOUT-DIRTY)))))
     (set-node-visible! r (ui/node r :preset-row) visible?)
     (when curr
       (let [fade (double (or (:fade curr) 1.0))
@@ -953,16 +1039,14 @@
   ;; hint, activate hint, CP/OL numbers, all part of the same widget), not the
   ;; whole HUD (skill slots, toasts, crosshair etc. stay put upstream too).
   (when-let [^INode jitter-root (ui/node r :cpbar-jitter-group)]
-    (if interfered?
-      (let [jx (sig/sget-d (rt/user-signal r :jitter-x))
-            jy (sig/sget-d (rt/user-signal r :jitter-y))]
-        (when (or (not= jx (.getX jitter-root)) (not= jy (.getY jitter-root)))
-          (.setX jitter-root jx)
-          (.setY jitter-root jy)
-          (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY)))
-      (when (or (not= 0.0 (.getX jitter-root)) (not= 0.0 (.getY jitter-root)))
-        (.setX jitter-root 0.0)
-        (.setY jitter-root 0.0)
+    (let [[cp-dx cp-dy] (gameplay/hud-position :cpbar)
+          jx (if interfered? (sig/sget-d (rt/user-signal r :jitter-x)) 0.0)
+          jy (if interfered? (sig/sget-d (rt/user-signal r :jitter-y)) 0.0)
+          x (+ (double cp-dx) jx)
+          y (+ (double cp-dy) jy)]
+      (when (or (not= x (.getX jitter-root)) (not= y (.getY jitter-root)))
+        (.setX jitter-root x)
+        (.setY jitter-root y)
         (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY)))))
 
 (defn- apply-screen-size! [r sw sh]
@@ -1053,7 +1137,7 @@
             (let [low? (boolean (or (:recovering (:overload-bar snapshot))
                                     (:interfered? snapshot)))]
               (sig/sset-d! cp-low-mult (if low? 0.3 1.0))))
-          (update-activation-indicator! r snapshot)
+          (update-activation-indicator! r snapshot sw)
           (update-overload-lane! r snapshot sw)
           (update-numbers! r snapshot)
           (update-preset-indicators! r snapshot sw)
