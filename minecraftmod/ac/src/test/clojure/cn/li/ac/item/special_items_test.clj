@@ -46,7 +46,7 @@
       (is (= {:consume? false}
              (#'special-items/apply-induction-factor!
               {:player player
-               :item-id "my_mod:induction_factor_electromaster"
+               :item-id "academy:induction_factor_electromaster"
                :side :server}))))
     (is (nil? (get-in (store/get-player-state ps-fix/test-session-id player-uuid)
                       [:ability-data :category-id])))
@@ -54,14 +54,14 @@
 
 (deftest induction-factor-catalog-lists-all-factors-test
   (is (= 4 (count (special-items/induction-factor-catalog))))
-  (is (some #(= "my_mod:induction_factor_electromaster" (first %))
+  (is (some #(= "academy:induction_factor_electromaster" (first %))
             (special-items/induction-factor-catalog))))
 
 (deftest find-induction-factor-scans-inventory-test
-  (let [inventory {"my_mod:induction_factor_teleporter" 1}]
+  (let [inventory {"academy:induction_factor_teleporter" 1}]
     (with-redefs [entity/player-count-item-by-id
                   (fn [_ item-id] (get inventory item-id 0))]
-      (is (= {:item-id "my_mod:induction_factor_teleporter" :category :teleporter}
+      (is (= {:item-id "academy:induction_factor_teleporter" :category :teleporter}
              (special-items/find-induction-factor :stub-player)))))
   (with-redefs [entity/player-count-item-by-id (constantly 0)]
     (is (nil? (special-items/find-induction-factor :stub-player)))))

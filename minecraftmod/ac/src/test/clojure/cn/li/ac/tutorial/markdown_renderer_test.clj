@@ -5,7 +5,7 @@
             [cn.li.ac.tutorial.markdown-renderer :as mr]))
 
 (def ^:private lang
-  {"settings.my_mod.prop.open_data_terminal" "Open Data Terminal"})
+  {"settings.academy.prop.open_data_terminal" "Open Data Terminal"})
 
 (defn- with-lang
   "Bind a language table so ![key id=…] can resolve. Unknown keys echo back,

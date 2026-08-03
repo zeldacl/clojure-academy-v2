@@ -45,8 +45,8 @@
 (defn root-json
   [{:keys [id background]}]
   {"display" {"icon" {"item" "minecraft:nether_star"}
-              "title" {"translate" (str "advancement.my_mod.tab." (name id))}
-              "description" {"translate" (str "advancement.my_mod.tab." (name id) ".description")}
+              "title" {"translate" (str "advancement.academy.tab." (name id))}
+              "description" {"translate" (str "advancement.academy.tab." (name id) ".description")}
               "background" background
               "frame" "task"
               "show_toast" false
@@ -70,8 +70,8 @@
                     root-rl)]
     {"parent" parent-rl
      "display" {"icon" {"item" (item-registry/safe-item-id (:icon ach) known rl/parse-resource-location)}
-                "title" {"translate" (str "advancement.my_mod." id)}
-                "description" {"translate" (str "advancement.my_mod." id ".description")}
+                "title" {"translate" (str "advancement.academy." id)}
+                "description" {"translate" (str "advancement.academy." id ".description")}
                 "frame" (name (or (:frame ach) :task))
                 "show_toast" true
                 "announce_to_chat" false

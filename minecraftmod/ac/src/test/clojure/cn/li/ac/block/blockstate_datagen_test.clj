@@ -7,7 +7,7 @@
             [cn.li.mcmod.protocol.metadata :as metadata]))
 
 (deftest properties-from-schema-match-runtime-shape-test
-  (with-redefs [mcmod-config/mod-id "my_mod"]
+  (with-redefs [mcmod-config/mod-id "academy"]
     (let [fusor-def (get (datagen/complex-definitions-map) :imag-fusor)
           former-def (get (datagen/complex-definitions-map) :metal-former)
           fusor (:properties fusor-def)
@@ -21,26 +21,26 @@
       (is (= 4 (count (:parts former-def)))))))
 
 (deftest ability-interferer-on-parts-test
-  (with-redefs [mcmod-config/mod-id "my_mod"]
+  (with-redefs [mcmod-config/mod-id "academy"]
     (let [def (get (datagen/complex-definitions-map) :ability-interferer)]
       (is (= #{true false}
              (set (map #(get-in % [:condition :on]) (:parts def)))))
-      (is (= ["my_mod:block/ability_interferer"
-              "my_mod:block/ability_interf_off"]
+      (is (= ["academy:block/ability_interferer"
+              "academy:block/ability_interf_off"]
              (map first (map :models (:parts def))))))))
 
 (deftest blockstate-definition-uses-schema-datagen-test
-  (with-redefs [mcmod-config/mod-id "my_mod"
+  (with-redefs [mcmod-config/mod-id "academy"
                 metadata/get-all-block-ids (fn [] [])
                 metadata/get-block-registry-name identity]
     (let [def (blockstate-def/get-block-state-definition :metal-former)]
       (is (= "metal_former" (:registry-name def)))
       (is (= 4 (count (:parts def))))
-      (is (= "my_mod:block/metal_former_north"
+      (is (= "academy:block/metal_former_north"
              (first (:models (first (:parts def)))))))))
 
 (deftest state-driven-shape-blocks-use-exclusive-conditional-parts-test
-  (with-redefs [mcmod-config/mod-id "my_mod"]
+  (with-redefs [mcmod-config/mod-id "academy"]
     (let [complex-defs (datagen/complex-definitions-map)
           node-defs (node-blockstate/get-all-node-definitions)
           target-defs [(get complex-defs :ability-interferer)

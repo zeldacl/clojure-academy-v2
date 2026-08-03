@@ -64,7 +64,7 @@
     (.getSoundManager mc)))
 
 (defn stop-sound!
-  "Stop a playing sound by its ResourceLocation id (e.g. \"my_mod:em.arc_strong\")."
+  "Stop a playing sound by its ResourceLocation id (e.g. \"academy:em.arc_strong\")."
   [sound-id]
   (when-let [^SoundManager sm (get-sound-manager)]
     (let [loc (ResourceLocation. (namespace sound-id) (name sound-id))]

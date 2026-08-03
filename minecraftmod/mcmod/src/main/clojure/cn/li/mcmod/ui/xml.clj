@@ -250,7 +250,7 @@
 (defn load-spec
   "Load XML from classpath resource and parse into node-spec.
    Schema-validated at load time (never on the render path).
-   resource-path: e.g. \"my_mod:guis/rework/page_inv.xml\"
+   resource-path: e.g. \"academy:guis/rework/page_inv.xml\"
    Falls back to assets/<modid>/ prefix when the bare path is not on classpath."
   [resource-path]
   (let [path (str/replace resource-path #"^[^:]+:" "")

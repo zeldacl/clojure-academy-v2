@@ -14,7 +14,7 @@
 (deftest mode-normalization-test
   (is (= :plate (recipes/normalize-mode nil)))
   (is (= :incise (recipes/normalize-mode "incise")))
-  (is (= "my_mod:textures/guis/icons/icon_former_refine.png"
+  (is (= "academy:textures/guis/icons/icon_former_refine.png"
          (recipes/mode->icon-texture :refine))))
 
 (deftest recipe-by-id-and-form-guard-test
@@ -25,7 +25,7 @@
   (let [custom {:id "mf_custom"
                 :mode "plate"
                 :input {:item "minecraft:iron_ingot" :count 1}
-                :output {:item "my_mod:reinforced_iron_plate" :count 1}}]
+                :output {:item "academy:reinforced_iron_plate" :count 1}}]
     (recipes/register-recipe! custom)
     (recipes/register-recipe! custom)
     (is (= 1 (count (filter #(= "mf_custom" (:id %)) (recipes/recipes-snapshot)))))

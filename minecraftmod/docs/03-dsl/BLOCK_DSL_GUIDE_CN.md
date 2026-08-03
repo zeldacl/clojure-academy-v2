@@ -55,9 +55,9 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 
 ```clojure
 :model-parent   "minecraft:block/cube_all"    ; 可选，模型 parent
-:textures       {:all "my_mod:blocks/matrix"} ; 可选，基础纹理映射
-:model-textures {"node_basic_energy_0" "my_mod:blocks/node_basic_energy_0"
-                 "node_basic_energy_1" "my_mod:blocks/node_basic_energy_1"}
+:textures       {:all "academy:blocks/matrix"} ; 可选，基础纹理映射
+:model-textures {"node_basic_energy_0" "academy:blocks/node_basic_energy_0"
+                 "node_basic_energy_1" "academy:blocks/node_basic_energy_1"}
                                               ; 可选，按具体 model 名覆盖纹理
 ```
 
@@ -66,7 +66,7 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
 1. `:model-textures`（按 model 名精确匹配）
 2. `:textures`（通用纹理）
 3. `:properties` 下同名配置（仅用于 datagen 的扩展字段）
-4. 自动回退到 `my_mod:blocks/<model-name>`
+4. 自动回退到 `academy:blocks/<model-name>`
 
 > 建议：新增方块优先声明 `:model-parent`/`:textures`/`:model-textures`，避免仅依赖回退推导。
 
@@ -126,7 +126,7 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
   :harvest-tool :pickaxe
   :sounds :stone
   :model-parent "minecraft:block/cube_all"
-  :textures {:all "my_mod:blocks/custom_stone"})
+  :textures {:all "academy:blocks/custom_stone"})
 ```
 
 ### 示例 1.1：显式多模型纹理（适合动态/分层模型）
@@ -138,13 +138,13 @@ Block DSL 提供声明式方式定义方块元数据，**由 `cn.li.mcmod.protoc
   :hardness 2.5
   :resistance 6.0
   :model-parent "minecraft:block/cube_all"
-  :model-textures {"node_basic_base"      "my_mod:blocks/node_basic_base"
-                   "node_basic_connected" "my_mod:blocks/node_basic_connected"
-                   "node_basic_energy_0"  "my_mod:blocks/node_basic_energy_0"
-                   "node_basic_energy_1"  "my_mod:blocks/node_basic_energy_1"
-                   "node_basic_energy_2"  "my_mod:blocks/node_basic_energy_2"
-                   "node_basic_energy_3"  "my_mod:blocks/node_basic_energy_3"
-                   "node_basic_energy_4"  "my_mod:blocks/node_basic_energy_4"})
+  :model-textures {"node_basic_base"      "academy:blocks/node_basic_base"
+                   "node_basic_connected" "academy:blocks/node_basic_connected"
+                   "node_basic_energy_0"  "academy:blocks/node_basic_energy_0"
+                   "node_basic_energy_1"  "academy:blocks/node_basic_energy_1"
+                   "node_basic_energy_2"  "academy:blocks/node_basic_energy_2"
+                   "node_basic_energy_3"  "academy:blocks/node_basic_energy_3"
+                   "node_basic_energy_4"  "academy:blocks/node_basic_energy_4"})
 ```
 
 此写法可让 datagen 直接读取 DSL 声明，减少隐式命名约定带来的风险。

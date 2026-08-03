@@ -14,7 +14,7 @@ Wireless Node GUI is an `ac` business GUI backed by `mcmod` GUI spec and the Min
 
 ## Resource paths
 
-GUI XML and textures live under `ac/src/main/resources/assets/my_mod/`.
+GUI XML and textures live under `ac/src/main/resources/assets/academy/`.
 
 The GUI should access wireless state through `cn.li.ac.wireless.api` and presenter helpers, not by mutating wireless world-state directly.
 

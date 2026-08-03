@@ -7,13 +7,13 @@
 (deftest default-definition-generation-test
   (with-redefs [metadata/get-all-block-ids (fn [] ["demo-block"])
                 metadata/get-block-registry-name (fn [_] "demo_block")
-                config/mod-id "my_mod"]
+                config/mod-id "academy"]
     (let [all-defs (#'sut/basic-get-all-definitions)
           definition (get all-defs :demo-block)]
       (testing "basic definitions are generated from metadata"
         (is (= "demo_block" (:registry-name definition)))
         (is (= {} (:properties definition)))
-        (is (= ["my_mod:block/demo_block"]
+        (is (= ["academy:block/demo_block"]
                (-> definition :parts first :models))))
       (testing "lookup supports keyword and stringy keys"
         (is (= definition (#'sut/basic-get-block-state-definition :demo-block)))

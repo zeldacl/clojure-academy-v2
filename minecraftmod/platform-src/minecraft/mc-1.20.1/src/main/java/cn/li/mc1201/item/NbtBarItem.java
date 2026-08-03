@@ -98,6 +98,6 @@ public class NbtBarItem extends Item {
         long currentDisplay = Math.round(current);
         long maxDisplay = Math.round(max);
         tooltip.add(Component.translatable(
-            "tooltip.my_mod.energy_info", currentDisplay, maxDisplay));
+            "tooltip.academy.energy_info", currentDisplay, maxDisplay));
     }
 }

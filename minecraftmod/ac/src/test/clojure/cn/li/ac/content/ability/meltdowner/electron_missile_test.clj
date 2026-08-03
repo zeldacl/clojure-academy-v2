@@ -104,7 +104,7 @@
                                                               "ball-1")]
       (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"}))
 
-    (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0]] @spawn-calls*))
+    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0]] @spawn-calls*))
     (is (= ["p1" 220.0] (first @floor-calls*)))
     (is (= {:ticks 1 :active-balls 1 :ball-ids ["ball-1"]
             :active? true :overload-floor 220.0}

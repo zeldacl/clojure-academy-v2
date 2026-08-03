@@ -89,7 +89,7 @@
                [(.-x aoe-start) (.-y aoe-start) (.-z aoe-start)])
             "AOE arcs start at AttackData.point, not at the full-range main endpoint"))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:em.arc_strong" (:sound-id (first @sounds*))))
+      (is (= "academy:em.arc_strong" (:sound-id (first @sounds*))))
       (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (dotimes [_ 30]
         (level-effects/update-effect-state! :thunder-bolt-strike

@@ -895,7 +895,7 @@
   `call` is not implemented.
 
   Optional second arg `opts`: `{:asset-parent \"models/\"}` — directory of the
-  OBJ file under `assets/my_mod/` (used to resolve `mtllib` and `map_Kd`)."
+  OBJ file under `assets/academy/` (used to resolve `mtllib` and `map_Kd`)."
   ([obj-text] (parse-obj obj-text nil))
   ([obj-text opts]
    (let [asset-parent (or (:asset-parent opts) "")
@@ -1100,7 +1100,7 @@
          (finalize-obj-state state asset-parent))))
 
 (defn load-obj-model
-  "Load and parse OBJ from `assets/my_mod/<asset-path>`. Resolves `mtllib` /
+  "Load and parse OBJ from `assets/academy/<asset-path>`. Resolves `mtllib` /
   `map_Kd` using the directory of `asset-path` (e.g. `models/foo.obj` →
   `models/`). Optional `opts` is merged into `parse-obj` (typically `{}`)."
   ([asset-path]

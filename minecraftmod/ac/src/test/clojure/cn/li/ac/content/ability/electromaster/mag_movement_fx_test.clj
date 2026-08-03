@@ -89,7 +89,7 @@
       (is (= 1 (count @sounds*)))
       (invoke-tick!)
       (is (= 2 (count @sounds*)))
-      (is (= "my_mod:em.move_loop" (:sound-id (second @sounds*)))))))
+      (is (= "academy:em.move_loop" (:sound-id (second @sounds*)))))))
 
 (deftest two-owners-keep-mag-movement-state-independent-test
   (invoke-level-enqueue! "ctx-a" :mag-movement/fx-start {:mode :start :target {:x 1.0 :y 2.0 :z 3.0}})

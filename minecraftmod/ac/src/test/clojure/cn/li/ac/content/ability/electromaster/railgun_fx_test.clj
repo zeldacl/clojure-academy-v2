@@ -144,7 +144,7 @@
       ((get @handlers* :railgun/fx-charge-start) "ctx-glow" :railgun/fx-charge-start
        {:mode :charge-start :source-player-id "caster-uuid"})
       (is (= [[:mcmod/spawn-scripted-effect-at-player
-               {:effect-id "my_mod:railgun_charge" :owner-uuid "caster-uuid"}]]
+               {:effect-id "academy:railgun_charge" :owner-uuid "caster-uuid"}]]
              @run-calls*)
           "spawns anchored to the CASTER's uuid from the payload, not the local viewer"))))
 

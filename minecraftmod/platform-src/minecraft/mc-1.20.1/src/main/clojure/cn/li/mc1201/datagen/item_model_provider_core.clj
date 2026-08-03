@@ -9,7 +9,7 @@
 (defn- texture-path
   "Build a full texture ResourceLocation string from a texture name.
   If the name already contains a colon, return it as-is (full path e.g.
-  'my_mod:block/phase_liquid'). Otherwise prepend modid:item/."
+  'academy:block/phase_liquid'). Otherwise prepend modid:item/."
   [texture-name]
   (if (str/includes? (str texture-name) ":")
     (str texture-name)

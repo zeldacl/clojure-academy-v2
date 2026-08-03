@@ -50,10 +50,26 @@ if (target.loader == "forge") {
         layout.buildDirectory.dir("clojure/main"),
         layout.buildDirectory.dir("resources/main")
     ]
+    // Loom writes MOD_CLASSES from the full source-set graph (including stale
+    // platform/build and IDE out/production paths). Force the target-local
+    // roots at execution time so an unexpanded/stale mods.toml cannot win.
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }
-        .configureEach {
-            def roots = forgeModClassRoots.collect { "main%%${it.get().asFile.absolutePath}" }
-            environment "MOD_CLASSES", roots.join(";")
+        .configureEach { task ->
+            task.doFirst {
+                def roots = forgeModClassRoots
+                    .collect { it.get().asFile }
+                    .findAll { it.directory }
+                    .collect { "main%%${it.absolutePath}" }
+                if (roots.isEmpty()) {
+                    throw new GradleException("Forge MOD_CLASSES is empty for target '${targetId}'; run processResources/classes first")
+                }
+                def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
+                def modsToml = new File(resourcesRoot, "META-INF/mods.toml")
+                if (!modsToml.isFile()) {
+                    throw new GradleException("Missing processed mods.toml at ${modsToml}; run :platform:processResources first")
+                }
+                task.environment "MOD_CLASSES", roots.join(File.pathSeparator)
+            }
         }
 }
 
@@ -212,10 +228,10 @@ if (target.loader != "none") {
         filesMatching(["META-INF/mods.toml", "fabric.mod.json"]) {
             expand replaceProperties + [project: project]
         }
-        rename "^mixins\\.my_mod\\.json\$", "mixins.${rootProject.findProperty("mod_id")}.json"
-        rename "^my_mod\\.mixins\\.json\$", "${rootProject.findProperty("mod_id")}.mixins.json"
+        rename "^mixins\\.academy\\.json\$", "mixins.${rootProject.findProperty("mod_id")}.json"
+        rename "^academy\\.mixins\\.json\$", "${rootProject.findProperty("mod_id")}.mixins.json"
         filesMatching(["**/*.xml", "**/*.json"]) {
-            filter { String line -> line.replace("my_mod:", rootProject.findProperty("mod_id") + ":") }
+            filter { String line -> line.replace("academy:", rootProject.findProperty("mod_id") + ":") }
         }
     }
 
@@ -652,8 +668,10 @@ if (target.loader != "none") {
 
     def rootProj = project.rootProject
     def modId = rootProj.findProperty("mod_id")
-    def forgeResources = project.file("platform-src/loader/forge/src/main/resources").absolutePath
-    def acResources = project(":ac").file("src/main/resources").absolutePath
+    // Resolve against the repo root — project.file() is relative to platform/
+    // and would incorrectly become platform/platform-src/...
+    def forgeResources = rootProj.file("platform-src/loader/forge/src/main/resources").absolutePath
+    def acResources = rootProj.project(":ac").file("src/main/resources").absolutePath
     def datagenPath = generatedDatagenResources.get().asFile.absolutePath
 
     loom {

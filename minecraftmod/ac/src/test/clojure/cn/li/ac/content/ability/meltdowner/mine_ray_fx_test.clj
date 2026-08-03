@@ -86,9 +86,9 @@
                                                         (swap! sounds* conj args)
                                                         nil)]
       (doseq [[ctx-id variant expected-sound-id]
-              [["ctx-basic" :basic "my_mod:md.mine_basic_startup"]
-               ["ctx-expert" :expert "my_mod:md.mine_expert_startup"]
-               ["ctx-luck" :luck "my_mod:md.mine_luck_startup"]]]
+              [["ctx-basic" :basic "academy:md.mine_basic_startup"]
+               ["ctx-expert" :expert "academy:md.mine_expert_startup"]
+               ["ctx-luck" :luck "academy:md.mine_luck_startup"]]]
         (enqueue! enqueue-state! ctx-id :mine-ray/fx-start {:mode :start :variant variant :source-player-id "player-a"})
         (is (= expected-sound-id
                (:sound-id (second (last @sounds*)))))))))

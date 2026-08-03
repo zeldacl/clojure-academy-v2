@@ -80,7 +80,7 @@
       ((get @handlers* :directed-shock/fx-perform) "ctx-1" :directed-shock/fx-perform
        {:x 1.0 :y 2.0 :z 3.0})
       (is (= 1 (count @sound-calls*)))
-      (is (= {:sound-id "my_mod:vecmanip.directed_shock"
+      (is (= {:sound-id "academy:vecmanip.directed_shock"
               :volume 0.5 :pitch 1.0 :x 1.0 :y 2.0 :z 3.0}
              (first @sound-calls*))))))
 

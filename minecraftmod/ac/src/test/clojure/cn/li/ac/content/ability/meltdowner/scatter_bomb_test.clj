@@ -121,7 +121,7 @@
     (is (= [["p1" 120.0]] @floor-calls*))
     (is (empty? @damage-calls*))
     ;; Tracked spawn with a life override covering the whole hold window.
-    (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0 120]] @spawn-calls*))
+    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0 120]] @spawn-calls*))
     (is (= 20 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 1 (get-in @ctx* [:skill-state :balls])))
     (is (= ["ball-uuid-1"] (get-in @ctx* [:skill-state :ball-uuids])))

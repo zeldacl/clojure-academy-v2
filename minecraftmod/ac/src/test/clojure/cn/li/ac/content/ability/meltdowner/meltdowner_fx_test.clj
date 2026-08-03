@@ -133,7 +133,7 @@
                                                    :end {:x 2.0 :y 64.0 :z 2.0}
                                                    :source-player-id "player-a"})
       (is (= [[:mcmod/start-loop-sound-at-player
-               {:key "meltdowner/ctx-main" :sound-id "my_mod:md.md_charge"
+               {:key "meltdowner/ctx-main" :sound-id "academy:md.md_charge"
                 :owner-uuid "player-a" :volume 1.0 :pitch 1.0}]]
              @bridge*)
           ":start starts the FollowEntitySound loop attached to the caster")
@@ -184,7 +184,7 @@
       (arc-beam/enqueue-for-test! :meltdowner "ctx-cadence" :meltdowner/fx-end
         {:mode :end :performed? true :source-player-id "player-a"})
       (is (= [[:mcmod/start-loop-sound-at-player
-               {:key "meltdowner/ctx-cadence" :sound-id "my_mod:md.md_charge"
+               {:key "meltdowner/ctx-cadence" :sound-id "academy:md.md_charge"
                 :owner-uuid "player-a" :volume 1.0 :pitch 1.0}]
               [:mcmod/stop-loop-sound {:key "meltdowner/ctx-cadence"}]]
              @bridge*)

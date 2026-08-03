@@ -9,6 +9,6 @@ public final class FabricPlayerPersistentData {
     }
 
     public static CompoundTag get(Player player) {
-        return ((PlayerPersistentDataAccess) player).my_mod$getPersistentData();
+        return ((PlayerPersistentDataAccess) player).academy$getPersistentData();
     }
 }

@@ -83,7 +83,7 @@
 ;; ============================================================================
 
 (defonce ^:private cursor-rl
-  (ResourceLocation. "my_mod" "textures/guis/data_terminal/cursor.png"))
+  (ResourceLocation. "academy" "textures/guis/data_terminal/cursor.png"))
 
 (defn render-cursor!
   "Render the custom cursor with additive blending (upstream: GL_SRC_ALPHA,

@@ -30,6 +30,9 @@
     (modid/namespaced-path icon)
     icon))
 
+(defn- st-key [suffix]
+  (str "skill_tree." modid/MOD-ID "." suffix))
+
 (defn parallax-offset
   "Node parallax shift (±5px at the edges) from the pointer position — the tree
    nodes are drawn at (x - pdx, y - pdy). Public so the developer panel can shift
@@ -229,12 +232,12 @@
       (if learned
         (do
           (ctext (+ cy 40.0) 220 8.0 0xFFa1e1ff
-                 (str (i18n/translate "skill_tree.my_mod.skill_exp") " " (int (* 100.0 (or exp 0.0))) "%"))
+                 (str (i18n/translate (st-key "skill_exp")) " " (int (* 100.0 (or exp 0.0))) "%"))
           (when skill-description
             (doseq [[i line] (map-indexed vector (wrap-text skill-description 42))]
               (ctext (+ cy 50.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
         (do
-          (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate "skill_tree.my_mod.skill_not_learned"))
+          (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate (st-key "skill_not_learned")))
           ;; Requirement icons (upstream: "Req." label + condition icons, greyed
           ;; when not accepted). Centred row of 14px icons stepped by 16px.
           (let [conds (:conditions node)
@@ -243,7 +246,7 @@
                 left (- cx (/ (* step (double n)) 2.0))]
             (when (pos? n)
               (rt/build-child! rt {:kind :text :props {:x (- left 44.0) :y (+ cy 52.0) :w 40.0 :h 12.0
-                                                       :text (i18n/translate "skill_tree.my_mod.req")
+                                                       :text (i18n/translate (st-key "req"))
                                                        :font-size 9.0 :color 0xFFAAAAAA :align "right"}} layer)
               (doseq [[i c] (map-indexed vector conds)]
                 (when-let [info (condition-icons/condition-display-info c)]
@@ -277,11 +280,11 @@
                      (= result :success) 1.0
                      :else 0.0)
           hint (cond
-                 developing? (i18n/translate "skill_tree.my_mod.dev_developing")
-                 (= result :success) (i18n/translate "skill_tree.my_mod.dev_successful")
-                 (= result :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
-                 (= (:error dev-state) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
-                 :else (i18n/translate "skill_tree.my_mod.level_question"))
+                 developing? (i18n/translate (st-key "dev_developing"))
+                 (= result :success) (i18n/translate (st-key "dev_successful"))
+                 (= result :failed) (i18n/translate (st-key "dev_failed"))
+                 (= (:error dev-state) :low-energy) (i18n/translate (st-key "noenergy"))
+                 :else (i18n/translate (st-key "level_question")))
           ctext (fn [y tw fs color s]
                   (rt/build-child! rt {:kind :text
                                        :props {:x (- cx (/ (double tw) 2.0)) :y y :w (double tw) :h 14.0
@@ -299,7 +302,7 @@
                                                                         :skill-view-outline))
                                                   :texture-1 (tex-src :skill-mask)}}} layer)
       (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
-             (i18n/translate "skill_tree.my_mod.uplevel" (str "Lv." target-level)))
+             (i18n/translate (st-key "uplevel") (str "Lv." target-level)))
       (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
       (when (and (not developing?) (nil? result))
         (let [btn-x (- cx 16.0) btn-y (+ cy 70.0)]

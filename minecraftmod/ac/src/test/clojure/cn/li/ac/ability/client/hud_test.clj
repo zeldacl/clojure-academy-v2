@@ -33,7 +33,7 @@
 (deftest cp-bar-render-data-uses-texture-without-solid-bar-color-test
   (let [data (hud/build-cp-bar-render-data
               {:cp {:cur 100.0 :max 100.0}})]
-    (is (= "my_mod:textures/guis/cpbar/cp.png" (:fg-texture data)))
+    (is (= "academy:textures/guis/cpbar/cp.png" (:fg-texture data)))
     (is (nil? (:bar-color data)))))
 
 (deftest cpbar-layout-matches-upstream-scaled-coordinates-test
@@ -77,10 +77,10 @@
               1000)]
     (is (true? (:overloaded cap)))
     (is (true? (:recovering cap)))
-    (is (= "my_mod:textures/guis/cpbar/back_overload.png" (:bg-texture cap)))
+    (is (= "academy:textures/guis/cpbar/back_overload.png" (:bg-texture cap)))
     (is (false? (:overloaded tail)))
     (is (true? (:recovering tail)))
-    (is (= "my_mod:textures/guis/cpbar/back_normal.png" (:bg-texture tail)))))
+    (is (= "academy:textures/guis/cpbar/back_normal.png" (:bg-texture tail)))))
 
 (deftest build-skill-slot-render-data-resolves-skill-id-spec-and-icon-test
   (with-redefs [read-model/get-player-contexts-for-player (fn [& _] [])

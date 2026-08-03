@@ -97,8 +97,8 @@
 
 (defn- texture-path-from-category-icon
   "Category :icon → an :src a ResourceLocation can parse. Content categories
-   author it already namespaced (\"my_mod:textures/guis/icons/...\"); prefixing
-   that a second time yields \"my_mod:textures/my_mod:textures/...\", which
+   author it already namespaced (\"academy:textures/guis/icons/...\"); prefixing
+   that a second time yields \"academy:textures/academy:textures/...\", which
    tryParse rejects outright, so the image silently drew nothing. Same
    pass-through guard skill-query/get-skill-icon-path uses."
   [icon-str]
@@ -562,17 +562,18 @@
             (let [ad (get-ad) learned? (adata/is-learned? ad skill-id)
                   s @state-a
                   ;; Learn prompt / development status line (upstream skillViewArea).
-                  message (cond
-                            (:is-developing? s) (str (i18n/translate "skill_tree.my_mod.progress")
-                                                      " " (int (* 100.0 (:progress s 0.0))) "%")
-                            (= (:result s) :success) (i18n/translate "skill_tree.my_mod.dev_successful")
-                            (= (:result s) :failed) (i18n/translate "skill_tree.my_mod.dev_failed")
-                            (= (:error s) :low-energy) (i18n/translate "skill_tree.my_mod.noenergy")
-                            (= (:error s) :low-level) (i18n/translate "skill_tree.my_mod.level_fail"
-                                                                      (int skill-level))
-                            (= (:error s) :cond-fail) (i18n/translate "skill_tree.my_mod.condition_fail")
-                            :else (i18n/translate "skill_tree.my_mod.learn_question"
-                                                  (str est-consumption)))
+                  message (let [st (fn [k] (str "skill_tree." modid/MOD-ID "." k))]
+                            (cond
+                              (:is-developing? s) (str (i18n/translate (st "progress"))
+                                                        " " (int (* 100.0 (:progress s 0.0))) "%")
+                              (= (:result s) :success) (i18n/translate (st "dev_successful"))
+                              (= (:result s) :failed) (i18n/translate (st "dev_failed"))
+                              (= (:error s) :low-energy) (i18n/translate (st "noenergy"))
+                              (= (:error s) :low-level) (i18n/translate (st "level_fail")
+                                                                        (int skill-level))
+                              (= (:error s) :cond-fail) (i18n/translate (st "condition_fail"))
+                              :else (i18n/translate (st "learn_question")
+                                                    (str est-consumption))))
                   updated (assoc node-data :learned learned?
                                  :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
                                  :message message

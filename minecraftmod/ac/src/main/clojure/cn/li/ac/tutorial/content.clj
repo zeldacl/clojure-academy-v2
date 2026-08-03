@@ -1,7 +1,7 @@
 (ns cn.li.ac.tutorial.content
   "Runtime markdown loader for tutorial text.
 
-  Reads `assets/my_mod/tutorials/<lang>/<id>.md` from the classpath using
+  Reads `assets/academy/tutorials/<lang>/<id>.md` from the classpath using
   `clojure.java.io/resource` + `slurp` — the same pattern used by
   `cn.li.mcmod.client.obj/read-obj-data`.
 

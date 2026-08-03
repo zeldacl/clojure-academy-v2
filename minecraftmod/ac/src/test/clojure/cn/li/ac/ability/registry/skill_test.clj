@@ -49,7 +49,7 @@
   (is (false? (skill-query/can-control? :y)))
   (sk/register-skill! (assoc (minimal-skill :z :c :z2) :icon "path/to/icon.png"))
   ;; bare paths are resolved against the mod namespace
-  (is (= "my_mod:path/to/icon.png" (skill-query/get-skill-icon-path :z))))
+  (is (= "academy:path/to/icon.png" (skill-query/get-skill-icon-path :z))))
 
 (deftest learning-cost-and-developer-type-test
   (is (= 5.0 (progression/learning-cost 2))) ;; 3 + 2²×0.5

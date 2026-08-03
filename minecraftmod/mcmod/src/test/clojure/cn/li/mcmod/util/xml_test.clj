@@ -21,15 +21,15 @@
       (is (= nil (xml/get-text {:content [1 nil]})))))
   (testing "normalize handles nil and whitespace"
     (is (= nil (xml/normalize-xml-texture nil)))
-    (is (= "assets/my_mod/textures/a.png"
-           (xml/normalize-xml-texture " assets/my_mod/textures/a.png ")))))
+    (is (= "assets/academy/textures/a.png"
+           (xml/normalize-xml-texture " assets/academy/textures/a.png ")))))
 
 (deftest xml-texture-contract-test
   (testing "texture normalization contract"
     (let [legacy-namespace (str "academy" ":")]
       (doseq [{:keys [input expected]}
             [{:input (str legacy-namespace "block/a") :expected (str legacy-namespace "block/a")}
-             {:input "my_mod:block/a" :expected "my_mod:block/a"}
+             {:input "academy:block/a" :expected "academy:block/a"}
              {:input "other:block/a" :expected "other:block/a"}
              {:input "plain/path" :expected "plain/path"}
              {:input " assets/x " :expected "assets/x"}]]

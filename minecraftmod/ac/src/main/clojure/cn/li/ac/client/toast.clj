@@ -7,7 +7,7 @@
   (0xaaffffff), centered text, auto-dismiss after TTL.
 
   Usage from any client-side code:
-    (toast/show-toast! {:message-key \"app.my_mod.freq_transmitter.e1\"})"
+    (toast/show-toast! {:message-key \"app.academy.freq_transmitter.e1\"})"
   (:require [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.client.platform-bridge :as client-bridge])
   (:import [java.util ArrayList]))

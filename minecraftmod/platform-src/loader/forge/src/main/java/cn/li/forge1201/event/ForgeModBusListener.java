@@ -14,7 +14,7 @@ public final class ForgeModBusListener {
     @SubscribeEvent
     public static void onGatherData(GatherDataEvent event) {
         DataGeneratorInterop.invoke(
-            "[my_mod] Error invoking Clojure DataGenerator handler: ",
+            "[academy] Error invoking Clojure DataGenerator handler: ",
             "cn.li.forge1201.datagen.setup",
             "static-gather-data",
             event);

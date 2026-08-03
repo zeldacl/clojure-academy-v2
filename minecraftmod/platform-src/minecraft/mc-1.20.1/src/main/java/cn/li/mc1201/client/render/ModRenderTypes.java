@@ -51,6 +51,6 @@ public final class ModRenderTypes extends RenderType {
     }
 
     public static RenderType plasmaBody() {
-        return PLASMA_BODY_BY_KEY.apply("my_mod_plasma_body");
+        return PLASMA_BODY_BY_KEY.apply("academy_plasma_body");
     }
 }

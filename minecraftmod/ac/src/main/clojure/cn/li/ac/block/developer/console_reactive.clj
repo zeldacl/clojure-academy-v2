@@ -3,6 +3,7 @@
    console state machine. Owns boot animation, task queue, command execution,
    and native text-node updates."
   (:require [clojure.string :as str]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -21,7 +22,7 @@
 (def ^:private prompt-str "OS >")
 
 ;; i18n key prefix — matching upstream ac.skill_tree.console.*
-(def ^:private console-i18n-prefix "skill_tree.my_mod.console.")
+(def ^:private console-i18n-prefix (str "skill_tree." modid/MOD-ID ".console."))
 
 ;; Key codes matching the Minecraft GUI input enter-keys/backspace-keys
 (def ^:private enter-keys #{257 335 28})

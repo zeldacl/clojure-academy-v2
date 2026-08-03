@@ -19,7 +19,7 @@
                  :line-color line})]
       (is (= 3 (count ops)))
       (is (= {:kind :quad
-              :texture "my_mod:textures/effects/arc.png"
+              :texture "academy:textures/effects/arc.png"
               :p0 (v3/v3 0.0 0.2 0.0)
               :p1 (v3/v3 0.0 -0.2 0.0)
               :p2 (v3/v3 0.0 -0.2 1.0)
@@ -28,7 +28,7 @@
               :color outer}
              (first ops)))
       (is (= {:kind :quad
-              :texture "my_mod:textures/effects/arc.png"
+              :texture "academy:textures/effects/arc.png"
               :p0 (v3/v3 0.0 0.1 0.0)
               :p1 (v3/v3 0.0 -0.1 0.0)
               :p2 (v3/v3 0.0 -0.1 1.0)

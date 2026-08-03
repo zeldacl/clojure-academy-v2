@@ -4,7 +4,7 @@
 					[clojure.test :refer [deftest is]]))
 
 (def ^:private legacy-namespace-token
-	(str "academy" ":"))
+	(str "my_mod" ":"))
 
 (def ^:private text-resource-extensions
 	#{".json" ".mcmeta" ".md" ".properties" ".txt" ".xml"})
@@ -30,14 +30,14 @@
 		 vec))
 
 (defn- resource-files-containing-legacy-namespace []
-	(->> (text-resource-files-under "src/main/resources/assets/my_mod")
+	(->> (text-resource-files-under "src/main/resources/assets/academy")
 		 (filter #(str/includes? (slurp %) legacy-namespace-token))
 		 (map #(.getPath %))
 		 sort
 		 vec))
 
-(deftest ac-clojure-source-does-not-use-legacy-academy-namespace
+(deftest ac-clojure-source-does-not-use-legacy-my-mod-namespace
 	(is (empty? (files-containing-legacy-namespace))))
 
-(deftest ac-static-text-resources-do-not-use-legacy-academy-namespace
+(deftest ac-static-text-resources-do-not-use-legacy-my-mod-namespace
 	(is (empty? (resource-files-containing-legacy-namespace))))

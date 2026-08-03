@@ -9,7 +9,7 @@
 
   A condition is a map:
     {:type   :item-obtained        ; :item-crafted | :item-smelted | :item-pickup
-     :item-id string}              ; runtime item id e.g. \"my_mod:constrained_ore\"
+     :item-id string}              ; runtime item id e.g. \"academy:constrained_ore\"
 
   Note: energy_bridge.md exists in resources but was NEVER registered in the
   original AcademyCraft TutorialInit.java — we preserve that decision by NOT

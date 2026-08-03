@@ -54,7 +54,7 @@
       nil)))
 
 (defn find-recipes
-  "Find all recipes that produce `target-id` (e.g. \"my_mod:constrained_ore\").
+  "Find all recipes that produce `target-id` (e.g. \"academy:constrained_ore\").
   Returns a map: {:crafting [...] :smelting [...] :imag-fusor [...] :metal-former [...]}"
   [^String target-id]
   (try

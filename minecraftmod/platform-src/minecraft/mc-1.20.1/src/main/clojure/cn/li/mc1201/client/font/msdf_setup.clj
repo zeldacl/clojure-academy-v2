@@ -22,7 +22,7 @@
   nil)
 
 (defn on-shader-ready!
-  "Called from platform shader registration after my_mod:msdf_text is loaded."
+  "Called from platform shader registration after academy:msdf_text is loaded."
   []
   (log/info "MSDF text shader registered")
   (ensure-ready!))

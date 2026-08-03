@@ -17,7 +17,7 @@
     get-item-name-fn: function returning registry name for item ID
     get-block-ids-fn: function returning collection of mod block IDs
     get-block-name-fn: function returning registry name for block ID
-    mod-id: mod namespace prefix (e.g. 'my_mod')
+    mod-id: mod namespace prefix (e.g. 'academy')
   
   Returns: java.util.HashSet of known item references
   

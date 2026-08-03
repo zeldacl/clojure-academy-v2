@@ -41,7 +41,7 @@ public final class MsdfRenderTypes extends RenderType {
             final DepthTestStateShard depthTest,
             final LayeringStateShard layering) {
         return create(
-                "my_mod_msdf_text/" + suffix + "/" + texture,
+                "academy_msdf_text/" + suffix + "/" + texture,
                 MSDF_TEXT_FORMAT,
                 VertexFormat.Mode.QUADS,
                 256,

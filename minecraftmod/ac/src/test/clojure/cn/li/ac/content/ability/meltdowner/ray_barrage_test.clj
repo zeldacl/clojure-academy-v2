@@ -64,7 +64,7 @@
                   raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :uuid "enemy-1"
-                                               :type "entity.my_mod.enemy"
+                                               :type "entity.academy.enemy"
                                                :x 0.0 :y 64.0 :z 10.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   entity-damage/available? (constantly true)
@@ -145,7 +145,7 @@
                   raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :uuid "silbarn-1"
-                                               :type "entity.my_mod.silbarn"
+                                               :type "entity.academy.silbarn"
                                                :is-hit false
                                                :x 0.0 :y 64.0 :z 15.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
@@ -192,7 +192,7 @@
                   raycast/raycast-combined (fn [& _]
                                               {:hit-type :entity
                                                :uuid "silbarn-1"
-                                               :type "entity.my_mod.silbarn"
+                                               :type "entity.academy.silbarn"
                                                :is-hit true
                                                :x 0.0 :y 64.0 :z 10.0})
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})

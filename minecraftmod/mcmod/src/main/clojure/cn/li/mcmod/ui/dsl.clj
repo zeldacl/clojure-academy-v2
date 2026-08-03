@@ -8,7 +8,7 @@
    (group {:id :root :w 200 :h 100}
      (box {:id :panel :fill 0xFF353535 :x 10 :y 10 :w 180 :h 80}
        (text {:id :label :text \"Hello\" :x 5 :y 5})
-       (image {:id :icon :src \"my_mod:textures/gui/icon.png\" :x 0 :y 0 :w 16 :h 16})))")
+       (image {:id :icon :src \"academy:textures/gui/icon.png\" :x 0 :y 0 :w 16 :h 16})))")
 
 (defn- spec-map
   "构建 spec map 的内部辅助。"

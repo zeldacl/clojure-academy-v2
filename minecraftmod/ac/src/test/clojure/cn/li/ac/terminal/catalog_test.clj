@@ -24,5 +24,5 @@
          (mapv :id
                (catalog/installed-apps-in-display-order
                  #{:about :tutorial :skill-tree}))))
-  (is (= "app.my_mod.freq_transmitter"
+  (is (= "app.academy.freq_transmitter"
          (catalog/app-name-key (catalog/app-by-id :freq-transmitter)))))

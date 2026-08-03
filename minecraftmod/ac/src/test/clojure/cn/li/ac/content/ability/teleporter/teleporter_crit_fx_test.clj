@@ -79,7 +79,7 @@
       (is (= 1 (count @sounds*)))
       (is (= :portal (:particle-type (first @particles*))))
       (is (= :electric_spark (:particle-type (second @particles*))))
-      (is (= "my_mod:tp.tp" (:sound-id (first @sounds*))))
+      (is (= "academy:tp.tp" (:sound-id (first @sounds*))))
       (is (= [[:teleporter-crit {:message-key "ability.teleporter.critical_hit"
                                  :args ["x2.6"]
                                  :duration-ms 1500

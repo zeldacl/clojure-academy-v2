@@ -120,7 +120,7 @@
         ;; charge loop is a FollowEntitySound started once via the bridge —
         ;; only the fully-charged cue goes through the sound queue
         (is (= [[:mcmod/start-loop-sound-at-player
-                 {:key "plasma-cannon/ctx-main" :sound-id "my_mod:vecmanip.plasma_cannon"
+                 {:key "plasma-cannon/ctx-main" :sound-id "academy:vecmanip.plasma_cannon"
                   :owner-uuid "" :volume 0.5 :pitch 1.0}]]
                @bridge-calls*))
         (is (= 1 (count @sound-calls*)))

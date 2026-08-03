@@ -5,7 +5,7 @@
 (deftest resource-location-validity-test
   (testing "full namespace:path strings"
     (is (true? (rl-schema/valid-resource-location? "minecraft:stone")))
-    (is (true? (rl-schema/valid-resource-location? "my_mod:textures/gui/panel"))))
+    (is (true? (rl-schema/valid-resource-location? "academy:textures/gui/panel"))))
   (testing "path-only strings"
     (is (true? (rl-schema/valid-path? "textures/gui/panel")))
     (is (false? (rl-schema/valid-path? "Textures/Gui"))))
@@ -19,14 +19,14 @@
     (is (= {:namespace "minecraft" :path "stone"}
            (rl-schema/parse-resource-location "minecraft:stone"))))
   (testing "parse path with default namespace"
-    (is (= {:namespace "my_mod" :path "textures/gui/panel"}
-           (rl-schema/parse-resource-location "textures/gui/panel" "my_mod"))))
+    (is (= {:namespace "academy" :path "textures/gui/panel"}
+           (rl-schema/parse-resource-location "textures/gui/panel" "academy"))))
   (testing "normalize"
     (is (= "minecraft:stone"
            (rl-schema/normalize-resource-location "minecraft:stone")))
-    (is (= "my_mod:textures/gui/panel"
-           (rl-schema/normalize-resource-location "textures/gui/panel" "my_mod"))))
+    (is (= "academy:textures/gui/panel"
+           (rl-schema/normalize-resource-location "textures/gui/panel" "academy"))))
   (testing "invalid input throws"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Invalid resource location string"
-                          (rl-schema/parse-resource-location "Bad Path" "my_mod")))))
+                          (rl-schema/parse-resource-location "Bad Path" "academy")))))

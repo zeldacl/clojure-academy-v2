@@ -16,7 +16,7 @@
 
 (deftest kind-props-cases
   (doseq [[kind good bad]
-          [[:image {:src "my_mod:textures/a.png" :alpha 0.5} {:src 123}]
+          [[:image {:src "academy:textures/a.png" :alpha 0.5} {:src 123}]
            [:text {:text "hi" :color 0xFFFFFFFF :font-size 12.0} {:color "red"}]
            [:list {:spacing 4.0 :template {:kind :box :props {:w 10 :h 10}}} {:spacing "x"}]
            [:box {:fill 0.5 :outline 1.0} {:fill "x"}]

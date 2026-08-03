@@ -19,7 +19,7 @@
 
 (deftest is-energy-item-by-registry-test
   (let [tag (test-nbt/atom-compound)
-        stk (fake-stack "my_mod:energy_unit" tag)]
+        stk (fake-stack "academy:energy_unit" tag)]
     (with-redefs [item/object identity
                   item/registry-name (fn [o] (:reg o))
                   item/tag-compound (fn [o] (:tag o))
@@ -39,7 +39,7 @@
 
 (deftest set-and-clamp-energy-test
   (let [tag (test-nbt/atom-compound)
-        stk (fake-stack "my_mod:developer_portable" tag)]
+        stk (fake-stack "academy:developer_portable" tag)]
     (with-redefs [item/object identity
                   item/registry-name (fn [o] (:reg o))
                   item/tag-compound (fn [o] (:tag o))
@@ -54,7 +54,7 @@
 
 (deftest charge-and-pull-behavior-test
   (let [tag (doto (test-nbt/atom-compound) (nbt/set-double! "energy" 0.0))
-        stk (fake-stack "my_mod:energy_unit" tag)]
+        stk (fake-stack "academy:energy_unit" tag)]
     (with-redefs [item/object identity
                   item/registry-name (fn [o] (:reg o))
                   item/tag-compound (fn [o] (:tag o))

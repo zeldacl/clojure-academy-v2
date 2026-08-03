@@ -48,12 +48,12 @@
   "Content should preserve markdown formatting like __bold__, ![images](url), # headings."
   (let [raw (str "![title]\n# Welcome\n\n"
                  "![brief]\n__Important__ overview of the tutorial\n\n"
-                 "![content]\nHere is an image:\n![alt](my_mod:textures/foo.png)\n\n"
+                 "![content]\nHere is an image:\n![alt](academy:textures/foo.png)\n\n"
                  "Use ![key id=\"my_key\"] to perform actions.")
         result (content/parse-sections raw)]
     (is (str/includes? (:title result) "# Welcome"))
     (is (str/includes? (:brief result) "__Important__"))
-    (is (str/includes? (:content result) "![alt](my_mod:textures/foo.png)"))
+    (is (str/includes? (:content result) "![alt](academy:textures/foo.png)"))
     (is (str/includes? (:content result) "![key id=\"my_key\"]"))))
 
 (deftest parse-sections-trims-head-whitespace

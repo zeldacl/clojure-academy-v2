@@ -1,5 +1,6 @@
 package cn.li.forge1201.network;
 
+import cn.li.mcmod.ModId;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -21,7 +22,7 @@ final class ClojureNetworkChannel {
         }
 
         channel = NetworkRegistry.newSimpleChannel(
-            ResourceLocation.parse("my_mod:gui_rpc"),
+            ResourceLocation.fromNamespaceAndPath(ModId.ID, "gui_rpc"),
             () -> PROTOCOL_VERSION,
             PROTOCOL_VERSION::equals,
             PROTOCOL_VERSION::equals

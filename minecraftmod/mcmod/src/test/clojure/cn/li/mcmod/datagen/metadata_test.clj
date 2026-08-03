@@ -24,7 +24,7 @@
 
 (deftest achievement-and-translation-validation-test
   (testing "achievement tabs and achievements are validated"
-    (metadata/set-achievement-tabs! [{:id :default :background "my_mod:textures/gui/bg.png"}])
+    (metadata/set-achievement-tabs! [{:id :default :background "academy:textures/gui/bg.png"}])
     (metadata/set-achievements! [{:id "demo"
                                   :tab :default
                                   :criteria [{:type :custom :criterion-id "demo"}]

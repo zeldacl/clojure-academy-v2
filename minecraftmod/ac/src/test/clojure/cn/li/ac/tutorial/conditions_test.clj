@@ -15,15 +15,15 @@
 
 (deftest build-condition-index-deduplication
   (let [tutorials [{:id :a :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:foo"}
-                                 {:type :item-obtained :item-id "my_mod:bar"}]}
+                    :conditions [{:type :item-obtained :item-id "academy:foo"}
+                                 {:type :item-obtained :item-id "academy:bar"}]}
                    {:id :b :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:foo"}]}]
+                    :conditions [{:type :item-obtained :item-id "academy:foo"}]}]
         idx (conds/build-condition-index tutorials)]
-    ;; "my_mod:foo" appears twice but should be deduplicated
+    ;; "academy:foo" appears twice but should be deduplicated
     (is (= 2 (count idx)))
-    (is (= {:type :item-obtained :item-id "my_mod:foo"} (first idx)))
-    (is (= {:type :item-obtained :item-id "my_mod:bar"} (second idx)))))
+    (is (= {:type :item-obtained :item-id "academy:foo"} (first idx)))
+    (is (= {:type :item-obtained :item-id "academy:bar"} (second idx)))))
 
 (deftest build-condition-index-empty
   (is (= [] (conds/build-condition-index [])))
@@ -32,47 +32,47 @@
 
 (deftest condition-index-stability
   (let [tutorials [{:id :a :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:a"}]}
+                    :conditions [{:type :item-obtained :item-id "academy:a"}]}
                    {:id :b :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:b"}]}]
+                    :conditions [{:type :item-obtained :item-id "academy:b"}]}]
         idx (conds/build-condition-index tutorials)]
     (is (= 2 (count idx)))
-    (is (= 0 (.indexOf idx {:type :item-obtained :item-id "my_mod:a"})))
-    (is (= 1 (.indexOf idx {:type :item-obtained :item-id "my_mod:b"})))))
+    (is (= 0 (.indexOf idx {:type :item-obtained :item-id "academy:a"})))
+    (is (= 1 (.indexOf idx {:type :item-obtained :item-id "academy:b"})))))
 
 ;; --- find-matching-conditions ---
 
 (deftest find-matching-obtained-condition
   (conds/ensure-condition-index!
     [{:id :a :default-installed? false
-      :conditions [{:type :item-obtained :item-id "my_mod:foo"}]}])
+      :conditions [{:type :item-obtained :item-id "academy:foo"}]}])
   ;; :item-obtained matches :item-crafted, :item-smelted, :item-pickup
-  (is (= [0] (conds/find-matching-conditions "my_mod:foo" :item-crafted)))
-  (is (= [0] (conds/find-matching-conditions "my_mod:foo" :item-smelted)))
-  (is (= [0] (conds/find-matching-conditions "my_mod:foo" :item-pickup))))
+  (is (= [0] (conds/find-matching-conditions "academy:foo" :item-crafted)))
+  (is (= [0] (conds/find-matching-conditions "academy:foo" :item-smelted)))
+  (is (= [0] (conds/find-matching-conditions "academy:foo" :item-pickup))))
 
 (deftest find-matching-exact-type
   (conds/ensure-condition-index!
     [{:id :a :default-installed? false
-      :conditions [{:type :item-crafted :item-id "my_mod:bar"}]}])
-  (is (= [0] (conds/find-matching-conditions "my_mod:bar" :item-crafted)))
+      :conditions [{:type :item-crafted :item-id "academy:bar"}]}])
+  (is (= [0] (conds/find-matching-conditions "academy:bar" :item-crafted)))
   ;; :item-crafted condition should NOT match :item-smelted
-  (is (= [] (conds/find-matching-conditions "my_mod:bar" :item-smelted))))
+  (is (= [] (conds/find-matching-conditions "academy:bar" :item-smelted))))
 
 (deftest find-matching-no-match
   (conds/ensure-condition-index!
     [{:id :a :default-installed? false
-      :conditions [{:type :item-obtained :item-id "my_mod:a"}]}])
+      :conditions [{:type :item-obtained :item-id "academy:a"}]}])
   ;; Different item-id should not match
-  (is (= [] (conds/find-matching-conditions "my_mod:other" :item-crafted)))
-  (is (= [] (conds/find-matching-conditions "my_mod:other" :item-smelted))))
+  (is (= [] (conds/find-matching-conditions "academy:other" :item-crafted)))
+  (is (= [] (conds/find-matching-conditions "academy:other" :item-smelted))))
 
 ;; --- check-new-activations ---
 
 (deftest check-new-activations-single-unlock
   (conds/reset-condition-index!)
   (let [tutorials [{:id :ores :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:constrained_ore"}]}
+                    :conditions [{:type :item-obtained :item-id "academy:constrained_ore"}]}
                    {:id :welcome :default-installed? true :conditions []}]
         _ (conds/ensure-condition-index! tutorials)
         cond-map (conds/build-tutorial-condition-map tutorials)]
@@ -89,8 +89,8 @@
 (deftest check-new-activations-multiple-conditions-or
   (conds/reset-condition-index!)
   (let [tutorials [{:id :ores :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:a"}
-                                 {:type :item-obtained :item-id "my_mod:b"}]}]
+                    :conditions [{:type :item-obtained :item-id "academy:a"}
+                                 {:type :item-obtained :item-id "academy:b"}]}]
         _ (conds/ensure-condition-index! tutorials)
         cond-map (conds/build-tutorial-condition-map tutorials)]
     ;; Condition 0 met → ores should activate
@@ -109,7 +109,7 @@
   (conds/reset-condition-index!)
   (let [tutorials [{:id :welcome :default-installed? true :conditions []}
                    {:id :ores :default-installed? false
-                    :conditions [{:type :item-obtained :item-id "my_mod:foo"}]}]
+                    :conditions [{:type :item-obtained :item-id "academy:foo"}]}]
         _ (conds/ensure-condition-index! tutorials)
         cond-map (conds/build-tutorial-condition-map tutorials)]
     ;; Only ores should be in the condition map (welcome has no conditions)

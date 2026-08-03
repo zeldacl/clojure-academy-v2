@@ -12,7 +12,7 @@ public class DataGeneratorSetup implements DataGeneratorEntrypoint {
     public void onInitializeDataGenerator(FabricDataGenerator fabricDataGenerator) {
         fabricDataGenerator.createPack();
         DataGeneratorInterop.invoke(
-                "[my_mod] Error invoking Clojure DataGenerator setup: ",
+                "[academy] Error invoking Clojure DataGenerator setup: ",
                 "cn.li.fabric1201.datagen.setup",
                 "register-data-generators!",
                 fabricDataGenerator,

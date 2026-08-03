@@ -89,7 +89,7 @@
         (is (= 5 (:rescan-interval st))))
       (is (= 1 (count @sounds*)))
       (is (= {:type :sound
-              :sound-id "my_mod:em.minedetect"
+              :sound-id "academy:em.minedetect"
               :source :ambient
               :volume 0.5
               :pitch 1.0}

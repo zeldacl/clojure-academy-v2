@@ -97,7 +97,7 @@
                [:owner-key [:ctx "ctx-1"]]]]
              @enqueued-effects*))
       (is (= 1 (count @sound-calls*)))
-      (is (= "my_mod:vecmanip.blood_retro" (:sound-id (first @sound-calls*)))))))
+      (is (= "academy:vecmanip.blood_retro" (:sound-id (first @sound-calls*)))))))
 
 (defn- approx= [expected actual]
   (< (Math/abs (- (double expected) (double actual))) 1.0e-6))

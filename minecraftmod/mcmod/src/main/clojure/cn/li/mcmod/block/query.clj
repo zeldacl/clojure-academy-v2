@@ -66,7 +66,7 @@
 
 (defn identify-block-from-full-name
   "Resolve DSL block-id from full block name strings, e.g.
-   \"Block{my_mod:demo_block}\", \"my_mod:demo_block\", or \"demo_block\"."
+   \"Block{academy:demo_block}\", \"academy:demo_block\", or \"demo_block\"."
   [^String block-name]
   (when block-name
     (let [registry-name (cond

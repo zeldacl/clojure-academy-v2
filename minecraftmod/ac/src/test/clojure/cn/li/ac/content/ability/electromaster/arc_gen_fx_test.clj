@@ -65,7 +65,7 @@
 (deftest enqueue-perform-adds-arc-and-plays-sound-test
   (let [spec (arc-beam/build-spec
                {:effect-id :arc-gen
-                :sound-id "my_mod:em.arc_weak"
+                :sound-id "academy:em.arc_weak"
                 :sound-source :ambient
                 :arc-life 10
                 :arc-pattern :weak
@@ -87,7 +87,7 @@
       (is (= 1 (count (get (:arcs (arc-fx/fx-snapshot)) [:ctx "ctx-main"]))))
       (is (= 1 (count @sounds*)))
       (is (= {:type :sound
-              :sound-id "my_mod:em.arc_weak"
+              :sound-id "academy:em.arc_weak"
               :source :ambient
               :volume 0.5
               :pitch 1.0

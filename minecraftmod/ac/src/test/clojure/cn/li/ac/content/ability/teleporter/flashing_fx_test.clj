@@ -84,7 +84,7 @@
       (level-effects/tick-level-effects!)
       (is (= 1 (count @sounds*)))
       (is (>= (count @particles*) 2))
-      (is (= "my_mod:tp.tp_flashing" (:sound-id (second (first @sounds*))))))))
+      (is (= "academy:tp.tp_flashing" (:sound-id (second (first @sounds*))))))))
 
 
 

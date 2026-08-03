@@ -23,7 +23,7 @@
          (:advancement-id (h/handle-grant-advancement
                            {:arguments {:advancement "minecraft:story/root"}
                             :player :pl}))))
-  (is (= "my_mod:achievements/foo/bar"
+  (is (= "academy:achievements/foo/bar"
          (:advancement-id (h/handle-grant-advancement
                            {:arguments {:advancement "foo.bar"}
                             :player :pl})))))

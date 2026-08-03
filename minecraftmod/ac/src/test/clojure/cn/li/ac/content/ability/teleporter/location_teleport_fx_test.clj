@@ -56,7 +56,7 @@
 
       (is (= 1 (count @sounds*)))
 
-      (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
+      (is (= "academy:tp.tp" (:sound-id (first @sounds*)))))))
 
 (deftest enqueue-perform-success-plays-teleport-sound-test
   (let [handlers* (atom {})
@@ -72,7 +72,7 @@
         "ctx-test" :location-teleport/fx-perform-success
         {:mode :perform-success :target {:x 1.0 :y 2.0 :z 3.0}})
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.tp" (:sound-id (first @sounds*)))))))
+      (is (= "academy:tp.tp" (:sound-id (first @sounds*)))))))
 
 ;; Success is gated by the channel itself — there is only one topic, and it is
 ;; only ever sent on a successful teleport, so the handler needs no :mode check.

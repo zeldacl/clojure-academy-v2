@@ -10,7 +10,7 @@
     - Global condition index: deduplicated vector of all conditions across
       all registered tutorials, each assigned a stable numeric index.
     - Condition: {:type :item-crafted|:item-smelted|:item-pickup
-                  :item-id \"my_mod:...\"}
+                  :item-id \"academy:...\"}
     - Tutorial registry stores condition indices per tutorial.
     - When an item event fires, matching condition indices are marked in
       player state.  Tutorials whose any condition index matches become
@@ -34,7 +34,7 @@
 
 (defn- app-installer-item-id
   "Convert an app keyword id to its installer item id string.
-  E.g. :skill-tree → \"my_mod:app_skill_tree\""
+  E.g. :skill-tree → \"academy:app_skill_tree\""
   [app-id]
   (modid/namespaced-path (str "app_" (str/replace (name app-id) "-" "_"))))
 

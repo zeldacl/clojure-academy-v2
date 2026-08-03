@@ -204,7 +204,7 @@
   "Parse a GUI-texture path string into a ResourceLocation. MC's SimpleTexture
    uses the RL verbatim as the resource file path, so it must include the
    '.png' extension. GUI textures are always .png; tolerate paths written
-   without it (e.g. \"my_mod:textures/guis/blend_quad\") by appending it. Paths
+   without it (e.g. \"academy:textures/guis/blend_quad\") by appending it. Paths
    that already end in .png (image :src values) are left unchanged."
   ^ResourceLocation [src]
   (when (and src (string? src) (not (clojure.string/blank? src)))

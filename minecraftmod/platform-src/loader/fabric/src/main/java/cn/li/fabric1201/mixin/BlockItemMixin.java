@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class BlockItemMixin {
 
     @Inject(method = "place", at = @At("HEAD"), cancellable = true)
-    private void my_mod$beforePlace(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> cir) {
+    private void academy$beforePlace(BlockPlaceContext context, CallbackInfoReturnable<InteractionResult> cir) {
         try {
             if (context == null) {
                 return;

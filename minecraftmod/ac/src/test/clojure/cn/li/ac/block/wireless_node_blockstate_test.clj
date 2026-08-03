@@ -4,7 +4,7 @@
             [cn.li.mcmod.config :as mcmod-config]))
 
 (deftest node-definitions-use-exclusive-energy-connected-parts-test
-  (with-redefs [mcmod-config/mod-id "my_mod"]
+  (with-redefs [mcmod-config/mod-id "academy"]
     (let [definition (node-blockstate/get-node-blockstate-definition :wireless-node-basic)
           parts (:parts definition)
           conditions (map :condition parts)]
@@ -23,15 +23,15 @@
                                     (filter #(= "true" (get-in % [:condition :connected])))
                                     (map (comp first :models))
                                     set)]
-          (is (= #{"my_mod:block/node_basic_energy_0_connected"
-                   "my_mod:block/node_basic_energy_1_connected"
-                   "my_mod:block/node_basic_energy_2_connected"
-                   "my_mod:block/node_basic_energy_3_connected"
-                   "my_mod:block/node_basic_energy_4_connected"}
+          (is (= #{"academy:block/node_basic_energy_0_connected"
+                   "academy:block/node_basic_energy_1_connected"
+                   "academy:block/node_basic_energy_2_connected"
+                   "academy:block/node_basic_energy_3_connected"
+                   "academy:block/node_basic_energy_4_connected"}
                  connected-models)))))))
 
 (deftest node-model-texture-config-supports-combined-connected-variant-test
-  (with-redefs [mcmod-config/mod-id "my_mod"]
+  (with-redefs [mcmod-config/mod-id "academy"]
     (let [cfg (node-blockstate/get-node-model-texture-config "node_basic_energy_3_connected")]
-      (is (= "my_mod:block/node_basic_side_3" (:side cfg)))
-      (is (= "my_mod:block/node_top_1" (:vert cfg))))))
+      (is (= "academy:block/node_basic_side_3" (:side cfg)))
+      (is (= "academy:block/node_top_1" (:vert cfg))))))

@@ -5,7 +5,7 @@
 					[clojure.test :refer [deftest is testing]]
 					[cn.li.ac.content.sounds :as sounds]))
 
-(def ^:private sounds-json-path "assets/my_mod/sounds.json")
+(def ^:private sounds-json-path "assets/academy/sounds.json")
 
 (defn- sounds-json-text []
 	(slurp (io/resource sounds-json-path)))
@@ -17,7 +17,7 @@
 			(re-seq #"\"([^\"]+)\"\s*:\s*\{\s*\"category\"\s*:\s*\"[^\"]+\"\s*,\s*\"sounds\"\s*:\s*\[\s*\{\s*\"name\"\s*:\s*\"([^\"]+)\"" (sounds-json-text))))
 
 (defn- sound-resource-root []
-	(io/file "src/main/resources/assets/my_mod/sounds"))
+	(io/file "src/main/resources/assets/academy/sounds"))
 
 (defn- normalize-path [s]
 	(str/replace s #"\\" "/"))
@@ -27,7 +27,7 @@
 			file-path (normalize-path (.getPath file))
 			rel (subs file-path (inc (count root-path)))
 			without-ext (str/replace rel #"\.ogg$" "")]
-		(str "my_mod:" without-ext)))
+		(str "academy:" without-ext)))
 
 (defn- actual-sound-resource-names []
 	(let [root (sound-resource-root)]
@@ -45,7 +45,7 @@
 (defn- code-sound-ids []
 	(->> (clj-source-files)
 		 (mapcat (fn [file]
-					(re-seq #"my_mod:([A-Za-z0-9_]+\.[A-Za-z0-9_.-]+)" (slurp file))))
+					(re-seq #"academy:([A-Za-z0-9_]+\.[A-Za-z0-9_.-]+)" (slurp file))))
 		 (map second)
 		 set))
 
@@ -53,8 +53,8 @@
 	(let [entries (parse-sound-entries)
 			actual-resource-names (actual-sound-resource-names)
 			resource-names (set (vals entries))]
-		(testing "all sounds.json sound resources use my_mod namespace"
-			(is (empty? (remove #(str/starts-with? % "my_mod:") resource-names))))
+		(testing "all sounds.json sound resources use academy namespace"
+			(is (empty? (remove #(str/starts-with? % "academy:") resource-names))))
 		(testing "all sounds.json sound resources point to existing ogg files"
 			(is (empty? (sort (set/difference resource-names actual-resource-names)))))
 		(testing "all shipped ogg files are referenced by sounds.json"

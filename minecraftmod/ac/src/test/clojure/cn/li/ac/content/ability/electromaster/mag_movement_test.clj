@@ -68,8 +68,8 @@
 (deftest description-ids-normalize-for-vanilla-and-mod-entities-test
   (is (= "minecraft:iron_block"
          (#'mag-movement/normalize-id "block.minecraft.iron_block")))
-  (is (= "my_mod:entity_mag_hook"
-         (#'mag-movement/normalize-id "entity.my_mod.entity_mag_hook"))))
+  (is (= "academy:entity_mag_hook"
+         (#'mag-movement/normalize-id "entity.academy.entity_mag_hook"))))
 
 (deftest pattern-is-hold-channel-and-cost-fail-present-test
   (let [spec (skill-def)]
@@ -308,7 +308,7 @@
   ;; The original RayTraceResult retains entityHit. The bridge must retain
   ;; enough metadata to make an anchored magnetic hook a valid target.
   (with-redefs [mag-movement/is-metal-entity? (fn [entity-type]
-                                                (= "my_mod:entity_mag_hook" entity-type))
+                                                (= "academy:entity_mag_hook" entity-type))
                 raycast/available? (constantly true)
                 raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                 geom/eye-pos (fn [_] {:x 0.0 :y 1.62 :z 0.0})
@@ -319,7 +319,7 @@
                 (fn [_ _ living-only?]
                   (is (false? living-only?))
                   {:entity-id "mag-hook-uuid"
-                   :type "entity.my_mod.entity_mag_hook"
+                   :type "entity.academy.entity_mag_hook"
                    :x 0.0 :y 5.0 :z 8.0
                    :eye-height 0.0
                    :alive? true
@@ -328,7 +328,7 @@
     (is (= {:target-kind :entity
             :target-world-id "w"
             :target-entity-uuid "mag-hook-uuid"
-            :target-entity-type "my_mod:entity_mag_hook"
+            :target-entity-type "academy:entity_mag_hook"
             :target-x 0.0
             :target-y 5.0
             :target-z 8.0}

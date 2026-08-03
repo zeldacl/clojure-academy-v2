@@ -14,6 +14,7 @@
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.item-actions :as item-actions]
             [cn.li.ac.ability.spi-lifecycle :as lifecycle]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.content.ability.teleporter.passive-hooks :as tp-passive]
@@ -23,7 +24,7 @@
 (defcategory electromaster
   :id :electromaster
   :name-key "ability.category.electromaster"
-  :icon "my_mod:textures/guis/icons/icon_electromaster.png"
+  :icon (modid/asset-path "textures" "guis/icons/icon_electromaster.png")
   :color [0.27 0.69 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -31,7 +32,7 @@
 (defcategory meltdowner-category
   :id :meltdowner
   :name-key "ability.category.meltdowner"
-  :icon "my_mod:textures/guis/icons/icon_meltdowner.png"
+  :icon (modid/asset-path "textures" "guis/icons/icon_meltdowner.png")
   :color [0.1 1.0 0.3 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -39,7 +40,7 @@
 (defcategory teleporter
   :id :teleporter
   :name-key "ability.category.teleporter"
-  :icon "my_mod:textures/guis/icons/icon_teleporter.png"
+  :icon (modid/asset-path "textures" "guis/icons/icon_teleporter.png")
   :color [1.0 1.0 1.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)
@@ -47,7 +48,7 @@
 (defcategory vecmanip
   :id :vecmanip
   :name-key "ability.category.vecmanip"
-  :icon "my_mod:textures/guis/icons/icon_vecmanip.png"
+  :icon (modid/asset-path "textures" "guis/icons/icon_vecmanip.png")
   :color [0.0 0.0 0.0 1.0]
   :prog-incr-rate 1.0
   :enabled true)

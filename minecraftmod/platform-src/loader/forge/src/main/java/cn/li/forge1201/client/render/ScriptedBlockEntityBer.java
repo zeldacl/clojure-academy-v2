@@ -40,7 +40,7 @@ public final class ScriptedBlockEntityBer implements BlockEntityRenderer<Scripte
         try {
             renderFn().invoke(blockEntity, partialTick, poseStack, bufferSource, packedLight, packedOverlay);
         } catch (Throwable t) {
-            System.err.println("[my_mod] ScriptedBlockEntityBer.render failed:");
+            System.err.println("[academy] ScriptedBlockEntityBer.render failed:");
             t.printStackTrace();
         }
     }

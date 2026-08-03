@@ -117,7 +117,7 @@
       (is (= target
              (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= :mcmod/start-loop-sound (ffirst @effects*)))
-      (is (= "my_mod:em.charge_loop" (get-in @effects* [0 1 :sound-id])))
+      (is (= "academy:em.charge_loop" (get-in @effects* [0 1 :sound-id])))
       (let [plan (level-effects/build-level-effect-plan
                   {:x 1.0 :y 65.0 :z 2.0}
                   {:player-uuid "local-player"}

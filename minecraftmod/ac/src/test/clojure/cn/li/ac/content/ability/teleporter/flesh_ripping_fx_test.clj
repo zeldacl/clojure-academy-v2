@@ -73,7 +73,7 @@
                                          :owner-key [:ctx "ctx-1"])
       (is (zero? (count @particles*)))
       (is (= 1 (count @sounds*)))
-      (is (= "my_mod:tp.guts" (:sound-id (second (first @sounds*))))))))
+      (is (= "academy:tp.guts" (:sound-id (second (first @sounds*))))))))
 
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)

@@ -18,8 +18,8 @@
 
 (deftest recipe-registry-duplicate-and-reload-policy-test
   (let [custom {:id "if_custom"
-                :input {:item "my_mod:crystal_low" :count 1}
-                :output {:item "my_mod:crystal_normal" :count 1}
+                :input {:item "academy:crystal_low" :count 1}
+                :output {:item "academy:crystal_normal" :count 1}
                 :consume-liquid 1
                 :time 1}]
     (recipes/register-recipe! custom)

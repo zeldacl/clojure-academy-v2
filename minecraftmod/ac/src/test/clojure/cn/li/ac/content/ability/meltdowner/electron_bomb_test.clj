@@ -71,7 +71,7 @@
       ;; The ball spawns with a life override equal to the settle life, so the
       ;; ball dies exactly when the ray fires (original death callback).
       (cb/apply-invoke electron-bomb/electron-bomb-perform! :player-id "p1" :ctx-id "ctx-1" :player-ref {:id "player-obj"})
-      (is (= [[{:id "player-obj"} "my_mod:entity_md_ball" 0.0 20]]
+      (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0 20]]
              @spawn-calls*))
       (is (= [["ctx-1"
                :electron-bomb/fx-spawn

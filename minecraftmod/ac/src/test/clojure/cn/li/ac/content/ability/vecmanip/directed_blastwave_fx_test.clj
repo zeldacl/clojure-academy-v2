@@ -57,7 +57,7 @@
                 :charge-ticks 20})
       (is (= 1 (count (get (:waves (blastwave-fx/fx-snapshot)) [:ctx "ctx-wave"]))))
       (is (= 1 (count @sound-calls*)))
-      (is (= "my_mod:vecmanip.directed_blast"
+      (is (= "academy:vecmanip.directed_blast"
              (:sound-id (first @sound-calls*)))))))
 
 (deftest tick-clears-finished-state-and-expires-wave-test
