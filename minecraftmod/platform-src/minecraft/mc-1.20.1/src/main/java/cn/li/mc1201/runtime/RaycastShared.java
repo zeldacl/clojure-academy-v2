@@ -639,6 +639,10 @@ public final class RaycastShared {
         hit.put("eye-height", entity.getEyeHeight());
         hit.put("width", entity.getBbWidth());
         hit.put("height", entity.getBbHeight());
+        // The original RayTraceResult retains entityHit directly. Preserve
+        // its type here so MagMovement can identify an anchored mag hook as
+        // a configured metallic entity during acquisition.
+        hit.put("type", entity.getType().getDescriptionId());
         hit.put("distance", distance);
         return hit;
     }

@@ -5,6 +5,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -29,6 +32,8 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     private static final String HOOK_DAMAGE_AND_DISCARD = "damage-and-discard";
     private static final String HOOK_DROP_WHEN_INVALID = "drop-when-invalid";
     private static final String HOOK_DISCARD_WHEN_HURT = "discard-when-hurt";
+    private static final EntityDataAccessor<Boolean> DATA_ANCHORED =
+            SynchedEntityData.defineId(ScriptedProjectileEntity.class, EntityDataSerializers.BOOLEAN);
 
     private boolean anchored = false;
     private BlockPos anchorPos = null;
@@ -36,6 +41,12 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     public ScriptedProjectileEntity(EntityType<? extends ScriptedProjectileEntity> type, Level level) {
         super(type, level);
+    }
+
+    @Override
+    protected void defineSynchedData() {
+        super.defineSynchedData();
+        this.entityData.define(DATA_ANCHORED, false);
     }
 
     private ScriptedProjectileSpec getSpec() {
@@ -78,8 +89,24 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     private void anchorAt(HitResult result) {
         this.anchored = true;
+        this.entityData.set(DATA_ANCHORED, true);
         this.anchorPos = BlockPos.containing(result.getLocation());
         this.setPos(result.getLocation());
+        applyAnchoredState();
+    }
+
+    private boolean isAnchored() {
+        return this.anchored || this.entityData.get(DATA_ANCHORED);
+    }
+
+    /**
+     * The old EntityMagHook synchronised isHit and performed its still/open
+     * transition on both sides.  Keeping this local state in sync is required
+     * in 1.20 too: otherwise clients continue simulating a thrown item after
+     * the server has attached it to a block.
+     */
+    private void applyAnchoredState() {
+        this.anchored = true;
         this.setDeltaMovement(Vec3.ZERO);
         this.setNoGravity(true);
         this.noPhysics = true;
@@ -88,13 +115,16 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     @Override
     public EntityDimensions getDimensions(Pose pose) {
-        return this.anchored ? EntityDimensions.scalable(1.0F, 1.0F) : super.getDimensions(pose);
+        return isAnchored() ? EntityDimensions.scalable(1.0F, 1.0F) : super.getDimensions(pose);
     }
 
     @Override
     public void tick() {
+        if (isAnchored()) {
+            applyAnchoredState();
+        }
         super.tick();
-        if (!this.anchored) {
+        if (!isAnchored()) {
             return;
         }
         this.setDeltaMovement(Vec3.ZERO);
@@ -120,13 +150,18 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     @Override
     protected void onHit(HitResult result) {
-        super.onHit(result);
         ScriptedProjectileSpec spec = getSpec();
         if (result.getType() == HitResult.Type.BLOCK
-                && !this.anchored
+                && !isAnchored()
                 && HOOK_ANCHOR.equals(normalizeHook(spec == null ? null : spec.getOnHitBlockHook()))) {
+            // ThrowableItemProjectile's implementation discards itself after
+            // a hit.  AcademyCraft's EntityMagHook instead stays alive,
+            // enlarges, and becomes a magnetic target, so anchor before (and
+            // instead of) the disposable projectile path.
             anchorAt(result);
+            return;
         }
+        super.onHit(result);
     }
 
     @Override
@@ -168,13 +203,13 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     @Override
     public boolean isPickable() {
-        return this.anchored;
+        return isAnchored();
     }
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
         ScriptedProjectileSpec spec = getSpec();
-        if (this.anchored
+        if (isAnchored()
                 && source.getEntity() != null
                 && HOOK_DISCARD_WHEN_HURT.equals(normalizeHook(spec == null ? null : spec.getOnAnchoredHurtHook()))) {
             dropConfiguredItemAndDiscard();
@@ -197,6 +232,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         anchored = tag.getBoolean("Anchored");
+        this.entityData.set(DATA_ANCHORED, anchored);
         if (tag.contains("AnchorPos")) {
             anchorPos = BlockPos.of(tag.getLong("AnchorPos"));
         }
@@ -207,7 +243,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
             }
         }
         if (anchored) {
-            this.refreshDimensions();
+            applyAnchoredState();
         }
     }
 }
