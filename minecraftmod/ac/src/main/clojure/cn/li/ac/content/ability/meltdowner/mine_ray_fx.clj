@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-fx
   "Client FX for all mine-ray variants: beam glow + block progress indicator."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -113,18 +114,18 @@
         shrink (* 0.05 (- 1.0 progress))
         x0 (+ x shrink) y0 (+ y shrink) z0 (+ z shrink)
         x1 (- (+ x 1.0) shrink) y1 (- (+ y 1.0) shrink) z1 (- (+ z 1.0) shrink)]
-    [(ru/line-op {:x x0 :y y0 :z z0} {:x x1 :y y0 :z z0} col)
-     (ru/line-op {:x x1 :y y0 :z z0} {:x x1 :y y0 :z z1} col)
-     (ru/line-op {:x x1 :y y0 :z z1} {:x x0 :y y0 :z z1} col)
-     (ru/line-op {:x x0 :y y0 :z z1} {:x x0 :y y0 :z z0} col)
-     (ru/line-op {:x x0 :y y1 :z z0} {:x x1 :y y1 :z z0} col)
-     (ru/line-op {:x x1 :y y1 :z z0} {:x x1 :y y1 :z z1} col)
-     (ru/line-op {:x x1 :y y1 :z z1} {:x x0 :y y1 :z z1} col)
-     (ru/line-op {:x x0 :y y1 :z z1} {:x x0 :y y1 :z z0} col)
-     (ru/line-op {:x x0 :y y0 :z z0} {:x x0 :y y1 :z z0} col)
-     (ru/line-op {:x x1 :y y0 :z z0} {:x x1 :y y1 :z z0} col)
-     (ru/line-op {:x x1 :y y0 :z z1} {:x x1 :y y1 :z z1} col)
-     (ru/line-op {:x x0 :y y0 :z z1} {:x x0 :y y1 :z z1} col)]))
+    [(ru/line-op (vec3/v3 x0 y0 z0) (vec3/v3 x1 y0 z0) col)
+     (ru/line-op (vec3/v3 x1 y0 z0) (vec3/v3 x1 y0 z1) col)
+     (ru/line-op (vec3/v3 x1 y0 z1) (vec3/v3 x0 y0 z1) col)
+     (ru/line-op (vec3/v3 x0 y0 z1) (vec3/v3 x0 y0 z0) col)
+     (ru/line-op (vec3/v3 x0 y1 z0) (vec3/v3 x1 y1 z0) col)
+     (ru/line-op (vec3/v3 x1 y1 z0) (vec3/v3 x1 y1 z1) col)
+     (ru/line-op (vec3/v3 x1 y1 z1) (vec3/v3 x0 y1 z1) col)
+     (ru/line-op (vec3/v3 x0 y1 z1) (vec3/v3 x0 y1 z0) col)
+     (ru/line-op (vec3/v3 x0 y0 z0) (vec3/v3 x0 y1 z0) col)
+     (ru/line-op (vec3/v3 x1 y0 z0) (vec3/v3 x1 y1 z0) col)
+     (ru/line-op (vec3/v3 x1 y0 z1) (vec3/v3 x1 y1 z1) col)
+     (ru/line-op (vec3/v3 x0 y0 z1) (vec3/v3 x0 y1 z1) col)]))
 
 (defn- build-plan
   [_camera-pos _hand-center-pos _tick _query-fn]

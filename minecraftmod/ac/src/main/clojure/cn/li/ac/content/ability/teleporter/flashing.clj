@@ -26,6 +26,8 @@
 
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
 
+            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
 
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -39,7 +41,9 @@
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.platform.raycast :as raycast]))
+            [cn.li.mcmod.platform.raycast :as raycast]
+
+            [cn.li.mcmod.util.log :as log]))
 
 
 
@@ -296,6 +300,68 @@
   (when (get-in ctx-data [:skill-state :active?])
     ctx-data))
 
+(defn- active-flashing-ctx-id
+
+  "First flashing context of `player-id` whose active? flag is set,
+
+  optionally excluding `exclude-ctx-id`."
+
+  ([player-id]
+
+   (active-flashing-ctx-id player-id nil))
+
+  ([player-id exclude-ctx-id]
+
+   (->> (ctx/get-all-contexts)
+
+        (filter (fn [[ctx-id ctx-data]]
+
+                  (and (not= ctx-id exclude-ctx-id)
+
+                       (= (:player-uuid ctx-data) player-id)
+
+                       (get-in ctx-data [:skill-state :active?]))))
+
+        first
+
+        first)))
+
+
+
+(defn- flashing-cooldown-ticks
+
+  [ctx-id player-id]
+
+  (let [exp (double (or (get-in (ctx-skill/get-context ctx-id)
+
+                                [:skill-state :active-exp])
+
+                        (skill-exp player-id)))]
+
+    (cfg-lerp-int :cooldown.deactivate-ticks exp)))
+
+
+
+(defn- deactivate-and-terminate!
+
+  "Original serverTerminated: cooldown on termination. Notify the client so
+
+  its mirror context and preview marking are cleaned up."
+
+  [ctx-id player-id reason]
+
+  (fx/send! ctx-id {:topic :flashing/fx-state-end} nil {})
+
+  (skill-effects/set-main-cooldown! player-id flashing-skill-id
+
+                                    (flashing-cooldown-ticks ctx-id player-id))
+
+  (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!)
+
+  (log/info "Flashing: Deactivated" reason)
+
+  nil)
+
 
 
 (defn- perform-flash!
@@ -432,9 +498,25 @@
 
 (defn flashing-activate!
 
+  "Press-to-toggle like the original Flashing onKeyDown: the client's slot
+
+  ctx-id is cleared at key-up, so the second press arrives on a NEW context
+
+  - deactivate the still-active context of the previous press (and this
+
+  one); otherwise activate."
+
   [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
 
-  (if cost-ok?
+  (if-let [active-ctx-id (active-flashing-ctx-id player-id ctx-id)]
+
+    (do
+
+      (deactivate-and-terminate! active-ctx-id player-id :manual)
+
+      (ctx/terminate-context! ctx-id ctx-mgr/send-terminated-context!))
+
+    (if cost-ok?
 
     (let [exp (skill-exp player-id)
 
@@ -464,7 +546,7 @@
                                       (dissoc :preview))))
 
       (register-movement-listeners! ctx-id))
-    (ctx/terminate-context! ctx-id nil)))
+    (ctx/terminate-context! ctx-id nil))))
 
 
 
@@ -482,7 +564,8 @@
         (when (pos? protect-ticks)
           (helper/reset-fall-damage! player-id))
         (if (> ticks max-ticks)
-          (ctx/terminate-context! ctx-id nil)
+
+          (deactivate-and-terminate! ctx-id player-id :max-time)
           (update-skill-state-root!
             ctx-id
             (fn [st]
@@ -494,27 +577,14 @@
 
 (defn flashing-deactivate!
 
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  "Release does nothing - the original onKeyUp has no handler; the second
 
-  (fx/send! ctx-id {:topic :flashing/fx-state-end} nil {})
+  press (or max-time) deactivates."
 
-  (update-skill-state-root! ctx-id
+  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
 
-                            (fn [st]
+  nil)
 
-                              (-> (or st {})
-
-                                  (assoc :active? false)
-
-                                  (dissoc :direction)
-
-                                  (dissoc :preview))))
-
-  (let [exp (double (or (get-in (ctx-skill/get-context ctx-id)
-                                 [:skill-state :active-exp])
-                        (skill-exp player-id)))]
-    (skill-effects/set-main-cooldown! player-id flashing-skill-id
-                                      (cfg-lerp-int :cooldown.deactivate-ticks exp))))
 
 
 
@@ -566,9 +636,11 @@
 
   :overload-consume-speed 0.0
 
-  :pattern         :toggle
+  :pattern         :release-cast
 
-  :input-policy    {:terminate-on-key-up? false}
+  :input-policy    {:terminate-on-key-up? false
+
+                    :keep-active-on-key-up? true}
 
   :cost            {:down {:overload (fn [player-id _skill-id _exp]
 
@@ -588,11 +660,11 @@
 
   :cooldown        {:mode :manual}
 
-  :actions         {:activate! flashing-activate!
+  :actions         {:down!  flashing-activate!
 
-                    :tick! flashing-tick!
+                    :tick!  flashing-tick!
 
-                    :deactivate! flashing-deactivate!
+                    :up!    flashing-deactivate!
 
                     :abort! flashing-abort!}
 

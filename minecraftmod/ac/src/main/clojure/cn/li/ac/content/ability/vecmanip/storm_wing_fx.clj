@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.storm-wing-fx
   "Client FX for Storm Wing: tornado ring visuals + dirt particles."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
@@ -178,8 +179,8 @@
                 color {:r 200 :g 230 :b 255 :a (:ring-alpha sw)}]
             {:ops (mapv (fn [{:keys [p0 p1]}]
                           (ru/line-op
-                            {:x (+ cx (:x p0)) :y (+ cy (:y p0)) :z (+ cz (:z p0))}
-                            {:x (+ cx (:x p1)) :y (+ cy (:y p1)) :z (+ cz (:z p1))}
+                            (vec3/v3 (+ cx (:x p0)) (+ cy (:y p0)) (+ cz (:z p0)))
+                            (vec3/v3 (+ cx (:x p1)) (+ cy (:y p1)) (+ cz (:z p1)))
                             color))
                         (:ring-segments-local sw))}))))))
 
