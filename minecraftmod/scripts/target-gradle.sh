@@ -10,4 +10,4 @@ if [ -z "$JAVA_HOME" ] || [ ! -x "$JAVA_HOME/bin/java" ]; then
 fi
 export JAVA_HOME
 "$ROOT/gradlew" :tools:target-launcher:installDist --no-daemon
-exec "$ROOT/tools/target-launcher/build/install/target-launcher/bin/target-launcher" "$TARGET" "$@"
+exec "$ROOT/tools/target-launcher/dist/bin/target-launcher" "$TARGET" "$@"

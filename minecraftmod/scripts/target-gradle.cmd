@@ -15,5 +15,5 @@ call "%ROOT%\gradlew.bat" :tools:target-launcher:installDist --no-daemon
 if errorlevel 1 exit /b %ERRORLEVEL%
 rem %* keeps the original argument list after SHIFT, so forward the shifted
 rem arguments explicitly to avoid passing the target id as a Gradle task.
-call "%ROOT%\tools\target-launcher\build\install\target-launcher\bin\target-launcher.bat" %TARGET% %~1 %~2 %~3 %~4 %~5 %~6 %~7 %~8 %~9
+call "%ROOT%\tools\target-launcher\dist\bin\target-launcher.bat" %TARGET% %~1 %~2 %~3 %~4 %~5 %~6 %~7 %~8 %~9
 exit /b %ERRORLEVEL%

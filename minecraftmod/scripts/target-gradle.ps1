@@ -15,6 +15,6 @@ Push-Location $root
 try {
   & (Join-Path $root 'gradlew.bat') ':tools:target-launcher:installDist' '--no-daemon'
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-  & (Join-Path $root 'tools\target-launcher\build\install\target-launcher\bin\target-launcher.bat') $Target @GradleArgs
+  & (Join-Path $root 'tools\target-launcher\dist\bin\target-launcher.bat') $Target @GradleArgs
   exit $LASTEXITCODE
 } finally { Pop-Location }

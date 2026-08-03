@@ -11,6 +11,14 @@ java {
 }
 tasks.withType(JavaCompile).configureEach { options.release = 17 }
 
+// Install outside build/ so `clean` (often invoked via this same launcher)
+// cannot try to delete the running Windows jar and fail with IOException.
+// Intentionally not registered with clean: the launcher may still be running.
+def launcherDistDir = layout.projectDirectory.dir("dist")
+tasks.named("installDist", Sync).configure {
+    destinationDir = launcherDistDir.asFile
+}
+
 tasks.register("testLauncher", JavaExec) {
     group = "verification"
     description = "Run dependency-free regression tests for target catalog parsing."
