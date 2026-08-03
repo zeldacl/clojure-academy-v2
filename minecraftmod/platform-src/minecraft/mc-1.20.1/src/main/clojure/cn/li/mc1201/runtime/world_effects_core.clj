@@ -15,7 +15,7 @@
            [net.minecraft.world.phys AABB Vec3]))
 
 (defn entity->map
-  [^Entity entity resolve-entity-id-fn]
+  [^Entity entity resolve-entity-id-fn multipart-entity?-fn]
   (let [^Vec3 pos (.position entity)
         scripted? (instance? ScriptedEffectEntity entity)
         ^ScriptedEffectEntity scripted-entity (when scripted? entity)
@@ -41,6 +41,8 @@
                           (long (.-invulnerableTime ^LivingEntity entity))
                           0)
      :mob? (instance? Monster entity)
+     :multipart? (boolean (and multipart-entity?-fn
+                               (multipart-entity?-fn entity)))
      :item? (instance? ItemEntity entity)
      :projectile? projectile?
      :arrow? (instance? AbstractArrow entity)
@@ -102,17 +104,17 @@
       true)))
 
 (defn entities-in-radius
-  [^Level level x y z radius get-entities-fn resolve-entity-id-fn]
+  [^Level level x y z radius get-entities-fn resolve-entity-id-fn multipart-entity?-fn]
   (let [aabb (AABB. (- x radius) (- y radius) (- z radius)
                     (+ x radius) (+ y radius) (+ z radius))
         entities (get-entities-fn level aabb)]
-    (mapv #(entity->map % resolve-entity-id-fn) entities)))
+    (mapv #(entity->map % resolve-entity-id-fn multipart-entity?-fn) entities)))
 
 (defn entities-in-aabb
-  [^Level level min-x min-y min-z max-x max-y max-z get-entities-fn resolve-entity-id-fn]
+  [^Level level min-x min-y min-z max-x max-y max-z get-entities-fn resolve-entity-id-fn multipart-entity?-fn]
   (let [aabb (AABB. min-x min-y min-z max-x max-y max-z)
         entities (get-entities-fn level aabb)]
-    (mapv #(entity->map % resolve-entity-id-fn) entities)))
+    (mapv #(entity->map % resolve-entity-id-fn multipart-entity?-fn) entities)))
 
 (defn spawn-projectile-in-level!
   [^Level level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn]

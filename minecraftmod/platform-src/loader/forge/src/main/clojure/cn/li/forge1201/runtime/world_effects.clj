@@ -2,7 +2,8 @@
   "Forge implementation of IWorldEffects protocol."
   (:require [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
-            [cn.li.forge1201.adapter.server-context :as server-context])
+            [cn.li.forge1201.adapter.server-context :as server-context]
+            [cn.li.forge1201.runtime.multipart-entity :as multipart])
   (:import [cn.li.mc1201.runtime RuntimeAccessShared WorldEntityShared]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level.block Block]
@@ -22,6 +23,7 @@
                   (WorldEntityShared/getEntitiesInAabb l aabb))
      :resolve-entity-id-fn (fn [entity]
                  (RuntimeAccessShared/getEntityRegistryId entity))
+     :combat-parent-fn multipart/parent
      :block-id-fn (fn [^Block block _block-state]
                     (str (.getDescriptionId block)))}))
 

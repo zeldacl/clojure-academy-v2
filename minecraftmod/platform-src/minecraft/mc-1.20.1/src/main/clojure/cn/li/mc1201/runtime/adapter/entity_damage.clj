@@ -5,6 +5,7 @@
   query callbacks; this namespace owns the damage-flow orchestration."
   (:require [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mc1201.runtime.multipart-entity :as multipart]
             [cn.li.mcmod.platform.entity-damage :as damage-effects]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -13,7 +14,6 @@
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity LivingEntity]
-           [net.minecraft.world.entity.boss EnderDragonPart]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.phys AABB]))
 
@@ -36,31 +36,6 @@
    (canAttackPlayer() || !(target instanceof EntityPlayer)) check."
   [entity]
   (and (instance? Player entity) (not (damage-effects/pvp-allowed?))))
-
-(defn- multipart-parent
-  [^Entity entity combat-parent-fn]
-  (or (when (instance? EnderDragonPart entity)
-        (.-parentMob ^EnderDragonPart entity))
-      (when combat-parent-fn
-        (combat-parent-fn entity))))
-
-(defn- combat-root
-  "Resolve vanilla dragon parts and loader-provided multipart entities to a
-  stable parent. Identity tracking and a hard depth bound protect malformed
-  third-party multipart graphs."
-  [entity combat-parent-fn]
-  (loop [^Entity current entity
-         depth 0
-         seen []]
-    (if (or (nil? current)
-            (>= depth 8)
-            (some #(identical? current %) seen))
-      current
-      (if-let [^Entity parent (multipart-parent current combat-parent-fn)]
-        (recur parent
-               (inc depth)
-               (conj seen current))
-        current))))
 
 (defn create-entity-damage
   "Return a function map implementing the entity-damage contract.
@@ -89,9 +64,9 @@
        (when (instance? DamageSource damage-source)
          (let [^DamageSource source damage-source
                causing-root (some-> (.getEntity source)
-                                    (combat-root combat-parent-fn))
+                                    (multipart/combat-root combat-parent-fn))
                direct-root (some-> (.getDirectEntity source)
-                                   (combat-root combat-parent-fn))
+                                   (multipart/combat-root combat-parent-fn))
                ^Entity target (cond
                                 (and causing-root (living? causing-root)) causing-root
                                 (and direct-root (living? direct-root)) direct-root

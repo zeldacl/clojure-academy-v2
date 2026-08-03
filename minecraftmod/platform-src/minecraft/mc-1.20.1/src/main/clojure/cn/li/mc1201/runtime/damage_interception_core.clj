@@ -2,8 +2,10 @@
   "Shared Minecraft-side damage interception helpers (no loader API imports)."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.hooks.core :as damage-hooks])
-  (:import [net.minecraft.server.level ServerPlayer]
+            [cn.li.mcmod.hooks.core :as damage-hooks]
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mc1201.runtime DamageInterceptionShared]
+           [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity]))
 
@@ -16,10 +18,15 @@
    :get-active-handlers (fn []
                           (damage-hooks/get-active-damage-handlers))})
 
+(declare rewrite-damage)
+
 (defn install-damage-interception!
   []
   (when-let [fw-atom (fw/fw-atom)]
-    (platform/install-adapter! fw-atom :damage-interception (make-damage-interception)))
+    (platform/install-adapter! fw-atom :damage-interception (make-damage-interception))
+    (DamageInterceptionShared/installModifier
+     (fn [entity damage-source amount]
+       (rewrite-damage entity damage-source amount))))
   nil)
 
 (defn should-allow-attack?
@@ -78,20 +85,75 @@
 
 (defn damage-process-result
   "Return shared mutable-damage result for player damage, or nil when the
-  damaged entity is not a server player. Forge applies the returned damage to
-  LivingHurtEvent; Fabric 1.20.1 has no equivalent mutable amount callback."
+  damaged entity is not a server player. Loader registration adapters and the
+  Fabric mixin both consume this common result."
   [entity damage-source amount]
   (when (instance? ServerPlayer entity)
     (let [^ServerPlayer player entity
           player-id (str (.getUUID player))
           original-damage (double amount)
           attacker-id (attacker-id damage-source)
-          next-damage (with-damaged-player-owner
-                        player
-                        #(process-damage
-                           player-id attacker-id original-damage damage-source))]
+          next-damage (if (Double/isFinite original-damage)
+                        (with-damaged-player-owner
+                          player
+                          #(process-damage
+                             player-id attacker-id original-damage damage-source))
+                        original-damage)
+          next-damage (if (and (number? next-damage)
+                               (Double/isFinite (double next-damage)))
+                        (double next-damage)
+                        original-damage)]
       {:player-id player-id
        :attacker-id attacker-id
        :original-damage original-damage
        :next-damage next-damage
        :changed? (not= next-damage original-damage)})))
+
+(defn allow-attack?
+  "Common attack-stage decision used by loader registration callbacks."
+  [entity damage-source amount]
+  (try
+    (if-let [{:keys [allow?]} (attack-precheck-result entity damage-source amount)]
+      (boolean allow?)
+      true)
+    (catch Exception e
+      (log/warn "Damage interception precheck failed:" (ex-message e))
+      true)))
+
+(defn apply-attack-result!
+  "Apply the common attack decision through a loader-provided cancellation
+  setter. The loader owns only native event adaptation."
+  [entity damage-source amount cancel-fn]
+  (try
+    (let [allow? (allow-attack? entity damage-source amount)]
+      (when-not allow?
+        (cancel-fn true))
+      allow?)
+    (catch Exception e
+      (log/warn "Damage interception cancellation apply failed:" (ex-message e))
+      true)))
+
+(defn rewrite-damage
+  "Return the common final pre-armor damage. Invalid handler output fails open
+  to the original amount."
+  [entity damage-source amount]
+  (try
+    (if-let [{:keys [next-damage]} (damage-process-result entity damage-source amount)]
+      (float next-damage)
+      (float amount))
+    (catch Exception e
+      (log/warn "Damage interception rewrite failed:" (ex-message e))
+      (float amount))))
+
+(defn apply-damage-result!
+  "Apply common damage rewriting through a loader-provided amount setter."
+  [entity damage-source amount set-amount-fn]
+  (try
+    (let [next-damage (rewrite-damage entity damage-source amount)
+          changed? (not= (float amount) next-damage)]
+      (when changed?
+        (set-amount-fn next-damage))
+      next-damage)
+    (catch Exception e
+      (log/warn "Damage interception amount apply failed:" (ex-message e))
+      (float amount))))

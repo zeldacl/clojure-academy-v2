@@ -1,12 +1,12 @@
 (ns cn.li.forge1201.runtime.entity-damage
   "Forge implementation of IEntityDamage protocol."
   (:require [cn.li.mc1201.runtime.adapter.entity-damage :as entity-damage]
-            [cn.li.forge1201.adapter.server-context :as server-context])
+            [cn.li.forge1201.adapter.server-context :as server-context]
+            [cn.li.forge1201.runtime.multipart-entity :as multipart])
   (:import [cn.li.mc1201.runtime WorldEntityShared]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
-           [net.minecraft.world.phys AABB]
-           [net.minecraftforge.entity PartEntity]))
+           [net.minecraft.world.phys AABB]))
 
 (defn forge-entity-damage []
   (entity-damage/create-entity-damage
@@ -14,9 +14,7 @@
     {:get-living-entities-in-aabb-fn (fn [^ServerLevel level ^AABB aabb]
                                        (WorldEntityShared/getLivingEntitiesInAabb level aabb))
      :living-entity?-fn (fn [entity] (WorldEntityShared/isLivingEntity ^Entity entity))
-     :combat-parent-fn (fn [^Entity entity]
-                         (when (instance? PartEntity entity)
-                           (.getParent ^PartEntity entity)))}))
+     :combat-parent-fn multipart/parent}))
 
 (defn install-entity-damage! []
   (entity-damage/install-entity-damage! (forge-entity-damage)

@@ -1,25 +1,12 @@
 (ns cn.li.fabric1201.runtime.damage-interception
   "Fabric implementation of IDamageInterception protocol.
 
-  Uses ServerLivingEntityEvents/ALLOW_DAMAGE for pre-check cancellation parity.
-  Fabric 1.20.1 API does not expose a mutable hurt-amount event equivalent to
-  Forge LivingHurtEvent, so damage amount rewriting is not applied here."
+  Fabric registers attack cancellation here. Its mixin registration delegates
+  mutable damage rewriting to the common Minecraft runtime."
   (:require [cn.li.mc1201.runtime.damage-interception-core :as core]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.entity.event.v1 ServerLivingEntityEvents$AllowDamage]))
-
-(defn- on-allow-damage
-  "Handle ALLOW_DAMAGE - perform side-effect-free precheck and cancel when
-  reflection should preempt incoming attack effects."
-  [entity damage-source amount]
-  (try
-    (if-let [{:keys [allow?]} (core/attack-precheck-result entity damage-source amount)]
-      (boolean allow?)
-      true)
-    (catch Exception e
-      (log/warn "Fabric damage interception precheck failed:" (ex-message e))
-      true)))
 
 (defn install-damage-interception! []
   (install/process-once! ::installed
@@ -31,7 +18,7 @@
        (.register net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents/ALLOW_DAMAGE
                   (reify ServerLivingEntityEvents$AllowDamage
                     (allowDamage [_ entity damage-source amount]
-                      (on-allow-damage entity damage-source amount))))
+                      (core/allow-attack? entity damage-source amount))))
 
-       (log/info "Fabric damage interception installed (ALLOW_DAMAGE precheck path)")))
+       (log/info "Fabric damage interception installed")))
   nil)

@@ -85,7 +85,8 @@
     (when-not (or (contains? excluded-ids eid)
                   (:item? entity)
                   (:living? entity)
-                  (:mob? entity))
+                  (:mob? entity)
+                  (:multipart? entity))
       (double (get difficulty-map eid 1.0)))))
 
 (defn- now-ms []

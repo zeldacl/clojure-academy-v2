@@ -201,6 +201,23 @@
                   cn.li.ac.content.ability.vecmanip.vec-deviation/active-vec-deviation-ctx-id (fn [_] nil)]
       (is (= 10000.0 (vd/reduce-damage "p1" 10000.0))))))
 
+(deftest reduce-damage-ignores-non-finite-damage-test
+  (let [side-effects (atom 0)]
+    (with-redefs [cn.li.ac.ability.service.skill-effects/get-player-state (fn [_] {:ok true})
+                  cn.li.ac.content.ability.vecmanip.vec-deviation/consume-cp!
+                  (fn [& _] (swap! side-effects inc))
+                  cn.li.ac.content.ability.vecmanip.vec-deviation/add-exp!
+                  (fn [& _] (swap! side-effects inc))]
+      (is (Double/isNaN (vd/reduce-damage "p1" Double/NaN)))
+      (is (= 0 @side-effects)))))
+
+(deftest multipart-entities-are-not-projectile-targets-test
+  (with-redefs [cn.li.ac.content.ability.vecmanip.vec-deviation/excluded-entity-ids
+                (constantly #{})]
+    (is (true?
+         (@#'cn.li.ac.content.ability.vecmanip.vec-deviation/excluded-entity?
+          {:entity-id "minecraft:ender_dragon" :multipart? true})))))
+
 ;; ---------------------------------------------------------------------------
 ;; reduce-damage �?force-consume semantics (cap to current CP)
 ;; ---------------------------------------------------------------------------

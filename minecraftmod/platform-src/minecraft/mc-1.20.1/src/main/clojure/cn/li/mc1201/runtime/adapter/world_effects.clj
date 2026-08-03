@@ -5,6 +5,7 @@
   entity/lightning/explosion callbacks; this namespace owns the shared
   world-query orchestration and protocol-var installation."
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mc1201.runtime.multipart-entity :as multipart]
             [cn.li.mc1201.runtime.world-effects-core :as core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -19,7 +20,7 @@
     (resolve-level-fn server world-id)))
 
 (defn create-world-effects
-  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn]
+  [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn combat-parent-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
                    get-entity-by-uuid-fn query-core/get-entity-by-uuid
                    resolve-entity-id-fn (fn [^Entity entity] (str (.getDescriptionId (.getType entity))))
@@ -32,7 +33,8 @@
                               (fn [level projectile-spec]
                                 (core/spawn-projectile-in-level!
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
-        get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))]
+        get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))
+        multipart-entity? #(multipart/multipart? % combat-parent-fn)]
     {:spawn-lightning! (fn spawn-lightning-adapter!
                          ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
                          ([world-id x y z visual-only?]
@@ -82,7 +84,8 @@
                                         level
                                         x y z radius
                                         get-entities-in-aabb
-                                        resolve-entity-id-fn)))
+                                        resolve-entity-id-fn
+                                        multipart-entity?)))
                                   (catch Exception e
                                     (log/warn "Failed to find entities:" (ex-message e))
                                     [])))
@@ -94,7 +97,8 @@
                                       level
                                       min-x min-y min-z max-x max-y max-z
                                       get-entities-in-aabb
-                                      resolve-entity-id-fn)))
+                                      resolve-entity-id-fn
+                                      multipart-entity?)))
                                 (catch Exception e
                                   (log/warn "Failed to find entities in AABB:" (ex-message e))
                                   [])))

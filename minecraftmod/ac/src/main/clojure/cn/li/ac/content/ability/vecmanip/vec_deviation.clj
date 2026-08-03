@@ -66,7 +66,8 @@
     (or (contains? (excluded-entity-ids) entity-id)
         (:item? entity)
         (:living? entity)
-        (:mob? entity))))
+        (:mob? entity)
+        (:multipart? entity))))
 
 (defn- affect-difficulty [entity]
   (let [entity-id (entity-registry-id entity)]
@@ -311,26 +312,27 @@
   "Reduce incoming damage while the registered toggle handler is active."
   [player-id original-damage]
   (try
-    (if (skill-effects/get-player-state player-id)
-      (if (> (double original-damage)
-             (cfg-double :combat.damage-ignore-threshold))
-        original-damage
-        (let [exp (skill-exp player-id)
-              reduction-rate (cfg-lerp :combat.damage-reduction exp)
-              max-consumption (cfg-lerp :cost.damage.cp exp)
-              consumption
-              (min (current-cp player-id) (double max-consumption))]
-          (when (pos? consumption)
-            (consume-cp! player-id consumption))
-          (add-exp!
-           player-id
-           (* original-damage
-              (cfg-double :progression.exp-damage-scale)))
-          (when-let [pos (get-player-position player-id)]
-            (when-let [ctx-id (active-vec-deviation-ctx-id player-id)]
-              (send-fx-play! ctx-id pos)))
-          (* original-damage (- 1.0 reduction-rate))))
-      original-damage)
+    (let [damage (double original-damage)]
+      (if (skill-effects/get-player-state player-id)
+        (if (or (not (Double/isFinite damage))
+                (> damage (cfg-double :combat.damage-ignore-threshold)))
+          original-damage
+          (let [exp (skill-exp player-id)
+                reduction-rate (cfg-lerp :combat.damage-reduction exp)
+                max-consumption (cfg-lerp :cost.damage.cp exp)
+                consumption
+                (min (current-cp player-id) (double max-consumption))]
+            (when (pos? consumption)
+              (consume-cp! player-id consumption))
+            (add-exp!
+             player-id
+             (* damage
+                (cfg-double :progression.exp-damage-scale)))
+            (when-let [pos (get-player-position player-id)]
+              (when-let [ctx-id (active-vec-deviation-ctx-id player-id)]
+                (send-fx-play! ctx-id pos)))
+            (* damage (- 1.0 reduction-rate))))
+        original-damage))
     (catch Exception e
       (log/warn "VecDeviation reduce-damage failed:" (ex-message e))
       original-damage)))

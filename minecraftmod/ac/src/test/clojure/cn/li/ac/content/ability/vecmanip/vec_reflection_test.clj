@@ -81,6 +81,13 @@
            (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/reflection-target-id
              "shooter" :melee-source)))))
 
+(deftest multipart-entities-are-not-reflected-as-projectiles-test
+  (is (nil?
+       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/affect-difficulty-with-snapshot
+        {:entity-id "minecraft:ender_dragon" :multipart? true}
+        #{}
+        {}))))
+
 (deftest reflected-damage-source-cannot-trigger-reflection-test
   (with-redefs [cn.li.mcmod.platform.entity-damage/available? (constantly true)
                 cn.li.mcmod.platform.entity-damage/vec-reflection-damage-source?
