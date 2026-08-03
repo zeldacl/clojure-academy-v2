@@ -137,20 +137,35 @@
 																		 {:r 255 :g 255 :b 255}
 																		 {:r 255 :g 51 :b 51})
 																	 a-int)
+													 ;; Original ParabolaRenderer GL_QUADS texcoords: u runs
+													 ;; prev→cur along the trajectory, v across the ribbon
+													 ;; height. The glow_line texture's soft vertical
+													 ;; gradient (alpha 0→255→0) then falls off across the
+													 ;; ribbon's top/bottom edges, and its constant-u axis
+													 ;; keeps every segment uniform along the path. The
+													 ;; earlier corner order swapped u/v: the gradient was
+													 ;; compressed into each 0.02s segment (every quad read
+													 ;; as its own fading vertical bar) and the ribbon edges
+													 ;; were hard — the "flat line of dashes" look.
 													 p0 (vec3/v3 (.-x prev) (+ (.-y prev) h) (.-z prev))
-													 p1 (vec3/v3 (.-x pos) (+ (.-y pos) h) (.-z pos))
+													 p1 (vec3/v3 (.-x prev) (- (.-y prev) h) (.-z prev))
 													 p2 (vec3/v3 (.-x pos) (- (.-y pos) h) (.-z pos))
-													 p3 (vec3/v3 (.-x prev) (- (.-y prev) h) (.-z prev))]
+													 p3 (vec3/v3 (.-x pos) (+ (.-y pos) h) (.-z pos))]
 											 (conj! ops (fx-beam/glow-line-quad-op p0 p1 p2 p3 color)))
 										 ops))))))))
 
 (defn- build-plan
-	[camera-pos _hand-center-pos _tick]
-	(let [^V3 cam-v (vec3/map->v3 camera-pos)
-				ops (mapcat #(trajectory-ops cam-v %)
-										(filter #(get % :active?) (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-accel)))))]
-		(when (seq ops)
-			{:ops (vec ops)})))
+	[camera-pos hand-center-pos _tick]
+	;; Original ParabolaRenderer only draws in first person
+	;; (thirdPersonView == 0) — in F5 the line's camera-anchored start
+	;; would sit detached from the player.
+	(if-not (:first-person? hand-center-pos true)
+		nil
+		(let [^V3 cam-v (vec3/map->v3 camera-pos)
+					ops (mapcat #(trajectory-ops cam-v %)
+											(filter #(get % :active?) (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-accel)))))]
+			(when (seq ops)
+				{:ops (vec ops)}))))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:vec-accel :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:vec-accel :level]
