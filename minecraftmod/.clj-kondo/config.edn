@@ -2,7 +2,8 @@
            cn.li.ac.util.init-guard/with-init-guard clojure.core/when
            cn.li.ac.ability.dsl/defcategory clojure.core/def}
  :hooks {:analyze-call {cn.li.ac.ability.dsl/defskill hooks.defskill/defskill
-                      java.lang.ThreadLocal/. hooks.thread-local/thread-local-ctor}}
+                      java.lang.ThreadLocal/. hooks.thread-local/thread-local-ctor
+                      clojure.core/ns hooks.forbid-loader-api/analyze-ns}}
  :linters
  {:unresolved-symbol {:level :warning}
   :unused-private-var {:level :warning}
@@ -10,6 +11,8 @@
   ;; clj-kondo cannot track the runtime injection, so suppress false-positive
   ;; nil-deref warnings on @*framework* across all namespaces.
   :deref {:level :off}
+  ;; Catch (:import [net.minecraft...]) in ac/mcmod — not covered by reflection warnings.
+  :loader-api-in-neutral-layer {:level :error}
   ;; *client-session-id* and *player-state-owner* are defn functions (not ^:dynamic)
   ;; that read from ThreadLocal. Earmuffs naming is intentional for API compatibility
   ;; (function signature unchanged from the original ^:dynamic vars).

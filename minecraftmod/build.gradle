@@ -79,17 +79,34 @@ subprojects {
                 }
             }
         }
-        tasks.matching { task -> task.metaClass.hasProperty(task, "forkOptions") != null }.configureEach { task ->
+        // Clojurephant forks a dedicated JVM for AOT (not JavaExec). Inject via forkOptions.
+        // Loom 1.13 tiny-remapper AIOOBE on Clojure 1.13 :doc metadata; elide :doc only,
+        // keep :file/:line for crash stack lines.
+        def ensureClojureForkJvmArg = { task, String arg ->
+            def args = (task.forkOptions.jvmArgs ?: []) as List
+            if (!args.contains(arg)) {
+                args << arg
+            }
+            task.forkOptions.jvmArgs = args
+        }
+        tasks.matching { it.name in ["compileClojure", "compileTestClojure"] }.configureEach { task ->
             if (!task.forkOptions.memoryMaximumSize) {
                 task.forkOptions.memoryMaximumSize = "1536m"
             }
-            def args = (task.forkOptions.jvmArgs ?: []) as List
-            ["-Dfile.encoding=UTF-8", "-XX:+UseG1GC"].each { arg ->
-                if (!args.contains(arg)) {
-                    args << arg
-                }
+            ensureClojureForkJvmArg(task, "-Dfile.encoding=UTF-8")
+            ensureClojureForkJvmArg(task, "-XX:+UseG1GC")
+            ensureClojureForkJvmArg(task, "-Dclojure.compile.elide-meta=[:doc]")
+        }
+        // Other Clojurephant forked tasks (e.g. checkClojure) keep baseline JVM settings.
+        tasks.matching { task ->
+            task.name !in ["compileClojure", "compileTestClojure"] &&
+                task.metaClass.hasProperty(task, "forkOptions") != null
+        }.configureEach { task ->
+            if (!task.forkOptions.memoryMaximumSize) {
+                task.forkOptions.memoryMaximumSize = "1536m"
             }
-            task.forkOptions.jvmArgs = args
+            ensureClojureForkJvmArg(task, "-Dfile.encoding=UTF-8")
+            ensureClojureForkJvmArg(task, "-XX:+UseG1GC")
         }
     }
 
@@ -434,6 +451,71 @@ tasks.register("compareDatagenParityManifests") {
     }
 }
 
+tasks.register("verifyNeutralClojureNoMinecraftApis") {
+    group = "verification"
+    description = "Fail if ac/mcmod Clojure sources import or reference Minecraft/Forge/Fabric/NeoForge APIs."
+    doLast {
+        def roots = [
+            file("ac/src/main/clojure"),
+            file("ac/src/test/clojure"),
+            file("mcmod/src/main/clojure"),
+            file("mcmod/src/test/clojure")
+        ].findAll { it.directory }
+        // Real API refs look like net.minecraft.Foo — docstrings saying "net.minecraft.*" do not match.
+        def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
+        def violations = []
+        roots.each { File root ->
+            fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.each { File src ->
+                def inBlockComment = false
+                src.eachLine { String line, int idx ->
+                    def code = line
+                    if (inBlockComment) {
+                        def end = code.indexOf("*/")
+                        if (end < 0) {
+                            return
+                        }
+                        code = code.substring(end + 2)
+                        inBlockComment = false
+                    }
+                    while (true) {
+                        def start = code.indexOf("/*")
+                        if (start < 0) {
+                            break
+                        }
+                        def end = code.indexOf("*/", start + 2)
+                        if (end < 0) {
+                            code = code.substring(0, start)
+                            inBlockComment = true
+                            break
+                        }
+                        code = code.substring(0, start) + code.substring(end + 2)
+                    }
+                    def lineComment = code.indexOf(";")
+                    if (lineComment >= 0) {
+                        code = code.substring(0, lineComment)
+                    }
+                    // Drop string literals so docstring mentions do not trip the gate.
+                    code = code.replaceAll(/"(?:\\.|[^\\"])*"/, "\"\"")
+                    code = code.replaceAll(/'(?:\\.|[^\\'])*'/, "''")
+                    def matcher = forbidden.matcher(code)
+                    while (matcher.find()) {
+                        violations << "${src}:${idx + 1}: ${matcher.group()}"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException(
+                "Neutral layers (ac/mcmod) must not reference Minecraft/loader APIs.\n" +
+                "Reflection Guard only catches untyped interop; (:import [net.minecraft...]) needs this gate.\n" +
+                "Platform-only code belongs under platform-src.\n" +
+                violations.take(40).join("\n") +
+                (violations.size() > 40 ? "\n... and ${violations.size() - 40} more" : ""))
+        }
+        logger.lifecycle("[verifyNeutralClojureNoMinecraftApis] ok ({} roots)", roots.size())
+    }
+}
+
 tasks.register("verifyCurrentPlatforms") {
     group = "verification"
     description = "Run architecture gates for the catalog-based platform layout."
@@ -446,7 +528,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyBuildProfiles",
               "verifyTargetBuildEntrypoints",
               "verifySingleApiBoundary",
-              "verifyRepositoryHygiene"
+              "verifyRepositoryHygiene",
+              "verifyNeutralClojureNoMinecraftApis"
 }
 
 tasks.register("verifySyntheticNeoForgeTarget") {
@@ -578,6 +661,7 @@ tasks.register("lintClojureNative") {
     group = "verification"
     description = "Run clj-kondo and fail the build on lint errors."
     dependsOn tasks.named("downloadCljKondo")
+    dependsOn tasks.named("verifyNeutralClojureNoMinecraftApis")
     def lintLog = layout.buildDirectory.file("reports/clj-kondo-lint.log")
     outputs.file(lintLog)
     doLast {

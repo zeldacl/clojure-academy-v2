@@ -20,7 +20,9 @@ Use only the current target catalog architecture. Do not add root platform modul
 
 - Architecture gate: `cmd /c .\gradlew.bat verifyCurrentPlatforms`
 - Install clj-kondo binary: `cmd /c .\gradlew.bat downloadCljKondo`
-- Clojure lint gate: `cmd /c .\gradlew.bat lintClojureNative` (depends on `downloadCljKondo`; also runs before `:*:compileClojure` / packaging)
+- Clojure lint gate: `cmd /c .\gradlew.bat lintClojureNative` (depends on `downloadCljKondo` + `verifyNeutralClojureNoMinecraftApis`; also runs before `:*:compileClojure` / packaging)
+- Neutral-layer API gate: `cmd /c .\gradlew.bat verifyNeutralClojureNoMinecraftApis` (blocks `net.minecraft.*` / Forge / Fabric / NeoForge refs in `ac`/`mcmod`; clj-kondo hook also errors on `:import` there). Note: `:import` is **not** a Clojure reflection warning — Reflection Guard only catches untyped interop.
+- LVT strip (packaging): always on (`stripAotLvt` / `stripPlatformOutputLvt` / `stripShadowJarLvt`) for Loom 1.13 tiny-remapper. AOT also sets `-Dclojure.compile.elide-meta=[:doc]` (keeps `:file`/`:line`).
 - Forge compile: `.`\\scripts\\target-gradle.ps1 forge-1.20.1``
 - Fabric compile: `.`\\scripts\\target-gradle.ps1 fabric-1.20.1``
 - Forge client: `.`\\scripts\\target-gradle.ps1 forge-1.20.1``

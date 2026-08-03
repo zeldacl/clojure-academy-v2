@@ -55,7 +55,7 @@ tasks.named('compileClojure').configure { task ->
 }
 
 // Strip LVT from AOT class files (same as the platform target build).
-// Clojure 1.12 AOT can emit slot_index=-1 entries that crash TinyRemapper.
+// TinyRemapper (Loom 1.13) can crash on bad/nested LVT slots from Clojure AOT.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
     def classesDir = layout.buildDirectory.dir('clojure/main')

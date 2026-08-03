@@ -310,6 +310,38 @@ if (target.loader != "none") {
     tasks.named("compileClojure").configure { task ->
         dependsOn "compileJava"
         classpath.from(files(platformJavaClasses))
+        forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+        logging.addStandardOutputListener(new StandardOutputListener() {
+            @Override
+            void onOutput(CharSequence output) {
+                String log = output.toString()
+                if (log.contains("Reflection warning")) {
+                    throw new GradleException(
+                        "\n[Reflection Guard] Clojure AOT implicit reflection in :platform!\n" +
+                        "Untyped interop breaks Loom remap. Add ^TypeHint or a Java bridge:\n" +
+                        "--------------------------------------------------\n" +
+                        log.trim() + "\n" +
+                        "--------------------------------------------------"
+                    )
+                }
+            }
+        })
+    }
+
+    tasks.matching { it.name == "compileTestClojure" }.configureEach { task ->
+        forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+        logging.addStandardOutputListener(new StandardOutputListener() {
+            @Override
+            void onOutput(CharSequence output) {
+                String log = output.toString()
+                if (log.contains("Reflection warning")) {
+                    throw new GradleException(
+                        "\n[Reflection Guard] Clojure AOT implicit reflection in :platform tests!\n" +
+                        log.trim()
+                    )
+                }
+            }
+        })
     }
 
     def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
