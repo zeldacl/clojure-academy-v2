@@ -1,4 +1,4 @@
-package cn.li.forge1201.client.render.item;
+package cn.li.mc1201.client.render.item;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.multiplayer.ClientLevel;
@@ -19,16 +19,14 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Forge BakedModel implementation for GUI-vs-world item composites.
- *
- * Business rules (which items, which model ids, when to install) live in
- * {@code cn.li.mc1201.client.render.obj-model-baking}. This class only
- * implements Forge {@link BakedModel#applyTransform} semantics matching
- * upstream ItemDeveloper / BakedModelForTEISR:
+ * GUI-vs-world composite item model (upstream ItemDeveloper / BakedModelForTEISR).
  * <ul>
  *   <li>GUI — flat generated model (energy empty/half/full overrides)</li>
  *   <li>Hand / ground / item-frame — 3D world mesh</li>
  * </ul>
+ *
+ * Loader-neutral: uses vanilla {@link ItemTransforms} rather than loader-specific
+ * model APIs. Forge still dispatches here via BakedModel.applyTransform injection.
  */
 public class ObjCompositeBakedModel implements BakedModel {
 
@@ -55,12 +53,17 @@ public class ObjCompositeBakedModel implements BakedModel {
         return guiModel.getQuads(state, side, rand);
     }
 
-    @Override
+    /**
+     * Same contract as Forge {@code IForgeBakedModel#applyTransform}: apply the
+     * selected sub-model's item transform and return that model for rendering.
+     * Implemented with vanilla {@link ItemTransforms} so this class stays loader-free.
+     */
     public @NotNull BakedModel applyTransform(@NotNull ItemDisplayContext transformType,
                                               @NotNull PoseStack poseStack,
                                               boolean applyLeftHandTransform) {
         BakedModel selected = selectModel(transformType);
-        return selected.applyTransform(transformType, poseStack, applyLeftHandTransform);
+        selected.getTransforms().getTransform(transformType).apply(applyLeftHandTransform, poseStack);
+        return selected;
     }
 
     @Override
