@@ -4,7 +4,8 @@
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.entity.hook-resolver :as hook-resolver]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.platform.loader-hook-support :as hook-support])
   (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
 
 (defn normalize-impl-key
@@ -112,14 +113,16 @@
             :success-label "Registered scripted marker hook"}})
 
 (defn- resolve-scripted-hook-class
-  [{:keys [catalog-impl-key-fn impl-key->hook-class]}
+  [{:keys [catalog-impl-key-fn impl-key->hook-class install-key]}
    {:keys [hook-props hook-id]}]
-  (let [impl-key (or (some-> (:hook-impl-key hook-props) normalize-impl-key)
+  (let [allowed-classes (hook-support/filter-impl-key->hook-class
+                         install-key impl-key->hook-class)
+        impl-key (or (some-> (:hook-impl-key hook-props) normalize-impl-key)
                      (when catalog-impl-key-fn
                        (catalog-impl-key-fn hook-id)))
         hook-class (or (some-> (:hook-class hook-props) str)
                        (when impl-key
-                         (get impl-key->hook-class impl-key)))]
+                         (get allowed-classes impl-key)))]
     (cond-> {:hook-class hook-class}
       impl-key (assoc :hook-impl-key impl-key))))
 

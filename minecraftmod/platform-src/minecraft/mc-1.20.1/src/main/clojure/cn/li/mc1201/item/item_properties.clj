@@ -4,7 +4,7 @@
   Loaders supply a with-owner callback for player-scoped runtime (Forge) or
   a no-op (Fabric)."
   (:require [cn.li.mc1201.runtime.item-callback :as item-callback]
-            [cn.li.mc1201.item.spec :as item-spec])
+            [cn.li.mcbase.item.spec :as item-spec])
   (:import [net.minecraft.world.food FoodProperties$Builder]
            [net.minecraft.world.item Item Item$Properties Rarity]
            [cn.li.mc1201.item NbtBarItem ScriptedItem]))

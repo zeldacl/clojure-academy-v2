@@ -11,7 +11,7 @@
             [cn.li.ac.wireless.data.world-registry :as world-registry]
             [cn.li.ac.wireless.service.commands :as commands]
             [cn.li.ac.wireless.data.world :as world]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.world :as platform-world]))
 
 (use-fixtures :each support-fw/with-fresh-framework)
@@ -102,7 +102,7 @@
         (is (nil? (lookup/get-network-by-ssid wd "dnet")))))))
 
 (deftest world-lifecycle-saved-data-restores-active-world-state-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (let [world-id (test-world :w-lifecycle)
         matrix-cap (stubs/fake-matrix {})
         node-cap (stubs/mutable-node {})
@@ -141,28 +141,28 @@
               (is (= [gen-vb] (node-conn/get-generators conn))))))))))
 
 (deftest world-lifecycle-skips-invalid-saved-wireless-entries-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (let [world-id (test-world :w-lifecycle-corrupt)
-        payload (nbt/create-compound)
-        networks (nbt/create-list)
-        connections (nbt/create-list)]
+        payload (sd/create-structured)
+        networks (sd/create-list)
+        connections (sd/create-list)]
     ;; Entries missing required nested fields (`matrix`, `node`, ...).
     ;; A single corrupt entry must not prevent the world from loading.
-    (nbt/set-int! payload "schemaVersion" 2)
-    (nbt/append! networks (nbt/create-compound))
-    (nbt/append! connections (nbt/create-compound))
-    (nbt/set-tag! payload "networks" networks)
-    (nbt/set-tag! payload "connections" connections)
+    (sd/set-int! payload "schemaVersion" 2)
+    (sd/append! networks (sd/create-structured))
+    (sd/append! connections (sd/create-structured))
+    (sd/set-entry! payload "networks" networks)
+    (sd/set-entry! payload "connections" connections)
     (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
       (is (= restored (world/get-world-data-non-create world-id)))
       (is (empty? (world-registry/networks restored)))
       (is (empty? (world-registry/connections restored))))))
 
 (deftest world-load-rejects-old-schema-with-fresh-state-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (let [world-id (test-world :w-schema-v1)
-        payload (nbt/create-compound)]
-    (nbt/set-int! payload "schemaVersion" 1)
+        payload (sd/create-structured)]
+    (sd/set-int! payload "schemaVersion" 1)
     (let [restored (world/on-world-load world-id (world/create-wi-saved-data nil payload))]
       (is (some? restored))
       (is (empty? (world-registry/networks restored)))

@@ -2,19 +2,19 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.be :as be]
-            [cn.li.mc1201.platform.item-ops :as item-ops]
-            [cn.li.mc1201.platform.player-ops :as player-ops]
-            [cn.li.mc1201.runtime.spi.network-transport :as network-transport-spi]
-            [cn.li.mc1201.platform.world-block-ops :as world-block-ops]
-            [cn.li.mc1201.platform.menu-inventory-ops :as menu-inventory-ops]
+            [cn.li.mcbase.platform.item-ops :as item-ops]
+            [cn.li.mcbase.platform.player-ops :as player-ops]
+            [cn.li.mcbase.runtime.spi.network-transport :as network-transport-spi]
+            [cn.li.mcbase.platform.world-block-ops :as world-block-ops]
+            [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mcmod.runtime.install :as install])
-  (:import [cn.li.mc1201.runtime BlockRegistryShared RuntimeAccessShared]
+  (:import [cn.li.mc1201.runtime BlockRegistry RuntimeAccess]
            [net.minecraft.core BlockPos]
            [net.minecraft.nbt CompoundTag ListTag]
            [net.minecraft.network.chat Component]
@@ -35,7 +35,7 @@
 
 (defn- world-server-session-id-value
   [^Level level]
-  (when-let [sid (RuntimeAccessShared/getWorldServerSessionId level)]
+  (when-let [sid (RuntimeAccess/getWorldServerSessionId level)]
     [:server sid]))
 
 (defn- world-ops-map
@@ -92,36 +92,36 @@
         (world/install-block-state-ops! bs-ops "mc1201 block-state"))
       (log/info "mc1201 block-state ops initialized"))))
 
-(defn- install-nbt! []
-  (install/framework-once! ::nbt-installed
+(defn- install-structured-data! []
+  (install/framework-once! ::structured-data-installed
     (fn []
-      (nbt/install-nbt-ops!
-        {:nbt-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
-         :nbt-get-int       (fn [^CompoundTag this key] (.getInt this (str key)))
-         :nbt-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
-         :nbt-get-string    (fn [^CompoundTag this key] (.getString this (str key)))
-         :nbt-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
-         :nbt-get-boolean   (fn [^CompoundTag this key] (.getBoolean this (str key)))
-         :nbt-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
-         :nbt-get-double    (fn [^CompoundTag this key] (.getDouble this (str key)))
-         :nbt-set-tag!      (fn [^CompoundTag this key tag] (.put this (str key) tag) this)
-         :nbt-get-tag       (fn [^CompoundTag this key] (.get this (str key)))
-         :nbt-get-compound  (fn [^CompoundTag this key] (.getCompound this (str key)))
-         :nbt-get-list      (fn [^CompoundTag this key] (.getList this (str key) 10))
-         :nbt-has-key?      (fn [^CompoundTag this key] (.contains this (str key)))
-         :nbt-set-float!    (fn [^CompoundTag this key value] (.putFloat this (str key) (float value)) this)
-         :nbt-get-float     (fn [^CompoundTag this key] (.getFloat this (str key)))
-         :nbt-set-long!     (fn [^CompoundTag this key value] (.putLong this (str key) (long value)) this)
-         :nbt-get-long      (fn [^CompoundTag this key] (.getLong this (str key)))
-         :nbt-append!       (fn [^ListTag this el] (.add this el) this)
-         :nbt-list-size     (fn [^ListTag this] (.size this))
-         :nbt-list-get      (fn [^ListTag this idx]
-                              (let [i (int idx) n (int (.size this))]
-                                (when (and (>= i 0) (< i n)) (.get this i))))
-         :nbt-list-get-compound (fn [^ListTag this idx]
+      (sd/install-structured-data-ops!
+        {:sd-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
+         :sd-get-int       (fn [^CompoundTag this key] (.getInt this (str key)))
+         :sd-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+         :sd-get-string    (fn [^CompoundTag this key] (.getString this (str key)))
+         :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
+         :sd-get-boolean   (fn [^CompoundTag this key] (.getBoolean this (str key)))
+         :sd-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
+         :sd-get-double    (fn [^CompoundTag this key] (.getDouble this (str key)))
+         :sd-set-entry!    (fn [^CompoundTag this key entry] (.put this (str key) entry) this)
+         :sd-get-entry     (fn [^CompoundTag this key] (.get this (str key)))
+         :sd-get-structured (fn [^CompoundTag this key] (.getCompound this (str key)))
+         :sd-get-list      (fn [^CompoundTag this key] (.getList this (str key) 10))
+         :sd-has-key?      (fn [^CompoundTag this key] (.contains this (str key)))
+         :sd-set-float!    (fn [^CompoundTag this key value] (.putFloat this (str key) (float value)) this)
+         :sd-get-float     (fn [^CompoundTag this key] (.getFloat this (str key)))
+         :sd-set-long!     (fn [^CompoundTag this key value] (.putLong this (str key) (long value)) this)
+         :sd-get-long      (fn [^CompoundTag this key] (.getLong this (str key)))
+         :sd-append!       (fn [^ListTag this el] (.add this el) this)
+         :sd-list-size     (fn [^ListTag this] (.size this))
+         :sd-list-get      (fn [^ListTag this idx]
+                             (let [i (int idx) n (int (.size this))]
+                               (when (and (>= i 0) (< i n)) (.get this i))))
+         :sd-list-get-structured (fn [^ListTag this idx]
                                    (let [i (int idx) n (int (.size this))]
                                      (when (and (>= i 0) (< i n)) (.getCompound this i))))
-         :create-compound   #(CompoundTag.)
+         :create-structured #(CompoundTag.)
          :create-list       #(ListTag.)}
         "mc1201"))))
 
@@ -148,45 +148,45 @@
         :item-get-max-stack-size (fn [^ItemStack this] (.getMaxStackSize this))
         :item-is-equal?          (fn [^ItemStack this ^ItemStack other]
                                   (.is this (.getItem other)))
-        :item-save-to-nbt        (fn [^ItemStack this nbt] (.save this nbt))
-        :item-get-or-create-tag  (fn [^ItemStack this] (.getOrCreateTag this))
-        :item-get-max-damage     (fn [^ItemStack this] (.getMaxDamage this))
-        :item-set-damage!        (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
-        :item-get-damage         (fn [^ItemStack this] (.getDamageValue this))
-        :item-get-item           (fn [^ItemStack this] (.getItem this))
-        :item-get-tag-compound   (fn [^ItemStack this] (.getTag this))
-        :item-split              (fn [^ItemStack this amount] (.split this (int amount)))
-        :item-get-description-id (fn [^Item this] (.getDescriptionId this))
-        :item-get-registry-name  (fn [^Item this] (item-ops/item-registry-name adapter this))
-        :create-item-from-nbt    (fn [nbt-tag] (item-ops/item-stack-of adapter nbt-tag))
-        :create-item-stack-by-id (fn [item-id count] (item-ops/create-item-stack-by-id adapter (str item-id) (int count)))
-        :item-stack-empty?       (fn [stack] (item-ops/item-stack-empty? adapter stack))
-        :item-tag-checker        (fn [^ItemStack stack tag-str]
-                                   (try
-                                     (let [tag-str (str tag-str)
-                                           colon (.indexOf tag-str ":")
-                                           ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
-                                           path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                           rl (ResourceLocation. ns path)
-                                           tag-key (net.minecraft.tags.TagKey/create
-                                                    net.minecraft.core.registries.Registries/ITEM rl)]
-                                       (boolean (.is stack tag-key)))
-                                     (catch Throwable _ false)))
-        :tag-item-resolver       (fn [tag-str count]
-                                   (try
-                                     (let [tag-str (str tag-str)
-                                           colon (.indexOf tag-str ":")
-                                           ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
-                                           path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
-                                           rl (ResourceLocation. ns path)
-                                           tag-key (net.minecraft.tags.TagKey/create
-                                                    net.minecraft.core.registries.Registries/ITEM rl)
-                                           items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
-                                       (when (.hasNext items)
-                                         (let [^Item item (.value ^net.minecraft.core.Holder (.next items))
-                                               stack (ItemStack. item (int count))]
-                                           stack)))
-                                     (catch Throwable _ nil)))}
+        :item-save-to-data         (fn [^ItemStack this data] (.save this data))
+        :item-ensure-custom-data   (fn [^ItemStack this] (.getOrCreateTag this))
+        :item-get-max-damage       (fn [^ItemStack this] (.getMaxDamage this))
+        :item-set-damage!          (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
+        :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))
+        :item-get-item             (fn [^ItemStack this] (.getItem this))
+        :item-get-custom-data      (fn [^ItemStack this] (.getTag this))
+        :item-split                (fn [^ItemStack this amount] (.split this (int amount)))
+        :item-get-description-id   (fn [^Item this] (.getDescriptionId this))
+        :item-get-registry-name    (fn [^Item this] (item-ops/item-registry-name adapter this))
+        :create-item-from-data     (fn [data] (item-ops/item-stack-of adapter data))
+        :create-item-stack-by-id   (fn [item-id count] (item-ops/create-item-stack-by-id adapter (str item-id) (int count)))
+        :item-stack-empty?         (fn [stack] (item-ops/item-stack-empty? adapter stack))
+        :item-in-tag?              (fn [^ItemStack stack tag-str]
+                                     (try
+                                       (let [tag-str (str tag-str)
+                                             colon (.indexOf tag-str ":")
+                                             ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                             path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                             rl (ResourceLocation. ns path)
+                                             tag-key (net.minecraft.tags.TagKey/create
+                                                      net.minecraft.core.registries.Registries/ITEM rl)]
+                                         (boolean (.is stack tag-key)))
+                                       (catch Throwable _ false)))
+        :item-tag-stack-resolver   (fn [tag-str count]
+                                     (try
+                                       (let [tag-str (str tag-str)
+                                             colon (.indexOf tag-str ":")
+                                             ns (if (pos? colon) (.substring tag-str 0 (int colon)) "minecraft")
+                                             path (if (pos? colon) (.substring tag-str (inc (int colon))) tag-str)
+                                             rl (ResourceLocation. ns path)
+                                             tag-key (net.minecraft.tags.TagKey/create
+                                                      net.minecraft.core.registries.Registries/ITEM rl)
+                                             items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
+                                         (when (.hasNext items)
+                                           (let [^Item item (.value ^net.minecraft.core.Holder (.next items))
+                                                 stack (ItemStack. item (int count))]
+                                             stack)))
+                                       (catch Throwable _ nil)))}
        "mc1201")
       (log/info "mc1201 shared item ops initialized"))))
 
@@ -204,7 +204,7 @@
                                 (let [^ItemStack stack (.getMainHandItem this)]
                                   (when-not (.isEmpty stack)
                                     (let [^Item item (.getItem stack)
-                                          placeable? (BlockRegistryShared/isPlaceableBlockItem item)
+                                          placeable? (BlockRegistry/isPlaceableBlockItem item)
                                           item-id (item-ops/item-registry-name adapter item)]
                                       {:placeable? placeable?
                                        :item-id item-id})))
@@ -319,7 +319,7 @@
 
 (defn install-platform-core!
   [adapter]
-  (install-nbt!)
+  (install-structured-data!)
   (install-position! adapter)
   (install-item-protocols! adapter)
   (install-world! adapter)
@@ -330,7 +330,7 @@
 
 (defn install-platform-services!
   [adapter world-fns-map be-fns-map]
-  (install-nbt!)
+  (install-structured-data!)
   (install-position! adapter)
   (install-entity-protocols! adapter)
   (install-item-protocols! adapter)

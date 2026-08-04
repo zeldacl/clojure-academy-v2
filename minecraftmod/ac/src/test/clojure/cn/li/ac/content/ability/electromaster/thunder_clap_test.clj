@@ -166,12 +166,12 @@
 
 (deftest thunder-clap-strikes-the-block-hit-not-the-sky-test
   ;; The bolt was landing ~range blocks along the look vector — up in the air
-  ;; — instead of at the aimed block. RaycastShared.raycastBlocks did not put
+  ;; — instead of at the aimed block. Raycast.raycastBlocks did not put
   ;; a "hit-type" (only the combined variants did), so attack/hit-kind
   ;; classified every real block hit as :miss and resolve-raycast-target took
   ;; the eye+look*range fallback every time.
   ;;
-  ;; The fixture below is the exact key set RaycastShared.raycastBlocks puts:
+  ;; The fixture below is the exact key set Raycast.raycastBlocks puts:
   ;; hit-type, x/y/z (block pos), hit-x/hit-y/hit-z (precise), block-id, face,
   ;; distance. Tests that invent a friendlier shape are what let this ship.
   (let [block-hit {:hit-type :block

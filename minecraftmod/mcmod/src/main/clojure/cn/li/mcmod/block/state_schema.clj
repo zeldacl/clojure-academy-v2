@@ -11,7 +11,7 @@
   behaviour."
   (:require [cn.li.mcmod.platform.world :as platform-world]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.nbt.dsl :as nbt-dsl]
             [cn.li.mcmod.block.inventory-helpers :as inv-helpers]
@@ -161,7 +161,7 @@
               (let [nk (:nbt-key spec)]
                 (if-let [load-fn (:load-fn spec)]
                   (assoc state k (load-fn tag nk dflt))
-                  (if (nbt/has-key-safe? tag nk)
+                  (if (sd/has-key-safe? tag nk)
                     (if-let [reader (get nbt-readers (:type spec))]
                       (assoc state k (reader tag nk))
                       (assoc state k dflt))

@@ -1,6 +1,6 @@
 package cn.li.mc1201.client.render.effect;
 
-import cn.li.mc1201.util.ResourceLocations;
+import cn.li.mcver.ResourceLocations;
 
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import com.mojang.blaze3d.vertex.PoseStack;

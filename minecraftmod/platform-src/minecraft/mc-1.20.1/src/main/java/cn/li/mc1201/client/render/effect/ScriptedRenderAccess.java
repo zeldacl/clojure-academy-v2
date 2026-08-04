@@ -1,9 +1,9 @@
 package cn.li.mc1201.client.render.effect;
 
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
-import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
-import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
+import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
+import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.world.entity.Entity;
 
 import java.lang.reflect.Field;

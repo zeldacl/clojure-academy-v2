@@ -76,7 +76,7 @@
        (let [min-count (int (or (:count item-spec) 1))]
          (and (>= (stack-count stack) min-count)
               (or (when-let [tag (:tag item-spec)]
-                    (pitem/in-tag? stack tag))
+                    (pitem/in-item-tag? stack tag))
                   (let [expected-id (normalize-item-id (:item item-spec))
                         actual-id (item-id-from-stack stack)]
                     (and expected-id
@@ -89,7 +89,7 @@
         count (int (or (:count output) 1))]
     (when (pos? count)
       (or (when-let [tag (:tag output)]
-            (pitem/stack-from-tag tag count))
+            (pitem/stack-from-item-tag tag count))
           (when-let [item-id (normalize-item-id (:item output))]
             (pitem/stack-by-id item-id count))))))
 
@@ -325,7 +325,7 @@
       (let [items-compatible?
             (or (when-let [tag (:tag output-spec)]
                   ;; Tag-based output: check if existing item also belongs to the same tag
-                  (pitem/in-tag? output-slot-item tag))
+                  (pitem/in-item-tag? output-slot-item tag))
                 (try (pitem/same? output-slot-item result-stack)
                      (catch Exception _ false)))]
         (and items-compatible?

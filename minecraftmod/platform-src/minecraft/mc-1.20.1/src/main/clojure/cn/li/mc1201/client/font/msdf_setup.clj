@@ -5,7 +5,7 @@
   builds the isolated MSDF FontSet used by CGUI text rendering.
 
   Init is retried until both the font face and msdf_text shader are ready."
-  (:require [cn.li.mc1201.client.font.system-font-detector :as detector]
+  (:require [cn.li.mcbase.client.font.system-font-detector :as detector]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.client.font.msdf MsdfFontManager]))
 

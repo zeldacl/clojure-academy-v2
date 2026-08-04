@@ -43,5 +43,6 @@ platform-src/loader/*/src/generated/
 gradle
 .gradle
 .clj-kondo/.cache
+platform-src/**/.clj-kondo/
 .lsp
 _upstream

@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.datagen.lang-provider-shell
   "Shared DataProvider shell that emits all merged language files."
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mc1201.datagen.lang-provider-core :as lang-core]
-            [cn.li.mc1201.datagen.gson-util :as gson-util])
+            [cn.li.mcbase.datagen.lang-provider-core :as lang-core]
+            [cn.li.mcbase.datagen.gson-util :as gson-util])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]

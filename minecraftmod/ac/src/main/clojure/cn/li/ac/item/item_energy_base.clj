@@ -9,7 +9,7 @@
   (:require [cn.li.ac.energy.imag-energy-item :as energy-item]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ============================================================================
@@ -54,8 +54,8 @@
           registry-id (some-> item-obj item/registry-name str)
           expected-energy-id (str modid/mod-id ":energy_unit")
           expected-portable-id (str modid/mod-id ":developer_portable")
-          nbt-data (item/tag-compound item-stack)
-          nbt-type (when nbt-data (nbt/get-string nbt-data "batteryType"))]
+          nbt-data (item/custom-data item-stack)
+          nbt-type (when nbt-data (sd/get-string nbt-data "batteryType"))]
       (or (when (seq nbt-type) (keyword nbt-type))
           (cond
             (= registry-id expected-energy-id) :energy-unit

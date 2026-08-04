@@ -3,35 +3,60 @@
   "defaultTarget": "forge-1.20.1",
   "javaBaseline": 17,
   "buildProfiles": {
-    "loom-1.13-gradle-8.8": {
+    "mc1201-loom-1.13-gradle-8.8": {
       "gradleVersion": "8.8",
       "wrapper": "root",
       "gradleJvmVersion": 21,
-      "loomVersion": "1.13.467",
+      "loomVersion": "1.13.469",
+      "clojurephantVersion": "0.9.1",
+      "shadowVersion": "8.1.1"
+    },
+    "mc1211-loom-1.13-gradle-8.8": {
+      "gradleVersion": "8.8",
+      "wrapper": "root",
+      "gradleJvmVersion": 21,
+      "loomVersion": "1.13.469",
       "clojurephantVersion": "0.9.1",
       "shadowVersion": "8.1.1"
     }
   },
   "components": {
+    "minecraft-base": {
+      "kind": "minecraft-shared",
+      "source": "platform-src/minecraft/base/src/main"
+    },
     "minecraft-1.20.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.20.1",
       "source": "platform-src/minecraft/mc-1.20.1/src/main"
     },
+    "minecraft-1.21.1": {
+      "kind": "minecraft",
+      "minecraftVersion": "1.21.1",
+      "source": "platform-src/minecraft/mc-1.21.1/src/main"
+    },
     "forge-1.20.1": {
       "kind": "loader",
       "loader": "forge",
       "minecraftVersion": "1.20.1",
-      "source": "platform-src/loader/forge/src/main",
-      "tests": "platform-src/loader/forge/src/test",
+      "source": "platform-src/loader/forge-1.20.1/src/main",
+      "tests": "platform-src/loader/forge-1.20.1/src/test",
       "runtimeAotEntrypoint": "cn.li.forge1201.mod"
     },
     "fabric-1.20.1": {
       "kind": "loader",
       "loader": "fabric",
       "minecraftVersion": "1.20.1",
-      "source": "platform-src/loader/fabric/src/main",
+      "source": "platform-src/loader/fabric-1.20.1/src/main",
       "runtimeAotEntrypoint": "cn.li.fabric1201.mod"
+    },
+    "neoforge-1.21.1": {
+      "kind": "loader",
+      "loader": "neoforge",
+      "minecraftVersion": "1.21.1",
+      "source": "platform-src/loader/neoforge-1.21.1/src/main",
+      "tests": "platform-src/loader/neoforge-1.21.1/src/test",
+      "runtimeAotEntrypoint": "cn.li.neoforge1211.mod"
     },
     "platform-test-support": {
       "kind": "test-support",
@@ -43,7 +68,7 @@
       "id": "core",
       "loader": "none",
       "minecraftVersion": null,
-      "buildProfile": "loom-1.13-gradle-8.8",
+      "buildProfile": "mc1201-loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 21,
@@ -62,7 +87,7 @@
       "id": "forge-1.20.1",
       "loader": "forge",
       "minecraftVersion": "1.20.1",
-      "buildProfile": "loom-1.13-gradle-8.8",
+      "buildProfile": "mc1201-loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 21,
@@ -71,6 +96,7 @@
       ],
       "contentProjects": ["ac"],
       "sourceComponents": [
+        "minecraft-base",
         "minecraft-1.20.1",
         "forge-1.20.1"
       ],
@@ -106,7 +132,7 @@
         "jeiCommonApi": "mezz.jei:jei-1.20.1-common-api:15.20.0.112",
         "jeiForgeApi": "mezz.jei:jei-1.20.1-forge-api:15.20.0.112",
         "jeiForgeRuntime": "mezz.jei:jei-1.20.1-forge:15.20.0.112",
-        "sparkRuntimeFile": "platform-src/loader/forge/libs/spark-1.10.53-forge.jar"
+        "sparkRuntimeFile": "platform-src/loader/forge-1.20.1/libs/spark-1.10.53-forge.jar"
       },
       "datagenParityGroup": "mc-1201",
       "entrypoint": {
@@ -122,7 +148,7 @@
       "id": "fabric-1.20.1",
       "loader": "fabric",
       "minecraftVersion": "1.20.1",
-      "buildProfile": "loom-1.13-gradle-8.8",
+      "buildProfile": "mc1201-loom-1.13-gradle-8.8",
       "gradleJvmVersion": 21,
       "compileJavaVersion": 17,
       "runtimeJavaVersion": 21,
@@ -131,6 +157,7 @@
       ],
       "contentProjects": ["ac"],
       "sourceComponents": [
+        "minecraft-base",
         "minecraft-1.20.1",
         "fabric-1.20.1"
       ],
@@ -168,6 +195,61 @@
       "artifact": {
         "baseName": "academy-fabric",
         "classifier": "fabric-1.20.1"
+      }
+    },
+    "neoforge-1.21.1": {
+      "id": "neoforge-1.21.1",
+      "loader": "neoforge",
+      "minecraftVersion": "1.21.1",
+      "buildProfile": "mc1211-loom-1.13-gradle-8.8",
+      "gradleJvmVersion": 21,
+      "compileJavaVersion": 21,
+      "runtimeJavaVersion": 21,
+      "contentModules": [
+        {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
+      ],
+      "contentProjects": ["ac"],
+      "sourceComponents": [
+        "minecraft-base",
+        "minecraft-1.21.1",
+        "neoforge-1.21.1"
+      ],
+      "testComponents": [
+        "platform-test-support",
+        "neoforge-1.21.1"
+      ],
+      "capabilities": [
+        "loader-entrypoint",
+        "client-entrypoint",
+        "datagen-entrypoint",
+        "minecraft-runtime",
+        "registry",
+        "network",
+        "gui",
+        "capability"
+      ],
+      "capabilityOwners": {
+        "loader-entrypoint": ["neoforge-1.21.1"],
+        "client-entrypoint": ["neoforge-1.21.1"],
+        "datagen-entrypoint": ["neoforge-1.21.1"],
+        "minecraft-runtime": ["minecraft-1.21.1"],
+        "registry": ["neoforge-1.21.1"],
+        "network": ["neoforge-1.21.1"],
+        "gui": ["neoforge-1.21.1"],
+        "capability": ["neoforge-1.21.1"]
+      },
+      "dependencies": {
+        "minecraft": "com.mojang:minecraft:1.21.1",
+        "loader": "net.neoforged:neoforge:21.1.248"
+      },
+      "datagenParityGroup": "mc-1211",
+      "entrypoint": {
+        "namespace": "cn.li.neoforge1211.platform.init",
+        "function": "init-platform!"
+      },
+      "artifact": {
+        "baseName": "academy-neoforge",
+        "classifier": "neoforge-1.21.1"
       }
     }
   }

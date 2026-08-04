@@ -3,9 +3,9 @@ import groovy.json.JsonOutput
 import org.gradle.internal.os.OperatingSystem
 
 plugins {
-    id "dev.architectury.loom" version "1.13.469" apply false
-    id "dev.clojurephant.clojure" version "0.9.1" apply false
-    id "com.github.johnrengelman.shadow" version "8.1.1" apply false
+    id "dev.architectury.loom" apply false
+    id "dev.clojurephant.clojure" apply false
+    id "com.github.johnrengelman.shadow" apply false
 }
 
 ext {
@@ -28,6 +28,7 @@ allprojects {
         maven { url "https://maven.architectury.dev/" }
         maven { url "https://maven.fabricmc.net/" }
         maven { url "https://maven.minecraftforge.net" }
+        maven { url "https://maven.neoforged.net/releases/" }
         maven { url "https://repo.clojars.org" }
         maven {
             url = "https://maven.blamejared.com"
@@ -453,7 +454,7 @@ tasks.register("compareDatagenParityManifests") {
 
 tasks.register("verifyNeutralClojureNoMinecraftApis") {
     group = "verification"
-    description = "Fail if ac/mcmod Clojure sources import or reference Minecraft/Forge/Fabric/NeoForge APIs."
+    description = "Fail if ac/mcmod Clojure sources or build.gradle files import or reference Minecraft/Forge/Fabric/NeoForge APIs."
     doLast {
         def roots = [
             file("ac/src/main/clojure"),
@@ -461,7 +462,7 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
             file("mcmod/src/main/clojure"),
             file("mcmod/src/test/clojure")
         ].findAll { it.directory }
-        // Real API refs look like net.minecraft.Foo â€” docstrings saying "net.minecraft.*" do not match.
+        // Real API refs look like net.minecraft.Foo ?docstrings saying "net.minecraft.*" do not match.
         def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
         def violations = []
         roots.each { File root ->
@@ -504,6 +505,25 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
                 }
             }
         }
+        // Also ban loader coordinates in neutral-module build scripts.
+        def gradleForbidden = ~/net\.(minecraftforge|fabricmc|neoforged):/
+        ["ac/build.gradle", "mcmod/build.gradle"].each { String path ->
+            def gradleFile = file(path)
+            if (!gradleFile.isFile()) {
+                return
+            }
+            gradleFile.eachLine { String line, int idx ->
+                def code = line
+                def lineComment = code.indexOf("//")
+                if (lineComment >= 0) {
+                    code = code.substring(0, lineComment)
+                }
+                def matcher = gradleForbidden.matcher(code)
+                while (matcher.find()) {
+                    violations << "${gradleFile}:${idx + 1}: ${matcher.group()}"
+                }
+            }
+        }
         if (!violations.isEmpty()) {
             throw new GradleException(
                 "Neutral layers (ac/mcmod) must not reference Minecraft/loader APIs.\n" +
@@ -513,6 +533,84 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
                 (violations.size() > 40 ? "\n... and ${violations.size() - 40} more" : ""))
         }
         logger.lifecycle("[verifyNeutralClojureNoMinecraftApis] ok ({} roots)", roots.size())
+    }
+}
+
+tasks.register("verifyVersionSeamParity") {
+    group = "verification"
+    description = "Ensure each target has at most one MC version component and version-seam members match across versions."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def components = catalog.components ?: [:]
+        def problems = []
+
+        catalog.targets.each { targetId, target ->
+            def versionComponents = (target.sourceComponents ?: []).findAll { componentId ->
+                def component = components[componentId.toString()]
+                component != null && component.kind?.toString() == "minecraft"
+            }
+            if (versionComponents.size() > 1) {
+                problems << "${targetId}: multiple minecraft version components ${versionComponents}"
+            }
+        }
+
+        def baseComponent = components.values().find { it.kind?.toString() == "minecraft-shared" }
+        if (baseComponent?.source) {
+            def baseRoot = file(baseComponent.source.toString())
+            def forbiddenNs = ~/cn\.li\.mc(1201|1211)\./
+            ["**/*.clj", "**/*.cljc", "**/*.java"].each { pattern ->
+                if (!baseRoot.directory) {
+                    return
+                }
+                fileTree(baseRoot) { include pattern }.each { File src ->
+                    src.eachLine { String line, int idx ->
+                        if (forbiddenNs.matcher(line).find()) {
+                            problems << "minecraft-base must not reference version namespaces: ${src}:${idx + 1}"
+                        }
+                    }
+                }
+            }
+        }
+
+        def seamSets = [:]
+        components.each { componentId, component ->
+            if (component.kind?.toString() != "minecraft" || !component.source) {
+                return
+            }
+            def root = file(component.source.toString())
+            def seamRoot = new File(root, "java/cn/li/mcver")
+            def names = new TreeSet()
+            if (seamRoot.directory) {
+                fileTree(seamRoot) {
+                    include "**/*.java"
+                }.each { File src ->
+                    def rel = seamRoot.toPath().relativize(src.toPath()).toString().replace("\\", "/")
+                    names << rel.replaceAll(/\.java$/, "").replace("/", ".")
+                }
+            }
+            def cljSeam = new File(root, "clojure/cn/li/mcver")
+            if (cljSeam.directory) {
+                fileTree(cljSeam) { include "**/*.clj" }.each { File src ->
+                    def rel = cljSeam.toPath().relativize(src.toPath()).toString().replace("\\", "/")
+                    names << rel.replaceAll(/\.clj$/, "").replace("/", ".").replace("_", "-")
+                }
+            }
+            seamSets[componentId.toString()] = names
+        }
+
+        def reference = seamSets.find { k, v -> !v.isEmpty() }
+        if (reference != null) {
+            seamSets.each { componentId, names ->
+                if (names != reference.value) {
+                    problems << "version seam mismatch for ${componentId}: expected ${reference.value}, found ${names}"
+                }
+            }
+        }
+
+        if (!problems.isEmpty()) {
+            throw new GradleException("verifyVersionSeamParity failed:\n" + problems.take(40).join("\n"))
+        }
+        logger.lifecycle("[verifyVersionSeamParity] ok ({} version components)", seamSets.size())
     }
 }
 
@@ -529,7 +627,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyTargetBuildEntrypoints",
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
-              "verifyNeutralClojureNoMinecraftApis"
+              "verifyNeutralClojureNoMinecraftApis",
+              "verifyVersionSeamParity"
 }
 
 tasks.register("verifySyntheticNeoForgeTarget") {
@@ -559,6 +658,8 @@ tasks.register("verifyBuildProfiles") {
         def rootVersion = (wrapperText =~ /gradle-([0-9.]+)-bin\.zip/).find() ?
             ((wrapperText =~ /gradle-([0-9.]+)-bin\.zip/)[0][1]) : null
         def problems = []
+        def clojurephantVersions = new LinkedHashSet()
+        def shadowVersions = new LinkedHashSet()
         (catalog.buildProfiles ?: [:]).each { profileId, profile ->
             if (profile.wrapper == "root" && profile.gradleVersion.toString() != rootVersion) {
                 problems << "${profileId}: declared Gradle ${profile.gradleVersion} but root wrapper is ${rootVersion}"
@@ -566,6 +667,37 @@ tasks.register("verifyBuildProfiles") {
             if (profile.wrapper != "root" && !profile.fixture && !file(profile.wrapper.toString()).exists()) {
                 problems << "${profileId}: missing isolated wrapper ${profile.wrapper}"
             }
+            if (!profile.fixture && !profile.loomVersion) {
+                problems << "${profileId}: must declare loomVersion"
+            }
+            if (!profile.fixture && !profile.clojurephantVersion) {
+                problems << "${profileId}: must declare clojurephantVersion"
+            }
+            if (!profile.fixture && !profile.shadowVersion) {
+                problems << "${profileId}: must declare shadowVersion"
+            }
+            if (!profile.fixture && profile.clojurephantVersion) {
+                clojurephantVersions << profile.clojurephantVersion.toString()
+            }
+            if (!profile.fixture && profile.shadowVersion) {
+                shadowVersions << profile.shadowVersion.toString()
+            }
+        }
+        if (clojurephantVersions.size() > 1) {
+            problems << "clojurephantVersion must be identical across all non-fixture profiles; found ${clojurephantVersions}"
+        }
+        if (shadowVersions.size() > 1) {
+            problems << "shadowVersion must be identical across all non-fixture profiles; found ${shadowVersions}"
+        }
+        def rootBuildText = file("build.gradle").text
+        if (rootBuildText =~ /id\s+[\"']dev\.architectury\.loom[\"']\s+version\s+/) {
+            problems << "build.gradle must not hardcode Architectury Loom version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
+        }
+        if (rootBuildText =~ /id\s+[\"']dev\.clojurephant\.clojure[\"']\s+version\s+/) {
+            problems << "build.gradle must not hardcode clojurephant version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
+        }
+        if (rootBuildText =~ /id\s+[\"']com\.github\.johnrengelman\.shadow[\"']\s+version\s+/) {
+            problems << "build.gradle must not hardcode shadow version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
         }
         if (!problems.isEmpty()) throw new GradleException("Invalid build profiles:\n" + problems.join("\n"))
     }
@@ -610,7 +742,7 @@ tasks.register("verifySingleApiBoundary") {
 }
 
 // ============================================================================
-// clj-kondo native static lint â€” packaging gate via compileClojure
+// clj-kondo native static lint ?packaging gate via compileClojure
 // ============================================================================
 
 def cljKondoVersion = "2025.10.15"

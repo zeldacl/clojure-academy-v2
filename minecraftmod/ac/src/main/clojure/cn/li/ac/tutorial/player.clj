@@ -12,7 +12,7 @@
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "ac_tutorial_v2")
@@ -27,28 +27,28 @@
 
 (defn- load-state
   [tag]
-  (when (nbt/has-key-safe? tag nbt-key)
-    (let [root (nbt/get-compound tag nbt-key)]
-      (when (= schema-version (nbt/get-int root "schema"))
+  (when (sd/has-key-safe? tag nbt-key)
+    (let [root (sd/get-structured tag nbt-key)]
+      (when (= schema-version (sd/get-int root "schema"))
         {:activated-tuts (nbt-coll/read-keyword-set root "activated")
          :condition-flags (nbt-coll/read-int-set root "conditions")
-         :misaka-id (when (nbt/get-boolean root "has_misaka")
-                      (nbt/get-int root "misaka"))
-         :first-open? (nbt/get-boolean root "first_open")
+         :misaka-id (when (sd/get-boolean root "has_misaka")
+                      (sd/get-int root "misaka"))
+         :first-open? (sd/get-boolean root "first_open")
          :dirty? false}))))
 
 (defn- save-state!
   [tag state]
-  (let [root (nbt/create-compound)
+  (let [root (sd/create-structured)
         misaka-id (:misaka-id state)]
-    (nbt/set-int! root "schema" schema-version)
+    (sd/set-int! root "schema" schema-version)
     (nbt-coll/write-keyword-set! root "activated" (:activated-tuts state))
     (nbt-coll/write-int-set! root "conditions" (:condition-flags state))
-    (nbt/set-boolean! root "has_misaka" (some? misaka-id))
+    (sd/set-boolean! root "has_misaka" (some? misaka-id))
     (when (some? misaka-id)
-      (nbt/set-int! root "misaka" (int misaka-id)))
-    (nbt/set-boolean! root "first_open" (boolean (:first-open? state)))
-    (nbt/set-tag! tag nbt-key root)))
+      (sd/set-int! root "misaka" (int misaka-id)))
+    (sd/set-boolean! root "first_open" (boolean (:first-open? state)))
+    (sd/set-entry! tag nbt-key root)))
 
 ;; --- Public API ---
 

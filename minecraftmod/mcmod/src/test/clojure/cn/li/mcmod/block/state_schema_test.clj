@@ -1,7 +1,7 @@
 (ns cn.li.mcmod.block.state-schema-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.block.state-schema :as schema]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
@@ -23,7 +23,7 @@
         writer-str (fn [tag k v] (swap! tag assoc k v))]
     (with-redefs [schema/nbt-readers {:int reader-int :string reader-str}
                   schema/nbt-writers {:int writer-int :string writer-str}
-                  nbt/has-key-safe? (fn [_ k] (#{"energy" "name"} k))]
+                  sd/has-key-safe? (fn [_ k] (#{"energy" "name"} k))]
       (testing "schema->load-fn reads persisted fields and keeps defaults for non-persisted"
         (is (= {:energy 9 :name "abc" :temp 1 :x 11}
                (load-fn :tag))))

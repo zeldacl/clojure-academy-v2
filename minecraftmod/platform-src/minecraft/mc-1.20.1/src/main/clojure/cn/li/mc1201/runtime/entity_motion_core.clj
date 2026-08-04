@@ -3,7 +3,7 @@
   (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.entity ScriptedBlockBodyEntity]
-           [cn.li.mc1201.runtime WorldEntityShared]
+           [cn.li.mc1201.runtime WorldEntity]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
@@ -89,7 +89,7 @@
 (defn power-creeper-for-entity!
   [^ServerLevel level ^Entity entity]
   (when (and level entity)
-    (boolean (WorldEntityShared/tryPowerCreeper level entity))))
+    (boolean (WorldEntity/tryPowerCreeper level entity))))
 
 (defn resolve-entity
   [^MinecraftServer server world-id entity-uuid]

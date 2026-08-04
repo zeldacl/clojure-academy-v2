@@ -1,8 +1,8 @@
 package cn.li.mc1201.entity;
 
-import cn.li.mc1201.util.ResourceLocations;
+import cn.li.mcver.ResourceLocations;
 
-import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
+import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;

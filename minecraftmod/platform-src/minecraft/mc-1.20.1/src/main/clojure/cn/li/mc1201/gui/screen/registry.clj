@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.gui.screen.registry
   "Shared dispatcher for platform GUI screen factory registration."
   (:require [cn.li.mc1201.gui.screen.impl :as screen-core]
-            [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
+            [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.mcmod.gui.registry :as gui-reg]
             [cn.li.mcmod.util.log :as log]))
 

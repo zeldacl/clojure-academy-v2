@@ -8,7 +8,7 @@
             [cn.li.ac.energy.imag-energy-item :as energy-item]
             [cn.li.ac.item.item-energy-base :as energy-base]
             [cn.li.mcmod.platform.item :as item]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.structured-data :as sd]))
 
 ;; ============================================================================
 ;; Support check — aligns with IFItemManager.isSupported()
@@ -27,9 +27,9 @@
   "Read current energy from an item stack."
   [item-stack]
   (if (is-energy-item-supported? item-stack)
-    (let [nbt-data (item/tag-compound item-stack)]
+    (let [nbt-data (item/custom-data item-stack)]
       (if nbt-data
-        (nbt/get-double nbt-data "energy")
+        (sd/get-double nbt-data "energy")
         0.0))
     0.0))
 
@@ -60,11 +60,11 @@
           clamped-energy (min max-energy (max 0.0 amount))
           bandwidth (energy-item/get-bandwidth config)
           battery-type (name (energy-base/get-energy-item-type item-stack))
-          tag (item/get-or-create-tag item-stack)]
-      (nbt/set-double! tag "energy" clamped-energy)
-      (nbt/set-double! tag "maxEnergy" max-energy)
-      (nbt/set-double! tag "bandwidth" bandwidth)
-      (nbt/set-string! tag "batteryType" battery-type))
+          tag (item/ensure-custom-data item-stack)]
+      (sd/set-double! tag "energy" clamped-energy)
+      (sd/set-double! tag "maxEnergy" max-energy)
+      (sd/set-double! tag "bandwidth" bandwidth)
+      (sd/set-string! tag "batteryType" battery-type))
     nil))
 
 ;; ============================================================================

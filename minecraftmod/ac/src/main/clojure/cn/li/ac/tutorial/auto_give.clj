@@ -10,7 +10,7 @@
             [cn.li.ac.tutorial.config :as tut-config]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
@@ -26,7 +26,7 @@
 
 (defn- tutorial-acquired-in-nbt?
   [tag]
-  (and (nbt/has-key-safe? tag nbt-key) (nbt/get-boolean tag nbt-key)))
+  (and (sd/has-key-safe? tag nbt-key) (sd/get-boolean tag nbt-key)))
 
 (defn auto-give-on-login!
   "Check NBT flag directly (matching upstream @SerializeIncluded boolean).
@@ -38,7 +38,7 @@
         (try
           (when-let [stack (pitem/stack-by-id tutorial-item-id 1)]
             (entity/player-give-item-stack! player stack)
-            (nbt/set-boolean! tag nbt-key true)
+            (sd/set-boolean! tag nbt-key true)
             (log/info "Tutorial item auto-given to player" {:uuid (uuid/player-uuid player)}))
           (catch Exception e
             (log/warn "Failed to auto-give tutorial item:" (ex-message e))))))))

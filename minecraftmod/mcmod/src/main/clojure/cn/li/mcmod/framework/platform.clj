@@ -4,7 +4,7 @@
    Replaces the defprotocol + ^:dynamic *runtime* + alter-var-root pattern
    with plain function maps stored in the framework atom.
 
-   Each platform domain (e.g. :world-ops, :nbt-ops, :entity-damage) is a
+   Each platform domain (e.g. :world-ops, :structured-data-ops, :entity-damage) is a
    plain Clojure map of {:operation-key (fn [args] ...), ...}.
 
    Benefits over defprotocol + dynamic var:
@@ -21,7 +21,7 @@
 
    Args:
      fw          — framework atom instance
-     adapter-key — keyword identifying the adapter, e.g. :world-ops, :nbt-ops
+     adapter-key — keyword identifying the adapter, e.g. :world-ops, :structured-data-ops
      impl-map    — plain map of {:operation-key (fn [args] ...), ...}"
   [fw adapter-key impl-map]
   (swap! fw assoc-in [:platform adapter-key] impl-map)

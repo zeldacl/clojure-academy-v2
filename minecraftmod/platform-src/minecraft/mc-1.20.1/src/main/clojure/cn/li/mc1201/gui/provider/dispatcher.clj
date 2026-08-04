@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.gui.provider.dispatcher
   "Shared GUI provider callback dispatcher used by Forge/Fabric wrappers."
   (:require [cn.li.mc1201.gui.provider.common :as provider-common]
-            [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
+            [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))

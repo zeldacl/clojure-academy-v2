@@ -1,6 +1,6 @@
 (ns cn.li.ac.integration.block.energy-converter.base
   (:require [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.ac.integration.block.energy-converter.schema :as ec-schema])
   (:import [cn.li.mcmod.energy IEnergyCapable]))
@@ -21,8 +21,8 @@
 (defn read-nbt-fn
   [tag]
   (merge (ec-schema/default-state-map)
-         {:energy (if (nbt/has-key-safe? tag "Energy")
-                    (nbt/get-double tag "Energy")
+         {:energy (if (sd/has-key-safe? tag "Energy")
+                    (sd/get-double tag "Energy")
                     0.0)
           :max-energy (double (ec-config/energy-capacity))
           :wireless-bandwidth (double (ec-config/transfer-bandwidth))}))
@@ -30,9 +30,9 @@
 (defn write-nbt-fn
   [be tag]
   (let [state (or (platform-be/get-custom-state be) (ec-schema/default-state-map))]
-    (nbt/set-double! tag "Energy" (double (get-energy be)))
-    (nbt/set-double! tag "MaxEnergy" (double (ec-config/energy-capacity)))
-    (nbt/set-double! tag "WirelessBandwidth" (double (ec-config/transfer-bandwidth)))))
+    (sd/set-double! tag "Energy" (double (get-energy be)))
+    (sd/set-double! tag "MaxEnergy" (double (ec-config/energy-capacity)))
+    (sd/set-double! tag "WirelessBandwidth" (double (ec-config/transfer-bandwidth)))))
 
 (deftype ConverterEnergyImpl [be can-recv? can-ext?]
   IEnergyCapable

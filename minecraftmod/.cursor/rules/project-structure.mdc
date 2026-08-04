@@ -10,15 +10,23 @@ Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overvi
 - **Top-level layout**
   - `minecraftmod/` is the Gradle root for this mod (`settings.gradle` includes subprojects).
   - **`api`** — outward-facing Java API (interop surfaces); no Clojure game logic.
-  - **`mcmod`** — platform-neutral foundation: protocols, DSLs, metadata, utilities (no Forge/Fabric or `net.minecraft.*`).
+  - **`mcmod`** — platform-neutral foundation: protocols, DSLs, metadata, utilities (no Forge/Fabric/NeoForge or `net.minecraft.*`).
   - **`ac`** — platform-neutral game content and domain logic; depends on `mcmod` only (plus `api` where needed).
-  - **`forge-1.20.1`** — Forge adapter: `@Mod`, registration, Java bridges, implements `mcmod` protocols.
-  - **`fabric-1.20.1`** — optional Fabric adapter; may be omitted from root `settings.gradle` (default `include` commented).
+  - **`:platform`** — single catalog-driven platform project. Select a target with `scripts/target-gradle.ps1 <target-id>`; do **not** add root `forge-1.20.1/` / `fabric-1.20.1/` / `neoforge-1.21.1/` Gradle modules.
+
+- **Platform source (`platform-src/`, assembled by `platform-catalog.json`)**
+  - **`minecraft/base/`** — `minecraft-base` component (`cn.li.mcbase.*`): version-agnostic Minecraft glue (entity specs, platform ops, runtime SPIs, datagen helpers). Must not reference `cn.li.mc1201` / `cn.li.mc1211`.
+  - **`minecraft/mc-1.20.1/`** — `minecraft-1.20.1` (`cn.li.mc1201.*` + `cn.li.mcver.*` downgrade seam).
+  - **`minecraft/mc-1.21.1/`** — `minecraft-1.21.1` (`cn.li.mc1211.*` + `cn.li.mcver.*` contract-shaped seam).
+  - **`loader/forge-1.20.1/`** — Forge entrypoints, `mods.toml`, events, registration (`cn.li.forge1201.*`).
+  - **`loader/fabric-1.20.1/`** — Fabric entrypoints, `fabric.mod.json`, events (`cn.li.fabric1201.*`).
+  - **`loader/neoforge-1.21.1/`** — NeoForge entrypoints, `neoforge.mods.toml`, events (`cn.li.neoforge1211.*`).
+  - Version seam docs: `docs/dev/MC_VERSION_SEAM.md`. Gate: `verifyVersionSeamParity`.
 
 - **mcmod (foundation)**
   - Clojure under `mcmod/src/main/clojure/cn/li/mcmod/...` with namespaces **`cn.li.mcmod.*`**.
   - Domain areas include: `block` (dsl, tile_dsl, tile_logic), `client` (obj, render), `events`, `gui` (api, cgui, container, core, dsl, network, …), `inventory`, `item` (dsl), `nbt` (dsl), `network`, `platform`, `registry`, `util`, etc.
-  - No direct Forge/Fabric/Minecraft API imports; Clojure + data libs only.
+  - No direct Forge/Fabric/NeoForge/Minecraft API imports; Clojure + data libs only.
   - No `src/main/resources` in this module (per `build.gradle`).
 
 - **ac (game content)**
@@ -27,19 +35,16 @@ Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overvi
   - **Terminal** (`ac/.../terminal/`): server `model`, `catalog`, `player`, `network`; client `client/shell`, `client/runtime`, `client/apps`, `client/actions` (sole `requiring-resolve` entry). See `docs/04-systems/TERMINAL_SYSTEM_MAINTENANCE.md`.
   - **Wireless** (`ac/.../wireless/`): public `api`; `service.commands` / `service.queries`; `domain.topology` / `domain.transfer`; `data.world-registry` (`transact!`); `data.world` lifecycle-only. See `docs/05-wireless/WIRELESS_REFACTOR_CONTRACTS.md`.
   - **Ability** (`ac/ability/`, `ac/content/ability/`): **reducer-only** — all player-state writes via `command-runtime` → `reducer` → `runtime-store` only; `context-dispatcher` (`:as ctx`) for lifecycle/merged reads; `context-skill-state` for skill-state writes; no `context-registry` facade, no `:sync-*-data` commands, no `update-context!`. See `docs/04-systems/ABILITY_SYSTEM_MAINTENANCE.md`.
-  - Depends on `mcmod`; uses mcmod DSLs/metadata; **must not** import Forge/Fabric/`net.minecraft.*`.
+  - Depends on `mcmod`; uses mcmod DSLs/metadata; **must not** import Forge/Fabric/NeoForge/`net.minecraft.*`.
   - Shared assets: `ac/src/main/resources` (e.g. `assets/academy/`, `data/academy/`).
 
-- **Platform modules (`forge-1.20.1`, optional `fabric-1.20.1`)**
-  - `src/main/java` — loader entrypoints and Java-only glue.
-  - Clojure adapters: `forge-1.20.1/src/main/clojure/cn/li/forge1201/...` → **`cn.li.forge1201.*`** (and similarly `cn.li.fabric1201.*` when Fabric is enabled).
-  - Translate loader events into `mcmod` / lifecycle hooks; read metadata from `mcmod`/`ac` instead of hardcoding registry IDs.
-  - Loader-specific resources: `mods.toml`, `fabric.mod.json`, loader-specific assets under each module’s `src/main/resources`.
-
 - **Dependency red line**
-  - **`ac` and `forge-1.20.1` must not reference each other** (no `cn.li.ac` requires from forge; no `cn.li.forge1201` from ac). Both depend on **`mcmod`** (and **`api`** where applicable).
+  - **`ac` / `mcmod` must not reference loader namespaces** (`cn.li.forge1201`, `cn.li.fabric1201`, `cn.li.neoforge1211`) or Minecraft version namespaces (`cn.li.mc1201`, `cn.li.mc1211`, `cn.li.mcver`).
+  - Loader components must not hardcode content IDs; read metadata from `mcmod`/`ac`.
+  - Minecraft components must not enumerate loaders; loader lifecycle stays under `platform-src/loader/*`.
 
 - **Adding new content**
   - Extend DSL/metadata in **`mcmod`** when introducing new abstractions.
   - Implement gameplay in **`ac`** using `defblock` / `defitem` / etc.
-  - Touch **`forge-1.20.1`** (or Fabric) only for loader-specific wiring; keep adapters thin.
+  - Touch **`platform-src/loader/<target>/`** only for loader-specific wiring; keep adapters thin.
+  - Cross-version Minecraft API differences go in **`cn.li.mcver`** under each `mc-<version>` component (see `docs/dev/MC_VERSION_SEAM.md`), not in `minecraft/base`.

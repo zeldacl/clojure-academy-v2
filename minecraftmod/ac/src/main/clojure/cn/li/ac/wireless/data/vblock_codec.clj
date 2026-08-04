@@ -6,7 +6,7 @@
   Runtime code can wrap decoded foundation VBlocks when it needs the wireless
   runtime record type."
   (:require [cn.li.ac.foundation.vblock :as foundation-vb]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.structured-data :as sd]))
 
 (defn- normalize-vblock
   [vblock]
@@ -22,12 +22,12 @@
   "Serialize a vblock-like map to an NBT compound."
   [vblock]
   (let [vblock (normalize-vblock vblock)
-        compound (nbt/create-compound)]
-    (nbt/set-int! compound "x" (:x vblock))
-    (nbt/set-int! compound "y" (:y vblock))
-    (nbt/set-int! compound "z" (:z vblock))
-    (nbt/set-string! compound "type" (name (or (:block-type vblock) :node)))
-    (nbt/set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
+        compound (sd/create-structured)]
+    (sd/set-int! compound "x" (:x vblock))
+    (sd/set-int! compound "y" (:y vblock))
+    (sd/set-int! compound "z" (:z vblock))
+    (sd/set-string! compound "type" (name (or (:block-type vblock) :node)))
+    (sd/set-boolean! compound "ignoreChunk" (boolean (:ignore-chunk vblock)))
     compound))
 
 (defn vblock-from-nbt
@@ -35,26 +35,26 @@
   ([compound]
    (vblock-from-nbt compound :node false))
   ([compound default-type default-ignore-chunk]
-   (let [x (nbt/get-int compound "x")
-         y (nbt/get-int compound "y")
-         z (nbt/get-int compound "z")
+   (let [x (sd/get-int compound "x")
+         y (sd/get-int compound "y")
+         z (sd/get-int compound "z")
          block-type-str (try
-                          (nbt/get-string compound "type")
+                          (sd/get-string compound "type")
                           (catch Exception _ ""))
          block-type (if (seq block-type-str)
                       (keyword block-type-str)
                       default-type)
          ignore-chunk (try
-                        (nbt/get-boolean compound "ignoreChunk")
+                        (sd/get-boolean compound "ignoreChunk")
                         (catch Exception _ default-ignore-chunk))]
      (foundation-vb/vblock x y z block-type ignore-chunk))))
 
 (defn vblocks-to-nbt-list
   "Serialize a collection of vblocks to an NBT list."
   [vblocks]
-  (let [items (nbt/create-list)]
+  (let [items (sd/create-list)]
     (doseq [vblock vblocks]
-      (nbt/append! items (vblock-to-nbt vblock)))
+      (sd/append! items (vblock-to-nbt vblock)))
     items))
 
 (defn nbt-list->vblocks
@@ -65,10 +65,10 @@
   ([items default-type default-ignore-chunk]
    (nbt-list->vblocks items default-type default-ignore-chunk identity))
   ([items default-type default-ignore-chunk from-foundation]
-   (let [size (if items (nbt/list-size items) 0)]
+   (let [size (if items (sd/list-size items) 0)]
      (vec
        (keep
          (fn [index]
-           (when-let [compound (nbt/list-compound items index)]
+           (when-let [compound (sd/list-structured items index)]
              (from-foundation (vblock-from-nbt compound default-type default-ignore-chunk))))
          (range size))))))

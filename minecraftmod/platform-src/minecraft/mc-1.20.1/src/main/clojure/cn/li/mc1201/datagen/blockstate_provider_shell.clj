@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.datagen.blockstate-provider-shell
   "Shared DataProvider shell for blockstate/block-model/item-model datagen."
-  (:require [cn.li.mc1201.datagen.blockstate-provider-core :as blockstate-core]
+  (:require [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mc1201.datagen.resource-location :as rl]
-            [cn.li.mc1201.datagen.gson-util :as gson-util])
+            [cn.li.mcbase.datagen.gson-util :as gson-util])
   (:import [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [net.minecraft.resources ResourceLocation]
            [com.google.gson Gson JsonElement]

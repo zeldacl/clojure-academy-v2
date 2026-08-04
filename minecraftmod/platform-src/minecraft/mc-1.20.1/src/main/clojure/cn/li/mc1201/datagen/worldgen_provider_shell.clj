@@ -1,6 +1,6 @@
 (ns cn.li.mc1201.datagen.worldgen-provider-shell
   "Shared DataProvider shell bridging worldgen-provider-core to PackOutput."
-  (:require [cn.li.mc1201.datagen.worldgen-provider-core :as core]
+  (:require [cn.li.mcbase.datagen.worldgen-provider-core :as core]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [com.google.gson GsonBuilder Gson JsonElement]

@@ -5,7 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
-import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
+import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -21,7 +21,7 @@ import org.joml.Matrix3f;
 import org.joml.Quaternionf;
 
 public final class ScriptedEffectBillboardRenderer<T extends Entity> extends EntityRenderer<T> {
-    private static final String SCRIPT_RENDER_RUNTIME_NS = "cn.li.mc1201.client.render.script-render-runtime";
+    private static final String SCRIPT_RENDER_RUNTIME_NS = "cn.li.mcbase.client.render.script-render-runtime";
     private static final float ARC_DEFAULT_LENGTH = 20.0F;
     private static final float ARC_DEFAULT_SHOW_WIGGLE = 0.2F;
     private static final float ARC_DEFAULT_HIDE_WIGGLE = 0.2F;

@@ -1,11 +1,7 @@
 package cn.li.mc1201.client;
 
+import cn.li.mcver.render.ImmediateDraw;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.resources.ResourceLocation;
@@ -30,15 +26,13 @@ public final class GuiGraphicsHelper {
 
     /**
      * Render a textured quad with custom normalized UV coordinates.
-     * Uses only public Minecraft rendering APIs (Tesselator / BufferBuilder).
-     * No reflection, no Mixin, no Access Transformer required.
+     * Mesh upload goes through {@link ImmediateDraw} (version seam).
      *
      * <p>The vertices are transformed by the GuiGraphics PoseStack matrix, so the
      * quad honors the current translate/scale (e.g. a container screen's
-     * leftPos/topPos offset). Emitting raw {@code bb.vertex(x,y,z)} without the
-     * matrix would ignore the pose and render at absolute coordinates.</p>
+     * leftPos/topPos offset).</p>
      *
-     * <p>{@code BufferUploader.drawWithShader} uses whatever shader
+     * <p>{@code ImmediateDraw.draw} uses whatever shader
      * {@code RenderSystem.setShader} last selected, and MC's RenderType shards
      * leave their own shader bound after a text/fill batch flushes. Bind
      * position_tex explicitly (exactly as vanilla {@code GuiGraphics.innerBlit}
@@ -59,14 +53,13 @@ public final class GuiGraphicsHelper {
         RenderSystem.setShaderTexture(0, texture);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
-
-        Tesselator tess = Tesselator.getInstance();
-        BufferBuilder bb = tess.getBuilder();
-        bb.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bb.vertex(pose, x1, y2, z).uv(u0, v1).endVertex();
-        bb.vertex(pose, x2, y2, z).uv(u1, v1).endVertex();
-        bb.vertex(pose, x2, y1, z).uv(u1, v0).endVertex();
-        bb.vertex(pose, x1, y1, z).uv(u0, v0).endVertex();
-        BufferUploader.drawWithShader(bb.end());
+        // Note: vanilla blit uses y1/y2 order (top/bottom) differently than UV origin;
+        // preserve the historical corner mapping from the previous BufferBuilder path.
+        ImmediateDraw.begin(ImmediateDraw.Mode.QUADS, ImmediateDraw.Format.POSITION_TEX);
+        ImmediateDraw.vertex(pose, x1, y2, z).uv(u0, v1).endVertex();
+        ImmediateDraw.vertex(pose, x2, y2, z).uv(u1, v1).endVertex();
+        ImmediateDraw.vertex(pose, x2, y1, z).uv(u1, v0).endVertex();
+        ImmediateDraw.vertex(pose, x1, y1, z).uv(u0, v0).endVertex();
+        ImmediateDraw.draw();
     }
 }

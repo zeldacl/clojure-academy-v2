@@ -3,7 +3,7 @@ package cn.li.mc1201.client.render.effect;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;

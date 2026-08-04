@@ -1,7 +1,7 @@
 (ns cn.li.mc1201.datagen.advancement-provider-shell
   "Shared DataProvider shell for advancement JSON from achievement metadata."
   (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mc1201.datagen.gson-util :as gson-util]
+            [cn.li.mcbase.datagen.gson-util :as gson-util]
             [cn.li.mc1201.datagen.advancement-provider-core :as adv-core]
             [cn.li.mc1201.datagen.item-registry :as item-registry]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata]

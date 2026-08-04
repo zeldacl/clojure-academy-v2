@@ -9,7 +9,7 @@
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.util.log :as log]))
 
 (def ^:private nbt-key "ac_terminal_v2")
@@ -24,20 +24,20 @@
 
 (defn- load-state
   [tag]
-  (when (nbt/has-key-safe? tag nbt-key)
-    (let [root (nbt/get-compound tag nbt-key)]
-      (when (= schema-version (nbt/get-int root "schema"))
-        {:terminal-installed? (nbt/get-boolean root "installed")
+  (when (sd/has-key-safe? tag nbt-key)
+    (let [root (sd/get-structured tag nbt-key)]
+      (when (= schema-version (sd/get-int root "schema"))
+        {:terminal-installed? (sd/get-boolean root "installed")
          :installed-apps (nbt-coll/read-keyword-set root "apps")}))))
 
 (defn- save-state!
   [tag state]
   (let [state (model/normalize-state state)
-        root (nbt/create-compound)]
-    (nbt/set-int! root "schema" schema-version)
-    (nbt/set-boolean! root "installed" (:terminal-installed? state))
+        root (sd/create-structured)]
+    (sd/set-int! root "schema" schema-version)
+    (sd/set-boolean! root "installed" (:terminal-installed? state))
     (nbt-coll/write-keyword-set! root "apps" (:installed-apps state))
-    (nbt/set-tag! tag nbt-key root)))
+    (sd/set-entry! tag nbt-key root)))
 
 ;; --- Public API ---
 

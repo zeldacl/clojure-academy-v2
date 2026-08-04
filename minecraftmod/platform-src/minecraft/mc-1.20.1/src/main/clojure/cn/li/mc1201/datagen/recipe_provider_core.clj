@@ -2,8 +2,8 @@
   "Shared Minecraft recipe builder emission used by loader datagen shells."
   (:require [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mc1201.datagen.metadata-resolver :as metadata-resolver]
-            [cn.li.mc1201.datagen.recipe-core :as recipe-core]
-            [cn.li.mc1201.datagen.recipe-patterns :as recipe-patterns]
+            [cn.li.mcbase.datagen.recipe-core :as recipe-core]
+            [cn.li.mcbase.datagen.recipe-patterns :as recipe-patterns]
             [cn.li.mcmod.config :as modid])
   (:import [java.util.function Consumer]
            [net.minecraft.advancements CriterionTriggerInstance]

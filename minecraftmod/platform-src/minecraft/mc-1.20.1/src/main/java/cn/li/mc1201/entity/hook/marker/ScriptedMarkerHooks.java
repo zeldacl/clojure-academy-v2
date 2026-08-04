@@ -1,6 +1,6 @@
 package cn.li.mc1201.entity.hook.marker;
 
-import cn.li.mc1201.entity.hook.AbstractHookRegistry;
+import cn.li.mcbase.entity.hook.AbstractHookRegistry;
 
 public final class ScriptedMarkerHooks {
     private static final Class<?> REGISTRY_CLASS = ScriptedMarkerHooks.class;

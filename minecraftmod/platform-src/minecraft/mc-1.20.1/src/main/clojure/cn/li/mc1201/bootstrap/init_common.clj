@@ -5,7 +5,7 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.dispatch :as platform-dispatch]
             [cn.li.mcmod.platform.position :as platform-position]
-            [cn.li.mcmod.platform.nbt :as platform-nbt]
+            [cn.li.mcmod.platform.structured-data :as platform-sd]
             [cn.li.mcmod.platform.item :as platform-item]
             [cn.li.mcmod.util.log :as log]))
 
@@ -19,7 +19,7 @@
   (let [fw-atom (fw/fw-atom)
         checks [{:k :resource :ok (boolean (get (platform/get-adapter fw-atom :resource) :factory))}
                 {:k :position :ok (platform-position/factory-initialized?)}
-                {:k :nbt :ok (platform-nbt/factory-initialized?)}
+                {:k :structured-data :ok (platform-sd/factory-initialized?)}
                 {:k :item :ok (platform-item/available?)}]
         missing (->> checks (remove #(get % :ok)) (map #(get % :k)) vec)]
     (when (seq missing)

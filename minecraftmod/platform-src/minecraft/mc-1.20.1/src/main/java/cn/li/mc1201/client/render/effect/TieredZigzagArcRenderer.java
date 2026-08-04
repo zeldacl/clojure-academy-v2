@@ -1,7 +1,7 @@
 package cn.li.mc1201.client.render.effect;
 
 import cn.li.mc1201.entity.ScriptedEffectEntity;
-import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
+import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.MultiBufferSource;

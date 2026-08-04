@@ -4,8 +4,8 @@
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock]
-            [cn.li.mc1201.gui.reactive.input :as input]
-            [cn.li.mc1201.gui.reactive.perf :as perf]
+            [cn.li.mcbase.gui.reactive.input :as input]
+            [cn.li.mcbase.gui.reactive.perf :as perf]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mc1201.shim DelegatingScreen]

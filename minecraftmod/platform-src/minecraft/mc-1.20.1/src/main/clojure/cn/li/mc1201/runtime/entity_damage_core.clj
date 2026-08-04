@@ -4,7 +4,7 @@
   Keeps generic shaping/calculation logic in shared mc1201 while platform layers
   own world/entity lookup and concrete damage application calls."
   (:require [cn.li.mcmod.hooks.core :as power-runtime])
-  (:import [cn.li.mc1201.runtime DamageSourceShared]
+  (:import [cn.li.mc1201.runtime DamageSourceAccess]
            [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.level Level]
            [net.minecraft.world.phys Vec3]))
@@ -13,10 +13,10 @@
   "Resolve level.damageSources().<kind>() via shared Java accessor."
   ([^Level level source-type]
    (when level
-     (DamageSourceShared/resolveKeyword level source-type)))
+     (DamageSourceAccess/resolveKeyword level source-type)))
   ([^Level level source-type attacker]
    (when level
-     (DamageSourceShared/resolveKeyword level source-type attacker))))
+     (DamageSourceAccess/resolveKeyword level source-type attacker))))
 
 (defn entity-pos-map
   [^LivingEntity entity]

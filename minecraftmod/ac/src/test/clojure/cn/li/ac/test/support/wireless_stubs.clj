@@ -1,7 +1,7 @@
 (ns cn.li.ac.test.support.wireless-stubs
   (:require [cn.li.ac.test.support.nbt :as test-nbt]
             [cn.li.mcmod.platform.position :as pos]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.world :as pworld])
   (:import [cn.li.acapi.wireless IWirelessGenerator IWirelessMatrix IWirelessNode IWirelessReceiver]))
 
@@ -83,7 +83,7 @@
 (defn with-tile-world
   "Install platform world/position/nbt stubs so tile entities resolve from `tiles-atom` keyed by [x y z] (ints)."
   [tiles-atom f]
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (pos/install-position-ops!
     {:pos-x test-pos-x
      :pos-y test-pos-y

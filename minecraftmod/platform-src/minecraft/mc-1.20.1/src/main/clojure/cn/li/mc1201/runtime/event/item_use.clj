@@ -3,7 +3,7 @@
 
   Platform layers should only unpack their event/callback objects and translate
   the returned map into loader-specific results."
-  (:require [cn.li.mc1201.runtime.event.safe-handler :as safe]
+  (:require [cn.li.mcbase.runtime.event.safe-handler :as safe]
             [cn.li.mc1201.runtime.item-handler-core :as core])
   (:import [net.minecraft.world InteractionHand]
            [net.minecraft.world.entity.player Player]

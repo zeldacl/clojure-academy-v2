@@ -1,14 +1,43 @@
 pluginManagement {
+    def catalogFile = new File(settings.rootDir, "platform-catalog.json")
+    def catalog = new groovy.json.JsonSlurper().parse(catalogFile)
+    def targetId = (settings.startParameter.projectProperties["platformTarget"] ?: catalog.defaultTarget).toString()
+    def target = catalog.targets[targetId]
+    if (target == null) {
+        throw new GradleException(
+            "Unknown platformTarget '${targetId}'. Known targets: ${catalog.targets.keySet().sort()}")
+    }
+    def profileId = target.buildProfile?.toString()
+    def profile = catalog.buildProfiles[profileId]
+    if (profile == null) {
+        throw new GradleException(
+            "Target '${targetId}' references unknown buildProfile '${profileId}'. Known: ${catalog.buildProfiles.keySet().sort()}")
+    }
+    if (!profile.loomVersion) {
+        throw new GradleException("buildProfile '${profileId}' must declare loomVersion")
+    }
+    if (!profile.clojurephantVersion) {
+        throw new GradleException("buildProfile '${profileId}' must declare clojurephantVersion")
+    }
+    if (!profile.shadowVersion) {
+        throw new GradleException("buildProfile '${profileId}' must declare shadowVersion")
+    }
     repositories {
         maven { url "https://maven.architectury.dev" }
         maven { url "https://maven.fabricmc.net" }
         maven { url "https://maven.minecraftforge.net" }
+        maven { url "https://maven.neoforged.net/releases/" }
         gradlePluginPortal()
         mavenCentral()
         maven {
             url = "https://maven.blamejared.com"
             name = "BlameJared Maven"
         }
+    }
+    plugins {
+        id "dev.architectury.loom" version "${profile.loomVersion}"
+        id "dev.clojurephant.clojure" version "${profile.clojurephantVersion}"
+        id "com.github.johnrengelman.shadow" version "${profile.shadowVersion}"
     }
 }
 

@@ -5,12 +5,12 @@
 ## 当前构建
 
 - 根工程：`api`、`mcmod`、`ac`、`:platform`。
-- 平台目标：`forge-1.20.1`、`fabric-1.20.1`，均在 `platform-catalog.json` 显式声明。
+- 平台目标：`forge-1.20.1`、`fabric-1.20.1`、`neoforge-1.21.1`，均在 `platform-catalog.json` 显式声明。
 - 源码组件：
-  - 通用平台代码：`platform-src/minecraft + platform-src/loader/`
-  - Minecraft API 层：`platform-src/minecraft/mc-1.20.1/`、`platform-src/minecraft/mc-1.20.1/`
-  - Loader 层：`platform-src/loader/forge/`、`platform-src/loader/fabric/`
-- 构建输出：`platform/build/targets/<target-id>/`。
+  - 跨版本公用层：`platform-src/minecraft/base/`（`cn.li.mcbase.*`）
+  - Minecraft 版本层：`platform-src/minecraft/mc-1.20.1/`（`cn.li.mc1201.*` + `cn.li.mcver.*`）、`platform-src/minecraft/mc-1.21.1/`（`cn.li.mc1211.*` + `cn.li.mcver.*`）
+  - Loader 层：`platform-src/loader/forge-1.20.1/`、`platform-src/loader/fabric-1.20.1/`、`platform-src/loader/neoforge-1.21.1/`
+- 构建输出：`build/targets/<target-id>/`（以及平台工程下的 run/generated 目录）。
 
 ## 目录
 
@@ -25,12 +25,12 @@
 | `06-gui` | GUI DSL 与分层 | [GUI_DSL.md](06-gui/GUI_DSL.md)、[GUI_Architecture_Refactoring.md](06-gui/GUI_Architecture_Refactoring.md) |
 | `07-ability` | 能力系统规范 | [ABILITY_CORE_SPEC_V2.md](07-ability/ABILITY_CORE_SPEC_V2.md) |
 | `testing` | 当前测试与验证边界 | [IMPLEMENTATION_SCOPE.md](testing/IMPLEMENTATION_SCOPE.md)、[MULTI_LOADER_VERIFICATION.md](testing/MULTI_LOADER_VERIFICATION.md) |
-| `dev` | 开发、Agent、构建、治理文档 | [BUILD_AND_VERIFY_PLAYBOOK.md](dev/BUILD_AND_VERIFY_PLAYBOOK.md)、[ADD_NEW_LOADER_OR_VERSION.md](dev/ADD_NEW_LOADER_OR_VERSION.md)、[AGENT_AND_TOOLING.md](dev/AGENT_AND_TOOLING.md)、[CLIENT_INPUT_PROTOCOL_PLAYBOOK.md](dev/CLIENT_INPUT_PROTOCOL_PLAYBOOK.md) |
+| `dev` | 开发、Agent、构建、治理文档 | [BUILD_AND_VERIFY_PLAYBOOK.md](dev/BUILD_AND_VERIFY_PLAYBOOK.md)、[ADD_NEW_LOADER_OR_VERSION.md](dev/ADD_NEW_LOADER_OR_VERSION.md)、[AGENT_AND_TOOLING.md](dev/AGENT_AND_TOOLING.md)、[MC_VERSION_SEAM.md](dev/MC_VERSION_SEAM.md)、[loader-hook-support.properties](dev/loader-hook-support.properties)、[CLIENT_INPUT_PROTOCOL_PLAYBOOK.md](dev/CLIENT_INPUT_PROTOCOL_PLAYBOOK.md) |
 
 ## 常用入口
 
-- 构建验证：[01-overview/GETTING_STARTED.md](01-overview/GETTING_STARTED.md)
-- 平台目标架构：[02-architecture/platform-expansion/01-target-architecture.md](02-architecture/platform-expansion/01-target-architecture.md)
-- 新增 Loader 或 Minecraft 版本：[dev/ADD_NEW_LOADER_OR_VERSION.md](dev/ADD_NEW_LOADER_OR_VERSION.md)
-- DataGen manifest 与 parity：[04-datagen/DataGenerator.md](04-datagen/DataGenerator.md)
-- 系统维护索引：[04-systems/SYSTEMS_MAINTENANCE_INDEX.md](04-systems/SYSTEMS_MAINTENANCE_INDEX.md)
+- 上手：[GETTING_STARTED.md](01-overview/GETTING_STARTED.md)
+- 布局：[PROJECT_LAYOUT.md](01-overview/PROJECT_LAYOUT.md)
+- 版本缝：[MC_VERSION_SEAM.md](dev/MC_VERSION_SEAM.md)
+- Agent 约定：[AGENT_AND_TOOLING.md](dev/AGENT_AND_TOOLING.md)
+- 多 loader 验证：[MULTI_LOADER_VERIFICATION.md](testing/MULTI_LOADER_VERIFICATION.md)

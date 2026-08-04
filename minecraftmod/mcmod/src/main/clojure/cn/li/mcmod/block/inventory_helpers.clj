@@ -3,7 +3,7 @@
 
   Provides load/save functions for item vector 鈫?NBT ListTag conversion.
   Reusable across any block with inventory slots."
-  (:require [cn.li.mcmod.platform.nbt :as nbt]
+  (:require [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.item :as pitem]
             [cn.li.mcmod.platform.be :as pbe]
             [cn.li.mcmod.util.log :as log]))
@@ -18,14 +18,14 @@
 
   Returns: Vector of ItemStack or nil per slot"
   [tag nbt-key default]
-  (if (nbt/has-key-safe? tag nbt-key)
-    (let [inv-tag (nbt/get-list tag nbt-key)
-          size    (nbt/list-size inv-tag)]
+  (if (sd/has-key-safe? tag nbt-key)
+    (let [inv-tag (sd/get-list tag nbt-key)
+          size    (sd/list-size inv-tag)]
       (reduce
         (fn [v i]
-          (let [st   (nbt/list-compound inv-tag i)
-                slot (nbt/get-int st "Slot")
-                item (pitem/from-nbt st)]
+          (let [st   (sd/list-structured inv-tag i)
+                slot (sd/get-int st "Slot")
+                item (pitem/from-data st)]
             (if (and (>= slot 0) (< slot (count v)))
               (assoc v slot (when-not (pitem/empty? item) item))
               v)))
@@ -44,14 +44,14 @@
   Side effects: Writes ListTag to tag"
   [state tag nbt-key]
   (let [inv      (get state :inventory [])
-        inv-list (nbt/create-list)]
+        inv-list (sd/create-list)]
     (doseq [slot (range (count inv))]
       (when-let [item (nth inv slot nil)]
-        (let [st (nbt/create-compound)]
-          (nbt/set-int! st "Slot" slot)
-          (pitem/save-to-nbt item st)
-          (nbt/append! inv-list st))))
-    (nbt/set-tag! tag nbt-key inv-list)))
+        (let [st (sd/create-structured)]
+          (sd/set-int! st "Slot" slot)
+          (pitem/save-to-data item st)
+          (sd/append! inv-list st))))
+    (sd/set-entry! tag nbt-key inv-list)))
 
 (defn update-be-field!
   "Update single field in BE's customState.

@@ -9,12 +9,12 @@
            [net.minecraft.client.renderer.item ItemProperties]
            [net.minecraft.world.item Item]
            [cn.li.mc1201.client.render.item EnergyItemPropertyFunction]
-           [cn.li.mc1201.runtime ItemRegistryShared]))
+           [cn.li.mc1201.runtime ItemRegistry]))
 
 (defn- resolve-item
   ^Item
   [item-id]
-  (ItemRegistryShared/getItemById
+  (ItemRegistry/getItemById
     (modid/namespaced-path (registry-metadata/get-item-registry-name item-id))))
 
 (defn register!

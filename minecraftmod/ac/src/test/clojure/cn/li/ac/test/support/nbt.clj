@@ -1,6 +1,6 @@
 (ns cn.li.ac.test.support.nbt
   (:require [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.structured-data :as sd]))
 
 (def ^:private compound-marker ::atom-compound)
 (def ^:private list-marker ::atom-list)
@@ -15,97 +15,97 @@
 (defn- new-compound [] {:type compound-marker :data (atom {})})
 (defn- new-list [] {:type list-marker :data (atom [])})
 
-(defn install-test-nbt-ops!
+(defn install-test-structured-data-ops!
   "Install atom-backed NBT ops into the current Framework atom. Ops live in
   the Framework, so tests that swap in a fresh Framework must call this again
   — guard on the live atom, never on a one-shot flag."
   []
-  (when (and (fw/fw-atom) (not (nbt/available?)))
-    (nbt/install-nbt-ops!
-      {:nbt-set-int! (fn [c k v]
+  (when (and (fw/fw-atom) (not (sd/available?)))
+    (sd/install-structured-data-ops!
+      {:sd-set-int! (fn [c k v]
                        (when (compound? c)
                          (swap! (compound-data c) assoc (nk k) (int v)))
                        c)
-       :nbt-get-int (fn [c k]
+       :sd-get-int (fn [c k]
                       (when (compound? c)
                         (int (get @(compound-data c) (nk k) 0))))
-       :nbt-set-string! (fn [c k v]
+       :sd-set-string! (fn [c k v]
                           (when (compound? c)
                             (swap! (compound-data c) assoc (nk k) (str v)))
                           c)
-       :nbt-get-string (fn [c k]
+       :sd-get-string (fn [c k]
                          (when (compound? c)
                            (str (get @(compound-data c) (nk k) ""))))
-       :nbt-set-boolean! (fn [c k v]
+       :sd-set-boolean! (fn [c k v]
                            (when (compound? c)
                              (swap! (compound-data c) assoc (nk k) (boolean v)))
                            c)
-       :nbt-get-boolean (fn [c k]
+       :sd-get-boolean (fn [c k]
                           (when (compound? c)
                             (boolean (get @(compound-data c) (nk k) false))))
-       :nbt-set-double! (fn [c k v]
+       :sd-set-double! (fn [c k v]
                           (when (compound? c)
                             (swap! (compound-data c) assoc (nk k) (double v)))
                           c)
-       :nbt-get-double (fn [c k]
+       :sd-get-double (fn [c k]
                          (when (compound? c)
                            (double (get @(compound-data c) (nk k) 0.0))))
-       :nbt-set-float! (fn [c k v]
+       :sd-set-float! (fn [c k v]
                          (when (compound? c)
                            (swap! (compound-data c) assoc (nk k) (float v)))
                          c)
-       :nbt-get-float (fn [c k]
+       :sd-get-float (fn [c k]
                         (when (compound? c)
                           (float (get @(compound-data c) (nk k) 0.0))))
-       :nbt-set-long! (fn [c k v]
+       :sd-set-long! (fn [c k v]
                         (when (compound? c)
                           (swap! (compound-data c) assoc (nk k) (long v)))
                         c)
-       :nbt-get-long (fn [c k]
+       :sd-get-long (fn [c k]
                        (when (compound? c)
                          (long (get @(compound-data c) (nk k) 0))))
-       :nbt-set-tag! (fn [c k v]
+       :sd-set-entry! (fn [c k v]
                        (when (compound? c)
                          (swap! (compound-data c) assoc (nk k) v))
                        c)
-       :nbt-get-tag (fn [c k]
+       :sd-get-entry (fn [c k]
                       (when (compound? c)
                         (get @(compound-data c) (nk k))))
-       :nbt-get-compound (fn [c k]
+       :sd-get-structured (fn [c k]
                            (when (compound? c)
                              (let [v (get @(compound-data c) (nk k))]
                                (when (compound? v) v))))
-       :nbt-get-list (fn [c k]
+       :sd-get-list (fn [c k]
                       (when (compound? c)
                         (let [v (get @(compound-data c) (nk k))]
                           (when (nbt-list-value? v) v))))
-       :nbt-has-key? (fn [c k]
+       :sd-has-key? (fn [c k]
                        (when (compound? c)
                          (contains? @(compound-data c) (nk k))))
-       :nbt-append! (fn [lst el]
+       :sd-append! (fn [lst el]
                       (when (nbt-list-value? lst)
                         (swap! (list-data lst) conj el))
                       lst)
-       :nbt-list-size (fn [lst]
+       :sd-list-size (fn [lst]
                         (when (nbt-list-value? lst)
                           (count @(list-data lst))))
-       :nbt-list-get (fn [lst i]
+       :sd-list-get (fn [lst i]
                        (when (nbt-list-value? lst)
                          (get @(list-data lst) i)))
-       :nbt-list-get-compound (fn [lst i]
+       :sd-list-get-structured (fn [lst i]
                                 (when (nbt-list-value? lst)
                                   (let [v (get @(list-data lst) i)]
                                     (when (compound? v) v))))
-       :create-compound new-compound
+       :create-structured new-compound
        :create-list new-list}
       "ac-test")))
 
 (defn atom-compound
   []
-  (install-test-nbt-ops!)
+  (install-test-structured-data-ops!)
   (new-compound))
 
 (defn atom-list
   []
-  (install-test-nbt-ops!)
+  (install-test-structured-data-ops!)
   (new-list))

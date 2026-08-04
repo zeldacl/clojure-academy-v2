@@ -5,7 +5,7 @@
             [clojure.string :as str]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]
@@ -64,8 +64,8 @@
 
 (defn- get-matter-kind
   [item-stack]
-  (let [tag (try (pitem/tag-compound item-stack) (catch Exception _ nil))
-        from-tag (when tag (try (nbt/get-string tag "matterKind") (catch Exception _ nil)))]
+  (let [tag (try (pitem/custom-data item-stack) (catch Exception _ nil))
+        from-tag (when tag (try (sd/get-string tag "matterKind") (catch Exception _ nil)))]
     (or (case (some-> from-tag str)
           "phase-liquid" :phase-liquid
           "none" :none
@@ -76,8 +76,8 @@
 
 (defn- set-matter-kind!
   [item-stack kind]
-  (let [tag (pitem/get-or-create-tag item-stack)]
-    (nbt/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
+  (let [tag (pitem/ensure-custom-data item-stack)]
+    (sd/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
     (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))))
 
 (defn- make-matter-unit-stack
@@ -193,7 +193,8 @@
     (idsl/register-item!
       (idsl/create-item-spec
         "mag_hook"
-        {:max-stack-size 1
+        ;; Crafting recipe yields 3; 1.21+ rejects result count > maxStackSize.
+        {:max-stack-size 16
          :creative-tab :tools
          :properties {:tooltip ["Mag Hook"
                                 "Right click to throw and retrieve after hit"]

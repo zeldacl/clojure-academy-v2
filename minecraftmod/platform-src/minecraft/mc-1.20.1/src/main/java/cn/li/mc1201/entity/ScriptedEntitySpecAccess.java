@@ -1,10 +1,10 @@
 package cn.li.mc1201.entity;
 
-import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
-import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
-import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
-import cn.li.mc1201.entity.spec.ScriptedProjectileSpec;
-import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
+import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
+import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
+import cn.li.mcbase.entity.spec.ScriptedProjectileSpec;
+import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 

@@ -1,6 +1,6 @@
 package cn.li.mc1201.entity.hook.effect;
 
-import cn.li.mc1201.entity.hook.AbstractHookRegistry;
+import cn.li.mcbase.entity.hook.AbstractHookRegistry;
 
 public final class ScriptedEffectHooks {
     private static final Class<?> REGISTRY_CLASS = ScriptedEffectHooks.class;

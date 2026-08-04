@@ -11,8 +11,8 @@
    "mcmod/src/main/clojure"
    "platform-src/common/src/main/clojure"
    "platform-src/minecraft/version/mc-1201/src/main/clojure"
-   "platform-src/loader/forge/src/main/clojure"
-   "platform-src/loader/fabric/src/main/clojure"])
+   "platform-src/loader/forge-1.20.1/src/main/clojure"
+   "platform-src/loader/fabric-1.20.1/src/main/clojure"])
 
 (def ^:private forbidden-symbols
   ["Blocks/" "Items/" "BuiltInRegistries/" "ForgeRegistries/"

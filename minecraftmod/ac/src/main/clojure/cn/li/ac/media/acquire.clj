@@ -5,7 +5,7 @@
   upstream: 'media.external || bitset.get(...)')."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.media.catalog :as catalog]
-            [cn.li.mcmod.platform.nbt :as nbt]
+            [cn.li.mcmod.platform.structured-data :as sd]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.ac.persistence.nbt-collections :as nbt-coll]
@@ -20,15 +20,15 @@
 
 (defn- load-ids
   [tag]
-  (when (nbt/has-key-safe? tag nbt-key)
-    (let [root (nbt/get-compound tag nbt-key)]
+  (when (sd/has-key-safe? tag nbt-key)
+    (let [root (sd/get-structured tag nbt-key)]
       (nbt-coll/read-keyword-set root "acquired"))))
 
 (defn- save-ids!
   [tag ids]
-  (let [root (nbt/create-compound)]
+  (let [root (sd/create-structured)]
     (nbt-coll/write-keyword-set! root "acquired" ids)
-    (nbt/set-tag! tag nbt-key root)))
+    (sd/set-entry! tag nbt-key root)))
 
 (defn acquired-ids
   "Set of acquired internal media ids (keywords) for `player`."

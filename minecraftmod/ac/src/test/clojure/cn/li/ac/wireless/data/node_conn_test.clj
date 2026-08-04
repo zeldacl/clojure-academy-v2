@@ -136,7 +136,7 @@
           (is (identical? conn-b (lookup/get-node-connection wd node-b-vb))))))))
 
 (deftest node-conn-nbt-round-trip-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (let [wd (wdata/create-world-data (test-world :wc-nbt))
         node-cap (stubs/mutable-node {})
         gen-cap (stubs/generator-stub {})

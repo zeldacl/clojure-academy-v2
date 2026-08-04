@@ -1,0 +1,44 @@
+(ns cn.li.neoforge1211.integration.events.event-apply
+  "Centralized NeoForge event mutation helpers to keep write-back semantics consistent."
+  (:import [net.minecraft.world InteractionResult]
+           [net.neoforged.neoforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
+           [net.neoforged.bus.api Event]
+           [net.neoforged.neoforge.common.util TriState]))
+
+(defn deny-right-click-use!
+  [evt]
+  (when (instance? PlayerInteractEvent$RightClickBlock evt)
+    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
+      (.setUseItem right-click-evt TriState/FALSE)
+      (.setUseBlock right-click-evt TriState/FALSE)))
+  evt)
+
+(defn cancel-player-interact-fail!
+  [^PlayerInteractEvent evt]
+  (.setCancellationResult evt InteractionResult/FAIL)
+  (.setCanceled evt true)
+  evt)
+
+(defn cancel-player-interact-consume!
+  [^PlayerInteractEvent evt]
+  (.setCancellationResult evt InteractionResult/CONSUME)
+  (.setCanceled evt true)
+  evt)
+
+(defn cancel-event!
+  [^Event evt]
+  (.setCanceled evt true)
+  evt)
+
+(defn apply-consumed-right-click!
+  "Cancel the RightClickBlock event with InteractionResult/CONSUME on both sides.
+  This prevents the vanilla Item.use() fallback that would otherwise fire even
+  after useItem=FALSE (Item.useOn is skipped, but Item.use runs as a last resort).
+  The block's GUI was already opened by the handler — cancelling the event does
+  not affect the GUI."
+  [^PlayerInteractEvent evt client-side?]
+  (when (instance? PlayerInteractEvent$RightClickBlock evt)
+    (let [^PlayerInteractEvent$RightClickBlock right-click-evt evt]
+      (.setUseItem right-click-evt TriState/FALSE)))
+  (cancel-player-interact-consume! evt)
+  evt)

@@ -24,7 +24,8 @@
     (idsl/register-item!
       (idsl/create-item-spec
         "energy_unit"
-        {:max-stack-size 1
+        ;; Recipes yield up to 4; 1.21+ ItemStack codec rejects count > maxStackSize.
+        {:max-stack-size 64
          :creative-tab :misc
          :properties {:tooltip ["储能单元"
                                 "容量: 10000 IF"

@@ -27,7 +27,7 @@ public final class TargetGradleLauncherTest {
                   "components": {
                     "forge-1.20.1": {
                       "kind": "loader",
-                      "source": "platform-src/loader/forge/src/main"
+                      "source": "platform-src/loader/forge-1.20.1/src/main"
                     }
                   },
                   "targets": {

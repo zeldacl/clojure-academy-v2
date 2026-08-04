@@ -1,6 +1,6 @@
 package cn.li.mc1201.client.font.msdf;
 
-import cn.li.mc1201.util.ResourceLocations;
+import cn.li.mcver.ResourceLocations;
 
 import cn.li.mcmod.ModId;
 import com.mojang.blaze3d.font.GlyphProvider;

@@ -4,7 +4,7 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.hooks.core :as damage-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.runtime DamageInterceptionShared]
+  (:import [cn.li.mc1201.runtime DamageInterception]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity]))
@@ -24,7 +24,7 @@
   []
   (when-let [fw-atom (fw/fw-atom)]
     (platform/install-adapter! fw-atom :damage-interception (make-damage-interception))
-    (DamageInterceptionShared/installModifier
+    (DamageInterception/installModifier
      (fn [entity damage-source amount]
        (rewrite-damage entity damage-source amount))))
   nil)

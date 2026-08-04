@@ -1,6 +1,6 @@
 package cn.li.mc1201.trigger;
 
-import cn.li.mc1201.util.ResourceLocations;
+import cn.li.mcver.ResourceLocations;
 
 import cn.li.mcmod.ModId;
 import com.google.gson.JsonObject;

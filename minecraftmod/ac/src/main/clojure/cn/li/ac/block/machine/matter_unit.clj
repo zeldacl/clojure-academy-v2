@@ -2,14 +2,14 @@
   "Matter unit item helpers shared by phase-gen and imag-fusor."
   (:require [cn.li.ac.block.machine.inventory-stack :as inv]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.platform.nbt :as nbt]))
+            [cn.li.mcmod.platform.structured-data :as sd]))
 
 (defn matter-unit-kind
   [stack matter-unit-item-id]
   (when (and (not (inv/stack-empty? stack))
              (= (inv/stack-id stack) matter-unit-item-id))
-    (let [tag (try (pitem/tag-compound stack) (catch Exception _ nil))
-          tag-kind (when tag (try (nbt/get-string tag "matterKind") (catch Exception _ nil)))]
+    (let [tag (try (pitem/custom-data stack) (catch Exception _ nil))
+          tag-kind (when tag (try (sd/get-string tag "matterKind") (catch Exception _ nil)))]
       (or (case (some-> tag-kind str)
             "none" :none
             "phase-liquid" :phase-liquid
@@ -32,8 +32,8 @@
   (let [stack (pitem/stack-by-id matter-unit-item-id (int count))]
     (when stack
       (try
-        (let [tag (pitem/get-or-create-tag stack)]
-          (nbt/set-string! tag "matterKind" "none"))
+        (let [tag (pitem/ensure-custom-data stack)]
+          (sd/set-string! tag "matterKind" "none"))
         (catch Exception _ nil))
       (try
         (pitem/set-damage! stack none-meta)

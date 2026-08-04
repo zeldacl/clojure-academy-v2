@@ -44,7 +44,7 @@ sourceSets {
     }
 }
 
-if (target.loader == "forge") {
+if (target.loader == "forge" || target.loader == "neoforge") {
     def forgeModClassRoots = [
         layout.buildDirectory.dir("classes/java/main"),
         layout.buildDirectory.dir("clojure/main"),
@@ -61,12 +61,13 @@ if (target.loader == "forge") {
                     .findAll { it.directory }
                     .collect { "main%%${it.absolutePath}" }
                 if (roots.isEmpty()) {
-                    throw new GradleException("Forge MOD_CLASSES is empty for target '${targetId}'; run processResources/classes first")
+                    throw new GradleException("Forge/NeoForge MOD_CLASSES is empty for target '${targetId}'; run processResources/classes first")
                 }
                 def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
-                def modsToml = new File(resourcesRoot, "META-INF/mods.toml")
+                def modsTomlName = target.loader == "neoforge" ? "META-INF/neoforge.mods.toml" : "META-INF/mods.toml"
+                def modsToml = new File(resourcesRoot, modsTomlName)
                 if (!modsToml.isFile()) {
-                    throw new GradleException("Missing processed mods.toml at ${modsToml}; run :platform:processResources first")
+                    throw new GradleException("Missing processed ${modsTomlName} at ${modsToml}; run :platform:processResources first")
                 }
                 task.environment "MOD_CLASSES", roots.join(File.pathSeparator)
             }
@@ -211,8 +212,27 @@ if (target.loader != "none") {
                 }
             }
         }
+    } else if (target.loader == "neoforge") {
+        loom {
+            neoForge {}
+            mods {
+                main {
+                    modFiles.setFrom([])
+                    sourceSet("main")
+                }
+            }
+        }
     }
 
+    // Resource merge semantics (overlays):
+    // - processResources uses INCLUDE → later CopySpec entries overwrite earlier ones
+    //   at the same relative path in build/resources/main.
+    // - jar uses EXCLUDE → the first occurrence of a relative path wins; later
+    //   duplicates (e.g. raw ac resources) are skipped.
+    // Content projects are appended after platform component srcDirs (see
+    // configurePackagedRuntimeProject). Same-path version overlays under
+    // minecraft-N must therefore exclude the shadowed content paths when
+    // merging ac, otherwise INCLUDE lets ac win over the overlay.
     processResources {
         dependsOn tasks.named("generatePlatformTargetMetadata")
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
@@ -225,7 +245,7 @@ if (target.loader != "none") {
             mod_description: rootProject.findProperty("mod_description")
         ]
         inputs.properties replaceProperties
-        filesMatching(["META-INF/mods.toml", "fabric.mod.json"]) {
+        filesMatching(["META-INF/mods.toml", "META-INF/neoforge.mods.toml", "fabric.mod.json"]) {
             expand replaceProperties + [project: project]
         }
         rename "^mixins\\.academy\\.json\$", "mixins.${rootProject.findProperty("mod_id")}.json"
@@ -278,6 +298,12 @@ if (target.loader != "none") {
             add("modCompileOnlyApi", target.dependencies.jeiForgeApi)
             add("modRuntimeOnly", target.dependencies.jeiForgeRuntime)
             add("modRuntimeOnly", files(rootProject.file(target.dependencies.sparkRuntimeFile)))
+        } else if (target.loader == "neoforge") {
+            add("neoForge", target.dependencies.loader)
+            clojureRuntimeLibraries.each { dependencyNotation ->
+                // Arch Loom reuses the forgeRuntimeLibrary configuration name for NeoForge.
+                add("forgeRuntimeLibrary", dependencyNotation)
+            }
         } else if (target.loader == "fabric") {
             add("modImplementation", target.dependencies.fabricLoader)
             add("modImplementation", target.dependencies.fabricApi)
@@ -502,6 +528,12 @@ if (target.loader != "none") {
             }
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
+                // jar uses EXCLUDE (first wins). Processed platform resources are
+                // already in the jar; still exclude 1.21.1 overlay targets from
+                // raw content so a packaging-order change cannot resurrect them.
+                if (target.minecraftVersion == "1.21.1") {
+                    exclude "data/*/pack.mcmeta"
+                }
             }
         }
 
@@ -517,6 +549,9 @@ if (target.loader != "none") {
             }
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
+                if (target.minecraftVersion == "1.21.1") {
+                    exclude "data/*/pack.mcmeta"
+                }
             }
         }
 
@@ -524,6 +559,12 @@ if (target.loader != "none") {
             dependsOn contentProject.tasks.named("processResources")
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
+                // 1.21.1 overlays live in minecraft-1.21.1 resources (loot_table/,
+                // data/*/pack.mcmeta). Content is merged last under INCLUDE, so
+                // exclude same-path files that the version component overlays.
+                if (target.minecraftVersion == "1.21.1") {
+                    exclude "data/*/pack.mcmeta"
+                }
             }
         }
 
@@ -702,7 +743,13 @@ if (target.loader != "none") {
     def modId = rootProj.findProperty("mod_id")
     // Resolve against the repo root — project.file() is relative to platform/
     // and would incorrectly become platform/platform-src/...
-    def forgeResources = rootProj.file("platform-src/loader/forge/src/main/resources").absolutePath
+    def loaderResourceRoots = sourceComponentIds.collect { componentId ->
+        def component = resolveComponent(componentId)
+        if (component.kind?.toString() != "loader") {
+            return null
+        }
+        rootProj.file("${componentSourceRoot(componentId)}/resources").absolutePath
+    }.findAll { it != null }
     def acResources = rootProj.project(":ac").file("src/main/resources").absolutePath
     def datagenPath = generatedDatagenResources.get().asFile.absolutePath
 
@@ -719,17 +766,20 @@ if (target.loader != "none") {
                 runDir = "run/${target.id}/server"
                 if (target.loader == "forge") {
                     property "forge.enabledGameTestNamespaces", "${modId},minecraft"
+                } else if (target.loader == "neoforge") {
+                    property "neoforge.enabledGameTestNamespaces", "${modId},minecraft"
                 }
             }
-            if (target.loader == "forge") {
+            if (target.loader == "forge" || target.loader == "neoforge") {
                 data {
                     data()
                     configName = "${target.id} Data"
                     runDir = "run/${target.id}/data"
-                    programArgs "--mod", modId, "--all",
-                        "--output", generatedDatagenResources.get().asFile.absolutePath,
-                        "--existing", forgeResources,
-                        "--existing", acResources
+                    def existingArgs = ["--mod", modId, "--all",
+                        "--output", generatedDatagenResources.get().asFile.absolutePath]
+                    loaderResourceRoots.each { existingArgs.addAll(["--existing", it]) }
+                    existingArgs.addAll(["--existing", acResources])
+                    programArgs existingArgs as String[]
                 }
             } else if (target.loader == "fabric") {
                 datagen {
@@ -786,6 +836,23 @@ if (target.loader != "none") {
 
     tasks.matching { it.name in ["runData", "runDatagen"] }.configureEach {
         finalizedBy generateDatagenHashManifest
+    }
+
+    // Datagen that crashes the game can still leave Gradle green; refuse empty manifests.
+    generateDatagenHashManifest.configure {
+        doLast {
+            def manifestFile = datagenHashManifest.get().asFile
+            if (!manifestFile.isFile()) {
+                throw new GradleException("Missing datagen hash manifest for ${target.id}")
+            }
+            def parsed = new groovy.json.JsonSlurper().parse(manifestFile)
+            def fileCount = (parsed.files instanceof Map) ? parsed.files.size() : 0
+            if (fileCount == 0) {
+                throw new GradleException(
+                    "Datagen hash manifest for ${target.id} contains 0 files. " +
+                    "The datagen run likely failed or wrote nothing under ${generatedDatagenResources.get().asFile}")
+            }
+        }
     }
 
     tasks.register("verifyRuntimeClasspathPurity") {

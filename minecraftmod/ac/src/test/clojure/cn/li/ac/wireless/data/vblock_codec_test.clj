@@ -9,14 +9,14 @@
 (use-fixtures :each support-fw/with-fresh-framework)
 
 (deftest vblock-compound-roundtrip-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (testing "data codec round-trips pure foundation vblocks"
     (let [source (foundation-vb/vblock 10 20 30 :receiver true)
           decoded (codec/vblock-from-nbt (codec/vblock-to-nbt source))]
       (is (= source decoded)))))
 
 (deftest vblock-list-roundtrip-test
-  (test-nbt/install-test-nbt-ops!)
+  (test-nbt/install-test-structured-data-ops!)
   (let [source [(runtime-vb/create-vnode 1 2 3)
                 (runtime-vb/create-vmatrix 4 5 6)]
         decoded (codec/nbt-list->vblocks

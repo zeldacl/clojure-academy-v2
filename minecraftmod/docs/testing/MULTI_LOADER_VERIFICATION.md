@@ -1,6 +1,10 @@
 # Multi-loader verification
 
-Current supported targets are declared in `platform-catalog.json`.
+Current supported targets are declared in `platform-catalog.json`:
+
+- `forge-1.20.1`
+- `fabric-1.20.1`
+- `neoforge-1.21.1`
 
 Required local gate:
 
@@ -8,11 +12,19 @@ Required local gate:
 cmd /c .\gradlew.bat verifyCurrentPlatforms
 ```
 
-For target-specific checks, run a single selected target:
+For target-specific checks, run a single selected target (including per-target Clojure lint, which only scans that target's source roots):
 
 ```text
-.`\\scripts\\target-gradle.ps1 forge-1.20.1`
-.`\\scripts\\target-gradle.ps1 fabric-1.20.1`
+.\scripts\target-gradle.ps1 forge-1.20.1 lintClojureNative
+.\scripts\target-gradle.ps1 fabric-1.20.1 lintClojureNative
+.\scripts\target-gradle.ps1 neoforge-1.21.1 lintClojureNative
+```
+
+Compile smoke examples:
+
+```text
+.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileJava
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileJava
 ```
 
 Do not use old root module commands. Do not add a new real target only to test architecture expansion; use synthetic catalog/sourceSet/capability fixtures instead.

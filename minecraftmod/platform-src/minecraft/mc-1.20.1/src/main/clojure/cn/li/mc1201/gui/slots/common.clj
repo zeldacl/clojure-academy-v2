@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.shim DynamicSlot]
-           [cn.li.mc1201.shim FnPredicate FnSupplier]
+           [cn.li.mcbase.shim FnPredicate FnSupplier]
            [net.minecraft.world.inventory Slot AbstractContainerMenu]
            [net.minecraft.world.entity.player Inventory]
            [net.minecraft.world.item ItemStack]))

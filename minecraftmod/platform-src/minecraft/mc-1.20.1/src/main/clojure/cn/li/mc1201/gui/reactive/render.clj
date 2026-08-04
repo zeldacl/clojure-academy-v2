@@ -12,13 +12,13 @@
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcver.render ImmediateDraw ImmediateDraw$Mode ImmediateDraw$Format]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client.renderer GameRenderer ShaderInstance]
            [net.minecraft.client.renderer.texture MissingTextureAtlasSprite]
            [net.minecraft.resources ResourceLocation]
-           [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose DefaultVertexFormat VertexFormat$Mode
-            Tesselator BufferBuilder BufferUploader]
+           [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose]
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.vertex VertexSorting]
            [org.lwjgl.opengl GL11 GL13]
@@ -483,7 +483,7 @@
         cutout-y0  (when cutout (+ iy (int (or (:y-offset cutout 0) 0))))
         cutout-h   (when cutout (int (or (:h cutout 0) (- ih iy))))
 
-        ;; Draw a textured trapezoid via BufferBuilder (1 draw call, zero alloc).
+        ;; Draw a textured trapezoid via ImmediateDraw (1 draw call, zero alloc).
         ;; When diag-tan=0 draws a plain rectangle; when >0 the left edge tilts
         ;; inward such that the bottom-left corner is offset right by diag-tan*h.
         draw-trap!
@@ -499,7 +499,6 @@
             (if (or (pos? diag-tan) uv-region)
               (let [^PoseStack ps (.pose gg)
                     ^Matrix4f pose (.pose (.last ps))
-                    ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))
                     x0   (float seg-start)
                     x1   (float seg-end)
                     y0   (float iy)
@@ -514,12 +513,12 @@
                 (RenderSystem/enableBlend)
                 (RenderSystem/defaultBlendFunc)
                 (apply-color!)  ;; AFTER setShader
-                (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-                (.vertex bb pose x0  y0 0.0)  (.uv bb (u-at x0)  (float v0))  (.endVertex bb)
-                (.vertex bb pose x0b y1 0.0)  (.uv bb (u-at x0b) (float v1))  (.endVertex bb)
-                (.vertex bb pose x1  y1 0.0)  (.uv bb (u-at x1)  (float v1))  (.endVertex bb)
-                (.vertex bb pose x1  y0 0.0)  (.uv bb (u-at x1)  (float v0))  (.endVertex bb)
-                (BufferUploader/drawWithShader (.end bb)))
+                (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
+                (-> (ImmediateDraw/vertex pose x0  y0 0.0)  (.uv (u-at x0)  (float v0))  (.endVertex))
+                (-> (ImmediateDraw/vertex pose x0b y1 0.0)  (.uv (u-at x0b) (float v1))  (.endVertex))
+                (-> (ImmediateDraw/vertex pose x1  y1 0.0)  (.uv (u-at x1)  (float v1))  (.endVertex))
+                (-> (ImmediateDraw/vertex pose x1  y0 0.0)  (.uv (u-at x1)  (float v0))  (.endVertex))
+                (ImmediateDraw/draw))
               ;; Rectangular fill: existing scissor+blit path
               (let [uoff (float (* scroll iw))]
                 (apply-color!)  ;; BEFORE blit
@@ -596,7 +595,7 @@
             (RenderSystem/setShader GameRenderer/getPositionTexShader)))
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
-        ;; ColorModulator — read by ShaderInstance.apply() inside drawWithShader.
+        ;; ColorModulator — read by ShaderInstance.apply() inside ImmediateDraw/draw.
         ;; Set unconditionally so the quad never inherits the previous node's tint.
         (RenderSystem/setShaderColor 1.0 1.0 1.0 alpha)
         (let [x (float (node-abs-x node)) y (float (node-abs-y node))
@@ -604,18 +603,16 @@
               y2 (float (+ (node-abs-y node) (scaled-h node)))
               ^PoseStack ps (.pose gg)
               ^PoseStack$Pose entry (.last ps)
-              ^Matrix4f pose-matrix (.pose entry)
-              ^Tesselator tess (Tesselator/getInstance)
-              ^BufferBuilder bb (.getBuilder tess)]
+              ^Matrix4f pose-matrix (.pose entry)]
           (RenderSystem/setShaderTexture (int 0) tex-0)
           (when tex-1 (RenderSystem/setShaderTexture (int 1) tex-1))
           (let [z (push-depth! node)]
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-            (.vertex bb pose-matrix x y2 z) (.uv bb u0 v1) (.endVertex bb)
-            (.vertex bb pose-matrix x2 y2 z) (.uv bb u1 v1) (.endVertex bb)
-            (.vertex bb pose-matrix x2 y z) (.uv bb u1 v0) (.endVertex bb)
-            (.vertex bb pose-matrix x y z) (.uv bb u0 v0) (.endVertex bb)
-            (BufferUploader/drawWithShader (.end bb))
+            (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
+            (-> (ImmediateDraw/vertex pose-matrix x y2 z) (.uv u0 v1) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix x2 y2 z) (.uv u1 v1) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix x2 y z) (.uv u1 v0) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix x y z) (.uv u0 v0) (.endVertex))
+            (ImmediateDraw/draw)
             (pop-depth! node)))
         ;; ShaderInstance.apply() walks its samplers with activeTexture(GL_TEXTUREi)
         ;; and never puts the unit back, so a two-sampler shader (ring-progbar)
@@ -627,15 +624,15 @@
         (RenderSystem/activeTexture GL13/GL_TEXTURE0)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
         ;; Release the custom program, but leave a *usable* shader bound: a nil
-        ;; current shader NPEs the next raw-BufferBuilder node (drawWithShader
-        ;; dereferences it), and every skill-tree node ends with this ring.
+        ;; current shader NPEs the next ImmediateDraw node (draw dereferences it),
+        ;; and every skill-tree node ends with this ring.
         (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
         (catch Exception e
           (cn.li.mcmod.util.log/stacktrace "shader render failed" e))))))
 
 ;; ============================================================================
 ;; :depth-mask — colour-less depth stamp (upstream SkillTree.scala's
-;; glColorMask(false…) + glAlphaFunc pass)
+;; glColorMask(false…) + glAlphaFunc pass))
 ;; ============================================================================
 
 (def ^:private SLOT-DM-SRC 0)
@@ -660,8 +657,7 @@
               x2 (float (+ (node-abs-x node) (scaled-w node)))
               y2 (float (+ (node-abs-y node) (scaled-h node)))
               ^PoseStack ps (.pose gg)
-              ^Matrix4f pose-matrix (.pose (.last ps))
-              ^BufferBuilder bb (.getBuilder ^Tesselator (Tesselator/getInstance))]
+              ^Matrix4f pose-matrix (.pose (.last ps))]
           (RenderSystem/setShader (StaticShaderSupplier. si))
           (when-let [u (.safeGetUniform si "AlphaThreshold")] (.set u cutoff))
           (RenderSystem/setShaderTexture (int 0) rl)
@@ -673,12 +669,12 @@
           (RenderSystem/depthFunc (int GL11/GL_ALWAYS))
           (RenderSystem/depthMask true)
           (RenderSystem/colorMask false false false false)
-          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          (.vertex bb pose-matrix x y2 z) (.uv bb 0.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y2 z) (.uv bb 1.0 1.0) (.endVertex bb)
-          (.vertex bb pose-matrix x2 y z) (.uv bb 1.0 0.0) (.endVertex bb)
-          (.vertex bb pose-matrix x y z) (.uv bb 0.0 0.0) (.endVertex bb)
-          (BufferUploader/drawWithShader (.end bb))
+          (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
+          (-> (ImmediateDraw/vertex pose-matrix x y2 z) (.uv 0.0 1.0) (.endVertex))
+          (-> (ImmediateDraw/vertex pose-matrix x2 y2 z) (.uv 1.0 1.0) (.endVertex))
+          (-> (ImmediateDraw/vertex pose-matrix x2 y z) (.uv 1.0 0.0) (.endVertex))
+          (-> (ImmediateDraw/vertex pose-matrix x y z) (.uv 0.0 0.0) (.endVertex))
+          (ImmediateDraw/draw)
           (RenderSystem/colorMask true true true true)
           (RenderSystem/depthMask true)
           (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
@@ -704,7 +700,7 @@
 (defn bake-shader-progress! [^INode _node] nil)
 
 ;; ============================================================================
-;; :gradient — pre-compute stops into baked bands, render via BufferBuilder strips
+;; :gradient — pre-compute stops into baked bands, render via ImmediateDraw strips
 ;; ============================================================================
 
 (def ^:private SLOT-GRAD-ALPHA 0)
@@ -778,18 +774,16 @@
             horizontal? (< (Math/abs (- angle 90.0)) 45.0)
             ^PoseStack ps (.pose gg)
             ^PoseStack$Pose entry (.last ps)
-            ^Matrix4f pose-matrix (.pose entry)
-            ^Tesselator tess (Tesselator/getInstance)
-            ^BufferBuilder bb (.getBuilder tess)]
+            ^Matrix4f pose-matrix (.pose entry)]
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
-        ;; POSITION_COLOR buffer → bind position_color explicitly (drawWithShader
+        ;; POSITION_COLOR buffer → bind position_color explicitly (ImmediateDraw/draw
         ;; otherwise reuses the previous node's shader).
         (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionColorShader)))
         (if horizontal?
           ;; Vertical bands for horizontal-ish gradient
           (let [band-w (/ (double w) (double (max 1 (dec n))))]
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_COLOR)
+            (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_COLOR)
             (dotimes [i (dec n)]
               (let [x0 (+ x (* band-w (double i))) x1 (+ x0 band-w)
                     c0 (aget ^ints bands i) c1 (aget ^ints bands (inc i))
@@ -801,14 +795,14 @@
                     r1 (float (/ (double (bit-and (bit-shift-right c1 16) 0xFF)) 255.0))
                     g1 (float (/ (double (bit-and (bit-shift-right c1 8) 0xFF)) 255.0))
                     b1 (float (/ (double (bit-and c1 0xFF)) 255.0))]
-                (.vertex bb pose-matrix (float x0) (float y) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
-                (.vertex bb pose-matrix (float x1) (float y) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
-                (.vertex bb pose-matrix (float x1) (float (+ y h)) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
-                (.vertex bb pose-matrix (float x0) (float (+ y h)) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)))
-            (BufferUploader/drawWithShader (.end bb)))
+                (-> (ImmediateDraw/vertex pose-matrix (float x0) (float y) 0.0) (.color r0 g0 b0 a0) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float x1) (float y) 0.0) (.color r1 g1 b1 a1) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float x1) (float (+ y h)) 0.0) (.color r1 g1 b1 a1) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float x0) (float (+ y h)) 0.0) (.color r0 g0 b0 a0) (.endVertex))))
+            (ImmediateDraw/draw))
           ;; Horizontal bands for vertical-ish gradient
           (let [band-h (/ (double h) (double (max 1 (dec n))))]
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_COLOR)
+            (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_COLOR)
             (dotimes [i (dec n)]
               (let [y0 (+ y (* band-h (double i))) y1 (+ y0 band-h)
                     c0 (aget ^ints bands i) c1 (aget ^ints bands (inc i))
@@ -820,11 +814,11 @@
                     r1 (float (/ (double (bit-and (bit-shift-right c1 16) 0xFF)) 255.0))
                     g1 (float (/ (double (bit-and (bit-shift-right c1 8) 0xFF)) 255.0))
                     b1 (float (/ (double (bit-and c1 0xFF)) 255.0))]
-                (.vertex bb pose-matrix (float x) (float y0) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
-                (.vertex bb pose-matrix (float (+ x w)) (float y0) 0.0) (.color bb r0 g0 b0 a0) (.endVertex bb)
-                (.vertex bb pose-matrix (float (+ x w)) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)
-                (.vertex bb pose-matrix (float x) (float y1) 0.0) (.color bb r1 g1 b1 a1) (.endVertex bb)))
-            (BufferUploader/drawWithShader (.end bb))))))))
+                (-> (ImmediateDraw/vertex pose-matrix (float x) (float y0) 0.0) (.color r0 g0 b0 a0) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float (+ x w)) (float y0) 0.0) (.color r0 g0 b0 a0) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float (+ x w)) (float y1) 0.0) (.color r1 g1 b1 a1) (.endVertex))
+                (-> (ImmediateDraw/vertex pose-matrix (float x) (float y1) 0.0) (.color r1 g1 b1 a1) (.endVertex))))
+            (ImmediateDraw/draw)))))))
 
 ;; ============================================================================
 ;; :line
@@ -859,24 +853,22 @@
               ca (float (* alpha (/ (double (bit-and (bit-shift-right color-int 24) 0xFF)) 255.0)))
               ^PoseStack ps (.pose gg)
               ^PoseStack$Pose entry (.last ps)
-              ^Matrix4f pose-matrix (.pose entry)
-              ^Tesselator tess (Tesselator/getInstance)
-              ^BufferBuilder bb (.getBuilder tess)]
+              ^Matrix4f pose-matrix (.pose entry)]
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
-          ;; Bind position_tex explicitly — see render-nine-slice!: drawWithShader
+          ;; Bind position_tex explicitly — see render-nine-slice!: ImmediateDraw/draw
           ;; reuses whatever shader was last set, and the tree background / text
           ;; nodes drawn just before leave a different one active.
           (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 ca)
           (RenderSystem/setShaderTexture (int 0) tex)
           (let [z (push-depth! node)]
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-            (.vertex bb pose-matrix (float (- x1 nx)) (float (- y1 ny)) z) (.uv bb 0.0 0.0) (.endVertex bb)
-            (.vertex bb pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) z) (.uv bb 0.0 1.0) (.endVertex bb)
-            (.vertex bb pose-matrix (float (+ x2 nx)) (float (+ y2 ny)) z) (.uv bb 1.0 1.0) (.endVertex bb)
-            (.vertex bb pose-matrix (float (- x2 nx)) (float (- y2 ny)) z) (.uv bb 1.0 0.0) (.endVertex bb)
-            (BufferUploader/drawWithShader (.end bb))
+            (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
+            (-> (ImmediateDraw/vertex pose-matrix (float (- x1 nx)) (float (- y1 ny)) z) (.uv 0.0 0.0) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix (float (+ x1 nx)) (float (+ y1 ny)) z) (.uv 0.0 1.0) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix (float (+ x2 nx)) (float (+ y2 ny)) z) (.uv 1.0 1.0) (.endVertex))
+            (-> (ImmediateDraw/vertex pose-matrix (float (- x2 nx)) (float (- y2 ny)) z) (.uv 1.0 0.0) (.endVertex))
+            (ImmediateDraw/draw)
             (pop-depth! node))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))
         (catch Exception e
@@ -915,13 +907,13 @@
       (.setOSlot node SLOT-NS-LINE (resolve-rl line)))))
 
 (defn- render-nine-slice-quad!
-  "Render a single textured quad via BufferBuilder (matching upstream glBegin/glEnd)."
-  [^Matrix4f pose-matrix ^BufferBuilder bb
+  "Render a single textured quad via ImmediateDraw (matching upstream glBegin/glEnd)."
+  [^Matrix4f pose-matrix
    x0 y0 x1 y1 u0 v0 u1 v1]
-  (.vertex bb pose-matrix (float x0) (float y1) 0.0) (.uv bb (float u0) (float v1)) (.endVertex bb)
-  (.vertex bb pose-matrix (float x1) (float y1) 0.0) (.uv bb (float u1) (float v1)) (.endVertex bb)
-  (.vertex bb pose-matrix (float x1) (float y0) 0.0) (.uv bb (float u1) (float v0)) (.endVertex bb)
-  (.vertex bb pose-matrix (float x0) (float y0) 0.0) (.uv bb (float u0) (float v0)) (.endVertex bb))
+  (-> (ImmediateDraw/vertex pose-matrix (float x0) (float y1) 0.0) (.uv (float u0) (float v1)) (.endVertex))
+  (-> (ImmediateDraw/vertex pose-matrix (float x1) (float y1) 0.0) (.uv (float u1) (float v1)) (.endVertex))
+  (-> (ImmediateDraw/vertex pose-matrix (float x1) (float y0) 0.0) (.uv (float u1) (float v0)) (.endVertex))
+  (-> (ImmediateDraw/vertex pose-matrix (float x0) (float y0) 0.0) (.uv (float u0) (float v0)) (.endVertex)))
 
 (defn render-nine-slice! [^GuiGraphics gg ^INode node]
   (let [^ResourceLocation tex (.getOSlot node SLOT-NS-BAKED)]
@@ -937,12 +929,10 @@
             d-ys [(double (- y margin)) (double y) (double (+ y h)) (double (+ y h margin))]
             ^PoseStack ps (.pose gg)
             ^PoseStack$Pose entry (.last ps)
-            ^Matrix4f pose-matrix (.pose entry)
-            ^Tesselator tess (Tesselator/getInstance)
-            ^BufferBuilder bb (.getBuilder tess)]
+            ^Matrix4f pose-matrix (.pose entry)]
         (RenderSystem/enableBlend)
         (RenderSystem/defaultBlendFunc)
-        ;; Bind the position_tex shader explicitly: BufferUploader/drawWithShader
+        ;; Bind the position_tex shader explicitly: ImmediateDraw/draw
         ;; uses the *currently set* shader, and text/other nodes rendered earlier
         ;; leave a different one active — without this the quad draws untextured
         ;; (pure white). Also reset the shader color so we're not tinted.
@@ -952,15 +942,15 @@
         ;; (light) texture — that's the "pure white" background.
         (RenderSystem/setShaderColor 0.0 0.0 0.0 0.5)
         (RenderSystem/setShaderTexture 0 tex)
-        (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+        (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
         (dotimes [i 3]
           (dotimes [j 3]
             (let [u0 (* i step)  u1 (+ u0 step)
                   v0 (* j step)  v1 (+ v0 step)]
-              (render-nine-slice-quad! pose-matrix bb
+              (render-nine-slice-quad! pose-matrix
                 (d-xs i) (d-ys j) (d-xs (inc i)) (d-ys (inc j))
                 u0 v0 u1 v1))))
-        (BufferUploader/drawWithShader (.end bb))
+        (ImmediateDraw/draw)
         ;; Top & bottom decorative lines (matching upstream lineTex rendering)
         (when-let [^ResourceLocation line-tex (.getOSlot node SLOT-NS-LINE)]
           (let [lm 3.2
@@ -969,14 +959,14 @@
             ;; lines drawn at full white (upstream resets glColor4d(1,1,1,1))
             (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
             (RenderSystem/setShaderTexture 0 line-tex)
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
+            (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
             ;; Top line
-            (render-nine-slice-quad! pose-matrix bb
+            (render-nine-slice-quad! pose-matrix
               (- x lm) (+ y lt) (+ x w lm) (+ y lt lh) 0.0 0.0 1.0 1.0)
             ;; Bottom line
-            (render-nine-slice-quad! pose-matrix bb
+            (render-nine-slice-quad! pose-matrix
               (- x lm) (+ y lb) (+ x w lm) (+ y lb lbh) 0.0 0.0 1.0 1.0)
-            (BufferUploader/drawWithShader (.end bb))))
+            (ImmediateDraw/draw)))
         (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
 
 ;; ============================================================================
@@ -1015,11 +1005,21 @@
                  :u  (resolve-rl (modid/asset-path "textures" "guis/glow_up"))
                  :d  (resolve-rl (modid/asset-path "textures" "guis/glow_down"))})))
 
-(defn- glow-quad! [^Matrix4f pm ^BufferBuilder bb x0 y0 x1 y1 u0 v0 u1 v1]
-  (.vertex bb pm (float x0) (float y1) 0.0) (.uv bb (float u0) (float v1)) (.endVertex bb)
-  (.vertex bb pm (float x1) (float y1) 0.0) (.uv bb (float u1) (float v1)) (.endVertex bb)
-  (.vertex bb pm (float x1) (float y0) 0.0) (.uv bb (float u1) (float v0)) (.endVertex bb)
-  (.vertex bb pm (float x0) (float y0) 0.0) (.uv bb (float u0) (float v0)) (.endVertex bb))
+(defn- glow-quad!
+  "Emit one POSITION_TEX quad into the open ImmediateDraw mesh."
+  [^Matrix4f pm x0 y0 x1 y1 u0 v0 u1 v1]
+  (-> (ImmediateDraw/vertex pm (float x0) (float y1) 0.0) (.uv (float u0) (float v1)) (.endVertex))
+  (-> (ImmediateDraw/vertex pm (float x1) (float y1) 0.0) (.uv (float u1) (float v1)) (.endVertex))
+  (-> (ImmediateDraw/vertex pm (float x1) (float y0) 0.0) (.uv (float u1) (float v0)) (.endVertex))
+  (-> (ImmediateDraw/vertex pm (float x0) (float y0) 0.0) (.uv (float u0) (float v0)) (.endVertex)))
+
+(defn- glow-textured-quad!
+  "One textured glow segment: bind texture then begin/draw (no mid-batch rebind)."
+  [^Matrix4f pm ^ResourceLocation tex x0 y0 x1 y1]
+  (RenderSystem/setShaderTexture 0 tex)
+  (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_TEX)
+  (glow-quad! pm x0 y0 x1 y1 0.0 0.0 1.0 1.0)
+  (ImmediateDraw/draw))
 
 (defn render-glow-line! [^GuiGraphics gg ^INode node]
   (when (.isVisible node)
@@ -1039,41 +1039,28 @@
               [tr tg tb ta] (glow-line-tint-rgba node)
               no-center? (not (zero? (.getDSlot node SLOT-GL-NOCENTER)))
               ^PoseStack ps (.pose gg)
-              ^Matrix4f pm (.pose (.last ps))
-              ^Tesselator tess (Tesselator/getInstance)
-              ^BufferBuilder bb (.getBuilder tess)]
+              ^Matrix4f pm (.pose (.last ps))]
           (RenderSystem/enableBlend)
           (RenderSystem/defaultBlendFunc)
           (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionTexShader)))
           (RenderSystem/setShaderColor tr tg tb ta)
-          (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-          ;; corners
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:lu texs))
-          (glow-quad! pm bb glx0 gly0 gx0 gy0 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:ru texs))
-          (glow-quad! pm bb gx1 gly0 glx1 gy0 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:ld texs))
-          (glow-quad! pm bb glx0 gy1 gx0 gly1 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:rd texs))
-          (glow-quad! pm bb gx1 gy1 glx1 gly1 0.0 0.0 1.0 1.0)
+          ;; corners — separate begin/draw per texture (ImmediateDraw forbids mid-batch rebind)
+          (glow-textured-quad! pm ^ResourceLocation (:lu texs) glx0 gly0 gx0 gy0)
+          (glow-textured-quad! pm ^ResourceLocation (:ru texs) gx1 gly0 glx1 gy0)
+          (glow-textured-quad! pm ^ResourceLocation (:ld texs) glx0 gy1 gx0 gly1)
+          (glow-textured-quad! pm ^ResourceLocation (:rd texs) gx1 gy1 glx1 gly1)
           ;; edges
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:l texs))
-          (glow-quad! pm bb glx0 gy0 gx0 gy1 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:r texs))
-          (glow-quad! pm bb gx1 gy0 glx1 gy1 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:u texs))
-          (glow-quad! pm bb gx0 gly0 gx1 gy0 0.0 0.0 1.0 1.0)
-          (RenderSystem/setShaderTexture 0 ^ResourceLocation (:d texs))
-          (glow-quad! pm bb gx0 gy1 gx1 gly1 0.0 0.0 1.0 1.0)
-          (BufferUploader/drawWithShader (.end bb))
+          (glow-textured-quad! pm ^ResourceLocation (:l texs) glx0 gy0 gx0 gy1)
+          (glow-textured-quad! pm ^ResourceLocation (:r texs) gx1 gy0 glx1 gy1)
+          (glow-textured-quad! pm ^ResourceLocation (:u texs) gx0 gly0 gx1 gy0)
+          (glow-textured-quad! pm ^ResourceLocation (:d texs) gx0 gy1 gx1 gly1)
           ;; center bright line (ACRenderingHelper.lineSegmentGlow only —
           ;; drawGlow-style box glow, e.g. the skill-slot icon border, sets
           ;; :no-center to skip this so only the 8 edge/corner segments show)
           (when-not no-center?
-            (RenderSystem/setShaderTexture 0 (resolve-rl (modid/asset-path "textures" "guis/line")))
-            (.begin bb VertexFormat$Mode/QUADS DefaultVertexFormat/POSITION_TEX)
-            (glow-quad! pm bb gx0 (- gy hw) gx1 (+ gy hw) 0.0 0.0 1.0 1.0)
-            (BufferUploader/drawWithShader (.end bb)))
+            (glow-textured-quad! pm
+              (resolve-rl (modid/asset-path "textures" "guis/line"))
+              gx0 (- gy hw) gx1 (+ gy hw)))
           (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0))))))
 
 ;; ============================================================================

@@ -24,7 +24,7 @@
   (fn [f]
     (with-framework
       (fn []
-        (test-nbt/install-test-nbt-ops!)
+        (test-nbt/install-test-structured-data-ops!)
         (with-redefs [log/info (fn [& _])
                       log/warn (fn [& _])
                       uuid/player-uuid (fn [_] #uuid "00000000-0000-0000-0000-000000000001")

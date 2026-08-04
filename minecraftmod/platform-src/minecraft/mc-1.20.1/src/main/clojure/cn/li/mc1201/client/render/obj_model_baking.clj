@@ -9,7 +9,7 @@
   hand/ground stays on the 3D mesh without a custom ItemOverrides subclass."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
-            [cn.li.mc1201.datagen.item-model-patterns :as model-patterns]
+            [cn.li.mcbase.datagen.item-model-patterns :as model-patterns]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.resources.model BakedModel ModelResourceLocation]
            [net.minecraft.resources ResourceLocation]

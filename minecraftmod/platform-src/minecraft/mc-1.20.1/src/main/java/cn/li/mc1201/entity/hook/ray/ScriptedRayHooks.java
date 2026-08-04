@@ -1,6 +1,6 @@
 package cn.li.mc1201.entity.hook.ray;
 
-import cn.li.mc1201.entity.hook.AbstractHookRegistry;
+import cn.li.mcbase.entity.hook.AbstractHookRegistry;
 
 public final class ScriptedRayHooks {
     private static final Class<?> REGISTRY_CLASS = ScriptedRayHooks.class;

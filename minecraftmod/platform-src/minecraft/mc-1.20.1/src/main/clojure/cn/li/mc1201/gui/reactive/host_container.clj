@@ -7,7 +7,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.gui.reactive.render :as render]
             [cn.li.mc1201.gui.reactive.clock :as clock]
-            [cn.li.mc1201.gui.reactive.input :as input]
+            [cn.li.mcbase.gui.reactive.input :as input]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]
