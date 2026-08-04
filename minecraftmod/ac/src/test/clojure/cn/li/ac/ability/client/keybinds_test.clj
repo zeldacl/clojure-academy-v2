@@ -172,6 +172,20 @@
        :on-short-up (fn [] (swap! emitted conj :short-up))})
     (is (empty? @emitted))))
 
-
-
+(deftest vanilla-override-key-codes-follow-upstream-control-overrider-test
+  (binding [keybinds/*client-session-id* :session-a
+            keybinds/*get-player-uuid-fn* (constantly "p1")]
+    (with-redefs [read-model/get-player-state (fn [& _] {:resource-data {:activated false}})]
+      (is (= [] (keybinds/vanilla-override-key-codes "p1"))))
+    (with-redefs [read-model/get-player-state (fn [& _] {:resource-data {:activated true}})]
+      (is (= [] (keybinds/vanilla-override-key-codes "p1"))
+          "activated with empty preset must not override vanilla keys"))
+    (keybinds/register-key-delegate! :default 0 {:skill-id :railgun})
+    (keybinds/register-key-delegate! :default 1 {:skill-id :arc-gen})
+    (with-redefs [read-model/get-player-state (fn [& _] {:resource-data {:activated true}})]
+      (is (= [-100 -99] (keybinds/vanilla-override-key-codes "p1"))
+          "delegates on default LMB/RMB slots suppress vanilla attack/use"))
+    (with-redefs [read-model/get-player-state (fn [& _] {:resource-data {:activated false}})]
+      (is (= [] (keybinds/vanilla-override-key-codes "p1"))
+          "deactivated clears overrides even if delegates remain"))))
 

@@ -57,7 +57,8 @@
 (defn handle-entity-attack
   "Shared entity-attack policy. Runtime-active players cannot attack entities
   with vanilla LMB — upstream AcademyCraft overrides the attack KeyBinding
-  itself while ability mode is active, suppressing entity attack uniformly
+  itself while ability mode is active (ControlOverrider / our
+  vanilla-input-control SPI), suppressing entity attack uniformly
   alongside block breaking."
   [event-data]
   (when (runtime-active-event? event-data)

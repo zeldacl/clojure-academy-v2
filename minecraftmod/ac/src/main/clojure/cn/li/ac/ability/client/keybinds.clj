@@ -19,6 +19,7 @@
             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.spi.vanilla-input-control :as vanilla-input]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap TreeMap Map$Entry]))
 
@@ -427,23 +428,57 @@
                                                (cmd-builder/toggle-activated-command current))
              (runtime-hooks/set-client-overlay-activated! player-uuid (not current)))))))))
 
+(defn vanilla-override-key-codes
+  "AC key ids that must suppress matching vanilla KeyMappings this frame.
+
+  Mirrors upstream ClientRuntime.rebuildOverrides + ControlOverrider:
+  - ability mode off → no overrides
+  - Frequency Transmitter pass-on → LMB/RMB owned by the overlay
+  - ability mode on → only slots that currently have a skill delegate"
+  ([]
+   (vanilla-override-key-codes (get-client-player-uuid)))
+  ([player-uuid]
+   (cond
+     (nil? player-uuid) []
+     (freq-transmitter/overlay-active? player-uuid) [-100 -99]
+     (activated? player-uuid)
+     (into []
+           (keep (fn [idx]
+                   (when (get-delegate-for-key idx)
+                     (gameplay-config/input-key
+                       (keyword (str "ability-key-" idx)))))
+                 (range 4)))
+     :else [])))
+
+(defn- sync-vanilla-input-overrides!
+  "Apply ControlOverrider-equivalent suppression for this client tick."
+  [player-uuid]
+  (vanilla-input/suppress-vanilla-inputs! (vanilla-override-key-codes player-uuid)))
+
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for each key."
   [key-state-fn]
   ;; Frequency Transmitter's pass-on stage owns the mouse buttons just like
   ;; upstream ControlOverrider; ordinary ability-slot input is suppressed.
-  (if-let [player-uuid (get-client-player-uuid)]
-    (if (freq-transmitter/overlay-active? player-uuid)
-      (freq-transmitter/tick-overlay-input! player-uuid
-                                            (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
+  (let [player-uuid (get-client-player-uuid)]
+    ;; Suppress vanilla attack/use first so handleKeybinds on the *next* frame
+    ;; does not keep swinging while a skill owns LMB/RMB (upstream ControlOverrider).
+    (sync-vanilla-input-overrides! player-uuid)
+    (if player-uuid
+      (if (freq-transmitter/overlay-active? player-uuid)
+        (freq-transmitter/tick-overlay-input!
+          player-uuid
+          (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
+        (doseq [idx (range 4)]
+          (on-skill-key-event
+            idx
+            (key-state-fn [:raw (gameplay-config/input-key
+                                  (keyword (str "ability-key-" idx)))]))))
       (doseq [idx (range 4)]
-        (on-skill-key-event idx
+        (on-skill-key-event
+          idx
           (key-state-fn [:raw (gameplay-config/input-key
-                                (keyword (str "ability-key-" idx)))]))))
-    (doseq [idx (range 4)]
-      (on-skill-key-event idx
-        (key-state-fn [:raw (gameplay-config/input-key
-                              (keyword (str "ability-key-" idx)))]))))
+                                (keyword (str "ability-key-" idx)))])))))
 
   ;; Poll movement keys (W/A/S/D)
   (doseq [movement-key movement-keys]
