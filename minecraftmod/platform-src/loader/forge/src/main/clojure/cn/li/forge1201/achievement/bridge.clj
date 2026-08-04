@@ -7,7 +7,7 @@
   (:require [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.forge1201.trigger ModTriggers]
+  (:import [cn.li.mc1201.trigger ModTriggers]
            [java.util UUID]
            [net.minecraftforge.server ServerLifecycleHooks]))
 

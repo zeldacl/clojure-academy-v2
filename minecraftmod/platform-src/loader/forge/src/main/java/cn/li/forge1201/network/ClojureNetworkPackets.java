@@ -1,5 +1,6 @@
 package cn.li.forge1201.network;
 
+import cn.li.mc1201.network.NetworkHandlerRegistry;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;

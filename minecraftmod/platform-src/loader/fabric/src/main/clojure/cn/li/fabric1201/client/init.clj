@@ -4,6 +4,8 @@
             [cn.li.mc1201.client.render.pose :as pose-impl]
             [cn.li.mc1201.client.render.buffer :as buffer-impl]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
+            [cn.li.mc1201.client.energy-item-model-properties :as energy-item-model-properties]
+            [cn.li.mc1201.integration.recipe-query :as recipe-query]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.ui.registry :as widget-registry]
@@ -33,9 +35,10 @@
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
            [net.minecraft.client Minecraft]
            [net.minecraft.network.chat Component]
-           [cn.li.fabric1201.shim FabricClientHelper]
-           [cn.li.fabric1201.shim FabricClientHelper$RendererFactory]
-           [cn.li.fabric1201.client.render BlockEntityRendererImpl]
+           [cn.li.mc1201.client ClientHelper]
+           [cn.li.mc1201.client ClientHelper$RendererFactory]
+           [cn.li.mc1201.client.render ScriptedBlockEntityBer]
+           [cn.li.mc1201.client.render ModRenderTypes]
            [com.mojang.blaze3d.platform Window]
            [net.minecraft.world.entity.player Player]
            [cn.li.mc1201.client GuiGraphicsHelper]
@@ -44,9 +47,7 @@
 (defn- bind-texture-fabric!
   "Bind a texture for rendering."
   [texture]
-  (let [minecraft (Minecraft/getInstance)
-        texture-manager (.getTextureManager minecraft)]
-    (.bindForSetup texture-manager texture)))
+  (ClientHelper/bindTextureForSetup texture))
 
 (defn register-renderers
   "Register platform-agnostic renderers for Fabric."
@@ -90,11 +91,11 @@
   []
   (doseq [tile-id (registry-metadata/get-all-tile-ids)]
     (when-let [be-type (mod/get-registered-block-entity-type tile-id)]
-      (FabricClientHelper/registerBlockEntityRenderer
+      (ClientHelper/registerBlockEntityRenderer
         be-type
-        (reify FabricClientHelper$RendererFactory
+        (reify ClientHelper$RendererFactory
           (create [_]
-            (BlockEntityRendererImpl.))))
+            (ScriptedBlockEntityBer.))))
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
 (defn- open-screen-dispatcher
@@ -124,22 +125,26 @@
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
          (overlay-state/get-active-overlay-app owner)))
-	     :get-client-player #(.player (Minecraft/getInstance))
-	     :local-player-uuid mc-session/local-player-uuid
-	     :set-active-overlay-app (fn [app-kw player-uuid]
-	                                (overlay-state/set-active-overlay-app!
-	                                  {:client-session-id "" :player-uuid (str player-uuid)}
-	                                  app-kw))
-	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
-       :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
-       :settings-key-name key-scheme-core/key-display-name
-	     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
-	     :send-system-message! (fn [^Player player translatable-key & args]
-	                              (.sendSystemMessage player
-	                                (Component/translatable translatable-key (into-array Object args))))
-     ;; === Rendering bridge (parity with Forge init.clj) ===
-     :resolve-shader (fn [_shader-name]
-                       nil)
+     :get-client-player #(.player (Minecraft/getInstance))
+     :local-player-uuid mc-session/local-player-uuid
+     :set-active-overlay-app (fn [app-kw player-uuid]
+                                (overlay-state/set-active-overlay-app!
+                                  {:client-session-id "" :player-uuid (str player-uuid)}
+                                  app-kw))
+     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+     :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
+     :settings-key-name key-scheme-core/key-display-name
+     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+     :send-system-message! (fn [^Player player translatable-key & args]
+                              (.sendSystemMessage player
+                                (Component/translatable translatable-key (into-array Object args))))
+     :resolve-shader (fn [shader-name]
+                       (case shader-name
+                         :ring-progbar (ModRenderTypes/getSkillProgbarShader)
+                         :mono (ModRenderTypes/getMonoShader)
+                         :cpbar-overload (ModRenderTypes/getCpbarOverloadShader)
+                         :alpha-discard (ModRenderTypes/getAlphaDiscardShader)
+                         nil))
      :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                             (GuiGraphicsHelper/blitTexturedQuad
                               graphics texture (float x1) (float y1) (float x2) (float y2) (float z)
@@ -160,7 +165,6 @@
                         (sound/stop-all-media!))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
-                            ;; Returns the UUID string so callers can despawn later.
                             :mcmod/spawn-local-scripted-effect
                             (ScriptedEffectSpawner/spawnLocalWithUuid (:effect-id payload))
 
@@ -202,11 +206,18 @@
                                   handle (.getWindow win)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))
-     ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
-       :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
-       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
-       :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
-       :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!}))
+     :has-recipes? (fn [item-id]
+                     (recipe-query/has-recipes? item-id))
+     :first-recipe-for (fn [item-id recipe-kind]
+                         (recipe-query/first-recipe-for item-id recipe-kind))
+     :all-recipes-for (fn [item-id recipe-kind]
+                        (recipe-query/all-recipes-for item-id recipe-kind))
+     :find-recipes (fn [item-id]
+                     (recipe-query/find-recipes item-id))
+     :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
+     :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
+     :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
+     :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!}))
 
 (defn- install-client-owner-hooks!
   []
@@ -220,35 +231,29 @@
   (mc-session/init-default-owner-resolver!)
   (install-client-owner-hooks!)
 
-  ;; ===== Platform SPI Installation (before AC bootstrap) =====
-  ;; Install Fabric-specific SPI implementations that AC will use
   (try
     (key-scheme-spi/install-provider! (key-scheme-core/get-spi-implementation))
     (vanilla-spi/install-suppressor! (vanilla-control/get-spi-implementation))
     (catch Exception e
       (log/warn e "Failed to install keyboard input SPI providers")))
-  
-  ;; ===== Content Keybinding Initialization (post-SPI) =====
-  ;; Run content-registered post-SPI init callbacks (e.g. AC keybindings)
+
   (try
     (lifecycle/run-post-spi-client-init!)
     (catch Exception e
       (log/error e "Failed to run post-SPI content keybinding init")))
-  
-  ;; ===== Fabric Keyboard Handler Installation =====
-  ;; Install GLFW polling for keyboard inputs (Fabric has no native keyboard events)
+
   (try
     (kb-init/install-keyboard-handler!)
     (catch Exception e
       (log/error e "Failed to install Fabric keyboard handler")))
-  
-  ;; ===== Standard Client Initialization =====
+
   (init-render-bindings!)
   (init-content-client-bridge!)
   (i18n/install-client-i18n!)
   (register-renderers)
   (FabricClientRenderSetup/registerEntityRenderers)
   (register-scripted-block-entity-renderers!)
+  (energy-item-model-properties/register!)
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)

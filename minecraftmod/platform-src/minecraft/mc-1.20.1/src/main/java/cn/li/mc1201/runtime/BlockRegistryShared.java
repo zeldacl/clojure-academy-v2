@@ -1,5 +1,7 @@
 package cn.li.mc1201.runtime;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -15,7 +17,7 @@ public final class BlockRegistryShared {
             if (blockId == null || blockId.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = ResourceLocation.parse(blockId);
+            ResourceLocation id = ResourceLocations.parse(blockId);
             Block block = BuiltInRegistries.BLOCK.get(id);
             return block == Blocks.AIR ? null : block;
         } catch (Exception ignored) {
@@ -28,7 +30,7 @@ public final class BlockRegistryShared {
             if (namespace == null || namespace.isEmpty() || path == null || path.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
+            ResourceLocation id = ResourceLocations.of(namespace, path);
             return BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
         } catch (Exception ignored) {
             return null;

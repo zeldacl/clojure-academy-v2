@@ -1,5 +1,7 @@
 package cn.li.fabric1201.entity;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -84,7 +86,7 @@ public final class FabricEntities {
 
         private static <E extends net.minecraft.world.entity.Entity> void registerEntityType(
             String id, EntityType<E> entityType) {
-        ResourceLocation location = ResourceLocation.fromNamespaceAndPath(MOD_ID, id);
+        ResourceLocation location = ResourceLocations.of(MOD_ID, id);
         @SuppressWarnings("unchecked")
         EntityType<E> registered = (EntityType<E>) Registry.register(
                 BuiltInRegistries.ENTITY_TYPE,

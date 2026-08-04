@@ -1,5 +1,7 @@
 package cn.li.fabric1201.shim;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.fabricmc.fabric.api.particle.v1.FabricParticleTypes;
 import net.minecraft.core.Registry;
 import net.minecraft.core.particles.SimpleParticleType;
@@ -17,7 +19,7 @@ public final class FabricParticleHelper {
 
     public static SimpleParticleType registerParticle(String namespace, String path, boolean alwaysShow) {
         SimpleParticleType type = FabricParticleTypes.simple(alwaysShow);
-        Registry.register(BuiltInRegistries.PARTICLE_TYPE, ResourceLocation.fromNamespaceAndPath(namespace, path), type);
+        Registry.register(BuiltInRegistries.PARTICLE_TYPE, ResourceLocations.of(namespace, path), type);
         return type;
     }
 }

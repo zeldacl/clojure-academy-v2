@@ -8,14 +8,11 @@
             [cn.li.mcmod.protocol.metadata :as metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1201.block.blockstate-properties :as bsp]
-            [cn.li.mc1201.runtime.item-callback :as item-callback]
-            [cn.li.mc1201.item.spec :as item-spec])
+            [cn.li.mc1201.item.item-properties :as item-properties])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.block IScriptedBlock]
-           [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
-           [cn.li.mc1201.item NbtBarItem ScriptedItem]
-           [net.minecraft.world.item Item$Properties]))
+           [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]))
 
 (defn- metadata-call
   "Call metadata function `f` with `args`. Returns nil if `f` is nil."
@@ -100,14 +97,7 @@
 
 (defn- create-standalone-item
   [item-spec]
-  (let [props (Item$Properties.)
-        {:keys [energy-item? enchantability tooltip-lines current-key max-key default-max bar-color]}
-        (item-spec/standalone-values item-spec)
-        no-owner (fn [_player _side f] (f))
-        callback (item-callback/build "Fabric" no-owner)]
-    (if energy-item?
-      (NbtBarItem. props current-key max-key default-max bar-color callback)
-      (ScriptedItem. props enchantability tooltip-lines callback))))
+  (item-properties/create-standalone-item item-spec))
 
 (defn register-all-items!
   [{:keys [registered-items registered-blocks]}]

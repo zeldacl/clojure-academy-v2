@@ -1,5 +1,7 @@
 package cn.li.mc1201.entity;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
@@ -101,7 +103,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         this.entityData.set(DATA_BEHAVIOR_HIT, true);
         String soundPath = behaviorValue(heavy ? "heavy-sound" : "light-sound", "");
         String soundId = cn.li.mcmod.ModId.ID + ":" + soundPath;
-        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocation.parse(soundId));
+        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.get(ResourceLocations.parse(soundId));
         if (sound != null) {
             this.playSound(sound, 0.5F, 1.0F);
         }
@@ -113,7 +115,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             return;
         }
         String particlePath = behaviorValue("particle", "");
-        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, particlePath));
+        var fragTypeRaw = BuiltInRegistries.PARTICLE_TYPE.get(ResourceLocations.of(cn.li.mcmod.ModId.ID, particlePath));
         if (!(fragTypeRaw instanceof SimpleParticleType fragType)) {
             return;
         }
@@ -369,7 +371,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     private BlockState resolveSyncedBlockState() {
         try {
-            ResourceLocation blockId = ResourceLocation.parse(getSyncedBlockId());
+            ResourceLocation blockId = ResourceLocations.parse(getSyncedBlockId());
             Block block = BuiltInRegistries.BLOCK.get(blockId);
             return block == null ? null : block.defaultBlockState();
         } catch (Exception ignored) {
@@ -389,7 +391,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     @Override
     protected Item getDefaultItem() {
         try {
-            ResourceLocation blockId = ResourceLocation.parse(getSyncedBlockId());
+            ResourceLocation blockId = ResourceLocations.parse(getSyncedBlockId());
             Item item = BuiltInRegistries.ITEM.get(blockId);
             return item == null ? Items.AIR : item;
         } catch (Exception ignored) {

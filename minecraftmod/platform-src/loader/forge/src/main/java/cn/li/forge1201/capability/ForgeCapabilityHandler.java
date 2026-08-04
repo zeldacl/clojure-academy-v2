@@ -1,6 +1,7 @@
 package cn.li.forge1201.capability;
 
 import cn.li.mc1201.block.IScriptedBlock;
+import cn.li.mc1201.block.capability.ScriptedCapabilityResolver;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc1201.block.logic.ITileCapabilityLogic;
 import net.minecraft.core.Direction;
@@ -32,7 +33,7 @@ public final class ForgeCapabilityHandler {
             return cached.cast();
         }
 
-        Object handler = ForgeCapabilityResolver.resolve(be, key, side);
+        Object handler = ScriptedCapabilityResolver.resolve(be, key, side);
         if (handler != null) {
             LazyOptional<Object> lazyOptional = LazyOptional.of(() -> handler);
             cache.put(key, lazyOptional);

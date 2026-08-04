@@ -4,10 +4,10 @@
             [cn.li.fabric1201.integration.events.block :as block-events]
             [cn.li.fabric1201.integration.events.loot :as loot-events]
             [cn.li.fabric1201.integration.events.lifecycle :as lifecycle-events]
+            [cn.li.fabric1201.integration.events.world :as world-events]
             [cn.li.fabric1201.commands :as commands]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.events.world-save-cache :as world-save-cache]
             [cn.li.mcmod.runtime.install :as install])
   (:import [net.fabricmc.fabric.api.command.v2 CommandRegistrationCallback]
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]
@@ -68,14 +68,12 @@
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/LOAD
                  (reify ServerWorldEvents$Load
                    (onWorldLoad [_ _server world]
-                     (world-lifecycle/dispatch-world-load world (world-save-cache/consume-saved-data! world)))))
+                     (world-events/handle-world-load world))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/UNLOAD
                  (reify ServerWorldEvents$Unload
                    (onWorldUnload [_ _server world]
-                     (let [saved (world-lifecycle/dispatch-world-save world)]
-                       (world-save-cache/remember-saved-data! world saved))
-                     (world-lifecycle/dispatch-world-unload world))))
+                     (world-events/handle-world-unload world))))
 
       (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_WORLD_TICK
                  (reify ServerTickEvents$EndWorldTick
@@ -123,6 +121,7 @@
                      (commands/register-commands dispatcher))))
 
           (lifecycle-events/install-server-stop-cleanup!)
+          (world-events/register-on-world-state-changed!)
 
           (log/info "Fabric event listeners registered")))
   nil)

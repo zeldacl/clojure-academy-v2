@@ -28,7 +28,7 @@
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
-            [cn.li.forge1201.client.key-mapping-adapter :as key-mapping-adapter]
+            [cn.li.mc1201.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mc1201.client.overlay.state :as overlay-state]
@@ -41,15 +41,15 @@
             [cn.li.forge1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.forge1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.forge1201.client.fov-renderer :as fov-renderer]
-            [cn.li.forge1201.client.render.tesr-impl :as tesr-impl]
-            [cn.li.forge1201.client.energy-item-model-properties :as energy-item-model-properties]
+            [cn.li.mc1201.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.forge1201.integration.recipe-query :as recipe-query]
+            [cn.li.mc1201.integration.recipe-query :as recipe-query]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi])
-  (:import [cn.li.forge1201.shim ForgeClientHelper]
-           [cn.li.forge1201.mixin GuiGraphicsInvoker]
+  (:import [cn.li.mc1201.client ClientHelper]
+           [cn.li.forge1201.shim ForgeClientHelper]
+           [cn.li.mc1201.client GuiGraphicsHelper]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -60,7 +60,8 @@
            [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
            [net.minecraft.client KeyMapping]
-           [cn.li.forge1201.client.render ScriptedBlockEntityBerProvider]
+           [cn.li.mc1201.client.render ScriptedBlockEntityBerProvider]
+           [cn.li.mc1201.client.render ModRenderTypes]
            [com.mojang.blaze3d.platform Window]))
 
 ;; ============================================================================
@@ -75,7 +76,7 @@
   
   Uses direct method calls (no reflection) for better performance."
   [texture]
-  (ForgeClientHelper/bindTextureForSetup texture))
+  (ClientHelper/bindTextureForSetup texture))
 
 (defn register-renderers
   "Register platform-agnostic renderers with the universal BlockEntityRenderer dispatcher
@@ -278,11 +279,11 @@
                        (.width (.-font mc) text)))
        :resolve-shader (fn [shader-name]
                          (case shader-name
-                            :ring-progbar (cn.li.forge1201.client.render.ModShaders/getSkillProgbarShader)
-                            :mono (cn.li.forge1201.client.render.ModShaders/getMonoShader)
-                            :cpbar-overload (cn.li.forge1201.client.render.ModShaders/getCpbarOverloadShader)
-                            :alpha-discard (cn.li.forge1201.client.render.ModShaders/getAlphaDiscardShader)
-                           nil))
+                            :ring-progbar (ModRenderTypes/getSkillProgbarShader)
+                            :mono (ModRenderTypes/getMonoShader)
+                            :cpbar-overload (ModRenderTypes/getCpbarOverloadShader)
+                            :alpha-discard (ModRenderTypes/getAlphaDiscardShader)
+                            nil))
        :get-window-size (fn []
                          (let [^Minecraft mc (Minecraft/getInstance)
                                ^Window win (.getWindow mc)]
@@ -303,8 +304,9 @@
        :find-recipes (fn [item-id]
                        (recipe-query/find-recipes item-id))
        :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
-                              (.invokeInnerBlit ^GuiGraphicsInvoker graphics
-                                texture (int x1) (int x2) (int y1) (int y2) (int z)
+                              (GuiGraphicsHelper/blitTexturedQuad
+                                graphics texture
+                                (float x1) (float y1) (float x2) (float y2) (float z)
                                 (float u0) (float u1) (float v0) (float v1)))
        :is-glfw-key-down? (fn [key-code]
                             (try

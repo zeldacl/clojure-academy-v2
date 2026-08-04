@@ -1,5 +1,7 @@
 package cn.li.mc1201.entity;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.mc1201.entity.spec.ScriptedProjectileSpec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -64,7 +66,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         }
         ResourceLocation itemId;
         try {
-            itemId = ResourceLocation.parse(spec.getDefaultItemId());
+            itemId = ResourceLocations.parse(spec.getDefaultItemId());
         } catch (Exception ignored) {
             return Items.AIR;
         }

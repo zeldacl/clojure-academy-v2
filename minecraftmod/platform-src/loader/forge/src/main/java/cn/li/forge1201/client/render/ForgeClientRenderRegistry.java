@@ -153,6 +153,7 @@ public final class ForgeClientRenderRegistry {
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     skillProgbarShader = shader;
+                    ModRenderTypes.setSkillProgbarShader(shader);
                 }
             );
             // Grayscale shader (for unlearned content icons)
@@ -162,6 +163,7 @@ public final class ForgeClientRenderRegistry {
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     monoShader = shader;
+                    ModRenderTypes.setMonoShader(shader);
                 }
             );
             // CPBar overload shader (scroll + highlight pulse effect)
@@ -171,6 +173,7 @@ public final class ForgeClientRenderRegistry {
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     cpbarOverloadShader = shader;
+                    ModRenderTypes.setCpbarOverloadShader(shader);
                 }
             );
             // Alpha discard shader (for depth masking in content tree nodes)
@@ -180,6 +183,7 @@ public final class ForgeClientRenderRegistry {
                     com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_TEX),
                 shader -> {
                     alphaDiscardShader = shader;
+                    ModRenderTypes.setAlphaDiscardShader(shader);
                 }
             );
         } catch (IOException e) {

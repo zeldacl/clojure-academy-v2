@@ -1,5 +1,7 @@
 package cn.li.mc1201.client.render.effect;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
@@ -138,7 +140,7 @@ public final class ScriptedBlockBodyRenderer<T extends Entity> extends EntityRen
 
     private static BlockState resolveBlockState(String blockId) {
         try {
-            ResourceLocation loc = ResourceLocation.parse(blockId);
+            ResourceLocation loc = ResourceLocations.parse(blockId);
             Block block = BuiltInRegistries.BLOCK.get(loc);
             if (block == null) return null;
             return block.defaultBlockState();

@@ -9,7 +9,7 @@
             [cn.li.forge1201.capability.fluid-handler :as fluid-handler]
             [cn.li.forge1201.integration.imc-dispatch :as imc-dispatch]
             [cn.li.forge1201.achievement.bridge :as achievement-bridge])
-  (:import [cn.li.forge1201.trigger ModTriggers]))
+  (:import [cn.li.mc1201.trigger ModTriggers]))
 
 (defn set-version!
   "Set the forge version for multimethod dispatch"

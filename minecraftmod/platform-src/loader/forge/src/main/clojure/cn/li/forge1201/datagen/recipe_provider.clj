@@ -2,8 +2,8 @@
   "Forge 1.20.1 recipe datagen provider."
   (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]
             [cn.li.mc1201.datagen.recipe-provider-core :as recipe-provider-core]
-            [cn.li.forge1201.datagen.recipe-provider-custom :as recipe-provider-custom])
-  (:import [cn.li.forge1201.shim DelegatingRecipeProvider]
+            [cn.li.mc1201.datagen.recipe-provider-custom :as recipe-provider-custom])
+  (:import [cn.li.mc1201.shim DelegatingRecipeProvider]
            [java.util.function Consumer]
            [net.minecraft.data PackOutput]
            [net.minecraft.data.recipes RecipeProvider]

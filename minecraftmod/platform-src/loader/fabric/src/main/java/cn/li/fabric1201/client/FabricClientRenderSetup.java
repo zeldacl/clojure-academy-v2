@@ -1,12 +1,13 @@
 package cn.li.fabric1201.client;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.fabric1201.entity.FabricEntities;
 import cn.li.fabric1201.shim.FabricClientHelper;
 import cn.li.mc1201.clj.ClojureInterop;
 import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.render.EffectRendererDispatcher;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mc1201.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
@@ -14,6 +15,10 @@ import cn.li.mc1201.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mc1201.entity.spec.ScriptedEffectSpec;
 import cn.li.mc1201.entity.spec.ScriptedMarkerSpec;
 import cn.li.mc1201.entity.spec.ScriptedRaySpec;
+import cn.li.mcmod.ModId;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
@@ -23,7 +28,7 @@ import net.minecraft.world.entity.EntityType;
 import java.io.IOException;
 
 /**
- * Fabric entity renderer registration for scripted runtime entities.
+ * Fabric entity renderer / shader registration for scripted runtime entities.
  */
 public final class FabricClientRenderSetup {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -35,7 +40,15 @@ public final class FabricClientRenderSetup {
         CoreShaderRegistrationCallback.EVENT.register(context -> {
             try {
                 context.register(
-                        ResourceLocation.fromNamespaceAndPath(cn.li.mcmod.ModId.ID, "msdf_text"),
+                        ResourceLocations.of(ModId.ID, "plasma_body"),
+                        ModRenderTypes.PLASMA_BODY_FORMAT,
+                        ModRenderTypes::setPlasmaBodyShader);
+            } catch (IOException e) {
+                LOGGER.error("Failed to register plasma_body shader", e);
+            }
+            try {
+                context.register(
+                        ResourceLocations.of(ModId.ID, "msdf_text"),
                         MsdfRenderTypes.MSDF_TEXT_FORMAT,
                         shader -> {
                             MsdfRenderTypes.setMsdfShader(shader);
@@ -47,6 +60,26 @@ public final class FabricClientRenderSetup {
                 ClojureInterop.invoke("cn.li.mc1201.client.font.msdf-setup", "on-shader-ready!");
             } catch (IOException e) {
                 LOGGER.error("Failed to register MSDF text shader", e);
+            }
+            try {
+                context.register(
+                        ResourceLocations.of(ModId.ID, "skill_progbar"),
+                        DefaultVertexFormat.POSITION_TEX,
+                        ModRenderTypes::setSkillProgbarShader);
+                context.register(
+                        ResourceLocations.of(ModId.ID, "mono"),
+                        DefaultVertexFormat.POSITION_TEX,
+                        ModRenderTypes::setMonoShader);
+                context.register(
+                        ResourceLocations.of(ModId.ID, "cpbar_overload"),
+                        DefaultVertexFormat.POSITION_TEX,
+                        ModRenderTypes::setCpbarOverloadShader);
+                context.register(
+                        ResourceLocations.of(ModId.ID, "alpha_discard"),
+                        DefaultVertexFormat.POSITION_TEX,
+                        ModRenderTypes::setAlphaDiscardShader);
+            } catch (IOException e) {
+                LOGGER.error("Failed to register content shaders", e);
             }
         });
     }
@@ -126,5 +159,4 @@ public final class FabricClientRenderSetup {
             FabricClientHelper.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
         }
     }
-
 }

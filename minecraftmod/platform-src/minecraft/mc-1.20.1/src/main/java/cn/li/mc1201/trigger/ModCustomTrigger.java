@@ -1,5 +1,7 @@
 package cn.li.mc1201.trigger;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.mcmod.ModId;
 import com.google.gson.JsonObject;
 import net.minecraft.advancements.critereon.AbstractCriterionTriggerInstance;
@@ -19,7 +21,7 @@ import net.minecraft.util.GsonHelper;
  */
 public class ModCustomTrigger extends SimpleCriterionTrigger<ModCustomTrigger.TriggerInstance> {
 
-    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(ModId.ID, "custom");
+    public static final ResourceLocation ID = ResourceLocations.of(ModId.ID, "custom");
 
     @Override
     public ResourceLocation getId() {

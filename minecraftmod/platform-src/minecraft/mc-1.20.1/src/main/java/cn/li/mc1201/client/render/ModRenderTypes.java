@@ -12,6 +12,10 @@ public final class ModRenderTypes extends RenderType {
     public static final VertexFormat PLASMA_BODY_FORMAT = DefaultVertexFormat.POSITION;
 
     private static volatile ShaderInstance plasmaBodyShader;
+    private static volatile ShaderInstance skillProgbarShader;
+    private static volatile ShaderInstance monoShader;
+    private static volatile ShaderInstance cpbarOverloadShader;
+    private static volatile ShaderInstance alphaDiscardShader;
 
     private static final ShaderStateShard PLASMA_BODY_SHADER_STATE =
             new ShaderStateShard(ModRenderTypes::getPlasmaBodyShader);
@@ -48,6 +52,38 @@ public final class ModRenderTypes extends RenderType {
 
     public static ShaderInstance getPlasmaBodyShader() {
         return plasmaBodyShader;
+    }
+
+    public static void setSkillProgbarShader(ShaderInstance shader) {
+        skillProgbarShader = shader;
+    }
+
+    public static ShaderInstance getSkillProgbarShader() {
+        return skillProgbarShader;
+    }
+
+    public static void setMonoShader(ShaderInstance shader) {
+        monoShader = shader;
+    }
+
+    public static ShaderInstance getMonoShader() {
+        return monoShader;
+    }
+
+    public static void setCpbarOverloadShader(ShaderInstance shader) {
+        cpbarOverloadShader = shader;
+    }
+
+    public static ShaderInstance getCpbarOverloadShader() {
+        return cpbarOverloadShader;
+    }
+
+    public static void setAlphaDiscardShader(ShaderInstance shader) {
+        alphaDiscardShader = shader;
+    }
+
+    public static ShaderInstance getAlphaDiscardShader() {
+        return alphaDiscardShader;
     }
 
     public static RenderType plasmaBody() {

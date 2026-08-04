@@ -1,29 +1,23 @@
 (ns cn.li.fabric1201.datagen.recipe-provider
   "Fabric 1.20.1 recipe datagen provider.
 
-  Emits recipe JSON files from shared platform-neutral recipe metadata."
-  (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mc1201.datagen.gson-util :as gson-util]
-            [cn.li.mc1201.datagen.recipe-core :as recipe-core])
-    (:import [com.google.gson Gson JsonElement]
-           [java.util.concurrent CompletableFuture]
-         [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
-           [net.minecraft.resources ResourceLocation]))
+  Uses shared DelegatingRecipeProvider + vanilla/custom emitters (ContentRecipe)."
+  (:require [cn.li.mc1201.datagen.recipe-core :as recipe-core]
+            [cn.li.mc1201.datagen.recipe-provider-core :as recipe-provider-core]
+            [cn.li.mc1201.datagen.recipe-provider-custom :as recipe-provider-custom])
+  (:import [cn.li.mc1201.shim DelegatingRecipeProvider]
+           [java.util.function Consumer]
+           [net.minecraft.data PackOutput]))
 
 (defn create-provider
-    [^PackOutput output]
-  (let [^String mod-id (str modid/mod-id)
-      path-provider (.createPathProvider output PackOutput$Target/DATA_PACK "recipes")
-      ^Gson gson (gson-util/create-pretty-gson)]
-    (reify DataProvider
-      (^CompletableFuture run [_ ^CachedOutput cached]
-        (let [recipes (recipe-core/load-recipes)
-          writes (atom [])]
-          (doseq [recipe recipes]
-        (let [recipe-id (recipe-core/normalize-recipe-id (:id recipe))
-                  target-path (.json ^PackOutput$PathProvider path-provider (ResourceLocation. mod-id recipe-id))
-          json-tree (.toJsonTree gson (gson-util/normalize-json (recipe-core/recipe-json recipe)))]
-              (swap! writes conj
-                     (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))
-          (CompletableFuture/allOf (into-array CompletableFuture @writes))))
-      (getName [_] (str mod-id " Recipe Provider")))))
+  [^PackOutput output]
+  (DelegatingRecipeProvider.
+    output
+    (fn [_this ^Consumer writer]
+      (let [vanilla-emitted (recipe-provider-core/build-recipes! writer)
+            recipes (recipe-core/load-recipes)
+            custom-emitters (recipe-provider-custom/custom-emitters writer)
+            custom-recipes (filter #(contains? custom-emitters (:type %)) recipes)
+            custom-emitted (recipe-core/emit-recipes! custom-recipes custom-emitters)]
+        (println (str "[fabric-recipe-provider] generated recipes: vanilla=" vanilla-emitted
+                      " custom=" custom-emitted))))))

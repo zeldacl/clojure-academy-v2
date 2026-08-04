@@ -1,5 +1,7 @@
 package cn.li.mc1201.runtime;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.mcmod.ModId;
 import cn.li.mc1201.entity.ScriptedEffectEntity;
 import net.minecraft.core.particles.ParticleOptions;
@@ -22,8 +24,8 @@ public final class ParticleEntityShared {
         if (particleType != null && !particleType.isEmpty()) {
             try {
                 ResourceLocation id = particleType.contains(":")
-                    ? ResourceLocation.parse(particleType)
-                    : ResourceLocation.fromNamespaceAndPath(ModId.ID, particleType.replace('-', '_'));
+                    ? ResourceLocations.parse(particleType)
+                    : ResourceLocations.of(ModId.ID, particleType.replace('-', '_'));
                 ParticleType<?> dynamicType = BuiltInRegistries.PARTICLE_TYPE.get(id);
                 if (dynamicType instanceof ParticleOptions options) {
                     return options;
@@ -65,7 +67,7 @@ public final class ParticleEntityShared {
         // must surface in the log, never degrade into a random mob.
         ResourceLocation key;
         try {
-            key = ResourceLocation.parse(entityId);
+            key = ResourceLocations.parse(entityId);
         } catch (Exception e) {
             throw new IllegalArgumentException("Malformed entity type id '" + entityId + "'", e);
         }
@@ -121,7 +123,7 @@ public final class ParticleEntityShared {
         // spawnEntityByIdFromPlayer: unknown ids throw instead of degrading.
         ResourceLocation key;
         try {
-            key = ResourceLocation.parse(entityId);
+            key = ResourceLocations.parse(entityId);
         } catch (Exception e) {
             throw new IllegalArgumentException("Malformed entity type id '" + entityId + "'", e);
         }

@@ -1,18 +1,28 @@
 package cn.li.fabric1201.shim;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import cn.li.fabric1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.ScriptedLiquidBlock;
 import cn.li.mc1201.block.SharedBootstrapBlockHelper;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.minecraft.world.level.material.FlowingFluid;
+import net.minecraft.world.level.material.Fluid;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public final class FabricBootstrapHelper {
 
@@ -77,6 +87,39 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createPlainBlock(blockProperties);
     }
 
+    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
+        return new LiquidBlock(Objects.requireNonNull(fluidSupplier.get(), "fluid"),
+            BlockBehaviour.Properties.copy(Blocks.WATER));
+    }
+
+    public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
+                                                   String blockId,
+                                                   String tileId) {
+        return new ScriptedLiquidBlock(
+            fluidSupplier,
+            blockId,
+            tileId,
+            BlockBehaviour.Properties.copy(Blocks.WATER),
+            (resolvedTileId, resolvedBlockId, pos, state) -> {
+                BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
+                return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
+            },
+            (level, pos, state, blockEntity) -> {
+                if (blockEntity instanceof ScriptedBlockEntity scripted) {
+                    ScriptedBlockEntity.serverTick(level, pos, state, scripted);
+                }
+            });
+    }
+
+    public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {
+        return new net.minecraft.world.item.BucketItem(
+            Objects.requireNonNull(fluidSupplier.get(), "fluid"),
+            new Item.Properties()
+                .stacksTo(1)
+                .craftRemainder(Items.BUCKET)
+        );
+    }
+
     public static Item createBlockItem(Block block) {
         return SharedBootstrapBlockHelper.createBlockItem(block);
     }
@@ -95,14 +138,14 @@ public final class FabricBootstrapHelper {
     }
 
     public static Block registerBlock(String modId, String id, Block block) {
-        return Registry.register(BuiltInRegistries.BLOCK, ResourceLocation.fromNamespaceAndPath(modId, id), block);
+        return Registry.register(BuiltInRegistries.BLOCK, ResourceLocations.of(modId, id), block);
     }
 
     public static Item registerItem(String modId, String id, Item item) {
-        return Registry.register(BuiltInRegistries.ITEM, ResourceLocation.fromNamespaceAndPath(modId, id), item);
+        return Registry.register(BuiltInRegistries.ITEM, ResourceLocations.of(modId, id), item);
     }
 
     public static BlockEntityType<?> registerBlockEntityType(String modId, String id, BlockEntityType<?> type) {
-        return Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, ResourceLocation.fromNamespaceAndPath(modId, id), type);
+        return Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, ResourceLocations.of(modId, id), type);
     }
 }

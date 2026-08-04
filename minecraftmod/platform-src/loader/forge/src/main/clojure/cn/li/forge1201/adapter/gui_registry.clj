@@ -5,7 +5,7 @@
   (:require [cn.li.mcmod.gui.registry :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
-            [cn.li.forge1201.gui.provider-bridge :as provider-bridge]
+            [cn.li.mc1201.gui.provider-bridge :as provider-bridge]
             [cn.li.mc1201.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mc1201.gui.registry.open :as open-core]

@@ -3,12 +3,12 @@
 
   This namespace is the Fabric-specific shell between the shared provider
   manifest and FabricDataGenerator Pack APIs."
-  (:require [cn.li.fabric1201.datagen.advancement-provider :as advancement-provider]
-            [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
-            [cn.li.fabric1201.datagen.lang-provider :as lang-provider]
+  (:require [cn.li.fabric1201.datagen.item-model-provider :as item-model-provider]
             [cn.li.fabric1201.datagen.recipe-provider :as recipe-provider]
             [cn.li.fabric1201.datagen.worldgen-provider :as worldgen-provider]
-            [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell])
+            [cn.li.mc1201.datagen.advancement-provider-shell :as advancement-shell]
+            [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell]
+            [cn.li.mc1201.datagen.lang-provider-shell :as lang-shell])
   (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
 
 (def ^:private blockstate-provider-name
@@ -17,10 +17,11 @@
 (defn- create-provider
   [provider output]
   (case (:factory provider)
-    :lang (lang-provider/create-provider output (:language provider))
+    ;; Shared shell emits all merged langs; ignore per-entry :language when present.
+    :lang (lang-shell/create output)
     :blockstate (blockstate-shell/create-provider output blockstate-provider-name)
     :item-model (item-model-provider/create-provider output)
-    :advancement (advancement-provider/create-provider output)
+    :advancement (advancement-shell/create output)
     :recipe (recipe-provider/create-provider output)
     :worldgen (worldgen-provider/create-provider output)
     (throw (ex-info "Unknown Fabric datagen provider factory"

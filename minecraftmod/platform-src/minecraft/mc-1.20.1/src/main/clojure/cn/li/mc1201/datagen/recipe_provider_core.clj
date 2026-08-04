@@ -84,7 +84,7 @@
   "Emit all supported vanilla recipes through Minecraft recipe builders.
   Returns the emitted count. Content-specific recipe types are supplied by
   loader/content components through the provider registry.
-  are handled by the loader-specific provider (recipe-provider-custom)."
+  are handled by recipe-provider-custom (serializer bindings via ContentRecipe)."
   [^Consumer writer]
   (let [recipes (recipe-core/load-recipes)]
     (recipe-core/emit-recipes!

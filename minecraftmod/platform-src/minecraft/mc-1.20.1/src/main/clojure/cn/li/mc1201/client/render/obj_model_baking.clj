@@ -3,7 +3,10 @@
 
   Discovers DSL items with `:item-model-3d-obj` and installs
   {@link cn.li.mc1201.client.render.item.ObjCompositeBakedModel}. Loaders only
-  register model-bus events and pass the baking registry map."
+  register model-bus events and pass the baking registry map.
+
+  Energy-tier override models (`_half` / `_full`) are also wrapped so charged
+  hand/ground stays on the 3D mesh without a custom ItemOverrides subclass."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mc1201.datagen.item-model-patterns :as model-patterns]
@@ -27,6 +30,21 @@
   [mod-id model-path]
   (ModelResourceLocation. (ResourceLocation. (str mod-id) (str model-path)) "inventory"))
 
+(defn- wrap-composite!
+  [^Map models gui-mrl world-mrl item-id label]
+  (let [^BakedModel gui-model (.get models gui-mrl)
+        ^BakedModel world-model (.get models world-mrl)]
+    (if (and gui-model world-model)
+      (do
+        (.put models gui-mrl (ObjCompositeBakedModel. gui-model world-model))
+        (log/debug "[obj-model-baking] composite installed" label "for" item-id)
+        true)
+      (do
+        (log/debug "[obj-model-baking] skipping" label item-id
+                   "- gui-model?" (boolean gui-model)
+                   "world-model?" (boolean world-model))
+        false))))
+
 (defn additional-obj-inventory-model-locations
   "ModelResourceLocations for each item's `_3d` inventory variant.
   Loaders register these on their model-bus RegisterAdditional event."
@@ -39,19 +57,25 @@
 (defn install-obj-composite-models!
   "Replace each 3D item's inventory baked model with ObjCompositeBakedModel.
 
+  Also wraps energy-tier override models when present so predicate resolution
+  still returns a composite (GUI flat + world OBJ).
+
   `models` is the mutable baking-result registry map (loader event payload)."
   [^Map models]
   (let [mod-id (str modid/mod-id)]
     (doseq [item-id (obj-3d-item-ids)]
       (let [basename (item-id->basename item-id)
-            gui-mrl (inventory-mrl mod-id basename)
+            item-spec (item-dsl/get-item item-id)
             world-mrl (inventory-mrl mod-id (str basename "_3d"))
-            ^BakedModel gui-model (.get models gui-mrl)
-            ^BakedModel world-model (.get models world-mrl)]
-        (if (and gui-model world-model)
-          (do
-            (.put models gui-mrl (ObjCompositeBakedModel. gui-model world-model))
-            (log/debug "[obj-model-baking] composite model installed for" item-id))
-          (log/debug "[obj-model-baking] skipping" item-id
-                     "- gui-model?" (boolean gui-model)
-                     "world-model?" (boolean world-model)))))))
+            base-mrl (inventory-mrl mod-id basename)]
+        (wrap-composite! models base-mrl world-mrl item-id "base")
+        (when (model-patterns/energy-tier-item? item-spec)
+          (let [levels (get-in item-spec [:properties :item-model-energy-levels])
+                tier (model-patterns/energy-tier-model-spec item-id levels)]
+            (doseq [suffix [(:half-model tier) (:full-model tier)]]
+              (when suffix
+                (wrap-composite! models
+                                 (inventory-mrl mod-id suffix)
+                                 world-mrl
+                                 item-id
+                                 (str "energy:" suffix))))))))))

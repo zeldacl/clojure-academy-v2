@@ -6,7 +6,7 @@
             [cn.li.mcmod.events.world-state-notify :as world-state-notify]
             [cn.li.mcmod.events.world-owner-key :as wok]
             [cn.li.mcmod.framework :as fw]
-            [cn.li.forge1201.integration.saveddata.world-lifecycle :as wl-saved])
+            [cn.li.mc1201.integration.saveddata.world-lifecycle :as wl-saved])
 	  (:import [net.minecraft.server.level ServerLevel]
            [net.minecraftforge.event.level LevelEvent$Load LevelEvent$Unload LevelEvent$Save]
            [net.minecraftforge.event TickEvent$LevelTickEvent TickEvent$Phase]))
@@ -105,12 +105,12 @@
 (defn register-on-world-state-changed!
   "Generic hook: subscribes to all world-state mutations (world-registry modules
   and connections, or any future module storing data via world-registry).
-  When state changes, calls setDirty() on the Forge WorldLifecycleSavedData
+  When state changes, calls setDirty() on the WorldLifecycleSavedData
   so the next save cycle picks it up — no LevelEvent$Save timing dependency."
   []
   (world-state-notify/set-on-world-state-changed-fn!
     (fn [world-key]
       (when-let [fw-atom (fw/fw-atom)]
         (when-let [sd (get-in @fw-atom (conj saved-data-path world-key))]
-          (.setDirty ^cn.li.forge1201.integration.saveddata.WorldLifecycleSavedData sd)))))
+          (.setDirty ^cn.li.mc1201.integration.saveddata.WorldLifecycleSavedData sd)))))
   (log/info "[forge] on-world-state-changed → SavedData.setDirty() hook registered"))

@@ -3,44 +3,28 @@ package cn.li.forge1201.shim;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.MenuScreens;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.ItemBlockRenderTypes;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
-import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.MenuType;
-import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.RenderHandEvent;
 
+/**
+ * Forge-only client helpers. Vanilla registration helpers live in
+ * {@link cn.li.mc1201.client.ClientHelper}.
+ */
 @OnlyIn(Dist.CLIENT)
 public final class ForgeClientHelper {
     private ForgeClientHelper() {
     }
 
-    public interface RendererFactory {
-        Object create();
-    }
-
-    public interface ScreenFactory {
-        Object create(Object menu, Object playerInventory, Object title);
-    }
-
-    public static void bindTextureForSetup(ResourceLocation texture) {
-        Minecraft minecraft = Minecraft.getInstance();
-        TextureManager textureManager = minecraft.getTextureManager();
-        textureManager.bindForSetup(texture);
+    public static void setFluidRenderLayerTranslucent(Fluid sourceFluid, Fluid flowingFluid) {
+        ItemBlockRenderTypes.setRenderLayer(sourceFluid, RenderType.translucent());
+        ItemBlockRenderTypes.setRenderLayer(flowingFluid, RenderType.translucent());
     }
 
     public static boolean renderTransformedMainHand(RenderHandEvent event,
@@ -81,25 +65,5 @@ public final class ForgeClientHelper {
             event.getPackedLight());
         poseStack.popPose();
         return true;
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public static void registerBlockEntityRenderer(BlockEntityType<?> blockEntityType, RendererFactory factory) {
-        BlockEntityRenderers.register((BlockEntityType) blockEntityType, context -> (BlockEntityRenderer) factory.create());
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public static void registerMenuScreen(MenuType<?> menuType, ScreenFactory factory) {
-        MenuScreens.register((MenuType) menuType, new MenuScreens.ScreenConstructor() {
-            @Override
-            public Screen create(AbstractContainerMenu menu, Inventory playerInventory, Component title) {
-                return (Screen) factory.create(menu, playerInventory, title);
-            }
-        });
-    }
-
-    public static void setFluidRenderLayerTranslucent(Fluid sourceFluid, Fluid flowingFluid) {
-        ItemBlockRenderTypes.setRenderLayer(sourceFluid, RenderType.translucent());
-        ItemBlockRenderTypes.setRenderLayer(flowingFluid, RenderType.translucent());
     }
 }

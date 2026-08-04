@@ -1,5 +1,7 @@
 package cn.li.mc1201.runtime;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -20,7 +22,7 @@ public final class ItemRegistryShared {
             if (itemId == null || itemId.isEmpty()) {
                 return null;
             }
-            ResourceLocation id = ResourceLocation.parse(itemId);
+            ResourceLocation id = ResourceLocations.parse(itemId);
             Item item = BuiltInRegistries.ITEM.get(id);
             return item == Items.AIR ? null : item;
         } catch (Exception ignored) {

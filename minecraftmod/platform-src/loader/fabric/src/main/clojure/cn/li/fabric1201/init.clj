@@ -3,7 +3,9 @@
   (:require [cn.li.mc1201.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.content :as content]
-            [cn.li.mcmod.lifecycle :as lifecycle]))
+            [cn.li.mcmod.lifecycle :as lifecycle])
+  (:import [cn.li.fabric1201.recipe ModRecipeTypes]
+           [cn.li.mc1201.trigger ModTriggers]))
 
 (defn set-version!
   "Set the Fabric version for multimethod dispatch."
@@ -20,5 +22,7 @@
   (init-common/init-from-java!
    (target/current-target-key!)
    (fn []
+     (ModRecipeTypes/register)
+     (ModTriggers/init)
      (content/register-all-content!)
      (lifecycle/run-content-init!))))

@@ -1,5 +1,7 @@
 package cn.li.fabric1201.loot;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
@@ -26,7 +28,7 @@ public final class FabricLootInjectionHelper {
             return;
         }
 
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+        Item item = BuiltInRegistries.ITEM.get(ResourceLocations.parse(itemId));
         if (item == null) {
             return;
         }

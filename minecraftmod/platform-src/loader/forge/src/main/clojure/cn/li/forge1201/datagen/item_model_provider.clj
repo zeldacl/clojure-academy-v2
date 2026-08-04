@@ -8,7 +8,7 @@
 
   Optional :item-model-energy-levels in :properties generates base + tiered
   sibling models and overrides on predicate <modid>:energy (see client
-  `energy-item-model-properties`).
+  `cn.li.mc1201.client.energy-item-model-properties`).
 
   Optional :item-model-3d-obj in :properties generates a forge:obj loader model
   with perspective-specific display transforms.

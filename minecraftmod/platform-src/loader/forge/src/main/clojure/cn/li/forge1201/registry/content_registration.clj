@@ -2,8 +2,9 @@
   "Forge content registration extracted from the mod entrypoint so loader bootstrap
   stays focused on lifecycle coordination."
   (:require [cn.li.forge1201.integration.bootstrap :as bootstrap]
-            [cn.li.forge1201.registry.item-properties :as item-properties]
+            [cn.li.mc1201.item.item-properties :as item-properties]
             [cn.li.forge1201.registry.state :as registry-state]
+            [cn.li.forge1201.runtime.owner :as runtime-owner]
             [cn.li.mc1201.block.logic-pipeline :as logic-pipeline]
             [cn.li.mc1201.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]
@@ -390,7 +391,9 @@
           registered-obj (.register ^DeferredRegister items-register registry-name
                                     (reify java.util.function.Supplier
                                       (get [_]
-                                        (item-properties/create-standalone-item item-spec))))]
+                                        (item-properties/create-standalone-item
+                                          item-spec
+                                          runtime-owner/with-player-owner))))]
       (registry-state/register-item! item-id registered-obj)))
   (doseq [block-id (registry-metadata/get-all-block-ids)]
     (when (and (registry-metadata/should-create-block-item? block-id)

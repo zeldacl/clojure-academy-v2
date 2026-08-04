@@ -1,7 +1,7 @@
 package cn.li.forge1201.shim;
 
-import cn.li.forge1201.block.ScriptedLiquidBlock;
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
+import cn.li.mc1201.block.ScriptedLiquidBlock;
 import cn.li.mc1201.block.SharedBootstrapBlockHelper;
 import cn.li.mc1201.block.SharedDynamicStateBlock;
 import cn.li.mc1201.block.SharedScriptedBlock;
@@ -208,8 +208,20 @@ public final class ForgeBootstrapHelper {
     public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
                                                    String tileId) {
-        return new ScriptedLiquidBlock(fluidSupplier, blockId, tileId,
-            BlockBehaviour.Properties.copy(Blocks.WATER));
+        return new ScriptedLiquidBlock(
+            fluidSupplier,
+            blockId,
+            tileId,
+            BlockBehaviour.Properties.copy(Blocks.WATER),
+            (resolvedTileId, resolvedBlockId, pos, state) -> {
+                BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
+                return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
+            },
+            (level, pos, state, blockEntity) -> {
+                if (blockEntity instanceof ScriptedBlockEntity scripted) {
+                    ScriptedBlockEntity.serverTick(level, pos, state, scripted);
+                }
+            });
     }
 
     public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {

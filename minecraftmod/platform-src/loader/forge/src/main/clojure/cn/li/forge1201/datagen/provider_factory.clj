@@ -3,11 +3,11 @@
 
   This namespace is the Forge-specific shell between the shared provider manifest
   and Forge/Minecraft DataGenerator APIs."
-  (:require [cn.li.forge1201.datagen.advancement-provider :as adv]
+  (:require [cn.li.mc1201.datagen.advancement-provider-shell :as adv]
             [cn.li.forge1201.datagen.item-model-provider :as imp]
-            [cn.li.forge1201.datagen.lang-provider :as lang]
+            [cn.li.mc1201.datagen.lang-provider-shell :as lang]
             [cn.li.forge1201.datagen.recipe-provider :as rp]
-            [cn.li.forge1201.datagen.worldgen-provider :as worldgen]
+            [cn.li.mc1201.datagen.worldgen-provider-shell :as worldgen]
             [cn.li.mc1201.datagen.blockstate-provider-shell :as blockstate-shell])
   (:import [net.minecraft.data DataGenerator DataProvider$Factory]
            [net.minecraftforge.common.data ExistingFileHelper]))
@@ -22,7 +22,8 @@
    :lang lang/create
    :recipe rp/create
    :advancement adv/create
-   :worldgen worldgen/create})
+   :worldgen (fn [pack-output exfile-helper]
+               (worldgen/create pack-output :forge exfile-helper))})
 
 (defn- provider-factory
   [{:keys [factory] :as provider}]

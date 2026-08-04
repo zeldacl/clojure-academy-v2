@@ -3,7 +3,6 @@ package cn.li.forge1201.client.render;
 import cn.li.forge1201.MyMod1201;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterShadersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -22,22 +21,22 @@ public final class ModShaders {
     }
 
     public static ShaderInstance getPlasmaBodyShader() {
-        return ForgeClientRenderRegistry.getPlasmaBodyShader();
+        return ModRenderTypes.getPlasmaBodyShader();
     }
 
     public static ShaderInstance getSkillProgbarShader() {
-        return ForgeClientRenderRegistry.getSkillProgbarShader();
+        return ModRenderTypes.getSkillProgbarShader();
     }
 
     public static ShaderInstance getMonoShader() {
-        return ForgeClientRenderRegistry.getMonoShader();
+        return ModRenderTypes.getMonoShader();
     }
 
     public static ShaderInstance getCpbarOverloadShader() {
-        return ForgeClientRenderRegistry.getCpbarOverloadShader();
+        return ModRenderTypes.getCpbarOverloadShader();
     }
 
     public static ShaderInstance getAlphaDiscardShader() {
-        return ForgeClientRenderRegistry.getAlphaDiscardShader();
+        return ModRenderTypes.getAlphaDiscardShader();
     }
 }

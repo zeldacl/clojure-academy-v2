@@ -1,5 +1,7 @@
 package cn.li.mc1201.runtime;
 
+import cn.li.mc1201.util.ResourceLocations;
+
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -14,12 +16,12 @@ public final class RegistryDispatchShared {
     }
 
     public static Block registerBlock(String namespace, String path, Block instance) {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
+        ResourceLocation id = ResourceLocations.of(namespace, path);
         return Registry.register(BuiltInRegistries.BLOCK, id, instance);
     }
 
     public static Item registerItem(String namespace, String path, Item instance) {
-        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(namespace, path);
+        ResourceLocation id = ResourceLocations.of(namespace, path);
         return Registry.register(BuiltInRegistries.ITEM, id, instance);
     }
 }
