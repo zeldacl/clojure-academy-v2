@@ -542,16 +542,18 @@
                      (level-effects/effect-state-snapshot :storm-wing))))
         key-state (keybinds/key-state-snapshot player-uuid)]
     (when sw-storm
-      {:kind :movement-hints
-       :x (- screen-w 165)
-       :y (- screen-h 100)
-       :skill-icon (skill-query/get-skill-icon-path sw-storm)
-       :items (mapv (fn [[movement-key key-label dir-label]]
-                      {:key-label key-label
-                       :label dir-label
-                       :active? (boolean (get-in key-state
-                                                 [:movement-keys movement-key]))})
-                    movement-hint-keys)})))
+      (let [skill-icon (skill-query/get-skill-icon-path sw-storm)]
+        {:kind :movement-hints
+         :x (- screen-w 165)
+         :y (- screen-h 100)
+         :skill-icon skill-icon
+         :items (mapv (fn [[movement-key key-label dir-label]]
+                        {:key-label key-label
+                         :label dir-label
+                         :skill-icon skill-icon
+                         :active? (boolean (get-in key-state
+                                                   [:movement-keys movement-key]))})
+                      movement-hint-keys)}))))
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.

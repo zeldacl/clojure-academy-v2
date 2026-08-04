@@ -9,6 +9,7 @@
             [cn.li.ac.test.support.hud-render-data :as hud-rd]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-screen]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -576,3 +577,24 @@
               {:ctx-id "ctx-flashing" :channel :flashing/move-tick :payload {:key :forward}}
               {:ctx-id "ctx-flashing" :channel :flashing/move-up :payload {:key :forward}}]
              (mapv :payload @sent))))))
+
+(deftest build-client-overlay-plan-renders-movement-hints-when-storm-wing-active-test
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session}
+    (fn []
+      (with-redefs [store/get-player-state (fn [_ _]
+                                             {:resource-data {:activated true
+                                                              :cur-cp 80.0
+                                                              :cur-overload 0.0
+                                                              :max-overload 100.0}
+                                              :cooldown-data {}
+                                              :preset-data {}})
+                    ctx/get-all-contexts (fn [] {})
+                    level-effects/effect-state-snapshot
+                    (fn [effect-id]
+                      (when (= :storm-wing effect-id)
+                        {:effect-state {[:ctx "ctx-sw"] {:active? true
+                                                         :phase :flying
+                                                         :source-player-id "p1"}}}))]
+        (let [plan (client-ui-hooks/build-client-overlay-plan
+                    "p1" 320 180 {:now-ms 1000})]
+          (is (some #{:movement-hints} (mapv :kind (:elements plan)))))))))

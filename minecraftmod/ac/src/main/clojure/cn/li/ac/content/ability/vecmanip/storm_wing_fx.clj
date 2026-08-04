@@ -6,8 +6,8 @@
   The tornado ring stacks are randomized once at :start (TornadoEffect's
   constructor); per tick the noise-driven ring displacement / radius /
   rotation are sampled (TornadoRenderer's calcdx/r/rot at GameTimer*4);
-  per frame build-plan applies the player-yaw/pitch + 70-degree tilt
-  transform (StormWingEffectRender) and emits the textured ring quads."
+  per frame build-plan applies the player-yaw/pitch + back-tilt transform
+  (StormWingEffectRender) and emits the textured ring quads."
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.config.modid :as modid]
@@ -26,20 +26,26 @@
 ;; ---------------------------------------------------------------------------
 
 (def ^:private tornado-ht 2.0)
-(def ^:private tornado-divide 20) ;; original 40; fewer, wider rings keep the op budget sane
+(def ^:private tornado-divide 40) ;; original TornadoEffect divide
 (def ^:private tornado-sz 0.16)
 (def ^:private tornado-dscale 2.0)
-(def ^:private ring-segments 8)
+(def ^:private ring-segments 20) ;; original TornadoRenderer div
 
-;; Original StormWingEffect tornadoList: setTransform + setRotation(0, sep, sep).
+;; Original StormWingEffect tornadoList: setTransform +
+;; setRotation(0, sepY, sepZ) — the Y and Z angles are independent per column.
 (def ^:private tornado-transforms
-  [{:ox -0.1 :oy -0.3 :oz 0.1 :sep 45}
-   {:ox 0.1 :oy -0.3 :oz 0.1 :sep -45}
-   {:ox -0.1 :oy -0.5 :oz -0.1 :sep -45}
-   {:ox 0.1 :oy -0.5 :oz -0.1 :sep 45}])
+  [{:ox -0.1 :oy -0.3 :oz 0.1 :sep-y 45 :sep-z 45}
+   {:ox 0.1 :oy -0.3 :oz 0.1 :sep-y -45 :sep-z -45}
+   {:ox -0.1 :oy -0.5 :oz -0.1 :sep-y -45 :sep-z 45}
+   {:ox 0.1 :oy -0.5 :oz -0.1 :sep-y 45 :sep-z -45}])
 
 (def ^:private tornado-ring-texture
   (modid/asset-path "textures" "effects/tornado_ring.png"))
+
+;; Original StormWingEffectRender: glRotated(-70, 1, 0, 0) — the columns
+;; lean back toward the player's back. Stored as a positive magnitude and
+;; SUBTRACTED in phi so the effective rotation is exactly -70deg.
+(def ^:private tornado-back-tilt-degrees 70.0)
 
 ;; ---------------------------------------------------------------------------
 ;; ImprovedNoise (Ken Perlin 2002) - deterministic, no deps
@@ -156,10 +162,9 @@
     (mapv (fn [{:keys [y w phase scale]}]
             (let [ny (/ y tornado-ht)
                   t0 (* 0.1 time)
-                  ;; Original calcdx scales the DISPLACEMENT by sz*dscale, but
-                  ;; the ring RADIUS (r * sz * sizeScale) uses sz only — the
-                  ;; columns stay thin (~0.16x) while whipping around, which is
-                  ;; what keeps the four of them visually distinct.
+                  ;; Original calcdx: displacement scaled by sz*dscale, ring
+                  ;; RADIUS (r * sz * sizeScale) by sz only — exact original
+                  ;; values.
                   sway (* (+ 0.3 (Math/pow (Math/abs (* 2.0 ny)) 1.4))
                           tornado-sz tornado-dscale)
                   rr (* (+ (+ 0.5 (* 0.3 (noise2 ny (* 0.2 time))))
@@ -334,17 +339,18 @@
   The whole chain is linear in the ring-local point, so per frame we
   precompute the anchor A and the local rotation constants, then apply the
   linear part per ring corner (ring y-offset + 2 circle offsets per segment)."
-  [px py pz yaw-rad phi-rad alpha {:keys [ox oy oz sep]} rings]
+  [px py pz yaw-rad phi-rad alpha {:keys [ox oy oz sep-y sep-z]} rings]
   (let [cy (Math/cos (- yaw-rad)) sy (Math/sin (- yaw-rad))
         cp (Math/cos phi-rad) sp (Math/sin phi-rad)
-        cys (Math/cos (Math/toRadians sep)) sys (Math/sin (Math/toRadians sep))
-        czs cys szs sys
+        cys (Math/cos (Math/toRadians sep-y)) sys (Math/sin (Math/toRadians sep-y))
+        czs (Math/cos (Math/toRadians sep-z)) szs (Math/sin (Math/toRadians sep-z))
         ;; Anchor A = player + (0,1.6,0) + rotY(-yaw)*rotX(phi)*(0,0.2,-0.5)
         z1 (- (* 0.2 sp) (* 0.5 cp))
         ax (+ px (* z1 sy))
         ay (+ py 1.6 (* 0.2 cp) (* 0.5 sp))
         az (+ pz (* z1 cy))
-        color {:r 255 :g 255 :b 255 :a alpha}
+        ;; Original TornadoRenderer: glColor4d(1,1,1, eff.alpha * 0.7).
+        color {:r 255 :g 255 :b 255 :a (int (* 255.0 (double alpha) 0.7))}
         lp (fn [^double x ^double y ^double z]
              ;; tornado-local -> world (linear part, anchor applied by caller)
              (let [a (- (* x czs) (* y szs))
@@ -393,7 +399,7 @@
             pz (double (or (:player-z hand-center-pos) 0.0))
             yaw (double (or (:player-yaw-rad hand-center-pos) 0.0))
             pitch (double (or (:player-pitch-rad hand-center-pos) 0.0))
-            phi (- (* 0.2 pitch) (Math/toRadians 70.0))]
+            phi (- (* 0.2 pitch) (Math/toRadians tornado-back-tilt-degrees))]
         (maybe-spawn-flying-particles! (:owner-key sw) sw tick center)
         (let [ops (into []
                         (mapcat (fn [[tf rings]]

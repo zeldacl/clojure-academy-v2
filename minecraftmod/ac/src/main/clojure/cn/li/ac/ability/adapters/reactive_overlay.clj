@@ -168,6 +168,7 @@
     [(+ (- sw w) group-dx)
      (+ (- (/ sh 2.0) (/ h 2.0)) 30.0)]))
 
+
 (defn- key-cap-texture [key-label]
   ;; Upstream KeyHintUI.drawSingle: MOUSE_LEFT/MOUSE_RIGHT draw TEX_MOUSE_L/
   ;; TEX_MOUSE_R (no key character); any other key draws key_short/key_long
@@ -424,6 +425,16 @@
         (dsl/list-node {:id :skill-slots :spacing 0 :w 320 :h 400 :scale skill-slot-scale
                         :x (+ ax key-dx) :y (+ ay key-dy)
                         :template (skill-slot-template)}))
+      ;; StormWing's movement-key hint column — the KEY_GROUP delegates at
+      ;; x = -200 - availIdx*200 widget units (upstream KeyHintUI), i.e. one
+      ;; full key-hint column (~46px) to the LEFT of the skill slots, each
+      ;; row 92 units apart using the same drawSingle layout.
+      (let [[ax ay] (skill-slot-anchor sw sh)]
+        (dsl/list-node {:id :movement-hints :spacing (* 92.0 skill-slot-scale)
+                        :w 320 :h 400 :scale skill-slot-scale
+                        :x (- (+ ax key-dx) (* 200.0 skill-slot-scale))
+                        :y (+ ay key-dy)
+                        :template (skill-slot-template) :visible? false}))
       (dsl/crosshair {:id :crosshair :x (int (/ sw 2)) :y (int (/ sh 2)) :visible? false})
       (dsl/list-node {:id :toasts :w sw :h 200 :template (toast-template)})
       (dsl/group {:id :tutorial-notif :x notif-dx :y notif-dy
@@ -544,6 +555,7 @@
 
 (defn- set-visible! [r id visible?]
   (set-node-visible! r (ui/node r id) visible?))
+
 
 (defn- update-overload-lane! [r snapshot _sw]
   ;; Upstream drawNormal vs drawOverload: only one of these two visuals is
@@ -766,6 +778,44 @@
            (or (= i n)
                (and (= (nth cached i) (:skill-id (nth slots i)))
                     (recur (unchecked-inc-int i))))))))
+
+;; ============================================================================
+;; Movement-key hint column (upstream StormWing KEY_GROUP / KeyHintUI)
+;; ============================================================================
+
+(defn- update-movement-hint-item! [r item hint]
+  (let [{:keys [key-label active? skill-icon]} hint
+        key-cap (ui/item-node item :key-cap)
+        key-label-node (ui/item-node item :key-label)
+        icon (ui/item-node item :icon)
+        icon-glow (ui/item-node item :icon-glow)]
+    (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
+    (ui/set-node-prop! r key-label-node :text (str key-label))
+    (ui/set-node-prop! r key-cap :tint [255 255 255 255])
+    (ui/set-node-prop! r key-label-node :color 0xFFFFFFFF)
+    (when-let [icon-src skill-icon]
+      (ui/set-node-prop! r icon :src icon-src))
+    (ui/set-node-prop! r icon :alpha (if active? 1.0 0.55))
+    ;; Upstream delegate ACTIVE state: blue glow around the held key's icon.
+    (update-skill-slot-glow! r icon-glow (if active? :active :idle)
+                             (when active? [70 179 255 255]) 1.0)))
+
+(defn- update-movement-hints! [r snapshot sw sh]
+  (let [hints (:movement-hints snapshot)
+        [key-dx key-dy] (gameplay/hud-position :keyhint)]
+    ;; Re-anchor every frame: one key-hint column (-200 widget units) LEFT of
+    ;; the skill slots, matching the skill-slot anchor (tracks resize).
+    (when-let [^INode list-node (ui/node r :movement-hints)]
+      (let [[ax ay] (skill-slot-anchor sw sh)
+            x (- (+ ax key-dx) (* 200.0 skill-slot-scale))
+            y (+ ay key-dy)]
+        (when (or (not= x (.getX list-node)) (not= y (.getY list-node)))
+          (.setX list-node x)
+          (.setY list-node y)
+          (.setFlag list-node node/FLAG-LAYOUT-DIRTY))))
+    (ui/list-set! r :movement-hints (or (:items hints) [])
+                  update-movement-hint-item!)
+    (set-visible! r :movement-hints (boolean (seq (:items hints))))))
 
 (defn- update-skill-slots! [r snapshot now-ms sw sh]
   (let [slots (:skill-slots snapshot)
@@ -1143,6 +1193,7 @@
           (update-numbers! r snapshot)
           (update-preset-indicators! r snapshot sw)
           (update-skill-slots! r snapshot now-ms sw sh)
+          (update-movement-hints! r snapshot sw sh)
           (update-crosshair! r snapshot)))
       (update-vm-waves! r snapshot)
       (update-charging-layer! r snapshot sw sh)

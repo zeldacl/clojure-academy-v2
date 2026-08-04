@@ -1,4 +1,4 @@
-(ns cn.li.mcbase.runtime.spi.server-context-test
+(ns cn.li.mc1211.runtime.spi.server-context-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcbase.runtime.spi.server-context :as server-context]))
 
