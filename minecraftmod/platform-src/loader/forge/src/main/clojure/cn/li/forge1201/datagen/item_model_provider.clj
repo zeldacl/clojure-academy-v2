@@ -11,15 +11,56 @@
   `energy-item-model-properties`).
 
   Optional :item-model-3d-obj in :properties generates a forge:obj loader model
-  with perspective-specific display transforms."
+  with perspective-specific display transforms.
+
+  Optional :item-model-display in :properties writes vanilla `display` transforms
+  on simple generated models (e.g. ItemCoin hand/ground scales)."
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mc1201.datagen.resource-location :as rl]
-            [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core])
+            [cn.li.mc1201.datagen.item-model-provider-core :as item-model-core]
+            [clojure.string :as str])
   (:import [cn.li.forge1201.shim DelegatingItemModelProvider DelegatingCustomLoaderBuilder]
            [net.minecraft.data PackOutput]
            [net.minecraft.resources ResourceLocation]
+           [net.minecraft.world.item ItemDisplayContext]
            [net.minecraftforge.common.data ExistingFileHelper]
            [net.minecraftforge.client.model.generators ItemModelProvider ItemModelBuilder ModelFile$ExistingModelFile]))
+
+(def ^:private display-context-by-key
+  "Map item-model JSON perspective keys → ItemDisplayContext via serialized names."
+  (into {}
+        (map (fn [^ItemDisplayContext ctx]
+               [(.getSerializedName ctx) ctx])
+             (ItemDisplayContext/values))))
+
+(defn- display-key-name
+  [k]
+  (cond
+    (keyword? k) (name k)
+    (string? k) (str/lower-case k)
+    :else (str k)))
+
+(defn- apply-display!
+  "Write perspective transforms onto an ItemModelBuilder from a display map."
+  [^ItemModelBuilder builder display]
+  (when (map? display)
+    (let [transforms (.transforms builder)]
+      (doseq [[perspective opts] display
+              :let [ctx (get display-context-by-key (display-key-name perspective))]
+              :when (and ctx (map? opts))]
+        (let [tb (.transform transforms ^ItemDisplayContext ctx)
+              rotation (or (:rotation opts) (get opts "rotation"))
+              translation (or (:translation opts) (get opts "translation"))
+              scale (or (:scale opts) (get opts "scale"))]
+          (when (sequential? rotation)
+            (.rotation tb (float (nth rotation 0)) (float (nth rotation 1)) (float (nth rotation 2))))
+          (when (sequential? translation)
+            (.translation tb (float (nth translation 0)) (float (nth translation 1)) (float (nth translation 2))))
+          (when (sequential? scale)
+            (.scale tb (float (nth scale 0)) (float (nth scale 1)) (float (nth scale 2))))
+          (.end tb)))
+      (.end transforms)))
+  builder)
 
 (defn- apply-model-spec!
   [^ItemModelProvider provider ^ExistingFileHelper exfile-helper {:keys [model-name json]}]
@@ -38,6 +79,7 @@
           (.predicate override-builder (rl/parse-resource-location predicate-id modid/mod-id) (float value)))
         (.model override-builder model-file)
         (.end override-builder)))
+    (apply-display! builder (:display json))
     builder))
 
 ;; ============================================================================

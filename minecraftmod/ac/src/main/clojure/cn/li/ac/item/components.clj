@@ -115,7 +115,20 @@
          :creative-tab :misc
          :properties {:tooltip ["能力硬币"
                                 "电磁炮 QTE 投掷触发物"]
-                      :model-texture "coin_front"}}))
+                      :model-texture "coin_front"
+                      ;; Upstream ItemCoin TEISR (ItemCoin#onModelBake):
+                      ;; FP scale 0.5 + translate(0.2,0,-0.1); TP scale 0.2;
+                      ;; ground scale(-0.3,-0.3,0.3) + translate(0,0.1,0).
+                      ;; JSON translation is in 1/16-block units (*16 of matrix).
+                      :item-model-display
+                      {:firstperson_righthand {:scale [0.5 0.5 0.5]
+                                               :translation [3.2 0.0 -1.6]}
+                       :firstperson_lefthand {:scale [0.5 0.5 0.5]
+                                              :translation [3.2 0.0 -1.6]}
+                       :thirdperson_righthand {:scale [0.2 0.2 0.2]}
+                       :thirdperson_lefthand {:scale [0.2 0.2 0.2]}
+                       :ground {:scale [-0.3 -0.3 0.3]
+                                :translation [0.0 1.6 0.0]}}}}))
     (idsl/register-item!
       (idsl/create-item-spec
         "brain_component"

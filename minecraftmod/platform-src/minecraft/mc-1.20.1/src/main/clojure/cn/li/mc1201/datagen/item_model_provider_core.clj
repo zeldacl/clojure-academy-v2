@@ -20,10 +20,11 @@
   (str (or parent "item/generated")))
 
 (defn- simple-model-entry
-  [{:keys [item-name model-texture model-parent]}]
+  [{:keys [item-name model-texture model-parent display]}]
   {:model-name item-name
-   :json {:parent (normalize-parent model-parent)
-          :textures {:layer0 (texture-path model-texture)}}})
+   :json (cond-> {:parent (normalize-parent model-parent)
+                  :textures {:layer0 (texture-path model-texture)}}
+           (map? display) (assoc :display display))})
 
 (defn- energy-tier-model-entries
   [item-id {:keys [texture-empty texture-half texture-full]}]

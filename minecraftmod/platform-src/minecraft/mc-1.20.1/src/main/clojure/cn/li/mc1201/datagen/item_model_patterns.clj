@@ -30,12 +30,18 @@
      :full-model (str base "_full")}))
 
 (defn simple-model-spec
-  "Normalize a simple item model spec into a portable map."
+  "Normalize a simple item model spec into a portable map.
+
+  Optional `:item-model-display` in `:properties` becomes model JSON `display`
+  (perspective → {:rotation :translation :scale}), matching Forge/vanilla
+  item-model camera transforms."
   [item-name item-spec]
   (when-let [texture (get-in item-spec [:properties :model-texture])]
-    {:item-name (str item-name)
-     :model-texture texture
-     :model-parent (get-in item-spec [:properties :model-parent] "item/generated")}))
+    (cond-> {:item-name (str item-name)
+             :model-texture texture
+             :model-parent (get-in item-spec [:properties :model-parent] "item/generated")}
+      (map? (get-in item-spec [:properties :item-model-display]))
+      (assoc :display (get-in item-spec [:properties :item-model-display])))))
 
 (defn energy-tier-item?
   "Predicate: does an item spec request energy-tier models?"
