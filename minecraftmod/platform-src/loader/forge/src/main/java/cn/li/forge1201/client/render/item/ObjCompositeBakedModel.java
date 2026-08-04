@@ -1,5 +1,6 @@
 package cn.li.forge1201.client.render.item;
 
+import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
@@ -25,6 +26,13 @@ import java.util.List;
  *
  * Driven by item DSL {@code :item-model-3d-obj} metadata — no per-item
  * subclass needed.
+ *
+ * Critical: {@link #applyTransform} must return the selected sub-model.
+ * ItemRenderer resolves energy overrides on this composite, then calls
+ * applyTransform; if we keep returning {@code this} and {@link #getQuads}
+ * always pulls the OBJ mesh, empty-energy GUI stacks (no override hit)
+ * render as an invisible/wrong 3D model while charged stacks look fine
+ * because overrides swap in a flat generated model.
  */
 public class ObjCompositeBakedModel implements BakedModel {
 
@@ -49,14 +57,21 @@ public class ObjCompositeBakedModel implements BakedModel {
     @Override
     public @NotNull List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side,
                                               @NotNull RandomSource rand) {
-        return worldModel.getQuads(state, side, rand);
+        // Fallback when no display context is available (breaking overlay, etc.).
+        // Prefer the 2D GUI mesh — inventory/creative empty stacks must stay visible.
+        return guiModel.getQuads(state, side, rand);
     }
 
-    @SuppressWarnings("deprecation")
-    public @NotNull List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side,
-                                              @NotNull RandomSource rand,
-                                              @NotNull ItemDisplayContext displayContext) {
-        return selectModel(displayContext).getQuads(state, side, rand);
+    /**
+     * Forge path: pick GUI vs handheld model, apply that model's transforms,
+     * and return it so subsequent getQuads/render use the correct mesh.
+     */
+    @Override
+    public @NotNull BakedModel applyTransform(@NotNull ItemDisplayContext transformType,
+                                              @NotNull PoseStack poseStack,
+                                              boolean applyLeftHandTransform) {
+        BakedModel selected = selectModel(transformType);
+        return selected.applyTransform(transformType, poseStack, applyLeftHandTransform);
     }
 
     @Override
@@ -71,22 +86,23 @@ public class ObjCompositeBakedModel implements BakedModel {
 
     @Override
     public boolean usesBlockLight() {
-        return worldModel.usesBlockLight();
+        return false;
     }
 
     @Override
     public boolean isCustomRenderer() {
-        return worldModel.isCustomRenderer();
+        return false;
     }
 
     @Override
     public @NotNull TextureAtlasSprite getParticleIcon() {
-        return worldModel.getParticleIcon();
+        return guiModel.getParticleIcon();
     }
 
     @Override
     public @NotNull ItemTransforms getTransforms() {
-        return worldModel.getTransforms();
+        // applyTransform selects the real model; this is only a fallback.
+        return guiModel.getTransforms();
     }
 
     @Override
