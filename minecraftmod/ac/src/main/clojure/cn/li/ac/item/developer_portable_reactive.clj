@@ -51,20 +51,25 @@
 (defn make-portable-container [player owner]
   (let [player-uuid-str (or (uuid/player-uuid player) "")
         player-name-str (or (entity/player-get-name player) "")]
-    {:energy                (atom (current-energy-from-held-item player))
-     :max-energy            (atom portable-max-energy)
-     :tier                  (atom :portable)
-     :is-developing         (atom false)
-     :development-progress  (atom 0.0)
-     :development-complete? (atom false)
-     :structure-valid       (atom true)
-     :user-uuid             (atom player-uuid-str)
-     :user-name             (atom player-name-str)
-     :player                player
-     :tile-entity           nil
-     :container-type        :portable-developer
-     :metadata              (atom {})
-     :on-dev-start          (make-portable-on-dev-start owner)}))
+    ;; :owner must live on the container: panel-reactive resolves session-id from
+    ;; it during render flush, when ThreadLocal player-state-owner is unbound.
+    (cond-> {:energy                (atom (current-energy-from-held-item player))
+             :max-energy            (atom portable-max-energy)
+             :tier                  (atom :portable)
+             :is-developing         (atom false)
+             :development-progress  (atom 0.0)
+             :development-complete? (atom false)
+             :structure-valid       (atom true)
+             :user-uuid             (atom player-uuid-str)
+             :user-name             (atom player-name-str)
+             :player                player
+             :tile-entity           nil
+             :container-type        :portable-developer
+             :metadata              (atom {})
+             :owner                 owner
+             :on-dev-start          (make-portable-on-dev-start owner)}
+      (:client-session-id owner) (assoc :client-session-id (:client-session-id owner))
+      (:player-uuid owner) (assoc :player-uuid (:player-uuid owner)))))
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run

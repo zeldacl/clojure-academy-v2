@@ -345,7 +345,9 @@
               (reset! last-ver ver)
               (let [{:keys [ability-name icon-path exp-label level-label
                             cat-prog01 power01 sync-rate can-upgrade?]}
-                    (current-ui-model container player)]
+                    ;; Use the session-id captured at attach time — do not call
+                    ;; current-ui-model here (it re-resolves via ThreadLocal).
+                    (current-ui-model-in-session session-id container player)]
                 (ui/set-prop! rt :text-abilityname :text ability-name)
                 (ui/set-prop! rt :logo-ability :src icon-path)
                 (ui/set-prop! rt :text-exp :text exp-label)
@@ -913,27 +915,37 @@
 
 (defn- make-viewer-container
   "Device-less container: no energy, no wireless, no learn/level-up. The
-   :portable tier only feeds condition-icon greying in the tree render."
-  [player]
-  {:energy                (atom 0.0)
-   :max-energy            (atom 1.0)
-   :tier                  (atom :portable)
-   :is-developing         (atom false)
-   :development-progress  (atom 0.0)
-   :development-complete? (atom false)
-   :structure-valid       (atom true)
-   :user-uuid             (atom (or (uuid/player-uuid player) ""))
-   :user-name             (atom (or (entity/player-get-name player) ""))
-   :player                player
-   :tile-entity           nil
-   :container-type        :skill-tree-viewer
-   :metadata              (atom {})})
+   :portable tier only feeds condition-icon greying in the tree render.
+   `owner` must carry :client-session-id so panel-session-id works on the
+   render thread (no ThreadLocal during flush!)."
+  [player owner]
+  (let [player-uuid-str (or (uuid/player-uuid player) "")]
+    (cond-> {:energy                (atom 0.0)
+             :max-energy            (atom 1.0)
+             :tier                  (atom :portable)
+             :is-developing         (atom false)
+             :development-progress  (atom 0.0)
+             :development-complete? (atom false)
+             :structure-valid       (atom true)
+             :user-uuid             (atom player-uuid-str)
+             :user-name             (atom (or (entity/player-get-name player) ""))
+             :player                player
+             :tile-entity           nil
+             :container-type        :skill-tree-viewer
+             :metadata              (atom {})
+             :owner                 owner}
+      (:client-session-id owner) (assoc :client-session-id (:client-session-id owner))
+      (:player-uuid owner) (assoc :player-uuid (:player-uuid owner)))))
 
 (defn create-viewer-runtime
   "Build the viewer variant: machine panel hidden, ui_left swapped to the
    skilltree texture (upstream SkillTree.scala's developer == null branch)."
   [player]
-  (let [r (build-runtime! (make-viewer-container player) player)]
+  (let [session-id (runtime-hooks/require-player-state-session-id "developer.skill-tree-viewer")
+        owner {:logical-side :client
+               :client-session-id session-id
+               :player-uuid (uuid/player-uuid player)}
+        r (build-runtime! (make-viewer-container player owner) player)]
     (when-let [^INode pm (rt/node-by-id r :panel-machine)]
       (.setVisible pm false)
       (.setFlag pm node/FLAG-LAYOUT-DIRTY))
