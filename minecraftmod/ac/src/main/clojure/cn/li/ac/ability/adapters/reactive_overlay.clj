@@ -273,7 +273,7 @@
                   :alpha 0.0})
       (dsl/list-node {:id :vm-waves :w sw :h sh :template (vm-wave-template)})
       (dsl/group {:id :charging-layer :w sw :h sh :visible? false}
-        (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x00081220})
+        (dsl/box {:id :charging-dim :x 0 :y 0 :w sw :h sh :fill 0x00000000})
         ;; Upstream CurrentChargingHUD "blue mask" (em_intensify_mask.png,
         ;; full-screen, alpha = mAlpha) — the release/blend cinematic.
         (dsl/image {:id :charging-mask :x 0 :y 0 :w sw :h sh
@@ -877,7 +877,8 @@
   (if-let [ch (:charging snapshot)]
     (let [{:keys [dim-a mask-alpha]} ch]
       (set-visible! r :charging-layer true)
-      (set-box-rgba! r :charging-dim {:r 8 :g 18 :b 32 :a dim-a})
+      ;; Upstream CurrentChargingHUD Black Mask: glColor4d(0,0,0, 0.1*mAlpha).
+      (set-box-rgba! r :charging-dim {:r 0 :g 0 :b 0 :a dim-a})
       (ui/set-prop! r :charging-mask :alpha (double (or mask-alpha 0.0)))
       ;; AcademyCraft's CurrentChargingHUD belongs to BodyIntensify and only
       ;; renders the dim/mask plus arc sprites. The progress bar, label and

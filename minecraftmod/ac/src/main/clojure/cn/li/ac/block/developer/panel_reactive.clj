@@ -382,10 +382,22 @@
 ;; Cover-overlay mechanics
 ;; ============================================================================
 
+;; Upstream SkillTree.Cover: glColor4d(0,0,0, alpha * 0.7), fade ~0.2s in/out.
+(def ^:private cover-dim-alpha 0.7)
+;; smoothed rate 3.5 → 0.7/3.5 = 0.2s to settle (matches Cover's 0.2s transit).
+(def ^:private cover-fade-rate 3.5)
+(def ^:private cover-fade-ms 200.0)
+
 (defn- set-cover-visible! [^UiRt rt visible?]
+  ;; Visibility changes must mark-tree-dirty!: the render tape skips invisible
+  ;; subtrees and is only rebuilt when tree-dirty. FLAG-LAYOUT-DIRTY alone
+  ;; recomputes abs coords for nodes already on the tape — so a cover that
+  ;; started hidden never appeared, and a cover left on the tape kept drawing
+  ;; after hide. (preset_editor_reactive/set-node-visible! already does this.)
   (let [^INode n (rt/node-by-id rt :dev-cover)]
     (.setVisible n visible?)
-    (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+    (.setFlag n node/FLAG-LAYOUT-DIRTY)
+    (rt/mark-tree-dirty! rt)))
 
 (defn- cover-fullscreen! [^UiRt rt]
   ;; :dev-cover is a child of :root, drawn at getGuiLeft/Top. The runtime is
@@ -400,7 +412,7 @@
     (.setFlag n node/FLAG-LAYOUT-DIRTY)))
 
 (defn- cover-fill-signal [alpha-target clock]
-  (let [smoothed-a (ranim/smoothed alpha-target clock 3.5)]
+  (let [smoothed-a (ranim/smoothed alpha-target clock cover-fade-rate)]
     (sig/computed-d [smoothed-a]
       (fn [a]
         (double (unchecked-int (bit-shift-left (long (* 255.0 (max 0.0 (min 1.0 (double a))))) 24)))))))
@@ -438,16 +450,66 @@
     (rt/register-binding! rt (.getIdx n) b)
     (rt/put-user-signal! rt :cover-fill-binding b)))
 
-(defn- close-cover!
-  "Close whatever overlay is currently open: dispose the overlay's embedded
-   runtime (leaving the persistent skill-tree area embed intact), clear
-   active-modal, hide cover, clear the ticker user-signal."
+(defn- begin-cover!
+  "Show the shared full-screen dim (upstream blackCover) at cover-dim-alpha."
+  [^UiRt rt]
+  ;; Drop any leftover fade watcher from a previous close (safe: opens run
+  ;; from click handlers, never from inside the fade tick itself).
+  (set-tick! rt :cover-fade-tick nil)
+  (rt/put-user-signal! rt :cover-closing? false)
+  (rt/put-user-signal! rt :cover-on-closed nil)
+  (let [alpha-target (sig/signal-d cover-dim-alpha)
+        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))]
+    (rt/put-user-signal! rt :cover-alpha-target alpha-target)
+    (bind-cover-fill! rt fill-sig)
+    (set-cover-visible! rt true)
+    (cover-fullscreen! rt)
+    alpha-target))
+
+(defn- finish-cover-close!
+  "Teardown after fade-out completes (upstream Cover dispose at alpha==0).
+   Does not clear :cover-fade-tick — that ticker may be mid-pull; the next
+   begin-cover! / open replaces it."
   [^UiRt rt]
   (remove-embedded-runtimes! rt :overlay?)
   (clear-modal! rt)
   (set-tick! rt :cover-tick nil)
   (set-cover-visible! rt false)
-  (events/gain-focus! rt -1))
+  (when-let [old (rt/user-signal rt :cover-fill-binding)] (sig/unbind! old))
+  (rt/put-user-signal! rt :cover-fill-binding nil)
+  (rt/put-user-signal! rt :cover-alpha-target nil)
+  (rt/put-user-signal! rt :cover-closing? false)
+  (events/gain-focus! rt -1)
+  (when-let [cb (rt/user-signal rt :cover-on-closed)]
+    (rt/put-user-signal! rt :cover-on-closed nil)
+    (cb)))
+
+(defn- close-cover!
+  "Upstream Cover.end(): fade dim α→0 over ~0.2s, then dispose overlay.
+   Input is cleared immediately; overlay + dim keep drawing until fade ends."
+  ([^UiRt rt] (close-cover! rt nil))
+  ([^UiRt rt on-closed]
+   (when-not (rt/user-signal rt :cover-closing?)
+     (rt/put-user-signal! rt :cover-closing? true)
+     (when on-closed (rt/put-user-signal! rt :cover-on-closed on-closed))
+     (clear-modal! rt)
+     (events/gain-focus! rt -1)
+     (if-let [a (rt/user-signal rt :cover-alpha-target)]
+       (let [clock (rt/clock-ms-sig rt)
+             start (volatile! nil)
+             finished? (volatile! false)]
+         (sig/sset-d! a 0.0)
+         (set-tick! rt :cover-fade-tick
+           (sig/computed-o [clock]
+             (fn [now]
+               (when-not @finished?
+                 (let [t (double now)]
+                   (when (nil? @start) (vreset! start t))
+                   (when (>= (- t @start) cover-fade-ms)
+                     (vreset! finished? true)
+                     (finish-cover-close! rt))))
+               nil))))
+       (finish-cover-close! rt)))))
 
 ;; ============================================================================
 ;; Wireless overlay — reuses wireless-tab-reactive verbatim (full native
@@ -455,15 +517,12 @@
 ;; ============================================================================
 
 (defn- open-wireless-overlay! [^UiRt rt container]
-  (let [alpha-target (sig/signal-d 1.0)  ;; fully opaque — wireless page is a full page, not a modal popup
-        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+  ;; Same Cover alpha as skilltips/levelup (upstream blackCover + Cover * 0.7).
+  (let [_ (begin-cover! rt)
         wr (rt/create-runtime)
         spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_wireless.xml"))
         _ (rt/build! wr spec)
         px (/ (- classic-w 176.0) 2.0) py 0.0]
-    (bind-cover-fill! rt fill-sig)
-    (set-cover-visible! rt true)
-    (cover-fullscreen! rt)  ;; full-screen dark backdrop (matching other overlays)
     (wireless-tab/attach-panel! wr {:role :receiver :container container
                                     :tab-logo-path (tex-path "guis/icons/icon_node.png")
                                     :connected-row-logo-path (tex-path "guis/icons/icon_node.png")})
@@ -472,8 +531,7 @@
       (atom {:child-rt wr :x px :y py :w 176.0 :h 187.0
              :on-close-outside
              (fn []
-               (close-cover! rt)
-               (refresh-node-name! rt container))}))))
+               (close-cover! rt #(refresh-node-name! rt container)))}))))
 
 ;; ============================================================================
 ;; Skill-detail / level-up overlays — render-only embedded popup (via
@@ -486,20 +544,21 @@
   (let [^INode cover (rt/node-by-id rt :dev-cover)]
     (events/on! rt :dev-cover :left-click
       (fn [_ _ evt]
-        (let [mx (double (:x evt 0)) my (double (:y evt 0))
-              on-btn? (and (eligible?-fn)
-                           (>= mx btn-x) (<= mx (+ btn-x btn-w))
-                           (>= my btn-y) (<= my (+ btn-y btn-h)))]
-          (if on-btn? (on-click!) (on-outside-close!)))))
+        (when-not (rt/user-signal rt :cover-closing?)
+          (let [mx (double (:x evt 0)) my (double (:y evt 0))
+                on-btn? (and (eligible?-fn)
+                             (>= mx btn-x) (<= mx (+ btn-x btn-w))
+                             (>= my btn-y) (<= my (+ btn-y btn-h)))]
+            (if on-btn? (on-click!) (on-outside-close!))))))
     (events/on! rt :dev-cover :key
       (fn [_ _ evt]
-        (when (= (long (:key-code evt 0)) 256)
+        (when (and (not (rt/user-signal rt :cover-closing?))
+                   (= (long (:key-code evt 0)) 256))
           (on-outside-close!))))
     (events/gain-focus! rt (.getIdx cover))))
 
 (defn- open-skill-detail-overlay! [^UiRt rt container player skill-id dev-type]
-  (let [alpha-target (sig/signal-d 0.7)
-        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+  (let [_ (begin-cover! rt)
         dev-spec (developer/developer-spec (or dev-type :normal))
         skill-spec (skill/get-skill skill-id)
         skill-name (or (:name skill-spec) (name skill-id) "Unknown")
@@ -525,9 +584,6 @@
                    :conditions (learning-rules/conditions-with-status
                                  skill-spec ad0 (int (or (:level ad0) 1)) dev-type)}
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
-    (bind-cover-fill! rt fill-sig)
-    (set-cover-visible! rt true)
-    (cover-fullscreen! rt)
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]
@@ -585,8 +641,7 @@
           nil)))))
 
 (defn- open-levelup-overlay! [^UiRt rt container player developer-type]
-  (let [alpha-target (sig/signal-d 0.7)
-        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+  (let [_ (begin-cover! rt)
         dev-type (or (normalize-tier developer-type) :normal)
         dev-spec (developer/developer-spec dev-type)
         session-id (panel-session-id container)
@@ -603,9 +658,6 @@
         prev-dev-a (atom false)
         last-state (atom nil)
         popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
-    (bind-cover-fill! rt fill-sig)
-    (set-cover-visible! rt true)
-    (cover-fullscreen! rt)
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))

@@ -6,8 +6,10 @@
 -->
 <Ui size="0.0,0.0" align="center,center">
 
-  <!-- Full-screen dark overlay — matching upstream RenderUtils.drawBlackout() -->
-  <box id="blackout" pos="0.0,0.0" size="1920.0,1080.0" fill="#C8000000"/>
+  <!-- Full-screen dark overlay — matching upstream RenderUtils.drawBlackout()
+       (glColor4d(0,0,0,0.7) → ARGB #B3000000). Screen-level only; Selector
+       does not add a second dim (upstream Selector has its own CRL_BACK panel). -->
+  <box id="blackout" pos="0.0,0.0" size="1920.0,1080.0" fill="#B3000000"/>
 
   <!-- ===== Page helper template: one slot row ===== -->
   <template name="slot-row">
