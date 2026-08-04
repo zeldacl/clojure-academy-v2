@@ -33,6 +33,7 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.fabric1201.mod :as mod])
   (:import [cn.li.fabric1201.client FabricClientRenderSetup]
+           [cn.li.fabric1201.shim FabricClientHelper]
            [net.minecraft.client Minecraft]
            [net.minecraft.network.chat Component]
            [cn.li.mc1201.client ClientHelper]
@@ -223,6 +224,28 @@
   []
   (gui-registry/install-client-owner-wrapper! mc-session/with-current-client-owner))
 
+(defn- register-fluid-client!
+  "Register translucent layers + SimpleFluidRenderHandler for all DSL fluids."
+  []
+  (doseq [fluid-id (registry-metadata/get-all-fluid-ids)]
+    (let [fluid-spec (registry-metadata/get-fluid-spec fluid-id)
+          rendering (:rendering fluid-spec)
+          translucent? (true? (:is-translucent rendering))
+          source (mod/get-registered-fluid-source fluid-id)
+          flowing (mod/get-registered-fluid-flowing fluid-id)]
+      (when (and source flowing)
+        (when translucent?
+          (FabricClientHelper/setFluidRenderLayerTranslucent source flowing))
+        (when (and (:still-texture rendering) (:flowing-texture rendering))
+          (FabricClientHelper/registerSimpleFluidRenderHandler
+            source
+            flowing
+            (str (:still-texture rendering))
+            (str (:flowing-texture rendering))
+            (when-let [overlay (:overlay-texture rendering)]
+              (str overlay))
+            (unchecked-int (or (:tint-color rendering) -1))))))))
+
 (defn init-client
   "Initialize client-side systems for Fabric 1.20.1."
   []
@@ -253,6 +276,7 @@
   (register-renderers)
   (FabricClientRenderSetup/registerEntityRenderers)
   (register-scripted-block-entity-renderers!)
+  (register-fluid-client!)
   (energy-item-model-properties/register!)
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)

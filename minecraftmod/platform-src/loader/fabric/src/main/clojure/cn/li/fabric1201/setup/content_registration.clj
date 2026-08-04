@@ -12,7 +12,10 @@
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
            [cn.li.mc1201.block IScriptedBlock]
-           [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]))
+           [cn.li.mc1201.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
+           [net.minecraft.world.level.block LiquidBlock]
+           [net.minecraft.world.level.material FlowingFluid]
+           [java.util.function Supplier]))
 
 (defn- metadata-call
   "Call metadata function `f` with `args`. Returns nil if `f` is nil."
@@ -31,8 +34,81 @@
       (when (instance? IScriptedBlock block)
         (logic-pipeline/install-bundle-to-block! block bundle)))))
 
+(defn- atom-supplier
+  ^Supplier [holder]
+  (reify Supplier
+    (get [_] @holder)))
+
+(defonce ^:private fluid-block-holders
+  (atom {}))
+
+(defn register-all-fluids!
+  "Register source/flowing fluids (+ buckets) before liquid blocks."
+  [{:keys [mod-id registered-fluids-source registered-fluids-flowing registered-items]}]
+  (doseq [fluid-id (or (metadata-call metadata/get-all-fluid-ids) [])]
+    (let [fluid-spec (metadata-call metadata/get-fluid-spec fluid-id)
+          physical (:physical fluid-spec)
+          behavior (:behavior fluid-spec)
+          block-spec (:block fluid-spec)
+          registry-name (metadata-call metadata/get-fluid-registry-name fluid-id)
+          flowing-name (str registry-name "_flowing")
+          source-holder (atom nil)
+          flowing-holder (atom nil)
+          bucket-holder (atom nil)
+          block-holder (atom nil)
+          make-props (fn []
+                       (FabricBootstrapHelper/createFlowingFluidProperties
+                         (atom-supplier source-holder)
+                         (atom-supplier flowing-holder)
+                         (when (:has-bucket? block-spec) (atom-supplier bucket-holder))
+                         (when (:block-id block-spec)
+                           (reify Supplier
+                             (get [_]
+                               (cast LiquidBlock @block-holder))))
+                         (int (or (:slope-find-distance behavior) 4))
+                         (int (or (:level-decrease-per-block behavior) 1))
+                         (int (or (:tick-rate behavior) 5))
+                         (float (or (:explosion-resistance behavior) 100.0))
+                         (boolean (:can-convert-to-source physical))))
+          source (FabricBootstrapHelper/createSourceFluid (make-props))
+          flowing (FabricBootstrapHelper/createFlowingFluid (make-props))
+          registered-source (fabric-dispatch/register-fluid registry-name source)
+          registered-flowing (fabric-dispatch/register-fluid flowing-name flowing)]
+      (reset! source-holder registered-source)
+      (reset! flowing-holder registered-flowing)
+      (swap! fluid-block-holders assoc fluid-id block-holder)
+      ((:swap-state! registered-fluids-source) #(assoc % fluid-id registered-source))
+      ((:swap-state! registered-fluids-flowing) #(assoc % fluid-id registered-flowing))
+      (when (:has-bucket? block-spec)
+        (let [bucket (FabricBootstrapHelper/createFluidBucket
+                       (reify Supplier
+                         (get [_] @source-holder)))
+              registered-bucket (fabric-dispatch/register-item
+                                  (:bucket-registry-name block-spec)
+                                  bucket)]
+          (reset! bucket-holder registered-bucket)
+          ((:swap-state! registered-items)
+           #(assoc % (:bucket-item-id block-spec) registered-bucket)))))))
+
+(defn- create-fluid-backed-block
+  [block-id fluid-id has-be? tile-id registered-fluids-source]
+  (let [source (registry-core/lookup registered-fluids-source fluid-id)]
+    (when-not source
+      (throw (ex-info "Fluid source missing for liquid block"
+                      {:block-id block-id :fluid-id fluid-id})))
+    (let [fluid-supplier (reify Supplier
+                           (get [_]
+                             (cast FlowingFluid source)))
+          block-inst (if has-be?
+                       (FabricBootstrapHelper/createScriptedLiquidBlock
+                         fluid-supplier block-id tile-id)
+                       (FabricBootstrapHelper/createLiquidBlock fluid-supplier))]
+      (when-let [block-holder (get @fluid-block-holders fluid-id)]
+        (reset! block-holder block-inst))
+      block-inst)))
+
 (defn register-all-blocks!
-  [{:keys [registered-blocks base-properties carrier-properties]}]
+  [{:keys [registered-blocks registered-fluids-source base-properties carrier-properties]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (doseq [block-id (or (metadata-call metadata/get-all-block-ids) [])]
       (let [registry-name (metadata-call metadata/get-block-registry-name block-id)
@@ -42,13 +118,12 @@
             tile-id (when has-be?
                       (metadata-call metadata/get-block-tile-id block-id))
             block-inst (cond
+                         (and fluid-id (metadata-call metadata/fluid-block? block-id))
+                         (create-fluid-backed-block
+                           block-id fluid-id has-be? tile-id registered-fluids-source)
+
                          (and fluid-id (not (metadata-call metadata/fluid-block? block-id)))
                          (FabricBootstrapHelper/createPlainBlock base-properties)
-
-                         fluid-id
-                         (throw (ex-info "Fabric fluid-backed block registration not wired"
-                                         {:block-id block-id
-                                          :fluid-id fluid-id}))
 
                          (and needs-dynamic-properties? has-be?)
                          (let [props (bsp/get-all-properties block-id)]
@@ -110,7 +185,10 @@
 
   (doseq [block-id (or (metadata-call metadata/get-all-block-ids) [])]
     (when (and (metadata-call metadata/should-create-block-item? block-id)
-               (not (metadata-call metadata/fluid-block? block-id)))
+               (or (not (metadata-call metadata/fluid-block? block-id))
+                   ;; Match Forge: BlockItem for fluid blocks that have a BE
+                   ;; (animated inventory icon via fluid texture).
+                   (metadata-call metadata/has-block-entity? block-id)))
       (when-let [block-inst (registry-core/lookup registered-blocks block-id)]
         (let [registry-name (metadata-call metadata/get-block-registry-name block-id)
               block-item (FabricBootstrapHelper/createBlockItem block-inst)
@@ -238,6 +316,7 @@
 
 (defn register-content!
   [{:keys [mod-id] :as ctx}]
+  (register-all-fluids! ctx)
   (register-all-blocks! ctx)
   (assert-scripted-blocks-bundled! ctx)
   (register-block-entities! (assoc ctx :mod-id mod-id))

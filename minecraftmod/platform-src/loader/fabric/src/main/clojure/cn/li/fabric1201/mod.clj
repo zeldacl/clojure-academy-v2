@@ -35,6 +35,12 @@
 (defonce registered-block-entities-holder
   (deferred/deferred #(registry-core/atom-registry {})))
 
+(defonce registered-fluids-source-holder
+  (deferred/deferred #(registry-core/atom-registry {})))
+
+(defonce registered-fluids-flowing-holder
+  (deferred/deferred #(registry-core/atom-registry {})))
+
 (defonce base-properties-holder
   (deferred/deferred #(FabricBootstrapHelper/createStoneProperties)))
 
@@ -53,6 +59,14 @@
   []
   @registered-block-entities-holder)
 
+(defn- registered-fluids-source
+  []
+  @registered-fluids-source-holder)
+
+(defn- registered-fluids-flowing
+  []
+  @registered-fluids-flowing-holder)
+
 (defn- base-properties
   []
   @base-properties-holder)
@@ -64,9 +78,11 @@
 (defn- registration-context
   []
   {:mod-id (current-mod-id)
-    :registered-blocks (registered-blocks)
-    :registered-items (registered-items)
-    :registered-block-entities (registered-block-entities)
+   :registered-blocks (registered-blocks)
+   :registered-items (registered-items)
+   :registered-block-entities (registered-block-entities)
+   :registered-fluids-source (registered-fluids-source)
+   :registered-fluids-flowing (registered-fluids-flowing)
    :base-properties (base-properties)
    :carrier-properties (carrier-properties)})
 
@@ -113,3 +129,13 @@
   "Get a registered block item by its block ID."
   [block-id]
   (registry-core/lookup (registered-items) (str block-id "-item")))
+
+(defn get-registered-fluid-source
+  "Get a registered source Fluid by fluid DSL id."
+  [fluid-id]
+  (registry-core/lookup (registered-fluids-source) fluid-id))
+
+(defn get-registered-fluid-flowing
+  "Get a registered flowing Fluid by fluid DSL id."
+  [fluid-id]
+  (registry-core/lookup (registered-fluids-flowing) fluid-id))

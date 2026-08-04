@@ -120,6 +120,44 @@ public final class FabricBootstrapHelper {
         );
     }
 
+    public static FabricFlowingFluid.Properties createFlowingFluidProperties(
+            Supplier<? extends Fluid> sourceSupplier,
+            Supplier<? extends Fluid> flowingSupplier,
+            Supplier<? extends Item> bucketSupplier,
+            Supplier<? extends LiquidBlock> blockSupplier,
+            int slopeFindDistance,
+            int levelDecreasePerBlock,
+            int tickRate,
+            float explosionResistance,
+            boolean canConvertToSource) {
+        FabricFlowingFluid.Properties properties =
+            new FabricFlowingFluid.Properties(sourceSupplier, flowingSupplier)
+                .slopeFindDistance(slopeFindDistance)
+                .levelDecreasePerBlock(levelDecreasePerBlock)
+                .tickRate(tickRate)
+                .explosionResistance(explosionResistance)
+                .canConvertToSource(canConvertToSource);
+        if (bucketSupplier != null) {
+            properties = properties.bucket(bucketSupplier);
+        }
+        if (blockSupplier != null) {
+            properties = properties.block(blockSupplier);
+        }
+        return properties;
+    }
+
+    public static Fluid createSourceFluid(FabricFlowingFluid.Properties properties) {
+        return new FabricFlowingFluid.Source(properties);
+    }
+
+    public static Fluid createFlowingFluid(FabricFlowingFluid.Properties properties) {
+        return new FabricFlowingFluid.Flowing(properties);
+    }
+
+    public static Fluid registerFluid(String modId, String id, Fluid fluid) {
+        return Registry.register(BuiltInRegistries.FLUID, ResourceLocations.of(modId, id), fluid);
+    }
+
     public static Item createBlockItem(Block block) {
         return SharedBootstrapBlockHelper.createBlockItem(block);
     }

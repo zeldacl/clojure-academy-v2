@@ -5,7 +5,8 @@
   (:import [cn.li.fabric1201.shim FabricParticleHelper]
            [cn.li.mc1201.runtime RegistryDispatchShared]
            [net.minecraft.world.item Item]
-           [net.minecraft.world.level.block Block]))
+           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.material Fluid]))
 
 (defn register-block
   [block-id ^Block block-instance]
@@ -16,6 +17,11 @@
   [item-id ^Item item-instance]
   (log/info "Registering item with Fabric BuiltInRegistries:" item-id)
   (RegistryDispatchShared/registerItem modid/mod-id (str item-id) item-instance))
+
+(defn register-fluid
+  [fluid-id ^Fluid fluid-instance]
+  (log/info "Registering fluid with Fabric BuiltInRegistries:" fluid-id)
+  (RegistryDispatchShared/registerFluid modid/mod-id (str fluid-id) fluid-instance))
 
 (defn register-particle
   [particle-id always-show?]
