@@ -335,6 +335,7 @@
   (install-entity-protocols! adapter)
   (install-item-protocols! adapter)
   (install-block-state-protocol! adapter)
+  (install-player-feedback!)
   (install-resource-factory!)
   (when world-fns-map
     (install-world-fns! world-fns-map))

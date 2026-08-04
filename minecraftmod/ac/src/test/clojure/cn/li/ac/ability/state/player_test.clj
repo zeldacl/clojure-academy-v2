@@ -41,7 +41,10 @@
   (let [s (store/fresh-player-state)]
     (is (map? (:ability-data s)))
     (is (map? (:resource-data s)))
+    (is (map? (:cooldown-data s)))
     (is (map? (:preset-data s)))
+    (is (map? (:develop-data s)))
+    (is (= 0 (:max-stim (:develop-data s))))
     (is (map? (:context-registry s)))
     (is (false? (contains? s :dirty-domains)))
     (is (false? (contains? s :terminal-data)))))

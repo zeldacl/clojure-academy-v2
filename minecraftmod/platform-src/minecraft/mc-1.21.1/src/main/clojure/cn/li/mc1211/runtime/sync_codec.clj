@@ -42,7 +42,11 @@
     (.writeByte buf mask)
     (doseq [[bit domain] domains]
       (when-not (zero? (bit-and mask bit))
-        (.writeByteArray buf ^bytes (domain-codec/encode (or (get payload domain) {})))))
+        (let [value (get payload domain)]
+          (when-not (some? value)
+            (throw (ex-info "Runtime sync domain missing for dirty bit"
+                            {:domain domain :dirty-mask mask})))
+          (.writeByteArray buf ^bytes (domain-codec/encode value)))))
     buf))
 
 (defn read-payload!

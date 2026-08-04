@@ -94,7 +94,7 @@
 
 (defn player-owner
   [player-uuid]
-  {:client-session-id (or runtime-hooks/client-session-id
+  {:client-session-id (or (runtime-hooks/client-session-id)
                           [:terminal-client player-uuid])
    :screen-id :terminal
    :player-uuid player-uuid})

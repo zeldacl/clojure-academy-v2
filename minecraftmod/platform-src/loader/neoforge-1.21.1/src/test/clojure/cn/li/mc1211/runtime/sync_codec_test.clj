@@ -32,4 +32,14 @@
     (is (thrown? clojure.lang.ExceptionInfo
                  (codec/encode-bytes
                    {:version 2 :opcode 2 :uuid "player" :revision 0
-                    :dirty-mask 0x20})))))
+                    :dirty-mask 0x20}))))
+  (testing "dirty bit without domain value is rejected instead of encoding {}"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Runtime sync domain missing for dirty bit"
+                          (codec/encode-bytes
+                            {:version 2 :opcode 1 :uuid "player" :revision 0
+                             :dirty-mask 0x1f
+                             :ability-data {}
+                             :resource-data {}
+                             :cooldown-data {}
+                             :preset-data {}})))))

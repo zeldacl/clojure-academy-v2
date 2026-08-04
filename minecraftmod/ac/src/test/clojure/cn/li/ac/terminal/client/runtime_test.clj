@@ -2,7 +2,9 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.terminal.client.runtime :as runtime]
             [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
-            [cn.li.mcmod.network.client :as net-client]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.runtime.owner :as owner]))
 
 (defn- reset-fixture [f]
   ;; Terminal runtime state lives in the Framework atom
@@ -16,6 +18,20 @@
           (runtime/reset-states-for-test!))))))
 
 (use-fixtures :each reset-fixture)
+
+(deftest player-owner-invokes-client-session-id-test
+  ;; Regression: player-owner used to store the client-session-id *function*
+  ;; itself (truthy under `or`), which then failed :client-owner validation
+  ;; when Left-Alt toggled the terminal.
+  (runtime-hooks/with-client-ctx-fn {:session-id [:client-session :test]}
+    (fn []
+      (let [po (runtime/player-owner "380df991-f603-344c-a090-369bad2a924a")]
+        (is (= [:client-session :test] (:client-session-id po)))
+        (is (false? (fn? (:client-session-id po))))
+        (is (owner/valid-client-owner? po)))))
+  (let [po (runtime/player-owner "no-bound-session")]
+    (is (= [:terminal-client "no-bound-session"] (:client-session-id po)))
+    (is (owner/valid-client-owner? po))))
 
 (deftest query-state-isolated-by-owner-test
   (let [owner-a {:client-session-id :session-a :screen-id :terminal :player-uuid "a"}

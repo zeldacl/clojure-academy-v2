@@ -8,7 +8,9 @@
   tracking and revisions are primitive mutable fields."
   (:require [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.model.resource :as rdata]
-            [cn.li.ac.ability.model.preset :as pdata])
+            [cn.li.ac.ability.model.preset :as pdata]
+            [cn.li.ac.ability.model.cooldown :as cdata]
+            [cn.li.ac.ability.model.develop :as ddata])
   (:import [java.util ArrayDeque HashMap]))
 
 (def ability-data-mask 0x01)
@@ -52,10 +54,17 @@
     (not (zero? (bit-and mask develop-data-mask))) (conj :develop-data)))
 
 (defn fresh-player-state
+  "Initial player-state containing every sync domain with its constructor.
+
+  Full sync sets all domain bits; missing domains previously became nil in the
+  payload and were silently encoded as {} on the wire, which then crashed
+  consumers that expect schema-complete maps (e.g. develop/progress)."
   []
   {:ability-data (adata/new-ability-data)
    :resource-data (rdata/new-resource-data)
+   :cooldown-data (cdata/new-cooldown-data)
    :preset-data (pdata/new-preset-data)
+   :develop-data (ddata/new-develop-data)
    ;; Upstream keeps the /aim cheat switch in PlayerDataTag, outside
    ;; AbilityData/CPData, and it survives relog. Its own persisted domain here
    ;; for the same reason: it gates commands, it is not ability progression.

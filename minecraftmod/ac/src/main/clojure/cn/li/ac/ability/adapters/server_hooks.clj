@@ -90,28 +90,43 @@
    player-uuid)
   nil)
 
-(defn- build-sync-payload-impl
+  (defn- build-sync-payload-impl
   "Build the client sync payload for player-uuid.
 
   full? true: every sync domain included (login/respawn/dimension-change
   request this; there is no periodic full-sync fallback — see sync-core).
   full? false: only domains present in :dirty-domains are included — absent
   keys tell sync-message-payload (network-core) to skip that domain's wire
-  message entirely rather than send a stale/nil value over it."
+  message entirely rather than send a stale/nil value over it.
+
+  Domain values must be present whenever their dirty bit is set. Sync codecs
+  reject nil/missing domains instead of encoding {}."
   [player-uuid full?]
   (when-let [state (runtime-get-player-state player-uuid)]
     (let [session-id (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
-          mask (if full? store/all-sync-mask (store/dirty-mask session-id player-uuid))]
-      (cond-> {:version 2
-               :opcode (if full? 1 2)
-               :uuid player-uuid
-               :revision (store/player-revision session-id player-uuid)
-               :dirty-mask mask}
-        (not (zero? (bit-and mask store/ability-data-mask))) (assoc :ability-data (:ability-data state))
-        (not (zero? (bit-and mask store/resource-data-mask))) (assoc :resource-data (:resource-data state))
-        (not (zero? (bit-and mask store/cooldown-data-mask))) (assoc :cooldown-data (:cooldown-data state))
-        (not (zero? (bit-and mask store/preset-data-mask))) (assoc :preset-data (:preset-data state))
-        (not (zero? (bit-and mask store/develop-data-mask))) (assoc :develop-data (:develop-data state))))))
+          mask (if full? store/all-sync-mask (store/dirty-mask session-id player-uuid))
+          payload {:version 2
+                   :opcode (if full? 1 2)
+                   :uuid player-uuid
+                   :revision (store/player-revision session-id player-uuid)
+                   :dirty-mask mask}]
+      (reduce (fn [acc [bit domain]]
+                (if (zero? (bit-and mask bit))
+                  acc
+                  (let [value (get state domain)]
+                    (when-not (some? value)
+                      (throw (ex-info "Player-state sync domain missing for dirty bit"
+                                      {:player-uuid player-uuid
+                                       :domain domain
+                                       :full? full?
+                                       :dirty-mask mask})))
+                    (assoc acc domain value))))
+              payload
+              [[store/ability-data-mask :ability-data]
+               [store/resource-data-mask :resource-data]
+               [store/cooldown-data-mask :cooldown-data]
+               [store/preset-data-mask :preset-data]
+               [store/develop-data-mask :develop-data]]))))
 
 (defn- runtime-list-player-uuids
   []
