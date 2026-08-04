@@ -37,29 +37,20 @@ public final class ModClientRenderSetup {
         ForgeClientRenderRegistry.registerParticleProviders(event);
     }
 
-    /**
-     * Register {@code item_id_3d} model variants for every item with
-     * {@code :item-model-3d-obj} metadata so they are baked alongside normal
-     * item models.
-     */
     @SubscribeEvent
     public static void onRegisterAdditionalModels(ModelEvent.RegisterAdditional event) {
-        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-baking");
+        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-registration");
         ClojureInterop.invoke(
-            "cn.li.forge1201.client.obj-model-baking",
+            "cn.li.forge1201.client.obj-model-registration",
             "register-additional-obj-models!",
             event);
     }
 
-    /**
-     * Replace each item's baked model with a generic {@code ObjCompositeBakedModel}
-     * that delegates between the 2D flat icon (GUI) and the 3D OBJ model (hand/world).
-     */
     @SubscribeEvent
     public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
-        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-baking");
+        ClojureInterop.requireNamespace("cn.li.forge1201.client.obj-model-registration");
         ClojureInterop.invoke(
-            "cn.li.forge1201.client.obj-model-baking",
+            "cn.li.forge1201.client.obj-model-registration",
             "replace-obj-composite-models!",
             event);
     }

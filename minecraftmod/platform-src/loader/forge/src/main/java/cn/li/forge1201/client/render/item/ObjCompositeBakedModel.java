@@ -19,16 +19,16 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Composite BakedModel matching upstream ItemDeveloper / BakedModelForTEISR:
+ * Forge BakedModel implementation for GUI-vs-world item composites.
+ *
+ * Business rules (which items, which model ids, when to install) live in
+ * {@code cn.li.mc1201.client.render.obj-model-baking}. This class only
+ * implements Forge {@link BakedModel#applyTransform} semantics matching
+ * upstream ItemDeveloper / BakedModelForTEISR:
  * <ul>
  *   <li>GUI — flat generated model (energy empty/half/full overrides)</li>
- *   <li>Hand / ground / item-frame — 3D forge:obj mesh</li>
+ *   <li>Hand / ground / item-frame — 3D world mesh</li>
  * </ul>
- *
- * Energy overrides must not replace this composite with a bare flat model:
- * that would make charged handheld items lose the OBJ (upstream keeps TEISR
- * for all non-GUI perspectives). {@link EnergyAwareOverrides} re-wraps the
- * resolved GUI model inside a new composite so FP/TP stay on the OBJ.
  */
 public class ObjCompositeBakedModel implements BakedModel {
 
@@ -43,8 +43,6 @@ public class ObjCompositeBakedModel implements BakedModel {
     }
 
     private BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
-        // Upstream ItemDeveloper maps only TransformType.GUI → 2D original;
-        // GROUND/FIXED/hand stay on the TEISR (3D) model.
         if (displayContext == ItemDisplayContext.GUI) {
             return guiModel;
         }
@@ -100,10 +98,6 @@ public class ObjCompositeBakedModel implements BakedModel {
         return overrides;
     }
 
-    /**
-     * Resolve energy-tier overrides on the GUI model, then wrap the result
-     * back into a composite so handheld contexts still use the OBJ.
-     */
     private static final class EnergyAwareOverrides extends ItemOverrides {
         private final BakedModel guiModel;
         private final BakedModel worldModel;
