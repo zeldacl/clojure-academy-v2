@@ -90,7 +90,7 @@
    player-uuid)
   nil)
 
-  (defn- build-sync-payload-impl
+(defn- build-sync-payload-impl
   "Build the client sync payload for player-uuid.
 
   full? true: every sync domain included (login/respawn/dimension-change
