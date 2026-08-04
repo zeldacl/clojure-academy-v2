@@ -3,8 +3,9 @@
 
   Iterates the item DSL metadata registry at bake time. Every item with
   {:properties {:item-model-3d-obj ...}} gets a composite ObjCompositeBakedModel
-  that switches between the 2D item/generated model (GUI/ground/fixed) and the
-  3D forge:obj model (first/third-person handheld).
+  matching upstream ItemDeveloper / BakedModelForTEISR:
+  - GUI → 2D item/generated (energy empty/half/full overrides)
+  - hand / ground / fixed → 3D forge:obj
 
   Pattern mirrors register-scripted-block-entity-renderers!: a single generic
   Java class (ObjCompositeBakedModel) is driven by Clojure metadata iteration."
@@ -46,7 +47,7 @@
 (defn replace-obj-composite-models!
   "ModelEvent.ModifyBakingResult handler.
   Replaces each item's baked model with an ObjCompositeBakedModel that
-  delegates to the 2D model for GUI/ground and the 3D OBJ model for handheld."
+  uses the 2D model for GUI only and the 3D OBJ elsewhere (upstream TEISR)."
   [^ModelEvent$ModifyBakingResult event]
   (let [^Map registry (.getModels event)
         mod-id (str modid/mod-id)]

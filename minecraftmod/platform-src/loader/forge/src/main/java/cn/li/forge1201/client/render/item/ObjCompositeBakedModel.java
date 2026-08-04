@@ -1,6 +1,7 @@
 package cn.li.forge1201.client.render.item;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.block.model.ItemOverrides;
 import net.minecraft.client.renderer.block.model.ItemTransforms;
@@ -8,7 +9,9 @@ import net.minecraft.client.renderer.texture.TextureAtlasSprite;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.Direction;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -16,56 +19,44 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Generic composite BakedModel for items that need separate 2D (GUI) and 3D
- * (world/hand) rendering.  The 2D flat model is used for GUI/ground/fixed
- * display contexts and the 3D OBJ model for first/third-person handheld.
+ * Composite BakedModel matching upstream ItemDeveloper / BakedModelForTEISR:
+ * <ul>
+ *   <li>GUI — flat generated model (energy empty/half/full overrides)</li>
+ *   <li>Hand / ground / item-frame — 3D forge:obj mesh</li>
+ * </ul>
  *
- * This mirrors the upstream pattern where BakedModelForTEISR
- * maps TransformType.GUI to the original 2D model and delegates 3D rendering
- * to a TEISRModel for all other contexts.
- *
- * Driven by item DSL {@code :item-model-3d-obj} metadata — no per-item
- * subclass needed.
- *
- * Critical: {@link #applyTransform} must return the selected sub-model.
- * ItemRenderer resolves energy overrides on this composite, then calls
- * applyTransform; if we keep returning {@code this} and {@link #getQuads}
- * always pulls the OBJ mesh, empty-energy GUI stacks (no override hit)
- * render as an invisible/wrong 3D model while charged stacks look fine
- * because overrides swap in a flat generated model.
+ * Energy overrides must not replace this composite with a bare flat model:
+ * that would make charged handheld items lose the OBJ (upstream keeps TEISR
+ * for all non-GUI perspectives). {@link EnergyAwareOverrides} re-wraps the
+ * resolved GUI model inside a new composite so FP/TP stay on the OBJ.
  */
 public class ObjCompositeBakedModel implements BakedModel {
 
-    private final BakedModel guiModel;   // 2D item/generated with energy predicates
-    private final BakedModel worldModel; // 3D forge:obj model
+    private final BakedModel guiModel;
+    private final BakedModel worldModel;
+    private final ItemOverrides overrides;
 
     public ObjCompositeBakedModel(BakedModel guiModel, BakedModel worldModel) {
         this.guiModel = guiModel;
         this.worldModel = worldModel;
+        this.overrides = new EnergyAwareOverrides(guiModel, worldModel);
     }
 
     private BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
-        if (displayContext == null) {
-            return worldModel;
+        // Upstream ItemDeveloper maps only TransformType.GUI → 2D original;
+        // GROUND/FIXED/hand stay on the TEISR (3D) model.
+        if (displayContext == ItemDisplayContext.GUI) {
+            return guiModel;
         }
-        return switch (displayContext) {
-            case GUI, GROUND, FIXED, NONE -> guiModel;
-            default -> worldModel;
-        };
+        return worldModel;
     }
 
     @Override
     public @NotNull List<BakedQuad> getQuads(@Nullable BlockState state, @Nullable Direction side,
                                               @NotNull RandomSource rand) {
-        // Fallback when no display context is available (breaking overlay, etc.).
-        // Prefer the 2D GUI mesh — inventory/creative empty stacks must stay visible.
         return guiModel.getQuads(state, side, rand);
     }
 
-    /**
-     * Forge path: pick GUI vs handheld model, apply that model's transforms,
-     * and return it so subsequent getQuads/render use the correct mesh.
-     */
     @Override
     public @NotNull BakedModel applyTransform(@NotNull ItemDisplayContext transformType,
                                               @NotNull PoseStack poseStack,
@@ -101,12 +92,44 @@ public class ObjCompositeBakedModel implements BakedModel {
 
     @Override
     public @NotNull ItemTransforms getTransforms() {
-        // applyTransform selects the real model; this is only a fallback.
         return guiModel.getTransforms();
     }
 
     @Override
     public @NotNull ItemOverrides getOverrides() {
-        return guiModel.getOverrides();
+        return overrides;
+    }
+
+    /**
+     * Resolve energy-tier overrides on the GUI model, then wrap the result
+     * back into a composite so handheld contexts still use the OBJ.
+     */
+    private static final class EnergyAwareOverrides extends ItemOverrides {
+        private final BakedModel guiModel;
+        private final BakedModel worldModel;
+
+        EnergyAwareOverrides(BakedModel guiModel, BakedModel worldModel) {
+            this.guiModel = guiModel;
+            this.worldModel = worldModel;
+        }
+
+        @Override
+        public @NotNull BakedModel resolve(@NotNull BakedModel model,
+                                           @NotNull ItemStack stack,
+                                           @Nullable ClientLevel level,
+                                           @Nullable LivingEntity entity,
+                                           int seed) {
+            BakedModel resolvedGui = guiModel.getOverrides()
+                    .resolve(guiModel, stack, level, entity, seed);
+            if (resolvedGui == null) {
+                resolvedGui = guiModel;
+            }
+            if (resolvedGui == guiModel && model instanceof ObjCompositeBakedModel composite
+                    && composite.guiModel == guiModel
+                    && composite.worldModel == worldModel) {
+                return model;
+            }
+            return new ObjCompositeBakedModel(resolvedGui, worldModel);
+        }
     }
 }
