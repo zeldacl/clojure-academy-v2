@@ -94,10 +94,15 @@
 
 (defn player-owner
   [player-uuid]
-  {:client-session-id (or (runtime-hooks/client-session-id)
-                          [:terminal-client player-uuid])
-   :screen-id :terminal
-   :player-uuid player-uuid})
+  (let [session-id (or (runtime-hooks/client-session-id)
+                       (:client-session-id (runtime-hooks/default-client-owner))
+                       [:terminal-client player-uuid])]
+    {:logical-side :client
+     :client-session-id session-id
+     ;; :screen-id partitions terminal UI state only — network RPC channel
+     ;; intentionally ignores it (see mcmod.network.client/client-channel-id).
+     :screen-id :terminal
+     :player-uuid player-uuid}))
 
 (defn call-with-owner
   [owner f]

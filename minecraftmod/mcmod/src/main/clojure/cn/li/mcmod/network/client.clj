@@ -36,9 +36,13 @@
       (runtime-hooks/client-session-id)))
 
 (defn- client-channel-id
+  "RPC channel for pending-request / push scoping.
+
+  Only `:channel-id` participates — not `:screen-id`. S2C responses rebuild
+  the owner via with-client-response-owner without screen-id, so keys that
+  include screen-id never match (terminal Left-Alt: 'No pending request')."
   [owner]
-  (or (:screen-id owner)
-      (:channel-id owner)
+  (or (:channel-id owner)
       CLIENT-RPC-CHANNEL))
 
 (defn client-owner-key
