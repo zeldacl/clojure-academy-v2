@@ -10,7 +10,7 @@ import cn.li.mc262.entity.ScriptedRayEntity;
 import cn.li.mc262.entity.hook.effect.ScriptedEffectHooks;
 import cn.li.mc262.entity.hook.marker.ScriptedMarkerHooks;
 import cn.li.mc262.entity.hook.ray.ScriptedRayHooks;
-import cn.li.mc262.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;

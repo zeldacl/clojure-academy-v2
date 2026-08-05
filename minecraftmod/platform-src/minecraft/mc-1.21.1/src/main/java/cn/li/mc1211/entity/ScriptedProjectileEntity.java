@@ -1,5 +1,7 @@
 package cn.li.mc1211.entity;
 
+
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcver.ResourceLocations;
 
 import cn.li.mcbase.entity.spec.ScriptedProjectileSpec;

@@ -5,7 +5,7 @@
             [cn.li.neoforge262.runtime.world-effects :as world-effects]
             [cn.li.neoforge262.runtime.block-manipulation :as block-manipulation]
             [cn.li.neoforge262.runtime.damage-interception :as damage-interception]
-            [cn.li.neoforge262.adapter.server-context :as server-context]
+            [cn.li.neoforgebase.adapter.server-context :as server-context]
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]
             [cn.li.mc262.runtime.interop-core :as interop-core]
             [cn.li.mc262.runtime.teleportation-core :as teleportation-core]

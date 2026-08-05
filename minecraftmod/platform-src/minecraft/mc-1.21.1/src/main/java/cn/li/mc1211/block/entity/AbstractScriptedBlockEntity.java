@@ -1,9 +1,11 @@
 package cn.li.mc1211.block.entity;
 
-import cn.li.mc1211.block.IScriptedBlock;
-import cn.li.mc1211.block.logic.ITileNbtLogic;
-import cn.li.mc1211.block.logic.ITileTickLogic;
-import cn.li.mc1211.block.logic.TileLogicBundle;
+import cn.li.mcbase.block.entity.IScriptedBlockEntity;
+
+import cn.li.mcbase.block.IScriptedBlock;
+import cn.li.mcbase.block.logic.ITileNbtLogic;
+import cn.li.mcbase.block.logic.ITileTickLogic;
+import cn.li.mcbase.block.logic.TileLogicBundle;
 import cn.li.mcver.BlockEntityIo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -22,7 +24,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * <p>Server tick / NBT hooks dispatch through {@link IScriptedBlock#getTileLogic()}
  * bundles installed at registration time (no Clojure registry lookup on hot paths).</p>
  */
-public abstract class AbstractScriptedBlockEntity extends BlockEntity {
+public abstract class AbstractScriptedBlockEntity extends BlockEntity implements IScriptedBlockEntity {
 
     private final String tileId;
     private final String blockId;

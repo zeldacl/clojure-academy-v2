@@ -1,7 +1,7 @@
 package cn.li.mc1201.client.render.effect;
 
 import cn.li.mcbase.clj.ClojureInterop;
-import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRenderer;

@@ -10,7 +10,7 @@ import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import cn.li.mc1201.client.render.ModRenderTypes;
 import cn.li.mcbase.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
-import cn.li.mc1201.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;

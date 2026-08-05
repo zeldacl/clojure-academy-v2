@@ -1,9 +1,9 @@
 package cn.li.neoforge262.block.entity;
 
-import cn.li.mc262.block.IScriptedBlock;
+import cn.li.mcbase.block.IScriptedBlock;
 import cn.li.mc262.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc262.block.entity.BlockEntityRegistry;
-import cn.li.mc262.block.logic.ITileContainerLogic;
+import cn.li.mcbase.block.logic.ITileContainerLogic;
 import cn.li.neoforge262.capability.ForgeCapabilityHandler;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;

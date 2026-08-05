@@ -1,6 +1,6 @@
 package cn.li.forge1201.capability;
 
-import cn.li.mc1201.block.capability.ScriptedCapabilityResolver;
+import cn.li.mcbase.block.capability.ScriptedCapabilityResolver;
 import cn.li.mc1201.block.entity.AbstractScriptedBlockEntity;
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
 import net.minecraft.core.BlockPos;

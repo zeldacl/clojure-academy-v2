@@ -1,9 +1,9 @@
 (ns cn.li.mc1211.block.pipeline-install-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc1211.block.logic-compile :as lc]
-            [cn.li.mc1211.block.logic-pipeline :as pipeline])
-  (:import [cn.li.mc1211.block IScriptedBlock]
-           [cn.li.mc1211.block.logic TileLogicBundle]))
+            [cn.li.mcbase.block.logic-compile :as lc]
+            [cn.li.mcbase.block.logic-pipeline :as pipeline])
+  (:import [cn.li.mcbase.block IScriptedBlock]
+           [cn.li.mcbase.block.logic TileLogicBundle]))
 
 (defn- mock-scripted-block []
   (let [state (atom {:installed nil :tile-id "test-tile"})]

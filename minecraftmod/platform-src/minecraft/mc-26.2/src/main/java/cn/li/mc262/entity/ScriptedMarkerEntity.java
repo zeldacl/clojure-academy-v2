@@ -1,5 +1,7 @@
 package cn.li.mc262.entity;
 
+
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mc262.entity.hook.marker.ScriptedMarkerHooks;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import net.minecraft.client.multiplayer.ClientLevel;

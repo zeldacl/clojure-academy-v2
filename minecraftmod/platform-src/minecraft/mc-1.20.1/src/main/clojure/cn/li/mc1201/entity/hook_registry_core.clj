@@ -6,7 +6,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.loader-hook-support :as hook-support])
-  (:import [cn.li.mc1201.entity ScriptedEntitySpecAccess]))
+  (:import [cn.li.mcbase.entity ScriptedEntitySpecAccess]))
 
 (defn normalize-impl-key
   [impl-key]

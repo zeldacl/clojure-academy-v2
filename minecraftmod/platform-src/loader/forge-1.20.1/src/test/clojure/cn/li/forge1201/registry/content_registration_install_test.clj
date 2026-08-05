@@ -1,10 +1,10 @@
 (ns cn.li.forge1201.registry.content-registration-install-test
   "Plan S3: bundle install + assert-all-blocks-have-bundle! smoke tests."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1201.block.logic-compile :as lc]
-            [cn.li.mc1201.block.logic-pipeline :as pipeline])
-  (:import [cn.li.mc1201.block IScriptedBlock]
-           [cn.li.mc1201.block.logic TileLogicBundle]))
+            [cn.li.mcbase.block.logic-compile :as lc]
+            [cn.li.mcbase.block.logic-pipeline :as pipeline])
+  (:import [cn.li.mcbase.block IScriptedBlock]
+           [cn.li.mcbase.block.logic TileLogicBundle]))
 
 (defn- mock-scripted-block []
   (let [state (atom {:bundle TileLogicBundle/EMPTY :tile-id "tile-a"})]

@@ -2,8 +2,8 @@
   "Fabric content registration — thin Registry callbacks over
   cn.li.platform.registry.content-registration-core."
   (:require [cn.li.fabric1201.registry.fabric-dispatch :as fabric-dispatch]
-            [cn.li.mc1201.block.logic-pipeline :as logic-pipeline]
-            [cn.li.mc1201.entity.mob-logic-pipeline :as mob-pipeline]
+            [cn.li.mcbase.block.logic-pipeline :as logic-pipeline]
+            [cn.li.mcbase.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mc1201.block.blockstate-properties :as bsp]
@@ -11,7 +11,7 @@
             [cn.li.platform.registry.content-registration-core :as core])
   (:import [cn.li.fabric1201.entity FabricScriptedEntityAccess]
            [cn.li.fabric1201.shim FabricBootstrapHelper]
-           [cn.li.mc1201.block IScriptedBlock]
+           [cn.li.mcbase.block IScriptedBlock]
            [cn.li.mcbase.entity.spec ScriptedProjectileSpec ScriptedEffectSpec ScriptedRaySpec ScriptedMarkerSpec ScriptedBlockBodySpec]
            [net.minecraft.world.level.block LiquidBlock]
            [net.minecraft.world.level.material FlowingFluid]

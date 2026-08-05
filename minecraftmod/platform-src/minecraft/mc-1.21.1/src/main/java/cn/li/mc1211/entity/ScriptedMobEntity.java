@@ -1,10 +1,13 @@
 package cn.li.mc1211.entity;
 
-import cn.li.mc1211.entity.logic.IMobDeathLogic;
-import cn.li.mc1211.entity.logic.IMobHurtLogic;
-import cn.li.mc1211.entity.logic.IMobLootLogic;
-import cn.li.mc1211.entity.logic.IMobTickLogic;
-import cn.li.mc1211.entity.logic.MobLogicBundle;
+import cn.li.mcbase.entity.IScriptedMob;
+import cn.li.mcbase.entity.ScriptedEntityLogicRegistry;
+
+import cn.li.mcbase.entity.logic.IMobDeathLogic;
+import cn.li.mcbase.entity.logic.IMobHurtLogic;
+import cn.li.mcbase.entity.logic.IMobLootLogic;
+import cn.li.mcbase.entity.logic.IMobTickLogic;
+import cn.li.mcbase.entity.logic.MobLogicBundle;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.PathfinderMob;
@@ -13,7 +16,7 @@ import net.minecraft.world.level.Level;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class ScriptedMobEntity extends PathfinderMob {
+public class ScriptedMobEntity extends PathfinderMob implements IScriptedMob {
     private final Map<String, Object> scriptData = new ConcurrentHashMap<>();
 
     public ScriptedMobEntity(EntityType<? extends ScriptedMobEntity> type, Level level) {

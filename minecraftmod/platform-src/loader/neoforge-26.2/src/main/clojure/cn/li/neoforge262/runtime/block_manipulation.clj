@@ -3,7 +3,7 @@
   Loader-agnostic ops delegate to mc262 adapter.block-manipulation.
   Break/can-break use BreakBlockEvent (26.2 relocation of BlockEvent$BreakEvent)."
   (:require [cn.li.mc262.runtime.adapter.block-manipulation :as block-manipulation]
-            [cn.li.neoforge262.adapter.server-context :as server-context])
+            [cn.li.neoforgebase.adapter.server-context :as server-context])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]
            [net.neoforged.neoforge.event.level.block BreakBlockEvent]

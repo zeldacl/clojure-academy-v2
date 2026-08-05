@@ -1,8 +1,8 @@
 (ns cn.li.mc262.entity.scripted-mob-dispatch-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc262.entity.mob-logic-compile :as mlc])
-  (:import [cn.li.mc262.entity ScriptedEntityLogicRegistry]
-           [cn.li.mc262.entity.logic MobLogicBundle IMobHurtLogic IMobLootLogic]))
+            [cn.li.mcbase.entity.mob-logic-compile :as mlc])
+  (:import [cn.li.mcbase.entity ScriptedEntityLogicRegistry]
+           [cn.li.mcbase.entity.logic MobLogicBundle IMobHurtLogic IMobLootLogic]))
 
 (deftest hurt-nan-cancels-via-compile-test
   (let [bundle (mlc/compile-mob-logic {:mob-hurt-fn (constantly Float/NaN)})

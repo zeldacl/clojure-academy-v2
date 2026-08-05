@@ -1,9 +1,11 @@
 package cn.li.mc262.block.entity;
 
-import cn.li.mc262.block.IScriptedBlock;
-import cn.li.mc262.block.logic.ITileNbtLogic;
-import cn.li.mc262.block.logic.ITileTickLogic;
-import cn.li.mc262.block.logic.TileLogicBundle;
+import cn.li.mcbase.block.entity.IScriptedBlockEntity;
+
+import cn.li.mcbase.block.IScriptedBlock;
+import cn.li.mcbase.block.logic.ITileNbtLogic;
+import cn.li.mcbase.block.logic.ITileTickLogic;
+import cn.li.mcbase.block.logic.TileLogicBundle;
 import cn.li.mcver.BlockEntityIo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
@@ -35,7 +37,7 @@ import net.minecraft.world.level.storage.ValueOutput;
  * {@code ITileNbtLogic} stays {@code CompoundTag}-based; this class bridges by
  * reading/writing a nested "Data" sub-tag via {@link CompoundTag#CODEC}.</p>
  */
-public abstract class AbstractScriptedBlockEntity extends BlockEntity {
+public abstract class AbstractScriptedBlockEntity extends BlockEntity implements IScriptedBlockEntity {
 
     private static final String DATA_KEY = "Data";
 

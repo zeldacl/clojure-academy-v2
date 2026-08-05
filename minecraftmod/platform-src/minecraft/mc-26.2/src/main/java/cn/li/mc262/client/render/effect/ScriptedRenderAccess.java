@@ -1,6 +1,6 @@
 package cn.li.mc262.client.render.effect;
 
-import cn.li.mc262.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mc262.entity.ScriptedBlockBodyEntity;
 import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;

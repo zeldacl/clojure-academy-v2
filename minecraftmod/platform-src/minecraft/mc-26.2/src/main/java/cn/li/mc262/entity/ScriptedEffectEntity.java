@@ -1,5 +1,7 @@
 package cn.li.mc262.entity;
 
+
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import clojure.lang.IFn;
 import cn.li.mc262.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc262.entity.hook.effect.OwnerOrbitEffectHook;

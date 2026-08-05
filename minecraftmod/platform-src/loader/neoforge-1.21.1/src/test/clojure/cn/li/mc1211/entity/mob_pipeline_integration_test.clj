@@ -1,6 +1,6 @@
 (ns cn.li.mc1211.entity.mob-pipeline-integration-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1211.entity.mob-logic-pipeline :as mob-pipeline]
+            [cn.li.mcbase.entity.mob-logic-pipeline :as mob-pipeline]
             [cn.li.mcmod.entity.dsl :as edsl]))
 
 (deftest compile-all-mob-bundles-includes-scripted-mob-test

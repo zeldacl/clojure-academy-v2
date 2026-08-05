@@ -1,6 +1,8 @@
 package cn.li.mc1211.block;
 
-import cn.li.mc1211.block.logic.TileLogicBundle;
+
+import cn.li.mcbase.block.IScriptedBlock;
+import cn.li.mcbase.block.logic.TileLogicBundle;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;

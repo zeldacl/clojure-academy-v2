@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.capability;
 
-import cn.li.mc1211.block.capability.ScriptedCapabilityResolver;
+import cn.li.mcbase.block.capability.ScriptedCapabilityResolver;
 import cn.li.mc1211.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc1211.block.entity.BlockEntityRegistry;
 import net.minecraft.core.BlockPos;

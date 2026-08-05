@@ -1,5 +1,7 @@
 package cn.li.neoforge1211.event;
 
+import cn.li.neoforgebase.event.ForgeCommandRegistrar;
+
 import cn.li.mcmod.ModId;
 import cn.li.neoforge1211.MyMod1211;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -17,6 +19,6 @@ public final class ForgeEventBusManager {
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
-        ForgeCommandRegistrar.registerAll(event, LOGGER);
+        ForgeCommandRegistrar.registerAll(event, LOGGER, "cn.li.neoforge1211.commands");
     }
 }

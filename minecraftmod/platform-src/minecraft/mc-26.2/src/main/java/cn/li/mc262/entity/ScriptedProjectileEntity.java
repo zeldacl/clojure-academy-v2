@@ -1,5 +1,7 @@
 package cn.li.mc262.entity;
 
+
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcbase.entity.spec.ScriptedProjectileSpec;
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.core.BlockPos;

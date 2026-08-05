@@ -1,7 +1,7 @@
 (ns cn.li.mc1211.block.logic-compile-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc1211.block.logic-compile :as lc])
-  (:import [cn.li.mc1211.block.logic TileLogicBundle ITileTickLogic ITileContainerLogic]))
+            [cn.li.mcbase.block.logic-compile :as lc])
+  (:import [cn.li.mcbase.block.logic TileLogicBundle ITileTickLogic ITileContainerLogic]))
 
 (deftest compile-empty-cfg-test
   (let [bundle (lc/compile-tile-logic {})]

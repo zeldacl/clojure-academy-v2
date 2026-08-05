@@ -1,6 +1,6 @@
 (ns cn.li.mc1211.block.container-default-behavior-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1211.block.logic-compile :as lc])
+            [cn.li.mcbase.block.logic-compile :as lc])
   (:import [net.minecraft.core Direction]))
 
 (deftest worldly-container-non-item-fallback-contract-test

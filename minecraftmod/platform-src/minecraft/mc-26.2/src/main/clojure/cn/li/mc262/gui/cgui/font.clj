@@ -8,7 +8,7 @@
    When `:monospace?` is set, glyphs are measured and drawn with a fixed
    advance (width of `0`) so terminal/CGui layouts stay columnar without MSDF."
   (:require [clojure.string :as str])
-  (:import [cn.li.mc262.client MinecraftClientAccess]
+  (:import [cn.li.mcbase.client MinecraftClientAccess]
            [net.minecraft.client.gui Font GuiGraphicsExtractor]
            [net.minecraft.network.chat Component MutableComponent Style]
            [org.joml Matrix3x2fStack]))

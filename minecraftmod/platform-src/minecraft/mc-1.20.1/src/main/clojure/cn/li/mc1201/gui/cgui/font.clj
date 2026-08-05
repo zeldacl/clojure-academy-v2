@@ -9,7 +9,7 @@
            [net.minecraft.client.gui Font GuiGraphics]
            [com.mojang.blaze3d.vertex PoseStack]
            [com.mojang.blaze3d.systems RenderSystem]
-           [cn.li.mc1201.client MinecraftClientAccess]
+           [cn.li.mcbase.client MinecraftClientAccess]
            [cn.li.mc1201.client.font.msdf MsdfFontManager]))
 
 (defonce ^:private registry (atom {}))

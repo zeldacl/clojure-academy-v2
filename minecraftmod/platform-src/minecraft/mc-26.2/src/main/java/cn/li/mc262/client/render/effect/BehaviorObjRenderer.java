@@ -1,7 +1,7 @@
 package cn.li.mc262.client.render.effect;
 
 import cn.li.mc262.client.render.SubmitNodeRenderBufferAdapter;
-import cn.li.mc262.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import com.mojang.blaze3d.vertex.PoseStack;

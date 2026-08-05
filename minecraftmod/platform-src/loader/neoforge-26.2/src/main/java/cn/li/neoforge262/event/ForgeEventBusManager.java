@@ -1,5 +1,7 @@
 package cn.li.neoforge262.event;
 
+import cn.li.neoforgebase.event.ForgeCommandRegistrar;
+
 import cn.li.mcmod.ModId;
 import cn.li.neoforge262.MyMod262;
 import net.neoforged.bus.api.IEventBus;
@@ -28,7 +30,7 @@ public final class ForgeEventBusManager {
     }
 
     private static void onRegisterCommands(RegisterCommandsEvent event) {
-        ForgeCommandRegistrar.registerAll(event, LOGGER);
+        ForgeCommandRegistrar.registerAll(event, LOGGER, "cn.li.neoforge262.commands");
     }
 
     /** Kept for callers that still reference the old MODID constant path. */

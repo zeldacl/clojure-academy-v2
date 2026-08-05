@@ -3,7 +3,7 @@
   Loader-agnostic ops delegate to mc1211 adapter.block-manipulation.
   Break/can-break use Forge BlockEvent$BreakEvent inline."
   (:require [cn.li.mc1211.runtime.adapter.block-manipulation :as block-manipulation]
-            [cn.li.neoforge1211.adapter.server-context :as server-context])
+            [cn.li.neoforgebase.adapter.server-context :as server-context])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]
            [net.neoforged.neoforge.event.level BlockEvent$BreakEvent]

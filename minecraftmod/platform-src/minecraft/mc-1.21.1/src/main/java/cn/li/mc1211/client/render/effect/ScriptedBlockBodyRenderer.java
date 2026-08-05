@@ -2,7 +2,7 @@ package cn.li.mc1211.client.render.effect;
 
 import cn.li.mcver.ResourceLocations;
 
-import cn.li.mc1211.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
 import com.mojang.blaze3d.vertex.VertexConsumer;

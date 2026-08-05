@@ -1,6 +1,6 @@
 package cn.li.mc1211.client.render.effect;
 
-import cn.li.mc1211.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;

@@ -1,5 +1,7 @@
 package cn.li.mc1211.entity;
 
+
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1211.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc1211.entity.hook.effect.OwnerOrbitEffectHook;
 import cn.li.mc1211.entity.hook.effect.ScriptedEffectHook;

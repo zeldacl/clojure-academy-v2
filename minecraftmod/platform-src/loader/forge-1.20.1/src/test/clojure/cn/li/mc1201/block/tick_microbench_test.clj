@@ -1,8 +1,8 @@
 (ns cn.li.mc1201.block.tick-microbench-test
   "Lightweight dispatch overhead sample (nanoTime). Not a CI gate."
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc1201.block.logic-compile :as lc])
-  (:import [cn.li.mc1201.block.logic ITileTickLogic]))
+            [cn.li.mcbase.block.logic-compile :as lc])
+  (:import [cn.li.mcbase.block.logic ITileTickLogic]))
 
 (deftest bundle-tick-dispatch-overhead-smoke-test
   (let [volatile! (atom 0)

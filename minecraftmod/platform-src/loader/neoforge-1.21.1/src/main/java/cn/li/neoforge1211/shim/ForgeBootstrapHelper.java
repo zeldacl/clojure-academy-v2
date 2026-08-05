@@ -6,7 +6,7 @@ import cn.li.mc1211.block.SharedBootstrapBlockHelper;
 import cn.li.mc1211.block.SharedDynamicStateBlock;
 import cn.li.mc1211.block.SharedScriptedBlock;
 import cn.li.mc1211.block.ScriptedRenderShapes;
-import cn.li.mc1211.entity.ScriptedEntitySpecAccess;
+import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import cn.li.mc1211.runtime.BlockRegistry;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;

@@ -1,7 +1,7 @@
 (ns cn.li.mc262.entity.mob-logic-compile-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mc262.entity.mob-logic-compile :as mlc])
-  (:import [cn.li.mc262.entity.logic MobLogicBundle IMobHurtLogic]))
+            [cn.li.mcbase.entity.mob-logic-compile :as mlc])
+  (:import [cn.li.mcbase.entity.logic MobLogicBundle IMobHurtLogic]))
 
 (deftest compile-empty-mob-props-test
   (let [bundle (mlc/compile-mob-logic {})]
