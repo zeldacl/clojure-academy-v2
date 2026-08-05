@@ -363,12 +363,20 @@
             editable? (boolean (get (.getStaticProps node) :editable?))
             focused? (.hasFlag node node/FLAG-FOCUSED)
             align-kw (or align :left)
+            ;; font-size / text offsets are authored in local design units (same as
+            ;; w/h). Images/boxes already multiply by cum-scale; text must too or
+            ;; scaled roots (terminal fit-scale, skill-tree camera) draw oversized
+            ;; glyphs that ignore the panel shrink.
+            s (node-scale node)
+            font-size (* (double font-size) s)
+            x-off (* (double x-off) s)
+            y-off (* (double y-off) s)
             ;; Vertical alignment: MSDF text draws with y as the em-box top, so a
             ;; node with align-h center/bottom otherwise renders top-aligned in its
             ;; box (reads as "too low" for a tall font in a short row). Offset y by
             ;; the em-box within the node's height to honor align-h (0 top / 1
             ;; middle / 2 bottom), matching how images/boxes already center.
-            node-h (* (.getH node) (.getCumScale node))
+            node-h (* (.getH node) s)
             v-off (case (int (.getAlignH node))
                     1 (/ (- node-h (double font-size)) 2.0)
                     2 (- node-h (double font-size))
@@ -378,7 +386,7 @@
             ;; node's LEFT edge, so center/right must anchor at the box center/right
             ;; edge — otherwise centered/right text draws off the node box. Matches
             ;; upstream TextBox.option.align (independent of the node's align-w).
-            node-w (* (.getW node) (.getCumScale node))
+            node-w (* (.getW node) s)
             h-off (case align-kw :center (/ node-w 2.0) :right node-w 0.0)
             x (+ (node-abs-x node) x-off h-off)
             y (+ (node-abs-y node) y-off v-off)]

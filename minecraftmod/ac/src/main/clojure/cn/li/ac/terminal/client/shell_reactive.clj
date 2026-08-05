@@ -203,8 +203,12 @@
           (let [panel-scale (double (ensure-fit-scale! rt*))
                 now-ms (double (System/currentTimeMillis))
                 dt (max 0.001 (/ (- now-ms (aget fd 6)) 1000.0))
-                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY).
-                ;; Divide by panel-scale so motion tracks the on-screen panel size.
+                ;; Mouse delta integration.
+                ;; Upstream: mouseX += dx*SENS; mouseY -= dy*SENS where dy is
+                ;; LWJGL Mouse.getDY() (positive = mouse moved UP). Screen `my`
+                ;; grows downward, so Screen deltas already have the opposite Y
+                ;; sign — add dy here, do not subtract. Divide by panel-scale so
+                ;; motion tracks the on-screen panel size.
                 first-pointer-frame? (Double/isNaN (aget fd 4))
                 inv-scale (/ 1.0 (max 0.001 panel-scale))
                 dx (if first-pointer-frame?
@@ -214,7 +218,7 @@
                      0.0
                      (* (- my (aget fd 5)) sensitivity inv-scale))
                 new-mx (max 0.0 (min max-mx (+ (aget fd 0) dx)))
-                new-my (max 0.0 (min max-my (- (aget fd 1) dy)))
+                new-my (max 0.0 (min max-my (+ (aget fd 1) dy)))
                 ;; Smooth balance
                 balance (fn bal [from to]
                           (let [d (double (- (double to) (double from)))]
