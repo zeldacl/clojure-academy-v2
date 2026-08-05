@@ -15,7 +15,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * previous stored amount by reversing the delta.</p>
  */
 @SuppressWarnings("removal")
-public final class EnergyStorageAsHandler implements EnergyHandler {
+final class EnergyStorageAsHandler implements EnergyHandler {
     private final IEnergyStorage storage;
     private final SnapshotJournal<Integer> journal = new SnapshotJournal<>() {
         @Override
@@ -39,12 +39,8 @@ public final class EnergyStorageAsHandler implements EnergyHandler {
         this.storage = Objects.requireNonNull(storage, "storage");
     }
 
-    public static EnergyHandler wrap(IEnergyStorage storage) {
+    static EnergyHandler wrap(IEnergyStorage storage) {
         return storage == null ? null : new EnergyStorageAsHandler(storage);
-    }
-
-    public IEnergyStorage asEnergyStorage() {
-        return storage;
     }
 
     @Override

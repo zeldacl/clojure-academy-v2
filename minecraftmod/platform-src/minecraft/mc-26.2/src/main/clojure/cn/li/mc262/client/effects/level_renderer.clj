@@ -349,15 +349,85 @@
     [center-v3 right up]))
 
 (def ^:private plasma-slices
-  "Depth-separated procedural slices used on 26.2. The collector API binds only
-   vanilla global/transform groups, so arbitrary per-op ball-array UBOs cannot
-   be attached like 1.21.1 ShaderInstance uniforms. These slices preserve the
-   animated noisy density/palette and give the orb visible depth, but they are
-   an approximation of the 20-step multi-ball ray march."
-  [{:scale 1.50 :depth -0.20 :rgba [70 190 255 48]}
-   {:scale 1.18 :depth -0.06 :rgba [92 205 255 76]}
-   {:scale 0.88 :depth 0.08 :rgba [225 126 245 112]}
-   {:scale 0.58 :depth 0.18 :rgba [238 220 255 148]}])
+  "Four back-to-front field samples. UV.x's integer band carries the sample
+   index, leaving its fractional position available as the billboard coordinate.
+
+   This is intentionally still cheaper than 1.21.1's 20-step ray march. Unlike
+   the old 26.2 approximation, however, every sample evaluates a primary ball
+   plus its nearest neighbour, so nearby balls share a metaball field instead
+   of merely stacking unrelated noisy billboards."
+  [{:index 0 :depth -1.20}
+   {:index 1 :depth -0.40}
+   {:index 2 :depth 0.40}
+   {:index 3 :depth 1.20}])
+
+(def ^:private plasma-field-half-size 1.8)
+(def ^:private encoded-neighbor-range 4.0)
+
+(defn- clamp-double
+  ^double [value min-value max-value]
+  (max (double min-value) (min (double max-value) (double value))))
+
+(defn- encode-neighbor-axis
+  "Encode an offset measured in primary-ball radii into one UNORM8 colour
+   channel. The shader reverses this mapping to [-4, 4]."
+  [value]
+  (int
+    (Math/round
+      (* 255.0
+         (/ (+ (clamp-double value
+                             (- encoded-neighbor-range)
+                             encoded-neighbor-range)
+               encoded-neighbor-range)
+            (* 2.0 encoded-neighbor-range))))))
+
+(defn- ball-radius
+  ^double [ball]
+  (max 0.05 (double (or (:size ball) 0.5))))
+
+(defn- distance-squared
+  ^double [^V3 a ^V3 b]
+  (let [dx (- (.-x a) (.-x b))
+        dy (- (.-y a) (.-y b))
+        dz (- (.-z a) (.-z b))]
+    (+ (* dx dx) (* dy dy) (* dz dz))))
+
+(defn- nearest-neighbor
+  [balls ball-index ^V3 center]
+  (reduce-kv
+    (fn [nearest candidate-index candidate]
+      (if (= ball-index candidate-index)
+        nearest
+        (let [candidate-center (map->v3 candidate)
+              distance (distance-squared center candidate-center)]
+          (if (or (nil? nearest) (< distance (:distance nearest)))
+            {:ball candidate :center candidate-center :distance distance}
+            nearest))))
+    nil
+    balls))
+
+(defn- radius-ratio-code
+  "Quantize neighbour/primary radius to four UV.y bands. Zero means no
+   neighbour; the shader maps 1..4 to 0.5, 1.0, 1.5, and 2.0."
+  [ratio]
+  (cond
+    (< ratio 0.75) 1
+    (< ratio 1.25) 2
+    (< ratio 1.75) 3
+    :else 4))
+
+(defn- neighbor-payload
+  [balls ball-index ^V3 center ^V3 right ^V3 up ^V3 to-camera radius]
+  (if-let [{neighbor :ball
+            ^V3 neighbor-center :center} (nearest-neighbor balls ball-index center)]
+    (let [delta (V3/sub neighbor-center center)
+          inverse-radius (/ 1.0 radius)]
+      {:r (encode-neighbor-axis (* (V3/dot delta right) inverse-radius))
+       :g (encode-neighbor-axis (* (V3/dot delta up) inverse-radius))
+       :b (encode-neighbor-axis (* (V3/dot delta to-camera) inverse-radius))
+       :ratio-code (radius-ratio-code (/ (ball-radius neighbor) radius))})
+    ;; RGB decodes near zero, but ratio-code zero disables the neighbour term.
+    {:r 128 :g 128 :b 128 :ratio-code 0}))
 
 (defn- emit-plasma-vertex!
   [^VertexConsumer consumer ^PoseStack$Pose pose ^V3 p u v r g b a]
@@ -370,42 +440,46 @@
 (defn- emit-plasma-slice!
   [^VertexConsumer consumer ^PoseStack$Pose pose
    ^V3 center ^V3 right ^V3 up ^V3 to-camera radius alpha
-   {:keys [scale depth rgba]}]
-  (let [[r g b slice-alpha] rgba
-        opacity (int (Math/round (* (double alpha)
-                                    (/ (double slice-alpha) 255.0))))
+   {:keys [r g b ratio-code]}
+   {:keys [index depth]}]
+  (let [uv-u-base (* 2.0 (double index))
+        uv-v-base (* 2.0 (double ratio-code))
         slice-center (V3/add center (V3/scale to-camera (* radius (double depth))))
-        side (V3/scale right (* radius (double scale)))
-        lift (V3/scale up (* radius (double scale)))
+        side (V3/scale right (* radius plasma-field-half-size))
+        lift (V3/scale up (* radius plasma-field-half-size))
         p0 (V3/add (V3/sub slice-center side) lift)
         p1 (V3/add (V3/add slice-center side) lift)
         p2 (V3/sub (V3/add slice-center side) lift)
         p3 (V3/sub (V3/sub slice-center side) lift)]
-    (emit-plasma-vertex! consumer pose p0 0.0 0.0 r g b opacity)
-    (emit-plasma-vertex! consumer pose p1 1.0 0.0 r g b opacity)
-    (emit-plasma-vertex! consumer pose p2 1.0 1.0 r g b opacity)
-    (emit-plasma-vertex! consumer pose p3 0.0 1.0 r g b opacity)))
+    (emit-plasma-vertex! consumer pose p0 uv-u-base uv-v-base r g b alpha)
+    (emit-plasma-vertex! consumer pose p1 (inc uv-u-base) uv-v-base r g b alpha)
+    (emit-plasma-vertex! consumer pose p2 (inc uv-u-base) (inc uv-v-base) r g b alpha)
+    (emit-plasma-vertex! consumer pose p3 uv-u-base (inc uv-v-base) r g b alpha)))
 
 (defn- emit-plasma-ball!
   [^VertexConsumer consumer ^PoseStack$Pose pose camera-pos
-   {:keys [size] :as ball} alpha]
+   balls ball-index ball alpha]
   (let [[^V3 center ^V3 right ^V3 up] (billboard-basis camera-pos ball)
         ^V3 camera (map->v3 camera-pos)
         to-camera (V3/normalize (V3/sub camera center))
-        radius (max 0.05 (double (or size 0.5)))]
+        radius (ball-radius ball)
+        payload (neighbor-payload
+                  balls ball-index center right up to-camera radius)]
     (doseq [slice plasma-slices]
       (emit-plasma-slice!
-        consumer pose center right up to-camera radius alpha slice))))
+        consumer pose center right up to-camera radius alpha payload slice))))
 
 (defn- emit-plasma-op!
   [^VertexConsumer consumer ^PoseStack$Pose pose camera-pos
    {:keys [center radius alpha balls]}]
   (let [alpha-channel (color-channel-255 alpha 1.0)
-        visible-balls (or (seq (take 16 balls))
-                          [(assoc (or center {:x 0.0 :y 0.0 :z 0.0})
-                                  :size (double (or radius 0.75)))])]
-    (doseq [ball visible-balls]
-      (emit-plasma-ball! consumer pose camera-pos ball alpha-channel))))
+        visible-balls (vec
+                        (or (seq (take 16 balls))
+                            [(assoc (or center {:x 0.0 :y 0.0 :z 0.0})
+                                    :size (double (or radius 0.75)))]))]
+    (doseq [[ball-index ball] (map-indexed vector visible-balls)]
+      (emit-plasma-ball!
+        consumer pose camera-pos visible-balls ball-index ball alpha-channel))))
 
 (defn- submit-custom-geometry!
   [^SubmitNodeCollector collector ^PoseStack pose-stack

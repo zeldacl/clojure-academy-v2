@@ -26,6 +26,10 @@ neoForge {
             sourceSet(sourceSets.main)
         }
     }
+    // Loom puts Minecraft on testCompileClasspath by default; MDG only wires
+    // the main source set unless asked. Platform Clojure unit tests (ported
+    // from neoforge-1.21.1) import net.minecraft.* / NeoForge types at AOT time.
+    addModdingDependenciesTo(sourceSets.test)
     runs {
         client {
             client()

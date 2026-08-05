@@ -15,7 +15,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * {@code Capabilities.Item.BLOCK}.
  */
 @SuppressWarnings("removal")
-public final class ItemHandlerAsResourceHandler implements ResourceHandler<ItemResource> {
+final class ItemHandlerAsResourceHandler implements ResourceHandler<ItemResource> {
     private final IItemHandler handler;
     private final SnapshotJournal<ItemStack[]> journal = new SnapshotJournal<>() {
         @Override
@@ -52,12 +52,8 @@ public final class ItemHandlerAsResourceHandler implements ResourceHandler<ItemR
         this.handler = Objects.requireNonNull(handler, "handler");
     }
 
-    public static ResourceHandler<ItemResource> wrap(IItemHandler handler) {
+    static ResourceHandler<ItemResource> wrap(IItemHandler handler) {
         return handler == null ? null : new ItemHandlerAsResourceHandler(handler);
-    }
-
-    public IItemHandler asItemHandler() {
-        return handler;
     }
 
     @Override

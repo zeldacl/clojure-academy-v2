@@ -1,7 +1,10 @@
 package cn.li.neoforge262.client;
 
 import cn.li.mcbase.clj.ClojureInterop;
+import cn.li.mc262.client.render.GuiRenderPipelines;
 import cn.li.mc262.client.render.PlasmaRenderTypes;
+import cn.li.mc262.client.render.ReactivePreviewPipRenderer;
+import cn.li.mc262.client.render.ReactivePreviewRenderState;
 import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
 import cn.li.neoforge262.client.render.ForgeClientRenderRegistry;
@@ -11,6 +14,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterFluidModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.neoforged.neoforge.client.event.RegisterPictureInPictureRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterRangeSelectItemModelPropertyEvent;
 import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 
@@ -39,6 +43,7 @@ public final class ModClientRenderSetup {
         modBus.addListener(ModClientRenderSetup::onRegisterFluidModels);
         modBus.addListener(ModClientRenderSetup::onRegisterRangeProperties);
         modBus.addListener(ModClientRenderSetup::onRegisterRenderPipelines);
+        modBus.addListener(ModClientRenderSetup::onRegisterPictureInPictureRenderers);
     }
 
     private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
@@ -72,6 +77,13 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
         event.registerPipeline(PlasmaRenderTypes.plasmaBodyPipeline());
+        GuiRenderPipelines.all().forEach(event::registerPipeline);
+    }
+
+    private static void onRegisterPictureInPictureRenderers(
+            RegisterPictureInPictureRenderersEvent event) {
+        event.register(ReactivePreviewRenderState.class, ReactivePreviewPipRenderer::new);
+        ReactivePreviewRenderState.markRendererRegistered();
     }
 
 }

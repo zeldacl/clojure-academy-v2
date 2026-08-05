@@ -3,10 +3,13 @@
   (:require [cn.li.mc262.client.texture-registry :as tex-registry]
             [cn.li.mc262.gui.cgui.font :as cgui-font]
             [cn.li.mc262.gui.reactive.clock :as clock]
+            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
             [clojure.string :as str])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
+           [cn.li.mc262.client.render ReactivePreviewRenderState]
+           [com.mojang.blaze3d.pipeline RenderPipeline]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcver ResourceLocations]
@@ -73,6 +76,24 @@
 
 (defn- argb [^long a ^long r ^long g ^long b]
   (unchecked-int (bit-or (bit-shift-left a 24) (bit-shift-left r 16) (bit-shift-left g 8) b)))
+
+(defn- unit-byte
+  ^long [value]
+  (long (Math/round (* 255.0 (max 0.0 (min 1.0 (double value)))))))
+
+(defn- resolve-pipeline
+  ^RenderPipeline [shader-id]
+  (let [value (platform-bridge/call-adapter :resolve-shader shader-id)]
+    (when (instance? RenderPipeline value)
+      value)))
+
+(defn- depth-layer-byte
+  "Encode the two skill-tree mask layers consumed by gui_mask_depth_26.vsh.
+   64 maps to approximately -0.5 NDC (plate), 96 to -0.25 (ring)."
+  ^long [^INode node]
+  (if (<= (double (:depth-z (.getStaticProps node) -1.0)) -1.5)
+    64
+    96))
 
 (defn render-box! [^GuiGraphicsExtractor gg ^INode node]
   (let [x  (node-abs-x node)  y  (node-abs-y node)
@@ -157,14 +178,26 @@
             tex-w-raw (.getDSlot node SLOT-IMG-TEX-W)
             tex-h-raw (.getDSlot node SLOT-IMG-TEX-H)
             tex-w (if (pos? tex-w-raw) tex-w-raw 1.0)
-            tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)]
+            tex-h (if (pos? tex-h-raw) tex-h-raw 1.0)
+            [tr tg tb ta] (image-tint-rgba node)
+            depth-equal? (= :equal (:depth-func (.getStaticProps node)))
+            ^RenderPipeline depth-pipeline
+            (when depth-equal? (resolve-pipeline :depth-equal))]
         (when (pos? alpha)
-          (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0))
-            (GuiGraphicsHelper/blit gg rl ix iy iw ih)
-            (GuiGraphicsHelper/blitTexturedQuad gg rl
-              (float x) (float y) (float (+ x w)) (float (+ y h)) 0.0
+          (if depth-pipeline
+            (GuiGraphicsHelper/blitPipeline
+              gg depth-pipeline rl nil
+              ix iy (unchecked-int (+ x w)) (unchecked-int (+ y h))
               (float u) (float (+ u tex-w))
-              (float v) (float (+ v tex-h)))))))))
+              (float v) (float (+ v tex-h))
+              (argb (unit-byte (* alpha ta))
+                    (unit-byte tr) (unit-byte tg) (unit-byte tb)))
+            (if (and (zero? u) (zero? v) (== tex-w 1.0) (== tex-h 1.0))
+              (GuiGraphicsHelper/blit gg rl ix iy iw ih)
+              (GuiGraphicsHelper/blitTexturedQuad gg rl
+                (float x) (float y) (float (+ x w)) (float (+ y h)) 0.0
+                (float u) (float (+ u tex-w))
+                (float v) (float (+ v tex-h))))))))))
 
 (defn- display-text [^INode node raw]
   (let [s (str (or raw ""))]
@@ -448,7 +481,7 @@
     (/ (if (neg? a) (+ a (* 2.0 Math/PI)) a) (* 2.0 Math/PI))))
 
 (defn- render-radial-texture!
-  "Approximate the legacy two-sampler radial mask by clipping texture-0 into
+  "Failure-only fallback when GuiRenderPipelines are unavailable: clip texture-0 into
    horizontal runs. The texture's own alpha keeps only the ring artwork, while
    the run boundary supplies the animated clockwise progress sector."
   [^GuiGraphicsExtractor gg ^INode node ^Identifier texture props]
@@ -505,15 +538,53 @@
 (defn render-shader-progress-node!
   [^GuiGraphicsExtractor gg ^INode node]
   (let [props (or (.getOSlot node SLOT-SHADER-PROPS) {})
-        ^Identifier texture (or (.getOSlot node SLOT-SHADER-TEX-0)
-                                (resolve-tex-loc
-                                  (or (:texture-0 props) (:tex-0 props))))
+        ^Identifier texture-0 (or (.getOSlot node SLOT-SHADER-TEX-0)
+                                  (resolve-tex-loc
+                                    (or (:texture-0 props) (:tex-0 props))))
+        ^Identifier texture-1 (or (.getOSlot node SLOT-SHADER-TEX-1)
+                                  (resolve-tex-loc
+                                    (or (:texture-1 props) (:tex-1 props))))
         kind (.getKind node)
+        shader-id (or (:shader-id props) :ring-progbar)
         radial? (or (identical? kind :shader-ring)
-                    (= :ring-progbar (:shader-id props)))]
-    (if radial?
-      (render-radial-texture! gg node texture props)
-      (render-textured-quad! gg node texture props))))
+                    (= :ring-progbar shader-id))
+        ^RenderPipeline pipeline (resolve-pipeline shader-id)
+        two-textures? (contains? #{:ring-progbar :skill-progbar :cpbar-overload}
+                                shader-id)
+        pipeline-ready? (and pipeline texture-0
+                             (or (not two-textures?) texture-1))]
+    (if pipeline-ready?
+      (let [x (unchecked-int (node-abs-x node))
+            y (unchecked-int (node-abs-y node))
+            x1 (unchecked-int (+ (node-abs-x node) (scaled-w node)))
+            y1 (unchecked-int (+ (node-abs-y node) (scaled-h node)))
+            progress (max 0.0 (min 1.0
+                                (double (.getDSlot node SLOT-SHADER-PROGRESS))))
+            quad? (identical? kind :shader-quad)
+            alpha (if quad?
+                    (max 0.0 (min 1.0
+                               (double (.getDSlot node SLOT-SQUAD-ALPHA))))
+                    1.0)
+            scroll (mod progress 1.0)
+            highlight (max 0.0 (min 1.0
+                                 (double (or (:highlight-alpha props) 0.0))))
+            red (case shader-id
+                  :cpbar-overload (unit-byte scroll)
+                  (unit-byte progress))
+            green (if (= :cpbar-overload shader-id)
+                    (unit-byte highlight)
+                    255)
+            [u0 v0 u1 v1] (shader-uv props)]
+        (GuiGraphicsHelper/blitPipeline
+          gg pipeline texture-0 (when two-textures? texture-1)
+          x y x1 y1
+          (float u0) (float u1) (float v0) (float v1)
+          (argb (unit-byte alpha) red green 255)))
+      ;; Keep the previous CPU approximations as a resource/pipeline failure
+      ;; fallback; successful 26.2 registration no longer takes this branch.
+      (if radial?
+        (render-radial-texture! gg node texture-0 props)
+        (render-textured-quad! gg node texture-0 props)))))
 
 (defn bake-depth-mask! [^INode node]
   (let [src (.getOSlot node SLOT-DM-SRC)]
@@ -521,12 +592,22 @@
       (.setOSlot node SLOT-DM-BAKED (resolve-rl src)))))
 
 (defn render-depth-mask!
-  "26.2's extractor queues GUI states and exposes no local colour/depth-mask
-   mutation. Painter ordering already draws connections before node plates, so
-   a no-colour stamp is the safe degradation; drawing a box here visibly
-   corrupts every skill node."
-  [^GuiGraphicsExtractor _gg ^INode _node]
-  nil)
+  "Submit an alpha-discarded, colour-write-disabled depth stamp. Unlike the old
+   immediate GL path, 26.2 stores cutoff and layer in vertex colour so the state
+   remains valid when the extractor is rendered later."
+  [^GuiGraphicsExtractor gg ^INode node]
+  (when-let [^Identifier texture (.getOSlot node SLOT-DM-BAKED)]
+    (when-let [^RenderPipeline pipeline (resolve-pipeline :alpha-discard)]
+      (let [x (unchecked-int (node-abs-x node))
+            y (unchecked-int (node-abs-y node))
+            x1 (unchecked-int (+ (node-abs-x node) (scaled-w node)))
+            y1 (unchecked-int (+ (node-abs-y node) (scaled-h node)))
+            cutoff (unit-byte (:alpha-cutoff (.getStaticProps node) 0.3))
+            layer (depth-layer-byte node)]
+        (GuiGraphicsHelper/blitPipeline
+          gg pipeline texture nil x y x1 y1
+          0.0 1.0 0.0 1.0
+          (argb 255 cutoff layer 255))))))
 
 (defn render-shader-quad! [^GuiGraphicsExtractor gg ^INode node]
   (render-shader-progress-node! gg node))
@@ -661,26 +742,44 @@
                              (unchecked-int (apply-band-alpha (aget bands (inc i)) alpha))))))))))
 
 (defn render-line! [^GuiGraphicsExtractor gg ^INode node]
-  (let [x1 (.getDSlot node 0) y1 (.getDSlot node 1)
-        x2 (.getDSlot node 2) y2 (.getDSlot node 3)
-        thick (max 1.0 (.getDSlot node 4))
+  (let [scale (node-scale node)
+        x1 (+ (node-abs-x node) (* scale (.getDSlot node 0)))
+        y1 (+ (node-abs-y node) (* scale (.getDSlot node 1)))
+        x2 (+ (node-abs-x node) (* scale (.getDSlot node 2)))
+        y2 (+ (node-abs-y node) (* scale (.getDSlot node 3)))
+        thick (max 1.0 (* scale (.getDSlot node 4)))
         alpha (.getDSlot node 5)
         a (unchecked-int (* 255.0 (if (pos? alpha) alpha 1.0)))
-        color (argb a 255 255 255)
+        raw-color (.getOSlot node 0)
+        base-color (if (number? raw-color)
+                     (unchecked-int (long raw-color))
+                     0xFFFFFFFF)
+        color (unchecked-int
+                (bit-or (bit-and (long base-color) 0x00FFFFFF)
+                        (bit-shift-left (long a) 24)))
+        depth-notequal? (= :notequal (:depth-func (.getStaticProps node)))
+        ^RenderPipeline pipeline
+        (when depth-notequal? (resolve-pipeline :depth-notequal))
         ix1 (unchecked-int (min x1 x2))
         iy1 (unchecked-int (min y1 y2))
         ix2 (unchecked-int (max x1 x2))
-        iy2 (unchecked-int (max y1 y2))]
+        iy2 (unchecked-int (max y1 y2))
+        fill! (fn [x0 y0 x3 y3]
+                (if pipeline
+                  (GuiGraphicsHelper/fillPipeline
+                    ^GuiGraphicsExtractor gg ^RenderPipeline pipeline
+                    (int x0) (int y0) (int x3) (int y3) (int color))
+                  (.fill ^GuiGraphicsExtractor gg
+                         (int x0) (int y0) (int x3) (int y3) (int color))))]
     (if (< (Math/abs (- x2 x1)) (Math/abs (- y2 y1)))
-      (.fill gg (unchecked-int (- (/ (+ x1 x2) 2.0) (/ thick 2.0)))
+      (fill! (unchecked-int (- (/ (+ x1 x2) 2.0) (/ thick 2.0)))
              iy1
              (unchecked-int (+ (/ (+ x1 x2) 2.0) (/ thick 2.0)))
-             iy2 color)
-      (.fill gg ix1
+             iy2)
+      (fill! ix1
              (unchecked-int (- (/ (+ y1 y2) 2.0) (/ thick 2.0)))
              ix2
-             (unchecked-int (+ (/ (+ y1 y2) 2.0) (/ thick 2.0)))
-             color))))
+             (unchecked-int (+ (/ (+ y1 y2) 2.0) (/ thick 2.0)))))))
 
 (defn bake-nine-slice! [^INode node]
   (let [src (.getOSlot node SLOT-NS-SRC)]
@@ -750,17 +849,8 @@
   (Math/toRadians (* speed (mod (/ (System/currentTimeMillis) 80.0) 360.0))))
 
 (defn- render-stack!
-  "Draw an ItemStack centred in the node.
-
-   `spin` > 0 adds the 2.5D turntable approximation. A real Y rotation is out of
-   reach here: 26.2 hands items to the GUI renderer as a GuiItemRenderState
-   carrying only a 2D affine, and the perspective camera 1.21.1 sets up has no
-   equivalent short of registering a picture-in-picture renderer with its own
-   framebuffer per node. What an affine *can* reproduce is the silhouette: a
-   cube turning about its vertical axis is widest corner-on and a factor of
-   sqrt(2) narrower face-on, which is where the squeeze below comes from. The
-   shear rides the same 90-degree cycle and supplies the direction of the turn,
-   which the symmetric squeeze alone cannot."
+  "Compatibility renderer used by :preview-item and only as the :preview-3d
+   fallback when no PIP renderer was registered by the active loader."
   [^GuiGraphicsExtractor gg ^INode node ^ItemStack stack extra-scale spin y-off]
   (let [x (node-abs-x node)
         y (node-abs-y node)
@@ -803,11 +893,19 @@
 (defn render-preview-3d! [^GuiGraphicsExtractor gg ^INode node]
   (when (.isVisible node)
     (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
-      (let [requested-scale (double (.getDSlot node SLOT-P3D-SCALE))]
-        (render-stack! gg node stack
-                       (if (pos? requested-scale) requested-scale 1.0)
-                       (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
-                       (double (.getDSlot node SLOT-P3D-YOFF)))))))
+      (let [requested-scale (double (.getDSlot node SLOT-P3D-SCALE))
+            model-scale (if (pos? requested-scale) requested-scale 1.0)
+            spin (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
+            yaw-degrees (Math/toDegrees (turntable-phase spin))
+            y-off (double (.getDSlot node SLOT-P3D-YOFF))
+            submitted?
+            (ReactivePreviewRenderState/submit
+              gg stack
+              (node-abs-x node) (node-abs-y node)
+              (scaled-w node) (scaled-h node)
+              model-scale yaw-degrees y-off)]
+        (when-not submitted?
+          (render-stack! gg node stack model-scale spin y-off))))))
 
 (def ^:private crosshair-ring-unit-vecs
   (mapv (fn [idx]

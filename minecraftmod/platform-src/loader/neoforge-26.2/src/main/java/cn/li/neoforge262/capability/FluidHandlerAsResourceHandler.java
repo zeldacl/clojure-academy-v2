@@ -15,7 +15,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * {@code Capabilities.Fluid.BLOCK}.
  */
 @SuppressWarnings("removal")
-public final class FluidHandlerAsResourceHandler implements ResourceHandler<FluidResource> {
+final class FluidHandlerAsResourceHandler implements ResourceHandler<FluidResource> {
     private final IFluidHandler handler;
     private final SnapshotJournal<FluidStack[]> journal = new SnapshotJournal<>() {
         @Override
@@ -52,12 +52,8 @@ public final class FluidHandlerAsResourceHandler implements ResourceHandler<Flui
         this.handler = Objects.requireNonNull(handler, "handler");
     }
 
-    public static ResourceHandler<FluidResource> wrap(IFluidHandler handler) {
+    static ResourceHandler<FluidResource> wrap(IFluidHandler handler) {
         return handler == null ? null : new FluidHandlerAsResourceHandler(handler);
-    }
-
-    public IFluidHandler asFluidHandler() {
-        return handler;
     }
 
     @Override

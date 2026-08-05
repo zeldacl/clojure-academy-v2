@@ -61,7 +61,7 @@
            [cn.li.mcver ResourceLocations]
            [cn.li.neoforge262.bridge ClientTimeInterop]
            [cn.li.mc262.client GuiGraphicsHelper ClientHelper]
-           [cn.li.mc262.client.render ScriptedBlockEntityBerProvider]
+           [cn.li.mc262.client.render GuiRenderPipelines ScriptedBlockEntityBerProvider]
            [cn.li.neoforge262.client ModClientRenderSetup]))
 
 (defn- bind-texture-forge!
@@ -261,6 +261,16 @@
      :get-player-owner #(mc-session/current-local-player-owner)
      :font-text-width (fn [font-desc text font-size]
                         (cgui-font/text-width font-desc text font-size))
+     :resolve-shader (fn [shader-name]
+                       (case shader-name
+                         :ring-progbar (GuiRenderPipelines/skillProgbar)
+                         :skill-progbar (GuiRenderPipelines/skillProgbar)
+                         :mono (GuiRenderPipelines/mono)
+                         :cpbar-overload (GuiRenderPipelines/cpbarOverload)
+                         :alpha-discard (GuiRenderPipelines/alphaDiscard)
+                         :depth-equal (GuiRenderPipelines/depthEqualTextured)
+                         :depth-notequal (GuiRenderPipelines/depthNotEqualColor)
+                         nil))
      :stop-all-media! (fn [_player-uuid]
                         (sound/stop-all-media!))
      :has-recipes? (fn [item-id]

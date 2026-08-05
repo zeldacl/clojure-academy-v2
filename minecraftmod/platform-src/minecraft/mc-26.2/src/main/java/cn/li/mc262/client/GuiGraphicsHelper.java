@@ -2,6 +2,7 @@ package cn.li.mc262.client;
 
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.TextureSetup;
@@ -151,6 +152,51 @@ public final class GuiGraphicsHelper {
                 u0, u1, v0, v1,
                 argb,
                 gge.peekScissorStack()));
+    }
+
+    /**
+     * Submit a textured quad through a custom extraction-safe GUI pipeline.
+     *
+     * <p>The optional second texture is bound as Sampler1. The packed ARGB
+     * colour is available to custom shaders as the vertex {@code Color}, which
+     * is how 26.2 GUI nodes carry per-draw scalar parameters without mutable
+     * shader uniforms.</p>
+     */
+    public static void blitPipeline(Object graphics, RenderPipeline pipeline,
+                                    Identifier texture0, Identifier texture1,
+                                    int x0, int y0, int x1, int y1,
+                                    float u0, float u1, float v0, float v1,
+                                    int argb) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)
+                || pipeline == null || texture0 == null || x0 >= x1 || y0 >= y1) {
+            return;
+        }
+        AbstractTexture first = Minecraft.getInstance().getTextureManager().getTexture(texture0);
+        TextureSetup textures;
+        if (texture1 == null) {
+            textures = TextureSetup.singleTexture(first.getTextureView(), first.getSampler());
+        } else {
+            AbstractTexture second = Minecraft.getInstance().getTextureManager().getTexture(texture1);
+            textures = TextureSetup.doubleTexture(
+                    first.getTextureView(), first.getSampler(),
+                    second.getTextureView(), second.getSampler());
+        }
+        gge.submitGuiElementRenderState(new BlitRenderState(
+                pipeline,
+                textures,
+                new Matrix3x2f(gge.pose()),
+                x0, y0, x1, y1,
+                u0, u1, v0, v1,
+                argb,
+                gge.peekScissorStack()));
+    }
+
+    /** Submit a solid rectangle with pipeline-owned depth/blend state. */
+    public static void fillPipeline(Object graphics, RenderPipeline pipeline,
+                                    int x0, int y0, int x1, int y1, int argb) {
+        if (graphics instanceof GuiGraphicsExtractor gge && pipeline != null) {
+            gge.fill(pipeline, x0, y0, x1, y1, argb);
+        }
     }
 
     /** Sprite-sheet region blit. */
