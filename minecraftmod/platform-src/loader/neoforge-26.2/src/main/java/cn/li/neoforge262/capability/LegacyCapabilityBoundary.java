@@ -68,4 +68,25 @@ final class LegacyCapabilityBoundary {
         }
         return handler;
     }
+
+    /**
+     * Same legacy→transfer wrap as {@link #adaptBlock}, for item-stack providers
+     * that still expose pre-transfer storage interfaces.
+     */
+    @Nullable
+    static Object adaptItem(ItemCapability<?, ?> capability, @Nullable Object handler) {
+        if (handler == null) {
+            return null;
+        }
+        if (capability == Capabilities.Item.ITEM && handler instanceof IItemHandler itemHandler) {
+            return ItemHandlerAsResourceHandler.wrap(itemHandler);
+        }
+        if (capability == Capabilities.Fluid.ITEM && handler instanceof IFluidHandler fluidHandler) {
+            return FluidHandlerAsResourceHandler.wrap(fluidHandler);
+        }
+        if (capability == Capabilities.Energy.ITEM && handler instanceof IEnergyStorage energyStorage) {
+            return EnergyStorageAsHandler.wrap(energyStorage);
+        }
+        return handler;
+    }
 }

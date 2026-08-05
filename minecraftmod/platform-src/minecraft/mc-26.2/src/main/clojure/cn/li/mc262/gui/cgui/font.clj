@@ -3,7 +3,10 @@
 
    Minecraft 26.2's text extractor owns glyph render-state submission. This
    adapter therefore uses the vanilla Font directly instead of carrying the
-   removed ShaderInstance/GlyphInfo MSDF pipeline."
+   removed ShaderInstance/GlyphInfo MSDF pipeline.
+
+   When `:monospace?` is set, glyphs are measured and drawn with a fixed
+   advance (width of `0`) so terminal/CGui layouts stay columnar without MSDF."
   (:require [clojure.string :as str])
   (:import [cn.li.mc262.client MinecraftClientAccess]
            [net.minecraft.client.gui Font GuiGraphicsExtractor]
@@ -65,14 +68,47 @@
     :right (- (double x) total-width)
     (double x)))
 
+(defn- monospace-advance
+  "Unscaled em-space advance used when `:monospace?` is true."
+  ^double [font-desc]
+  (double (.width (vanilla-font) (component "0" font-desc))))
+
+(defn- codepoint-count
+  ^long [^String text]
+  (long (.codePointCount text 0 (.length text))))
+
+(defn- monospace-width
+  ^double [font-desc ^String text]
+  (* (monospace-advance font-desc) (codepoint-count text)))
+
 (defn text-width
   ([font-desc ^String text font-size]
    (text-width font-desc text font-size nil))
   ([font-desc ^String text font-size _glyph-styles]
    (if (str/blank? text)
      0.0
-     (* (double (.width (vanilla-font) (component text font-desc)))
-        (scale-factor font-size)))))
+     (let [scale (scale-factor font-size)
+           unscaled (if (:monospace? font-desc)
+                      (monospace-width font-desc text)
+                      (double (.width (vanilla-font) (component text font-desc))))]
+       (* unscaled scale)))))
+
+(defn- draw-monospace!
+  [^GuiGraphicsExtractor graphics font-desc ^String text
+   color shadow?]
+  (let [^Font font (vanilla-font)
+        advance (float (monospace-advance font-desc))
+        color-i (unchecked-int color)
+        shadow (boolean shadow?)
+        ^ints cps (.toArray (.codePoints text))
+        n (alength cps)]
+    (loop [i 0
+           x 0.0]
+      (when (< i n)
+        (let [cp (aget cps i)
+              ^String ch (String/valueOf (Character/toChars cp))]
+          (.text graphics font (component ch font-desc) (int (Math/round x)) 0 color-i shadow)
+          (recur (inc i) (+ x advance)))))))
 
 (defn draw-text!
   "Submit vanilla text render state at (`x`,`y`) with CGui scaling/alignment."
@@ -90,12 +126,14 @@
        (try
          (.translate pose (float draw-x) (float y))
          (.scale pose scale scale)
-         (.text graphics
-                (vanilla-font)
-                (component text font-desc)
-                0 0
-                (unchecked-int color)
-                (boolean shadow?))
+         (if (:monospace? font-desc)
+           (draw-monospace! graphics font-desc text color shadow?)
+           (.text graphics
+                  (vanilla-font)
+                  (component text font-desc)
+                  0 0
+                  (unchecked-int color)
+                  (boolean shadow?)))
          (finally
            (.popMatrix pose)))))))
 

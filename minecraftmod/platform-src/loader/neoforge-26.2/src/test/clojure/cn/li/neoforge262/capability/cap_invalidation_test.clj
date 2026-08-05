@@ -32,4 +32,6 @@
     (is (some? src))
     (when src
       (is (re-find #"ResourceHandler" src))
+      (is (re-find #"adaptBlock" src))
+      (is (re-find #"adaptItem" src))
       (is (nil? (re-find #"LazyOptional" src))))))
