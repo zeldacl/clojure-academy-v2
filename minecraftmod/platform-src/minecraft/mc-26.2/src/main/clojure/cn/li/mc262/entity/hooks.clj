@@ -1,9 +1,8 @@
-(ns cn.li.mc262.entity.hooks)
-;; 26.2 AOT stub -- full port pending for broken Minecraft 26.2 APIs.
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn dispose! [& _] nil)
-(defn create-tech-ui-container-screen [& _] nil)
-(defn dispose-overlay! [& _] nil)
-(defn combat-root [entity] entity)
-(defn ensure-loaded! [& _] nil)
+(ns cn.li.mc262.entity.hooks
+  "Data-driven scripted entity hook registration entrypoint."
+  (:require [cn.li.mc262.entity.hook-registry-core :as hook-core]))
+
+(defn register-all-hooks!
+  "Register all scripted entity hook kinds defined by hook registry specs."
+  []
+  (hook-core/register-all-scripted-hooks!))

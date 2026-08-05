@@ -7,8 +7,8 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
 public class ScriptedMarkerEntity extends ScriptedEffectEntity {
-    public ScriptedMarkerEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
-        super(entityType, level);
+    public ScriptedMarkerEntity(EntityType<? extends ScriptedEffectEntity> type, Level level) {
+        super(type, level);
     }
 
     public ScriptedMarkerSpec getMarkerSpec() {

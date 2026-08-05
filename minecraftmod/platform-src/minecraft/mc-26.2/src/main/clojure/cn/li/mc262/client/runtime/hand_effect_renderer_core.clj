@@ -1,9 +1,22 @@
-(ns cn.li.mc262.client.runtime.hand-effect-renderer-core)
-;; 26.2 AOT stub -- full port pending for broken Minecraft 26.2 APIs.
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn dispose! [& _] nil)
-(defn create-tech-ui-container-screen [& _] nil)
-(defn dispose-overlay! [& _] nil)
-(defn combat-root [entity] entity)
-(defn ensure-loaded! [& _] nil)
+(ns cn.li.mc262.client.runtime.hand-effect-renderer-core
+  "Shared hand-effect runtime core facade.
+
+  Keeps client runtime layering explicit while delegating to existing
+  shared hand-effect implementation."
+  (:require [cn.li.mc262.client.effects.hand :as hand]))
+
+(defn tick-hand-effects!
+  []
+  (hand/tick-hand-effects!))
+
+(defn apply-camera-pitch-deltas!
+  [player]
+  (hand/apply-camera-pitch-deltas! player))
+
+(defn tick-and-apply-camera!
+  [player]
+  (hand/tick-and-apply-camera! player))
+
+(defn current-hand-transform
+  []
+  (hand/current-hand-transform))

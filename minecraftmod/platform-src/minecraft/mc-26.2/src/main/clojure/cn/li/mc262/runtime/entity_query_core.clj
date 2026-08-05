@@ -1,10 +1,15 @@
-(ns cn.li.mc262.runtime.entity-query-core)
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn break-block! [& _] nil)
-(defn spawn-projectile-in-level! [& _] nil)
-(defn create-tile-inventory-adapter [& _] nil)
-(defn execute-send-message-action [& _] nil)
-(defn execute-action [& _] nil)
-(defn apply-effect! [& _] nil)
-(defn remove-effect! [& _] nil)
+(ns cn.li.mc262.runtime.entity-query-core
+  "Public aggregate API for shared entity query helpers.
+
+  Lookup and iteration implementations live in focused modules, while this
+  namespace remains the stable runtime-facing entrypoint for platform code."
+  (:require [cn.li.mc262.runtime.entity-iterators :as entity-iterators]
+            [cn.li.mc262.runtime.entity-lookup :as entity-lookup]))
+
+(def get-player-by-uuid entity-lookup/get-player-by-uuid)
+(def resolve-level entity-lookup/resolve-level)
+(def resolve-level-strict entity-lookup/resolve-level-strict)
+(def get-entity-by-uuid entity-lookup/get-entity-by-uuid)
+(def entity-type-id-for-entity entity-iterators/entity-type-id-for-entity)
+(def entity-type-id entity-iterators/entity-type-id)
+(def create-entity-type-id-fn entity-iterators/create-entity-type-id-fn)

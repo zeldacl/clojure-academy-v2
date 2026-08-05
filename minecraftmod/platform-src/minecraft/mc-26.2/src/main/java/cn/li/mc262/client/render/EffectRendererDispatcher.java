@@ -16,14 +16,21 @@ public final class EffectRendererDispatcher {
     }
 
     public static EntityRendererProvider<ScriptedEffectEntity> pickEffectRenderer(String rendererId) {
-        return ScriptedEffectBillboardRenderer::new;
+        String id = normalize(rendererId, "effect-billboard");
+        return context -> new ScriptedEffectBillboardRenderer<>(context, id);
     }
 
     public static EntityRendererProvider<ScriptedMarkerEntity> pickMarkerRenderer(String rendererId) {
-        return ScriptedMarkerBillboardRenderer::new;
+        String id = normalize(rendererId, "marker-billboard");
+        return context -> new ScriptedMarkerBillboardRenderer<>(context, id);
     }
 
     public static EntityRendererProvider<ScriptedRayEntity> pickRayRenderer(String rendererId) {
-        return ScriptedRayCompositeRenderer::new;
+        String id = normalize(rendererId, "ray-composite");
+        return context -> new ScriptedRayCompositeRenderer<>(context, id);
+    }
+
+    private static String normalize(String rendererId, String fallback) {
+        return rendererId == null || rendererId.isBlank() ? fallback : rendererId;
     }
 }

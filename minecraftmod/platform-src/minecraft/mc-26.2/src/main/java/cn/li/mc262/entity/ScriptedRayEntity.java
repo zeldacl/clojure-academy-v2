@@ -7,8 +7,8 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
 public class ScriptedRayEntity extends ScriptedEffectEntity {
-    public ScriptedRayEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
-        super(entityType, level);
+    public ScriptedRayEntity(EntityType<? extends ScriptedEffectEntity> type, Level level) {
+        super(type, level);
     }
 
     public ScriptedRaySpec getRaySpec() {

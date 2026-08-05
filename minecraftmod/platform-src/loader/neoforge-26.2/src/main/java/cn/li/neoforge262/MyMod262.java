@@ -26,6 +26,10 @@ public class MyMod262 {
 
             Var startFn = (Var) Clojure.var("cn.li.neoforge262.mod", "start-neoforge-mod!");
             if (!startFn.isBound()) {
+                // Fall back to the copied Forge entry name during the port.
+                startFn = (Var) Clojure.var("cn.li.neoforge262.mod", "start-forge-mod!");
+            }
+            if (!startFn.isBound()) {
                 throw new IllegalStateException("Clojure bootstrap var is unbound: cn.li.neoforge262.mod/start-neoforge-mod!");
             }
             startFn.invoke(modEventBus, modContainer);

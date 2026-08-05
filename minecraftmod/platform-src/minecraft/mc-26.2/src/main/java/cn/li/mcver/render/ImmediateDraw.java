@@ -1,22 +1,17 @@
 package cn.li.mcver.render;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 import org.joml.Matrix4f;
 
 /**
- * Version seam for immediate-mode mesh upload.
+ * Consumer-bound version seam for immediate-style vertex emission.
  *
- * <p>26.2 removed the {@code Tesselator}/{@code BufferUploader}/
- * {@code VertexFormat.Mode} immediate-draw path as part of the
- * RenderPipeline/GpuBuffer render rewrite (topology now lives on
- * {@code PrimitiveTopology} + {@code RenderPipeline}, uploads go through
- * {@code CommandEncoder}/{@code GpuBuffer} instead of a single static
- * {@code Tesselator} buffer). Porting the real immediate-draw path is
- * deferred to the client-render phase of the 26.2 port; this seam keeps the
- * 1.21.1 public surface intact and stubs the implementation so
- * {@code cn.li.mcver.render.ImmediateDraw} compiles and satisfies the
- * version-seam parity gate. Calling any drawing method throws
- * {@link UnsupportedOperationException} until the real implementation
- * lands.
+ * <p>Minecraft 26.2 owns upload, topology, and graphics state through a
+ * RenderType submitted to a SubmitNodeCollector. Callers bind the consumer
+ * supplied by that collector, then use the legacy begin/vertex fluent API.
+ * Vertices are written immediately; {@link #draw()} only closes the logical
+ * batch and intentionally performs no upload.
  */
 public final class ImmediateDraw {
     private ImmediateDraw() {
@@ -31,20 +26,55 @@ public final class ImmediateDraw {
         POSITION_COLOR
     }
 
+    private static final ThreadLocal<Binding> BINDING = new ThreadLocal<>();
+    private static final ThreadLocal<Boolean> OPEN = ThreadLocal.withInitial(() -> false);
+
+    public static void bind(VertexConsumer consumer, PoseStack.Pose pose) {
+        if (consumer == null || pose == null) {
+            throw new NullPointerException("ImmediateDraw binding requires a consumer and pose");
+        }
+        if (BINDING.get() != null) {
+            throw new IllegalStateException("ImmediateDraw is already bound on this thread");
+        }
+        BINDING.set(new Binding(consumer, pose));
+    }
+
+    public static void bind(VertexConsumer consumer, PoseStack poseStack) {
+        if (poseStack == null) {
+            throw new NullPointerException("ImmediateDraw binding requires a pose stack");
+        }
+        bind(consumer, poseStack.last());
+    }
+
+    public static void unbind() {
+        BINDING.remove();
+        OPEN.remove();
+    }
+
     public static void begin(Mode mode, Format format) {
-        throw unsupported();
+        requireBinding();
+        if (mode == null || format == null) {
+            throw new NullPointerException("ImmediateDraw.begin requires mode and format");
+        }
+        if (Boolean.TRUE.equals(OPEN.get())) {
+            throw new IllegalStateException("ImmediateDraw.begin called while a batch is already open");
+        }
+        OPEN.set(true);
     }
 
     public static Vertex vertex(Matrix4f pose, float x, float y, float z) {
-        throw unsupported();
+        Binding binding = requireOpen();
+        return new Vertex(binding.consumer.addVertex(pose, x, y, z));
     }
 
     public static Vertex vertex(float x, float y, float z) {
-        throw unsupported();
+        Binding binding = requireOpen();
+        return new Vertex(binding.consumer.addVertex(binding.pose, x, y, z));
     }
 
     public static void draw() {
-        throw unsupported();
+        requireOpen();
+        OPEN.set(false);
     }
 
     /**
@@ -54,33 +84,59 @@ public final class ImmediateDraw {
             Matrix4f pose,
             float x1, float y1, float x2, float y2, float z,
             float u0, float u1, float v0, float v1) {
-        throw unsupported();
+        begin(Mode.QUADS, Format.POSITION_TEX);
+        vertex(pose, x1, y1, z).uv(u0, v1).endVertex();
+        vertex(pose, x2, y1, z).uv(u1, v1).endVertex();
+        vertex(pose, x2, y2, z).uv(u1, v0).endVertex();
+        vertex(pose, x1, y2, z).uv(u0, v0).endVertex();
+        draw();
     }
 
-    private static UnsupportedOperationException unsupported() {
-        return new UnsupportedOperationException(
-            "ImmediateDraw is not yet implemented on 26.2 (RenderPipeline/GpuBuffer rewrite); "
-                + "see cn.li.mcver.render.ImmediateDraw");
+    private static Binding requireBinding() {
+        Binding binding = BINDING.get();
+        if (binding == null) {
+            throw new IllegalStateException(
+                    "ImmediateDraw has no bound VertexConsumer; call bind() in custom geometry");
+        }
+        return binding;
+    }
+
+    private static Binding requireOpen() {
+        Binding binding = requireBinding();
+        if (!Boolean.TRUE.equals(OPEN.get())) {
+            throw new IllegalStateException("ImmediateDraw has no open batch; call begin() first");
+        }
+        return binding;
+    }
+
+    private record Binding(VertexConsumer consumer, PoseStack.Pose pose) {
     }
 
     public static final class Vertex {
-        private Vertex() {
+        private final VertexConsumer consumer;
+
+        private Vertex(VertexConsumer consumer) {
+            this.consumer = consumer;
         }
 
         public Vertex uv(float u, float v) {
-            throw unsupported();
+            consumer.setUv(u, v);
+            return this;
         }
 
         public Vertex color(float r, float g, float b, float a) {
-            throw unsupported();
+            consumer.setColor(r, g, b, a);
+            return this;
         }
 
         public Vertex color(int argb) {
-            throw unsupported();
+            consumer.setColor(argb);
+            return this;
         }
 
         public void endVertex() {
-            throw unsupported();
+            // VertexConsumer finalizes vertices as attributes for the next
+            // vertex are written; retained for seam compatibility.
         }
     }
 }

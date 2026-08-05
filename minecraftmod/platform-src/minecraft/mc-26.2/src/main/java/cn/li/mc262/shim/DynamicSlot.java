@@ -7,7 +7,7 @@ import net.minecraft.world.entity.player.Player;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-/** Universal Slot subclass -- replaces all 9 per-feature proxy sites.
+/** Universal Slot subclass — replaces all 9 per-feature proxy sites.
  *  One class serves energy/plate/core/output/conditional slot variants. */
 public class DynamicSlot extends Slot {
     private Predicate<ItemStack> mayPlaceFn = s -> true;

@@ -1,13 +1,13 @@
 package cn.li.mc262.client.render.effect;
 
 import cn.li.mc262.entity.ScriptedEntitySpecAccess;
+import cn.li.mc262.entity.ScriptedBlockBodyEntity;
+import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.world.entity.Entity;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -30,70 +30,32 @@ final class ScriptedRenderAccess {
     }
 
     static int getAgeTicks(Entity entity) {
-        return invokeInt(entity, "getAgeTicks", 0);
+        return entity instanceof ScriptedEffectEntity effect ? effect.getAgeTicks() : entity.tickCount;
     }
 
     static String getSyncedBlockId(Entity entity) {
-        return invokeString(entity, "getSyncedBlockId", "minecraft:stone");
+        return entity instanceof ScriptedBlockBodyEntity body
+                ? body.getSyncedBlockId()
+                : "minecraft:stone";
     }
 
     static boolean isBehaviorHit(Entity entity) {
-        return invokeBoolean(entity, "isBehaviorHit", false);
-    }
-
-    private static boolean invokeBoolean(Object target, String methodName, boolean defaultValue) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            Object result = method.invoke(target);
-            return result instanceof Boolean b ? b : defaultValue;
-        } catch (Exception ignored) {
-            return defaultValue;
-        }
+        return entity instanceof ScriptedBlockBodyEntity body && body.isBehaviorHit();
     }
 
     static List<ArcDataView> getActiveArcs(Entity entity) {
-        List<?> arcs = invokeList(entity, "getActiveArcs");
+        if (!(entity instanceof ScriptedEffectEntity effect)) {
+            return Collections.emptyList();
+        }
+        List<ScriptedEffectEntity.ArcData> arcs = effect.getActiveArcs();
         if (arcs.isEmpty()) {
             return Collections.emptyList();
         }
         List<ArcDataView> out = new ArrayList<>(arcs.size());
-        for (Object arc : arcs) {
-            ArcDataView view = ArcDataView.from(arc);
-            if (view != null) {
-                out.add(view);
-            }
+        for (ScriptedEffectEntity.ArcData arc : arcs) {
+            out.add(ArcDataView.from(arc));
         }
-        return out;
-    }
-
-    private static int invokeInt(Object target, String methodName, int defaultValue) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            Object result = method.invoke(target);
-            return result instanceof Number n ? n.intValue() : defaultValue;
-        } catch (Exception ignored) {
-            return defaultValue;
-        }
-    }
-
-    private static String invokeString(Object target, String methodName, String defaultValue) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            Object result = method.invoke(target);
-            return result == null ? defaultValue : result.toString();
-        } catch (Exception ignored) {
-            return defaultValue;
-        }
-    }
-
-    private static List<?> invokeList(Object target, String methodName) {
-        try {
-            Method method = target.getClass().getMethod(methodName);
-            Object result = method.invoke(target);
-            return result instanceof List<?> list ? list : Collections.emptyList();
-        } catch (Exception ignored) {
-            return Collections.emptyList();
-        }
+        return List.copyOf(out);
     }
 
     static final class ArcDataView {
@@ -109,28 +71,16 @@ final class ScriptedRenderAccess {
             this.flickerSeed = flickerSeed;
         }
 
-        static ArcDataView from(Object arcObj) {
-            try {
-                Field strandsField = arcObj.getClass().getField("strands");
-                Field lifeTicksField = arcObj.getClass().getField("lifeTicks");
-                Field phaseField = arcObj.getClass().getField("phase");
-                Field flickerSeedField = arcObj.getClass().getField("flickerSeed");
-
-                Object strandsObj = strandsField.get(arcObj);
-                Object lifeObj = lifeTicksField.get(arcObj);
-                Object phaseObj = phaseField.get(arcObj);
-                Object seedObj = flickerSeedField.get(arcObj);
-
-                if (!(strandsObj instanceof float[][][] strands)) {
-                    return null;
+        static ArcDataView from(ScriptedEffectEntity.ArcData arc) {
+            float[][][] strands = new float[arc.strands.length][][];
+            for (int i = 0; i < arc.strands.length; i++) {
+                float[][] source = arc.strands[i];
+                strands[i] = new float[source.length][];
+                for (int j = 0; j < source.length; j++) {
+                    strands[i][j] = source[j].clone();
                 }
-                int lifeTicks = lifeObj instanceof Number n ? n.intValue() : 0;
-                float phase = phaseObj instanceof Number n ? n.floatValue() : 0.0F;
-                float flickerSeed = seedObj instanceof Number n ? n.floatValue() : 0.0F;
-                return new ArcDataView(strands, lifeTicks, phase, flickerSeed);
-            } catch (Exception ignored) {
-                return null;
             }
+            return new ArcDataView(strands, arc.lifeTicks, arc.phase, arc.flickerSeed);
         }
     }
 }

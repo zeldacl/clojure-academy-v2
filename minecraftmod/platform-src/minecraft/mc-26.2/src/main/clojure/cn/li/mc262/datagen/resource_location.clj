@@ -1,10 +1,14 @@
-(ns cn.li.mc262.datagen.resource-location)
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn break-block! [& _] nil)
-(defn spawn-projectile-in-level! [& _] nil)
-(defn create-tile-inventory-adapter [& _] nil)
-(defn execute-send-message-action [& _] nil)
-(defn execute-action [& _] nil)
-(defn apply-effect! [& _] nil)
-(defn remove-effect! [& _] nil)
+(ns cn.li.mc262.datagen.resource-location
+  "Loader-agnostic Identifier parsing helper for datagen outputs."
+  (:require [clojure.string :as str])
+  (:import [cn.li.mcver ResourceLocations]))
+
+(defn parse-resource-location
+  ([s] (parse-resource-location s nil))
+  ([s default-namespace]
+   (let [value (str s)]
+     (if (str/includes? value ":")
+       (let [[namespace path] (str/split value #":" 2)]
+         (ResourceLocations/of namespace path))
+       (when default-namespace
+         (ResourceLocations/of default-namespace value))))))

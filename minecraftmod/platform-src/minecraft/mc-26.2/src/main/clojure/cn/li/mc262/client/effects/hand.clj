@@ -1,9 +1,27 @@
-(ns cn.li.mc262.client.effects.hand)
-;; 26.2 AOT stub -- full port pending for broken Minecraft 26.2 APIs.
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn dispose! [& _] nil)
-(defn create-tech-ui-container-screen [& _] nil)
-(defn dispose-overlay! [& _] nil)
-(defn combat-root [entity] entity)
-(defn ensure-loaded! [& _] nil)
+(ns cn.li.mc262.client.effects.hand
+  "Shared client hand-effect helpers for Minecraft 26.2."
+  (:require [cn.li.mc262.client.session :as client-session]
+            [cn.li.mcmod.hooks.core :as power-runtime])
+  (:import [net.minecraft.client.player LocalPlayer]))
+
+(defn tick-hand-effects!
+  []
+  (client-session/with-current-client-session
+    #(power-runtime/client-tick-hand-effects!)))
+
+(defn apply-camera-pitch-deltas!
+  [^LocalPlayer player]
+  (when (and player (client-session/current-local-player-owner))
+    (doseq [delta (power-runtime/client-drain-camera-pitch-deltas!
+                    (client-session/current-local-player-owner))]
+      (.setXRot player (+ (.getXRot player) (float delta))))))
+
+(defn tick-and-apply-camera!
+  [^LocalPlayer player]
+  (tick-hand-effects!)
+  (apply-camera-pitch-deltas! player))
+
+(defn current-hand-transform
+  []
+  (client-session/with-current-client-session
+    #(power-runtime/client-current-hand-transform)))

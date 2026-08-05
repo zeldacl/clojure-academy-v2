@@ -9,7 +9,8 @@ import net.neoforged.api.distmarker.OnlyIn;
 public final class ScriptedBlockEntityBerProvider {
     private ScriptedBlockEntityBerProvider() {}
 
-    public static <T extends BlockEntity> BlockEntityRendererProvider<T, ?> provider() {
+    public static <T extends BlockEntity>
+    BlockEntityRendererProvider<T, ScriptedBlockEntityBer.State<T>> provider() {
         return context -> new ScriptedBlockEntityBer<>(context);
     }
 }

@@ -1,9 +1,22 @@
-(ns cn.li.mc262.gui.menu.container)
-;; 26.2 AOT stub -- full port pending for broken Minecraft 26.2 APIs.
-(defn init! [& _] nil)
-(defn setup! [& _] nil)
-(defn dispose! [& _] nil)
-(defn create-tech-ui-container-screen [& _] nil)
-(defn dispose-overlay! [& _] nil)
-(defn combat-root [entity] entity)
-(defn ensure-loaded! [& _] nil)
+(ns cn.li.mc262.gui.menu.container
+  "Shared Minecraft 1.20.1 container adapter for Clojure-side containers.
+
+  Wraps a Clojure container map (via mcmod gui.adapter.platform-registry) as a
+  vanilla `net.minecraft.world.Container` so Forge and Fabric slot machinery
+  can interact with it without platform-specific code."
+  (:require [cn.li.mcmod.gui.adapter.platform-registry :as platform])
+  (:import [cn.li.mc262.shim UniversalContainer]))
+
+(defn create-tile-inventory-adapter
+  "Return a `Container` Java skeleton backed by a Clojure container.
+
+  Works identically on Forge and Fabric â€?both use the same MC 1.20.1 API."
+  [clj-container]
+  (UniversalContainer.
+    clj-container
+    (fn [c] (int (or (platform/slot-count c) 0)))
+    (fn [c slot] (or (platform/slot-get-item c (int slot)) nil))
+    (fn [c slot stack] (platform/slot-set-item! c (int slot) stack))
+    (fn [c slot] (platform/slot-changed! c (int slot)))
+    (fn [c player] (boolean (platform/safe-validate c player)))
+    (fn [c slot stack] (boolean (platform/slot-can-place? c (int slot) stack)))))
