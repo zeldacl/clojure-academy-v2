@@ -101,12 +101,25 @@
                 (recur (unchecked-inc-int i)))
             (recur (unchecked-inc-int i))))))))
 
+(defn- template-item-h
+  "Resolve list row height from the template root, else its first child.
+   XML often wraps content as <template><box size=…/></template> with no size
+   on the template itself — falling back to 24 then stacks rows on top of each
+   other (settings/media)."
+  [template]
+  (let [h0 (double (get-in template [:props :h] 0.0))
+        h1 (double (get-in template [:children 0 :props :h] 0.0))]
+    (cond (pos? h0) h0
+          (pos? h1) h1
+          :else 24.0)))
+
 (defn list-set!
   "Rebuild :list node children from items using the list's template spec.
    - Template spec comes from the list node's :template static prop (or oslot 0)
    - Old children have their event handlers removed (leak prevention)
    - per-item-fn: (fn [rt item-root-node item]) — set props / attach handlers;
      use (ui/item-node item-root sub-id) to find sub-nodes within the item.
+   - Optional per-item `:row-h` overrides template height (category spacers).
    Usage: (ui/list-set! rt :entries locations
             (fn [rt item-root loc]
               (ui/set-node-prop! rt (ui/item-node item-root :label) :text (:name loc))))"
@@ -116,17 +129,28 @@
       (throw (ex-info (str "list-set!: node not found: " list-id) {:id list-id})))
     (let [template (or (.getOSlot list-node 0)
                        (get (.getStaticProps list-node) :template))
-          spacing (let [s (.getDSlot list-node 0)] (if (pos? s) s 4.0))]
+          ;; Honor explicit spacing=\"0\" (upstream ElementList.spacing=0). Default
+          ;; 4 only when the list never declared :spacing in props.
+          spacing (if (contains? (.getStaticProps list-node) :spacing)
+                    (double (.getDSlot list-node 0))
+                    4.0)
+          default-h (template-item-h template)]
       (when-not template
         (throw (ex-info (str "list-set!: no template on list node " list-id) {:id list-id})))
       ;; Clear existing children (removes their event handlers)
       (rt/clear-children! rt list-node)
-      ;; Instantiate template per item
-      (doseq [[idx item] (map-indexed vector items)]
-        (let [item-h (double (get-in template [:props :h] 24.0))
-              item-spec (assoc-in template [:props :y] (* idx (+ item-h spacing)))
-              item-root (rt/build-child! rt item-spec list-node)]
-          (per-item-fn rt item-root item)))
+      ;; Instantiate template per item — cumulative Y so :row-h spacers work.
+      (loop [y 0.0
+             remaining (seq items)]
+        (when remaining
+          (let [item (first remaining)
+                item-h (double (or (:row-h item) default-h))
+                item-spec (-> template
+                              (assoc-in [:props :y] y)
+                              (assoc-in [:props :h] item-h))
+                item-root (rt/build-child! rt item-spec list-node)]
+            (per-item-fn rt item-root item)
+            (recur (+ y item-h spacing) (next remaining)))))
       (rt/mark-tree-dirty! rt)
       nil)))
 

@@ -26,6 +26,10 @@
 (def ^:private thumb-max-y 528.0)
 (def ^:private thumb-travel (- thumb-max-y thumb-min-y))
 
+(def ^:private main-w 742.0)
+(def ^:private main-h 923.0)
+(def ^:private fit-margin 0.92)
+
 (defn- load-about-data []
   (try
     (some-> (io/resource (str "assets/" modid/MOD-ID "/config/about.edn"))
@@ -150,6 +154,17 @@
     (ui/set-prop! r (keyword (str (name id) "_text")) :color
                   (if active? 0xFF3D3F4B 0xFFFFFFFF))))
 
+(defn- sync-thumb! [^UiRt r progress]
+  (let [y (double (+ thumb-min-y (* (double progress) thumb-travel)))
+        ^INode hit (rt/node-by-id r :drag_bar_hit)
+        ^INode thumb (rt/node-by-id r :drag_bar)]
+    (when hit
+      (.setY hit y)
+      (.setFlag hit node/FLAG-LAYOUT-DIRTY))
+    (when (and thumb (not hit))
+      (.setY thumb y)
+      (.setFlag thumb node/FLAG-LAYOUT-DIRTY))))
+
 (defn- create-view! [^UiRt r state layouts tab]
   (let [layout (get layouts tab)
         ^INode content (rt/node-by-id r :content)
@@ -162,9 +177,7 @@
     (swap! state assoc :tab tab :scroll 0.0 :max-scroll max-scroll)
     (.setY content 0.0)
     (dirty-subtree! content)
-    (let [^INode thumb (rt/node-by-id r :drag_bar)]
-      (.setY thumb thumb-min-y)
-      (.setFlag thumb node/FLAG-LAYOUT-DIRTY))
+    (sync-thumb! r 0.0)
     (set-tab-style! r tab)
     (rt/mark-tree-dirty! r)))
 
@@ -172,13 +185,27 @@
   (let [max-scroll (double (:max-scroll @state))
         scroll (max 0.0 (min max-scroll (double value)))
         progress (if (pos? max-scroll) (/ scroll max-scroll) 0.0)
-        ^INode content (rt/node-by-id r :content)
-        ^INode thumb (rt/node-by-id r :drag_bar)]
+        ^INode content (rt/node-by-id r :content)]
     (swap! state assoc :scroll scroll)
     (.setY content (- scroll))
     (dirty-subtree! content)
-    (.setY thumb (+ thumb-min-y (* progress thumb-travel)))
-    (.setFlag thumb node/FLAG-LAYOUT-DIRTY)))
+    (sync-thumb! r progress)))
+
+(defn- fit-scale ^double [^UiRt rt*]
+  (let [sw (rt/screen-w rt*)
+        sh (rt/screen-h rt*)]
+    (if (and (pos? sw) (pos? sh))
+      (min 1.0 (* fit-margin (min (/ sw main-w) (/ sh main-h))))
+      0.55)))
+
+(defn- ensure-fit-scale! ^double [^UiRt rt*]
+  (let [fit (fit-scale rt*)
+        ^INode main (rt/node-by-id rt* :main)]
+    (when (and main (> (Math/abs (- (.getScale main) fit)) 0.001))
+      (.setScale main fit)
+      (.setFlag main node/FLAG-LAYOUT-DIRTY)
+      (rt/mark-tree-dirty! rt*))
+    (if main (.getScale main) fit)))
 
 (defn create-runtime []
   (let [r (rt/create-runtime)
@@ -187,27 +214,46 @@
         layouts {:credits (credit-layout (:credits data))
                  :donate (donation-layout (:donation data))}
         state (atom {:tab :credits :scroll 0.0 :max-scroll 0.0})
-        drag-start (atom thumb-min-y)]
+        drag-start (atom thumb-min-y)
+        scroll-handler
+        (fn [_ _ evt]
+          (set-scroll! r state
+                       (- (:scroll @state)
+                          (* (double (:delta evt 0.0)) 30.0))))
+        wire-thumb-drag!
+        (fn [id]
+          (events/on! r id :drag-start
+                      (fn [_ _ _]
+                        (reset! drag-start
+                                (.getY ^INode (or (rt/node-by-id r :drag_bar_hit)
+                                                  (rt/node-by-id r :drag_bar))))))
+          (events/on! r id :drag
+                      (fn [_ _ evt]
+                        (let [^INode hit (or (rt/node-by-id r :drag_bar_hit)
+                                             (rt/node-by-id r :drag_bar))
+                              sc (max 0.001 (.getCumScale hit))
+                              thumb-y (max thumb-min-y
+                                           (min thumb-max-y
+                                                (+ @drag-start
+                                                   (/ (double (:dy evt)) sc))))
+                              progress (/ (- thumb-y thumb-min-y) thumb-travel)]
+                          (set-scroll! r state (* progress (:max-scroll @state))))))
+          (events/on! r id :mouse-scroll scroll-handler))]
     (events/on! r :btn_credits :left-click
                 (fn [_ _ _] (create-view! r state layouts :credits)))
     (events/on! r :btn_donate :left-click
                 (fn [_ _ _] (create-view! r state layouts :donate)))
-    (events/on! r :scroll_area :mouse-scroll
-                (fn [_ _ evt]
-                  (set-scroll! r state
-                               (- (:scroll @state)
-                                  (* (double (:delta evt 0.0)) 30.0)))))
-    (events/on! r :drag_bar :drag-start
-                (fn [_ ^INode n _] (reset! drag-start (.getY n))))
-    (events/on! r :drag_bar :drag
-                (fn [_ _ evt]
-                  (let [thumb-y (max thumb-min-y
-                                     (min thumb-max-y
-                                          (+ @drag-start (double (:dy evt)))))
-                        progress (/ (- thumb-y thumb-min-y) thumb-travel)]
-                    (set-scroll! r state (* progress (:max-scroll @state))))))
+    (events/on! r :scroll_area :mouse-scroll scroll-handler)
+    (events/on! r :content :mouse-scroll scroll-handler)
+    (wire-thumb-drag! :drag_bar_hit)
+    (wire-thumb-drag! :drag_bar)
+    (rt/put-user-signal! r :about-pre-render
+      (fn [_gg ^UiRt rt* _mx _my _pt]
+        (ensure-fit-scale! rt*)))
     (create-view! r state layouts :credits)
     r))
 
 (defn open! []
-  (bridge/open-reactive-screen! (create-runtime) "About"))
+  (let [r (create-runtime)]
+    (bridge/open-reactive-screen! r "About"
+      {:on-pre-render (rt/user-signal r :about-pre-render)})))

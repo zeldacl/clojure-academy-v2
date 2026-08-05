@@ -362,12 +362,20 @@
             editable? (boolean (get (.getStaticProps node) :editable?))
             focused? (.hasFlag node node/FLAG-FOCUSED)
             align-kw (or align :left)
+            ;; font-size / text offsets are authored in local design units (same as
+            ;; w/h). Images/boxes already multiply by cum-scale; text must too or
+            ;; scaled roots (terminal fit-scale, skill-tree camera) draw oversized
+            ;; glyphs that ignore the panel shrink.
+            s (node-scale node)
+            font-size (* (double font-size) s)
+            x-off (* (double x-off) s)
+            y-off (* (double y-off) s)
             ;; Vertical alignment: MSDF text draws with y as the em-box top, so a
             ;; node with align-h center/bottom otherwise renders top-aligned in its
             ;; box (reads as "too low" for a tall font in a short row). Offset y by
             ;; the em-box within the node's height to honor align-h (0 top / 1
             ;; middle / 2 bottom), matching how images/boxes already center.
-            node-h (* (.getH node) (.getCumScale node))
+            node-h (* (.getH node) s)
             v-off (case (int (.getAlignH node))
                     1 (/ (- node-h (double font-size)) 2.0)
                     2 (- node-h (double font-size))
@@ -377,7 +385,7 @@
             ;; node's LEFT edge, so center/right must anchor at the box center/right
             ;; edge — otherwise centered/right text draws off the node box. Matches
             ;; upstream TextBox.option.align (independent of the node's align-w).
-            node-w (* (.getW node) (.getCumScale node))
+            node-w (* (.getW node) s)
             h-off (case align-kw :center (/ node-w 2.0) :right node-w 0.0)
             x (+ (node-abs-x node) x-off h-off)
             y (+ (node-abs-y node) y-off v-off)]
@@ -1313,11 +1321,27 @@
 ;; draw-tape! — flat tape render loop
 ;; ============================================================================
 
+(defn- clip-node-screen-rect
+  "Screen-space AABB for a clip group (abs layout + host left/top)."
+  [^INode nd ^double left ^double top]
+  (let [x0 (+ left (.getAbsX nd))
+        y0 (+ top (.getAbsY nd))
+        x1 (+ x0 (* (.getW nd) (.getCumScale nd)))
+        y1 (+ y0 (* (.getH nd) (.getCumScale nd)))]
+    [(int (Math/floor x0)) (int (Math/floor y0))
+     (int (Math/ceil x1)) (int (Math/ceil y1))]))
+
+(defn- intersect-scissor
+  [[ax0 ay0 ax1 ay1] [bx0 by0 bx1 by1]]
+  [(max ax0 bx0) (max ay0 by0) (min ax1 bx1) (min ay1 by1)])
+
 (defn draw-tape!
   "Render the flat tape: iterate Object[].
    Node with RENDER_DIRTY → run :bake! first (resolve textures / bake text /
    pre-compute gradient bands into backend slots), clear the flag, then :render!
-   reads only cached fields. Sentinels → PoseStack push/pop.
+   reads only cached fields. Sentinels → PoseStack push/pop; push-clip also
+   enables GuiGraphics scissor to the following clip-group node's bounds
+   (nested clips intersect).
 
    Node abs coords are 0-rooted; `left`/`top` are the GUI's on-screen origin
    (container leftPos/topPos, standalone screen offset, or an embedded widget's
@@ -1330,11 +1354,15 @@
         push-clip ui-layout/push-clip-sentinel
         pop-clip  ui-layout/pop-clip-sentinel
         push-xf   ui-layout/push-transform-sentinel
-        pop-xf    ui-layout/pop-transform-sentinel]
+        pop-xf    ui-layout/pop-transform-sentinel
+        left (double left)
+        top (double top)]
     (when (pos? n)
-      (let [^PoseStack pose (.pose gg)]
+      (let [^PoseStack pose (.pose gg)
+            ;; Nested scissor stack: each entry is [x0 y0 x1 y1] in screen space.
+            clip-stack (java.util.ArrayDeque.)]
         (.pushPose pose)
-        (.translate pose (double left) (double top) 0.0)
+        (.translate pose left top 0.0)
         (loop [i 0]
           (when (< i n)
             (let [entry (aget tape i)]
@@ -1349,9 +1377,37 @@
                   (when-let [render-fn (:render! kdef)]
                     (render-fn gg nd)))
                 ;; Sentinel dispatch
-                (cond (identical? push-clip entry) (.pushPose pose)
-                      (identical? pop-clip entry)  (.popPose pose)
-                      (identical? push-xf entry)   (.pushPose pose)
-                      (identical? pop-xf entry)    (.popPose pose))))
+                (cond
+                  (identical? push-clip entry)
+                  (do
+                    (.pushPose pose)
+                    ;; flatten-into! emits push-clip then the clip group node.
+                    (when (< (inc i) n)
+                      (let [clip-nd (aget tape (inc i))]
+                        (when (instance? INode clip-nd)
+                          (let [rect (clip-node-screen-rect ^INode clip-nd left top)
+                                rect (if (.isEmpty clip-stack)
+                                       rect
+                                       (intersect-scissor (.peek clip-stack) rect))
+                                [x0 y0 x1 y1] rect]
+                            (.push clip-stack rect)
+                            (when (and (< x0 x1) (< y0 y1))
+                              (.enableScissor gg x0 y0 x1 y1)))))))
+
+                  (identical? pop-clip entry)
+                  (do
+                    (when-not (.isEmpty clip-stack)
+                      (.pop clip-stack))
+                    (if (.isEmpty clip-stack)
+                      (.disableScissor gg)
+                      (let [[x0 y0 x1 y1] (.peek clip-stack)]
+                        (when (and (< x0 x1) (< y0 y1))
+                          (.enableScissor gg x0 y0 x1 y1))))
+                    (.popPose pose))
+
+                  (identical? push-xf entry) (.pushPose pose)
+                  (identical? pop-xf entry)  (.popPose pose))))
             (recur (unchecked-inc-int i))))
-        (.popPose pose)))))
+        (.popPose pose)
+        (when-not (.isEmpty clip-stack)
+          (.disableScissor gg))))))
