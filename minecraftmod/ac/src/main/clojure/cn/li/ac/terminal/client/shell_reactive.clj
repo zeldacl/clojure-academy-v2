@@ -55,13 +55,29 @@
 ;; Network / RPC (reused verbatim from original shell.clj design)
 ;; ============================================================================
 
-(defn- query-terminal-state! [owner callback]
-  (let [generation (term-rt/ensure-owner! owner)]
-    (net-client/send-to-server owner (terminal-messages/msg-id :get-state) {}
-      (fn [response]
-        (when (term-rt/owner-active? owner generation)
-          (term-rt/dispatch-event! owner :terminal/query-response response)
-          (when callback (callback response)))))))
+(defn- query-terminal-state!
+  "RPC get-state. When gate-active? is true (in-UI refresh), ignore responses
+   after clear-state!. Pre-open install checks must pass :gate-active? false —
+   a stale/mismatched generation would otherwise swallow the callback with no
+   UI and no chat feedback (Left-Alt appears to do nothing)."
+  ([owner callback]
+   (query-terminal-state! owner callback true))
+  ([owner callback gate-active?]
+   (let [generation (term-rt/ensure-owner! owner)]
+     (log/info "[AC-Terminal] querying install state"
+               {:owner-key (term-rt/owner-key owner)
+                :generation generation
+                :gate-active? gate-active?})
+     (net-client/send-to-server owner (terminal-messages/msg-id :get-state) {}
+       (fn [response]
+         (if (or (not gate-active?) (term-rt/owner-active? owner generation))
+           (do
+             (term-rt/dispatch-event! owner :terminal/query-response response)
+             (when callback (callback response)))
+           (log/warn "[AC-Terminal] ignoring stale get-state response"
+                     {:generation generation
+                      :owner-key (term-rt/owner-key owner)
+                      :response-keys (when (map? response) (keys response))})))))))
 
 (defn- player-owner [player]
   (term-rt/player-owner (or (player-uuid/player-uuid player) (str player))))
@@ -347,7 +363,12 @@
 ;; ============================================================================
 
 (defn open! [player]
-  (let [r (create-runtime player)]
+  (let [r (create-runtime player)
+        prev-on-close (rt/user-signal r :terminal-on-close)]
+    (rt/put-user-signal! r :terminal-on-close
+      (fn []
+        (term-rt/mark-ui-open! false)
+        (when prev-on-close (prev-on-close))))
     (let [screen (bridge/open-reactive-screen! r "Terminal"
       {:on-pre-render (rt/user-signal r :terminal-pre-render)
        :on-post-render (rt/user-signal r :terminal-post-render)
@@ -360,27 +381,42 @@
       ;; setScreen releases the mouse, so capture it only after opening.
       ;; This matches TerminalMouseHelper's raw, unbounded delta input and
       ;; leaves only the custom glowing reticle visible.
+      (term-rt/mark-ui-open! true)
       (bridge/call-adapter :terminal-cursor-hide!)
       screen)))
-
 (defn open-terminal!
   "Query install state first; only open if terminal is installed.
-   Shows chat message 'ac.terminal.notinstalled' if not installed."
+   Shows chat message terminal.<modid>.notinstalled if not installed."
   [player]
   (let [owner (player-owner player)]
+    ;; Do not gate on owner-active?: this query runs before any terminal UI
+    ;; exists, and a generation mismatch would swallow open with zero feedback.
     (query-terminal-state! owner
       (fn [response]
-        (if (:terminal-installed? response)
-          (open! player)
-          (do
-            (bridge/send-system-message! player "ac.terminal.notinstalled")
-            (log/info "Terminal not installed, use item to install first")))))))
+        (let [installed? (boolean (:terminal-installed? response))]
+          (log/info "[AC-Terminal] get-state response"
+                    {:installed? installed?
+                     :error (:error response)
+                     :keys (when (map? response) (keys response))
+                     :app-count (count (:installed-apps response))})
+          (if installed?
+            (do
+              (log/info "[AC-Terminal] opening terminal UI")
+              (open! player))
+            (do
+              (bridge/send-system-message!
+                player (str "terminal." modid/MOD-ID ".notinstalled"))
+              (log/info "[AC-Terminal] not installed — use terminal installer item first")))))
+      false)))
 
 (defn toggle! [player]
-  (if (bridge/screen-active?)
-    (bridge/close-screen!)
+  ;; Track our own terminal screen — Minecraft.screen being non-nil for any
+  ;; other UI must not silently become "close and do nothing".
+  (if (term-rt/ui-open?)
+    (do
+      (log/info "[AC-Terminal] terminal open — closing")
+      (bridge/close-screen!))
     (open-terminal! player)))
-
 ;; ============================================================================
 ;; Widget factory + install (preserved for existing callers)
 ;; ============================================================================

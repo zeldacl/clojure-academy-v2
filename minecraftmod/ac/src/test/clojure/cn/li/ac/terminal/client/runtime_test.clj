@@ -73,6 +73,12 @@
     (runtime/clear-state! owner)
     (is (= false (runtime/owner-active? owner generation)))))
 
+(deftest ui-open-flag-test
+  (is (false? (runtime/ui-open?)))
+  (runtime/mark-ui-open! true)
+  (is (true? (runtime/ui-open?)))
+  (runtime/mark-ui-open! false)
+  (is (false? (runtime/ui-open?))))
 (deftest owner-key-requires-player-uuid-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo
                         #"Terminal owner requires :player-uuid"
