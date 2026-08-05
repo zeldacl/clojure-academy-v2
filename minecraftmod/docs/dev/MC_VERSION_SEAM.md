@@ -110,10 +110,10 @@ registries concept on this path in 1.20.1 vanilla).
 Does not own shader/texture/blend/depth state — callers set those first.
 
 26.2: removed the `Tesselator`/`BufferUploader`/`VertexFormat.Mode` immediate-draw
-path as part of the RenderPipeline/GpuBuffer render rewrite. Porting the real
-immediate-draw path is deferred to the client-render phase of the 26.2 port; this
-seam keeps the 1.21.1 public surface intact and stubs every method to throw
-`UnsupportedOperationException` until the real implementation lands.  
+path as part of the RenderPipeline/GpuBuffer render rewrite. The seam now writes
+through the `VertexConsumer` supplied by `SubmitNodeCollector` custom geometry;
+`draw` closes the logical batch because upload and graphics state belong to the
+collector's `RenderType`.
 1.21.1: `Tesselator.begin` → `BufferBuilder.buildOrThrow` → `MeshData` → `BufferUploader.drawWithShader`; `endVertex` is a no-op.  
 1.20.1: `Tesselator.getBuilder()` + `endVertex` + `BufferUploader.drawWithShader(bb.end())`.
 

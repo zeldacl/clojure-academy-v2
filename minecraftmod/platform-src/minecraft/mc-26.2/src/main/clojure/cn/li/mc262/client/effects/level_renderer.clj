@@ -349,17 +349,19 @@
     [center-v3 right up]))
 
 (def ^:private plasma-slices
-  "Four back-to-front field samples. UV.x's integer band carries the sample
+  "Six back-to-front field samples. UV.x's integer band carries the sample
    index, leaving its fractional position available as the billboard coordinate.
 
    This is intentionally still cheaper than 1.21.1's 20-step ray march. Unlike
    the old 26.2 approximation, however, every sample evaluates a primary ball
-   plus its nearest neighbour, so nearby balls share a metaball field instead
-   of merely stacking unrelated noisy billboards."
-  [{:index 0 :depth -1.20}
-   {:index 1 :depth -0.40}
-   {:index 2 :depth 0.40}
-   {:index 3 :depth 1.20}])
+   plus its two nearest neighbours, so small clusters share a metaball field
+   instead of merely stacking unrelated noisy billboards."
+  [{:index 0 :depth -1.50}
+   {:index 1 :depth -0.90}
+   {:index 2 :depth -0.30}
+   {:index 3 :depth 0.30}
+   {:index 4 :depth 0.90}
+   {:index 5 :depth 1.50}])
 
 (def ^:private plasma-field-half-size 1.8)
 (def ^:private encoded-neighbor-range 4.0)
@@ -392,19 +394,19 @@
         dz (- (.-z a) (.-z b))]
     (+ (* dx dx) (* dy dy) (* dz dz))))
 
-(defn- nearest-neighbor
+(defn- nearest-neighbors
   [balls ball-index ^V3 center]
-  (reduce-kv
-    (fn [nearest candidate-index candidate]
-      (if (= ball-index candidate-index)
-        nearest
-        (let [candidate-center (map->v3 candidate)
-              distance (distance-squared center candidate-center)]
-          (if (or (nil? nearest) (< distance (:distance nearest)))
-            {:ball candidate :center candidate-center :distance distance}
-            nearest))))
-    nil
-    balls))
+  (->> balls
+       (keep-indexed
+         (fn [candidate-index candidate]
+           (when (not= ball-index candidate-index)
+             (let [candidate-center (map->v3 candidate)]
+               {:ball candidate
+                :center candidate-center
+                :distance (distance-squared center candidate-center)}))))
+       (sort-by :distance)
+       (take 2)
+       vec))
 
 (defn- radius-ratio-code
   "Quantize neighbour/primary radius to four UV.y bands. Zero means no
@@ -416,34 +418,58 @@
     (< ratio 1.75) 3
     :else 4))
 
-(defn- neighbor-payload
-  [balls ball-index ^V3 center ^V3 right ^V3 up ^V3 to-camera radius]
+(defn- encoded-neighbor
+  [neighbor-entry ^V3 center ^V3 right ^V3 up ^V3 to-camera radius]
   (if-let [{neighbor :ball
-            ^V3 neighbor-center :center} (nearest-neighbor balls ball-index center)]
+            ^V3 neighbor-center :center} neighbor-entry]
     (let [delta (V3/sub neighbor-center center)
           inverse-radius (/ 1.0 radius)]
       {:r (encode-neighbor-axis (* (V3/dot delta right) inverse-radius))
        :g (encode-neighbor-axis (* (V3/dot delta up) inverse-radius))
        :b (encode-neighbor-axis (* (V3/dot delta to-camera) inverse-radius))
        :ratio-code (radius-ratio-code (/ (ball-radius neighbor) radius))})
-    ;; RGB decodes near zero, but ratio-code zero disables the neighbour term.
     {:r 128 :g 128 :b 128 :ratio-code 0}))
 
+(defn- normal-payload-axis
+  "Map an encoded UNORM8 neighbour axis to the signed-normal range consumed by
+   the ENTITY vertex format. The shader scales it back to [-4, 4]."
+  [encoded-axis]
+  (- (* 2.0 (/ (double encoded-axis) 255.0)) 1.0))
+
+(defn- neighbor-payload
+  [balls ball-index ^V3 center ^V3 right ^V3 up ^V3 to-camera radius]
+  (let [[first-neighbor second-neighbor]
+        (nearest-neighbors balls ball-index center)
+        first-payload
+        (encoded-neighbor first-neighbor center right up to-camera radius)
+        second-payload
+        (encoded-neighbor second-neighbor center right up to-camera radius)]
+    {:r (:r first-payload)
+     :g (:g first-payload)
+     :b (:b first-payload)
+     :ratio-code (:ratio-code first-payload)
+     :nx (normal-payload-axis (:r second-payload))
+     :ny (normal-payload-axis (:g second-payload))
+     :nz (normal-payload-axis (:b second-payload))
+     :second-ratio-code (:ratio-code second-payload)}))
+
 (defn- emit-plasma-vertex!
-  [^VertexConsumer consumer ^PoseStack$Pose pose ^V3 p u v r g b a]
+  [^VertexConsumer consumer ^PoseStack$Pose pose ^V3 p u v r g b a nx ny nz]
   (LevelEffectGeometry/plasmaVertex
     consumer pose
     (float (.-x p)) (float (.-y p)) (float (.-z p))
     (float u) (float v)
-    (int r) (int g) (int b) (int a)))
+    (int r) (int g) (int b) (int a)
+    (float nx) (float ny) (float nz)))
 
 (defn- emit-plasma-slice!
   [^VertexConsumer consumer ^PoseStack$Pose pose
    ^V3 center ^V3 right ^V3 up ^V3 to-camera radius alpha
-   {:keys [r g b ratio-code]}
+   {:keys [r g b ratio-code nx ny nz second-ratio-code]}
    {:keys [index depth]}]
   (let [uv-u-base (* 2.0 (double index))
-        uv-v-base (* 2.0 (double ratio-code))
+        radius-pair-code (+ (int ratio-code) (* 5 (int second-ratio-code)))
+        uv-v-base (* 2.0 (double radius-pair-code))
         slice-center (V3/add center (V3/scale to-camera (* radius (double depth))))
         side (V3/scale right (* radius plasma-field-half-size))
         lift (V3/scale up (* radius plasma-field-half-size))
@@ -451,10 +477,10 @@
         p1 (V3/add (V3/add slice-center side) lift)
         p2 (V3/sub (V3/add slice-center side) lift)
         p3 (V3/sub (V3/sub slice-center side) lift)]
-    (emit-plasma-vertex! consumer pose p0 uv-u-base uv-v-base r g b alpha)
-    (emit-plasma-vertex! consumer pose p1 (inc uv-u-base) uv-v-base r g b alpha)
-    (emit-plasma-vertex! consumer pose p2 (inc uv-u-base) (inc uv-v-base) r g b alpha)
-    (emit-plasma-vertex! consumer pose p3 uv-u-base (inc uv-v-base) r g b alpha)))
+    (emit-plasma-vertex! consumer pose p0 uv-u-base uv-v-base r g b alpha nx ny nz)
+    (emit-plasma-vertex! consumer pose p1 (inc uv-u-base) uv-v-base r g b alpha nx ny nz)
+    (emit-plasma-vertex! consumer pose p2 (inc uv-u-base) (inc uv-v-base) r g b alpha nx ny nz)
+    (emit-plasma-vertex! consumer pose p3 uv-u-base (inc uv-v-base) r g b alpha nx ny nz)))
 
 (defn- emit-plasma-ball!
   [^VertexConsumer consumer ^PoseStack$Pose pose camera-pos

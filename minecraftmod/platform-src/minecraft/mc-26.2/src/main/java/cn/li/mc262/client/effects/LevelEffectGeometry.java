@@ -51,9 +51,15 @@ public final class LevelEffectGeometry {
             PoseStack.Pose pose,
             float x, float y, float z,
             float u, float v,
-            int red, int green, int blue, int alpha) {
+            int red, int green, int blue, int alpha,
+            float normalX, float normalY, float normalZ) {
         consumer.addVertex(pose, x, y, z)
                 .setUv(u, v)
-                .setColor(red, green, blue, alpha);
+                .setColor(red, green, blue, alpha)
+                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(0x00F000F0)
+                // Plasma uses the otherwise-unneeded normal attribute as a
+                // second neighbour offset; do not transform it by the pose.
+                .setNormal(normalX, normalY, normalZ);
     }
 }

@@ -21,14 +21,15 @@ import java.util.Optional;
  * <p>The 26.2 collector only prepares the standard global and transform bind
  * groups for a {@link RenderType}; it has no public equivalent of the old
  * per-draw {@code ShaderInstance#getUniform}. Plasma parameters are therefore
- * carried by POSITION_TEX_COLOR vertices: UV integer bands identify the depth
- * sample and quantized neighbour radius, while colour RGB stores the nearest
- * neighbour offset. The fragment shader adds both metaball terms on four depth
- * samples, so nearby balls visibly fuse.</p>
+ * carried by ENTITY vertices: UV integer bands identify the depth sample
+ * and two quantized neighbour radii, colour RGB stores the nearest-neighbour
+ * offset, and the otherwise-unused normal stores a second offset. The fragment
+ * shader adds all three metaball terms on six depth samples, so small clusters
+ * visibly fuse.</p>
  *
- * <p>This remains deliberately below the 1.21.1 path: it sees one neighbour
- * per ball with a quantized radius and four discrete samples, rather than all
- * 16 balls in a 20-step ray march. Keeping that limitation explicit avoids
+ * <p>This remains deliberately below the 1.21.1 path: it sees two neighbours
+ * per ball with quantized radii and six discrete samples, rather than all 16
+ * balls in a 20-step ray march. Keeping that limitation explicit avoids
  * implying that SubmitNodeCollector supplies a custom per-draw UBO.</p>
  */
 public final class PlasmaRenderTypes {
@@ -48,7 +49,7 @@ public final class PlasmaRenderTypes {
                     GpuFormat.RGBA8_UNORM,
                     ColorTargetState.WRITE_COLOR))
             .withDepthStencilState(new DepthStencilState(CompareOp.GREATER_THAN_OR_EQUAL, false))
-            .withVertexBinding(0, DefaultVertexFormat.POSITION_TEX_COLOR)
+            .withVertexBinding(0, DefaultVertexFormat.ENTITY)
             .withPrimitiveTopology(PrimitiveTopology.QUADS)
             .withCull(false)
             .build();

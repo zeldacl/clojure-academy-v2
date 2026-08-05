@@ -5,6 +5,7 @@
 
 in vec2 plasmaUv;
 in vec4 plasmaColor;
+in vec3 plasmaNeighbor2;
 
 out vec4 fragColor;
 
@@ -16,10 +17,12 @@ float plasma_noise(vec3 p, float phase) {
 }
 
 float sample_depth(int sliceIndex) {
-    if (sliceIndex == 0) return -1.20;
-    if (sliceIndex == 1) return -0.40;
-    if (sliceIndex == 2) return 0.40;
-    return 1.20;
+    if (sliceIndex == 0) return -1.50;
+    if (sliceIndex == 1) return -0.90;
+    if (sliceIndex == 2) return -0.30;
+    if (sliceIndex == 3) return 0.30;
+    if (sliceIndex == 4) return 0.90;
+    return 1.50;
 }
 
 float neighbor_radius(int radiusCode) {
@@ -37,23 +40,32 @@ float ball_field(vec3 samplePosition, vec3 center, float radius) {
 
 void main() {
     // SubmitNodeCollector does not expose the old per-draw ball-array UBO.
-    // UV integer bands therefore carry slice/radius codes while Color.rgb
-    // carries the nearest ball offset in primary-radius units.
+    // UV integer bands therefore carry the slice and two radius codes.
+    // Color.rgb and Normal carry the two nearest offsets in primary-radius
+    // units. This still falls short of 1.21.1's all-ball 20-step ray march.
     int sliceIndex = int(floor(plasmaUv.x * 0.5));
-    int radiusCode = int(floor(plasmaUv.y * 0.5));
+    int radiusPairCode = int(floor(plasmaUv.y * 0.5));
+    int radiusCode = radiusPairCode % 5;
+    int secondRadiusCode = radiusPairCode / 5;
     vec2 localUv = mod(plasmaUv, 2.0);
     vec2 planePosition = (localUv * 2.0 - 1.0) * 1.8;
     vec3 samplePosition = vec3(planePosition, sample_depth(sliceIndex));
     vec3 neighborPosition = plasmaColor.rgb * 8.0 - 4.0;
+    vec3 secondNeighborPosition = plasmaNeighbor2 * 4.0;
     float neighborRadius = neighbor_radius(radiusCode);
+    float secondNeighborRadius = neighbor_radius(secondRadiusCode);
 
     float phase = GameTime * 120.0;
     float noise = plasma_noise(samplePosition, phase);
     float density = ball_field(samplePosition, vec3(0.0), 1.0);
     if (radiusCode != 0) {
-        // This second term is what makes adjacent balls bridge and deform one
-        // another instead of rendering as independent translucent sprites.
         density += ball_field(samplePosition, neighborPosition, neighborRadius);
+    }
+    if (secondRadiusCode != 0) {
+        // These extra terms make adjacent balls bridge and deform one another
+        // instead of rendering as independent translucent sprites.
+        density += ball_field(
+            samplePosition, secondNeighborPosition, secondNeighborRadius);
     }
 
     float noisyDensity = density * (1.0 + noise * 0.10);
@@ -62,9 +74,9 @@ void main() {
     float sparks = pow(max(0.0,
         sin((samplePosition.x - samplePosition.y + samplePosition.z) * 24.0
             + phase * 3.0)), 14.0) * shell;
-    // Four ordered samples approximate front-to-back integration. The alpha
+    // Six ordered samples approximate front-to-back integration. The alpha
     // is deliberately per-sample so translucent blending performs accumulation.
-    float opacity = clamp(shell * 0.24 + core * 0.13 + sparks * 0.05, 0.0, 0.44)
+    float opacity = clamp(shell * 0.16 + core * 0.087 + sparks * 0.033, 0.0, 0.30)
         * plasmaColor.a;
     if (opacity < 0.01) {
         discard;
