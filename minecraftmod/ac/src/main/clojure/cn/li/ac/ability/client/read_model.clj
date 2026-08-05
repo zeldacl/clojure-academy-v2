@@ -43,6 +43,38 @@
      :client-session-id session-id
      :player-uuid player-uuid}))
 
+(defn local-client-owner
+  "Canonical client owner for local-player UI screens (portable developer,
+   skill-tree viewer, etc.).
+
+  Prefer `default-client-owner` — the same Minecraft connection session sync
+  and keybind paths use — so a screen opened without a bound
+  `:player-owner` ThreadLocal still reads the hydrated player-state partition.
+  Falls back to ThreadLocal `:session-id` / player-state-owner for tests."
+  [player-uuid component]
+  (let [uuid (some-> player-uuid str)]
+    (when-not uuid
+      (throw (ex-info (str component " requires player uuid")
+                      {:component component})))
+    (if-let [owner (runtime-hooks/default-client-owner)]
+      (let [session-id (:client-session-id owner)]
+        (when-not session-id
+          (throw (ex-info (str component " default client owner lacks :client-session-id")
+                          {:owner owner
+                           :component component})))
+        {:logical-side :client
+         :client-session-id session-id
+         :player-uuid uuid})
+      (let [session-id (or (runtime-hooks/client-session-id)
+                           (runtime-hooks/player-state-session-id))]
+        (when-not session-id
+          (throw (ex-info (str component " requires bound session-id")
+                          {:component component
+                           :player-state-owner (runtime-hooks/current-player-state-owner)})))
+        {:logical-side :client
+         :client-session-id session-id
+         :player-uuid uuid}))))
+
 (defn with-player-state-owner
   "Bind client owner context and run f as (f session-id player-uuid)."
   [owner-key f]

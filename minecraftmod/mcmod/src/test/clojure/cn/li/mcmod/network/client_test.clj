@@ -32,6 +32,26 @@
                             #"Client network owner requires :client-session-id"
                             (client/send-to-server "req" {} identity)))))))
 
+(deftest screen-id-does-not-scope-pending-requests-test
+  (testing "Responses rebuild owner without :screen-id; pending keys must still match"
+    (let [responses (atom [])
+          owner {:logical-side :client
+                 :client-session-id :session-a
+                 :player-uuid "player-a"
+                 :screen-id :terminal}]
+      (with-redefs [client/send-request (fn [& _] nil)]
+        (client/send-to-server owner "terminal/get-state" {}
+                               (fn [resp] (swap! responses conj resp))))
+      ;; Response path: owner has session but no screen-id (with-client-response-owner).
+      (client/handle-response {:logical-side :client
+                               :client-session-id :session-a
+                               :player-uuid "player-a"}
+                              1
+                              {:terminal-installed? true})
+      (is (= [{:terminal-installed? true}] @responses))
+      (is (empty? (:pending-requests
+                   (client/client-state-snapshot {:client-session-id :session-a})))))))
+
 (deftest handle-response-lifecycle-test
   (let [responses (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
@@ -53,12 +73,10 @@
         owner-a {:logical-side :client
                  :client-session-id :session-a
                  :player-uuid "player-a"
-                 :screen-id :screen
                  :client-network-session session-a}
         owner-b {:logical-side :client
                  :client-session-id :session-b
                  :player-uuid "player-b"
-                 :screen-id :screen
                  :client-network-session session-b}
         responses (atom [])]
     (with-redefs [client/send-request (fn [& _] nil)]
@@ -80,7 +98,6 @@
         owner {:logical-side :client
                :client-session-id :session-a
                :player-uuid "player-a"
-               :screen-id :screen
                :timeout-ms 1
                :client-network-session session}]
     (with-redefs [client/send-request (fn [& _] nil)]
@@ -105,12 +122,12 @@
         owner-a {:logical-side :client
                  :client-session-id :session-a
                  :player-uuid "player-a"
-                 :screen-id :screen-a
+                 :channel-id :screen-a
                  :client-network-session session-a}
         owner-b {:logical-side :client
                  :client-session-id :session-a
                  :player-uuid "player-b"
-                 :screen-id :screen-b
+                 :channel-id :screen-b
                  :client-network-session session-b}
         calls (atom [])]
     (client/register-push-handler! "push/state" (fn [payload] (swap! calls conj [:static payload])))

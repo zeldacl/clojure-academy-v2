@@ -45,7 +45,11 @@
   (when (or (not= w (.getScreenW rt)) (not= h (.getScreenH rt)))
     (.setScreenW rt w)
     (.setScreenH rt h)
-    (.setTreeDirty rt true)))
+    (.setTreeDirty rt true)
+    ;; Centered / edge-aligned roots depend on screen size; dirty layout so
+    ;; abs positions recompute instead of staying at the previous size.
+    (when-let [^INode root (node-by-idx rt 0)]
+      (.setFlag root node/FLAG-LAYOUT-DIRTY))))
 
 (defn screen-w ^double [^UiRt rt] (.getScreenW rt))
 (defn screen-h ^double [^UiRt rt] (.getScreenH rt))

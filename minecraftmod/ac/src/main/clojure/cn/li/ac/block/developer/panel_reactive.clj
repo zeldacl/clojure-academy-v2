@@ -33,6 +33,7 @@
             [cn.li.ac.ability.rules.progression :as progression]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.model.ability :as adata]
+            [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
             [cn.li.ac.ability.client.screens.skill-tree-reactive :as skill-tree-reactive]
             [cn.li.ac.ability.client.screens.skill-tree-view :as skill-tree-view]
@@ -941,10 +942,10 @@
   "Build the viewer variant: machine panel hidden, ui_left swapped to the
    skilltree texture (upstream SkillTree.scala's developer == null branch)."
   [player]
-  (let [session-id (runtime-hooks/require-player-state-session-id "developer.skill-tree-viewer")
-        owner {:logical-side :client
-               :client-session-id session-id
-               :player-uuid (uuid/player-uuid player)}
+  (let [;; Prefer default-client-owner so M-key / tick open (session-id only,
+        ;; no player-owner ThreadLocal) still hits the sync partition.
+        owner (read-model/local-client-owner (uuid/player-uuid player)
+                                             "developer.skill-tree-viewer")
         r (build-runtime! (make-viewer-container player owner) player)]
     (when-let [^INode pm (rt/node-by-id r :panel-machine)]
       (.setVisible pm false)

@@ -147,6 +147,9 @@
       {:success false :error (ex-message e)})))
 
 (defn register-handlers! []
-  (net-server/register-handler freq-scan-msg handle-scan)
-  (net-server/register-handler freq-config-msg handle-configure)
+  ;; Freq transmitter apps are launched from the terminal overlay; requests are
+  ;; not scoped to an open block container.
+  (let [contract {:owner-spec :server :payload-routing :none}]
+    (net-server/register-handler freq-scan-msg handle-scan contract)
+    (net-server/register-handler freq-config-msg handle-configure contract))
   (log/info "Frequency transmitter handlers registered"))

@@ -13,10 +13,8 @@
             [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.signal :as sig])
@@ -89,13 +87,13 @@
 ;; ============================================================================
 
 (defn create-runtime [player]
-  (let [session-id (runtime-hooks/require-player-state-session-id session-ns-prefix)
-        owner (read-model/canonical-client-owner
-                {:client-session-id session-id :player-uuid (uuid/player-uuid player)}
-                :skill-tree)
-        uuid-str (uuid/player-uuid player)
+  ;; Same session partition sync hydrates into (default-client-owner /
+  ;; connection session) — not merely whatever ThreadLocal player-owner the
+  ;; item-use boundary happened to bind.
+  (let [uuid-str (uuid/player-uuid player)
+        owner (read-model/local-client-owner uuid-str session-ns-prefix)
+        session-id (:client-session-id owner)
         container (make-portable-container player owner)
-        _ (read-model/ensure-player-state! (read-model/owner-key owner :skill-tree))
         r (panel-reactive/build-runtime! container player)]
     ;; No wireless link on portable — hide the block-only wireless button
     (let [^INode wb (rt/node-by-id r :button-wireless) ^INode wt (rt/node-by-id r :text-wireless)]

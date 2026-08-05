@@ -38,6 +38,31 @@
 (def ^:private max-my 740.0)     ;; MAX_MY
 (def ^:private balance-speed 3000.0)
 (def ^:private sensitivity 0.7)
+;; Fit margin so the 640×785 panel does not touch screen edges.
+(def ^:private fit-margin 0.92)
+
+(defn- fit-scale
+  "Uniform scale so the terminal panel fits the current Screen size.
+   Upstream shrinks via gluPerspective+1/310; without that camera the raw
+   640×785 design overflows typical GUI-scaled resolutions."
+  ^double [^UiRt rt*]
+  (let [sw (rt/screen-w rt*)
+        sh (rt/screen-h rt*)]
+    (if (and (pos? sw) (pos? sh))
+      (min 1.0 (* fit-margin (min (/ sw root-w) (/ sh root-h))))
+      1.0)))
+
+(defn- ensure-fit-scale!
+  "Apply fit-scale to the root when it changes. Host runs this in on-pre-render
+   *before* ensure-layout!, so only dirty flags are needed here."
+  ^double [^UiRt rt*]
+  (let [fit (fit-scale rt*)
+        ^INode root (rt/node-by-idx rt* 0)]
+    (when (and root (> (Math/abs (- (.getScale root) fit)) 0.001))
+      (.setScale root fit)
+      (.setFlag root node/FLAG-LAYOUT-DIRTY)
+      (rt/mark-tree-dirty! rt*))
+    (if root (.getScale root) fit)))
 
 ;; Grid positioning (upstream: START_X=65, START_Y=155, STEP_X=180, STEP_Y=180)
 (def ^:private start-x 65.0)
@@ -55,13 +80,29 @@
 ;; Network / RPC (reused verbatim from original shell.clj design)
 ;; ============================================================================
 
-(defn- query-terminal-state! [owner callback]
-  (let [generation (term-rt/ensure-owner! owner)]
-    (net-client/send-to-server owner (terminal-messages/msg-id :get-state) {}
-      (fn [response]
-        (when (term-rt/owner-active? owner generation)
-          (term-rt/dispatch-event! owner :terminal/query-response response)
-          (when callback (callback response)))))))
+(defn- query-terminal-state!
+  "RPC get-state. When gate-active? is true (in-UI refresh), ignore responses
+   after clear-state!. Pre-open install checks must pass :gate-active? false —
+   a stale/mismatched generation would otherwise swallow the callback with no
+   UI and no chat feedback (Left-Alt appears to do nothing)."
+  ([owner callback]
+   (query-terminal-state! owner callback true))
+  ([owner callback gate-active?]
+   (let [generation (term-rt/ensure-owner! owner)]
+     (log/info "[AC-Terminal] querying install state"
+               {:owner-key (term-rt/owner-key owner)
+                :generation generation
+                :gate-active? gate-active?})
+     (net-client/send-to-server owner (terminal-messages/msg-id :get-state) {}
+       (fn [response]
+         (if (or (not gate-active?) (term-rt/owner-active? owner generation))
+           (do
+             (term-rt/dispatch-event! owner :terminal/query-response response)
+             (when callback (callback response)))
+           (log/warn "[AC-Terminal] ignoring stale get-state response"
+                     {:generation generation
+                      :owner-key (term-rt/owner-key owner)
+                      :response-keys (when (map? response) (keys response))})))))))
 
 (defn- player-owner [player]
   (term-rt/player-owner (or (player-uuid/player-uuid player) (str player))))
@@ -156,19 +197,22 @@
             (when (< app-idx (count installed))
               (client-apps/launch! (:id (nth installed app-idx)) player))))
 
-        ;; ===== 4. pre-render hook — frame state update + MC 3D perspective =====
+        ;; ===== 4. pre-render hook — virtual mouse + selection / grid =====
         pre-render
         (fn pre-render-fn [_gg ^UiRt rt* mx my _pt]
-          (let [now-ms (double (System/currentTimeMillis))
+          (let [panel-scale (double (ensure-fit-scale! rt*))
+                now-ms (double (System/currentTimeMillis))
                 dt (max 0.001 (/ (- now-ms (aget fd 6)) 1000.0))
-                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY)
-                 first-pointer-frame? (Double/isNaN (aget fd 4))
-                 dx (if first-pointer-frame?
-                      0.0
-                      (* (- mx (aget fd 4)) sensitivity))
-                 dy (if first-pointer-frame?
-                      0.0
-                      (* (- my (aget fd 5)) sensitivity))
+                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY).
+                ;; Divide by panel-scale so motion tracks the on-screen panel size.
+                first-pointer-frame? (Double/isNaN (aget fd 4))
+                inv-scale (/ 1.0 (max 0.001 panel-scale))
+                dx (if first-pointer-frame?
+                     0.0
+                     (* (- mx (aget fd 4)) sensitivity inv-scale))
+                dy (if first-pointer-frame?
+                     0.0
+                     (* (- my (aget fd 5)) sensitivity inv-scale))
                 new-mx (max 0.0 (min max-mx (+ (aget fd 0) dx)))
                 new-my (max 0.0 (min max-my (- (aget fd 1) dy)))
                 ;; Smooth balance
@@ -207,8 +251,10 @@
             ;; Save old state before overwriting (for change detection below)
             (let [old-scroll (aget fi 0)]
               (aset fi 0 (int new-scroll)) (aset fi 1 new-sel)
-              ;; Delegate MC 3D perspective transform via platform bridge
-              (bridge/call-adapter :terminal-apply-perspective! _gg rt* mx my _pt)
+              ;; Orthographic Screen path — do NOT apply TerminalUI's
+              ;; gluPerspective camera here. GuiGraphics Screen rendering still
+              ;; cannot host that camera without an empty frustum; selection /
+              ;; cursor still use buffX/buffY like upstream.
               ;; --- Selected app change → grid update + audio ---
               ;; Scrolling changes the selected app even if the 3x3 cell index
               ;; itself stays the same.
@@ -218,7 +264,10 @@
                   (let [installed (installed-apps owner)
                         app-idx selected-app-idx]
                     (when (< app-idx (count installed))
-                      (client-sounds/queue-current-sound-effect!
+                      ;; Screen render has no ThreadLocal client owner — pass
+                      ;; the terminal owner explicitly (queue-current-* would
+                      ;; throw "requires :client-session-id").
+                      (client-sounds/queue-sound-effect! owner
                         {:type :sound :sound-id (str modid/MOD-ID ":terminal.select")
                          :volume 0.2 :pitch 1.0})))
                   (when-let [f @update-grid!-fn] (f))))
@@ -347,7 +396,12 @@
 ;; ============================================================================
 
 (defn open! [player]
-  (let [r (create-runtime player)]
+  (let [r (create-runtime player)
+        prev-on-close (rt/user-signal r :terminal-on-close)]
+    (rt/put-user-signal! r :terminal-on-close
+      (fn []
+        (term-rt/mark-ui-open! false)
+        (when prev-on-close (prev-on-close))))
     (let [screen (bridge/open-reactive-screen! r "Terminal"
       {:on-pre-render (rt/user-signal r :terminal-pre-render)
        :on-post-render (rt/user-signal r :terminal-post-render)
@@ -360,27 +414,42 @@
       ;; setScreen releases the mouse, so capture it only after opening.
       ;; This matches TerminalMouseHelper's raw, unbounded delta input and
       ;; leaves only the custom glowing reticle visible.
+      (term-rt/mark-ui-open! true)
       (bridge/call-adapter :terminal-cursor-hide!)
       screen)))
-
 (defn open-terminal!
   "Query install state first; only open if terminal is installed.
-   Shows chat message 'ac.terminal.notinstalled' if not installed."
+   Shows chat message terminal.<modid>.notinstalled if not installed."
   [player]
   (let [owner (player-owner player)]
+    ;; Do not gate on owner-active?: this query runs before any terminal UI
+    ;; exists, and a generation mismatch would swallow open with zero feedback.
     (query-terminal-state! owner
       (fn [response]
-        (if (:terminal-installed? response)
-          (open! player)
-          (do
-            (bridge/send-system-message! player "ac.terminal.notinstalled")
-            (log/info "Terminal not installed, use item to install first")))))))
+        (let [installed? (boolean (:terminal-installed? response))]
+          (log/info "[AC-Terminal] get-state response"
+                    {:installed? installed?
+                     :error (:error response)
+                     :keys (when (map? response) (keys response))
+                     :app-count (count (:installed-apps response))})
+          (if installed?
+            (do
+              (log/info "[AC-Terminal] opening terminal UI")
+              (open! player))
+            (do
+              (bridge/send-system-message!
+                player (str "terminal." modid/MOD-ID ".notinstalled"))
+              (log/info "[AC-Terminal] not installed — use terminal installer item first")))))
+      false)))
 
 (defn toggle! [player]
-  (if (bridge/screen-active?)
-    (bridge/close-screen!)
+  ;; Track our own terminal screen — Minecraft.screen being non-nil for any
+  ;; other UI must not silently become "close and do nothing".
+  (if (term-rt/ui-open?)
+    (do
+      (log/info "[AC-Terminal] terminal open — closing")
+      (bridge/close-screen!))
     (open-terminal! player)))
-
 ;; ============================================================================
 ;; Widget factory + install (preserved for existing callers)
 ;; ============================================================================

@@ -10,21 +10,27 @@
    :loading? false
    :page 0})
 
-(def ^:private default-runtime-state
+(defn- fresh-runtime-state
+  []
   {:next-generation 1
-   :owners {}})
+   :owners {}
+   :ui-open? false})
 
 ;; Terminal runtime — Framework [:service :terminal-runtime]
 
 (def ^:private term-path [:service :terminal-runtime])
 
 (defn- runtime-state-atom []
+  "Stable atom under the Framework. Never share a mutable default map across
+   atoms, and never return an orphaned atom if a concurrent install wins."
   (if-let [fw-atom (fw/fw-atom)]
-    (or (get-in @fw-atom term-path)
-        (let [a (atom default-runtime-state)]
-          (swap! fw-atom assoc-in term-path a)
-          a))
-    (atom default-runtime-state)))
+    (do
+      (swap! fw-atom update-in term-path
+             (fn [existing]
+               (or existing (atom (fresh-runtime-state)))))
+      (get-in @fw-atom term-path))
+    (throw (ex-info "Terminal client runtime requires an injected Framework atom"
+                    {:path term-path}))))
 
 (def ^:dynamic *owner* nil)
 
@@ -89,15 +95,23 @@
                           (assoc :next-generation (inc next-generation))
                           (assoc-in [:owners key]
                                     (assoc default-owner-state :generation generation)))))))
-        entry (get-in new-rs [:owners key])]
-    (:generation entry)))
+        entry (get-in new-rs [:owners key])
+        generation (:generation entry)]
+    (or generation
+        (throw (ex-info "Terminal ensure-owner! failed to materialize generation"
+                        {:owner owner :owner-key key})))))
 
 (defn player-owner
   [player-uuid]
-  {:client-session-id (or (runtime-hooks/client-session-id)
-                          [:terminal-client player-uuid])
-   :screen-id :terminal
-   :player-uuid player-uuid})
+  (let [session-id (or (runtime-hooks/client-session-id)
+                       (:client-session-id (runtime-hooks/default-client-owner))
+                       [:terminal-client player-uuid])]
+    {:logical-side :client
+     :client-session-id session-id
+     ;; :screen-id partitions terminal UI state only — network RPC channel
+     ;; intentionally ignores it (see mcmod.network.client/client-channel-id).
+     :screen-id :terminal
+     :player-uuid player-uuid}))
 
 (defn call-with-owner
   [owner f]
@@ -181,7 +195,16 @@
   (swap! (state-atom) update :owners dissoc (owner-key owner))
   nil)
 
+(defn mark-ui-open!
+  [open?]
+  (swap! (state-atom) assoc :ui-open? (boolean open?))
+  nil)
+
+(defn ui-open?
+  []
+  (boolean (:ui-open? (runtime-snapshot))))
+
 (defn reset-states-for-test!
   []
-  (reset! (state-atom) default-runtime-state)
+  (reset! (state-atom) (fresh-runtime-state))
   nil)
