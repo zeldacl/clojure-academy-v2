@@ -26,7 +26,7 @@ public final class CapabilityRegistry {
 
     private static final Map<String, BlockCapability<?, Direction>> KEY_TO_BLOCK = new ConcurrentHashMap<>();
     private static final Map<BlockCapability<?, ?>, String> BLOCK_TO_KEY = Collections.synchronizedMap(new IdentityHashMap<>());
-    private static final Map<String, ItemCapability<?, Void>> KEY_TO_ITEM = new ConcurrentHashMap<>();
+    private static final Map<String, ItemCapability<?, ?>> KEY_TO_ITEM = new ConcurrentHashMap<>();
     private static final Map<ItemCapability<?, ?>, String> ITEM_TO_KEY = Collections.synchronizedMap(new IdentityHashMap<>());
 
     private CapabilityRegistry() {
@@ -37,7 +37,7 @@ public final class CapabilityRegistry {
         BLOCK_TO_KEY.put(cap, key);
     }
 
-    public static synchronized <T> void registerItem(String key, ItemCapability<T, Void> cap) {
+    public static synchronized <T, C> void registerItem(String key, ItemCapability<T, C> cap) {
         KEY_TO_ITEM.put(key, cap);
         ITEM_TO_KEY.put(cap, key);
     }
@@ -66,8 +66,8 @@ public final class CapabilityRegistry {
 
     @Nullable
     @SuppressWarnings("unchecked")
-    public static <T> ItemCapability<T, Void> getItem(String key) {
-        return (ItemCapability<T, Void>) KEY_TO_ITEM.get(key);
+    public static <T, C> ItemCapability<T, C> getItem(String key) {
+        return (ItemCapability<T, C>) KEY_TO_ITEM.get(key);
     }
 
     @Nullable
@@ -101,7 +101,7 @@ public final class CapabilityRegistry {
         return Collections.unmodifiableCollection(KEY_TO_BLOCK.values());
     }
 
-    public static Collection<ItemCapability<?, Void>> allItemCapabilities() {
+    public static Collection<ItemCapability<?, ?>> allItemCapabilities() {
         return Collections.unmodifiableCollection(KEY_TO_ITEM.values());
     }
 

@@ -16,12 +16,14 @@ import javax.annotation.Nullable;
  * NeoForge 26.2 built-in capabilities use the transfer API
  * ({@link EnergyHandler}, {@link ResourceHandler}).
  *
- * <p>{@link EnergyHandler} and legacy {@code IItemHandler} map onto the built-in
- * Energy/Item BLOCK tokens. Fluid still uses {@link #fluidBlock()} explicitly
+ * <p>{@link EnergyHandler} and legacy {@code IItemHandler} map onto built-in
+ * tokens. Fluid still uses {@link #fluidBlock()} explicitly
  * because {@link ResourceHandler} is shared by item+fluid. Prefer
- * {@link #energyBlock()}, {@link #fluidBlock()}, {@link #itemBlock()} when
+ * {@link #energyBlock()}, {@link #fluidBlock()}, {@link #itemBlock()}, and
+ * {@link #itemItem()} when
  * registering transfer-facing providers.</p>
  */
+@SuppressWarnings("removal")
 public final class ForgeProvidedCapabilitySupport {
 
     private ForgeProvidedCapabilitySupport() {
@@ -42,6 +44,11 @@ public final class ForgeProvidedCapabilitySupport {
         return Capabilities.Item.BLOCK;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static ItemCapability<ResourceHandler<ItemResource>, ?> itemItem() {
+        return Capabilities.Item.ITEM;
+    }
+
     public static boolean isForgeProvidedCapabilityType(Class<?> capabilityType) {
         return blockCapabilityForType(capabilityType) != null
             || itemCapabilityForType(capabilityType) != null;
@@ -56,7 +63,7 @@ public final class ForgeProvidedCapabilitySupport {
         if (capabilityType == EnergyHandler.class) {
             return Capabilities.Energy.BLOCK;
         }
-        // Legacy IItemHandler factories are wrapped to ResourceHandler in ForgeCapabilityHandler.
+        // Third-party legacy factories are wrapped at the provider boundary.
         if (capabilityType == IItemHandler.class) {
             return Capabilities.Item.BLOCK;
         }
@@ -66,7 +73,10 @@ public final class ForgeProvidedCapabilitySupport {
 
     @Nullable
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static ItemCapability<?, Void> itemCapabilityForType(Class<?> capabilityType) {
+    public static ItemCapability<?, ?> itemCapabilityForType(Class<?> capabilityType) {
+        if (capabilityType == ResourceHandler.class || capabilityType == IItemHandler.class) {
+            return Capabilities.Item.ITEM;
+        }
         return null;
     }
 

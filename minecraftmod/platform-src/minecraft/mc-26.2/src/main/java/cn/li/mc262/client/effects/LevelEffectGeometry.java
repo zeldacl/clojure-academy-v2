@@ -45,4 +45,15 @@ public final class LevelEffectGeometry {
         consumer.addVertex(pose, x, y, z)
                 .setColor(red, green, blue, alpha);
     }
+
+    public static void plasmaVertex(
+            VertexConsumer consumer,
+            PoseStack.Pose pose,
+            float x, float y, float z,
+            float u, float v,
+            int red, int green, int blue, int alpha) {
+        consumer.addVertex(pose, x, y, z)
+                .setUv(u, v)
+                .setColor(red, green, blue, alpha);
+    }
 }

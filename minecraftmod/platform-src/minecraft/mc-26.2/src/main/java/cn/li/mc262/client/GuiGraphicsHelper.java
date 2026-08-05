@@ -1,10 +1,17 @@
 package cn.li.mc262.client;
 
+import com.mojang.blaze3d.textures.GpuSampler;
+import com.mojang.blaze3d.textures.GpuTextureView;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.client.renderer.state.gui.BlitRenderState;
+import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
+import org.joml.Matrix3x2f;
 
 /** Thin GuiGraphicsExtractor helpers for 26.2. */
 @OnlyIn(Dist.CLIENT)
@@ -87,6 +94,63 @@ public final class GuiGraphicsHelper {
             return;
         }
         gge.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0f, 0f, w, h, w, h);
+    }
+
+    /**
+     * Full-texture blit using vanilla's {@code SRC_ALPHA, ONE} pipeline.
+     *
+     * <p>This is extraction-safe: blend state belongs to the submitted render
+     * state instead of being mutated globally while the GUI tape is recorded.
+     */
+    public static void blitAdditive(Object graphics, Identifier texture,
+                                    int x, int y, int w, int h, int argb) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge) || texture == null || w <= 0 || h <= 0) {
+            return;
+        }
+        AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        gge.submitGuiElementRenderState(new BlitRenderState(
+                RenderPipelines.MOJANG_LOGO,
+                TextureSetup.singleTexture(tex.getTextureView(), tex.getSampler()),
+                new Matrix3x2f(gge.pose()),
+                x, y, x + w, y + h,
+                0f, 1f, 0f, 1f,
+                argb,
+                gge.peekScissorStack()));
+    }
+
+    /**
+     * Textured quad with fractional UVs and a per-quad ARGB tint.
+     *
+     * <p>Every public {@code GuiGraphicsExtractor.blit} overload that accepts
+     * fractional UVs pins the tint to -1, and the ones that accept a tint take
+     * texel UVs against a texture size the caller does not know. Submitting the
+     * BlitRenderState directly is the only way to get both, which the progress
+     * bar needs for its multi-stop colour ramp.
+     *
+     * <p>The caller's pose is captured as-is, so a sheared pose yields a
+     * parallelogram; the current scissor still clips it.
+     */
+    public static void blitTintedQuad(Object graphics, Identifier texture,
+                                      int x0, int y0, int x1, int y1,
+                                      float u0, float u1, float v0, float v1,
+                                      int argb) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge) || texture == null) {
+            return;
+        }
+        if (x0 >= x1 || y0 >= y1) {
+            return;
+        }
+        AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        GpuTextureView view = tex.getTextureView();
+        GpuSampler sampler = tex.getSampler();
+        gge.submitGuiElementRenderState(new BlitRenderState(
+                RenderPipelines.GUI_TEXTURED,
+                TextureSetup.singleTexture(view, sampler),
+                new Matrix3x2f(gge.pose()),
+                x0, y0, x1, y1,
+                u0, u1, v0, v1,
+                argb,
+                gge.peekScissorStack()));
     }
 
     /** Sprite-sheet region blit. */

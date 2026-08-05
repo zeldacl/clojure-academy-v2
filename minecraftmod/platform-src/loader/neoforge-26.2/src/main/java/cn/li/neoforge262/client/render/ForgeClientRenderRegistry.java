@@ -2,8 +2,6 @@ package cn.li.neoforge262.client.render;
 
 import cn.li.mc262.client.render.EffectRendererDispatcher;
 import cn.li.mc262.client.render.RenderProfileBootstrap;
-import cn.li.mc262.client.render.effect.BehaviorObjRenderer;
-import cn.li.mc262.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc262.entity.ScriptedBlockBodyEntity;
 import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mc262.entity.ScriptedMarkerEntity;
@@ -81,11 +79,8 @@ public final class ForgeClientRenderRegistry {
             }
             ScriptedBlockBodySpec spec = ModEntities.getScriptedBlockBodySpec(registryName);
             String rendererId = spec == null ? "block-body" : spec.getRendererId();
-            if ("block-body".equals(rendererId)) {
-                event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
-            } else {
-                event.registerEntityRenderer(blockBodyType, BehaviorObjRenderer::new);
-            }
+            event.registerEntityRenderer(blockBodyType,
+                    EffectRendererDispatcher.pickBlockBodyRenderer(rendererId));
         }
 
         try {

@@ -1,18 +1,36 @@
 package cn.li.neoforge262.shim;
 
-import net.neoforged.neoforge.energy.IEnergyStorage;
 import clojure.lang.IFn;
+import net.neoforged.neoforge.transfer.TransferPreconditions;
+import net.neoforged.neoforge.transfer.energy.EnergyHandler;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
-/** Universal IEnergyStorage skeleton — one class for ALL blocks.
- *  Pure puppet: holds IFn function pointers injected by mc-1.20.1 bridge.
- *  ac layer never sees this class — it only provides pure functions in Framework. */
-public class UniversalEnergyStorage implements IEnergyStorage {
+/** Universal 26.2 {@link EnergyHandler} skeleton — one class for all blocks. */
+public final class UniversalEnergyStorage implements EnergyHandler {
     private final IFn receiveFn;
     private final IFn extractFn;
     private final IFn getStoredFn;
     private final IFn getMaxStoredFn;
     private final IFn canExtractFn;
     private final IFn canReceiveFn;
+    private final SnapshotJournal<Integer> journal = new SnapshotJournal<>() {
+        @Override
+        protected Integer createSnapshot() {
+            return stored();
+        }
+
+        @Override
+        protected void revertToSnapshot(Integer snapshot) {
+            int current = stored();
+            int target = snapshot == null ? 0 : snapshot;
+            if (current > target && extractFn != null) {
+                extractFn.invoke(current - target, false);
+            } else if (current < target && receiveFn != null) {
+                receiveFn.invoke(target - current, false);
+            }
+        }
+    };
 
     public UniversalEnergyStorage(IFn receiveFn, IFn extractFn,
                                    IFn getStoredFn, IFn getMaxStoredFn,
@@ -25,33 +43,45 @@ public class UniversalEnergyStorage implements IEnergyStorage {
         this.canReceiveFn = canReceiveFn;
     }
 
-    @Override public int receiveEnergy(int maxReceive, boolean simulate) {
-        if (receiveFn == null) return 0;
-        return ((Number) receiveFn.invoke(maxReceive, simulate)).intValue();
+    private int stored() {
+        return getStoredFn == null ? 0 : ((Number) getStoredFn.invoke()).intValue();
     }
 
-    @Override public int extractEnergy(int maxExtract, boolean simulate) {
-        if (extractFn == null) return 0;
-        return ((Number) extractFn.invoke(maxExtract, simulate)).intValue();
+    @Override
+    public long getAmountAsLong() {
+        return stored();
     }
 
-    @Override public int getEnergyStored() {
-        if (getStoredFn == null) return 0;
-        return ((Number) getStoredFn.invoke()).intValue();
+    @Override
+    public long getCapacityAsLong() {
+        return getMaxStoredFn == null ? 0 : ((Number) getMaxStoredFn.invoke()).longValue();
     }
 
-    @Override public int getMaxEnergyStored() {
-        if (getMaxStoredFn == null) return 0;
-        return ((Number) getMaxStoredFn.invoke()).intValue();
+    @Override
+    public int insert(int amount, TransactionContext transaction) {
+        TransferPreconditions.checkNonNegative(amount);
+        if (amount == 0 || receiveFn == null || !canReceive()) {
+            return 0;
+        }
+        journal.updateSnapshots(transaction);
+        return ((Number) receiveFn.invoke(amount, false)).intValue();
     }
 
-    @Override public boolean canExtract() {
-        if (canExtractFn == null) return true;
-        return (boolean) canExtractFn.invoke();
+    @Override
+    public int extract(int amount, TransactionContext transaction) {
+        TransferPreconditions.checkNonNegative(amount);
+        if (amount == 0 || extractFn == null || !canExtract()) {
+            return 0;
+        }
+        journal.updateSnapshots(transaction);
+        return ((Number) extractFn.invoke(amount, false)).intValue();
     }
 
-    @Override public boolean canReceive() {
-        if (canReceiveFn == null) return true;
-        return (boolean) canReceiveFn.invoke();
+    private boolean canExtract() {
+        return canExtractFn == null || (boolean) canExtractFn.invoke();
+    }
+
+    private boolean canReceive() {
+        return canReceiveFn == null || (boolean) canReceiveFn.invoke();
     }
 }

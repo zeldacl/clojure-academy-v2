@@ -14,6 +14,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * <p>Mutations go through receive/extract; aborted transactions restore the
  * previous stored amount by reversing the delta.</p>
  */
+@SuppressWarnings("removal")
 public final class EnergyStorageAsHandler implements EnergyHandler {
     private final IEnergyStorage storage;
     private final SnapshotJournal<Integer> journal = new SnapshotJournal<>() {

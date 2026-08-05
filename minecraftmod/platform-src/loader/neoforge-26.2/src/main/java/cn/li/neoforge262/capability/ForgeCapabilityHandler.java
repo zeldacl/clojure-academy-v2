@@ -26,6 +26,7 @@ import javax.annotation.Nullable;
  * handler. Call {@link #invalidateAt(Level, BlockPos)} when a block capability
  * appears, disappears, or must be re-resolved.</p>
  */
+@SuppressWarnings("removal")
 public final class ForgeCapabilityHandler {
 
     private ForgeCapabilityHandler() {

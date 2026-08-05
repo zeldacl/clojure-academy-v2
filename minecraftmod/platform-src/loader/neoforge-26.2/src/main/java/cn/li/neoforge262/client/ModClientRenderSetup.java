@@ -1,6 +1,7 @@
 package cn.li.neoforge262.client;
 
 import cn.li.mcbase.clj.ClojureInterop;
+import cn.li.mc262.client.render.PlasmaRenderTypes;
 import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
 import cn.li.neoforge262.client.render.ForgeClientRenderRegistry;
@@ -11,6 +12,7 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.RegisterFluidModelsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RegisterRangeSelectItemModelPropertyEvent;
+import net.neoforged.neoforge.client.event.RegisterRenderPipelinesEvent;
 
 /**
  * Client mod-bus render/GUI registration for NeoForge 26.2.
@@ -36,6 +38,7 @@ public final class ModClientRenderSetup {
         modBus.addListener(ModClientRenderSetup::onRegisterRenderers);
         modBus.addListener(ModClientRenderSetup::onRegisterFluidModels);
         modBus.addListener(ModClientRenderSetup::onRegisterRangeProperties);
+        modBus.addListener(ModClientRenderSetup::onRegisterRenderPipelines);
     }
 
     private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
@@ -65,6 +68,10 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterRangeProperties(RegisterRangeSelectItemModelPropertyEvent event) {
         event.register(ResourceLocations.of("academy", "energy"), EnergyItemPropertyFunction.CODEC);
+    }
+
+    private static void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
+        event.registerPipeline(PlasmaRenderTypes.plasmaBodyPipeline());
     }
 
 }

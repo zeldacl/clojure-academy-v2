@@ -14,6 +14,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * {@link ResourceHandler}{@code <ItemResource>} for
  * {@code Capabilities.Item.BLOCK}.
  */
+@SuppressWarnings("removal")
 public final class ItemHandlerAsResourceHandler implements ResourceHandler<ItemResource> {
     private final IItemHandler handler;
     private final SnapshotJournal<ItemStack[]> journal = new SnapshotJournal<>() {

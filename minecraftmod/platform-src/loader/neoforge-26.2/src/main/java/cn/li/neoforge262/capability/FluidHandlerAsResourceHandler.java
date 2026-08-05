@@ -14,6 +14,7 @@ import net.neoforged.neoforge.transfer.transaction.TransactionContext;
  * {@link ResourceHandler}{@code <FluidResource>} for
  * {@code Capabilities.Fluid.BLOCK}.
  */
+@SuppressWarnings("removal")
 public final class FluidHandlerAsResourceHandler implements ResourceHandler<FluidResource> {
     private final IFluidHandler handler;
     private final SnapshotJournal<FluidStack[]> journal = new SnapshotJournal<>() {

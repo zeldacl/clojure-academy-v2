@@ -17,7 +17,7 @@
            [net.minecraft.resources Identifier]
            [net.minecraft.world.item Item ItemStack Items]
            [net.minecraft.world.level.block Block Blocks]
-           [org.joml Matrix3x2fStack]))
+           [org.joml Matrix3x2f Matrix3x2fStack]))
 
 (declare draw-tape!)
 
@@ -39,7 +39,19 @@
 (def ^:private SLOT-TEXT-BAKED  8)
 
 (def ^:private SLOT-PROG-PROGRESS 0)
+(def ^:private SLOT-PROG-CORNER   1)
+(def ^:private SLOT-PROG-SCROLL   3)
+(def ^:private SLOT-PROG-ALPHA    4)
 (def ^:private SLOT-PROG-BANDS   11)
+
+(def ^:private SLOT-SHADER-PROPS 0)
+(def ^:private SLOT-SHADER-PROGRESS 0)
+(def ^:private SLOT-SQUAD-ALPHA 0)
+(def ^:private SLOT-SHADER-TEX-0 4)
+(def ^:private SLOT-SHADER-TEX-1 5)
+
+(def ^:private SLOT-DM-SRC 0)
+(def ^:private SLOT-DM-BAKED 1)
 
 (def ^:private SLOT-NS-SRC 0)
 (def ^:private SLOT-NS-LINE 1)
@@ -228,7 +240,16 @@
     (when (vector? stops) (.setOSlot node SLOT-PROG-BANDS stops))))
 
 (defn- icon-cutout [^INode node]
-  (get (.getStaticProps node) :icon-cutout))
+  (let [cut (get (.getStaticProps node) :icon-cutout)]
+    (when (map? cut) cut)))
+
+(defn- progress-uv
+  "The :uv-region crop as [u0 v0 u1 v1], defaulting to the whole texture."
+  [^INode node]
+  (let [uv (get (.getStaticProps node) :uv-region)]
+    (if (and (vector? uv) (= 4 (count uv)))
+      [(double (nth uv 0)) (double (nth uv 1)) (double (nth uv 2)) (double (nth uv 3))]
+      [0.0 0.0 1.0 1.0])))
 
 (defn- sample-progress-color [bands ^double t]
   (if (nil? bands)
@@ -251,96 +272,393 @@
                    (int (+ (double b0) (* (- (double b) (double b0)) f)))]))
               (recur (inc i)))))))))
 
-(defn render-progress! [^GuiGraphicsExtractor gg ^INode node]
-  "Approximate progress with fill + optional texture blit (no ImmediateDraw trapezoid)."
+(defn- draw-bar-segment!
+  "One horizontal run of the fill texture, tinted by the colour ramp.
+
+   `diag` > 0 reproduces the 1.21.1 trapezoid. GuiGraphicsExtractor only ever
+   submits axis-aligned quads, so the slant comes from the pose instead: shear
+   it about the bar's top edge so the run's bottom edge sits diag*bar-h further
+   right, extend the quad by that much, and let a scissor cut the equally
+   slanted right edge back to vertical. The u ramp is anchored to the bar (not
+   the run), so a partial fill shows the matching slice of the texture rather
+   than the whole thing squashed."
+  [^GuiGraphicsExtractor gg ^Identifier fg-rl
+   seg-start seg-end bar-x bar-y bar-w bar-h diag scroll uv tint]
+  (when (and fg-rl (< (double seg-start) (double seg-end))
+             (pos? (double bar-w)) (pos? (double bar-h)))
+    (let [seg-start (double seg-start) seg-end (double seg-end)
+          bar-x (double bar-x) bar-y (double bar-y)
+          bar-w (double bar-w) bar-h (double bar-h)
+          diag (double diag) scroll (double scroll)
+          [u0 v0 u1 v1] uv
+          rate (/ (- (double u1) (double u0)) bar-w)
+          u-of (fn ^double [^double sx]
+                 (+ (double u0) scroll (* (- sx bar-x) rate)))
+          y0 (unchecked-int bar-y)
+          y1 (unchecked-int (+ bar-y bar-h))
+          x0 (unchecked-int seg-start)
+          x1 (unchecked-int seg-end)
+          color (unchecked-int (long tint))]
+      (if (pos? diag)
+        (let [lean (* diag bar-h)
+              ^Matrix3x2fStack pose (.pose gg)
+              shear (Matrix3x2f. (float 1.0) (float 0.0) (float diag)
+                                 (float 1.0) (float 0.0) (float 0.0))]
+          (.enableScissor gg x0 y0 x1 y1)
+          (.pushMatrix pose)
+          (try
+            (.translate pose (float 0.0) (float bar-y))
+            (.mul pose shear)
+            (.translate pose (float 0.0) (float (- bar-y)))
+            (GuiGraphicsHelper/blitTintedQuad
+              gg fg-rl x0 y0 (unchecked-int (+ seg-end lean)) y1
+              (float (u-of seg-start)) (float (u-of (+ seg-end lean)))
+              (float v0) (float v1) color)
+            (finally
+              (.popMatrix pose)
+              (.disableScissor gg))))
+        (GuiGraphicsHelper/blitTintedQuad
+          gg fg-rl x0 y0 x1 y1
+          (float (u-of seg-start)) (float (u-of seg-end))
+          (float v0) (float v1) color)))))
+
+(defn render-progress!
+  "Bar background, fill and icon overlay in the 1.21.1 shape: optional slanted
+   left edge (:corner), multi-stop colour ramp, :uv-region cropping,
+   :fill-remap extent, :anchor :right growth and an :icon-cutout gap."
+  [^GuiGraphicsExtractor gg ^INode node]
   (let [x (node-abs-x node) y (node-abs-y node)
         w (scaled-w node) h (scaled-h node)
         percent (double (.getDSlot node SLOT-PROG-PROGRESS))
-        remap (get (.getStaticProps node) :fill-remap)
+        diag (max 0.0 (double (.getDSlot node SLOT-PROG-CORNER)))
+        scroll (double (.getDSlot node SLOT-PROG-SCROLL))
+        raw-alpha (double (.getDSlot node SLOT-PROG-ALPHA))
+        fill-alpha (if (pos? raw-alpha) (min 1.0 raw-alpha) 1.0)
+        sp (.getStaticProps node)
+        remap (get sp :fill-remap)
+        anchor-right? (= :right (get sp :anchor))
         fill-pct (if remap
                    (+ (double (nth remap 0)) (* percent (double (nth remap 1))))
                    percent)
-        filled-w (max 0 (int (* fill-pct w)))
+        filled-w (max 0.0 (* fill-pct w))
+        uv (progress-uv node)
         ix (unchecked-int x) iy (unchecked-int y)
         iw (unchecked-int w) ih (unchecked-int h)
         ^Identifier bg-rl (.getOSlot node 8)
         ^Identifier fg-rl (.getOSlot node 9)
+        ^Identifier icon-rl (.getOSlot node 10)
         bands (.getOSlot node SLOT-PROG-BANDS)
-        [cr cg cb] (sample-progress-color bands percent)]
+        ;; Upstream CPBar.autoLerp samples the RAW percent, before :fill-remap
+        ;; stretches the drawn extent.
+        [cr cg cb] (sample-progress-color bands (max 0.0 (min 1.0 percent)))
+        tint (argb (unchecked-int (* 255.0 fill-alpha)) cr cg cb)
+        cut (icon-cutout node)
+        cut-x0 (when cut (+ x (double (:x-offset cut 0))))
+        cut-w (when cut (double (:w cut 0)))
+        cut-x1 (when (and cut-x0 cut-w) (+ (double cut-x0) (double cut-w)))
+        bar-right (+ x w)]
     (when bg-rl
       (GuiGraphicsHelper/blit gg bg-rl ix iy iw ih))
-    (when (and fg-rl (pos? filled-w))
-      (GuiGraphicsHelper/blit gg fg-rl ix iy filled-w ih))
-    (when (and (nil? fg-rl) (pos? filled-w))
-      (.fill gg ix iy (+ ix filled-w) (+ iy ih) (argb 220 cr cg cb)))
-    (when-let [cut (icon-cutout node)]
-      (when-let [^Identifier icon-rl (.getOSlot node 10)]
-        (let [[cx cy cw ch] cut]
-          (GuiGraphicsHelper/blit gg icon-rl
-                                  (unchecked-int (+ x (double cx)))
-                                  (unchecked-int (+ y (double cy)))
-                                  (unchecked-int (double cw))
-                                  (unchecked-int (double ch))))))))
+    (when (pos? filled-w)
+      (if fg-rl
+        (if anchor-right?
+          ;; Upstream drawCPBar pins the icon-side edge and grows leftward; draw
+          ;; one run all the way to the right edge so the diagonal never has to
+          ;; degenerate on the sliver beside the icon.
+          (draw-bar-segment! gg fg-rl (max x (- bar-right filled-w)) bar-right
+                             x y w h diag scroll uv tint)
+          (let [bar-end (min bar-right (+ x filled-w))]
+            (if (and cut-x0 cut-w (pos? (double cut-w)))
+              (do (draw-bar-segment! gg fg-rl x (min bar-end (double cut-x0))
+                                     x y w h diag scroll uv tint)
+                  (draw-bar-segment! gg fg-rl (double cut-x1) bar-end
+                                     x y w h diag scroll uv tint))
+              (draw-bar-segment! gg fg-rl x bar-end x y w h diag scroll uv tint))))
+        ;; No fill texture: flat colour run, still honouring the anchor.
+        (let [x0 (if anchor-right? (max x (- bar-right filled-w)) x)
+              x1 (if anchor-right? bar-right (min bar-right (+ x filled-w)))]
+          (.fill gg (unchecked-int x0) iy (unchecked-int x1) (+ iy ih) tint))))
+    (when (and icon-rl cut-x0 cut-w (pos? (double cut-w)))
+      (GuiGraphicsHelper/blit gg icon-rl
+                              (unchecked-int (double cut-x0))
+                              (unchecked-int (+ y (double (:y-offset cut 0))))
+                              (unchecked-int (double cut-w))
+                              (unchecked-int (double (:h cut h)))))))
+
+(defn- bake-shader-node! [^INode node]
+  (let [props (.getOSlot node SLOT-SHADER-PROPS)]
+    (.setOSlot node SLOT-SHADER-TEX-0
+               (resolve-tex-loc (or (:texture-0 props) (:tex-0 props))))
+    (.setOSlot node SLOT-SHADER-TEX-1
+               (resolve-tex-loc (or (:texture-1 props) (:tex-1 props))))))
+
+(defn- shader-uv
+  [props]
+  (let [uv (:uv-region props)]
+    (if (and (vector? uv) (= 4 (count uv)))
+      (mapv double uv)
+      [0.0 0.0 1.0 1.0])))
+
+(defn- blit-uv!
+  [^GuiGraphicsExtractor gg ^Identifier texture
+   x0 y0 x1 y1 u0 v0 u1 v1]
+  (when (and texture (< x0 x1) (< y0 y1))
+    (GuiGraphicsHelper/blitTexturedQuad
+      gg texture
+      (float x0) (float y0) (float x1) (float y1) 0.0
+      (float u0) (float u1) (float v0) (float v1))))
+
+(defn- render-textured-quad!
+  "Draw a baked texture with optional UV cropping. Extractor blits have no
+   ColorModulator, so fractional alpha is represented by stable scanline
+   dithering instead of being silently ignored."
+  [^GuiGraphicsExtractor gg ^INode node ^Identifier texture props]
+  (let [x (node-abs-x node) y (node-abs-y node)
+        w (scaled-w node) h (scaled-h node)
+        quad? (identical? :shader-quad (.getKind node))
+        alpha (if quad?
+                (max 0.0 (min 1.0 (.getDSlot node SLOT-SQUAD-ALPHA)))
+                1.0)
+        [u0 v0 u1 v1] (shader-uv props)
+        ;; cpbar-overload used Progress as ScrollOffset in the old shader.
+        scroll (if (= :cpbar-overload (:shader-id props))
+                 (double (.getDSlot node SLOT-SHADER-PROGRESS))
+                 0.0)
+        u0 (+ u0 scroll)
+        u1 (+ u1 scroll)]
+    (when (and texture (pos? w) (pos? h) (pos? alpha))
+      (if (>= alpha 0.999)
+        (blit-uv! gg texture x y (+ x w) (+ y h) u0 v0 u1 v1)
+        (let [rows (max 1 (int (Math/ceil h)))
+              threshold (* alpha 8.0)]
+          (dotimes [row rows]
+            ;; 5 is coprime with 8: adjacent rows do not form a solid block.
+            (when (< (mod (* row 5) 8) threshold)
+              (let [fy0 (/ (double row) rows)
+                    fy1 (/ (double (inc row)) rows)]
+                (blit-uv! gg texture
+                          x (+ y (* h fy0)) (+ x w) (+ y (* h fy1))
+                          u0 (+ v0 (* (- v1 v0) fy0))
+                          u1 (+ v0 (* (- v1 v0) fy1)))))))))))
+
+(defn- radial-fraction
+  "Clockwise angular fraction with zero at twelve o'clock."
+  ^double [^double dx ^double dy]
+  (let [a (Math/atan2 dx (- dy))]
+    (/ (if (neg? a) (+ a (* 2.0 Math/PI)) a) (* 2.0 Math/PI))))
+
+(defn- render-radial-texture!
+  "Approximate the legacy two-sampler radial mask by clipping texture-0 into
+   horizontal runs. The texture's own alpha keeps only the ring artwork, while
+   the run boundary supplies the animated clockwise progress sector."
+  [^GuiGraphicsExtractor gg ^INode node ^Identifier texture props]
+  (let [x (node-abs-x node) y (node-abs-y node)
+        w (scaled-w node) h (scaled-h node)
+        progress (max 0.0 (min 1.0
+                            (double (.getDSlot node SLOT-SHADER-PROGRESS))))
+        [u0 v0 u1 v1] (shader-uv props)
+        cols (max 1 (int (Math/ceil w)))
+        rows (max 1 (int (Math/ceil h)))
+        cx (/ cols 2.0)
+        cy (/ rows 2.0)]
+    (when (and texture (pos? progress) (pos? w) (pos? h))
+      (if (>= progress 0.999)
+        (blit-uv! gg texture x y (+ x w) (+ y h) u0 v0 u1 v1)
+        (dotimes [row rows]
+          (loop [col 0 run-start -1]
+            (if (< col cols)
+              (let [inside? (< (radial-fraction (- (+ col 0.5) cx)
+                                                (- (+ row 0.5) cy))
+                               progress)]
+                (cond
+                  (and inside? (neg? run-start))
+                  (recur (inc col) col)
+
+                  (and (not inside?) (not (neg? run-start)))
+                  (let [fx0 (/ (double run-start) cols)
+                        fx1 (/ (double col) cols)
+                        fy0 (/ (double row) rows)
+                        fy1 (/ (double (inc row)) rows)]
+                    (blit-uv! gg texture
+                              (+ x (* w fx0)) (+ y (* h fy0))
+                              (+ x (* w fx1)) (+ y (* h fy1))
+                              (+ u0 (* (- u1 u0) fx0))
+                              (+ v0 (* (- v1 v0) fy0))
+                              (+ u0 (* (- u1 u0) fx1))
+                              (+ v0 (* (- v1 v0) fy1)))
+                    (recur (inc col) -1))
+
+                  :else
+                  (recur (inc col) run-start)))
+              (when (not (neg? run-start))
+                (let [fx0 (/ (double run-start) cols)
+                      fy0 (/ (double row) rows)
+                      fy1 (/ (double (inc row)) rows)]
+                  (blit-uv! gg texture
+                            (+ x (* w fx0)) (+ y (* h fy0))
+                            (+ x w) (+ y (* h fy1))
+                            (+ u0 (* (- u1 u0) fx0))
+                            (+ v0 (* (- v1 v0) fy0))
+                            u1
+                            (+ v0 (* (- v1 v0) fy1))))))))))))
 
 (defn render-shader-progress-node!
-  "RenderPipeline-safe fallback for legacy shader widgets."
   [^GuiGraphicsExtractor gg ^INode node]
-  (if (pos? (.getDSlot node SLOT-PROG-PROGRESS))
-    (render-progress! gg node)
-    (render-box! gg node)))
+  (let [props (or (.getOSlot node SLOT-SHADER-PROPS) {})
+        ^Identifier texture (or (.getOSlot node SLOT-SHADER-TEX-0)
+                                (resolve-tex-loc
+                                  (or (:texture-0 props) (:tex-0 props))))
+        kind (.getKind node)
+        radial? (or (identical? kind :shader-ring)
+                    (= :ring-progbar (:shader-id props)))]
+    (if radial?
+      (render-radial-texture! gg node texture props)
+      (render-textured-quad! gg node texture props))))
 
-(def render-depth-mask! render-box!)
-(def render-shader-quad! render-shader-progress-node!)
-(def render-shader-progress! render-shader-progress-node!)
-(def render-shader-ring! render-shader-progress-node!)
+(defn bake-depth-mask! [^INode node]
+  (let [src (.getOSlot node SLOT-DM-SRC)]
+    (when (string? src)
+      (.setOSlot node SLOT-DM-BAKED (resolve-rl src)))))
 
-(defn- interpolate-color [c0 c1 ^double t]
-  (let [[r0 g0 b0 a0] c0 [r1 g1 b1 a1] c1]
-    [(+ r0 (* (- r1 r0) t))
-     (+ g0 (* (- g1 g0) t))
-     (+ b0 (* (- b1 b0) t))
-     (+ a0 (* (- a1 a0) t))]))
+(defn render-depth-mask!
+  "26.2's extractor queues GUI states and exposes no local colour/depth-mask
+   mutation. Painter ordering already draws connections before node plates, so
+   a no-colour stamp is the safe degradation; drawing a box here visibly
+   corrupts every skill node."
+  [^GuiGraphicsExtractor _gg ^INode _node]
+  nil)
 
-(defn- gradient-color-at [stops ^double t]
-  (let [n (count stops)]
-    (loop [i 0]
-      (if (>= i n)
-        (nth stops (dec n))
-        (let [[pos c] (nth stops i)
-              pos (double pos)]
-          (if (>= pos t)
-            (if (zero? i)
-              c
-              (let [[pos0 c0] (nth stops (dec i))
-                    span (- pos (double pos0))
-                    f (if (zero? span) 0.0 (/ (- t (double pos0)) span))]
-                (interpolate-color c0 c f)))
-            (recur (inc i))))))))
+(defn render-shader-quad! [^GuiGraphicsExtractor gg ^INode node]
+  (render-shader-progress-node! gg node))
+(defn bake-shader-quad! [^INode node] (bake-shader-node! node))
+(defn render-shader-progress! [^GuiGraphicsExtractor gg ^INode node]
+  (render-shader-progress-node! gg node))
+(defn bake-shader-progress! [^INode node] (bake-shader-node! node))
+(defn render-shader-ring! [^GuiGraphicsExtractor gg ^INode node]
+  (render-shader-progress-node! gg node))
+(defn bake-shader-ring! [^INode node] (bake-shader-node! node))
 
-(defn- bake-gradient-bands [stops]
-  (when (seq stops) (vec stops)))
+(def ^:private SLOT-GRAD-ALPHA 0)
+(def ^:private SLOT-GRAD-ANGLE 1)
+(def ^:private SLOT-GRAD-STOPS 0)
+(def ^:private SLOT-GRAD-BAKED 2)
 
-(defn bake-gradient! [^INode node]
-  (when-let [stops (.getOSlot node 0)]
-    (when (vector? stops)
-      (.setOSlot node 1 (bake-gradient-bands stops)))))
+(defn- pack-argb
+  "ARGB as an unsigned long, so intermediate colour maths never trips over
+   Clojure's signed-int boxing."
+  [a r g b]
+  (bit-or (bit-shift-left (bit-and (long a) 0xFF) 24)
+          (bit-shift-left (bit-and (long r) 0xFF) 16)
+          (bit-shift-left (bit-and (long g) 0xFF) 8)
+          (bit-and (long b) 0xFF)))
 
-(defn render-gradient! [^GuiGraphicsExtractor gg ^INode node]
-  "Approximate horizontal/vertical gradient via fillGradient when two stops exist."
-  (let [x (unchecked-int (node-abs-x node))
-        y (unchecked-int (node-abs-y node))
-        w (unchecked-int (scaled-w node))
-        h (unchecked-int (scaled-h node))
-        stops (or (.getOSlot node 1) (.getOSlot node 0))]
-    (when (and (vector? stops) (>= (count stops) 2) (pos? w) (pos? h))
-      (let [[_ c0] (first stops)
-            [_ c1] (last stops)
-            ->argb (fn [[r g b a]]
-                     (argb (unchecked-int (* 255.0 (or a 1.0)))
-                           (unchecked-int (or r 255))
-                           (unchecked-int (or g 255))
-                           (unchecked-int (or b 255))))]
-        (.fillGradient gg x y (+ x w) (+ y h) (->argb c0) (->argb c1))))))
+(defn- stop-color->argb
+  "A stop colour, either a packed ARGB number or an [r g b a] vector with 0-255
+   channels and a 0..1 alpha."
+  [c]
+  (cond
+    (number? c) (bit-and (long c) 0xFFFFFFFF)
+    (vector? c) (let [[r g b a] c]
+                  (pack-argb (long (* 255.0 (double (or a 1.0))))
+                             (long (or r 255)) (long (or g 255)) (long (or b 255))))
+    :else 0xFFFFFFFF))
+
+(defn- channel-at [^long c ^long shift]
+  (bit-and (bit-shift-right c shift) 0xFF))
+
+(defn- interpolate-argb [^long c0 ^long c1 ^double t]
+  (let [lerp (fn [^long shift]
+               (let [v0 (double (channel-at c0 shift))
+                     v1 (double (channel-at c1 shift))]
+                 (long (+ v0 (* (- v1 v0) t)))))]
+    (pack-argb (lerp 24) (lerp 16) (lerp 8) (lerp 0))))
+
+(defn- gradient-color-at
+  "Colour at position t in [0,1] over an ordered [[pos colour] ...] stop list."
+  [stops ^double t]
+  (let [n (count stops)
+        [p-first c-first] (nth stops 0)
+        [p-last c-last] (nth stops (dec n))]
+    (cond
+      (<= t (double p-first)) (stop-color->argb c-first)
+      (>= t (double p-last)) (stop-color->argb c-last)
+      :else
+      (loop [i 1]
+        (if (>= i n)
+          (stop-color->argb c-last)
+          (let [[p1 c1] (nth stops i)
+                p1 (double p1)]
+            (if (>= p1 t)
+              (let [[p0 c0] (nth stops (dec i))
+                    p0 (double p0)
+                    span (- p1 p0)
+                    f (if (zero? span) 0.0 (/ (- t p0) span))]
+                (interpolate-argb (long (stop-color->argb c0))
+                                  (long (stop-color->argb c1))
+                                  f))
+              (recur (inc i)))))))))
+
+(defn- bake-gradient-bands
+  [stops ^long n-bands]
+  (let [bands (int-array n-bands)
+        last-idx (double (max 1 (dec n-bands)))]
+    (dotimes [i n-bands]
+      (aset bands i (unchecked-int (long (gradient-color-at stops (/ (double i) last-idx))))))
+    bands))
+
+(defn bake-gradient!
+  "Pre-compute evenly spaced bands so the render path never walks the stop list.
+   Resolution follows the node's pixel size, as in 1.21.1."
+  [^INode node]
+  (when (nil? (.getOSlot node SLOT-GRAD-BAKED))
+    (when-let [stops (.getOSlot node SLOT-GRAD-STOPS)]
+      (when (and (vector? stops) (seq stops))
+        (let [px-w (* (.getW node) (.getCumScale node))
+              px-h (* (.getH node) (.getCumScale node))
+              n-bands (long (max 16.0 (min 128.0 (max px-w px-h))))]
+          (.setOSlot node SLOT-GRAD-BAKED (bake-gradient-bands stops n-bands)))))))
+
+(defn- apply-band-alpha [^long c ^double alpha]
+  (if (>= alpha 0.999)
+    c
+    (pack-argb (long (* alpha (double (channel-at c 24))))
+               (channel-at c 16) (channel-at c 8) (channel-at c 0))))
+
+(defn render-gradient!
+  "Multi-stop gradient. A vertical ramp maps straight onto fillGradient, whose
+   two colours are the top and bottom edges; a horizontal one has no such
+   primitive in 26.2, so it is drawn as flat vertical strips at the baked band
+   resolution."
+  [^GuiGraphicsExtractor gg ^INode node]
+  (when-let [bands (.getOSlot node SLOT-GRAD-BAKED)]
+    (let [^ints bands bands
+          n (alength bands)
+          x (node-abs-x node) y (node-abs-y node)
+          w (scaled-w node) h (scaled-h node)
+          raw-alpha (double (.getDSlot node SLOT-GRAD-ALPHA))
+          alpha (if (pos? raw-alpha) (min 1.0 raw-alpha) 1.0)
+          angle (double (.getDSlot node SLOT-GRAD-ANGLE))
+          horizontal? (< (Math/abs (- angle 90.0)) 45.0)
+          segments (dec n)]
+      (when (and (pos? segments) (pos? w) (pos? h))
+        (if horizontal?
+          (let [band-w (/ w (double segments))]
+            (dotimes [i segments]
+              (.fill gg
+                     (unchecked-int (+ x (* band-w i)))
+                     (unchecked-int y)
+                     (unchecked-int (Math/ceil (+ x (* band-w (inc i)))))
+                     (unchecked-int (+ y h))
+                     (unchecked-int (apply-band-alpha (aget bands i) alpha)))))
+          (let [band-h (/ h (double segments))]
+            (dotimes [i segments]
+              (.fillGradient gg
+                             (unchecked-int x)
+                             (unchecked-int (+ y (* band-h i)))
+                             (unchecked-int (+ x w))
+                             (unchecked-int (Math/ceil (+ y (* band-h (inc i)))))
+                             (unchecked-int (apply-band-alpha (aget bands i) alpha))
+                             (unchecked-int (apply-band-alpha (aget bands (inc i)) alpha))))))))))
 
 (defn render-line! [^GuiGraphicsExtractor gg ^INode node]
   (let [x1 (.getDSlot node 0) y1 (.getDSlot node 1)
@@ -390,20 +708,34 @@
 (def ^:private SLOT-P3D-BLOCK 1)
 (def ^:private SLOT-P3D-ITEM 2)
 (def ^:private SLOT-P3D-BAKED 4)
+(def ^:private SLOT-P3D-SPEED 0)
 (def ^:private SLOT-P3D-SCALE 1)
+(def ^:private SLOT-P3D-YOFF 2)
+
+(defn- item-stack-of
+  ^ItemStack [^Identifier id]
+  (let [^Item item (.getValue BuiltInRegistries/ITEM id)]
+    (when (and item (not= item Items/AIR))
+      (ItemStack. item))))
+
+(defn- block-stack-of
+  ^ItemStack [^Identifier id]
+  (let [^Block block (.getValue BuiltInRegistries/BLOCK id)]
+    (when (and block (not= block Blocks/AIR))
+      (let [stack (ItemStack. (.asItem block))]
+        (when-not (.isEmpty stack) stack)))))
 
 (defn- resolve-preview-stack
+  "Prefer the registry the caller named, but fall back to the other one: a
+   :block view of something registered only as an item (or a block with no item
+   form) would otherwise silently render nothing."
   ^ItemStack [id-value block?]
   (when (string? id-value)
     (try
       (let [id (ResourceLocations/parse id-value)]
         (if block?
-          (let [^Block block (.getValue BuiltInRegistries/BLOCK id)]
-            (when (and block (not= block Blocks/AIR))
-              (ItemStack. (.asItem block))))
-          (let [^Item item (.getValue BuiltInRegistries/ITEM id)]
-            (when (and item (not= item Items/AIR))
-              (ItemStack. item)))))
+          (or (block-stack-of id) (item-stack-of id))
+          (or (item-stack-of id) (block-stack-of id))))
       (catch Throwable _ nil))))
 
 (defn bake-preview-item! [^INode node]
@@ -411,17 +743,48 @@
     (.setOSlot node SLOT-PREVIEW-BAKED
                (resolve-preview-stack (.getOSlot node SLOT-PREVIEW-ITEM-ID) false))))
 
+(defn- turntable-phase
+  "Upstream drawBlock spins at (millis / 80) degrees, so a full turn takes ~29s.
+   Keeping the same period leaves 26.2 in step with the other versions."
+  ^double [^double speed]
+  (Math/toRadians (* speed (mod (/ (System/currentTimeMillis) 80.0) 360.0))))
+
 (defn- render-stack!
-  [^GuiGraphicsExtractor gg ^INode node ^ItemStack stack extra-scale]
+  "Draw an ItemStack centred in the node.
+
+   `spin` > 0 adds the 2.5D turntable approximation. A real Y rotation is out of
+   reach here: 26.2 hands items to the GUI renderer as a GuiItemRenderState
+   carrying only a 2D affine, and the perspective camera 1.21.1 sets up has no
+   equivalent short of registering a picture-in-picture renderer with its own
+   framebuffer per node. What an affine *can* reproduce is the silhouette: a
+   cube turning about its vertical axis is widest corner-on and a factor of
+   sqrt(2) narrower face-on, which is where the squeeze below comes from. The
+   shear rides the same 90-degree cycle and supplies the direction of the turn,
+   which the symmetric squeeze alone cannot."
+  [^GuiGraphicsExtractor gg ^INode node ^ItemStack stack extra-scale spin y-off]
   (let [x (node-abs-x node)
         y (node-abs-y node)
         w (scaled-w node)
         h (scaled-h node)
-        scale (float (* (min (/ w 16.0) (/ h 16.0)) extra-scale))
+        spin (double spin)
+        scale (float (* (min (/ w 16.0) (/ h 16.0)) (double extra-scale)))
         ^Matrix3x2fStack pose (.pose gg)]
     (.pushMatrix pose)
     (try
-      (.translate pose (float (+ x (/ w 2.0))) (float (+ y (/ h 2.0))))
+      (.translate pose
+                  (float (+ x (/ w 2.0)))
+                  (float (+ y (/ h 2.0) (* (double y-off) scale))))
+      (when (pos? spin)
+        (let [phase (turntable-phase spin)
+              ;; The default GUI view is corner-on, so face-on is a quarter
+              ;; turn away.
+              side (+ phase (/ Math/PI 4.0))
+              squeeze (/ (+ (Math/abs (Math/cos side)) (Math/abs (Math/sin side)))
+                         (Math/sqrt 2.0))
+              lean (* 0.08 (Math/sin (* 4.0 phase)))]
+          (.mul pose (Matrix3x2f. (float 1.0) (float 0.0) (float lean)
+                                  (float 1.0) (float 0.0) (float 0.0)))
+          (.scale pose (float squeeze) (float 1.0))))
       (.scale pose scale scale)
       (.fakeItem gg stack -8 -8)
       (finally
@@ -429,7 +792,7 @@
 
 (defn render-preview-item! [^GuiGraphicsExtractor gg ^INode node]
   (when-let [^ItemStack stack (.getOSlot node SLOT-PREVIEW-BAKED)]
-    (render-stack! gg node stack 1.0)))
+    (render-stack! gg node stack 1.0 0.0 0.0)))
 
 (defn bake-preview-3d! [^INode node]
   (when (nil? (.getOSlot node SLOT-P3D-BAKED))
@@ -438,9 +801,13 @@
       (.setOSlot node SLOT-P3D-BAKED (resolve-preview-stack id-value block?)))))
 
 (defn render-preview-3d! [^GuiGraphicsExtractor gg ^INode node]
-  (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
-    (let [requested-scale (.getDSlot node SLOT-P3D-SCALE)]
-      (render-stack! gg node stack (if (pos? requested-scale) requested-scale 1.0)))))
+  (when (.isVisible node)
+    (when-let [^ItemStack stack (.getOSlot node SLOT-P3D-BAKED)]
+      (let [requested-scale (double (.getDSlot node SLOT-P3D-SCALE))]
+        (render-stack! gg node stack
+                       (if (pos? requested-scale) requested-scale 1.0)
+                       (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
+                       (double (.getDSlot node SLOT-P3D-YOFF)))))))
 
 (def ^:private crosshair-ring-unit-vecs
   (mapv (fn [idx]
@@ -483,10 +850,10 @@
    :image           {:render! render-image!           :bake! bake-image!}
    :text            {:render! render-text!            :bake! bake-text!}
    :progress        {:render! render-progress!        :bake! bake-progress!}
-   :depth-mask      {:render! render-depth-mask!      :bake! nil}
-   :shader-quad     {:render! render-shader-quad!     :bake! nil}
-   :shader-ring     {:render! render-shader-ring!     :bake! nil}
-   :shader-progress {:render! render-shader-progress! :bake! nil}
+   :depth-mask      {:render! render-depth-mask!      :bake! bake-depth-mask!}
+   :shader-quad     {:render! render-shader-quad!     :bake! bake-shader-quad!}
+   :shader-ring     {:render! render-shader-ring!     :bake! bake-shader-ring!}
+   :shader-progress {:render! render-shader-progress! :bake! bake-shader-progress!}
    :gradient        {:render! render-gradient!        :bake! bake-gradient!}
    :line            {:render! render-line!            :bake! nil}
    :group           {:render! nil                     :bake! nil}

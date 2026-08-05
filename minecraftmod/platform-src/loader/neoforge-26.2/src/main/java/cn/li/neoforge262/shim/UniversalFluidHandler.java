@@ -1,78 +1,127 @@
 package cn.li.neoforge262.shim;
 
 import clojure.lang.IFn;
-import net.neoforged.neoforge.fluids.FluidStack;
-import net.neoforged.neoforge.fluids.capability.IFluidHandler;
+import net.neoforged.neoforge.transfer.ResourceHandler;
+import net.neoforged.neoforge.transfer.TransferPreconditions;
+import net.neoforged.neoforge.transfer.fluid.FluidResource;
+import net.neoforged.neoforge.transfer.transaction.SnapshotJournal;
+import net.neoforged.neoforge.transfer.transaction.TransactionContext;
 
 /**
- * Java skeleton for {@link IFluidHandler} — replaces Clojure reify on Forge MC interfaces.
+ * Native 26.2 fluid resource handler backed by Clojure function pointers.
  */
-public class UniversalFluidHandler implements IFluidHandler {
-    private final IFn getTanksFn;
-    private final IFn getFluidInTankFn;
-    private final IFn getTankCapacityFn;
-    private final IFn isFluidValidFn;
-    private final IFn fillFn;
-    private final IFn drainMaxFn;
-    private final IFn drainResourceFn;
+public final class UniversalFluidHandler implements ResourceHandler<FluidResource> {
+    private final IFn sizeFn;
+    private final IFn getResourceFn;
+    private final IFn getAmountFn;
+    private final IFn getCapacityFn;
+    private final IFn isValidFn;
+    private final IFn insertFn;
+    private final IFn extractFn;
+    private final SnapshotJournal<TankSnapshot[]> journal = new SnapshotJournal<>() {
+        @Override
+        protected TankSnapshot[] createSnapshot() {
+            int size = size();
+            TankSnapshot[] snapshot = new TankSnapshot[size];
+            for (int i = 0; i < size; i++) {
+                snapshot[i] = new TankSnapshot(getResource(i), getAmountAsLong(i));
+            }
+            return snapshot;
+        }
 
-    public UniversalFluidHandler(IFn getTanksFn,
-                                 IFn getFluidInTankFn,
-                                 IFn getTankCapacityFn,
-                                 IFn isFluidValidFn,
-                                 IFn fillFn,
-                                 IFn drainMaxFn,
-                                 IFn drainResourceFn) {
-        this.getTanksFn = getTanksFn;
-        this.getFluidInTankFn = getFluidInTankFn;
-        this.getTankCapacityFn = getTankCapacityFn;
-        this.isFluidValidFn = isFluidValidFn;
-        this.fillFn = fillFn;
-        this.drainMaxFn = drainMaxFn;
-        this.drainResourceFn = drainResourceFn;
+        @Override
+        protected void revertToSnapshot(TankSnapshot[] snapshot) {
+            if (snapshot == null) {
+                return;
+            }
+            int size = Math.min(size(), snapshot.length);
+            for (int i = 0; i < size; i++) {
+                FluidResource current = getResource(i);
+                long currentAmount = getAmountAsLong(i);
+                if (!current.isEmpty() && currentAmount > 0L) {
+                    invokeAmount(extractFn, i, current, currentAmount);
+                }
+                TankSnapshot target = snapshot[i];
+                if (target != null && !target.resource().isEmpty() && target.amount() > 0L) {
+                    invokeAmount(insertFn, i, target.resource(), target.amount());
+                }
+            }
+        }
+    };
+
+    public UniversalFluidHandler(IFn sizeFn,
+                                 IFn getResourceFn,
+                                 IFn getAmountFn,
+                                 IFn getCapacityFn,
+                                 IFn isValidFn,
+                                 IFn insertFn,
+                                 IFn extractFn) {
+        this.sizeFn = sizeFn;
+        this.getResourceFn = getResourceFn;
+        this.getAmountFn = getAmountFn;
+        this.getCapacityFn = getCapacityFn;
+        this.isValidFn = isValidFn;
+        this.insertFn = insertFn;
+        this.extractFn = extractFn;
     }
 
     @Override
-    public int getTanks() {
-        return getTanksFn == null ? 0 : ((Number) getTanksFn.invoke()).intValue();
+    public int size() {
+        return sizeFn == null ? 0 : ((Number) sizeFn.invoke()).intValue();
     }
 
     @Override
-    public FluidStack getFluidInTank(int tank) {
-        if (getFluidInTankFn == null) return FluidStack.EMPTY;
-        FluidStack stack = (FluidStack) getFluidInTankFn.invoke(tank);
-        return stack != null ? stack : FluidStack.EMPTY;
+    public FluidResource getResource(int index) {
+        if (getResourceFn == null) {
+            return FluidResource.EMPTY;
+        }
+        FluidResource resource = (FluidResource) getResourceFn.invoke(index);
+        return resource == null ? FluidResource.EMPTY : resource;
     }
 
     @Override
-    public int getTankCapacity(int tank) {
-        if (getTankCapacityFn == null) return 0;
-        return ((Number) getTankCapacityFn.invoke(tank)).intValue();
+    public long getAmountAsLong(int index) {
+        return getAmountFn == null ? 0L : ((Number) getAmountFn.invoke(index)).longValue();
     }
 
     @Override
-    public boolean isFluidValid(int tank, FluidStack stack) {
-        if (isFluidValidFn == null) return true;
-        return (boolean) isFluidValidFn.invoke(tank, stack);
+    public long getCapacityAsLong(int index, FluidResource resource) {
+        return getCapacityFn == null ? 0L : ((Number) getCapacityFn.invoke(index, resource)).longValue();
     }
 
     @Override
-    public int fill(FluidStack resource, FluidAction action) {
-        if (fillFn == null) return 0;
-        return ((Number) fillFn.invoke(resource, action)).intValue();
+    public boolean isValid(int index, FluidResource resource) {
+        return isValidFn == null || (boolean) isValidFn.invoke(index, resource);
     }
 
     @Override
-    public FluidStack drain(int maxDrain, FluidAction action) {
-        if (drainMaxFn == null) return FluidStack.EMPTY;
-        FluidStack stack = (FluidStack) drainMaxFn.invoke(maxDrain, action);
-        return stack != null ? stack : FluidStack.EMPTY;
+    public int insert(int index, FluidResource resource, int amount, TransactionContext transaction) {
+        TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+        if (amount == 0 || insertFn == null || !isValid(index, resource)) {
+            return 0;
+        }
+        journal.updateSnapshots(transaction);
+        return invokeAmount(insertFn, index, resource, amount);
     }
 
     @Override
-    public FluidStack drain(FluidStack resource, FluidAction action) {
-        if (drainResourceFn == null) return FluidStack.EMPTY;
-        FluidStack stack = (FluidStack) drainResourceFn.invoke(resource, action);
-        return stack != null ? stack : FluidStack.EMPTY;
+    public int extract(int index, FluidResource resource, int amount, TransactionContext transaction) {
+        TransferPreconditions.checkNonEmptyNonNegative(resource, amount);
+        if (amount == 0 || extractFn == null || !resource.equals(getResource(index))) {
+            return 0;
+        }
+        journal.updateSnapshots(transaction);
+        return invokeAmount(extractFn, index, resource, amount);
+    }
+
+    private static int invokeAmount(IFn fn, int index, FluidResource resource, long amount) {
+        if (fn == null || amount <= 0L) {
+            return 0;
+        }
+        int bounded = (int) Math.min(Integer.MAX_VALUE, amount);
+        return ((Number) fn.invoke(index, resource, bounded)).intValue();
+    }
+
+    private record TankSnapshot(FluidResource resource, long amount) {
     }
 }

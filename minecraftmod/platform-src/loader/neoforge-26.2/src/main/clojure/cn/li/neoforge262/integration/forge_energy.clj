@@ -1,17 +1,15 @@
 (ns cn.li.neoforge262.integration.forge-energy
   "Forge Energy integration for descriptor-declared content endpoints.
 
-  26.2: expose Capabilities.Energy.BLOCK (EnergyHandler) by wrapping the
-  existing IEnergyStorage ForgeEnergyAdapter through EnergyStorageAsHandler."
+  26.2: expose Capabilities.Energy.BLOCK through a native EnergyHandler."
   (:require [cn.li.mcmod.capability.registry :as cap-registry]
             [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
             [cn.li.mcmod.content.registry :as content-registry]
             [cn.li.mcmod.block.tile-dsl :as tdsl]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.neoforge262.capability CapabilityRegistry ForgeEnergyAdapter
-            EnergyStorageAsHandler ForgeProvidedCapabilitySupport]
+            ForgeProvidedCapabilitySupport]
            [cn.li.mcmod.energy IEnergyCapable]
-           [net.neoforged.neoforge.energy IEnergyStorage]
            [net.neoforged.neoforge.transfer.energy EnergyHandler]))
 
 (defn- fe-conversion-rate
@@ -19,7 +17,7 @@
   (double (energy-hooks/forge-energy-conversion-rate)))
 
 (defn- create-forge-energy-adapter
-  ^IEnergyStorage
+  ^EnergyHandler
   [^IEnergyCapable energy-capable conversion-rate]
   (ForgeEnergyAdapter. energy-capable (double conversion-rate)))
 
@@ -53,8 +51,7 @@
   (try
     (some (fn [descriptor]
             (when-let [content-energy (content-energy-capability be descriptor)]
-              (EnergyStorageAsHandler/wrap
-               (create-forge-energy-adapter content-energy (fe-conversion-rate)))))
+              (create-forge-energy-adapter content-energy (fe-conversion-rate))))
           (forge-energy-descriptors))
     (catch Exception e
       (log/error "Error creating Forge EnergyHandler capability:" (ex-message e))

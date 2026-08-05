@@ -7,6 +7,7 @@
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
            [cn.li.mc262.client.effects LevelEffectGeometry]
+           [cn.li.mc262.client.render PlasmaRenderTypes]
            [cn.li.mcmod.math V3]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
@@ -347,34 +348,60 @@
         up (V3/normalize (V3/cross to-camera right))]
     [center-v3 right up]))
 
-(defn- emit-colored-vertex!
-  [^VertexConsumer consumer ^PoseStack$Pose pose ^V3 p r g b a]
-  (LevelEffectGeometry/coloredVertex
+(def ^:private plasma-slices
+  "Depth-separated procedural slices used on 26.2. The collector API binds only
+   vanilla global/transform groups, so arbitrary per-op ball-array UBOs cannot
+   be attached like 1.21.1 ShaderInstance uniforms. These slices preserve the
+   animated noisy density/palette and give the orb visible depth, but they are
+   an approximation of the 20-step multi-ball ray march."
+  [{:scale 1.50 :depth -0.20 :rgba [70 190 255 48]}
+   {:scale 1.18 :depth -0.06 :rgba [92 205 255 76]}
+   {:scale 0.88 :depth 0.08 :rgba [225 126 245 112]}
+   {:scale 0.58 :depth 0.18 :rgba [238 220 255 148]}])
+
+(defn- emit-plasma-vertex!
+  [^VertexConsumer consumer ^PoseStack$Pose pose ^V3 p u v r g b a]
+  (LevelEffectGeometry/plasmaVertex
     consumer pose
     (float (.-x p)) (float (.-y p)) (float (.-z p))
+    (float u) (float v)
     (int r) (int g) (int b) (int a)))
+
+(defn- emit-plasma-slice!
+  [^VertexConsumer consumer ^PoseStack$Pose pose
+   ^V3 center ^V3 right ^V3 up ^V3 to-camera radius alpha
+   {:keys [scale depth rgba]}]
+  (let [[r g b slice-alpha] rgba
+        opacity (int (Math/round (* (double alpha)
+                                    (/ (double slice-alpha) 255.0))))
+        slice-center (V3/add center (V3/scale to-camera (* radius (double depth))))
+        side (V3/scale right (* radius (double scale)))
+        lift (V3/scale up (* radius (double scale)))
+        p0 (V3/add (V3/sub slice-center side) lift)
+        p1 (V3/add (V3/add slice-center side) lift)
+        p2 (V3/sub (V3/add slice-center side) lift)
+        p3 (V3/sub (V3/sub slice-center side) lift)]
+    (emit-plasma-vertex! consumer pose p0 0.0 0.0 r g b opacity)
+    (emit-plasma-vertex! consumer pose p1 1.0 0.0 r g b opacity)
+    (emit-plasma-vertex! consumer pose p2 1.0 1.0 r g b opacity)
+    (emit-plasma-vertex! consumer pose p3 0.0 1.0 r g b opacity)))
 
 (defn- emit-plasma-ball!
   [^VertexConsumer consumer ^PoseStack$Pose pose camera-pos
-   {:keys [x y z size] :as ball} alpha]
+   {:keys [size] :as ball} alpha]
   (let [[^V3 center ^V3 right ^V3 up] (billboard-basis camera-pos ball)
-        radius (max 0.05 (double (or size 0.5)))
-        side (V3/scale right radius)
-        lift (V3/scale up radius)
-        p0 (V3/add (V3/sub center side) lift)
-        p1 (V3/add (V3/add center side) lift)
-        p2 (V3/sub (V3/add center side) lift)
-        p3 (V3/sub (V3/sub center side) lift)]
-    (emit-colored-vertex! consumer pose p0 110 225 255 alpha)
-    (emit-colored-vertex! consumer pose p1 70 175 255 alpha)
-    (emit-colored-vertex! consumer pose p2 40 110 255 alpha)
-    (emit-colored-vertex! consumer pose p3 70 175 255 alpha)))
+        ^V3 camera (map->v3 camera-pos)
+        to-camera (V3/normalize (V3/sub camera center))
+        radius (max 0.05 (double (or size 0.5)))]
+    (doseq [slice plasma-slices]
+      (emit-plasma-slice!
+        consumer pose center right up to-camera radius alpha slice))))
 
 (defn- emit-plasma-op!
   [^VertexConsumer consumer ^PoseStack$Pose pose camera-pos
    {:keys [center radius alpha balls]}]
   (let [alpha-channel (color-channel-255 alpha 1.0)
-        visible-balls (or (seq balls)
+        visible-balls (or (seq (take 16 balls))
                           [(assoc (or center {:x 0.0 :y 0.0 :z 0.0})
                                   :size (double (or radius 0.75)))])]
     (doseq [ball visible-balls]
@@ -438,7 +465,7 @@
                   (emit-quad! consumer pose op))))))
         (when (seq plasma)
           (submit-custom-geometry!
-            submit-node-collector pose-stack (RenderTypes/lightning)
+            submit-node-collector pose-stack (PlasmaRenderTypes/plasmaBody)
             (fn [pose consumer]
               (doseq [op plasma]
                 (emit-plasma-op! consumer pose camera-pos op)))))
