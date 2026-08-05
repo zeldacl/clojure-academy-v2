@@ -1322,11 +1322,27 @@
 ;; draw-tape! — flat tape render loop
 ;; ============================================================================
 
+(defn- clip-node-screen-rect
+  "Screen-space AABB for a clip group (abs layout + host left/top)."
+  [^INode nd ^double left ^double top]
+  (let [x0 (+ left (.getAbsX nd))
+        y0 (+ top (.getAbsY nd))
+        x1 (+ x0 (* (.getW nd) (.getCumScale nd)))
+        y1 (+ y0 (* (.getH nd) (.getCumScale nd)))]
+    [(int (Math/floor x0)) (int (Math/floor y0))
+     (int (Math/ceil x1)) (int (Math/ceil y1))]))
+
+(defn- intersect-scissor
+  [[ax0 ay0 ax1 ay1] [bx0 by0 bx1 by1]]
+  [(max ax0 bx0) (max ay0 by0) (min ax1 bx1) (min ay1 by1)])
+
 (defn draw-tape!
   "Render the flat tape: iterate Object[].
    Node with RENDER_DIRTY → run :bake! first (resolve textures / bake text /
    pre-compute gradient bands into backend slots), clear the flag, then :render!
-   reads only cached fields. Sentinels → PoseStack push/pop.
+   reads only cached fields. Sentinels → PoseStack push/pop; push-clip also
+   enables GuiGraphics scissor to the following clip-group node's bounds
+   (nested clips intersect).
 
    Node abs coords are 0-rooted; `left`/`top` are the GUI's on-screen origin
    (container leftPos/topPos, standalone screen offset, or an embedded widget's
@@ -1339,28 +1355,56 @@
         push-clip ui-layout/push-clip-sentinel
         pop-clip  ui-layout/pop-clip-sentinel
         push-xf   ui-layout/push-transform-sentinel
-        pop-xf    ui-layout/pop-transform-sentinel]
+        pop-xf    ui-layout/pop-transform-sentinel
+        left (double left)
+        top (double top)]
     (when (pos? n)
-      (let [^PoseStack pose (.pose gg)]
+      (let [^PoseStack pose (.pose gg)
+            clip-stack (java.util.ArrayDeque.)]
         (.pushPose pose)
-        (.translate pose (double left) (double top) 0.0)
+        (.translate pose left top 0.0)
         (loop [i 0]
           (when (< i n)
             (let [entry (aget tape i)]
               (if (instance? INode entry)
                 (let [^INode nd entry
                       kdef (get kind-renderers (.getKind nd))]
-                  ;; Bake on dirty: only recompute caches when a binding wrote the node
                   (when (.hasFlag nd node/FLAG-RENDER-DIRTY)
                     (when-let [bake-fn (:bake! kdef)]
                       (bake-fn nd))
                     (.clearFlag nd node/FLAG-RENDER-DIRTY))
                   (when-let [render-fn (:render! kdef)]
                     (render-fn gg nd)))
-                ;; Sentinel dispatch
-                (cond (identical? push-clip entry) (.pushPose pose)
-                      (identical? pop-clip entry)  (.popPose pose)
-                      (identical? push-xf entry)   (.pushPose pose)
-                      (identical? pop-xf entry)    (.popPose pose))))
+                (cond
+                  (identical? push-clip entry)
+                  (do
+                    (.pushPose pose)
+                    (when (< (inc i) n)
+                      (let [clip-nd (aget tape (inc i))]
+                        (when (instance? INode clip-nd)
+                          (let [rect (clip-node-screen-rect ^INode clip-nd left top)
+                                rect (if (.isEmpty clip-stack)
+                                       rect
+                                       (intersect-scissor (.peek clip-stack) rect))
+                                [x0 y0 x1 y1] rect]
+                            (.push clip-stack rect)
+                            (when (and (< x0 x1) (< y0 y1))
+                              (.enableScissor gg x0 y0 x1 y1)))))))
+
+                  (identical? pop-clip entry)
+                  (do
+                    (when-not (.isEmpty clip-stack)
+                      (.pop clip-stack))
+                    (if (.isEmpty clip-stack)
+                      (.disableScissor gg)
+                      (let [[x0 y0 x1 y1] (.peek clip-stack)]
+                        (when (and (< x0 x1) (< y0 y1))
+                          (.enableScissor gg x0 y0 x1 y1))))
+                    (.popPose pose))
+
+                  (identical? push-xf entry) (.pushPose pose)
+                  (identical? pop-xf entry)  (.popPose pose))))
             (recur (unchecked-inc-int i))))
-        (.popPose pose)))))
+        (.popPose pose)
+        (when-not (.isEmpty clip-stack)
+          (.disableScissor gg))))))
