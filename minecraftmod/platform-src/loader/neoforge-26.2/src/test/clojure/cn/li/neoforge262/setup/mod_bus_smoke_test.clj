@@ -8,6 +8,16 @@
     (is (fn? mod-bus/register-config-phase!))
     (is (fn? mod-bus/register-registry-phase!))))
 
+(deftest imc-dispatcher-wired-into-capability-phase
+  (testing "capability phase registers InterModProcessEvent listener"
+    (require 'cn.li.neoforge262.setup.imc-dispatcher)
+    (is (fn? @(resolve 'cn.li.neoforge262.setup.imc-dispatcher/register-imc-listener!)))
+    (let [src (slurp
+               (or (let [f (java.io.File. "platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/setup/capability_setup.clj")]
+                     (when (.exists f) f))
+                   (java.io.File. "../platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/setup/capability_setup.clj")))]
+      (is (re-find #"imc-dispatcher/register-imc-listener!" src)))))
+
 (deftest config-registration-callable
   (testing "register-all! is callable from bridge module"
     (let [bridge-ns (symbol "cn.li.neoforge262.config.bridge")]
