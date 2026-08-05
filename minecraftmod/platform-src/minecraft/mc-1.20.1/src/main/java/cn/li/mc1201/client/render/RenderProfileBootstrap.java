@@ -1,6 +1,6 @@
 package cn.li.mc1201.client.render;
 
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 
 /**
  * Shared client render bootstrap for content-provided render profile hooks.

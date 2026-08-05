@@ -2,7 +2,7 @@ package cn.li.neoforge1211.client;
 
 import cn.li.neoforge1211.MyMod1211;
 import cn.li.neoforge1211.client.render.ForgeClientRenderRegistry;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;

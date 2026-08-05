@@ -3,7 +3,7 @@ package cn.li.forge1201.event;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Var;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 

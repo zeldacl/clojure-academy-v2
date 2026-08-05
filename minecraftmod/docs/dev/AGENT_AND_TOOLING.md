@@ -10,10 +10,14 @@ This repository uses a single `:platform` Gradle project. Loader/version behavio
 - `platform-src/minecraft/base`: version-agnostic Minecraft glue (`cn.li.mcbase.*`).
 - `platform-src/minecraft/mc-1.20.1`: Minecraft 1.20.1 adaptation (`cn.li.mc1201.*`) plus version seam (`cn.li.mcver.*`).
 - `platform-src/minecraft/mc-1.21.1`: Minecraft 1.21.1 adaptation (`cn.li.mc1211.*`) plus version seam (`cn.li.mcver.*`).
+- `platform-src/minecraft/mc-26.2`: Minecraft 26.2 adaptation (`cn.li.mc262.*`) plus version seam (`cn.li.mcver.*`; contract shape).
 - `platform-src/loader/forge-1.20.1`: Forge loader entrypoints, metadata, events, and loader bindings.
 - `platform-src/loader/fabric-1.20.1`: Fabric loader entrypoints, metadata, events, and loader bindings.
-- `platform-src/loader/neoforge-1.21.1`: NeoForge loader entrypoints, metadata, events, and loader bindings.
+- `platform-src/loader/neoforge-shared`: NeoForge shared glue (`cn.li.neoforgebase.*`) for 1.21.1 + 26.2.
+- `platform-src/loader/neoforge-1.21.1`: NeoForge 1.21.1 loader entrypoints, metadata, events, and loader bindings.
+- `platform-src/loader/neoforge-26.2`: NeoForge 26.2 loader entrypoints (MDG / Java 25 / Gradle 9.2).
 - `platform`: the single Gradle platform project.
+- `platform-builds/mdg-gradle-9.2/`: isolated Gradle wrapper used by the `mc262-mdg-gradle-9.2` build profile.
 
 Use only the current target catalog architecture. Do not add root platform modules, platform SPI, task aliases, pass-through namespaces, or dual-track implementations.
 
@@ -25,16 +29,18 @@ Version-seam rules: [MC_VERSION_SEAM.md](MC_VERSION_SEAM.md). Loader hook capabi
 - Install clj-kondo binary: `cmd /c .\gradlew.bat downloadCljKondo`
 - Clojure lint gate (must run **per target** so that target's source roots are scanned): `.\scripts\target-gradle.ps1 <target-id> lintClojureNative`
 - Neutral-layer API gate: `cmd /c .\gradlew.bat verifyNeutralClojureNoMinecraftApis` (blocks `net.minecraft.*` / Forge / Fabric / NeoForge refs in `ac`/`mcmod`; clj-kondo hook also errors on `:import` there). Note: `:import` is **not** a Clojure reflection warning — Reflection Guard only catches untyped interop.
-- LVT strip (packaging): always on (`stripAotLvt` / `stripPlatformOutputLvt` / `stripShadowJarLvt`) for Loom 1.13 tiny-remapper. AOT also sets `-Dclojure.compile.elide-meta=[:doc]` (keeps `:file`/`:line`).
+- LVT strip (packaging): always on (`stripAotLvt` / `stripPlatformOutputLvt` / `stripShadowJarLvt`) for Loom 1.13 tiny-remapper. AOT also sets `-Dclojure.compile.elide-meta=[:doc]` (keeps `:file`/`:line`). MDG targets do not remap; LVT strip still runs for packaging hygiene where configured.
 - Forge compile: `.\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileClojure`
 - Fabric compile: `.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure`
-- NeoForge compile: `.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure`
+- NeoForge 1.21.1 compile: `.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure`
+- NeoForge 26.2 build: `.\scripts\target-gradle.ps1 neoforge-26.2 :platform:build` (requires JDK 25 / `MC_JAVA_HOME_25`)
 - Forge / Fabric / NeoForge lint:
   - `.\scripts\target-gradle.ps1 forge-1.20.1 lintClojureNative`
   - `.\scripts\target-gradle.ps1 fabric-1.20.1 lintClojureNative`
   - `.\scripts\target-gradle.ps1 neoforge-1.21.1 lintClojureNative`
+  - `.\scripts\target-gradle.ps1 neoforge-26.2 lintClojureNative`
 
-Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target-gradle.sh`; these are the only platform build entry points and select the target runtime from the catalog. Loom / clojurephant / shadow plugin versions come from the target's `buildProfile` in `platform-catalog.json` via `settings.gradle` `pluginManagement`.
+Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target-gradle.sh`; these are the only platform build entry points and select the target runtime from the catalog. Loom / MDG / clojurephant / shadow plugin versions come from the target's `buildProfile` in `platform-catalog.json` via `settings.gradle` `pluginManagement` (`toolchain`: `loom` or `mdg`).
 
 ## Architecture rules
 
@@ -44,7 +50,7 @@ Use `scripts/target-gradle.ps1`, `scripts/target-gradle.cmd`, or `scripts/target
 - `ac` and `mcmod` must not depend on Minecraft, Forge, Fabric, NeoForge, or other loader APIs.
 - Java entrypoints, client/datagen entrypoints, and loader metadata are allowed only because external frameworks require them. Internal pass-through namespaces are not allowed.
 - Datagen output belongs under `build/targets/<target-id>/platform/generated/datagen/<target-id>/`; do not write generated output back to source directories.
-- Do not add a real new-loader target, dependency, source tree, documentation promise, or release artifact unless the project explicitly decides to support it. Use synthetic catalog/sourceSet/capability fixtures to validate extensibility.
+- Do not add a real new-loader target, dependency, source tree, documentation promise, or release artifact unless the project explicitly decides to support it.
 
 ## Required gate
 

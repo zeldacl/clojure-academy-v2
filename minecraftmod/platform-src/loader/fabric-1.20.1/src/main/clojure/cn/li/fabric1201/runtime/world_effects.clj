@@ -25,7 +25,7 @@
                                (.moveTo bolt (double x) (double y) (double z))
                                (.setVisualOnly bolt (boolean visual-only?))
                                (boolean (.addFreshEntity level bolt)))))
-     :create-explosion-fn (fn [^ServerLevel level source x y z radius fire? terrain?]
+     :create-explosion-fn (fn [^ServerLevel level ^Entity source x y z radius fire? terrain?]
                             (try
                               (.explode level source (double x) (double y) (double z)
                                         (float radius) (boolean fire?)

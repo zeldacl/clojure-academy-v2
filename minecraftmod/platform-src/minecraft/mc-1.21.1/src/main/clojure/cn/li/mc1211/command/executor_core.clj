@@ -5,8 +5,7 @@
   `cn.li.mcmod.command.actions` seam. This shared Minecraft-version namespace
   intentionally avoids content player-state schemas."
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.advancements Advancement AdvancementProgress]
-           [net.minecraft.resources ResourceLocation]
+  (:import [net.minecraft.advancements AdvancementHolder AdvancementProgress]
            [cn.li.mcver ResourceLocations]
            [net.minecraft.server.level ServerPlayer]))
 
@@ -42,7 +41,7 @@
     (let [server (.getServer player)
           advancement-manager (.getAdvancements server)
           resource-loc (ResourceLocations/parse advancement-id)
-          ^Advancement advancement (.getAdvancement advancement-manager resource-loc)]
+          ^AdvancementHolder advancement (.get advancement-manager resource-loc)]
       (if-not advancement
         (do
           (send-feedback-fn "command.mcmod.grant_advancement.not_found" true [advancement-id] true)

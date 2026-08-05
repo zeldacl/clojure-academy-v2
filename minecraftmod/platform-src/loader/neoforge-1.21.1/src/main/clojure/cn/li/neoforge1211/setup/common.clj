@@ -14,7 +14,7 @@
             [cn.li.neoforge1211.integration.events.world :as world-events]
             [cn.li.neoforge1211.setup.event-registration :as event-registration]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.neoforge1211.bootstrap ForgeBootstrapGuard]))
+  (:import [cn.li.neoforgebase.bootstrap ForgeBootstrapGuard]))
 
 (defn run-common-setup!
   []

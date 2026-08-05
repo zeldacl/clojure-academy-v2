@@ -1,7 +1,7 @@
 package cn.li.neoforge1211.gametest;
 
 import clojure.lang.Keyword;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;

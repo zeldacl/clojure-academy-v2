@@ -4,12 +4,21 @@ Cross-version Minecraft API differences that callers must share are concentrated
 `cn.li.mcver.*` inside each **minecraft** catalog component
 (`platform-src/minecraft/mc-<version>/src/main/java/cn/li/mcver/`).
 
-Contracts are shaped for **1.21.1**. The **1.20.1** component implements the same
-public surface as a downgrade (older APIs behind the same method names). Call sites
-in versioned Minecraft/runtime code should prefer the seam over raw version forks
-when the difference is already covered here.
+Contracts are shaped for **26.2** (the newest supported version). The **1.21.1**
+component implements the same public surface as a downgrade, and **1.20.1**
+downgrades further still (older APIs behind the same method names, or — where 26.2
+uses a native type unavailable on an older version, e.g. `Identifier` vs
+`ResourceLocation`, or `ValueInput`/`ValueOutput` vs `CompoundTag` +
+`HolderLookup.Provider` — an opaque handle wrapping the older version's native type
+behind the same method names). Call sites in versioned Minecraft/runtime code should
+prefer the seam over raw version forks when the difference is already covered here.
 
-Loader components (`forge-1.20.1`, `fabric-1.20.1`, `neoforge-1.21.1`) must not own
+`verifyVersionSeamParity` only compares relative **type file names** under each
+version's `java/cn/li/mcver` tree, not method signatures — so a member's payload
+type may legitimately differ per version (see `ResourceLocations`, `Effects`,
+`BlockEntityIo` below) as long as every version defines the same set of seam types.
+
+Loader components (`forge-1.20.1`, `fabric-1.20.1`, `neoforge-1.21.1`, `neoforge-26.2`) must not own
 these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver` or
 `net.minecraft.*`.
 
@@ -35,8 +44,14 @@ component.
 - `of(String namespace, String path)`
 - `parse(String id)`
 
+26.2: `Identifier.fromNamespaceAndPath` / `Identifier.parse` (26.2 renamed
+`ResourceLocation` to `Identifier`; the factory method names were kept).  
 1.21.1: `ResourceLocation.fromNamespaceAndPath` / `parse`.  
 1.20.1: constructors.
+
+Return type is each version's native identifier type (`Identifier` on 26.2,
+`ResourceLocation` on 1.21.1/1.20.1) — callers stay on the versioned component,
+so this does not need a shared wrapper type.
 
 ### `ItemData`
 
@@ -46,29 +61,45 @@ component.
 - `setCustomData(ItemStack, CompoundTag)`
 - `removeCustomData(ItemStack)`
 
-1.21.1: `DataComponents.CUSTOM_DATA` + `CustomData`.  
+26.2 / 1.21.1: `DataComponents.CUSTOM_DATA` + `CustomData` (identical — 26.2 did not
+touch this API).  
 1.20.1: `ItemStack` CompoundTag (`hasTag` / `getOrCreateTag` / `setTag`).
 
 ### `Effects`
 
-- `holderOf(MobEffect)` / `holderOf(ResourceLocation)`
+- `holderOf(MobEffect)` / `holderOf(ResourceLocation|Identifier)`
 - `unwrap(Holder<MobEffect>)`
 - `hasEffect` / `getEffect` / `addEffect` / `removeEffect` on `LivingEntity` + `Holder`
 
-1.21.1: Holder-native registry / entity APIs.  
+26.2: Holder-native; `Registry#getHolder` was removed from the base `Registry`
+interface, so lookups go through `Registry#wrapAsHolder` (always succeeds) and
+`Registry#get(Identifier)`.  
+1.21.1: Holder-native registry / entity APIs (`getHolder`/`getResourceKey`).  
 1.20.1: wraps bare `MobEffect` with `BuiltInRegistries.MOB_EFFECT.wrapAsHolder` and unwraps at call sites.
+
+The `holderOf(ResourceLocation|Identifier)` overload's parameter is each version's
+native identifier type.
 
 ### `BlockEntityIo`
 
-- `Registries` — opaque registries handle
-- `NO_REGISTRIES` — sentinel for call sites that have no provider (1.20.1 unused; 1.21.1 throws if used for real IO)
-- `of(HolderLookup.Provider)` — 1.21.1 only helper to wrap a real provider
-- `load(BlockEntity, CompoundTag, Registries)`
-- `getUpdateTag(BlockEntity, Registries)`
-- `AdditionalWriter` — subclass callback when writing additional NBT
+- `Io` — opaque handle over a version's persistence payload
+- `ofValueInput(...)` / `ofValueOutput(...)` — wrap the payload into an `Io`
+- `load(BlockEntity, Io)`
+- `getUpdateTag(BlockEntity, ...)`
+- `AdditionalWriter` — subclass callback (`write(Io)`) when writing additional NBT
 
-1.21.1: `HolderLookup.Provider` via `loadWithComponents` / `getUpdateTag(provider)`.  
-1.20.1: ignores registries; `be.load(tag)` / `be.getUpdateTag()`.
+26.2: `Io` wraps the real `ValueInput`/`ValueOutput` (26.2 replaced
+`CompoundTag + HolderLookup.Provider` with a single `ValueInput`/`ValueOutput`
+parameter); unwrap with `asValueInput`/`asValueOutput`. `getUpdateTag(BlockEntity,
+HolderLookup.Provider)` — untouched by the ValueInput/ValueOutput migration.  
+1.21.1: `ValueInput`/`ValueOutput` do not exist yet, so `Io` wraps a
+`CompoundTag` + `HolderLookup.Provider` pair instead (`asTag`/`asRegistries`);
+`load` calls `loadWithComponents`. `getUpdateTag(BlockEntity, HolderLookup.Provider)`
+matches 26.2 exactly (the type exists on 1.21.1).  
+1.20.1: neither `ValueInput`/`ValueOutput` nor `HolderLookup.Provider` exist, so
+`Io` wraps a bare `CompoundTag` (`asTag`); `load` calls `be.load(tag)`.
+`getUpdateTag(BlockEntity)` drops the registries parameter entirely (no
+registries concept on this path in 1.20.1 vanilla).
 
 ### `render.ImmediateDraw`
 
@@ -78,6 +109,11 @@ component.
 
 Does not own shader/texture/blend/depth state — callers set those first.
 
+26.2: removed the `Tesselator`/`BufferUploader`/`VertexFormat.Mode` immediate-draw
+path as part of the RenderPipeline/GpuBuffer render rewrite. Porting the real
+immediate-draw path is deferred to the client-render phase of the 26.2 port; this
+seam keeps the 1.21.1 public surface intact and stubs every method to throw
+`UnsupportedOperationException` until the real implementation lands.  
 1.21.1: `Tesselator.begin` → `BufferBuilder.buildOrThrow` → `MeshData` → `BufferUploader.drawWithShader`; `endVertex` is a no-op.  
 1.20.1: `Tesselator.getBuilder()` + `endVertex` + `BufferUploader.drawWithShader(bb.end())`.
 
@@ -88,7 +124,7 @@ Kind: `minecraft-shared`
 Source: `platform-src/minecraft/base/src/main`
 
 Version-agnostic Minecraft glue shared by every target that includes this component
-(Forge 1.20.1, Fabric 1.20.1, NeoForge 1.21.1 today):
+(Forge 1.20.1, Fabric 1.20.1, NeoForge 1.21.1, NeoForge 26.2 today):
 
 - Java entity specs / hook registry under `cn.li.mcbase.entity.*`
 - Clojure platform op installers under `cn.li.mcbase.platform.*`
@@ -118,9 +154,13 @@ cmd /c .\gradlew.bat verifyCurrentPlatforms
 
 ## Adding a seam member
 
-1. Define the public API against 1.21.1 semantics.
-2. Implement under `platform-src/minecraft/mc-1.21.1/.../cn/li/mcver/`.
-3. Implement the same type names under `platform-src/minecraft/mc-1.20.1/.../cn/li/mcver/`
-   as a downgrade.
-4. Run `verifyVersionSeamParity`.
-5. Document the member in this file.
+1. Define the public API against 26.2 semantics (the newest supported version).
+2. Implement under `platform-src/minecraft/mc-26.2/.../cn/li/mcver/`.
+3. Implement the same type name (same relative path) under
+   `platform-src/minecraft/mc-1.21.1/.../cn/li/mcver/` as a downgrade — same method
+   names where the native type still exists on 1.21.1; otherwise an opaque handle
+   wrapping 1.21.1's available native type behind the same method names.
+4. Implement the same type name under `platform-src/minecraft/mc-1.20.1/.../cn/li/mcver/`
+   as a further downgrade from 1.21.1.
+5. Run `verifyVersionSeamParity`.
+6. Document the member in this file.

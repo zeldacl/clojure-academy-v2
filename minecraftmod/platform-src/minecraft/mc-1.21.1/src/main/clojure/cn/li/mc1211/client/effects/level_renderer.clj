@@ -3,6 +3,7 @@
   (:require [cn.li.mc1211.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
+           [cn.li.mc1211.bridge RenderInterop]
            [cn.li.mc1211.client.render ModRenderTypes]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
@@ -306,13 +307,17 @@
     :else
     [255 255 255 255]))
 
+(defn- channel->float
+  [c]
+  (float (/ (double c) 255.0)))
+
 (defn- emit-line-vertex!
-  [^VertexConsumer vc mat x y z r g b a]
-  (-> vc
-      (.vertex mat (float x) (float y) (float z))
-      (.color (int r) (int g) (int b) (int a))
-      (.normal 0.0 1.0 0.0)
-      (.endVertex)))
+  [^VertexConsumer vc ^Matrix4f mat x y z r g b a]
+  (let [v (Vector3f. (float x) (float y) (float z))]
+    (.transformPosition mat v)
+    (RenderInterop/addColoredVertex vc (.-x v) (.-y v) (.-z v)
+                                    (channel->float r) (channel->float g)
+                                    (channel->float b) (channel->float a))))
 
 (defn- emit-line!
   [^VertexConsumer vc mat {:keys [^V3 p1 ^V3 p2 color]}]
@@ -321,16 +326,15 @@
     (emit-line-vertex! vc mat (.-x p2) (.-y p2) (.-z p2) r g b a)))
 
 (defn- emit-quad-vertex!
-  [^VertexConsumer vc mat ^V3 p u v color]
+  [^VertexConsumer vc ^PoseStack pose-stack ^V3 p u v color]
   (let [[a r g b] (color-int→channels color)]
-    (-> vc
-        (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
-        (.color (int r) (int g) (int b) (int a))
-        (.uv (float u) (float v))
-        (.overlayCoords (int OverlayTexture/NO_OVERLAY))
-        (.uv2 (int full-bright-uv2))
-        (.normal 0.0 1.0 0.0)
-        (.endVertex))))
+    (RenderInterop/submitVertex vc pose-stack
+                                (float (.-x p)) (float (.-y p)) (float (.-z p))
+                                (channel->float r) (channel->float g)
+                                (channel->float b) (channel->float a)
+                                (float u) (float v)
+                                (int OverlayTexture/NO_OVERLAY) (int full-bright-uv2)
+                                (float 0.0) (float 1.0) (float 0.0))))
 
 (defn- emit-quad!
   "Emit ONE quad as exactly 4 vertices.
@@ -346,11 +350,11 @@
   p0/p1 are the two corners at the segment's start and p2/p3 at its end (see
   render-util's beam quads), so `u` runs along the beam and `v` across its
   width."
-  [^VertexConsumer vc mat {:keys [p0 p1 p2 p3 u0 u1 v0 v1 color]}]
-  (emit-quad-vertex! vc mat p0 u0 v0 color)
-  (emit-quad-vertex! vc mat p1 u0 v1 color)
-  (emit-quad-vertex! vc mat p2 u1 v1 color)
-  (emit-quad-vertex! vc mat p3 u1 v0 color))
+  [^VertexConsumer vc ^PoseStack pose-stack {:keys [p0 p1 p2 p3 u0 u1 v0 v1 color]}]
+  (emit-quad-vertex! vc pose-stack p0 u0 v0 color)
+  (emit-quad-vertex! vc pose-stack p1 u0 v1 color)
+  (emit-quad-vertex! vc pose-stack p2 u1 v1 color)
+  (emit-quad-vertex! vc pose-stack p3 u1 v0 color))
 
 (defn- sort-ops
   "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
@@ -434,10 +438,10 @@
                        (aget row 8) (aget row 9) (aget row 10) (aget row 11)
                        (aget row 12) (aget row 13) (aget row 14) (aget row 15))))))))
 
-(defn- emit-plasma-vertex! [^VertexConsumer vc mat ^V3 p]
-  (-> vc
-      (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
-      (.endVertex)))
+(defn- emit-plasma-vertex! [^VertexConsumer vc ^Matrix4f mat ^V3 p]
+  (let [v (Vector3f. (float (.-x p)) (float (.-y p)) (float (.-z p)))]
+    (.transformPosition mat v)
+    (RenderInterop/addVertex vc (.-x v) (.-y v) (.-z v))))
 
 (def ^:private world-up (V3. 0.0 1.0 0.0))
 (def ^:private axis-x (V3. 1.0 0.0 0.0))
@@ -512,7 +516,7 @@
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                 (doseq [op texture-ops]
-                  (emit-quad! quad-vc mat op)))))
+                  (emit-quad! quad-vc pose-stack op)))))
           (when (seq plasma)
             (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source

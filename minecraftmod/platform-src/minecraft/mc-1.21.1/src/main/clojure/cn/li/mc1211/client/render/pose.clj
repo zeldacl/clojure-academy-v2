@@ -1,7 +1,7 @@
 (ns cn.li.mc1211.client.render.pose
-  "CLIENT-ONLY shared pose stack and vertex consumer helpers for Minecraft 1.20.1."
+  "CLIENT-ONLY shared pose stack and vertex consumer helpers for Minecraft 1.21.1."
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [org.joml Matrix3f Matrix4f]))
+           [cn.li.mc1211.bridge RenderInterop]))
 
 (defn rotate-y
   [^PoseStack pose-stack angle]
@@ -47,12 +47,9 @@
 (defn submit-vertex
   "Submit one vertex using PoseStack's current pose + normal matrices."
   [^VertexConsumer vc ^PoseStack pose-stack x y z r g b a u v overlay uv2 nx ny nz]
-  (let [entry (.last pose-stack)]
-    (-> vc
-        (.vertex ^Matrix4f (.pose entry) (float x) (float y) (float z))
-        (.color (float r) (float g) (float b) (float a))
-        (.uv (float u) (float v))
-        (.overlayCoords (int overlay))
-        (.uv2 (int uv2))
-        (.normal ^Matrix3f (.normal entry) (float nx) (float ny) (float nz))
-        (.endVertex))))
+  (RenderInterop/submitVertex vc pose-stack
+                              (float x) (float y) (float z)
+                              (float r) (float g) (float b) (float a)
+                              (float u) (float v)
+                              (int overlay) (int uv2)
+                              (float nx) (float ny) (float nz)))

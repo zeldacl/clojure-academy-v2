@@ -1,0 +1,76 @@
+// ModDevGradle toolchain: NeoForge on modern (unobfuscated, no-remap)
+// Minecraft versions, e.g. 26.2. Applied from platform-target.gradle via
+// `apply from:` once the shared source-set/dependency/AOT wiring for the
+// target is in place.
+//
+// The net.neoforged.moddev plugin is applied in platform/build.gradle before
+// this script so pluginManagement can resolve the version for the selected
+// target only.
+//
+// `apply from:` evaluates this file as its own Groovy Script instance, so
+// plain `def` locals declared in platform-target.gradle are NOT visible here
+// — only Project-level state (plugins, extensions, tasks, sourceSets, ...)
+// is shared automatically. platform-target.gradle bridges the handful of
+// catalog-derived values this file needs through `project.ext` right before
+// applying it: target, targetId, modId, generatedDatagenResources,
+// loaderResourceRoots, acResources.
+def neoForgeVer = target.dependencies.neoForgeVersion?.toString()
+if (!neoForgeVer) {
+    throw new GradleException("MDG target '${targetId}' must declare dependencies.neoForgeVersion")
+}
+
+neoForge {
+    version = neoForgeVer
+    mods {
+        "${modId}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+    runs {
+        client {
+            client()
+            ideName = "${target.id} Client"
+            gameDirectory = project.file("run/${target.id}/client")
+        }
+        server {
+            server()
+            ideName = "${target.id} Server"
+            gameDirectory = project.file("run/${target.id}/server")
+            programArgument "--nogui"
+        }
+        data {
+            // 26.x uses clientData (data() is for <=1.21.3).
+            clientData()
+            ideName = "${target.id} Data"
+            gameDirectory = project.file("run/${target.id}/data")
+            def existingArgs = ["--mod", modId.toString(), "--all",
+                "--output", generatedDatagenResources.get().asFile.absolutePath]
+            loaderResourceRoots.each { root -> existingArgs.addAll(["--existing", root]) }
+            existingArgs.addAll(["--existing", acResources])
+            programArguments.addAll(existingArgs)
+        }
+    }
+}
+
+// MDG resolves the Clojure runtime through the shared implementation deps.
+// No remap step: MDG ships an unobfuscated jar directly.
+tasks.named("jar", Jar).configure {
+    archiveBaseName = target.artifact.baseName
+    archiveClassifier = target.artifact.classifier
+}
+
+// Skeleton / early targets may only have a .gitkeep under src/test until
+// Phase 5 lands real tests. Gradle 9 fails the test task when sources exist
+// but no tests are discovered.
+tasks.named("test").configure {
+    failOnNoDiscoveredTests = false
+}
+
+// Publish tooling resolves release jars through remapJar. Loom targets produce
+// a remapped jar there; provide a passthrough alias for MDG.
+tasks.register("remapJar", Jar) {
+    dependsOn tasks.named("jar")
+    archiveBaseName = target.artifact.baseName
+    archiveClassifier = target.artifact.classifier
+    from(zipTree(tasks.named("jar", Jar).flatMap { it.archiveFile }))
+}

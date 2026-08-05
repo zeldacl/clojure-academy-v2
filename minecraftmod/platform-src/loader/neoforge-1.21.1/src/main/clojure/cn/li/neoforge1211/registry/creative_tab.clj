@@ -4,7 +4,7 @@
   Tab contents are populated via BuildCreativeModeTabContentsEvent handler
   (see cn.li.neoforge1211.registry.creative-tab-event) — the 1.20+ data-driven
   approach recommended by official Forge docs."
-  (:require [cn.li.neoforge1211.registry.state :as registry-state])
+  (:require [cn.li.neoforgebase.registry.state :as registry-state])
   (:import [net.minecraft.network.chat Component]
            [net.minecraft.world.item CreativeModeTab Items Item]
            [net.neoforged.neoforge.registries DeferredRegister]))

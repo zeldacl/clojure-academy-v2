@@ -7,17 +7,31 @@
       "gradleVersion": "8.8",
       "wrapper": "root",
       "gradleJvmVersion": 21,
+      "toolchain": "loom",
       "loomVersion": "1.13.469",
       "clojurephantVersion": "0.9.1",
+      "shadowPluginId": "com.github.johnrengelman.shadow",
       "shadowVersion": "8.1.1"
     },
     "mc1211-loom-1.13-gradle-8.8": {
       "gradleVersion": "8.8",
       "wrapper": "root",
       "gradleJvmVersion": 21,
+      "toolchain": "loom",
       "loomVersion": "1.13.469",
       "clojurephantVersion": "0.9.1",
+      "shadowPluginId": "com.github.johnrengelman.shadow",
       "shadowVersion": "8.1.1"
+    },
+    "mc262-mdg-gradle-9.2": {
+      "gradleVersion": "9.2.0",
+      "wrapper": "platform-builds/mdg-gradle-9.2/gradlew",
+      "gradleJvmVersion": 25,
+      "toolchain": "mdg",
+      "modDevGradleVersion": "2.0.141",
+      "clojurephantVersion": "0.9.1",
+      "shadowPluginId": "com.gradleup.shadow",
+      "shadowVersion": "9.6.1"
     }
   },
   "components": {
@@ -28,12 +42,22 @@
     "minecraft-1.20.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.20.1",
+      "javaNamespace": "cn.li.mc1201",
       "source": "platform-src/minecraft/mc-1.20.1/src/main"
     },
     "minecraft-1.21.1": {
       "kind": "minecraft",
       "minecraftVersion": "1.21.1",
-      "source": "platform-src/minecraft/mc-1.21.1/src/main"
+      "javaNamespace": "cn.li.mc1211",
+      "source": "platform-src/minecraft/mc-1.21.1/src/main",
+      "resourceOverlayExcludes": ["data/*/pack.mcmeta"]
+    },
+    "minecraft-26.2": {
+      "kind": "minecraft",
+      "minecraftVersion": "26.2",
+      "javaNamespace": "cn.li.mc262",
+      "source": "platform-src/minecraft/mc-26.2/src/main",
+      "resourceOverlayExcludes": ["data/*/pack.mcmeta"]
     },
     "forge-1.20.1": {
       "kind": "loader",
@@ -50,6 +74,12 @@
       "source": "platform-src/loader/fabric-1.20.1/src/main",
       "runtimeAotEntrypoint": "cn.li.fabric1201.mod"
     },
+    "neoforge-shared": {
+      "kind": "loader-shared",
+      "loader": "neoforge",
+      "javaNamespace": "cn.li.neoforgebase",
+      "source": "platform-src/loader/neoforge-shared/src/main"
+    },
     "neoforge-1.21.1": {
       "kind": "loader",
       "loader": "neoforge",
@@ -57,6 +87,14 @@
       "source": "platform-src/loader/neoforge-1.21.1/src/main",
       "tests": "platform-src/loader/neoforge-1.21.1/src/test",
       "runtimeAotEntrypoint": "cn.li.neoforge1211.mod"
+    },
+    "neoforge-26.2": {
+      "kind": "loader",
+      "loader": "neoforge",
+      "minecraftVersion": "26.2",
+      "source": "platform-src/loader/neoforge-26.2/src/main",
+      "tests": "platform-src/loader/neoforge-26.2/src/test",
+      "runtimeAotEntrypoint": "cn.li.neoforge262.mod"
     },
     "platform-test-support": {
       "kind": "test-support",
@@ -212,6 +250,7 @@
       "sourceComponents": [
         "minecraft-base",
         "minecraft-1.21.1",
+        "neoforge-shared",
         "neoforge-1.21.1"
       ],
       "testComponents": [
@@ -250,6 +289,61 @@
       "artifact": {
         "baseName": "academy-neoforge",
         "classifier": "neoforge-1.21.1"
+      }
+    },
+    "neoforge-26.2": {
+      "id": "neoforge-26.2",
+      "loader": "neoforge",
+      "minecraftVersion": "26.2",
+      "buildProfile": "mc262-mdg-gradle-9.2",
+      "gradleJvmVersion": 25,
+      "compileJavaVersion": 25,
+      "runtimeJavaVersion": 25,
+      "contentModules": [
+        {"id": "ac", "namespace": "cn.li.ac.core", "function": "register-lifecycle-hooks!"}
+      ],
+      "contentProjects": ["ac"],
+      "sourceComponents": [
+        "minecraft-base",
+        "minecraft-26.2",
+        "neoforge-shared",
+        "neoforge-26.2"
+      ],
+      "testComponents": [
+        "platform-test-support",
+        "neoforge-26.2"
+      ],
+      "capabilities": [
+        "loader-entrypoint",
+        "client-entrypoint",
+        "datagen-entrypoint",
+        "minecraft-runtime",
+        "registry",
+        "network",
+        "gui",
+        "capability"
+      ],
+      "capabilityOwners": {
+        "loader-entrypoint": ["neoforge-26.2"],
+        "client-entrypoint": ["neoforge-26.2"],
+        "datagen-entrypoint": ["neoforge-26.2"],
+        "minecraft-runtime": ["minecraft-26.2"],
+        "registry": ["neoforge-26.2"],
+        "network": ["neoforge-26.2"],
+        "gui": ["neoforge-26.2"],
+        "capability": ["neoforge-26.2"]
+      },
+      "dependencies": {
+        "neoForgeVersion": "26.2.0.10-beta"
+      },
+      "datagenParityGroup": "mc-262",
+      "entrypoint": {
+        "namespace": "cn.li.neoforge262.platform.init",
+        "function": "init-platform!"
+      },
+      "artifact": {
+        "baseName": "academy-neoforge",
+        "classifier": "neoforge-26.2"
       }
     }
   }

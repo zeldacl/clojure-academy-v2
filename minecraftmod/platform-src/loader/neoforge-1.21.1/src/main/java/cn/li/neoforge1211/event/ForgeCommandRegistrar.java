@@ -3,7 +3,7 @@ package cn.li.neoforge1211.event;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Var;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import org.slf4j.Logger;
 

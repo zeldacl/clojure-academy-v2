@@ -3,7 +3,7 @@ package cn.li.forge1201.integration;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.forge1201.MyMod1201;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.registration.IRecipeCategoryRegistration;

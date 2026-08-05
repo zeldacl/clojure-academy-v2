@@ -1,6 +1,6 @@
 package cn.li.fabric1201.mixin;
 
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;

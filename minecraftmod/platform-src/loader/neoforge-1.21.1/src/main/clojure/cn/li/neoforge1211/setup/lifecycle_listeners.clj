@@ -1,7 +1,7 @@
 (ns cn.li.neoforge1211.setup.lifecycle-listeners
   "Lifecycle and client listener registration for Forge mod event bus." 
-  (:require [cn.li.neoforge1211.integration.side :as side]
-            [cn.li.neoforge1211.setup.consumer-support :as consumer-support]
+  (:require [cn.li.neoforgebase.integration.side :as side]
+            [cn.li.neoforgebase.setup.consumer-support :as consumer-support]
             [cn.li.mc1211.entity.hooks :as entity-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.client.event RegisterKeyMappingsEvent]

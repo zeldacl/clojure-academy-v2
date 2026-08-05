@@ -2,7 +2,7 @@ package cn.li.forge1201.client;
 
 import cn.li.forge1201.MyMod1201;
 import cn.li.forge1201.client.render.ForgeClientRenderRegistry;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.ModelEvent;

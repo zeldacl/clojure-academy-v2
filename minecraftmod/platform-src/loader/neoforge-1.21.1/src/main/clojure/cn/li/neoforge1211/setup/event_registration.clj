@@ -2,8 +2,8 @@
 	"Unified Forge event registration binder.
 
 	Consumes declarative manifest entries and binds them to ModEventBus / Forge EVENT_BUS."
-	(:require [cn.li.neoforge1211.integration.side :as side]
-						[cn.li.neoforge1211.setup.consumer-support :as consumer-support]
+	(:require [cn.li.neoforgebase.integration.side :as side]
+						[cn.li.neoforgebase.setup.consumer-support :as consumer-support]
 						[cn.li.neoforge1211.setup.event-registration-manifest :as manifest]
 						[cn.li.neoforge1211.setup.lifecycle-listeners :as lifecycle-listeners])
 	(:import [net.neoforged.neoforge.common NeoForge]

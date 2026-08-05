@@ -28,10 +28,9 @@
         food (when food-props
                (let [^FoodProperties$Builder b (FoodProperties$Builder.)
                      _ (.nutrition b (int (or (:nutrition food-props) 0)))
-                     _ (.saturationMod b (float (or (:saturation food-props) 0.0)))]
-                 (when (:meat food-props) (.meat b))
+                     _ (.saturationModifier b (float (or (:saturation food-props) 0.0)))]
                  (when (:fast-to-eat food-props) (.fast b))
-                 (when (:always-edible food-props) (.alwaysEat b))
+                 (when (:always-edible food-props) (.alwaysEdible b))
                  (.build b)))]
     (cond-> base
       (some? max-stack-size) (.stacksTo (int max-stack-size))

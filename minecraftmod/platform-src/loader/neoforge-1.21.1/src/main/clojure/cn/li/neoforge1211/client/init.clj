@@ -44,7 +44,7 @@
             [cn.li.mc1211.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mcmod.client.render.pose :as pose]
             [cn.li.mcmod.client.render.buffer :as buffer]
-            [cn.li.neoforge1211.registry.state :as registry-state]
+            [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mc1211.integration.recipe-query :as recipe-query]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi])
   (:import [cn.li.mc1211.client ClientHelper]
@@ -62,6 +62,7 @@
            [net.minecraft.client KeyMapping]
            [cn.li.mc1211.client.render ScriptedBlockEntityBerProvider]
            [cn.li.mc1211.client.render ModRenderTypes]
+           [cn.li.neoforge1211.bridge ClientTimeInterop]
            [com.mojang.blaze3d.platform Window]))
 
 ;; ============================================================================
@@ -270,7 +271,7 @@
                            ;; Include partial tick for sub-tick smoothness
                            ;; (upstream GameTimer.getTime = worldTime + partialTick)
                            (long (+ (* (.getGameTime level) 50)
-                                    (* (double (.getFrameTime mc)) 50.0)))
+                                    (* (double (ClientTimeInterop/getFrameTime mc)) 50.0)))
                            (System/currentTimeMillis))
                          (System/currentTimeMillis)))
        :font-width (fn [^String text]

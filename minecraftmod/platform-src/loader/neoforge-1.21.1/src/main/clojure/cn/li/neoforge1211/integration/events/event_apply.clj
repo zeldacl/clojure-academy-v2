@@ -3,7 +3,8 @@
   (:import [net.minecraft.world InteractionResult]
            [net.neoforged.neoforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
            [net.neoforged.bus.api Event]
-           [net.neoforged.neoforge.common.util TriState]))
+           [net.neoforged.neoforge.common.util TriState]
+           [cn.li.neoforge1211.bridge EventInterop]))
 
 (defn deny-right-click-use!
   [evt]
@@ -15,19 +16,17 @@
 
 (defn cancel-player-interact-fail!
   [^PlayerInteractEvent evt]
-  (.setCancellationResult evt InteractionResult/FAIL)
-  (.setCanceled evt true)
+  (EventInterop/cancelPlayerInteract evt InteractionResult/FAIL)
   evt)
 
 (defn cancel-player-interact-consume!
   [^PlayerInteractEvent evt]
-  (.setCancellationResult evt InteractionResult/CONSUME)
-  (.setCanceled evt true)
+  (EventInterop/cancelPlayerInteract evt InteractionResult/CONSUME)
   evt)
 
 (defn cancel-event!
   [^Event evt]
-  (.setCanceled evt true)
+  (EventInterop/cancelEvent evt)
   evt)
 
 (defn apply-consumed-right-click!

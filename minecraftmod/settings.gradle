@@ -13,14 +13,37 @@ pluginManagement {
         throw new GradleException(
             "Target '${targetId}' references unknown buildProfile '${profileId}'. Known: ${catalog.buildProfiles.keySet().sort()}")
     }
-    if (!profile.loomVersion) {
-        throw new GradleException("buildProfile '${profileId}' must declare loomVersion")
+    def toolchain = (profile.toolchain ?: "loom").toString()
+    if (!(toolchain in ["loom", "mdg"])) {
+        throw new GradleException("buildProfile '${profileId}' toolchain must be 'loom' or 'mdg', got '${toolchain}'")
+    }
+    if (toolchain == "loom" && !profile.loomVersion) {
+        throw new GradleException("buildProfile '${profileId}' with toolchain=loom must declare loomVersion")
+    }
+    if (toolchain == "mdg" && !profile.modDevGradleVersion) {
+        throw new GradleException("buildProfile '${profileId}' with toolchain=mdg must declare modDevGradleVersion")
     }
     if (!profile.clojurephantVersion) {
         throw new GradleException("buildProfile '${profileId}' must declare clojurephantVersion")
     }
-    if (!profile.shadowVersion) {
-        throw new GradleException("buildProfile '${profileId}' must declare shadowVersion")
+    if (!profile.shadowVersion || !profile.shadowPluginId) {
+        throw new GradleException("buildProfile '${profileId}' must declare shadowPluginId and shadowVersion")
+    }
+    // Register BOTH toolchains (no capability conflict) so root can apply-false both.
+    // Register ONLY the selected target's shadow plugin (johnrengelman vs gradleup conflict).
+    def loomVersion = catalog.buildProfiles.values()
+        .findAll { (it.toolchain ?: "loom").toString() == "loom" && it.loomVersion }
+        .collect { it.loomVersion.toString() }
+        .unique()
+    def mdgVersion = catalog.buildProfiles.values()
+        .findAll { it.toolchain?.toString() == "mdg" && it.modDevGradleVersion }
+        .collect { it.modDevGradleVersion.toString() }
+        .unique()
+    if (loomVersion.size() > 1) {
+        throw new GradleException("Multiple loom versions in catalog: ${loomVersion}")
+    }
+    if (mdgVersion.size() > 1) {
+        throw new GradleException("Multiple modDevGradle versions in catalog: ${mdgVersion}")
     }
     repositories {
         maven { url "https://maven.architectury.dev" }
@@ -35,9 +58,14 @@ pluginManagement {
         }
     }
     plugins {
-        id "dev.architectury.loom" version "${profile.loomVersion}"
+        if (loomVersion) {
+            id "dev.architectury.loom" version "${loomVersion.first()}"
+        }
+        if (mdgVersion) {
+            id "net.neoforged.moddev" version "${mdgVersion.first()}"
+        }
         id "dev.clojurephant.clojure" version "${profile.clojurephantVersion}"
-        id "com.github.johnrengelman.shadow" version "${profile.shadowVersion}"
+        id "${profile.shadowPluginId}" version "${profile.shadowVersion}"
     }
 }
 

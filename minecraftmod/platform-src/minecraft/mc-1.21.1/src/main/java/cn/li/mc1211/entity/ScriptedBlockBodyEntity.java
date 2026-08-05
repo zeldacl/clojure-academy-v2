@@ -3,7 +3,7 @@ package cn.li.mc1211.entity;
 import cn.li.mcver.ResourceLocations;
 
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;

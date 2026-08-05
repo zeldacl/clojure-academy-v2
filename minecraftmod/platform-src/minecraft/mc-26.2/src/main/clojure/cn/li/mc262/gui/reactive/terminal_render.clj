@@ -1,0 +1,6 @@
+(ns cn.li.mc262.gui.reactive.terminal-render)
+(defn dispose-overlay! [& _] nil)
+(defn create-tech-ui-container-screen [& _] nil)
+(defn create-tech-ui-screen [& _] nil)
+(defn render! [& _] nil)
+(defn init! [& _] nil)

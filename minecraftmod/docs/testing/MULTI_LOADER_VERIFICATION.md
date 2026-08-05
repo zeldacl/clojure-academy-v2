@@ -2,9 +2,10 @@
 
 Current supported targets are declared in `platform-catalog.json`:
 
-- `forge-1.20.1`
-- `fabric-1.20.1`
-- `neoforge-1.21.1`
+- `forge-1.20.1` (Loom / Gradle 8.8)
+- `fabric-1.20.1` (Loom / Gradle 8.8)
+- `neoforge-1.21.1` (Loom / Gradle 8.8)
+- `neoforge-26.2` (ModDevGradle / Gradle 9.2 / Java 25; isolated wrapper under `platform-builds/mdg-gradle-9.2/`)
 
 Required local gate:
 
@@ -18,13 +19,16 @@ For target-specific checks, run a single selected target (including per-target C
 .\scripts\target-gradle.ps1 forge-1.20.1 lintClojureNative
 .\scripts\target-gradle.ps1 fabric-1.20.1 lintClojureNative
 .\scripts\target-gradle.ps1 neoforge-1.21.1 lintClojureNative
+.\scripts\target-gradle.ps1 neoforge-26.2 lintClojureNative
 ```
 
-Compile smoke examples:
+Compile / build smoke examples:
 
 ```text
 .\scripts\target-gradle.ps1 forge-1.20.1 :platform:compileJava
-.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileJava
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:build
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:build
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:runData
 ```
 
-Do not use old root module commands. Do not add a new real target only to test architecture expansion; use synthetic catalog/sourceSet/capability fixtures instead.
+Do not use old root module commands. Do not add a new real target only to test architecture expansion without an explicit product decision.

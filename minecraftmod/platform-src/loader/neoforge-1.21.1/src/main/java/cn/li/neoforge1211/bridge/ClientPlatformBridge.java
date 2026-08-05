@@ -1,4 +1,4 @@
-package cn.li.neoforge1211.bridge;
+package cn.li.neoforgebase.bridge;
 
 import cn.li.mc1211.client.ClientClassAccessor;
 import net.neoforged.api.distmarker.Dist;

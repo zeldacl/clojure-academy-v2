@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.event;
 
-import cn.li.mc1211.datagen.DataGeneratorInterop;
+import cn.li.mcbase.datagen.DataGeneratorInterop;
 import cn.li.neoforge1211.MyMod1211;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;

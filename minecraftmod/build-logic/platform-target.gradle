@@ -19,14 +19,18 @@ def target = catalog.targets[targetId]
 if (target == null) {
     throw new GradleException("Unknown platformTarget '${targetId}'. Known targets: ${catalog.targets.keySet().sort()}")
 }
+
+def profile = catalog.buildProfiles[target.buildProfile.toString()]
+// Named platformToolchain (not `toolchain`) so it does not shadow the
+// `java { toolchain { ... } }` DSL block configured below.
+def platformToolchain = (profile?.toolchain ?: "loom").toString()
+def shadowPluginId = (profile?.shadowPluginId ?: "com.github.johnrengelman.shadow").toString()
+
+// Toolchain plugins (loom/mdg/shadow/clojurephant) are applied in
+// platform/build.gradle before this script so versions resolve from
+// settings.gradle pluginManagement for the selected target only.
 if (target.loader == "none") {
     apply plugin: "java-library"
-} else {
-    extensions.extraProperties.set("loom.platform", target.loader)
-    System.setProperty("loom.platform", target.loader)
-    apply plugin: "dev.architectury.loom"
-    apply plugin: "dev.clojurephant.clojure"
-    apply plugin: "com.github.johnrengelman.shadow"
 }
 
 // Every target owns an isolated output tree so alternating Forge/Fabric or
@@ -42,36 +46,6 @@ sourceSets {
         java.destinationDirectory = layout.buildDirectory.dir("classes/java/main")
         resources.destinationDirectory = layout.buildDirectory.dir("resources/main")
     }
-}
-
-if (target.loader == "forge" || target.loader == "neoforge") {
-    def forgeModClassRoots = [
-        layout.buildDirectory.dir("classes/java/main"),
-        layout.buildDirectory.dir("clojure/main"),
-        layout.buildDirectory.dir("resources/main")
-    ]
-    // Loom writes MOD_CLASSES from the full source-set graph (including stale
-    // platform/build and IDE out/production paths). Force the target-local
-    // roots at execution time so an unexpanded/stale mods.toml cannot win.
-    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }
-        .configureEach { task ->
-            task.doFirst {
-                def roots = forgeModClassRoots
-                    .collect { it.get().asFile }
-                    .findAll { it.directory }
-                    .collect { "main%%${it.absolutePath}" }
-                if (roots.isEmpty()) {
-                    throw new GradleException("Forge/NeoForge MOD_CLASSES is empty for target '${targetId}'; run processResources/classes first")
-                }
-                def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
-                def modsTomlName = target.loader == "neoforge" ? "META-INF/neoforge.mods.toml" : "META-INF/mods.toml"
-                def modsToml = new File(resourcesRoot, modsTomlName)
-                if (!modsToml.isFile()) {
-                    throw new GradleException("Missing processed ${modsTomlName} at ${modsToml}; run :platform:processResources first")
-                }
-                task.environment "MOD_CLASSES", roots.join(File.pathSeparator)
-            }
-        }
 }
 
 def componentDir = { String component, String child ->
@@ -171,6 +145,16 @@ if (target.loader != "none") {
     def generatedDatagenResources = layout.buildDirectory.dir("generated/datagen/${target.id}")
     def datagenHashManifest = generatedDatagenResources.map { it.file("META-INF/academy-datagen-hashes.json") }
 
+    // Same-path resource overlays (e.g. a version-specific pack.mcmeta) are
+    // declared per minecraft component in the catalog, so packaging code
+    // here does not need to special-case individual Minecraft versions.
+    def resourceOverlayExcludes = {
+        sourceComponentIds.collectMany { componentId ->
+            def component = resolveComponent(componentId)
+            (component.resourceOverlayExcludes ?: []) as List
+        }.unique()
+    }
+
     sourceSets {
         main {
             sourceComponents.each { component ->
@@ -199,28 +183,6 @@ if (target.loader != "none") {
             def file = targetEdn.get().asFile
             file.parentFile.mkdirs()
             file.text = toEdn(target) + System.lineSeparator()
-        }
-    }
-
-    if (target.loader == "forge") {
-        loom {
-            forge {}
-            mods {
-                main {
-                    modFiles.setFrom([])
-                    sourceSet("main")
-                }
-            }
-        }
-    } else if (target.loader == "neoforge") {
-        loom {
-            neoForge {}
-            mods {
-                main {
-                    modFiles.setFrom([])
-                    sourceSet("main")
-                }
-            }
         }
     }
 
@@ -274,6 +236,10 @@ if (target.loader != "none") {
         files(outputDirs)
     }
 
+    // Shared by every toolchain: sibling-project outputs, the Clojure runtime
+    // and test dependencies. Loader/Minecraft-distribution coordinates
+    // (minecraft, mappings, forge/neoForge/fabric deps) live in the
+    // toolchain-*.gradle files applied at the bottom of this block.
     dependencies {
         compileOnly runtimeClassOutput(apiProject)
         runtimeOnly runtimeClassOutput(apiProject)
@@ -284,33 +250,6 @@ if (target.loader != "none") {
             implementation dependencyNotation
         }
         testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
-
-        minecraft target.dependencies.minecraft
-        mappings loom.officialMojangMappings()
-
-        if (target.loader == "forge") {
-            add("forge", target.dependencies.loader)
-            clojureRuntimeLibraries.each { dependencyNotation ->
-                add("forgeRuntimeLibrary", dependencyNotation)
-            }
-            compileOnly "com.blamejared.crafttweaker:CraftTweaker-common-1.20.1:14.0.60"
-            add("modCompileOnlyApi", target.dependencies.jeiCommonApi)
-            add("modCompileOnlyApi", target.dependencies.jeiForgeApi)
-            add("modRuntimeOnly", target.dependencies.jeiForgeRuntime)
-            add("modRuntimeOnly", files(rootProject.file(target.dependencies.sparkRuntimeFile)))
-        } else if (target.loader == "neoforge") {
-            add("neoForge", target.dependencies.loader)
-            clojureRuntimeLibraries.each { dependencyNotation ->
-                // Arch Loom reuses the forgeRuntimeLibrary configuration name for NeoForge.
-                add("forgeRuntimeLibrary", dependencyNotation)
-            }
-        } else if (target.loader == "fabric") {
-            add("modImplementation", target.dependencies.fabricLoader)
-            add("modImplementation", target.dependencies.fabricApi)
-            compileOnly "com.google.code.findbugs:jsr305:3.0.2"
-        } else {
-            throw new GradleException("Unsupported loader '${target.loader}' for target '${target.id}'")
-        }
     }
 
     // A platform compile needs the runtime class outputs of its sibling
@@ -529,11 +468,9 @@ if (target.loader != "none") {
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
                 // jar uses EXCLUDE (first wins). Processed platform resources are
-                // already in the jar; still exclude 1.21.1 overlay targets from
+                // already in the jar; still exclude version-overlay targets from
                 // raw content so a packaging-order change cannot resurrect them.
-                if (target.minecraftVersion == "1.21.1") {
-                    exclude "data/*/pack.mcmeta"
-                }
+                exclude(resourceOverlayExcludes())
             }
         }
 
@@ -549,9 +486,7 @@ if (target.loader != "none") {
             }
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
-                if (target.minecraftVersion == "1.21.1") {
-                    exclude "data/*/pack.mcmeta"
-                }
+                exclude(resourceOverlayExcludes())
             }
         }
 
@@ -559,12 +494,10 @@ if (target.loader != "none") {
             dependsOn contentProject.tasks.named("processResources")
             from(resources) {
                 exclude "META-INF/MANIFEST.MF"
-                // 1.21.1 overlays live in minecraft-1.21.1 resources (loot_table/,
-                // data/*/pack.mcmeta). Content is merged last under INCLUDE, so
+                // Version overlays live in minecraft-N resources (loot_table/,
+                // data/*/pack.mcmeta, ...). Content is merged last under INCLUDE, so
                 // exclude same-path files that the version component overlays.
-                if (target.minecraftVersion == "1.21.1") {
-                    exclude "data/*/pack.mcmeta"
-                }
+                exclude(resourceOverlayExcludes())
             }
         }
 
@@ -617,128 +550,6 @@ if (target.loader != "none") {
         configurePackagedRuntimeProject(contentProject, label)
     }
 
-    def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {
-        group = "build"
-        description = "Strip local variable tables from packaged platform classes before loader remapping."
-        dependsOn tasks.named("classes")
-        def outputDir = layout.buildDirectory.dir("classes/java/main")
-        def marker = layout.buildDirectory.file("tmp/stripPlatformOutputLvt/stripped.marker")
-        inputs.dir(outputDir)
-        outputs.file(marker)
-        doLast {
-            def dir = outputDir.get().asFile
-            int stripped = 0
-            int unchanged = 0
-            if (dir.isDirectory()) {
-                dir.eachFileRecurse { File file ->
-                    if (!file.isFile() || !file.name.endsWith(".class")) {
-                        return
-                    }
-                    try {
-                        def strippedClass = stripClassLocalVariableTables(file.bytes)
-                        if (strippedClass.stripped) {
-                            file.bytes = strippedClass.bytes
-                            stripped++
-                        } else {
-                            unchanged++
-                        }
-                    } catch (Exception ex) {
-                        logger.warn("[stripPlatformOutputLvt] skipped {}: {}", file, ex.message)
-                    }
-                }
-            }
-            def markerFile = marker.get().asFile
-            markerFile.parentFile.mkdirs()
-            markerFile.text = "stripped=${stripped}, unchanged=${unchanged}${System.lineSeparator()}"
-            logger.lifecycle("[stripPlatformOutputLvt] stripped LVT from {} class files; left {} unchanged", stripped, unchanged)
-        }
-    }
-
-    tasks.named("jar", Jar).configure {
-        dependsOn stripPlatformOutputLvt
-    }
-    tasks.matching { it.name == "shadowJar" }.configureEach {
-        dependsOn stripPlatformOutputLvt
-    }
-
-    def remapInputArchive = tasks.named("jar", Jar).flatMap { it.archiveFile }
-    def remapInputTask = tasks.named("jar")
-    if (target.loader == "fabric") {
-        def shadowArchive = tasks.named("shadowJar", Jar).flatMap { it.archiveFile }
-        def strippedShadowArchive = layout.buildDirectory.file("libs/${target.artifact.baseName}-${project.version}-${target.artifact.classifier}-shadow-stripped.jar")
-        def stripShadowJarLvt = tasks.register("stripShadowJarLvt") {
-            group = "build"
-            description = "Strip local variable tables from the Fabric shadow jar before loader remapping."
-            dependsOn tasks.named("shadowJar")
-            inputs.file(shadowArchive)
-            outputs.file(strippedShadowArchive)
-            doLast {
-                def input = shadowArchive.get().asFile
-                def output = strippedShadowArchive.get().asFile
-                output.parentFile.mkdirs()
-                int stripped = 0
-                int unchanged = 0
-                def seen = new LinkedHashSet<String>()
-                new java.util.jar.JarInputStream(new FileInputStream(input)).withCloseable { jarInput ->
-                    new java.util.jar.JarOutputStream(new FileOutputStream(output)).withCloseable { jarOutput ->
-                        java.util.jar.JarEntry entry
-                        while ((entry = jarInput.nextJarEntry) != null) {
-                            if (!seen.add(entry.name)) {
-                                jarInput.closeEntry()
-                                continue
-                            }
-                            if (entry.name ==~ /^META-INF\/.*\.(SF|DSA|RSA)$/) {
-                                jarInput.closeEntry()
-                                continue
-                            }
-                            def outEntry = new java.util.jar.JarEntry(entry.name)
-                            outEntry.time = entry.time
-                            if (entry.extra != null) {
-                                outEntry.extra = entry.extra
-                            }
-                            jarOutput.putNextEntry(outEntry)
-                            if (!entry.isDirectory()) {
-                                def entryBuffer = new ByteArrayOutputStream()
-                                byte[] readBuffer = new byte[8192]
-                                int readCount
-                                while ((readCount = jarInput.read(readBuffer)) != -1) {
-                                    entryBuffer.write(readBuffer, 0, readCount)
-                                }
-                                byte[] bytes = entryBuffer.toByteArray()
-                                if (entry.name.endsWith(".class")) {
-                                    try {
-                                        def strippedClass = stripClassLocalVariableTables(bytes)
-                                        bytes = strippedClass.bytes
-                                        if (strippedClass.stripped) {
-                                            stripped++
-                                        } else {
-                                            unchanged++
-                                        }
-                                    } catch (Exception ex) {
-                                        logger.warn("[stripShadowJarLvt] copied {} without bytecode rewrite: {}", entry.name, ex.message)
-                                    }
-                                }
-                                jarOutput.write(bytes)
-                            }
-                            jarOutput.closeEntry()
-                            jarInput.closeEntry()
-                        }
-                    }
-                }
-                logger.lifecycle("[stripShadowJarLvt] stripped LVT from {} shadow classes; left {} unchanged", stripped, unchanged)
-            }
-        }
-        remapInputArchive = strippedShadowArchive
-        remapInputTask = stripShadowJarLvt
-    }
-
-    tasks.named("remapJar").configure {
-        inputFile.set(remapInputArchive)
-        archiveBaseName.set(target.artifact.baseName)
-        archiveClassifier.set(target.artifact.classifier)
-        dependsOn remapInputTask
-    }
-
     def rootProj = project.rootProject
     def modId = rootProj.findProperty("mod_id")
     // Resolve against the repo root — project.file() is relative to platform/
@@ -751,48 +562,6 @@ if (target.loader != "none") {
         rootProj.file("${componentSourceRoot(componentId)}/resources").absolutePath
     }.findAll { it != null }
     def acResources = rootProj.project(":ac").file("src/main/resources").absolutePath
-    def datagenPath = generatedDatagenResources.get().asFile.absolutePath
-
-    loom {
-        runs {
-            client {
-                client()
-                configName = "${target.id} Client"
-                runDir = "run/${target.id}/client"
-            }
-            server {
-                server()
-                configName = "${target.id} Server"
-                runDir = "run/${target.id}/server"
-                if (target.loader == "forge") {
-                    property "forge.enabledGameTestNamespaces", "${modId},minecraft"
-                } else if (target.loader == "neoforge") {
-                    property "neoforge.enabledGameTestNamespaces", "${modId},minecraft"
-                }
-            }
-            if (target.loader == "forge" || target.loader == "neoforge") {
-                data {
-                    data()
-                    configName = "${target.id} Data"
-                    runDir = "run/${target.id}/data"
-                    def existingArgs = ["--mod", modId, "--all",
-                        "--output", generatedDatagenResources.get().asFile.absolutePath]
-                    loaderResourceRoots.each { existingArgs.addAll(["--existing", it]) }
-                    existingArgs.addAll(["--existing", acResources])
-                    programArgs existingArgs as String[]
-                }
-            } else if (target.loader == "fabric") {
-                datagen {
-                    server()
-                    configName = "${target.id} DataGen"
-                    runDir = "run/${target.id}/data"
-                    vmArg "-Dfabric-api.datagen"
-                    vmArg "-Dfabric-api.datagen.output-dir=${generatedDatagenResources.get().asFile.absolutePath}"
-                    vmArg "-Dfabric-api.datagen.modid=${rootProject.findProperty("mod_id")}"
-                }
-            }
-        }
-    }
 
     def sha256Hex = { File file ->
         def digest = java.security.MessageDigest.getInstance("SHA-256")
@@ -893,6 +662,35 @@ if (target.loader != "none") {
         }.join(";")
         systemProperty "platform.test.allow-empty", discoveredTestFiles.isEmpty().toString()
         args "-m", "cn.li.test-support.auto-test-runner"
+    }
+
+    // toolchain-loom.gradle / toolchain-mdg.gradle are separate Groovy script
+    // plugins (`apply from:` compiles each into its own Script instance), so
+    // plain `def` locals declared above are NOT visible inside them — only
+    // Project-level state (plugins, extensions, tasks, sourceSets, ...) is
+    // shared automatically. Bridge the handful of catalog-derived values
+    // those files need through the project's extra-properties container
+    // before applying the toolchain that matches this target's buildProfile.
+    [
+        target: target,
+        targetId: targetId,
+        catalog: catalog,
+        components: components,
+        resolveComponent: resolveComponent,
+        componentSourceRoot: componentSourceRoot,
+        sourceComponentIds: sourceComponentIds,
+        modId: modId,
+        generatedDatagenResources: generatedDatagenResources,
+        loaderResourceRoots: loaderResourceRoots,
+        acResources: acResources,
+        clojureRuntimeLibraries: clojureRuntimeLibraries,
+        stripClassLocalVariableTables: stripClassLocalVariableTables
+    ].each { name, value -> ext[name] = value }
+
+    if (platformToolchain == "mdg") {
+        apply from: rootProject.file("build-logic/toolchain-mdg.gradle")
+    } else {
+        apply from: rootProject.file("build-logic/toolchain-loom.gradle")
     }
 }
 

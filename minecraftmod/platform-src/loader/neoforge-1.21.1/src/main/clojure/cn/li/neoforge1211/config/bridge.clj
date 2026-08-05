@@ -4,7 +4,7 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.neoforge1211.bridge ConfigEventBridge]
+  (:import [cn.li.neoforgebase.bridge ConfigEventBridge]
            [java.util.function Consumer]
            [java.util.function Predicate]
            [java.util ArrayList Collection]
@@ -12,7 +12,8 @@
            [net.neoforged.bus.api IEventBus]
            [net.neoforged.fml ModContainer]
            [net.neoforged.fml.event.config ModConfigEvent]
-           [net.neoforged.fml.config ModConfig ModConfig$Type]))
+           [net.neoforged.fml.config ModConfig ModConfig$Type]
+           [cn.li.neoforge1211.bridge ConfigInterop]))
 
 (def ^:private registered-configs
   "Map of config file-name -> domain-info. Lock-free CAS updates replace the
@@ -170,7 +171,7 @@
           (.set cfg-value value)
           ;; Persist to TOML file
           (when-let [^ModConfig mod-cfg (:mod-config domain-info)]
-            (.save mod-cfg))
+            (ConfigInterop/save mod-cfg))
           ;; Also update in-memory registry for immediate getter visibility
           (config-reg/set-config-value! domain key value)
           true)

@@ -97,6 +97,7 @@
    :records SoundSource/RECORDS})
 
 (defn resolve-sound-source
+  ^SoundSource
   [source]
   (or (get sound-source-map source)
       SoundSource/AMBIENT))
@@ -110,8 +111,8 @@
                   (double x)
                   (double y)
                   (double z)
-                  sound-event
-                  (resolve-sound-source source)
+                  ^SoundEvent sound-event
+                  ^SoundSource (resolve-sound-source source)
                   (float volume)
                   (float pitch))
       true)))

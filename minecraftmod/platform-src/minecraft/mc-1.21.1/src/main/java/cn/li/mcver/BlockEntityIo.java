@@ -7,46 +7,50 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * Version seam for block-entity persistence.
- * {@link Registries} wraps {@link HolderLookup.Provider} for 1.21.1
- * {@code loadAdditional}/{@code saveAdditional}/{@code getUpdateTag} signatures.
- * saveAdditional remains protected — subclasses call {@link AdditionalWriter}
- * from their override.
+ * Contracts are shaped for 26.2 ({@link Io} over {@code ValueInput}/{@code ValueOutput}).
+ * On 1.21.1 those types do not exist yet, so {@link Io} wraps a {@link CompoundTag}
+ * + {@link HolderLookup.Provider} pair instead.
  */
 public final class BlockEntityIo {
     private BlockEntityIo() {
     }
 
-    /**
-     * Registries handle wrapping {@link HolderLookup.Provider}.
-     */
-    @FunctionalInterface
-    public interface Registries {
-        HolderLookup.Provider asLookup();
+    /** Opaque handle over a persistence payload (tag + registries on 1.21.1). */
+    public sealed interface Io {
     }
 
-    /**
-     * Wrap a real {@link HolderLookup.Provider} for seam callers.
-     */
-    public static Registries of(HolderLookup.Provider provider) {
-        Objects.requireNonNull(provider, "provider");
-        return () -> provider;
+    private record TagIo(CompoundTag tag, HolderLookup.Provider registries) implements Io {
     }
 
-    /**
-     * Sentinel kept for cross-version call sites. On 1.21.1 a real provider
-     * is required — use {@link #of(HolderLookup.Provider)}.
-     */
-    public static final Registries NO_REGISTRIES = () -> {
-        throw new IllegalStateException(
-            "BlockEntityIo on 1.21.1 requires HolderLookup.Provider; use BlockEntityIo.of(provider)");
-    };
-
-    public static void load(BlockEntity be, CompoundTag tag, Registries registries) {
-        be.loadWithComponents(tag, registries.asLookup());
+    public static Io ofValueInput(CompoundTag tag, HolderLookup.Provider registries) {
+        return new TagIo(Objects.requireNonNull(tag, "tag"),
+            Objects.requireNonNull(registries, "registries"));
     }
 
-    public static CompoundTag getUpdateTag(BlockEntity be, Registries registries) {
-        return be.getUpdateTag(registries.asLookup());
+    public static Io ofValueOutput(CompoundTag tag, HolderLookup.Provider registries) {
+        return ofValueInput(tag, registries);
+    }
+
+    public static CompoundTag asTag(Io io) {
+        if (io instanceof TagIo tagIo) {
+            return tagIo.tag();
+        }
+        throw new IllegalStateException("BlockEntityIo.Io is not backed by a CompoundTag");
+    }
+
+    public static HolderLookup.Provider asRegistries(Io io) {
+        if (io instanceof TagIo tagIo) {
+            return tagIo.registries();
+        }
+        throw new IllegalStateException("BlockEntityIo.Io is not backed by registries");
+    }
+
+    public static void load(BlockEntity be, Io io) {
+        be.loadWithComponents(asTag(io), asRegistries(io));
+    }
+
+    public static CompoundTag getUpdateTag(BlockEntity be, HolderLookup.Provider registries) {
+        return be.getUpdateTag(registries);
     }
 
     /**
@@ -54,6 +58,6 @@ public final class BlockEntityIo {
      */
     @FunctionalInterface
     public interface AdditionalWriter {
-        void write(CompoundTag tag, Registries registries);
+        void write(Io io);
     }
 }

@@ -3,12 +3,13 @@
             [cn.li.mc1211.gui.reactive.bake-slots :as bake-slots]
             [cn.li.mc1211.gui.reactive.render :as ui-render]
             [cn.li.mcmod.ui.node :as node])
-  (:import [net.minecraft.resources ResourceLocation]))
+  (:import [net.minecraft.resources ResourceLocation]
+           [cn.li.mcver ResourceLocations]))
 
 (deftest bake-image-populates-rl-slot
   (let [^cn.li.mcmod.ui.node.INode n (node/create-node 0 nil :image
                                                         {} 5 6 {})
-        rl (ResourceLocation. "minecraft" "textures/block/stone.png")]
+        rl (ResourceLocations/of "minecraft" "textures/block/stone.png")]
     (.setOSlot n 0 "minecraft:textures/block/stone.png")
     (ui-render/bake-image! n)
     (is (instance? ResourceLocation (.getOSlot n 2)))

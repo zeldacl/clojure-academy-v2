@@ -3,8 +3,8 @@
    for ability-slot key codes so Minecraft does not attack/use/swing while the
    skill system owns those keys via GLFW polling."
   (:require [cn.li.mcmod.util.log :as log])
-  (:import [com.mojang.blaze3d.platform InputConstants$Type]
-           [net.minecraft.client KeyMapping Minecraft Options]))
+  (:import [net.minecraft.client KeyMapping Minecraft Options]
+           [cn.li.mc1201.client KeyMappingAccess]))
 
 (defn- get-minecraft
   []
@@ -20,11 +20,7 @@
   "Map a KeyMapping's bound InputConstants.Key to the AC Settings integer
    convention (MOUSE_LEFT=-100, MOUSE_RIGHT=-99, else GLFW keysym)."
   [^KeyMapping mapping]
-  (let [key (.getKey mapping)
-        value (.getValue key)]
-    (if (= (.getType key) InputConstants$Type/MOUSE)
-      (+ -100 (int value))
-      (int value))))
+  (KeyMappingAccess/acKeyCode mapping))
 
 (defn- drain-and-release!
   "Consume pending clicks and force the mapping not-down for this frame."

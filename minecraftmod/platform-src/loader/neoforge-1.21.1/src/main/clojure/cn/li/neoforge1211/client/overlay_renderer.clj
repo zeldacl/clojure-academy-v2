@@ -9,7 +9,8 @@
   (:import [net.neoforged.neoforge.client.event RenderGuiEvent$Post]
            [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
-           [net.minecraft.client Minecraft]))
+           [net.minecraft.client Minecraft]
+           [cn.li.neoforge1211.bridge ClientTimeInterop]))
 
 (defn- bridge-build-fn [w h]
   (client-bridge/call-adapter :reactive-overlay-build w h))
@@ -21,7 +22,7 @@
   (let [^Minecraft mc (Minecraft/getInstance)
         w (.getGuiScaledWidth (.getWindow mc))
         h (.getGuiScaledHeight (.getWindow mc))
-        pt (.getFrameTime mc)]
+        pt (ClientTimeInterop/getFrameTime mc)]
     ;; Overlay render is a client dispatch boundary (hooks.core 调用规范 #2):
     ;; bind the CURRENT connection session so reactive HUD state reads resolve
     ;; the live store partition — without this the render thread sees whatever

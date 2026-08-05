@@ -9,7 +9,7 @@
   - Fires lazily when the creative inventory screen opens.
   - Iterates the platform-neutral DSL registry metadata to discover items/blocks.
   - Adds each item + optional NBT variants (energy fully-charged, filled-variant)."
-  (:require [cn.li.neoforge1211.registry.state :as registry-state]
+  (:require [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
@@ -18,7 +18,8 @@
            [net.minecraft.world.level ItemLike]
            [net.neoforged.neoforge.event BuildCreativeModeTabContentsEvent]
            [net.minecraft.network.chat Component]
-           [cn.li.mcver ItemData]))
+           [cn.li.mcver ItemData]
+           [cn.li.mc1211.bridge ItemStackInterop]))
 
 
 ;; ── NBT variant helpers ──────────────────────────────────────────────
@@ -69,7 +70,7 @@
         (let [label-key (str/replace (str label) #"-" "_")
               mod-id (var-get #'modid/mod-id)
               translation-key (str "item." mod-id "." item-id "_" label-key)]
-          (.setHoverName variant-stack (Component/translatable translation-key))))
+          (ItemStackInterop/setHoverName variant-stack (Component/translatable translation-key))))
       (.accept event variant-stack))
     (catch Exception e (log/warn "Failed to create filled variant for" item-id (ex-message e)) nil)))
 

@@ -2,7 +2,7 @@ package cn.li.mc1201.client.render;
 
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;

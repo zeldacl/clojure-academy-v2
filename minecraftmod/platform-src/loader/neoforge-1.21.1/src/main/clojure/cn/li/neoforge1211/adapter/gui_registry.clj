@@ -145,7 +145,7 @@
           ;; lazy callback that resolves get-menu-type at GUI-open time (runtime).
           menu-type (create-menu-type gui-id)
           ^DeferredRegister deferred-register (menu-register)
-          ro (.register deferred-register registry-name
+          ro (.register deferred-register ^String (str registry-name)
                (reify java.util.function.Supplier
                  (get [_]
                    ;; Called by NeoForge during RegisterEvent — registries are open here.

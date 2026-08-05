@@ -1,7 +1,7 @@
 package cn.li.forge1201.worldgen;
 
 import cn.li.forge1201.MyMod1201;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc1201.worldgen.ConfigurablePoolFeature;
 
 import net.minecraft.core.registries.BuiltInRegistries;

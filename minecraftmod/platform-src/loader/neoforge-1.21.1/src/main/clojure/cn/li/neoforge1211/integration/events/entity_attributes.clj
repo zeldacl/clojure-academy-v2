@@ -7,7 +7,7 @@
 
   The actual Java interop (PathfinderMob.createMobAttributes().build() + event.put)
   lives in ModEntities/registerMobDefaultAttributes to avoid clj-kondo import issues."
-  (:require [cn.li.neoforge1211.registry.state :as registry-state]
+  (:require [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mcmod.entity.dsl :as edsl]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.neoforge1211.entity ModEntities]

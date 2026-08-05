@@ -36,7 +36,7 @@
 (defn write-extended-open-payload!
   "Write the shared extended GUI open payload used by Fabric-style screen handlers."
   [^FriendlyByteBuf buf gui-id pos]
-  (.writeInt buf gui-id)
+  (.writeInt buf (int gui-id))
   (if pos
     (do
       (.writeBoolean buf true)

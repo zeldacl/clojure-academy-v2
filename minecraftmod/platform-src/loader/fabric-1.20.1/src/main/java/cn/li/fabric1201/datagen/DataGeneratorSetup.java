@@ -1,6 +1,6 @@
 package cn.li.fabric1201.datagen;
 
-import cn.li.mc1201.datagen.DataGeneratorInterop;
+import cn.li.mcbase.datagen.DataGeneratorInterop;
 import net.fabricmc.fabric.api.datagen.v1.DataGeneratorEntrypoint;
 import net.fabricmc.fabric.api.datagen.v1.FabricDataGenerator;
 

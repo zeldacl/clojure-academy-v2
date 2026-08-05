@@ -4,7 +4,7 @@ import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import clojure.lang.Keyword;
 import clojure.lang.RT;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraft.world.level.block.RenderShape;
 
 import java.util.Locale;

@@ -6,7 +6,7 @@
 					[cn.li.mcmod.platform.be :as pbe]
 					[cn.li.mcmod.protocol.metadata :as registry-metadata]
 					[cn.li.mcmod.util.log :as log]
-					[cn.li.neoforge1211.registry.state :as registry-state])
+					[cn.li.neoforgebase.registry.state :as registry-state])
 	(:import [net.minecraft.core BlockPos]
 				 [net.minecraft.world.level Level]
 				 [net.minecraft.world.level.block Block]

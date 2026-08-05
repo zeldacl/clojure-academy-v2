@@ -1,4 +1,4 @@
-package cn.li.neoforge1211.bridge;
+package cn.li.neoforgebase.bridge;
 
 import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.ICancellableEvent;

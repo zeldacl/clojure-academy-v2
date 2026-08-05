@@ -15,12 +15,15 @@ Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overvi
   - **`:platform`** — single catalog-driven platform project. Select a target with `scripts/target-gradle.ps1 <target-id>`; do **not** add root `forge-1.20.1/` / `fabric-1.20.1/` / `neoforge-1.21.1/` Gradle modules.
 
 - **Platform source (`platform-src/`, assembled by `platform-catalog.json`)**
-  - **`minecraft/base/`** — `minecraft-base` component (`cn.li.mcbase.*`): version-agnostic Minecraft glue (entity specs, platform ops, runtime SPIs, datagen helpers). Must not reference `cn.li.mc1201` / `cn.li.mc1211`.
+  - **`minecraft/base/`** — `minecraft-base` component (`cn.li.mcbase.*`): version-agnostic Minecraft glue (entity specs, platform ops, runtime SPIs, datagen helpers). Must not reference `cn.li.mc1201` / `cn.li.mc1211` / `cn.li.mc262`.
   - **`minecraft/mc-1.20.1/`** — `minecraft-1.20.1` (`cn.li.mc1201.*` + `cn.li.mcver.*` downgrade seam).
-  - **`minecraft/mc-1.21.1/`** — `minecraft-1.21.1` (`cn.li.mc1211.*` + `cn.li.mcver.*` contract-shaped seam).
+  - **`minecraft/mc-1.21.1/`** — `minecraft-1.21.1` (`cn.li.mc1211.*` + `cn.li.mcver.*` downgrade seam).
+  - **`minecraft/mc-26.2/`** — `minecraft-26.2` (`cn.li.mc262.*` + `cn.li.mcver.*` contract-shaped seam).
   - **`loader/forge-1.20.1/`** — Forge entrypoints, `mods.toml`, events, registration (`cn.li.forge1201.*`).
   - **`loader/fabric-1.20.1/`** — Fabric entrypoints, `fabric.mod.json`, events (`cn.li.fabric1201.*`).
+  - **`loader/neoforge-shared/`** — NeoForge cross-version shared glue (`cn.li.neoforgebase.*`); no version namespaces.
   - **`loader/neoforge-1.21.1/`** — NeoForge entrypoints, `neoforge.mods.toml`, events (`cn.li.neoforge1211.*`).
+  - **`loader/neoforge-26.2/`** — NeoForge 26.2 entrypoints, `neoforge.mods.toml`, events (`cn.li.neoforge262.*`); MDG/Java 25 toolchain.
   - Version seam docs: `docs/dev/MC_VERSION_SEAM.md`. Gate: `verifyVersionSeamParity`.
 
 - **mcmod (foundation)**
@@ -39,9 +42,10 @@ Human-readable mirror: [docs/01-overview/PROJECT_LAYOUT.md](../../docs/01-overvi
   - Shared assets: `ac/src/main/resources` (e.g. `assets/academy/`, `data/academy/`).
 
 - **Dependency red line**
-  - **`ac` / `mcmod` must not reference loader namespaces** (`cn.li.forge1201`, `cn.li.fabric1201`, `cn.li.neoforge1211`) or Minecraft version namespaces (`cn.li.mc1201`, `cn.li.mc1211`, `cn.li.mcver`).
+  - **`ac` / `mcmod` must not reference loader namespaces** (`cn.li.forge1201`, `cn.li.fabric1201`, `cn.li.neoforge1211`, `cn.li.neoforge262`, `cn.li.neoforgebase`) or Minecraft version namespaces (`cn.li.mc1201`, `cn.li.mc1211`, `cn.li.mc262`, `cn.li.mcver`).
   - Loader components must not hardcode content IDs; read metadata from `mcmod`/`ac`.
   - Minecraft components must not enumerate loaders; loader lifecycle stays under `platform-src/loader/*`.
+  - `neoforge-shared` must not reference versioned `cn.li.mc*` / `cn.li.neoforge1211` / `cn.li.neoforge262` namespaces.
 
 - **Adding new content**
   - Extend DSL/metadata in **`mcmod`** when introducing new abstractions.

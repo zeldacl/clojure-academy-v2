@@ -6,7 +6,8 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry])
   (:import [net.minecraft.client KeyMapping Minecraft]
-           [com.mojang.blaze3d.platform InputConstants$Type]))
+           [com.mojang.blaze3d.platform InputConstants$Type]
+           [cn.li.mc1201.client KeyMappingAccess]))
 
 ;; ===== KeyMapping Registry =====
 ;; Stores KeyMappings created from AC configuration.
@@ -66,13 +67,13 @@
    Backs the terminal Settings app's 'keys' category rebind rows."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.getString (.getDisplayName (.getKey km)))))
+    (KeyMappingAccess/boundKeyDisplayString km)))
 
 (defn get-key-code
   "Current GLFW key code for a registered KeyMapping, or nil."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.getValue (.getKey km))))
+    (Integer/valueOf (KeyMappingAccess/boundKeyValue km))))
 
 (defn set-key-mapping-key!
   "Rebind a registered KeyMapping to a new keyboard key-code and persist via

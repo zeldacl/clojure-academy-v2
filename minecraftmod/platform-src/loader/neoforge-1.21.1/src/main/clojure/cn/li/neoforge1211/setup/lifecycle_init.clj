@@ -8,7 +8,7 @@
             [cn.li.platform.lifecycle.manifest :as manifest]
             [cn.li.platform.lifecycle.orchestrator :as lifecycle-orchestrator]
             [cn.li.platform.target :as target])
-  (:import [cn.li.neoforge1211.bootstrap ForgeBootstrapGuard]))
+  (:import [cn.li.neoforgebase.bootstrap ForgeBootstrapGuard]))
 
 (defn- lifecycle-manifest []
   {:label (:id (target/current-target!))

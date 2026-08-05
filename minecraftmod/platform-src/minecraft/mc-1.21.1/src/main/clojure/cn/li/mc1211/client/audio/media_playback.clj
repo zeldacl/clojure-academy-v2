@@ -5,7 +5,8 @@
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1211.client.audio ExternalOggPlayer OggMetadata]
+  (:import [cn.li.mc1211.client.audio ExternalOggPlayer]
+           [cn.li.mcbase.client.audio OggMetadata]
            [net.minecraft.client Minecraft]
            [java.io File]))
 

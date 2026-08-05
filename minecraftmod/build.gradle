@@ -1,21 +1,31 @@
 import groovy.json.JsonSlurper
 import groovy.json.JsonOutput
 import org.gradle.internal.os.OperatingSystem
+import java.util.regex.Pattern
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.ow2.asm:asm:9.7"
+    }
+}
 
 plugins {
     id "dev.architectury.loom" apply false
+    id "net.neoforged.moddev" apply false
     id "dev.clojurephant.clojure" apply false
-    id "com.github.johnrengelman.shadow" apply false
 }
 
 ext {
     clojureVersions = [
-        clojure: findProperty("clojure_version") ?: "1.12.4",
+        clojure: findProperty("clojure_version") ?: "1.13.0-alpha6",
         testCheck: findProperty("clojure_test_check_version") ?: "1.1.1",
         cloverage: findProperty("cloverage_version") ?: "1.2.4",
         malli: findProperty("malli_version") ?: "0.16.4",
-        specAlpha: findProperty("spec_alpha_version") ?: "0.5.238",
-        coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.4.74"
+        specAlpha: findProperty("spec_alpha_version") ?: "0.6.249",
+        coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
 }
 
@@ -462,7 +472,7 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
             file("mcmod/src/main/clojure"),
             file("mcmod/src/test/clojure")
         ].findAll { it.directory }
-        // Real API refs look like net.minecraft.Foo ?docstrings saying "net.minecraft.*" do not match.
+        // Real API refs look like net.minecraft.Foo ??docstrings saying "net.minecraft.*" do not match.
         def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
         def violations = []
         roots.each { File root ->
@@ -554,18 +564,34 @@ tasks.register("verifyVersionSeamParity") {
             }
         }
 
-        def baseComponent = components.values().find { it.kind?.toString() == "minecraft-shared" }
-        if (baseComponent?.source) {
-            def baseRoot = file(baseComponent.source.toString())
-            def forbiddenNs = ~/cn\.li\.mc(1201|1211)\./
+        components.each { componentId, component ->
+            if (component.kind?.toString() == "minecraft" && !component.javaNamespace) {
+                problems << "component ${componentId} (kind:minecraft) must declare javaNamespace"
+            }
+        }
+
+        def forbiddenPatterns = components.findAll { id, component ->
+            component.kind?.toString() == "minecraft" && component.javaNamespace
+        }.collect { id, component ->
+            Pattern.compile(Pattern.quote(component.javaNamespace.toString()) + "\\.")
+        }
+
+        components.each { componentId, component ->
+            def kind = component.kind?.toString() ?: ""
+            if (!kind.endsWith("-shared") || !component.source) {
+                return
+            }
+            def root = file(component.source.toString())
             ["**/*.clj", "**/*.cljc", "**/*.java"].each { pattern ->
-                if (!baseRoot.directory) {
+                if (!root.directory) {
                     return
                 }
-                fileTree(baseRoot) { include pattern }.each { File src ->
+                fileTree(root) { include pattern }.each { File src ->
                     src.eachLine { String line, int idx ->
-                        if (forbiddenNs.matcher(line).find()) {
-                            problems << "minecraft-base must not reference version namespaces: ${src}:${idx + 1}"
+                        forbiddenPatterns.each { Pattern forbiddenNs ->
+                            if (forbiddenNs.matcher(line).find()) {
+                                problems << "${componentId} must not reference version namespaces: ${src}:${idx + 1}"
+                            }
                         }
                     }
                 }
@@ -631,24 +657,6 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyVersionSeamParity"
 }
 
-tasks.register("verifySyntheticNeoForgeTarget") {
-    group = "verification"
-    description = "Validate the synthetic Minecraft 26.1 + NeoForge target model without building it."
-    doLast {
-        def fixture = new JsonSlurper().parse(rootProject.file("platform-catalog-fixtures.json"))
-        def target = fixture.targets["neoforge-26.1-synthetic"]
-        if (!target || target.loader != "neoforge" || target.minecraftVersion != "26.1") {
-            throw new GradleException("Synthetic NeoForge 26.1 fixture is incomplete")
-        }
-        if (!fixture.buildProfiles[target.buildProfile]?.fixture) {
-            throw new GradleException("Synthetic target must route through an isolated fixture build profile")
-        }
-        ["platform-src/minecraft/mc-26.1-synthetic", "platform-src/loader/neoforge-26.1-synthetic"].each { path ->
-            if (file(path).exists()) throw new GradleException("Synthetic target must not add production source: ${path}")
-        }
-    }
-}
-
 tasks.register("verifyBuildProfiles") {
     group = "verification"
     description = "Validate Gradle wrapper/profile isolation rules."
@@ -659,45 +667,66 @@ tasks.register("verifyBuildProfiles") {
             ((wrapperText =~ /gradle-([0-9.]+)-bin\.zip/)[0][1]) : null
         def problems = []
         def clojurephantVersions = new LinkedHashSet()
-        def shadowVersions = new LinkedHashSet()
+        def shadowByToolchain = [:].withDefault { new LinkedHashSet() }
         (catalog.buildProfiles ?: [:]).each { profileId, profile ->
+            def toolchain = profile.toolchain?.toString()
+            if (!toolchain || !(toolchain in ["loom", "mdg"])) {
+                problems << "${profileId}: must declare toolchain as loom or mdg"
+            }
+            if (toolchain == "loom" && !profile.loomVersion) {
+                problems << "${profileId}: loom toolchain must declare loomVersion"
+            }
+            if (toolchain == "mdg" && !profile.modDevGradleVersion) {
+                problems << "${profileId}: mdg toolchain must declare modDevGradleVersion"
+            }
+            if (!profile.shadowPluginId) {
+                problems << "${profileId}: must declare shadowPluginId"
+            }
+            if (!profile.shadowVersion) {
+                problems << "${profileId}: must declare shadowVersion"
+            }
+            if (!profile.clojurephantVersion) {
+                problems << "${profileId}: must declare clojurephantVersion"
+            }
             if (profile.wrapper == "root" && profile.gradleVersion.toString() != rootVersion) {
                 problems << "${profileId}: declared Gradle ${profile.gradleVersion} but root wrapper is ${rootVersion}"
             }
-            if (profile.wrapper != "root" && !profile.fixture && !file(profile.wrapper.toString()).exists()) {
-                problems << "${profileId}: missing isolated wrapper ${profile.wrapper}"
+            if (profile.wrapper != "root") {
+                def wrapperPath = profile.wrapper.toString()
+                if (!file(wrapperPath).exists() && !file("${wrapperPath}.bat").exists()) {
+                    problems << "${profileId}: missing isolated wrapper ${wrapperPath} (or ${wrapperPath}.bat)"
+                }
             }
-            if (!profile.fixture && !profile.loomVersion) {
-                problems << "${profileId}: must declare loomVersion"
-            }
-            if (!profile.fixture && !profile.clojurephantVersion) {
-                problems << "${profileId}: must declare clojurephantVersion"
-            }
-            if (!profile.fixture && !profile.shadowVersion) {
-                problems << "${profileId}: must declare shadowVersion"
-            }
-            if (!profile.fixture && profile.clojurephantVersion) {
+            if (profile.clojurephantVersion) {
                 clojurephantVersions << profile.clojurephantVersion.toString()
             }
-            if (!profile.fixture && profile.shadowVersion) {
-                shadowVersions << profile.shadowVersion.toString()
+            if (toolchain && profile.shadowPluginId && profile.shadowVersion) {
+                shadowByToolchain[toolchain] << "${profile.shadowPluginId}:${profile.shadowVersion}"
             }
         }
         if (clojurephantVersions.size() > 1) {
-            problems << "clojurephantVersion must be identical across all non-fixture profiles; found ${clojurephantVersions}"
+            problems << "clojurephantVersion must be identical across all profiles; found ${clojurephantVersions}"
         }
-        if (shadowVersions.size() > 1) {
-            problems << "shadowVersion must be identical across all non-fixture profiles; found ${shadowVersions}"
+        shadowByToolchain.each { toolchain, versions ->
+            if (versions.size() > 1) {
+                problems << "shadow plugin id:version must be identical within toolchain ${toolchain}; found ${versions}"
+            }
         }
         def rootBuildText = file("build.gradle").text
         if (rootBuildText =~ /id\s+[\"']dev\.architectury\.loom[\"']\s+version\s+/) {
             problems << "build.gradle must not hardcode Architectury Loom version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
         }
+        if (rootBuildText =~ /id\s+[\"']net\.neoforged\.moddev[\"']\s+version\s+/) {
+            problems << "build.gradle must not hardcode ModDevGradle version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
+        }
         if (rootBuildText =~ /id\s+[\"']dev\.clojurephant\.clojure[\"']\s+version\s+/) {
             problems << "build.gradle must not hardcode clojurephant version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
         }
         if (rootBuildText =~ /id\s+[\"']com\.github\.johnrengelman\.shadow[\"']\s+version\s+/) {
-            problems << "build.gradle must not hardcode shadow version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
+            problems << "build.gradle must not hardcode johnrengelman shadow version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
+        }
+        if (rootBuildText =~ /id\s+[\"']com\.gradleup\.shadow[\"']\s+version\s+/) {
+            problems << "build.gradle must not hardcode gradleup shadow version; resolve it from platform-catalog buildProfiles via settings.gradle pluginManagement"
         }
         if (!problems.isEmpty()) throw new GradleException("Invalid build profiles:\n" + problems.join("\n"))
     }
@@ -742,7 +771,7 @@ tasks.register("verifySingleApiBoundary") {
 }
 
 // ============================================================================
-// clj-kondo native static lint ?packaging gate via compileClojure
+// clj-kondo native static lint ??packaging gate via compileClojure
 // ============================================================================
 
 def cljKondoVersion = "2025.10.15"
@@ -783,7 +812,7 @@ tasks.register("downloadCljKondo") {
         }
         archiveFile.delete()
         if (!OperatingSystem.current().isWindows()) {
-            exec { commandLine "chmod", "+x", kondoExe.absolutePath }
+            kondoExe.setExecutable(true)
         }
         logger.lifecycle("[clj-kondo] ready: {}", kondoExe)
     }
@@ -819,14 +848,14 @@ tasks.register("lintClojureNative") {
         }
         kondoArgs.addAll(["--fail-level", "error"])
         def out = new ByteArrayOutputStream()
-        def result = exec {
-            workingDir = rootProject.projectDir
-            executable = kondoExe.absolutePath
-            args kondoArgs
-            standardOutput = out
-            errorOutput = out
-            ignoreExitValue = true
-        }
+        def err = new ByteArrayOutputStream()
+        def pb = new ProcessBuilder([kondoExe.absolutePath] + kondoArgs)
+        pb.directory(rootProject.projectDir)
+        pb.redirectErrorStream(true)
+        def proc = pb.start()
+        proc.inputStream.withStream { input -> out << input }
+        def exitValue = proc.waitFor()
+        def result = [exitValue: exitValue]
         def log = out.toString("UTF-8")
         def logFile = lintLog.get().asFile
         logFile.parentFile.mkdirs()

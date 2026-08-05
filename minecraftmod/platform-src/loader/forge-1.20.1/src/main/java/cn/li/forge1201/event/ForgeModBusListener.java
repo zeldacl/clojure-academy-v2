@@ -1,7 +1,7 @@
 package cn.li.forge1201.event;
 
 import cn.li.forge1201.MyMod1201;
-import cn.li.mc1201.datagen.DataGeneratorInterop;
+import cn.li.mcbase.datagen.DataGeneratorInterop;
 import net.minecraftforge.data.event.GatherDataEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;

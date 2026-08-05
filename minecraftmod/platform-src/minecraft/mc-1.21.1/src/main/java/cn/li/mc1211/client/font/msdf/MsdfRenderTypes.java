@@ -1,5 +1,7 @@
 package cn.li.mc1211.client.font.msdf;
 
+import cn.li.mcbase.client.font.msdf.MsdfTextFx;
+
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.Util;

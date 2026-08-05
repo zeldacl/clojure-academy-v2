@@ -75,8 +75,8 @@
          ingredient
          RecipeCategory/MISC
          result-item
-         experience
-         cooking-time)]
+         (float experience)
+         (int cooking-time))]
     (add-unlock-to-builder! builder recipe)
     (.save builder writer (ResourceLocations/of modid/mod-id (str (:id recipe))))))
 

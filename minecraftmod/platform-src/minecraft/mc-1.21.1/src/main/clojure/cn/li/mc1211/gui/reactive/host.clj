@@ -31,7 +31,7 @@
           (fn render-cb [^DelegatingScreen this ^GuiGraphics gg mx my pt]
             (perf/frame-start!)
             (when (not= false render-background?)
-              (.renderBackground this gg))
+              (.renderBackground this gg (int mx) (int my) (float pt)))
             (clock/tick! rt pt)
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)

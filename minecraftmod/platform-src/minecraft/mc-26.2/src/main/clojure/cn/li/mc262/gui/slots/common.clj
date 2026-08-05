@@ -1,0 +1,6 @@
+(ns cn.li.mc262.gui.slots.common)
+(defn spawn-projectile-in-level! [& _] nil)
+(defn break-block! [& _] nil)
+(defn execute-send-message-action [& _] nil)
+(defn create-tile-inventory-adapter [& _] nil)
+(defn init! [& _] nil)

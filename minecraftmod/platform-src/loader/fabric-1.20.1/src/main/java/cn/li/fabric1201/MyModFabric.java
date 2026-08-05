@@ -3,7 +3,7 @@ package cn.li.fabric1201;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.fabric1201.entity.FabricEntities;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.fabric1201.entity.FabricScriptedEntityAccess;
 import net.fabricmc.api.ModInitializer;
 

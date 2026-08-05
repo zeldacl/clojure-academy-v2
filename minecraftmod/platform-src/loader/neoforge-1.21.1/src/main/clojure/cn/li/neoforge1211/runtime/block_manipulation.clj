@@ -7,7 +7,7 @@
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]
            [net.neoforged.neoforge.event.level BlockEvent$BreakEvent]
-           [cn.li.neoforge1211.bridge ForgeRuntimeBridge]))
+           [cn.li.neoforgebase.bridge ForgeRuntimeBridge]))
 
 ;; Forge-specific break guard: fires BlockEvent$BreakEvent
 (defn- forge-break-guard [^ServerLevel level ^BlockPos pos ^ServerPlayer player]

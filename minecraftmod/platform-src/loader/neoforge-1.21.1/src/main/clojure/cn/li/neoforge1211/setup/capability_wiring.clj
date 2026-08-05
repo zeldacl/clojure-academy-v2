@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.setup.capability-wiring
   "NeoForge BlockCapability / ItemCapability registration listener wiring."
-  (:require [cn.li.neoforge1211.setup.consumer-support :as consumer-support]
+  (:require [cn.li.neoforgebase.setup.consumer-support :as consumer-support]
             [cn.li.mcmod.capability.registry :as cap-registry])
   (:import [cn.li.neoforge1211.capability CapabilityRegistry
             ForgeCapabilityHandler

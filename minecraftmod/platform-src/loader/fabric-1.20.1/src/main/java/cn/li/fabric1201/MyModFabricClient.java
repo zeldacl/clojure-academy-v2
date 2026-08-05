@@ -3,7 +3,7 @@ package cn.li.fabric1201;
 import clojure.java.api.Clojure;
 import clojure.lang.IFn;
 import cn.li.fabric1201.client.FabricClientRenderSetup;
-import cn.li.mc1201.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 import net.fabricmc.api.ClientModInitializer;
 
 /**

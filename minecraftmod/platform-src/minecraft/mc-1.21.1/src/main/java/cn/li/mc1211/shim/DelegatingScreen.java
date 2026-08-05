@@ -5,7 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import clojure.lang.IFn;
 import clojure.java.api.Clojure;
-import cn.li.mc1211.clj.ClojureInterop;
+import cn.li.mcbase.clj.ClojureInterop;
 
 /** Universal Screen skeleton — replaces all Screen proxy sites.
  *  Takes IFn callbacks via constructor and chained with* setters.

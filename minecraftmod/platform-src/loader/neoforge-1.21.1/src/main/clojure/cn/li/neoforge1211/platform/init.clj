@@ -12,7 +12,7 @@
             [cn.li.mcbase.platform.player-ops :as player-ops]
             [cn.li.mcbase.platform.world-block-ops :as world-block-ops]
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.neoforge1211.integration.side :as side]
+            [cn.li.neoforgebase.integration.side :as side]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.adapter.minecraft-ops :as minecraft-ops]))
 
@@ -28,7 +28,7 @@
 
 (defn- resolve-local-player-class []
   (when (side/client-side?)
-    (cn.li.neoforge1211.bridge.ClientPlatformBridge/getLocalPlayerClass)))
+    (cn.li.neoforgebase.bridge.ClientPlatformBridge/getLocalPlayerClass)))
 
 (def ^:private forge-adapter
   (minecraft-ops/build-adapter-map

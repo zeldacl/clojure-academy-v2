@@ -141,7 +141,7 @@
               ;; dimmed the whole UI.
               (.callSuperRender this gg mx my pt)
               ;; non-inv tab: no vanilla slots — draw dark bg + reactive tree here.
-              (do (.renderBackground this gg)
+              (do (.renderBackground this gg (int mx) (int my) (float pt))
                   (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
                   (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
             (catch Exception e

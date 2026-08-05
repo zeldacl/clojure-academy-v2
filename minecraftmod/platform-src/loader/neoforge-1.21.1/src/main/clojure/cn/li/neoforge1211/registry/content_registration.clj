@@ -3,7 +3,7 @@
   cn.li.platform.registry.content-registration-core."
   (:require [cn.li.neoforge1211.integration.bootstrap :as bootstrap]
             [cn.li.mc1211.item.item-properties :as item-properties]
-            [cn.li.neoforge1211.registry.state :as registry-state]
+            [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.neoforge1211.runtime.owner :as runtime-owner]
             [cn.li.mc1211.block.logic-pipeline :as logic-pipeline]
             [cn.li.mc1211.entity.mob-logic-pipeline :as mob-pipeline]
@@ -100,7 +100,7 @@
       (fn [{:keys [block-id registry-name fluid-id needs-dynamic-properties?
                    has-be? tile-id]}]
         (let [registered-obj
-              (.register ^DeferredRegister blocks-register registry-name
+              (.register ^DeferredRegister blocks-register ^String (str registry-name)
                          (reify java.util.function.Supplier
                            (get [_]
                              (let [block (cond
@@ -136,7 +136,7 @@
   [{:keys [fluid-types-register fluids-register items-register]}]
   (core/for-each-fluid-plan!
     (fn [{:keys [fluid-id registry-name flowing-name physical rendering behavior block-spec]}]
-      (let [fluid-type-ro (.register ^DeferredRegister fluid-types-register registry-name
+      (let [fluid-type-ro (.register ^DeferredRegister fluid-types-register ^String (str registry-name)
                                      (reify java.util.function.Supplier
                                        (get [_]
                                          (bootstrap/create-fluid-type
@@ -153,7 +153,7 @@
             source-holder (atom nil)
             flowing-holder (atom nil)
             bucket-holder (atom nil)
-            source-ro (.register ^DeferredRegister fluids-register registry-name
+            source-ro (.register ^DeferredRegister fluids-register ^String (str registry-name)
                                  (reify java.util.function.Supplier
                                    (get [_]
                                      (bootstrap/create-source-fluid
@@ -176,7 +176,7 @@
                                          (:tick-rate behavior)
                                          (:explosion-resistance behavior)
                                          (:can-convert-to-source physical))))))
-            flowing-ro (.register ^DeferredRegister fluids-register flowing-name
+            flowing-ro (.register ^DeferredRegister fluids-register ^String (str flowing-name)
                                   (reify java.util.function.Supplier
                                     (get [_]
                                       (bootstrap/create-flowing-fluid
@@ -205,7 +205,7 @@
         (registry-state/register-fluid-source! fluid-id source-ro)
         (registry-state/register-fluid-flowing! fluid-id flowing-ro)
         (when (:has-bucket? block-spec)
-          (let [bucket-ro (.register ^DeferredRegister items-register (:bucket-registry-name block-spec)
+          (let [bucket-ro (.register ^DeferredRegister items-register ^String (str (:bucket-registry-name block-spec))
                                      (reify java.util.function.Supplier
                                        (get [_]
                                          (bootstrap/create-fluid-bucket
@@ -226,7 +226,7 @@
           (let [registered-obj
                 (.register
                   ^DeferredRegister block-entities-register
-                  registry-name
+                  ^String (str registry-name)
                   (reify java.util.function.Supplier
                     (get [_]
                       (let [pairs (keep (fn [[block-id ^DeferredHolder ro]]
@@ -287,7 +287,7 @@
   [{:keys [sounds-register mod-id]}]
   (core/for-each-sound-plan!
     (fn [{:keys [sound-id registry-name]}]
-      (let [registered-obj (.register ^DeferredRegister sounds-register registry-name
+      (let [registered-obj (.register ^DeferredRegister sounds-register ^String (str registry-name)
                                       (reify java.util.function.Supplier
                                         (get [_]
                                           (SoundEvent/createVariableRangeEvent
@@ -298,7 +298,7 @@
   [{:keys [effects-register]}]
   (core/for-each-effect-plan!
     (fn [{:keys [effect-id registry-name category color tick-interval damage-per-tick]}]
-      (let [registered-obj (.register ^DeferredRegister effects-register registry-name
+      (let [registered-obj (.register ^DeferredRegister effects-register ^String (str registry-name)
                                       (reify java.util.function.Supplier
                                         (get [_]
                                           (ScriptedMobEffect. (effect-category->forge category)
@@ -309,7 +309,7 @@
   [{:keys [particle-types-register]}]
   (core/for-each-particle-plan!
     (fn [{:keys [particle-id registry-name always-show?]}]
-      (let [registered-obj (.register ^DeferredRegister particle-types-register registry-name
+      (let [registered-obj (.register ^DeferredRegister particle-types-register ^String (str registry-name)
                                       (reify java.util.function.Supplier
                                         (get [_]
                                           (SimpleParticleType. always-show?))))]
@@ -319,7 +319,7 @@
   [{:keys [items-register]}]
   (core/for-each-item-plan!
     (fn [{:keys [item-id registry-name item-spec]}]
-      (let [registered-obj (.register ^DeferredRegister items-register registry-name
+      (let [registered-obj (.register ^DeferredRegister items-register ^String (str registry-name)
                                       (reify java.util.function.Supplier
                                         (get [_]
                                           (item-properties/create-standalone-item
@@ -331,7 +331,7 @@
       (when (core/should-register-block-item? plan)
         (let [{:keys [block-id registry-name]} plan
               block-registered (registry-state/get-registered-block-ro block-id)
-              registered-obj (.register ^DeferredRegister items-register registry-name
+              registered-obj (.register ^DeferredRegister items-register ^String (str registry-name)
                                         (reify java.util.function.Supplier
                                           (get [_]
                                             (when (and block-registered (.isBound ^DeferredHolder block-registered))

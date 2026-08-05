@@ -10,7 +10,7 @@
 	(:import [net.neoforged.bus.api IEventBus]
 				 [net.neoforged.fml ModContainer]
 				 [cn.li.neoforge1211.gametest ForgeGameTestRegistration]
-				 [cn.li.neoforge1211.bootstrap ForgeBootstrapGuard]))
+				 [cn.li.neoforgebase.bootstrap ForgeBootstrapGuard]))
 
 (defn register-config-phase!
 	[^IEventBus mod-bus ^ModContainer mod-container _opts]

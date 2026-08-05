@@ -1,41 +1,54 @@
 package cn.li.mcver;
 
+import java.util.Objects;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * Version seam for block-entity persistence.
- * Contract includes a registries handle that maps to HolderLookup.Provider on 1.21.1;
- * 1.20.1 ignores it. saveAdditional remains protected on both versions — subclasses
- * call {@link #writeAdditional} from their override.
+ * Contracts are shaped for 26.2 ({@link Io} over {@code ValueInput}/{@code ValueOutput}).
+ * On 1.20.1 neither those types nor {@code HolderLookup.Provider} exist, so {@link Io}
+ * wraps a bare {@link CompoundTag}.
  */
 public final class BlockEntityIo {
     private BlockEntityIo() {
     }
 
-    /**
-     * Opaque registries handle. On 1.20.1 this is unused; callers may pass {@link #NO_REGISTRIES}.
-     */
-    public interface Registries {
+    /** Opaque handle over a persistence payload (CompoundTag on 1.20.1). */
+    public sealed interface Io {
     }
 
-    public static final Registries NO_REGISTRIES = new Registries() {
-    };
-
-    public static void load(BlockEntity be, CompoundTag tag, Registries registries) {
-        be.load(tag);
+    private record TagIo(CompoundTag tag) implements Io {
     }
 
-    public static CompoundTag getUpdateTag(BlockEntity be, Registries registries) {
+    public static Io ofValueInput(CompoundTag tag) {
+        return new TagIo(Objects.requireNonNull(tag, "tag"));
+    }
+
+    public static Io ofValueOutput(CompoundTag tag) {
+        return ofValueInput(tag);
+    }
+
+    public static CompoundTag asTag(Io io) {
+        if (io instanceof TagIo tagIo) {
+            return tagIo.tag();
+        }
+        throw new IllegalStateException("BlockEntityIo.Io is not backed by a CompoundTag");
+    }
+
+    public static void load(BlockEntity be, Io io) {
+        be.load(asTag(io));
+    }
+
+    public static CompoundTag getUpdateTag(BlockEntity be) {
         return be.getUpdateTag();
     }
 
     /**
      * Callback used by versioned block-entity subclasses when writing NBT.
-     * On 1.21.1 the registries argument is a real HolderLookup.Provider.
      */
     @FunctionalInterface
     public interface AdditionalWriter {
-        void write(CompoundTag tag, Registries registries);
+        void write(Io io);
     }
 }
