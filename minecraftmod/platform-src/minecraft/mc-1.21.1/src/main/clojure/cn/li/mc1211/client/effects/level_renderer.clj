@@ -162,6 +162,9 @@
      :player-width (.getBbWidth player)
      :player-height (.getBbHeight player)
      :player-yaw-rad yaw-rad
+     ;; Body yaw (the original's renderYawOffset): effects anchored to the
+     ;; torso must not swing when only the head turns.
+     :player-body-yaw-rad (Math/toRadians (double (.-yBodyRot player)))
      :player-pitch-rad (Math/toRadians (double (.getXRot player)))
      :x (+ base-x (* (.-x look) 0.35) (* right-x 0.22))
      :y (+ base-y -0.22 (* (.-y look) 0.06))
