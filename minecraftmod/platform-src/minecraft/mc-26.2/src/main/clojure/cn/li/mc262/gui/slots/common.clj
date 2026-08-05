@@ -2,10 +2,10 @@
   "Shared slot construction/layout helpers for platform menu bridges.
 
    Uses DynamicSlot (universal Java skeleton) instead of per-feature proxy [Slot].
-   reify Predicate/Supplier is safe �?JDK core interfaces, never obfuscated."
+   reify Predicate/Supplier is safe 鈥?JDK core interfaces, never obfuscated."
   (:require [cn.li.mcmod.gui.slot-registry :as slot-registry]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc262.shim DynamicSlot]
+  (:import [cn.li.mcbase.shim DynamicSlot]
            [cn.li.mcbase.shim FnPredicate FnSupplier]
            [net.minecraft.world.inventory Slot AbstractContainerMenu]
            [net.minecraft.world.entity.player Inventory]
@@ -118,7 +118,7 @@
    (let [slot-fn (if active?-fn
                    (fn [inv idx x y] (create-conditional-slot inv idx x y active?-fn))
                    (fn [inv idx x y] (create-standard-slot inv idx x y)))
-         ;; Flatten 3×9 indices �?avoids 2-binding `doseq` `$iter` nesting.
+         ;; Flatten 3脳9 indices 鈥?avoids 2-binding `doseq` `$iter` nesting.
          inv-cells (persistent!
                     (reduce (fn [out row]
                               (reduce (fn [out' col]

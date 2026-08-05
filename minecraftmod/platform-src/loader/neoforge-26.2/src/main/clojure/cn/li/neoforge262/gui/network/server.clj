@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.gui.network.server
-  "NeoForge 1.21.1 GUI/RPC server transport via ClojureNetwork payloads."
+  "NeoForge 26.2 GUI/RPC server transport via ClojureNetwork payloads."
   (:require [cn.li.neoforge262.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcmod.network.server :as net-server]

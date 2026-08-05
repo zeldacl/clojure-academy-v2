@@ -2,7 +2,7 @@
   "Shared Brigadier helpers used by both Forge and Fabric command registration.
 
   These helpers only depend on vanilla Brigadier / Minecraft command APIs, so
-  they belong in mc1211 rather than platform loader modules."
+  they belong in the Minecraft version component rather than loader modules."
   (:require [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier.arguments StringArgumentType IntegerArgumentType FloatArgumentType BoolArgumentType]
            [com.mojang.brigadier.context CommandContext]

@@ -1,6 +1,6 @@
 package cn.li.forge1201.network;
 
-import cn.li.mc1201.network.NetworkHandlerRegistry;
+import cn.li.mcbase.network.NetworkHandlerRegistry;
 import clojure.lang.IFn;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;

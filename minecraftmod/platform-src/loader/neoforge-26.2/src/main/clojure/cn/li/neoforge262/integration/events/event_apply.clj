@@ -6,7 +6,7 @@
            [net.minecraft.world InteractionResult]
            [net.neoforged.neoforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
            [net.neoforged.bus.api Event]
-           [cn.li.neoforge262.bridge EventInterop]))
+           [cn.li.neoforgebase.bridge EventInterop]))
 
 (defn deny-right-click-use!
   [evt]

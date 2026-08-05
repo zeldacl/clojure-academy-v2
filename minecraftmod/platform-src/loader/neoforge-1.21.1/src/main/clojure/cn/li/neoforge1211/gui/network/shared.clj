@@ -1,8 +1,8 @@
 (ns cn.li.neoforge1211.gui.network.shared
   "Shared NeoForge GUI network owner-binding, payload decode, and handler install."
   (:require [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc1211.runtime.network-payload :as runtime-payload]
-            [cn.li.mc1211.runtime.sync-codec :as sync-codec]
+            [cn.li.mcbase.runtime.network-payload :as runtime-payload]
+            [cn.li.mcbase.runtime.sync-codec :as sync-codec]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])

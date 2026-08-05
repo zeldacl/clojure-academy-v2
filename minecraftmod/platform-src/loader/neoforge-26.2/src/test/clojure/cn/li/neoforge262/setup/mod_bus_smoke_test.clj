@@ -20,5 +20,5 @@
 
 (deftest config-registration-callable
   (testing "register-all! is callable from bridge module"
-    (let [bridge-ns (symbol "cn.li.neoforge262.config.bridge")]
+    (let [bridge-ns (symbol "cn.li.neoforgebase.config.bridge")]
       (is (some? (resolve (symbol (str bridge-ns) "register-all!")))))))

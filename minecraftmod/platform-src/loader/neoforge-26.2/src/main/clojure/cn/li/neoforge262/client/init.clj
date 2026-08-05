@@ -14,7 +14,7 @@
             [cn.li.mc262.client.overlay.state :as overlay-state]
             [cn.li.mc262.client.i18n :as i18n]
             [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter]
-            [cn.li.mc262.client.audio.media-playback :as media-playback-bridge]
+            [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc262.client.effects.particle :as particle]
             [cn.li.mc262.client.effects.sound :as sound]
             [cn.li.mc262.gui.cgui.font :as cgui-font]
@@ -329,7 +329,7 @@
                                (.players level))))]
           (when player
             (.post NeoForge/EVENT_BUS
-                   (cn.li.neoforge262.event.TutorialActivatedEvent. player (name tut-id)))))
+                   (cn.li.neoforgebase.event.TutorialActivatedEvent. player (name tut-id)))))
         (catch Throwable e
           (log/stacktrace "install-tutorial-activated-bridge!: hook callback failed" e))))))
 

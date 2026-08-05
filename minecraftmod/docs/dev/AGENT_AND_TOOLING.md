@@ -34,6 +34,8 @@ Version-seam rules: [MC_VERSION_SEAM.md](MC_VERSION_SEAM.md). Loader hook capabi
 - Fabric compile: `.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:compileClojure`
 - NeoForge 1.21.1 compile: `.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:compileClojure`
 - NeoForge 26.2 build: `.\scripts\target-gradle.ps1 neoforge-26.2 :platform:build` (requires JDK 25 / `MC_JAVA_HOME_25`)
+- Target tests: `.\scripts\target-gradle.ps1 <target-id> :platform:runPlatformClojureTests`
+- NeoForge 26.2 datagen: `.\scripts\target-gradle.ps1 neoforge-26.2 :platform:runData`
 - Forge / Fabric / NeoForge lint:
   - `.\scripts\target-gradle.ps1 forge-1.20.1 lintClojureNative`
   - `.\scripts\target-gradle.ps1 fabric-1.20.1 lintClojureNative`

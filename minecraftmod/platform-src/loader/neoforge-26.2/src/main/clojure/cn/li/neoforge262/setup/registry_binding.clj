@@ -1,8 +1,8 @@
 (ns cn.li.neoforge262.setup.registry-binding
   "Forge registry/config registration binding extracted from mod-bus orchestration."
-  (:require [cn.li.neoforge262.config.bridge :as config-bridge]
+  (:require [cn.li.neoforgebase.config.bridge :as config-bridge]
             [cn.li.neoforgebase.integration.side :as side]
-            [cn.li.neoforge262.setup.deferred-registries :as deferred-registries]
+            [cn.li.neoforgebase.setup.deferred-registries :as deferred-registries]
             [cn.li.neoforge262.setup.lifecycle-listeners :as lifecycle-listeners])
   (:import [cn.li.neoforge262.entity ModEntities]
            [cn.li.neoforge262.recipe ModRecipeTypes]

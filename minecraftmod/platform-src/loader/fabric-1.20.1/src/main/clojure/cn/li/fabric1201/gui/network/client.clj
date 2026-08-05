@@ -3,7 +3,7 @@
   net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
+            [cn.li.mcbase.runtime.network-payload :as runtime-payload]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.install :as install]

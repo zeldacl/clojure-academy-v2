@@ -1,6 +1,6 @@
 package cn.li.neoforge262.network;
 
-import cn.li.mc262.network.NetworkHandlerRegistry;
+import cn.li.mcbase.network.NetworkHandlerRegistry;
 import cn.li.mcmod.ModId;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
@@ -10,7 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * NeoForge 1.21.1 {@link CustomPacketPayload} types for the Clojure GUI RPC channel.
+ * NeoForge 26.2 {@link CustomPacketPayload} types for the Clojure GUI RPC channel.
  */
 final class ClojureNetworkPackets {
     private ClojureNetworkPackets() {

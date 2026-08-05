@@ -78,7 +78,8 @@ public final class ImmediateDraw {
     }
 
     /**
-     * One POSITION_TEX axis-aligned quad. Caller must already set shader + texture.
+     * One POSITION_TEX axis-aligned quad emitted into the bound consumer.
+     * The collector-selected RenderType owns shader, texture, blend, and depth state.
      */
     public static void texturedQuad(
             Matrix4f pose,

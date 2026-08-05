@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.init
-  "NeoForge 1.21.1 initialization and version-specific implementations"
+  "NeoForge 26.2 initialization and version-specific implementations"
   (:require [cn.li.mc262.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.framework :as fw]
@@ -7,7 +7,7 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
             [cn.li.neoforge262.capability.fluid-handler :as fluid-handler]
-            [cn.li.neoforge262.integration.imc-dispatch :as imc-dispatch]
+            [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]
             [cn.li.neoforge262.achievement.bridge :as achievement-bridge])
   (:import [cn.li.mc262.trigger ModTriggers]))
 

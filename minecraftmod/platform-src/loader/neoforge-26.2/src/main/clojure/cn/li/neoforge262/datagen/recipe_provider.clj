@@ -26,7 +26,8 @@
         (catch Throwable t
           (log/warn "Recipe datagen failed:" (ex-message t))
           (.printStackTrace t)
-          nil)))))
+          ;; Do not swallow: an empty/partial recipe set must fail the run.
+          (throw t))))))
 
 (defn create
   "Build RecipeProvider.Runner for GatherDataEvent.addProvider / createProvider."

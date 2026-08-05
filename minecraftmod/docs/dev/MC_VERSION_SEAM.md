@@ -107,15 +107,16 @@ registries concept on this path in 1.20.1 vanilla).
 - `begin` / `vertex` / `draw` / `texturedQuad`
 - `Vertex.uv` / `color` / `endVertex`
 
-Does not own shader/texture/blend/depth state — callers set those first.
-
 26.2: removed the `Tesselator`/`BufferUploader`/`VertexFormat.Mode` immediate-draw
-path as part of the RenderPipeline/GpuBuffer render rewrite. The seam now writes
-through the `VertexConsumer` supplied by `SubmitNodeCollector` custom geometry;
-`draw` closes the logical batch because upload and graphics state belong to the
-collector's `RenderType`.
-1.21.1: `Tesselator.begin` → `BufferBuilder.buildOrThrow` → `MeshData` → `BufferUploader.drawWithShader`; `endVertex` is a no-op.  
-1.20.1: `Tesselator.getBuilder()` + `endVertex` + `BufferUploader.drawWithShader(bb.end())`.
+path as part of the RenderPipeline/GpuBuffer render rewrite. The seam is
+consumer-bound: the `SubmitNodeCollector` selects the `RenderType`/pipeline and
+supplies its `VertexConsumer`; `draw` only closes the logical batch because
+upload and graphics state belong to that pipeline.
+1.21.1: `Tesselator.begin` → `BufferBuilder.buildOrThrow` → `MeshData` →
+`BufferUploader.drawWithShader`; legacy callers still select shader/texture state
+before entering the seam and `endVertex` is a no-op.
+1.20.1: same downgrade model using `Tesselator.getBuilder()` + `endVertex` +
+`BufferUploader.drawWithShader(bb.end())`.
 
 ## `minecraft-base` (`cn.li.mcbase`)
 
@@ -131,7 +132,8 @@ Version-agnostic Minecraft glue shared by every target that includes this compon
 - Runtime SPIs under `cn.li.mcbase.runtime.spi.*`
 - Datagen helpers under `cn.li.mcbase.datagen.*`
 
-**Must not** reference version namespaces (`cn.li.mc1201.*`, `cn.li.mc1211.*`).
+**Must not** reference version namespaces (`cn.li.mc1201.*`, `cn.li.mc1211.*`,
+`cn.li.mc262.*`).
 Version forks live in `cn.li.mcver.*` under each `mc-<version>` component, not in base.
 
 ## Gate: `verifyVersionSeamParity`
@@ -141,7 +143,9 @@ Registered in root `build.gradle`; included in `verifyCurrentPlatforms`.
 Checks:
 
 1. Each catalog **target** lists at most one component with `kind: "minecraft"`.
-2. `minecraft-base` sources do not mention `cn.li.mc1201.` / `cn.li.mc1211.`.
+2. Every `kind: "*-shared"` source tree is checked against catalog-derived
+   Minecraft namespaces (`cn.li.mc1201.` / `cn.li.mc1211.` / `cn.li.mc262.`)
+   and versioned loader namespaces.
 3. Relative seam type names under `…/java/cn/li/mcver` (and optional Clojure seam
    tree) are identical across all `kind: "minecraft"` components.
 

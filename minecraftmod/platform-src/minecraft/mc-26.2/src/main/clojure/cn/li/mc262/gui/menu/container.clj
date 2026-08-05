@@ -1,16 +1,15 @@
 (ns cn.li.mc262.gui.menu.container
-  "Shared Minecraft 1.20.1 container adapter for Clojure-side containers.
+  "Minecraft 26.2 container adapter for Clojure-side containers.
 
   Wraps a Clojure container map (via mcmod gui.adapter.platform-registry) as a
-  vanilla `net.minecraft.world.Container` so Forge and Fabric slot machinery
-  can interact with it without platform-specific code."
+  vanilla `net.minecraft.world.Container` for loader slot machinery."
   (:require [cn.li.mcmod.gui.adapter.platform-registry :as platform])
   (:import [cn.li.mc262.shim UniversalContainer]))
 
 (defn create-tile-inventory-adapter
   "Return a `Container` Java skeleton backed by a Clojure container.
 
-  Works identically on Forge and Fabric â€?both use the same MC 1.20.1 API."
+  The loader-facing menu bridge delegates all slot operations through this adapter."
   [clj-container]
   (UniversalContainer.
     clj-container

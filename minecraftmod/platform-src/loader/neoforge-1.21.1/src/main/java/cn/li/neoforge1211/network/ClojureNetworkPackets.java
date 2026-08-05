@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.network;
 
-import cn.li.mc1211.network.NetworkHandlerRegistry;
+import cn.li.mcbase.network.NetworkHandlerRegistry;
 import cn.li.mcmod.ModId;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;

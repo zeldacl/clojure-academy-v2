@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.runtime.lifecycle-event-binding-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.neoforge1211.runtime.lifecycle-event-binding :as binding])
+            [cn.li.neoforgebase.runtime.lifecycle-event-binding :as binding])
   (:import [net.neoforged.neoforge.event.entity.player PlayerEvent$PlayerLoggedInEvent
                                                  PlayerEvent$PlayerLoggedOutEvent
                                                  PlayerEvent$Clone

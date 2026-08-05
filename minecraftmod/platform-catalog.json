@@ -84,6 +84,7 @@
       "kind": "loader",
       "loader": "neoforge",
       "minecraftVersion": "1.21.1",
+      "javaNamespace": "cn.li.neoforge1211",
       "source": "platform-src/loader/neoforge-1.21.1/src/main",
       "tests": "platform-src/loader/neoforge-1.21.1/src/test",
       "runtimeAotEntrypoint": "cn.li.neoforge1211.mod"
@@ -92,6 +93,7 @@
       "kind": "loader",
       "loader": "neoforge",
       "minecraftVersion": "26.2",
+      "javaNamespace": "cn.li.neoforge262",
       "source": "platform-src/loader/neoforge-26.2/src/main",
       "tests": "platform-src/loader/neoforge-26.2/src/test",
       "runtimeAotEntrypoint": "cn.li.neoforge262.mod"

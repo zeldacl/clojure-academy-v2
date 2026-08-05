@@ -2,6 +2,12 @@ plugins {
     id 'java-library'
 }
 
+// buildSrc is compiled by both the Loom (Gradle 8 / JDK 21) and MDG
+// (Gradle 9 / JDK 25) profiles. Keep their class outputs isolated: Gradle 8
+// cannot instrument Java 25 bytecode left behind by an earlier MDG build.
+layout.buildDirectory = layout.projectDirectory.dir(
+        "build/${gradle.gradleVersion}-jvm${JavaVersion.current().majorVersion}")
+
 repositories {
     gradlePluginPortal()
     mavenCentral()

@@ -25,7 +25,7 @@
             [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
-            [cn.li.mc1201.client.audio.media-playback :as media-playback-bridge]
+            [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]

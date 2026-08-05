@@ -1,8 +1,8 @@
 (ns cn.li.neoforge262.gui.network.shared
   "Shared NeoForge GUI network owner-binding, payload decode, and handler install."
   (:require [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc262.runtime.network-payload :as runtime-payload]
-            [cn.li.mc262.runtime.sync-codec :as sync-codec]
+            [cn.li.mcbase.runtime.network-payload :as runtime-payload]
+            [cn.li.mcbase.runtime.sync-codec :as sync-codec]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
@@ -122,5 +122,5 @@
     (install/process-once! ::handlers-installed
       (fn []
         (invoke-network-static "init" @request-handler-ref @response-handler-ref)
-        (log/info "NeoForge 1.21.1 GUI network system initialized"))))
+        (log/info "NeoForge 26.2 GUI network system initialized"))))
   nil)

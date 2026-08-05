@@ -1,8 +1,8 @@
 (ns cn.li.forge1201.gui.network.shared
   "Shared Forge GUI network owner-binding, payload decode, and channel install."
   (:require [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
-            [cn.li.mc1201.runtime.sync-codec :as sync-codec]
+            [cn.li.mcbase.runtime.network-payload :as runtime-payload]
+            [cn.li.mcbase.runtime.sync-codec :as sync-codec]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])

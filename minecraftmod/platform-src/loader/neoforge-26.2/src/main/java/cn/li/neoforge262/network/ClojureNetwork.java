@@ -1,6 +1,6 @@
 package cn.li.neoforge262.network;
 
-import cn.li.mc262.network.NetworkHandlerRegistry;
+import cn.li.mcbase.network.NetworkHandlerRegistry;
 import clojure.lang.IFn;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -8,7 +8,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 
 /**
- * NeoForge 1.21.1 {@code CustomPacketPayload} bridge for the Clojure GUI RPC network system.
+ * NeoForge 26.2 {@code CustomPacketPayload} bridge for the Clojure GUI RPC network system.
  */
 public class ClojureNetwork {
     private ClojureNetwork() {

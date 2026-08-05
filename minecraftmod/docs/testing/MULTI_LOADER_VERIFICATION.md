@@ -31,4 +31,13 @@ Compile / build smoke examples:
 .\scripts\target-gradle.ps1 neoforge-26.2 :platform:runData
 ```
 
+Run the target-local Clojure test suite for every production target:
+
+```text
+.\scripts\target-gradle.ps1 forge-1.20.1 :platform:runPlatformClojureTests
+.\scripts\target-gradle.ps1 fabric-1.20.1 :platform:runPlatformClojureTests
+.\scripts\target-gradle.ps1 neoforge-1.21.1 :platform:runPlatformClojureTests
+.\scripts\target-gradle.ps1 neoforge-26.2 :platform:runPlatformClojureTests
+```
+
 Do not use old root module commands. Do not add a new real target only to test architecture expansion without an explicit product decision.

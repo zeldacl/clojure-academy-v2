@@ -1,5 +1,5 @@
 (ns cn.li.mc262.runtime.accessor-registry
-  "Explicit bootstrap for built-in mc1211 runtime accessor declarations."
+  "Explicit bootstrap for built-in Minecraft 26.2 runtime accessor declarations."
   (:require [cn.li.mcbase.runtime.accessor-registry-world :as world]
             [cn.li.mcbase.runtime.accessor-registry-entity :as entity]
             [cn.li.mcbase.runtime.accessor-registry-render :as render]

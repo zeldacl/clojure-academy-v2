@@ -43,10 +43,12 @@ neoForge {
             programArgument "--nogui"
         }
         data {
-            // 26.x uses clientData (data() is for <=1.21.3).
+            // 26.x MDG exposes clientData/serverData. Sharing one --output across
+            // both runs lets each HashCache delete the other run's files. Register
+            // all providers on GatherDataEvent.Client and use clientData only.
             clientData()
-            ideName = "${target.id} Data"
-            gameDirectory = project.file("run/${target.id}/data")
+            ideName = "${target.id} Client Data"
+            gameDirectory = project.file("run/${target.id}/client-data")
             def existingArgs = ["--mod", modId.toString(), "--all",
                 "--output", generatedDatagenResources.get().asFile.absolutePath]
             loaderResourceRoots.each { root -> existingArgs.addAll(["--existing", root]) }

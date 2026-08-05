@@ -7,7 +7,7 @@
 
   Here we provide helper send-fns for context manager and sync service."
   (:require [cn.li.mc1201.runtime.network-core :as network-core]
-            [cn.li.mc1201.runtime.network-payload :as network-payload]
+            [cn.li.mcbase.runtime.network-payload :as network-payload]
             [cn.li.forge1201.adapter.server-context :as _server-context])
   (:import [cn.li.forge1201.network ClojureNetwork]
            [net.minecraft.server.level ServerPlayer]))

@@ -18,7 +18,6 @@ import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -90,6 +89,14 @@ public final class ForgeBootstrapHelper {
 
     public static BlockBehaviour.Properties createStoneProperties() {
         return SharedBootstrapBlockHelper.createStoneProperties();
+    }
+
+    public static BlockBehaviour.Properties createStoneProperties(String registryId) {
+        return SharedBootstrapBlockHelper.createStoneProperties(registryId);
+    }
+
+    public static Item.Properties createItemProperties(String registryId) {
+        return SharedBootstrapBlockHelper.createItemProperties(registryId);
     }
 
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
@@ -189,7 +196,7 @@ public final class ForgeBootstrapHelper {
         if (blockSupplier != null) {
             properties = properties.block(blockSupplier);
         }
-        // NeoForge 1.21.1 API does not expose a configurable canConvertToSource setter.
+        // NeoForge 26.2 API does not expose a configurable canConvertToSource setter.
         // Keep parameter for cross-platform metadata parity; behavior follows default.
         return properties;
     }
@@ -202,18 +209,23 @@ public final class ForgeBootstrapHelper {
         return new BaseFlowingFluid.Flowing(properties);
     }
 
-    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
-        return new LiquidBlock(fluidSupplier.get(), BlockBehaviour.Properties.ofFullCopy(Blocks.WATER));
+    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
+                                          String registryId) {
+        return new LiquidBlock(
+            fluidSupplier.get(),
+            SharedBootstrapBlockHelper.createWaterProperties(registryId)
+        );
     }
 
     public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
-                                                   String tileId) {
+                                                   String tileId,
+                                                   String registryId) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            BlockBehaviour.Properties.ofFullCopy(Blocks.WATER),
+            SharedBootstrapBlockHelper.createWaterProperties(registryId),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
@@ -225,10 +237,11 @@ public final class ForgeBootstrapHelper {
             });
     }
 
-    public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {
+    public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier,
+                                         String registryId) {
         return new net.minecraft.world.item.BucketItem(
             fluidSupplier.get(),
-            new Item.Properties()
+            SharedBootstrapBlockHelper.createItemProperties(registryId)
                 .stacksTo(1)
                 .craftRemainder(Items.BUCKET)
         );

@@ -1,8 +1,8 @@
 (ns cn.li.neoforge262.registry.creative-tab-event
-  "BuildCreativeModeTabContentsEvent handler â€” 1.20+ data-driven creative tab population.
+  "BuildCreativeModeTabContentsEvent handler â€?1.20+ data-driven creative tab population.
 
   Replaces the legacy `displayItems` callback on CreativeModeTab.builder()
-  with the event-driven pattern recommended by official NeoForge 1.21.1 docs.
+  with the event-driven pattern recommended by official NeoForge 26.2 docs.
 
   Architecture:
   - Registered on the ModEventBus alongside lifecycle listeners.
@@ -87,7 +87,7 @@
     (when item-obj
       ;; Default (empty) instance
       (.accept event ^ItemLike item-obj)
-      ;; Stateful variants â€” only for standalone items, not block-items
+      ;; Stateful variants â€?only for standalone items, not block-items
       (when (= type :item)
         (when-let [spec (registry-metadata/get-item-spec id)]
           (let [props (:properties spec)]

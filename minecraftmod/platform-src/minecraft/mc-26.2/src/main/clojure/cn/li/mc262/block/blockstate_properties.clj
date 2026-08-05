@@ -1,9 +1,9 @@
 (ns cn.li.mc262.block.blockstate-properties
-  "Shared mc1211 orchestration for platform BlockState property adapters.
+  "Minecraft 26.2 orchestration for platform BlockState property adapters.
 
   BlockState property creation here uses only vanilla Minecraft APIs, so the
-  registry and default constructors can live entirely in mc1211 rather than be
-  mirrored by Forge/Fabric wrapper namespaces."
+  registry and default constructors can live in the version component rather
+  than being mirrored by Forge/Fabric wrapper namespaces."
   (:require [cn.li.mcmod.block.blockstate-properties :as shared]
             [cn.li.mcmod.block.query :as bquery]
             [cn.li.mcmod.util.log :as log])
@@ -58,7 +58,7 @@
 (defn init-all-properties!
   ([]
    (init-all-properties!
-    "mc1211 shared adapter"
+    "mc262 shared adapter"
     property-registry
     (fn [block-id]
       (get-in (bquery/get-block-spec block-id)

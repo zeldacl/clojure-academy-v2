@@ -4,6 +4,7 @@ import cn.li.mc262.block.IScriptedBlock;
 import cn.li.mc262.block.logic.ITileNbtLogic;
 import cn.li.mc262.block.logic.ITileTickLogic;
 import cn.li.mc262.block.logic.TileLogicBundle;
+import cn.li.mcver.BlockEntityIo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -106,7 +107,10 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
         super.loadAdditional(input);
         ITileNbtLogic nbt = bundle().nbt;
         if (nbt != null) {
-            CompoundTag tag = input.read(DATA_KEY, CompoundTag.CODEC).orElseGet(CompoundTag::new);
+            BlockEntityIo.Io io = BlockEntityIo.ofValueInput(input);
+            CompoundTag tag = BlockEntityIo.asValueInput(io)
+                .read(DATA_KEY, CompoundTag.CODEC)
+                .orElseGet(CompoundTag::new);
             nbt.readNbt(this, tag);
         }
     }
@@ -118,7 +122,8 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
         if (nbt != null) {
             CompoundTag tag = new CompoundTag();
             nbt.writeNbt(this, tag);
-            output.store(DATA_KEY, CompoundTag.CODEC, tag);
+            BlockEntityIo.Io io = BlockEntityIo.ofValueOutput(output);
+            BlockEntityIo.asValueOutput(io).store(DATA_KEY, CompoundTag.CODEC, tag);
         }
     }
 

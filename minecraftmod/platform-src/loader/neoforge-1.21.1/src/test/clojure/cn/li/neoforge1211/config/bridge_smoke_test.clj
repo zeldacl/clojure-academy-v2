@@ -22,8 +22,8 @@
 
 (deftest ability-domain-builds-forge-external-file-contract
   (testing "ability domain maps to the player-facing Forge TOML file"
-    (let [domain->file-name @(ns-resolve 'cn.li.neoforge1211.config.bridge 'domain->file-name)
-          build-domain-spec @(ns-resolve 'cn.li.neoforge1211.config.bridge 'build-domain-spec)
+    (let [domain->file-name @(ns-resolve 'cn.li.neoforgebase.config.bridge 'domain->file-name)
+          build-domain-spec @(ns-resolve 'cn.li.neoforgebase.config.bridge 'build-domain-spec)
           domain-info (build-domain-spec config-common/ability-domain ability/descriptors)]
       (is (= "cn.li.ac-ability.toml"
              (domain->file-name config-common/ability-domain ".toml")))
@@ -34,7 +34,7 @@
 
 (deftest split-player-config-domains-build-expected-forge-file-names
   (testing "wireless/ability split domains map to stable player-facing TOML files"
-    (let [domain->file-name @(ns-resolve 'cn.li.neoforge1211.config.bridge 'domain->file-name)
+    (let [domain->file-name @(ns-resolve 'cn.li.neoforgebase.config.bridge 'domain->file-name)
           expected {config-common/wireless-domain "cn.li.ac-wireless.toml"
                     config-common/wireless-devices-domain "cn.li.ac-wireless-devices.toml"
                     config-common/gameplay-domain "cn.li.ac-gameplay.toml"
@@ -49,6 +49,6 @@
 
 (deftest config-storage-is-initialized
   (testing "private registered-config storage defaults to a map"
-    (let [registered-configs-var (ns-resolve 'cn.li.neoforge1211.config.bridge 'registered-configs)]
+    (let [registered-configs-var (ns-resolve 'cn.li.neoforgebase.config.bridge 'registered-configs)]
       (is (some? registered-configs-var))
       (is (map? @(var-get registered-configs-var))))))

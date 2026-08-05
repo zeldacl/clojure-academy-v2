@@ -10,7 +10,7 @@ Java contracts have one canonical owner:
 
 - Public external API belongs in `api`.
 - Runtime framework contracts belong in `mcmod`.
-- Minecraft-version Java adapters belong in `platform-src/minecraft/version/<version>`.
+- Minecraft-version Java adapters belong in `platform-src/minecraft/mc-<version>`.
 - Loader Java entrypoints and metadata-required classes belong in `platform-src/loader/<loader>`.
 
 Do not duplicate the same contract in multiple packages. If a contract moves, update all callers in the same change and remove the previous package path.

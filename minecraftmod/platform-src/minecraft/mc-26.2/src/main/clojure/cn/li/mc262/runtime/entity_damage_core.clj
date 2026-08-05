@@ -1,8 +1,8 @@
 (ns cn.li.mc262.runtime.entity-damage-core
   "Loader-agnostic helpers for entity damage runtime flows.
 
-  Keeps generic shaping/calculation logic in shared mc1211 while platform layers
-  own world/entity lookup and concrete damage application calls."
+  Keeps generic shaping/calculation logic in the Minecraft version component
+  while platform layers own world/entity lookup and concrete damage calls."
   (:require [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [cn.li.mc262.runtime DamageSourceAccess]
            [net.minecraft.world.entity LivingEntity]

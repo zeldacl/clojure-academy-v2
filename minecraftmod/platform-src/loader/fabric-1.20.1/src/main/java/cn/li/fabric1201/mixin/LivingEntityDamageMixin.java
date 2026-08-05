@@ -1,6 +1,6 @@
 package cn.li.fabric1201.mixin;
 
-import cn.li.mc1201.runtime.DamageInterception;
+import cn.li.mcbase.runtime.DamageInterception;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;

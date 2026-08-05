@@ -1,6 +1,6 @@
 package cn.li.fabric1201.bridge;
 
-import cn.li.mc1201.client.ClientClassAccessor;
+import cn.li.mcbase.client.ClientClassAccessor;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 

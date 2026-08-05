@@ -1,6 +1,6 @@
 package cn.li.forge1201.bridge;
 
-import cn.li.mc1201.client.ClientClassAccessor;
+import cn.li.mcbase.client.ClientClassAccessor;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 

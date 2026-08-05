@@ -15,7 +15,7 @@
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.client.render.init :as render-init]
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
-            [cn.li.mc1201.client.audio.media-playback :as media-playback-bridge]
+            [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc1201.client.effects.particle :as particle]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mc1201.client.render.pose :as pose-impl]

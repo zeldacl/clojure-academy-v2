@@ -68,7 +68,7 @@
    :world-can-see-sky (resolve-binding! 'world-can-see-sky)})
 
 (defn init-platform!
-  "Initialize NeoForge 1.21.1 platform implementations."
+  "Initialize NeoForge 26.2 platform implementations."
   []
   (install/framework-once! ::initialized
     #(let [be-plan (minecraft-ops/resolve-be-install

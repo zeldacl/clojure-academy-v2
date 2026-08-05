@@ -5,7 +5,9 @@
   a no-op (Fabric)."
   (:require [cn.li.mc262.runtime.item-callback :as item-callback]
             [cn.li.mcbase.item.spec :as item-spec])
-  (:import [net.minecraft.world.food FoodProperties$Builder]
+  (:import [net.minecraft.core.registries Registries]
+           [net.minecraft.resources Identifier ResourceKey]
+           [net.minecraft.world.food FoodProperties$Builder]
            [net.minecraft.world.item Item Item$Properties Rarity]
            [cn.li.mc262.item NbtBarItem ScriptedItem]))
 
@@ -45,7 +47,15 @@
   (^Item [item-spec]
    (create-standalone-item item-spec (fn [_player _side f] (f))))
   (^Item [item-spec with-owner]
-   (let [props (apply-item-properties (Item$Properties.) item-spec)
+   (create-standalone-item item-spec with-owner nil))
+  (^Item [item-spec with-owner registry-id]
+   (let [base (Item$Properties.)
+         _ (when registry-id
+             (.setId base
+                     (ResourceKey/create
+                       Registries/ITEM
+                       (Identifier/parse ^String registry-id))))
+         props (apply-item-properties base item-spec)
          {:keys [energy-item? enchantability tooltip-lines current-key max-key default-max bar-color]}
          (item-spec/standalone-values item-spec)
          callback (item-callback/build "mc262" with-owner)]

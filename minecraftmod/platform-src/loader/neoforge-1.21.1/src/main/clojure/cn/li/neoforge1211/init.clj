@@ -7,7 +7,7 @@
             [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.content :as content]
             [cn.li.neoforge1211.capability.fluid-handler :as fluid-handler]
-            [cn.li.neoforge1211.integration.imc-dispatch :as imc-dispatch]
+            [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]
             [cn.li.neoforge1211.achievement.bridge :as achievement-bridge])
   (:import [cn.li.mc1211.trigger ModTriggers]))
 

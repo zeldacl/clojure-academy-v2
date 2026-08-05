@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.commands
-  "Brigadier command registration for NeoForge 1.21.1.
+  "Brigadier command registration for NeoForge 26.2.
 
   Delegates tree-building to the shared cn.li.mc262.command.brigadier-tree
   namespace; this file only contains the Forge-specific command registration

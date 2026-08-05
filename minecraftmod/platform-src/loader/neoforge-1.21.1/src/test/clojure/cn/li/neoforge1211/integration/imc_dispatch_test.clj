@@ -3,7 +3,7 @@
   dispatched events must reach both Consumer and IFn handlers with the full
   payload (including device capabilities)."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [cn.li.neoforge1211.integration.imc-dispatch :as imc-dispatch])
+            [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch])
   (:import [cn.li.acapi.wireless WirelessImc]
            [java.util.function Consumer]))
 
@@ -43,7 +43,7 @@
 
 (deftest unknown-method-key-is-ignored-test
   (imc-dispatch/register-by-method-key! "bogus_key" (fn [_]))
-  ;; nothing registered â€” dispatch must be a quiet no-op
+  ;; nothing registered â€?dispatch must be a quiet no-op
   (imc-dispatch/dispatch-event! {:kind :topology/network :action :created})
   (is true))
 

@@ -1,7 +1,7 @@
 (ns cn.li.neoforge262.runtime.adapters.registry
   "Declarative Forge runtime adapter registry."
   (:require [cn.li.neoforge262.runtime.entity-damage :as entity-damage]
-            [cn.li.neoforge262.runtime.multipart-entity :as multipart-entity]
+            [cn.li.neoforgebase.runtime.multipart-entity :as multipart-entity]
             [cn.li.neoforge262.runtime.world-effects :as world-effects]
             [cn.li.neoforge262.runtime.block-manipulation :as block-manipulation]
             [cn.li.neoforge262.runtime.damage-interception :as damage-interception]

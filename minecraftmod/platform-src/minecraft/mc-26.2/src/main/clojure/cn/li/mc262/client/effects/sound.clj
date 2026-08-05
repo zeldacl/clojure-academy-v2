@@ -9,7 +9,8 @@
            [net.minecraft.sounds SoundSource SoundEvent]
            [net.minecraft.resources Identifier]
            [cn.li.mcver ResourceLocations]
-           [cn.li.mc262.client.audio ExternalOggPlayer LoopingSoundRegistry]))
+           [cn.li.mcbase.client.audio ExternalOggPlayer]
+           [cn.li.mc262.client.audio LoopingSoundRegistry]))
 
 (def ^:private sound-source-map
   {:ambient SoundSource/AMBIENT

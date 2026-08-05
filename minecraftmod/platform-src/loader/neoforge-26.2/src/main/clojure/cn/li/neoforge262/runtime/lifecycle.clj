@@ -8,7 +8,7 @@
             [cn.li.mcbase.runtime.spi.network-transport :as transport-spi]
             [cn.li.neoforge262.runtime.adapters.registry :as runtime-adapters-registry]
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]
-            [cn.li.neoforge262.runtime.lifecycle-event-binding :as lifecycle-event-binding]
+            [cn.li.neoforgebase.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.neoforge262.adapter.network :as runtime-network]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.lifecycle :as lifecycle]

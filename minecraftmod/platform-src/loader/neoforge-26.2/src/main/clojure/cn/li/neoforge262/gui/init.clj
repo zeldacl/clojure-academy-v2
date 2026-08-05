@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.gui.init
-  "NeoForge 1.21.1 GUI System Initialization"
+  "NeoForge 26.2 GUI System Initialization"
   (:require [cn.li.mcbase.gui.init.orchestrator :as gui-orchestrator]
             [cn.li.mcbase.gui.init.checks :as init-checks]
             [cn.li.mcmod.gui.registry :as gui]
@@ -8,7 +8,7 @@
             [cn.li.neoforge262.gui.network.client :as network-client]
             [cn.li.neoforge262.adapter.gui-registry :as gui-registry]))
 
-(def ^:private platform-label "NeoForge 1.21.1")
+(def ^:private platform-label "NeoForge 26.2")
 
 (defn- optional-init!
   [init-fn missing-message]

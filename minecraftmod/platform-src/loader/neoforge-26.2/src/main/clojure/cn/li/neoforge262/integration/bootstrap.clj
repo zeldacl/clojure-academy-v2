@@ -2,8 +2,14 @@
 	(:import [cn.li.neoforge262.shim ForgeBootstrapHelper]))
 
 (defn create-stone-properties
-	[]
-	(ForgeBootstrapHelper/createStoneProperties))
+	([^String registry-id]
+	 (ForgeBootstrapHelper/createStoneProperties registry-id))
+	([]
+	 (ForgeBootstrapHelper/createStoneProperties)))
+
+(defn create-item-properties
+	[^String registry-id]
+	(ForgeBootstrapHelper/createItemProperties registry-id))
 
 (defn carrier-block-properties
 	[base]
@@ -101,17 +107,17 @@
 	(ForgeBootstrapHelper/createFlowingFluid properties))
 
 (defn create-liquid-block
-	[fluid-supplier]
-	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier))
+	[fluid-supplier ^String registry-id]
+	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier registry-id))
 
 (defn create-scripted-liquid-block
-	[fluid-supplier block-id tile-id]
+	[fluid-supplier block-id tile-id ^String registry-id]
 	(ForgeBootstrapHelper/createScriptedLiquidBlock
-		fluid-supplier ^String block-id ^String tile-id))
+		fluid-supplier ^String block-id ^String tile-id registry-id))
 
 (defn create-fluid-bucket
-	[fluid-supplier]
-	(ForgeBootstrapHelper/createFluidBucket fluid-supplier))
+	[fluid-supplier ^String registry-id]
+	(ForgeBootstrapHelper/createFluidBucket fluid-supplier registry-id))
 
 (defn create-entity-type
 	[^String full-id ^Class entity-class ^String category width height

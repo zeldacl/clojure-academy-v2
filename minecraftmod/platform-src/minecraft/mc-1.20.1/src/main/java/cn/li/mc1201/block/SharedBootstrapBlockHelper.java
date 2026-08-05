@@ -15,6 +15,8 @@ import net.minecraft.world.level.block.state.properties.Property;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import cn.li.mcbase.block.ScriptedBlockEntityFactory;
+import cn.li.mcbase.block.ScriptedServerTickDispatcher;
 
 /**
  * Shared loader-agnostic block/bootstrap helpers used by Forge and Fabric shims.

@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.query :as bquery]
-            [cn.li.mc262.integration.event-feedback :as event-feedback]
+            [cn.li.mcbase.integration.event-feedback :as event-feedback]
             [cn.li.mc262.integration.event-helpers-core :as event-helpers])
   (:import [net.minecraft.world.entity.player Player]))
 
@@ -56,7 +56,7 @@
 
 (defn handle-entity-attack
   "Shared entity-attack policy. Runtime-active players cannot attack entities
-  with vanilla LMB â€?upstream AcademyCraft overrides the attack KeyBinding
+  with vanilla LMB ï¿½?upstream AcademyCraft overrides the attack KeyBinding
   itself while ability mode is active (ControlOverrider / our
   vanilla-input-control SPI), suppressing entity attack uniformly
   alongside block breaking."
@@ -66,7 +66,7 @@
 
 (defn handle-entity-interact
   "Shared entity-interact policy. Runtime-active players cannot interact with
-  entities via vanilla RMB (trading, mounting, feeding, etc.) â€?mirrors
+  entities via vanilla RMB (trading, mounting, feeding, etc.) ï¿½?mirrors
   handle-entity-attack for the use/interact KeyBinding."
   [event-data]
   (when (runtime-active-event? event-data)

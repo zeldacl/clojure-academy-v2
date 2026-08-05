@@ -570,8 +570,11 @@ tasks.register("verifyVersionSeamParity") {
             }
         }
 
+        // Shared components (minecraft-base, neoforge-shared, …) must not reference
+        // versioned Minecraft or loader namespaces declared via javaNamespace.
         def forbiddenPatterns = components.findAll { id, component ->
-            component.kind?.toString() == "minecraft" && component.javaNamespace
+            def kind = component.kind?.toString() ?: ""
+            component.javaNamespace && (kind == "minecraft" || kind == "loader")
         }.collect { id, component ->
             Pattern.compile(Pattern.quote(component.javaNamespace.toString()) + "\\.")
         }

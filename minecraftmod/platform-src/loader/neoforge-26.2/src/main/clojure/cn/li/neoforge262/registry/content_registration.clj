@@ -94,16 +94,20 @@
         (logic-pipeline/install-bundle-to-block! block bundle)))))
 
 (defn register-all-blocks!
-  [{:keys [blocks-register registered-fluids-source base-properties carrier-properties]}]
+  [{:keys [blocks-register registered-fluids-source mod-id]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (core/for-each-block-plan!
       (fn [{:keys [block-id registry-name fluid-id needs-dynamic-properties?
                    has-be? tile-id]}]
-        (let [registered-obj
+        (let [registry-id (str mod-id ":" registry-name)
+              registered-obj
               (.register ^DeferredRegister blocks-register ^String (str registry-name)
                          (reify java.util.function.Supplier
                            (get [_]
-                             (let [block (cond
+                             (let [base-properties (bootstrap/create-stone-properties registry-id)
+                                   carrier-properties (bootstrap/carrier-block-properties
+                                                        (bootstrap/create-stone-properties registry-id))
+                                   block (cond
                                            (and fluid-id has-be?)
                                            (when-let [fluid-source-ro (get (core/registry-source-snapshot registered-fluids-source) fluid-id)]
                                              (bootstrap/create-scripted-liquid-block
@@ -111,13 +115,15 @@
                                                  (get [_]
                                                    (.get ^DeferredHolder fluid-source-ro)))
                                                block-id
-                                               tile-id))
+                                               tile-id
+                                               registry-id))
                                            fluid-id
                                            (when-let [fluid-source-ro (get (core/registry-source-snapshot registered-fluids-source) fluid-id)]
                                              (bootstrap/create-liquid-block
                                                (reify java.util.function.Supplier
                                                  (get [_]
-                                                   (.get ^DeferredHolder fluid-source-ro)))))
+                                                   (.get ^DeferredHolder fluid-source-ro)))
+                                               registry-id))
                                            (and needs-dynamic-properties? has-be?)
                                            (let [props (blockstate-props/get-all-properties block-id)]
                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))
@@ -133,7 +139,7 @@
           (registry-state/register-block! block-id registered-obj))))))
 
 (defn register-all-fluids!
-  [{:keys [fluid-types-register fluids-register items-register]}]
+  [{:keys [fluid-types-register fluids-register items-register mod-id]}]
   (core/for-each-fluid-plan!
     (fn [{:keys [fluid-id registry-name flowing-name physical rendering behavior block-spec]}]
       (let [fluid-type-ro (.register ^DeferredRegister fluid-types-register ^String (str registry-name)
@@ -205,12 +211,14 @@
         (registry-state/register-fluid-source! fluid-id source-ro)
         (registry-state/register-fluid-flowing! fluid-id flowing-ro)
         (when (:has-bucket? block-spec)
-          (let [bucket-ro (.register ^DeferredRegister items-register ^String (str (:bucket-registry-name block-spec))
+          (let [bucket-registry-name (str (:bucket-registry-name block-spec))
+                bucket-ro (.register ^DeferredRegister items-register ^String bucket-registry-name
                                      (reify java.util.function.Supplier
                                        (get [_]
                                          (bootstrap/create-fluid-bucket
                                            (reify java.util.function.Supplier
-                                             (get [_] (.get ^DeferredHolder source-ro)))))))]
+                                             (get [_] (.get ^DeferredHolder source-ro)))
+                                           (str mod-id ":" bucket-registry-name)))))]
             (reset! bucket-holder bucket-ro)
             (registry-state/register-item! (:bucket-item-id block-spec) bucket-ro)))))))
 
@@ -316,7 +324,7 @@
         (registry-state/register-particle! particle-id registered-obj)))))
 
 (defn register-all-items!
-  [{:keys [items-register]}]
+  [{:keys [items-register mod-id]}]
   (core/for-each-item-plan!
     (fn [{:keys [item-id registry-name item-spec]}]
       (let [registered-obj (.register ^DeferredRegister items-register ^String (str registry-name)
@@ -324,7 +332,8 @@
                                         (get [_]
                                           (item-properties/create-standalone-item
                                             item-spec
-                                            runtime-owner/with-player-owner))))]
+                                            runtime-owner/with-player-owner
+                                            (str mod-id ":" registry-name)))))]
         (registry-state/register-item! item-id registered-obj))))
   (core/for-each-block-plan!
     (fn [plan]
@@ -336,7 +345,8 @@
                                           (get [_]
                                             (when (and block-registered (.isBound ^DeferredHolder block-registered))
                                               (BlockItem. (.get ^DeferredHolder block-registered)
-                                                          (Item$Properties.))))))]
+                                                          (bootstrap/create-item-properties
+                                                            (str mod-id ":" registry-name)))))))]
           (registry-state/register-item! (str block-id "-item") registered-obj))))))
 
 (defn assert-scripted-blocks-bundled!

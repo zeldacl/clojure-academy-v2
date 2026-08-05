@@ -2,9 +2,9 @@
   "Fabric 1.20.1 provider bridge.
 
   Uses reify factories and delegates menu construction to shared provider dispatcher."
-  (:require [cn.li.mc1201.gui.provider.dispatcher :as provider-dispatcher]
+  (:require [cn.li.mcbase.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
-            [cn.li.mc1201.gui.provider.common :as provider-common]
+            [cn.li.mcbase.gui.provider.common :as provider-common]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.gui.handler :as gui-handler]

@@ -14,6 +14,8 @@ import net.minecraft.world.level.material.FlowingFluid;
 import javax.annotation.Nullable;
 import java.util.Objects;
 import java.util.function.Supplier;
+import cn.li.mcbase.block.ScriptedBlockEntityFactory;
+import cn.li.mcbase.block.ScriptedServerTickDispatcher;
 
 /**
  * A LiquidBlock that implements EntityBlock so the scripted TESR system

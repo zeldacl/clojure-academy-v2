@@ -5,7 +5,7 @@ This repository no longer has per-platform Gradle modules. A platform extension 
 ## Loader component
 
 ```text
-platform-src/loader/<loader>/
+platform-src/loader/<loader>-<mc-version>/
   src/main/java/...          # framework-required loader entrypoints only
   src/main/clojure/...       # loader lifecycle and bindings
   src/main/resources/...     # loader metadata only
@@ -23,7 +23,7 @@ Rules:
 ## Minecraft version component
 
 ```text
-platform-src/minecraft/version/<mc-component>/
+platform-src/minecraft/mc-<version>/
   src/main/clojure/...
   src/main/java/...
 ```
@@ -31,9 +31,11 @@ platform-src/minecraft/version/<mc-component>/
 Rules:
 
 - Put only version-specific Minecraft API differences here.
-- Move shared code to `platform-src/minecraft/mc-1.20.1`.
+- Move shared code to `platform-src/minecraft/base`.
 - Do not mention loader families from Minecraft components.
 
 ## Catalog entry
 
-Add a target only when it is intentionally supported. Use synthetic fixtures for expansion tests.
+Add a target only when it is intentionally supported. Validate catalog and
+component-selection rules with focused unit tests; do not add a fake production
+target or a second catalog.

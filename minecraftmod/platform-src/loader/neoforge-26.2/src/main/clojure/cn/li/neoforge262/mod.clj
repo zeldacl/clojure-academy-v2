@@ -1,11 +1,11 @@
 (ns cn.li.neoforge262.mod
-  "NeoForge 1.21.1 loader entry implemented via Java @Mod bridge."
+  "NeoForge 26.2 loader entry implemented via Java @Mod bridge."
   (:require [cn.li.neoforge262.integration.bootstrap :as bootstrap]
     [cn.li.neoforge262.init :as init]
     [cn.li.neoforge262.registry.content-registration :as content-registration]
-    [cn.li.neoforge262.registry.creative-tab :as creative-tab]
+    [cn.li.neoforgebase.registry.creative-tab :as creative-tab]
     [cn.li.neoforge262.setup.common :as setup-common]
-    [cn.li.neoforge262.setup.lifecycle-init :as lifecycle-init]
+    [cn.li.neoforgebase.setup.lifecycle-init :as lifecycle-init]
     [cn.li.neoforge262.setup.mod-bus :as setup-mod-bus]
     [cn.li.neoforgebase.integration.side :as side]
     [cn.li.neoforgebase.registry.state :as registry-state]
@@ -28,13 +28,6 @@
 ;; ============================================================================
 ;; Unified deferred holders (replaces old cached-once! + dynamic vars)
 ;; ============================================================================
-
-;; Basic properties
-(def ^:private base-props-holder
-  (deferred/deferred #(bootstrap/create-stone-properties)))
-
-(def ^:private carrier-props-holder
-  (deferred/deferred #(bootstrap/carrier-block-properties @base-props-holder)))
 
 ;; Core registries
 (def ^:private blocks-reg-holder
@@ -68,12 +61,6 @@
 ;; ============================================================================
 ;; Getter functions (delegates to deferred holders)
 ;; ============================================================================
-
-(defn base-properties []
-  @base-props-holder)
-
-(defn carrier-properties []
-  @carrier-props-holder)
 
 (defn blocks-register []
   @blocks-reg-holder)
@@ -119,9 +106,7 @@
   :sounds-register (sounds-register)
   :effects-register (effects-register)
   :particle-types-register (particle-types-register)
-   :registered-fluids-source registry-state/registered-fluids-source-snapshot
-  :base-properties (base-properties)
-  :carrier-properties (carrier-properties)})
+  :registered-fluids-source registry-state/registered-fluids-source-snapshot})
 
 (defn- registration-steps
   []

@@ -1,12 +1,18 @@
 package cn.li.mc262.entity;
 
+import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
@@ -20,6 +26,15 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
 public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
+    private static final String IMPACT_DETONATION = "impact-detonation";
+    private static final String BEHAVIOR_REGISTRY_NS = "cn.li.mcmod.spi.entity-behavior-registry";
+    private static final String ENTITY_DAMAGE_NS = "cn.li.mcmod.platform.entity-damage";
+
+    static {
+        ClojureInterop.requireNamespace(BEHAVIOR_REGISTRY_NS);
+        ClojureInterop.requireNamespace(ENTITY_DAMAGE_NS);
+    }
+
     private static final EntityDataAccessor<String> DATA_BLOCK_ID =
             SynchedEntityData.defineId(ScriptedBlockBodyEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Float> DATA_GRAVITY =
@@ -90,16 +105,62 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     }
 
     public void forceBehaviorHit() {
-        ScriptedBlockBodySpec spec = getBlockBodySpec();
-        if (spec != null && "impact-detonation".equals(spec.getBehaviorId())) {
-            markBehaviorHit();
+        if (hasImpactDetonationBehavior()) {
+            markBehaviorHit(true);
         }
     }
 
-    private void markBehaviorHit() {
+    private boolean hasImpactDetonationBehavior() {
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        return spec != null && IMPACT_DETONATION.equals(spec.getBehaviorId());
+    }
+
+    private boolean isMagManipBlockBody() {
+        ScriptedBlockBodySpec spec = getBlockBodySpec();
+        return spec != null && "magmanip-block".equals(spec.getHookId());
+    }
+
+    private void markBehaviorHit(boolean heavy) {
         if (!level().isClientSide() && despawnCountdown < 0) {
             entityData.set(DATA_BEHAVIOR_HIT, true);
             despawnCountdown = 10;
+            String soundPath = behaviorValue(heavy ? "heavy-sound" : "light-sound", "");
+            if (!soundPath.isBlank()) {
+                SoundEvent sound = BuiltInRegistries.SOUND_EVENT.getValue(
+                    ResourceLocations.of(cn.li.mcmod.ModId.ID, soundPath)
+                );
+                if (sound != null) {
+                    playSound(sound, 0.5F, 1.0F);
+                }
+            }
+            spawnBehaviorParticles();
+        }
+    }
+
+    private void spawnBehaviorParticles() {
+        if (!(level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        String particlePath = behaviorValue("particle", "");
+        var particleType = BuiltInRegistries.PARTICLE_TYPE.getValue(
+            ResourceLocations.of(cn.li.mcmod.ModId.ID, particlePath)
+        );
+        if (!(particleType instanceof SimpleParticleType fragType)) {
+            return;
+        }
+        int count = 18 + random.nextInt(10);
+        for (int i = 0; i < count; i++) {
+            double speed = 0.08 + random.nextDouble() * 0.10;
+            double speedSq = speed * speed;
+            double vx = random.nextDouble() * speed;
+            double vxSq = vx * vx;
+            double vy = random.nextDouble() * Math.sqrt(Math.max(0.0, speedSq - vxSq));
+            double vz = Math.sqrt(Math.max(0.0, speedSq - vxSq - vy * vy));
+            vx *= random.nextBoolean() ? 1 : -1;
+            vy *= random.nextBoolean() ? 1 : -1;
+            vz *= random.nextBoolean() ? 1 : -1;
+            serverLevel.sendParticles(fragType, getX(), getY(), getZ(),
+                0, vx, vy + 0.2, vz, 0.0);
         }
     }
 
@@ -119,8 +180,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
     @Override
     protected double getDefaultGravity() {
         ensureInitialized();
-        ScriptedBlockBodySpec spec = getBlockBodySpec();
-        if (spec != null && "impact-detonation".equals(spec.getBehaviorId()) && tickCount < 50) {
+        if (hasImpactDetonationBehavior() && tickCount < 50) {
             return 0.0D;
         }
         return entityData.get(DATA_GRAVITY);
@@ -128,17 +188,52 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
 
     @Override
     public boolean isPickable() {
-        ScriptedBlockBodySpec spec = getBlockBodySpec();
-        return (spec != null && "impact-detonation".equals(spec.getBehaviorId())) || super.isPickable();
+        return hasImpactDetonationBehavior() || super.isPickable();
     }
 
     @Override
     protected void onHitEntity(EntityHitResult result) {
         super.onHitEntity(result);
+        if (level().isClientSide()) {
+            return;
+        }
+        Entity target = result.getEntity();
+        Entity owner = getOwner();
+        if (target == owner) {
+            return;
+        }
+        if (hasImpactDetonationBehavior()) {
+            boolean heavy = target instanceof ScriptedBlockBodyEntity other
+                && other.hasImpactDetonationBehavior();
+            markBehaviorHit(heavy);
+            return;
+        }
+        float damage = Math.max(0.0F, entityData.get(DATA_DAMAGE));
+        if (damage > 0.0F && dispatchBehaviorDamage(owner, target, damage) == null) {
+            DamageSource source = damageSources().thrown(this, owner == null ? this : owner);
+            target.hurt(source, damage);
+        }
+    }
+
+    private Object dispatchBehaviorDamage(Entity owner, Entity target, float damage) {
         ScriptedBlockBodySpec spec = getBlockBodySpec();
-        if (spec != null && "impact-detonation".equals(spec.getBehaviorId())
-                && result.getEntity() != getOwner()) {
-            markBehaviorHit();
+        if (spec == null || spec.getBehaviorId().isBlank()) {
+            return null;
+        }
+        try {
+            String worldId = level().dimension().identifier().toString();
+            String ownerId = owner == null ? null : owner.getStringUUID();
+            return ClojureInterop.invoke(
+                ENTITY_DAMAGE_NS,
+                "handle-scripted-block-body-hit!",
+                spec.getBehaviorId(),
+                worldId,
+                ownerId,
+                target.getStringUUID(),
+                (double) damage
+            );
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
@@ -148,9 +243,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         if (result.getType() != HitResult.Type.BLOCK || level().isClientSide()) {
             return;
         }
-        ScriptedBlockBodySpec spec = getBlockBodySpec();
-        if (spec != null && "impact-detonation".equals(spec.getBehaviorId())) {
-            markBehaviorHit();
+        if (hasImpactDetonationBehavior()) {
+            markBehaviorHit(false);
         } else if (entityData.get(DATA_PLACE)) {
             placeBlock((BlockHitResult) result);
         }
@@ -162,14 +256,52 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
             discard();
             return;
         }
-        BlockPos primary = hit.getBlockPos();
-        BlockPos adjacent = primary.relative(hit.getDirection());
-        if (level().getBlockState(primary).canBeReplaced()) {
-            level().setBlock(primary, state, 3);
-        } else if (level().getBlockState(adjacent).canBeReplaced()) {
-            level().setBlock(adjacent, state, 3);
+        Level currentLevel = level();
+        BlockPos origin = hit.getBlockPos();
+        if (placeIfReplaceable(currentLevel, origin, state)) {
+            discard();
+            return;
+        }
+        BlockPos adjacent = origin.relative(hit.getDirection());
+        if (placeIfReplaceable(currentLevel, adjacent, state)) {
+            discard();
+            return;
+        }
+        boolean magManip = isMagManipBlockBody();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    if (magManip
+                        ? (dx == 0 || dy == 0 || dz == 0)
+                        : (dx == 0 && dy == 0 && dz == 0)) {
+                        continue;
+                    }
+                    if (placeIfReplaceable(currentLevel, origin.offset(dx, dy, dz), state)) {
+                        discard();
+                        return;
+                    }
+                }
+            }
+        }
+        if (magManip) {
+            BlockPos candidate = origin;
+            for (int remaining = 10; remaining > 0; remaining--) {
+                if (placeIfReplaceable(currentLevel, candidate, state)) {
+                    discard();
+                    return;
+                }
+                candidate = candidate.relative(hit.getDirection());
+            }
         }
         discard();
+    }
+
+    private static boolean placeIfReplaceable(Level level, BlockPos pos, BlockState state) {
+        if (!level.getBlockState(pos).canBeReplaced()) {
+            return false;
+        }
+        level.setBlock(pos, state, 3);
+        return true;
     }
 
     private BlockState resolveBlockState() {
@@ -191,6 +323,21 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         }
     }
 
+    private String behaviorValue(String key, String fallback) {
+        try {
+            Object value = ClojureInterop.invoke(
+                BEHAVIOR_REGISTRY_NS,
+                "value",
+                IMPACT_DETONATION,
+                key,
+                fallback
+            );
+            return value == null ? fallback : String.valueOf(value);
+        } catch (Throwable ignored) {
+            return fallback;
+        }
+    }
+
     @Override
     protected void addAdditionalSaveData(ValueOutput output) {
         super.addAdditionalSaveData(output);
@@ -209,5 +356,8 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
         entityData.set(DATA_DAMAGE, Math.max(0.0F, input.getFloatOr("BlockBodyDamage", 0.0F)));
         entityData.set(DATA_PLACE, input.getBooleanOr("BlockBodyPlaceWhenCollide", false));
         initialized = true;
+        if (hasImpactDetonationBehavior() || isMagManipBlockBody()) {
+            discard();
+        }
     }
 }

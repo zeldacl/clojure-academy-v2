@@ -1,6 +1,9 @@
 package cn.li.mc262.block;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.BlockGetter;
@@ -15,6 +18,8 @@ import net.minecraft.world.level.block.state.properties.Property;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Function;
+import cn.li.mcbase.block.ScriptedBlockEntityFactory;
+import cn.li.mcbase.block.ScriptedServerTickDispatcher;
 
 /**
  * Shared loader-agnostic block/bootstrap helpers used by Forge and Fabric shims.
@@ -36,6 +41,26 @@ public final class SharedBootstrapBlockHelper {
 
     public static BlockBehaviour.Properties createStoneProperties() {
         return BlockBehaviour.Properties.ofFullCopy(Blocks.STONE);
+    }
+
+    public static BlockBehaviour.Properties createStoneProperties(String registryId) {
+        return createStoneProperties().setId(blockKey(registryId));
+    }
+
+    public static BlockBehaviour.Properties createWaterProperties(String registryId) {
+        return BlockBehaviour.Properties.ofFullCopy(Blocks.WATER).setId(blockKey(registryId));
+    }
+
+    public static Item.Properties createItemProperties(String registryId) {
+        return new Item.Properties().setId(itemKey(registryId));
+    }
+
+    private static ResourceKey<Block> blockKey(String registryId) {
+        return ResourceKey.create(Registries.BLOCK, Identifier.parse(registryId));
+    }
+
+    private static ResourceKey<Item> itemKey(String registryId) {
+        return ResourceKey.create(Registries.ITEM, Identifier.parse(registryId));
     }
 
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {

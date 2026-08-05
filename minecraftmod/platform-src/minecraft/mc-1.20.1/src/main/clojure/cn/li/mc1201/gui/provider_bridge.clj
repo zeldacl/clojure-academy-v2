@@ -3,7 +3,7 @@
 
   Uses reify MenuProvider and delegates menu creation to shared provider dispatcher.
   Fabric ExtendedScreenHandlerFactory stays in the Fabric adapter."
-  (:require [cn.li.mc1201.gui.provider.dispatcher :as provider-dispatcher]
+  (:require [cn.li.mcbase.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.gui.handler :as gui-handler]

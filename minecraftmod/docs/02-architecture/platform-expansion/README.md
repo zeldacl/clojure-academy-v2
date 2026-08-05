@@ -10,7 +10,8 @@ Use these rules for all loader/version work:
 - No generated cartesian product of loader/version combinations.
 - No platform bootstrap SPI or ServiceLoader platform bootstrap files.
 - No real new-loader source tree, dependency, release artifact, or support promise unless the project intentionally adds that supported target.
-- Use synthetic fixtures for architecture-only expansion tests.
+- Use focused catalog/component-selection unit tests for architecture-only
+  expansion checks; do not maintain a synthetic target catalog.
 
 Files:
 

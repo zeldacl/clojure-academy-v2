@@ -7,10 +7,10 @@
             [cn.li.neoforge262.registry.content-registration :as content-registration]
             [cn.li.neoforge262.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.neoforge262.integration.forge-energy :as forge-energy]
-            [cn.li.neoforge262.integration.ic2-energy :as ic2-energy]
+            [cn.li.neoforgebase.integration.ic2-energy :as ic2-energy]
             [cn.li.neoforge262.runtime.item-handler :as runtime-item-handler]
             [cn.li.neoforge262.integration.tutorial-events :as tutorial-events]
-            [cn.li.neoforge262.integration.imc-dispatch :as imc-dispatch]
+            [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]
             [cn.li.neoforge262.integration.events.world :as world-events]
             [cn.li.neoforge262.setup.event-registration :as event-registration]
             [cn.li.mcmod.util.log :as log])

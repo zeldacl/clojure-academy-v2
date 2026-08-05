@@ -1,7 +1,7 @@
 (ns cn.li.fabric1201.gui.network.shared
   "Shared Fabric GUI network channel and envelope helpers."
   (:require [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc1201.runtime.sync-codec :as sync-codec]
+            [cn.li.mcbase.runtime.sync-codec :as sync-codec]
             [cn.li.mcmod.config :as mod-config]
             [cn.li.mcmod.util.log :as log])
   (:import [io.netty.buffer Unpooled]

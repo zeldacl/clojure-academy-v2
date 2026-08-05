@@ -10,9 +10,9 @@ These projects must not import Minecraft, Forge, Fabric, or other loader APIs.
 
 ## Platform source components
 
-- `platform-src/minecraft + platform-src/loader`: shared target glue.
-- `platform-src/minecraft/mc-1.20.1`: Minecraft API code shared by supported Minecraft versions.
-- `platform-src/minecraft/version/*`: version-specific Minecraft API differences.
+- `platform-src/minecraft/base`: shared Minecraft glue (`cn.li.mcbase`).
+- `platform-src/minecraft/mc-<version>`: version-specific Minecraft API differences.
+- `platform-src/loader/*-shared`: cross-version loader glue with no version namespace references.
 - `platform-src/loader/*`: loader lifecycle, metadata, events, and loader-specific bindings.
 
 Minecraft components must not enumerate loaders. Loader components own loader lifecycle and call shared bootstrap directly.

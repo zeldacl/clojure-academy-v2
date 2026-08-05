@@ -1,6 +1,6 @@
 package cn.li.neoforge1211.network;
 
-import cn.li.mc1211.network.NetworkHandlerRegistry;
+import cn.li.mcbase.network.NetworkHandlerRegistry;
 import clojure.lang.IFn;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;

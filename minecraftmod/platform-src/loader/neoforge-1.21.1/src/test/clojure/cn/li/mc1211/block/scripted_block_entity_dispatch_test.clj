@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is]]))
 
 (deftest abstract-scripted-be-has-no-rt-var-test
-  (let [candidates ["platform-src/minecraft/mc-1.20.1/src/main/java/cn/li/mc1211/block/entity/AbstractScriptedBlockEntity.java"
-                    "../platform-src/minecraft/mc-1.20.1/src/main/java/cn/li/mc1211/block/entity/AbstractScriptedBlockEntity.java"]
+  (let [candidates ["platform-src/minecraft/mc-1.21.1/src/main/java/cn/li/mc1211/block/entity/AbstractScriptedBlockEntity.java"
+                    "../platform-src/minecraft/mc-1.21.1/src/main/java/cn/li/mc1211/block/entity/AbstractScriptedBlockEntity.java"]
         src (some (fn [rel]
                     (let [f (java.io.File. (str (System/getProperty "user.dir") "/" rel))]
                       (when (.exists f) (slurp f))))

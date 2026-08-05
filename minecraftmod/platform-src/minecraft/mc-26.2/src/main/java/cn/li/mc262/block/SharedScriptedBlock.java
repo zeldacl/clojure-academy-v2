@@ -16,6 +16,10 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.block.state.properties.Property;
 
 import java.util.List;
+import cn.li.mcbase.block.DynamicBlockPropertyRegistry;
+import cn.li.mcbase.block.ScriptedBlockEntityFactory;
+import cn.li.mcbase.block.ScriptedRenderShapeResolver;
+import cn.li.mcbase.block.ScriptedServerTickDispatcher;
 
 /**
  * Loader-agnostic scripted carrier block with injected platform behavior.
@@ -75,16 +79,6 @@ public class SharedScriptedBlock extends ScriptedCarrierBlockBase {
         this.blockEntityFactory = blockEntityFactory;
         this.serverTickDispatcher = serverTickDispatcher;
         this.renderShapeResolver = renderShapeResolver;
-    }
-
-    /** Compatibility ctor used by early bootstrap stubs (no BE wiring). */
-    public SharedScriptedBlock(String blockId, Properties props) {
-        this(blockId, null, props, null, null, null);
-    }
-
-    /** Compatibility ctor used by early bootstrap stubs (no BE wiring). */
-    public SharedScriptedBlock(String blockId, String tileId, Properties props) {
-        this(blockId, tileId, props, null, null, null);
     }
 
     @Override

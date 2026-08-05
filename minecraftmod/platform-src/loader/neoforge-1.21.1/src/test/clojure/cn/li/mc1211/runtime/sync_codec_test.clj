@@ -1,6 +1,6 @@
 (ns cn.li.mc1211.runtime.sync-codec-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc1211.runtime.sync-codec :as codec]))
+            [cn.li.mcbase.runtime.sync-codec :as codec]))
 
 (deftest full-frame-roundtrip-test
   (let [payload {:version 2

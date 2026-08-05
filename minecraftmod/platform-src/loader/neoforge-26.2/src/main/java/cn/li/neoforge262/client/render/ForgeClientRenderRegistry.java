@@ -1,7 +1,7 @@
 package cn.li.neoforge262.client.render;
 
 import cn.li.mc262.client.render.EffectRendererDispatcher;
-import cn.li.mc262.client.render.RenderProfileBootstrap;
+import cn.li.mcbase.client.render.RenderProfileBootstrap;
 import cn.li.mc262.entity.ScriptedBlockBodyEntity;
 import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mc262.entity.ScriptedMarkerEntity;

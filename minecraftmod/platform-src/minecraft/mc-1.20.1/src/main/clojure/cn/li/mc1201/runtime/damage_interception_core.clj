@@ -4,7 +4,7 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.hooks.core :as damage-hooks]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc1201.runtime DamageInterception]
+  (:import [cn.li.mcbase.runtime DamageInterception]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity]))

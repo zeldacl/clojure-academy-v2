@@ -4,6 +4,7 @@ import cn.li.mc1201.block.IScriptedBlock;
 import cn.li.mc1201.block.logic.ITileNbtLogic;
 import cn.li.mc1201.block.logic.ITileTickLogic;
 import cn.li.mc1201.block.logic.TileLogicBundle;
+import cn.li.mcver.BlockEntityIo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
@@ -101,7 +102,8 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
         super.load(tag);
         ITileNbtLogic nbt = bundle().nbt;
         if (nbt != null) {
-            nbt.readNbt(this, tag);
+            BlockEntityIo.Io io = BlockEntityIo.ofValueInput(tag);
+            nbt.readNbt(this, BlockEntityIo.asTag(io));
         }
     }
 
@@ -110,7 +112,8 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity {
         super.saveAdditional(tag);
         ITileNbtLogic nbt = bundle().nbt;
         if (nbt != null) {
-            nbt.writeNbt(this, tag);
+            BlockEntityIo.Io io = BlockEntityIo.ofValueOutput(tag);
+            nbt.writeNbt(this, BlockEntityIo.asTag(io));
         }
     }
 

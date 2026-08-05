@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.gui.network.client
-  "NeoForge 1.21.1 GUI/RPC client transport via ClojureNetwork payloads.
+  "NeoForge 26.2 GUI/RPC client transport via ClojureNetwork payloads.
 
   Keeps client Minecraft types out of this namespace: session/owner fns are
   injected via shared/install-client-owner-functions! from client init."

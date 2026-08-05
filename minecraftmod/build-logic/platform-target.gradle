@@ -621,6 +621,19 @@ if (target.loader != "none") {
                     "Datagen hash manifest for ${target.id} contains 0 files. " +
                     "The datagen run likely failed or wrote nothing under ${generatedDatagenResources.get().asFile}")
             }
+            if (target.datagenParityGroup && parsed.files instanceof Map) {
+                def paths = parsed.files.keySet().collect { it.toString().replace("\\", "/") }
+                if (!paths.any { it.startsWith("assets/") }) {
+                    throw new GradleException(
+                        "Datagen hash manifest for ${target.id} contains no client assets")
+                }
+                if (!paths.any { it.startsWith("data/") }) {
+                    throw new GradleException(
+                        "Datagen hash manifest for ${target.id} contains no server data; " +
+                        "ensure GatherDataEvent.Client registers datapack providers " +
+                        "(do not split clientData/serverData onto the same --output)")
+                }
+            }
         }
     }
 

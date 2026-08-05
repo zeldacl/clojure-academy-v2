@@ -2,7 +2,7 @@
   "Fabric 1.20.1 GUI/RPC server transport."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mc1201.runtime.network-payload :as runtime-payload]
+            [cn.li.mcbase.runtime.network-payload :as runtime-payload]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.runtime.install :as install]

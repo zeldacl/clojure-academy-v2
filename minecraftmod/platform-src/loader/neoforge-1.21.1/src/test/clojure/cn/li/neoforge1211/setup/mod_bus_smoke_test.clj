@@ -15,5 +15,5 @@
   "Verify that config registration can be attempted without errors"
   
   (testing "register-all! is callable from bridge module"
-    (let [bridge-ns (symbol "cn.li.neoforge1211.config.bridge")]
+    (let [bridge-ns (symbol "cn.li.neoforgebase.config.bridge")]
       (is (some? (resolve (symbol (str bridge-ns) "register-all!")))))))

@@ -10,7 +10,7 @@ import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
-import cn.li.mc1201.client.render.RenderProfileBootstrap;
+import cn.li.mcbase.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.BehaviorObjRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;

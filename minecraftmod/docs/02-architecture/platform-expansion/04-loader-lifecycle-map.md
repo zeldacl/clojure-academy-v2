@@ -16,4 +16,6 @@
 
 ## New loader work
 
-Do not create a real new-loader target for architecture probing. Use a synthetic fixture to validate catalog, sourceSet, AOT, capability, and artifact pipelines.
+Do not create a real new-loader target for architecture probing. Validate
+catalog, source-set, AOT, capability, and artifact rules with focused unit tests
+against the single production catalog.

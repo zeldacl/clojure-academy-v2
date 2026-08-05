@@ -2,7 +2,9 @@
 
 This guide describes the current target-catalog architecture.
 
-Adding a real supported target is a product decision. Prefer proving architecture expansion with catalog/sourceSet/capability unit fixtures over inventing release artifacts.
+Adding a real supported target is a product decision. Prove architecture
+expansion with focused catalog/source-set/capability unit tests against the
+single production catalog instead of inventing release artifacts.
 
 ## Principles
 
@@ -45,6 +47,11 @@ NeoForge is a first-class peer loader for supported targets (today: `neoforge-1.
 - Pair with the matching `minecraft-<version>` + `minecraft-base` (+ `neoforge-shared` when applicable) source components in `platform-catalog.json`.
 - Do not treat NeoForge as a Forge subdirectory.
 - Minecraft 26.2+ uses the `mdg` toolchain profile (Java 25). Older NeoForge targets stay on Loom.
+- MDG exposes `clientData()` / `serverData()`, but sharing one `--output` across
+  both runs lets each HashCache delete the other run's files. For NeoForge 26.2,
+  register **all** datagen providers on `GatherDataEvent.Client` and use
+  `clientData()` only via `:platform:runData`. The hash manifest must still
+  contain both `assets/` and `data/` outputs.
 
 ## Adding a real target
 

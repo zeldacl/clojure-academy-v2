@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.block.query :as bquery]
-            [cn.li.mc1201.integration.event-feedback :as event-feedback]
+            [cn.li.mcbase.integration.event-feedback :as event-feedback]
             [cn.li.mc1201.integration.event-helpers-core :as event-helpers])
   (:import [net.minecraft.world.entity.player Player]))
 

@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.adapter.gui-registry
-  "NeoForge 1.21.1 GUI Registration Implementation
+  "NeoForge 26.2 GUI Registration Implementation
 
   Platform-agnostic design: Uses metadata-driven approach.
   Menu types use IMenuTypeExtension + RegistryFriendlyByteBuf;
@@ -10,12 +10,13 @@
             [cn.li.mc262.gui.provider-bridge :as provider-bridge]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc262.gui.registry.common :as registry-common]
-            [cn.li.mc262.gui.registry.open :as open-core]
+            [cn.li.mcbase.gui.registry.open :as open-core]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.neoforge262.shim ForgeBootstrapHelper ForgeContainerFactory]
+  (:import [cn.li.neoforge262.shim ForgeBootstrapHelper]
+           [cn.li.neoforgebase.shim ForgeContainerFactory]
            [net.neoforged.neoforge.common.extensions IMenuTypeExtension]
            [net.neoforged.neoforge.registries DeferredRegister DeferredHolder]
            [net.minecraft.server.level ServerPlayer]
@@ -205,4 +206,4 @@
 
 (defn register-gui-handler! []
   (install-registry-contract!)
-  (log/info "NeoForge 1.21.1 GUI handler ready (menu types registered via DeferredRegister)"))
+  (log/info "NeoForge 26.2 GUI handler ready (menu types registered via DeferredRegister)"))

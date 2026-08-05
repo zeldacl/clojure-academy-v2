@@ -5,7 +5,7 @@
             [cn.li.mcmod.hooks.core :as damage-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc262.bridge McAccess]
-           [cn.li.mc262.runtime DamageInterception]
+           [cn.li.mcbase.runtime DamageInterception]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.damagesource DamageSource]
            [net.minecraft.world.entity Entity]))
@@ -43,7 +43,7 @@
 (defn- with-damaged-player-owner
   "Bind the damaged player's server owner for the duration of f.
 
-  Hurt events fire on the server thread OUTSIDE any player action context ù?
+  Hurt events fire on the server thread OUTSIDE any player action context ¬ù?
   content damage handlers (vec-reflection's attack precheck, etc.) resolve
   the victim's player-state via :player-state-owner/:client-session-id, so
   without this binding they throw 'requires bound session-id' and the

@@ -2,7 +2,7 @@
   "Loader-agnostic player lifecycle flow for runtime state.
 
   Platform layers provide concrete persistence/sync callbacks and event binding."
-  (:require [cn.li.mc1211.runtime.server-runtime :as server-runtime]
+  (:require [cn.li.mcbase.runtime.server-runtime :as server-runtime]
             [cn.li.mcbase.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as player-hooks]
             [cn.li.mcmod.runtime.install :as install]
@@ -152,8 +152,8 @@
 (defn- same-server-runtime?
   [runtime ^MinecraftServer server]
   (and runtime
-       (not (.disposed ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime))
-       (identical? server (.server ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime))))
+       (not (.disposed ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime))
+       (identical? server (.server ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime))))
 
 (defn create-server-runtime!
   [^MinecraftServer server callbacks]
@@ -173,7 +173,7 @@
 
 (defn- cached-player-uuid
   [runtime ^ServerPlayer player]
-  (let [^HashMap cache (.players ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
+  (let [^HashMap cache (.players ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
         uuid (.getUUID player)]
     (or (.get cache uuid)
         (let [value (str uuid)]
@@ -183,8 +183,8 @@
 (defn player-tick!
   [runtime ^ServerPlayer player owner]
   (let [uuid (cached-player-uuid runtime player)
-        hooks (.hooks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
-        callbacks (.callbacks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)]
+        hooks (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
+        callbacks (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)]
     ((get hooks :on-player-tick!) uuid player)
     (when ((get hooks :player-state-dirty?) uuid)
       (when-let [mark-dirty! (get callbacks :mark-player-dirty!)]
@@ -193,15 +193,15 @@
 
 (defn world-tick!
   [runtime level]
-  (when-let [tick-world! (get (.callbacks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
+  (when-let [tick-world! (get (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
                               :world-tick!)]
     (tick-world! runtime level))
   nil)
 
 (defn server-tick-end!
   [runtime ^long game-time owner]
-  (let [hooks (.hooks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
-        callbacks (.callbacks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)]
+  (let [hooks (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
+        callbacks (.callbacks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)]
     ((get hooks :on-server-tick-end!) game-time)
     (when-let [tick-sync! (get callbacks :tick-sync!)]
       (tick-sync! (get callbacks :send-sync-fn) owner)))
@@ -212,11 +212,11 @@
   [^MinecraftServer server callbacks]
   (let [runtime (ensure-server-runtime! server callbacks)
         game-time (long (.getTickCount server))]
-    (.beginTick ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime game-time)
+    (.beginTick ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime game-time)
     (let [owner (server-runtime/runtime-owner runtime)
           old-context (player-hooks/push-player-state-owner! owner)]
       (try
-        ((get (.hooks ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
+        ((get (.hooks ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
               :on-server-tick-start!)
          game-time)
         (let [^PlayerList player-list (.getPlayerList server)]
@@ -226,6 +226,6 @@
           (world-tick! runtime level))
         (server-tick-end! runtime game-time owner)
         (finally
-          (.finishTick ^cn.li.mc1211.runtime.server_runtime.IServerRuntime runtime)
+          (.finishTick ^cn.li.mcbase.runtime.server_runtime.IServerRuntime runtime)
           (player-hooks/pop-client-context! old-context))))
     runtime))

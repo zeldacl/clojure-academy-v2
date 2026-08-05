@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.setup.imc-dispatcher
 	"Forge mod-bus listener for processing incoming IMC registrations."
-	(:require [cn.li.neoforge1211.integration.imc-dispatch :as imc-dispatch]
+	(:require [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]
 						[cn.li.mcmod.util.log :as log])
 	(:import [java.util.function Consumer Supplier]
 					 [net.neoforged.bus.api EventPriority IEventBus]

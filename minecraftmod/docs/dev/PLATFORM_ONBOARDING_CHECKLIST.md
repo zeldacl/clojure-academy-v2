@@ -11,7 +11,7 @@ Use this checklist when adding or changing a platform target.
 ## Source placement
 
 - [ ] Shared platform logic goes to `platform-src/minecraft + platform-src/loader/`.
-- [ ] Minecraft API logic goes to `platform-src/minecraft/mc-1.20.1/` or `platform-src/minecraft/version/<version>/`.
+- [ ] Shared Minecraft glue goes to `platform-src/minecraft/base/`; version API logic goes to `platform-src/minecraft/mc-<version>/`.
 - [ ] Loader lifecycle and metadata go to `platform-src/loader/<loader>/`.
 
 ## Verification

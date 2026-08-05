@@ -4,7 +4,7 @@
            [net.neoforged.neoforge.event.entity.player PlayerInteractEvent PlayerInteractEvent$RightClickBlock]
            [net.neoforged.bus.api Event]
            [net.neoforged.neoforge.common.util TriState]
-           [cn.li.neoforge1211.bridge EventInterop]))
+           [cn.li.neoforgebase.bridge EventInterop]))
 
 (defn deny-right-click-use!
   [evt]
