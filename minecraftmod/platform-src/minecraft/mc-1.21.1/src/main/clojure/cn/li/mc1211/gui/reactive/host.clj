@@ -88,9 +88,11 @@
             (clock/tick! rt pt)
             (rt/resize! rt (double (.-width this)) (double (.-height this)))
             (rt/flush! rt)
+            ;; Pre-render before layout so hooks (e.g. terminal fit-scale) can
+            ;; adjust root scale / child positions in the same frame's layout.
+            (when on-pre-render (on-pre-render gg rt mx my pt))
             (layout/ensure-layout! rt)
             (layout/ensure-tape! rt)
-            (when on-pre-render (on-pre-render gg rt mx my pt))
             (render/draw-tape! gg rt (.-leftOffset this) (.-topOffset this))
             (render-embedded-runtimes! rt gg (.-leftOffset this) (.-topOffset this) pt)
             (when on-post-render (on-post-render gg rt mx my pt))

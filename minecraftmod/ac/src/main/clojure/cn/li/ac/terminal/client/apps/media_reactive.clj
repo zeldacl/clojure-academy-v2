@@ -177,7 +177,7 @@
                             (play! r state latest))))))
 
 (defn- rebuild-list! [^UiRt r state]
-  (ui/list-set! r "media-list" (all-tracks state)
+  (ui/list-set! r :media-list (all-tracks state)
                 (fn [rt item track]
                   (let [idx (quot (long (.getY ^INode item)) (long row-h))]
                     (build-row! rt state item idx track)))))

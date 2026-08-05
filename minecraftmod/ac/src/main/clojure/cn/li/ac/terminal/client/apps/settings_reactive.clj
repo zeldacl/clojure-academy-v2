@@ -192,7 +192,7 @@
          {:type :callback :prop-id "edit_ui" :action ui-customize/open!}]))))
 
 (defn- populate-settings-list! [r rows]
-  (ui/list-set! r "settings-list" rows
+  (ui/list-set! r :settings-list rows
     (fn [rt item row]
       (case (:type row)
         :cathead (wire-cathead-item! rt item (:label row))

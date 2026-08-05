@@ -38,6 +38,31 @@
 (def ^:private max-my 740.0)     ;; MAX_MY
 (def ^:private balance-speed 3000.0)
 (def ^:private sensitivity 0.7)
+;; Fit margin so the 640×785 panel does not touch screen edges.
+(def ^:private fit-margin 0.92)
+
+(defn- fit-scale
+  "Uniform scale so the terminal panel fits the current Screen size.
+   Upstream shrinks via gluPerspective+1/310; without that camera the raw
+   640×785 design overflows typical GUI-scaled resolutions."
+  ^double [^UiRt rt*]
+  (let [sw (rt/screen-w rt*)
+        sh (rt/screen-h rt*)]
+    (if (and (pos? sw) (pos? sh))
+      (min 1.0 (* fit-margin (min (/ sw root-w) (/ sh root-h))))
+      1.0)))
+
+(defn- ensure-fit-scale!
+  "Apply fit-scale to the root when it changes. Host runs this in on-pre-render
+   *before* ensure-layout!, so only dirty flags are needed here."
+  ^double [^UiRt rt*]
+  (let [fit (fit-scale rt*)
+        ^INode root (rt/node-by-idx rt* 0)]
+    (when (and root (> (Math/abs (- (.getScale root) fit)) 0.001))
+      (.setScale root fit)
+      (.setFlag root node/FLAG-LAYOUT-DIRTY)
+      (rt/mark-tree-dirty! rt*))
+    (if root (.getScale root) fit)))
 
 ;; Grid positioning (upstream: START_X=65, START_Y=155, STEP_X=180, STEP_Y=180)
 (def ^:private start-x 65.0)
@@ -172,19 +197,22 @@
             (when (< app-idx (count installed))
               (client-apps/launch! (:id (nth installed app-idx)) player))))
 
-        ;; ===== 4. pre-render hook — frame state update + MC 3D perspective =====
+        ;; ===== 4. pre-render hook — virtual mouse + selection / grid =====
         pre-render
         (fn pre-render-fn [_gg ^UiRt rt* mx my _pt]
-          (let [now-ms (double (System/currentTimeMillis))
+          (let [panel-scale (double (ensure-fit-scale! rt*))
+                now-ms (double (System/currentTimeMillis))
                 dt (max 0.001 (/ (- now-ms (aget fd 6)) 1000.0))
-                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY)
-                 first-pointer-frame? (Double/isNaN (aget fd 4))
-                 dx (if first-pointer-frame?
-                      0.0
-                      (* (- mx (aget fd 4)) sensitivity))
-                 dy (if first-pointer-frame?
-                      0.0
-                      (* (- my (aget fd 5)) sensitivity))
+                ;; Mouse delta integration (upstream: mouseX += helper.dx * SENSITIVITY).
+                ;; Divide by panel-scale so motion tracks the on-screen panel size.
+                first-pointer-frame? (Double/isNaN (aget fd 4))
+                inv-scale (/ 1.0 (max 0.001 panel-scale))
+                dx (if first-pointer-frame?
+                     0.0
+                     (* (- mx (aget fd 4)) sensitivity inv-scale))
+                dy (if first-pointer-frame?
+                     0.0
+                     (* (- my (aget fd 5)) sensitivity inv-scale))
                 new-mx (max 0.0 (min max-mx (+ (aget fd 0) dx)))
                 new-my (max 0.0 (min max-my (- (aget fd 1) dy)))
                 ;; Smooth balance
@@ -223,8 +251,10 @@
             ;; Save old state before overwriting (for change detection below)
             (let [old-scroll (aget fi 0)]
               (aset fi 0 (int new-scroll)) (aset fi 1 new-sel)
-              ;; Delegate MC 3D perspective transform via platform bridge
-              (bridge/call-adapter :terminal-apply-perspective! _gg rt* mx my _pt)
+              ;; Orthographic Screen path — do NOT apply TerminalUI's
+              ;; gluPerspective camera here. GuiGraphics Screen rendering still
+              ;; cannot host that camera without an empty frustum; selection /
+              ;; cursor still use buffX/buffY like upstream.
               ;; --- Selected app change → grid update + audio ---
               ;; Scrolling changes the selected app even if the 3x3 cell index
               ;; itself stays the same.
@@ -234,7 +264,10 @@
                   (let [installed (installed-apps owner)
                         app-idx selected-app-idx]
                     (when (< app-idx (count installed))
-                      (client-sounds/queue-current-sound-effect!
+                      ;; Screen render has no ThreadLocal client owner — pass
+                      ;; the terminal owner explicitly (queue-current-* would
+                      ;; throw "requires :client-session-id").
+                      (client-sounds/queue-sound-effect! owner
                         {:type :sound :sound-id (str modid/MOD-ID ":terminal.select")
                          :volume 0.2 :pitch 1.0})))
                   (when-let [f @update-grid!-fn] (f))))
