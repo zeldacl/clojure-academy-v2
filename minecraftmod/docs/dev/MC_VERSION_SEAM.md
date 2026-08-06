@@ -43,10 +43,13 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 | `ItemUseResults` | `Item.use` success/pass (`InteractionResultHolder` vs `InteractionResult`) |
 | `EntityClasses` | Version-local scripted entity implementation classes |
 | `TeleportAccess` | Absolute teleport preserving rotation |
-| `RegistryValues` | `BuiltInRegistries` item/block get vs getValue |
+| `RegistryValues` | `BuiltInRegistries` item/block/particle get vs getValue |
 | `AdvancementJson` | Datagen path segment + icon JSON key |
 | `WorldOps` | Creeper power / arrow base-damage helpers |
 | `Ingredients` | Ingredient.of item/tag across HolderGetter requirement |
+| `RenderInterop` | VertexConsumer submit/add across endVertex vs addVertex/set* |
+| `ItemStackEnchants` | Fortune pickaxe across classic vs Holder enchant API |
+| `AdvancementAccess` | Runtime grant-all + player display name |
 
 Do not add a seam member to one Minecraft version without adding the matching
 public type (same relative path / name) to every other `kind: "minecraft"`
@@ -218,7 +221,7 @@ importing version namespaces.
 
 ### `RegistryValues`
 
-- `getItem(id)` / `getBlock(id)` — null when missing or air
+- `getItem(id)` / `getBlock(id)` / `getParticleType(id)` — null when missing or air (item/block)
 
 1.20.1 / 1.21.1: `Registry.get`.  
 26.2: `Registry.getValue`.
@@ -239,6 +242,25 @@ importing version namespaces.
 
 1.20.1 / 1.21.1: `Ingredient.of(tag)` (getter ignored).  
 26.2: `Ingredient.of(items.getOrThrow(tag))`.
+
+### `RenderInterop`
+
+- `submitVertex` / `addColoredVertex` / `addVertex`
+
+1.20.1: classic chain + `endVertex`.  
+1.21.1: `addVertex`/`set*`.  
+26.2: same as 1.21.1 plus deferred `SubmitNode` consumer path.
+
+### `ItemStackEnchants`
+
+- `fortuneNetheritePickaxe(Level, int)` — classic `BLOCK_FORTUNE` vs Holder `FORTUNE`
+
+### `AdvancementAccess`
+
+- `grantAllRemaining(ServerPlayer, String)` / `playerName(ServerPlayer)`
+
+1.20.1: `Advancement` + `getAdvancement`.  
+1.21.1 / 26.2: `AdvancementHolder` + `get`; 26.2 uses `GameProfile.name()`.
 
 ### `RegistryLookups`
 

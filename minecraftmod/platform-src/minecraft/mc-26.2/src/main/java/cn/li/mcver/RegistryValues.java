@@ -1,5 +1,6 @@
 package cn.li.mcver;
 
+import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
@@ -11,7 +12,7 @@ import javax.annotation.Nullable;
 
 /**
  * Cross-version BuiltInRegistries lookups.
- * 26.2: {@code getValue}.
+ * 26.2: getValue.
  */
 public final class RegistryValues {
     private RegistryValues() {
@@ -33,5 +34,13 @@ public final class RegistryValues {
         }
         Block block = BuiltInRegistries.BLOCK.getValue(id);
         return block == null || block == Blocks.AIR ? null : block;
+    }
+
+    @Nullable
+    public static ParticleType<?> getParticleType(Identifier id) {
+        if (id == null) {
+            return null;
+        }
+        return BuiltInRegistries.PARTICLE_TYPE.getValue(id);
     }
 }

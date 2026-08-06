@@ -1,12 +1,12 @@
-package cn.li.mc262.bridge;
+package cn.li.mcver;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
 /**
- * @deprecated Use {@link cn.li.mcver.RenderInterop}.
+ * Cross-version VertexConsumer helpers.
+ * 1.21.1: addVertex / set* API (endVertex removed).
  */
-@Deprecated
 public final class RenderInterop {
     private RenderInterop() {
     }
@@ -19,22 +19,33 @@ public final class RenderInterop {
             float u, float v,
             int overlay, int light,
             float nx, float ny, float nz) {
-        cn.li.mcver.RenderInterop.submitVertex(vc, poseStack, x, y, z, r, g, b, a, u, v, overlay, light, nx, ny, nz);
+        PoseStack.Pose pose = poseStack.last();
+        vc.addVertex(pose, x, y, z)
+                .setColor(r, g, b, a)
+                .setUv(u, v)
+                .setOverlay(overlay)
+                .setUv2(light & 0xFFFF, (light >> 16) & 0xFFFF)
+                .setNormal(pose, nx, ny, nz);
     }
 
     public static void addColoredVertex(VertexConsumer vc, float x, float y, float z, float r, float g, float b, float a) {
-        cn.li.mcver.RenderInterop.addColoredVertex(vc, x, y, z, r, g, b, a);
+        vc.addVertex(x, y, z).setColor(r, g, b, a);
     }
 
     public static void addColoredVertex(Object vc, double x, double y, double z, int r, int g, int b, int a) {
-        cn.li.mcver.RenderInterop.addColoredVertex(vc, x, y, z, r, g, b, a);
+        if (vc instanceof VertexConsumer consumer) {
+            addColoredVertex(consumer, (float) x, (float) y, (float) z,
+                    r / 255f, g / 255f, b / 255f, a / 255f);
+        }
     }
 
     public static void addVertex(VertexConsumer vc, float x, float y, float z) {
-        cn.li.mcver.RenderInterop.addVertex(vc, x, y, z);
+        vc.addVertex(x, y, z);
     }
 
     public static void addVertex(Object vc, double x, double y, double z) {
-        cn.li.mcver.RenderInterop.addVertex(vc, x, y, z);
+        if (vc instanceof VertexConsumer consumer) {
+            addVertex(consumer, (float) x, (float) y, (float) z);
+        }
     }
 }

@@ -44,6 +44,9 @@ Already in mcbase (version-agnostic FX): MsdfTextFx, MsdfGlyphFlags, MsdfGlowAni
   `entity-motion-core`, `metadata-resolver`, `session-cleanup-core` (+ walk-speed hook shell)
 - batch13: `BlockEntityRegistry`, `KeyMappingAccess`;
   `datagen/setup-common`, `client/texture-registry`, `vanilla-input-control-core`
+- batch14: `RenderInterop` / `ItemStackEnchants` / `AdvancementAccess`;
+  `RegistryValues.getParticleType`; promote `client/render/pose`,
+  `runtime/block-manipulation-core`, `command/executor-core`, `client/effects/particle`
 
 ## Blocked: ScriptedRenderShapes (intentional)
 
