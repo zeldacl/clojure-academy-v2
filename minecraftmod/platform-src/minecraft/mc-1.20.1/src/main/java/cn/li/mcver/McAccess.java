@@ -72,6 +72,13 @@ public final class McAccess {
         }
     }
 
+    /** Open or replace the current screen. */
+    public static void setScreen(Minecraft mc, net.minecraft.client.gui.screens.Screen screen) {
+        if (mc != null) {
+            mc.setScreen(screen);
+        }
+    }
+
     public static boolean hasCommandPermission(CommandSourceStack source, int level) {
         return source != null && source.hasPermission(level);
     }

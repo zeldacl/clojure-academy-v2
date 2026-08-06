@@ -47,6 +47,9 @@ Already in mcbase (version-agnostic FX): MsdfTextFx, MsdfGlyphFlags, MsdfGlowAni
 - batch14: `RenderInterop` / `ItemStackEnchants` / `AdvancementAccess`;
   `RegistryValues.getParticleType`; promote `client/render/pose`,
   `runtime/block-manipulation-core`, `command/executor-core`, `client/effects/particle`
+- batch15 (gui.reactive): `McAccess.setScreen`; promote `modal` / `embed` /
+  `host-core` / `host-container-core` (+ versioned draw/shim shells).
+  Leave `render.clj` / `terminal_render.clj` versioned.
 
 ## Blocked: ScriptedRenderShapes (intentional)
 

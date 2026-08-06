@@ -174,6 +174,7 @@ Prefer this over raw `.getServer` / `.location` / `.isClientSide` forks in share
 - `windowHandle(Window)` — GLFW handle (`getWindow()` vs `handle()`)
 - `clientPartialTick(Minecraft)` — frame partial tick (`getFrameTime` / `getTimer` / `getDeltaTracker`)
 - `closeScreen(Minecraft)` — `Minecraft.setScreen(null)` vs `Minecraft.gui.setScreen(null)`
+- `setScreen(Minecraft, Screen)` — same open/replace fork as closeScreen
 - `hasCommandPermission(CommandSourceStack, int)` — classic level vs 26.2 Permission API
 
 1.20.1 / 1.21.1: classic getters (`player.getServer()`, `level.getDayTime()`,

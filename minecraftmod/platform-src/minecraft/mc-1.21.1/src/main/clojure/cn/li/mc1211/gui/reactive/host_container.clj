@@ -1,246 +1,30 @@
 (ns cn.li.mc1211.gui.reactive.host-container
-  "Reactive container screen host — wraps DelegatingCGuiContainerScreen with UiRt.
-   Same pattern as host.clj but for container-backed screens."
-  (:require [cn.li.mcbase.gui.screen.impl :as screen-impl]
-            [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.layout :as layout]
-            [cn.li.mcmod.ui.events :as events]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1211.gui.reactive.render :as render]
-            [cn.li.mc1211.gui.reactive.clock :as clock]
-            [cn.li.mcbase.gui.reactive.input :as input]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui])
-  (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcmod.ui.node INode]
-           [cn.li.mc1211.shim DelegatingCGuiContainerScreen]
-           [net.minecraft.client.gui GuiGraphics]
-           [net.minecraft.world.entity.player Inventory]
-           [net.minecraft.world.inventory AbstractContainerMenu]
+  "Reactive container screen host -- thin shell over mcbase core."
+  (:require [cn.li.mcbase.gui.reactive.host-container-core :as core]
+            [cn.li.mc1211.gui.reactive.render :as render])
+  (:import [cn.li.mc1211.shim DelegatingCGuiContainerScreen]
            [net.minecraft.network.chat Component]))
 
-(defn- slots-active? [screen-data]
-  (cond
-    ;; Slotless full-screen UIs (e.g. developer panel): no menu slots are drawn
-    ;; or interactive. Without this the default (no tab-atom → true) makes
-    ;; AbstractContainerScreen render the menu's player-inventory slots.
-    (:no-slots? screen-data) false
-    (:current-tab-atom screen-data) (= "inv" @(:current-tab-atom screen-data))
-    :else true))
+(def ^:private seams
+  {:new-screen!
+   (fn [menu inv title _iw _ih]
+     (DelegatingCGuiContainerScreen. menu inv (Component/literal ^String title)))
 
-(defn- gui-offset [^DelegatingCGuiContainerScreen screen]
-  [(.getGuiLeft screen) (.getGuiTop screen)])
+   :render-background!
+   (fn [screen gg mx my pt]
+     (.renderBackground screen gg (int mx) (int my) (float pt)))
 
-(defn- render-embedded-runtimes!
-  "Render any child UiRt instances registered by the screen owner under the
-   well-known :embedded-runtimes user-signal (a plain atom holding a vector of
-   {:child-rt :x :y :w :h :visible?-fn} maps). Used by screens that graft a
-   separately-managed reactive sub-tree (e.g. developer panel's skill-tree
-   area / popups) alongside their own main node tree."
-  [^UiRt rt ^GuiGraphics gg left top pt]
-  (when-let [entries (rt/user-signal rt :embedded-runtimes)]
-    (doseq [{:keys [child-rt x y w h visible?-fn anchor-node]} @entries]
-      (when (or (nil? visible?-fn) (visible?-fn))
-        ;; An entry may anchor to a live node (e.g. the developer :area) so the
-        ;; embed follows that node's laid-out position instead of hardcoded x/y.
-        (let [ax (if anchor-node (.getAbsX ^INode anchor-node) (double x))
-              ay (if anchor-node (.getAbsY ^INode anchor-node) (double y))]
-          (render/render-embedded-runtime! gg child-rt (+ (double left) ax) (+ (double top) ay) w h pt))))))
+   :draw-tape! render/draw-tape!
+   :render-embedded-runtime! render/render-embedded-runtime!
 
-(defn- dispose-embedded-runtimes! [^UiRt rt]
-  (when-let [entries (rt/user-signal rt :embedded-runtimes)]
-    (doseq [{:keys [child-rt]} @entries]
-      (rt/dispose! child-rt))))
+   :apply-image-size!
+   (fn [screen iw ih]
+     (.setImageSize screen (int iw) (int ih)))})
 
-;; ============================================================================
-;; Modal input forwarding — full-screen cover overlay (developer panel popups)
-;; ============================================================================
-;; A screen may register :active-modal (an atom holding nil or
-;; {:child-rt :x :y :w :h :on-close-outside} in GUI-local coords) under the
-;; parent UiRt's user-signals. When present, all mouse/key input is captured:
-;; clicks within the child's bounds forward to it; clicks outside call
-;; on-close-outside; ESC always calls on-close-outside. Absent for every
-;; screen that doesn't opt in — zero effect on existing screens.
+(def create-reactive-container-screen
+  (partial core/create-reactive-container-screen* seams))
 
-(defn- active-modal [^UiRt rt]
-  (when-let [a (rt/user-signal rt :active-modal)] @a))
+(def create-tech-ui-container-screen
+  (partial core/create-tech-ui-container-screen* seams))
 
-(defn- modal-child-local [modal lx ly]
-  [(- (double lx) (double (:x modal))) (- (double ly) (double (:y modal)))])
-
-(defn- modal-in-bounds? [modal clx cly]
-  (and (>= clx 0.0) (>= cly 0.0) (<= clx (double (:w modal))) (<= cly (double (:h modal)))))
-
-(defn- modal-mouse-press! [modal lx ly button]
-  (let [[clx cly] (modal-child-local modal lx ly)]
-    (if (modal-in-bounds? modal clx cly)
-      (events/dispatch-mouse-press! (:child-rt modal) clx cly button)
-      (when-let [f (:on-close-outside modal)] (f)))))
-
-(defn- modal-mouse-release! [modal lx ly button]
-  (let [[clx cly] (modal-child-local modal lx ly)]
-    (when (modal-in-bounds? modal clx cly)
-      (events/dispatch-mouse-release! (:child-rt modal) clx cly button))))
-
-(defn- modal-mouse-drag! [modal lx ly button]
-  (let [[clx cly] (modal-child-local modal lx ly)]
-    (when (modal-in-bounds? modal clx cly)
-      (events/dispatch-mouse-drag! (:child-rt modal) clx cly button))))
-
-(defn- modal-key! [modal key-code scan-code modifiers]
-  (if (= (long key-code) 256)
-    (when-let [f (:on-close-outside modal)] (f))
-    (when-not (events/dispatch-editable-key! (:child-rt modal) key-code (char 0))
-      (events/dispatch-key! (:child-rt modal) key-code scan-code modifiers 0))))
-
-(defn- modal-char! [modal code-point]
-  (when-not (events/dispatch-editable-key! (:child-rt modal) 0 (char code-point))
-    (events/dispatch-char! (:child-rt modal) code-point)))
-
-(defn- local-mouse [^DelegatingCGuiContainerScreen screen mx my]
-  (let [[left top] (gui-offset screen)]
-    [(- (double mx) (double left))
-     (- (double my) (double top))]))
-
-(defn- hit-ui? [^UiRt rt ^DelegatingCGuiContainerScreen screen mx my]
-  (let [[lx ly] (local-mouse screen mx my)]
-    (boolean (layout/hit-test rt lx ly))))
-
-(defn- handle-container-click! [^UiRt rt ^DelegatingCGuiContainerScreen screen mx my button slots-active? super-click!]
-  (let [[lx ly] (local-mouse screen mx my)
-        hit (layout/hit-test rt lx ly)]
-    (when hit (events/dispatch-mouse-press! rt lx ly button))
-    (cond
-      hit true
-      (and slots-active? super-click!) (super-click!)
-      :else false)))
-
-(defn create-reactive-container-screen
-  "Build a DelegatingCGuiContainerScreen hosting a reactive UiRt.
-   screen-data: {:runtime :update-fn :current-tab-atom :tech-ui ...}
-   menu: Minecraft AbstractContainerMenu
-   player-inv: Inventory
-   title: screen title string"
-  [screen-data ^AbstractContainerMenu menu ^Inventory player-inv title]
-  (let [^UiRt rt (:runtime screen-data)
-        slots-active?* (fn [] (slots-active? screen-data))]
-    (doto (DelegatingCGuiContainerScreen. menu player-inv (Component/literal ^String title))
-      (.withRender
-        (fn render-cb [^DelegatingCGuiContainerScreen this ^GuiGraphics gg mx my pt]
-          (try
-            (when-let [update-fn (:update-fn screen-data)]
-              (update-fn screen-data))
-            (clock/tick! rt pt)
-            (rt/resize! rt (double (.-width this)) (double (.-height this)))
-            (rt/flush! rt)
-            (layout/ensure-layout! rt)
-            (layout/ensure-tape! rt)
-            (if (slots-active?*)
-              ;; inv tab: let vanilla AbstractContainerScreen.render orchestrate
-              ;; layering — screen dark bg → renderBg (= our reactive tree, via
-              ;; bg-cb) → widgets → slots → tooltips. Drawing the tree BEFORE
-              ;; callSuperRender put it under render()'s own dark-bg pass, which
-              ;; dimmed the whole UI.
-              (.callSuperRender this gg mx my pt)
-              ;; non-inv tab: no vanilla slots — draw dark bg + reactive tree here.
-              (do (.renderBackground this gg (int mx) (int my) (float pt))
-                  (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
-                  (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
-            (catch Exception e
-              ;; Dedup: the render loop runs ~every frame, so an exception that
-              ;; recurs each frame must not re-log a full (Forge-decorated) stack
-              ;; trace 60×/s — that logging is itself a CPU/GC drain. Log the first
-              ;; occurrence of each distinct error; suppress identical repeats.
-              (let [sig [(class e) (.getMessage e)]]
-                (when (not= sig (rt/user-signal rt :last-render-error))
-                  (rt/put-user-signal! rt :last-render-error sig)
-                  (log/stacktrace "host-container render failed (identical repeats suppressed)" e)))))))
-      (.withRenderBg
-        (fn bg-cb [^DelegatingCGuiContainerScreen this ^GuiGraphics gg pt _mx _my]
-          ;; renderBg runs inside super.render, right after the screen dark bg and
-          ;; before the slots — the correct layer for the reactive tree (slots draw
-          ;; on top; the tree is not dimmed by a second dark-bg pass).
-          (render/draw-tape! gg rt (.getGuiLeft this) (.getGuiTop this))
-          (render-embedded-runtimes! rt gg (.getGuiLeft this) (.getGuiTop this) pt)))
-      (.withRenderLabels
-        ;; Suppress vanilla's title + "Inventory" labels: the reactive tree draws
-        ;; its own text, so these overlap it — and an empty screen title leaks in
-        ;; as the literal string "empty[style={}]".
-        (fn labels-cb [^DelegatingCGuiContainerScreen _this ^GuiGraphics _gg _mx _my] nil))
-      (.withMouseClicked
-        (fn click-cb [^DelegatingCGuiContainerScreen this mx my button]
-          (if-let [modal (active-modal rt)]
-            (let [[lx ly] (local-mouse this mx my)]
-              (modal-mouse-press! modal lx ly button)
-              true)
-            (handle-container-click! rt this mx my button (slots-active?*)
-                                     #(boolean (.callSuperMouseClicked this mx my button))))))
-      (.withMouseReleased
-        (fn release-cb [^DelegatingCGuiContainerScreen this mx my button]
-          (if-let [modal (active-modal rt)]
-            (let [[lx ly] (local-mouse this mx my)]
-              (modal-mouse-release! modal lx ly button)
-              true)
-            (do
-              (let [[lx ly] (local-mouse this mx my)]
-                (events/dispatch-mouse-release! rt lx ly button))
-              (if (slots-active?*)
-                (.callSuperMouseReleased this mx my button)
-                true)))))
-      (.withMouseDragged
-        (fn drag-cb [^DelegatingCGuiContainerScreen this mx my button dx dy]
-          (if-let [modal (active-modal rt)]
-            (let [[lx ly] (local-mouse this mx my)]
-              (modal-mouse-drag! modal lx ly button)
-              true)
-            (do
-              (input/handle-mouse-dragged rt (.getGuiLeft this) (.getGuiTop this) mx my button dx dy)
-              (if (and (slots-active?*) (not (hit-ui? rt this mx my)))
-                (.callSuperMouseDragged this mx my button dx dy)
-                true)))))
-      (.withMouseMoved
-        (fn move-cb [^DelegatingCGuiContainerScreen this mx my]
-          (when-not (active-modal rt)
-            (input/handle-mouse-moved rt (.getGuiLeft this) (.getGuiTop this) mx my))))
-      (.withMouseScrolled
-        (fn scroll-cb [^DelegatingCGuiContainerScreen this mx my delta]
-          (when-not (active-modal rt)
-            (input/handle-mouse-scrolled rt (.getGuiLeft this) (.getGuiTop this) mx my delta))))
-      (.withKeyPressed
-        (fn key-cb [^DelegatingCGuiContainerScreen this key-code scan-code modifiers]
-          (if-let [modal (active-modal rt)]
-            (do (modal-key! modal key-code scan-code modifiers) true)
-            (let [handled (input/handle-key-pressed rt key-code scan-code modifiers)]
-              ;; DelegatingCGuiContainerScreen.keyPressed only calls this fn;
-              ;; it never calls super.keyPressed, so vanilla's ESC→onClose() is
-              ;; dead code. We must close the screen ourselves.
-              (when (and handled (= (long key-code) 256))
-                (.onClose this))
-              handled))))
-      (.withCharTyped
-        (fn char-cb [_this code-point modifiers]
-          (if-let [modal (active-modal rt)]
-            (do (modal-char! modal code-point) true)
-            (input/handle-char-typed rt code-point modifiers))))
-      (.withRemoved
-        (fn removed-cb [_this]
-          (when-let [tech (:tech-ui screen-data)]
-            (tabbed-gui/detach-tab-sync! tech))
-          (dispose-embedded-runtimes! rt)
-          (input/handle-removed rt))))))
-
-(defn create-tech-ui-container-screen
-  "Create container screen from reactive tech-ui assembled map.
-   {:runtime :update-fn :current-tab-atom :tech-ui :minecraft-container :size-dx :size-dy}"
-  [screen-data]
-  (let [{:keys [runtime minecraft-container size-dx size-dy screen-title player-inventory]} screen-data
-        ^DelegatingCGuiContainerScreen screen
-        (create-reactive-container-screen
-          screen-data
-          minecraft-container
-          player-inventory
-          (or screen-title "Container"))]
-    (when size-dx (.setImageSize screen (+ 176 (int size-dx)) (.getYSize screen)))
-    (when size-dy (.setImageSize screen (.getXSize screen) (+ 166 (int size-dy))))
-    screen))
-
-(screen-impl/install-create-tech-ui-container-screen! create-tech-ui-container-screen)
+(core/install! seams)
