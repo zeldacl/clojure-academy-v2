@@ -668,7 +668,7 @@
 
   :description-key "ability.skill.teleporter.shift_teleport.desc"
 
-  :icon           "textures/abilities/teleporter/skills/shift_teleport.png"
+  :icon           "textures/abilities/teleporter/skills/shift_tp.png"
 
   :ui-position    [175 47]
 

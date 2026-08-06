@@ -9,13 +9,14 @@
    :start-x (:start-x p)
    :start-y (:start-y p)
    :start-z (:start-z p)
-   :hit? (boolean (or (:hit? p) (:attacked? p)))})
+   :hit? (boolean (or (:hit? p) (:attacked? p)))
+   :target-height (double (or (:target-height p) 0.0))})
 
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :threatening-teleport
      :initial-state (fn [] {:fx-state {}})
-     :channels {:start {:topic :threatening-teleport/fx-start :mode :start}
+     :channels {:start {:topic :threatening-teleport/fx-start :mode :start :level-payload target-payload}
                 :update {:topic :threatening-teleport/fx-update :mode :update :level-payload target-payload}
                 :perform {:topic :threatening-teleport/fx-perform :mode :perform :level-payload target-payload}
                 :end {:topic :threatening-teleport/fx-end :mode :end}}}))

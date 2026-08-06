@@ -158,6 +158,9 @@
                          (double (or (:x hit) hit-x))
                          hit-x)
                 drop-y (if attacked?
+                         ;; Upstream calcDropPos ENTITY branch: ent.posY +
+                         ;; ent.height — the TOP of the bounding box, not the
+                         ;; ray intersection point.
                          (+ (double (or (:y hit) hit-y))
                             (double (or (:height hit) 0.0)))
                          hit-y)
@@ -176,6 +179,8 @@
              :attacked? attacked?
 
              :target-uuid target-uuid
+
+             :height (double (or (:height hit) 0.0))
 
              :distance (double (or (:distance hit)
 
@@ -202,6 +207,8 @@
              :attacked? false
 
              :target-uuid nil
+
+             :height 0.0
 
              :distance (double range)}))))))
 
@@ -237,39 +244,69 @@
 
 
 
+(defn- trace-fx-payload
+  "Shared fx payload shape for start/update: the caster's throw origin and the
+  current aim point (upstream TTContextC.l_tick moves the marker to
+  calcDropPos() every tick). :target-height lets the client sit the marker at
+  the target's FEET like upstream (l_tick subtracts the target height)."
+  [trace]
+  {:start-x (:start-x trace)
+   :start-y (:start-y trace)
+   :start-z (:start-z trace)
+   :drop-x (:drop-x trace)
+   :drop-y (:drop-y trace)
+   :drop-z (:drop-z trace)
+   :attacked? (:attacked? trace)
+   :target-uuid (:target-uuid trace)
+   :target-height (double (or (:height trace) 0.0))})
+
 (defn- threatening-tp-tick-impl!
 
-  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage player-ref]
 
-  (let [exp (skill-exp player-id)
+  (if (has-main-hand-item? player-ref)
 
-        range (cfg-lerp :targeting.range exp)
+    (let [exp (skill-exp player-id)
 
-        trace (trace-result player-id range)]
+          range (cfg-lerp :targeting.range exp)
 
-    (ctx-skill/replace-skill-state! ctx-id {:hold-ticks (long hold-ticks)
+          trace (trace-result player-id range)]
 
-                     :trace trace})
+      (ctx-skill/replace-skill-state! ctx-id {:hold-ticks (long hold-ticks)
 
-    (when trace
+                       :trace trace})
 
-      (fx/send! ctx-id {:topic :threatening-teleport/fx-update :mode :update} nil
+      (when trace
 
-                {:start-x (:start-x trace)
+        (fx/send! ctx-id {:topic :threatening-teleport/fx-update :mode :update} nil
 
-                 :start-y (:start-y trace)
+                  (trace-fx-payload trace))))
 
-                 :start-z (:start-z trace)
+    ;; Upstream s_tick terminates the context the moment the main hand is
+    ;; empty — drop the marker so the hold visibly ends.
+    (do
+      (ctx-skill/clear-skill-state! ctx-id)
+      (fx/send! ctx-id {:topic :threatening-teleport/fx-end :mode :end} nil))))
 
-                 :drop-x (:drop-x trace)
+(defn- threatening-tp-down-impl!
+  "Key-down: initialize the hold state and spawn the aim marker immediately
+  (upstream l_start spawns EntityMarker on MSG_MADEALIVE). An empty main hand
+  skips everything — upstream s_madeAlive terminates the context without an
+  item, so there is no marker and no throw."
+  [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage player-ref]
+  (when (and cost-ok? (has-main-hand-item? player-ref))
+    (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :trace nil})
+    (when-let [trace (trace-result player-id (cfg-lerp :targeting.range (skill-exp player-id)))]
+      (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :trace trace})
+      (fx/send! ctx-id {:topic :threatening-teleport/fx-start :mode :start} nil
+                (trace-fx-payload trace)))))
 
-                 :drop-y (:drop-y trace)
-
-                 :drop-z (:drop-z trace)
-
-                 :attacked? (:attacked? trace)
-
-                 :target-uuid (:target-uuid trace)}))))
+(defn- threatening-tp-abort-impl!
+  "Key-abort: clear the hold state and drop the aim marker (upstream
+  l_onKeyAbort terminates the context, MSG_TERMINATED kills the marker)."
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  (ctx-skill/clear-skill-state! ctx-id)
+  (fx/send! ctx-id {:topic :threatening-teleport/fx-end :mode :end} nil))
 
 
 
@@ -380,9 +417,13 @@
 
     {:initial-state {:hold-ticks 0 :trace nil}
 
+     :down! threatening-tp-down-impl!
+
      :tick! threatening-tp-tick-impl!
 
-     :up! threatening-tp-up-impl!}))
+     :up! threatening-tp-up-impl!
+
+     :abort! threatening-tp-abort-impl!}))
 
 
 

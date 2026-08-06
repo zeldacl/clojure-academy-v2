@@ -6,22 +6,13 @@
   (:require [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.command.runtime-hooks :as command-hooks]
             [cn.li.mcbase.command.action-impls] ; Ensure action implementations are loaded
+            [cn.li.mcbase.command.brigadier-tree :as brig-tree]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier CommandDispatcher]))
 
-(defonce ^:private brig-tree-atom (atom nil))
-
-(defn install-build-command-node!
-  [f]
-  (reset! brig-tree-atom f)
-  f)
-
 (defn- build-command-node
   [spec]
-  (let [f @brig-tree-atom]
-    (when (nil? f)
-      (throw (IllegalStateException. "brigadier-tree not installed")))
-    (f spec)))
+  (brig-tree/build-command-node spec))
 
 (defn- register-command!
   [^CommandDispatcher dispatcher command-id]
