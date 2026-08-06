@@ -1,22 +1,16 @@
 (ns cn.li.mc262.bootstrap.platform-init
-  "Shared platform bootstrap install wrappers.
-
-  Centralizes installer call sequences so platform SPI bootstraps keep only
-  adapter creation and platform-specific hook maps/extensions."
-  (:require [cn.li.mc262.gui.menu-bridge-install :as menu-bridge-install]
+  "Install versioned installer/accessor hooks into shared platform-init."
+  (:require [cn.li.mcbase.bootstrap.platform-init :as shared]
+            [cn.li.mc262.gui.menu-bridge-install :as menu-bridge-install]
             [cn.li.mc262.bootstrap.installer-core :as core]
             [cn.li.mc262.runtime.accessor-registry :as accessor-registry]))
 
-(defn install-platform-core!
-  "Install the full shared platform core for adapters that can provide
-  all required world/block/entity/item operations through PlatformAdapter."
-  [adapter]
-  (core/install-platform-core! adapter)
-  (accessor-registry/init-default-accessors!))
-
-(defn install-platform-services!
-  [adapter world-fns-map be-fns-map]
-  (core/install-platform-services! adapter world-fns-map be-fns-map)
-  (accessor-registry/init-default-accessors!))
+(shared/install-platform-init-hooks!
+  {:install-platform-core! core/install-platform-core!
+   :install-platform-services! core/install-platform-services!
+   :init-default-accessors! accessor-registry/init-default-accessors!})
 
 (menu-bridge-install/install!)
+
+(def install-platform-core! shared/install-platform-core!)
+(def install-platform-services! shared/install-platform-services!)

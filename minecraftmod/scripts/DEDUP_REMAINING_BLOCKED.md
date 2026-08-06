@@ -1,4 +1,4 @@
-﻿# Remaining identical-but-blocked files
+# Remaining identical-but-blocked files
 
 ## MSDF note (checked 2026-08-06)
 
@@ -12,21 +12,14 @@ Cannot promote MSDF Java into `minecraft-base`: base compiles for all targets in
 
 Already in mcbase (version-agnostic FX): MsdfTextFx, MsdfGlyphFlags, MsdfGlowAnimator.
 
-## Batch5 promoted (SPI unlock → mcbase / neoforgebase)
+## Batch5 / Batch6 promoted
 
-- `gui/screen/impl.clj` + `gui/screen/registry.clj` (host-container installs create-tech-ui-container-screen)
-- `runtime/multipart_entity.clj` (reflective EnderDragonPart package)
-- `runtime/adapter/block_manipulation.clj` + `runtime/adapter/world_effects.clj` (version cores install maps)
-- `runtime/event/item_use.clj` (item-handler-core installs)
-- `runtime/raycast_core.clj` + per-version `raycast_ops_install.clj`
-- `command/action_impls.clj` + `command/brigadier_registry.clj` (executor / brigadier-tree install)
-- NeoForge `setup/registry_binding.clj` → `neoforgebase` (shared_event_install hub expands)
+Batch5: screen, multipart, adapters, item-use, raycast, commands, neo registry_binding.
+Batch6: `bootstrap/platform_init`, `platform/runtime_ops`, NeoForge `setup/common`
+(version files remain thin install + re-export).
 
-## MC (identical across three versions, still blocked)
-- bootstrap/platform_init.clj
-- gui/menu_bridge_install.clj (intentional thin wrapper)
-- platform/runtime_ops.clj
+## MC residual (intentional thin wrappers)
+- gui/menu_bridge_install.clj (versioned DelegatingCMenuBridge factory)
 
-## NeoForge
-- setup/common.clj
-- setup/shared_event_install.clj (intentional version hub)
+## NeoForge residual (intentional version hub)
+- setup/shared_event_install.clj
