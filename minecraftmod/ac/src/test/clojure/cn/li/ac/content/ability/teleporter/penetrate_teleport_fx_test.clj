@@ -52,11 +52,13 @@
       (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update {:mode :update :available? true :distance 12.0 :x 1.0 :y 2.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
       (dotimes [_ 3] (level-effects/tick-level-effects!))
+      (is (true? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
       (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-perform {:mode :perform :to-x 4.0 :to-y 5.0 :to-z 6.0}
                                          :owner-key [:ctx "ctx-1"])
-      (is (true? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
       (is (= 1 (count @particle-calls*)))
-      (is (= 1 (count @sound-calls*))))))
+      (is (= 1 (count @sound-calls*)))
+      ;; Upstream c_endEffect kills the mark on MSG_TERMINATED.
+      (is (nil? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"]]))))))
 
 
 

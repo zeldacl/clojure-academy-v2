@@ -388,23 +388,30 @@
            first
            :id))
 
-(defn- up-cost-cp
+(defn up-cost-cp
+
+  [player-id skill-id _exp]
+
+  ;; Upstream s_execute terminates before consume when the destination is
+  ;; unavailable — return 0 so the framework deducts nothing.
+  (if-let [ctx-id (active-ctx-id player-id skill-id)]
+    (let [resolved (ensure-up-resolve! ctx-id player-id)]
+      (if (:available? resolved)
+        (* (double (:distance resolved)) (double (:cp-per-block resolved)))
+        0.0))
+    0.0))
+
+
+
+(defn up-cost-overload
 
   [player-id skill-id _exp]
 
   (if-let [ctx-id (active-ctx-id player-id skill-id)]
     (let [resolved (ensure-up-resolve! ctx-id player-id)]
-      (* (double (:distance resolved)) (double (:cp-per-block resolved))))
-    0.0))
-
-
-
-(defn- up-cost-overload
-
-  [player-id skill-id _exp]
-
-  (if-let [ctx-id (active-ctx-id player-id skill-id)]
-    (double (overload-cost (:exp (ensure-up-resolve! ctx-id player-id))))
+      (if (:available? resolved)
+        (double (overload-cost (:exp resolved)))
+        0.0))
     0.0))
 
 
@@ -429,15 +436,23 @@
 
   (when cost-ok?
 
-    (let [desired (default-desired-distance player-id)]
+    (let [desired (default-desired-distance player-id)
+
+          preview (resolve-preview player-id desired)]
 
       (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0
 
                                      :desired-distance desired
 
-                                     :preview (resolve-preview player-id desired)
+                                     :preview preview
 
                                      :up-resolve nil})
+
+      ;; Upstream l_spawnMark spawns EntityTPMarking on MSG_MADEALIVE; send
+      ;; the first preview so the mark appears on key-down.
+      (fx/send! ctx-id {:topic :penetrate-teleport/fx-start :mode :start} nil
+
+                (preview-payload ctx-id))
 
       (ctx/ctx-on! ctx-id distance-channel
 
@@ -485,7 +500,12 @@
 
                                     (assoc :preview preview)
 
-                                    (assoc :up-resolve nil))))))
+                                    (assoc :up-resolve nil))))
+
+    ;; Upstream l_updateMark moves EntityTPMarking every client tick.
+    (fx/send! ctx-id {:topic :penetrate-teleport/fx-update :mode :update} nil
+
+              (preview-payload ctx-id))))
 
 
 
@@ -505,12 +525,23 @@
       ;; including unavailable destinations and failed resource settlement.
       (fx/send! ctx-id {:topic :penetrate-teleport/fx-perform :mode :perform}
                 nil
-                (or dest {}))
+                {:to-x (:x dest)
 
+                 :to-y (:y dest)
+
+                 :to-z (:z dest)})
+
+      ;; Upstream s_execute terminates without cost/exp/cooldown when the
+      ;; destination is unavailable (still inside a wall).
       (if (and cost-ok?
+               (:available? resolved)
+
                dest
+
                (helper/teleport-to! player-id
+
                                     (geom/world-id-of player-id)
+
                                     (:x dest) (:y dest) (:z dest)))
 
         (do
@@ -548,11 +579,25 @@
 
 
 
+(defn- penetrate-tp-abort-impl!
+
+  "Key-abort: clear the hold state and drop the mark (upstream l_onKeyAbort
+  terminates; c_endEffect kills EntityTPMarking)."
+
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+
+  (ctx-skill/clear-skill-state! ctx-id)
+
+  (fx/send! ctx-id {:topic :penetrate-teleport/fx-end :mode :end} nil))
+
+
+
 (def ^:private release-cast-ops
   (release-cast/build-ops
     {:down! penetrate-tp-down-impl!
      :tick! penetrate-tp-tick-impl!
-     :up! penetrate-tp-up-impl!}))
+     :up! penetrate-tp-up-impl!
+     :abort! penetrate-tp-abort-impl!}))
 
 (defn penetrate-tp-down! [& args] (apply release-cast/down! release-cast-ops args))
 (defn penetrate-tp-tick! [& args] (apply release-cast/tick! release-cast-ops args))
