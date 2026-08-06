@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.runtime.adapters.registry
   "Declarative runtime adapter install registry for Fabric."
   (:require [cn.li.mc1201.runtime.raycast-ops-install]
+            [cn.li.mc1201.runtime.ender-dragon-parts-install]
             [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
             [cn.li.fabric1201.runtime.player-motion :as runtime-player-motion]
             [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]

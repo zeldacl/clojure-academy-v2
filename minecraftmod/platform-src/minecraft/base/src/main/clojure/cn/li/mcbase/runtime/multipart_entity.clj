@@ -1,40 +1,23 @@
 (ns cn.li.mcbase.runtime.multipart-entity
-  "Shared multipart entity normalization (EnderDragonPart package forks via reflection)."
+  "Shared multipart entity normalization.
+
+  Vanilla EnderDragonPart parent resolution is installed from versioned
+  `cn.li.mcver.EnderDragonParts` (typed import — no Class.forName strings)."
   (:import [cn.li.acapi.entity MultipartEntityApi MultipartEntityApi$ParentValidator MultipartEntityPart]
            [net.minecraft.world.entity Entity]))
 
-(defn- load-class-uninitialized
-  "Resolve a class without <clinit> so unit tests can load this ns without
-   Minecraft Bootstrap (EnderDragonPart → Entity → Registries)."
-  [^String name]
-  (try
-    (Class/forName name false (clojure.lang.RT/baseLoader))
-    (catch ClassNotFoundException _
-      nil)
-    (catch ExceptionInInitializerError _
-      nil)
-    (catch LinkageError _
-      nil)))
+(defonce ^:private ender-dragon-parent-atom (atom nil))
 
-(def ^:private ender-dragon-part-class
-  (delay
-    (or (load-class-uninitialized "net.minecraft.world.entity.boss.EnderDragonPart")
-        (load-class-uninitialized "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart")
-        (throw (IllegalStateException. "EnderDragonPart class not found")))))
+(defn install-ender-dragon-parent-resolver!
+  "Install (fn [entity] parent-or-nil) backed by versioned EnderDragonParts."
+  [f]
+  (reset! ender-dragon-parent-atom f)
+  f)
 
-(defn- ender-dragon-part?
+(defn- ender-dragon-parent
   [entity]
-  (boolean (and entity (.isInstance ^Class @ender-dragon-part-class entity))))
-
-(defn- ender-dragon-parent-mob
-  [entity]
-  (try
-    (let [^Class cls (.getClass ^Object entity)
-          ^java.lang.reflect.Field f (.getDeclaredField cls "parentMob")]
-      (.setAccessible f true)
-      (.get f entity))
-    (catch Exception _
-      nil)))
+  (when-let [f @ender-dragon-parent-atom]
+    (f entity)))
 
 (def ^:private ^MultipartEntityApi$ParentValidator entity-parent-validator
   (reify MultipartEntityApi$ParentValidator
@@ -70,8 +53,7 @@
    and registered compatibility contracts, in that order."
   [entity]
   (when entity
-    (or (when (ender-dragon-part? entity)
-          (valid-parent entity (ender-dragon-parent-mob entity)))
+    (or (valid-parent entity (ender-dragon-parent entity))
         (api-contract-parent entity)
         (registered-parent entity))))
 

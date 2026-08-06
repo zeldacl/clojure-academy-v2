@@ -34,6 +34,7 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 | `Effects` | Potion effects via `Holder<MobEffect>` |
 | `BlockEntityIo` | Block-entity load / update-tag + registries handle |
 | `render.ImmediateDraw` | Immediate-mode mesh begin / vertex / draw |
+| `EnderDragonParts` | Vanilla multipart parent (`EnderDragonPart.parentMob`) |
 
 Do not add a seam member to one Minecraft version without adding the matching
 public type (same relative path / name) to every other `kind: "minecraft"`
@@ -117,6 +118,19 @@ upload and graphics state belong to that pipeline.
 before entering the seam and `endVertex` is a no-op.
 1.20.1: same downgrade model using `Tesselator.getBuilder()` + `endVertex` +
 `BufferUploader.drawWithShader(bb.end())`.
+
+### `EnderDragonParts`
+
+- `parentOrNull(Entity)` — returns the owning dragon for a vanilla
+  `EnderDragonPart`, else `null`
+
+1.20.1 / 1.21.1: `net.minecraft.world.entity.boss.EnderDragonPart` + public
+`parentMob` field.  
+26.2: same field on `net.minecraft.world.entity.boss.enderdragon.EnderDragonPart`.
+
+Shared `cn.li.mcbase.runtime.multipart-entity` installs this via a versioned
+side-effect ns (`ender-dragon-parts-install`); do not `Class.forName` Minecraft
+entity class name strings from Clojure.
 
 ## `minecraft-base` (`cn.li.mcbase`)
 

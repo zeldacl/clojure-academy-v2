@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.adapters.registry
   "Declarative Forge runtime adapter registry."
   (:require [cn.li.mc1201.runtime.raycast-ops-install]
+            [cn.li.mc1201.runtime.ender-dragon-parts-install]
             [cn.li.forge1201.runtime.entity-damage :as entity-damage]
             [cn.li.forge1201.runtime.multipart-entity :as multipart-entity]
             [cn.li.forge1201.runtime.world-effects :as world-effects]
