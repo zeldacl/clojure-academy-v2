@@ -90,13 +90,107 @@
          :target-z (+ (double (:z position))
                       (* (double (:z look)) range))}))))
 
+(defn- trace-fx-payload
+
+  "Shared fx payload for start/update/perform: the aim point plus the target's
+  position/size (the client scales the marker by width*1.2 / height*1.2 like
+  upstream l_updateEffect)."
+
+  [trace]
+
+  {:target-x (:target-x trace)
+
+   :target-y (:target-y trace)
+
+   :target-z (:target-z trace)
+
+   :hit? (:hit? trace)
+
+   :target-uuid (:target-uuid trace)
+
+   :entity-x (:entity-x trace)
+
+   :entity-y (:entity-y trace)
+
+   :entity-z (:entity-z trace)
+
+   :target-width (double (or (:target-width trace) 0.6))
+
+   :target-height (double (or (:target-height trace) 1.8))})
+
+
+
+(defn- flesh-ripping-ctx-trace
+
+  "The stored trace of the live flesh-ripping context, if any."
+
+  [player-id]
+
+  (when-let [ctx-id (some->> (ctx/active-contexts player-id)
+
+                             (filter #(= flesh-ripping-skill-id (:skill-id %)))
+
+                             first
+
+                             :id)]
+
+    (get-in (ctx-skill/get-context ctx-id) [:skill-state :trace])))
+
+
+
+(defn flesh-ripping-cost-up-cp
+
+  "Up-stage CP cost. Upstream s_end charges only when the release has an
+  entity target (a miss sends MSG_ABORT and consumes nothing) — return 0 for
+  a miss so the framework's apply-cost! deducts nothing."
+
+  [player-id _skill-id exp]
+
+  (if-let [trace (flesh-ripping-ctx-trace player-id)]
+
+    (if (and (:hit? trace) (:target-uuid trace))
+
+      (cfg-lerp :cost.up.cp exp)
+
+      0.0)
+
+    (cfg-lerp :cost.up.cp exp)))
+
+
+
+(defn flesh-ripping-cost-up-overload
+
+  [player-id _skill-id exp]
+
+  (if-let [trace (flesh-ripping-ctx-trace player-id)]
+
+    (if (and (:hit? trace) (:target-uuid trace))
+
+      (cfg-lerp :cost.up.overload exp)
+
+      0.0)
+
+    (cfg-lerp :cost.up.overload exp)))
+
+
+
 (defn flesh-ripping-down!
 
-  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
 
   (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0
 
-                                 :trace nil}))
+                                 :trace nil})
+
+  ;; Upstream l_startEffect spawns the marker on MSG_MADEALIVE; send the first
+  ;; aim so the marker is visible the moment the key goes down.
+  (when-let [trace (build-trace player-id (skill-exp player-id))]
+
+    (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :trace trace})
+
+    (fx/send! ctx-id {:topic :flesh-ripping/fx-start :mode :start} nil
+
+              (trace-fx-payload trace))))
 
 
 
@@ -122,15 +216,7 @@
 
       (fx/send! ctx-id {:topic :flesh-ripping/fx-update :mode :update} nil
 
-                {:target-x (:target-x trace)
-
-                 :target-y (:target-y trace)
-
-                 :target-z (:target-z trace)
-
-                 :hit? (:hit? trace)
-
-                 :target-uuid (:target-uuid trace)}))))
+                (trace-fx-payload trace)))))
 
 
 
@@ -148,7 +234,14 @@
 
                     (build-trace player-id exp))]
 
-      (if (and cost-ok? (:hit? trace) (:target-uuid trace))
+      ;; Upstream s_end sendToClient(MSG_EFFECT_END, target) is unconditional —
+      ;; a miss still ends the effect (the client kills the marker; only the
+      ;; blood splashes and sound are target-gated in c_endEffect).
+      (fx/send-local-and-nearby! ctx-id {:topic :flesh-ripping/fx-perform :mode :perform} nil
+
+                (trace-fx-payload trace))
+
+      (when (and cost-ok? (:hit? trace) (:target-uuid trace))
 
         (let [world-id (:world-id trace)
 
@@ -201,35 +294,7 @@
 
           (let [cd (cfg-lerp-int :cooldown.ticks exp)]
 
-            (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd))
-
-          ;; Original's s_end sendToClient(MSG_EFFECT_END, target) — the hit
-          ;; sound and blood-splash particles are unconditional for every
-          ;; recipient in c_endEffect; only the local aim marker is
-          ;; isLocal-gated (handled by :flesh-ripping/fx-update above).
-          (fx/send-local-and-nearby! ctx-id {:topic :flesh-ripping/fx-perform :mode :perform} nil
-
-                    {:target-x (:target-x trace)
-
-                     :target-y (:target-y trace)
-
-                     :target-z (:target-z trace)
-
-                     :hit? true
-
-                     :target-uuid e-uuid
-
-                     :entity-x (:entity-x trace)
-
-                     :entity-y (:entity-y trace)
-
-                     :entity-z (:entity-z trace)
-
-                     :target-width (:target-width trace)
-
-                     :target-height (:target-height trace)}))
-
-        (log/debug "FleshRipping: no entity in range or cost failed")))
+            (skill-effects/set-main-cooldown! player-id flesh-ripping-skill-id cd)))))
 
     (catch Exception e
 
@@ -241,7 +306,10 @@
 
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
 
-  (ctx-skill/clear-skill-state! ctx-id))
+  (ctx-skill/clear-skill-state! ctx-id)
+
+  ;; Upstream l_onKeyAbort sends MSG_EFFECT_END(empty) -> marker dies.
+  (fx/send! ctx-id {:topic :flesh-ripping/fx-end :mode :end} nil))
 
 
 
@@ -281,17 +349,9 @@
 
   :pattern        :release-cast
 
-  :cost           {:up {:cp       (fn [player-id _skill-id _exp]
+  :cost           {:up {:cp       flesh-ripping-cost-up-cp
 
-                                    (cfg-lerp :cost.up.cp
-
-                                                     (skill-exp player-id)))
-
-                      :overload (fn [player-id _skill-id _exp]
-
-                                  (cfg-lerp :cost.up.overload
-
-                                                   (skill-exp player-id)))
+                      :overload flesh-ripping-cost-up-overload
 
                       :creative? (fn [_player-id _skill-id _exp player-ref]
                                    (boolean

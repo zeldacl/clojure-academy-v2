@@ -77,7 +77,12 @@
               :target-y 2.0
               :target-z 3.0
               :hit? true
-              :target-uuid "target-1"}]]
+              :target-uuid "target-1"
+              :entity-x 1.0
+              :entity-y 2.0
+              :entity-z 3.0
+              :target-width 0.6
+              :target-height 1.8}]]
            @calls*))))
 
 (deftest flesh-ripping-hit-critical-emits-crit-fx-test
@@ -140,9 +145,12 @@
     (is (empty? @potion-calls*))
     (is (= [["p1" :flesh-ripping 0.003]] @exp-calls*))
     (is (= [["p1" :flesh-ripping 20]] @cooldown-calls*))
-    ;; fx-crit-hit stays owner-only (a per-player text message); fx-perform
-    ;; fans out to owner + nearby (blood splash + sound are world-visible).
-    (is (= [[:teleporter/fx-crit-hit {:x 1.0
+    ;; Upstream s_end sends MSG_EFFECT_END first; fx-crit-hit stays owner-only
+    ;; (a per-player text message); fx-perform fans out to owner + nearby
+    ;; (blood splash + sound are world-visible).
+    (is (= [[:flesh-ripping/fx-perform perform-payload]
+            [:flesh-ripping/fx-perform perform-payload]
+            [:teleporter/fx-crit-hit {:x 1.0
                                       :y 2.0
                                       :z 3.0
                                       :crit-level 2
@@ -150,9 +158,7 @@
                                       :message-key "ability.teleporter.critical_hit"
                                       :message-args ["x2.6"]
                                       :target-uuid "target-1"
-                                      :skill-id :flesh-ripping}]
-            [:flesh-ripping/fx-perform perform-payload]
-            [:flesh-ripping/fx-perform perform-payload]]
+                                      :skill-id :flesh-ripping}]]
            @fx-calls*))))
 
 ;; crit-applied? keys off :critical? alone — upstream fires the crit event before
@@ -186,7 +192,9 @@
                                nil)
                     clojure.core/rand (fn [] 0.0)]
          (cb/apply-invoke flesh/flesh-ripping-up! :player-id "p1" :ctx-id "ctx-1b" :cost-ok? true)))
-    (is (= [[:teleporter/fx-crit-hit {:x 1.0
+    (is (= [[:flesh-ripping/fx-perform perform-payload]
+            [:flesh-ripping/fx-perform perform-payload]
+            [:teleporter/fx-crit-hit {:x 1.0
                                       :y 2.0
                                       :z 3.0
                                       :crit-level 2
@@ -194,12 +202,13 @@
                                       :message-key nil
                                       :message-args nil
                                       :target-uuid "target-1"
-                                      :skill-id :flesh-ripping}]
-            [:flesh-ripping/fx-perform perform-payload]
-            [:flesh-ripping/fx-perform perform-payload]]
+                                      :skill-id :flesh-ripping}]]
            @fx-calls*))))
 
 (deftest flesh-ripping-up-cost-fail-has-no-side-effects-test
+  ;; Upstream has no cost-fail path (s_end force-consumes; unaffordable
+  ;; contexts terminate in s_tick), so a failed local cost check still ends
+  ;; the effect visibly (marker dies) but deals no damage / exp / cooldown.
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:trace hit-trace}})
         {:keys [get-context]} mocks
         damage-calls* (atom 0)
@@ -218,9 +227,11 @@
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))
-    (is (= 0 @fx-calls*))))
+    (is (= 2 @fx-calls*))))
 
-(deftest flesh-ripping-miss-has-no-side-effects-test
+(deftest flesh-ripping-miss-still-ends-effect-but-no-damage-test
+  ;; Upstream s_end sends MSG_EFFECT_END unconditionally (marker dies even on
+  ;; a miss); only damage/exp/cooldown are target-gated.
   (let [exp-calls* (atom 0)
         cooldown-calls* (atom 0)
         fx-calls* (atom 0)
@@ -239,12 +250,63 @@
     (is (= 0 @damage-calls*))
     (is (= 0 @exp-calls*))
     (is (= 0 @cooldown-calls*))
-    (is (= 0 @fx-calls*))))
+    (is (= 2 @fx-calls*))))
 
-(deftest flesh-ripping-abort-clears-skill-state-test
+(deftest flesh-ripping-abort-clears-state-and-sends-end-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 3 :trace {:hit? true}}})
-        {:keys [ctx* clear-skill-state!]} mocks]
+        {:keys [ctx* clear-skill-state!]} mocks
+        fx-topics* (atom [])]
     (with-flesh-env
-      #(with-redefs [ctx-skill/clear-skill-state! clear-skill-state!]
+      #(with-redefs [ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! (fn [& args]
+                               (swap! fx-topics* conj (:topic (second args)))
+                               nil)]
          (cb/apply-invoke flesh/flesh-ripping-abort! :ctx-id "ctx-4")))
-    (is (nil? (:skill-state @ctx*)))))
+    (is (nil? (:skill-state @ctx*)))
+    (is (= [:flesh-ripping/fx-end] @fx-topics*))))
+
+(deftest flesh-ripping-down-sends-start-with-first-trace-test
+  ;; Upstream l_startEffect spawns the marker on MSG_MADEALIVE.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state!
+                clear-skill-state!]}
+        mocks
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-flesh-env
+      #(with-redefs [ctx/get-context get-context
+                    ctx-skill/update-skill-state-root! update-skill-state-root!
+                    ctx-skill/assoc-skill-state! assoc-skill-state!
+                    ctx-skill/clear-skill-state! clear-skill-state!
+                    fx/send! send!
+                    skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 12.0
+                                               0.0))
+                    helper/raycast-entity (fn [_ _]
+                                            {:entity-uuid "target-1"
+                                             :entity-x 1.0
+                                             :entity-y 2.0
+                                             :entity-z 3.0})
+                    helper/player-position (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                    helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                    geom/world-id-of (fn [_] "minecraft:overworld")
+                    skill-effects/skill-exp (fn [_ _] 0.5)]
+         (cb/apply-invoke flesh/flesh-ripping-down! :player-id "p1" :ctx-id "ctx-d")))
+    (is (= :flesh-ripping/fx-start (get-in (first @calls*) [1])))
+    (is (= :start (get-in (first @calls*) [2])))
+    (let [payload (get-in (first @calls*) [3])]
+      (is (= true (:hit? payload)))
+      (is (= "target-1" (:target-uuid payload))))))
+
+(deftest flesh-ripping-miss-charges-no-cp-test
+  ;; Upstream s_end charges only on a hit — the dynamic cost fns must return
+  ;; 0 for a miss so apply-cost! deducts nothing.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:trace {:hit? false :target-uuid nil}}})
+        {:keys [get-context]} mocks]
+    (with-flesh-env
+      #(with-redefs [ctx/get-context get-context
+                    ctx/active-contexts (fn [_] [{:id "ctx-c" :skill-id :flesh-ripping}])
+                    skill-effects/skill-exp (fn [_ _] 0.5)
+                    skill-config/lerp-double (fn [_ _ _] 200.0)]
+         (is (= 0.0 (flesh/flesh-ripping-cost-up-cp "p1" :flesh-ripping 0.5)))
+         (is (= 0.0 (flesh/flesh-ripping-cost-up-overload "p1" :flesh-ripping 0.5)))))))

@@ -18,7 +18,7 @@
   (arc-beam/build-spec
     {:effect-id :flesh-ripping
      :initial-state (fn [] {:fx-state {}})
-     :channels {:start {:topic :flesh-ripping/fx-start :mode :start}
+     :channels {:start {:topic :flesh-ripping/fx-start :mode :start :level-payload flesh-target-payload}
                 :update {:topic :flesh-ripping/fx-update :mode :update :level-payload flesh-target-payload}
                 :perform {:topic :flesh-ripping/fx-perform :mode :perform :level-payload flesh-target-payload}
                 :end {:topic :flesh-ripping/fx-end :mode :end}}}))
