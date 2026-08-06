@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Centered 640×785 design-space panel. shell-reactive applies a uniform
-  fit-scale each frame so it fits the current GUI-scaled Screen (upstream
-  shrank via perspective 1/310 instead).
+  TerminalUI's perspective renderer owns placement and scale (1/310), so this
+  remains in the original left/top design space instead of Screen-centering it.
 -->
-<Ui size="640.0,785.0" align="center,center">
+<Ui size="640.0,785.0" align="left,top">
   <image id="back" pos="0.0,0.0" size="640.0,785.0" align="left,top" src="academy:textures/guis/data_terminal/back.png">
     <text id="text_appcount" pos="-40.0,84.0" size="300.0,30.0" align="right,top" text="9 Applications, 19:23" font-size="30.0" color="#99FFFFFF"/>
     <image id="icon" pos="40.0,50.0" size="50.0,50.0" align="left,top" src="academy:textures/guis/data_terminal/logo.png"/>

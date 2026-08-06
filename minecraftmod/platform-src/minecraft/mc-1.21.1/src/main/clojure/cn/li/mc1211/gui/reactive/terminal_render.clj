@@ -32,6 +32,8 @@
     (.identity ^Matrix3f (.normal entry))))
 
 (defn apply-perspective!
+  "Install the upstream TerminalUI camera for this Screen frame.  The matching
+   `render-cursor!` flushes and restores the Screen render state."
   [^GuiGraphics gg ^UiRt rt mx my _pt]
   (let [fd (rt/user-signal rt :terminal-fd)
         fi (rt/user-signal rt :terminal-fi)
@@ -85,10 +87,12 @@
 (defn render-cursor!
   [^GuiGraphics gg ^UiRt rt _mx _my _pt]
   (let [fd (rt/user-signal rt :terminal-fd)
-        fi (rt/user-signal rt :terminal-fi)]
-    (when (and fd fi)
+        fi (rt/user-signal rt :terminal-fi)
+        render-state (rt/user-signal rt :terminal-render-state)]
+    (when (and fd fi render-state)
       (let [^doubles fd fd
             ^ints fi fi
+            ^objects render-state render-state
             ^INode back (rt/node-by-id rt :back)
             ox (if back (.getAbsX back) 0.0)
             oy (if back (.getAbsY back) 0.0)
@@ -111,9 +115,18 @@
         (RenderSystem/blendFunc GlStateManager$SourceFactor/SRC_ALPHA
                                 GlStateManager$DestFactor/ONE)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 0.4)
+        (.pushPose ^PoseStack (.pose gg))
+        (.translate ^PoseStack (.pose gg) 0.0 0.0 -2.0)
         (.blit gg cursor-rl ix iy 0 0 is is is is)
+        (.flush gg)
+        (.popPose ^PoseStack (.pose gg))
         (RenderSystem/defaultBlendFunc)
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+        (when-let [saved-proj (aget render-state 0)]
+          (.popPose ^PoseStack (.pose gg))
+          (RenderSystem/setProjectionMatrix saved-proj VertexSorting/DISTANCE_TO_ORIGIN)
+          (RenderSystem/disableDepthTest)
+          (aset render-state 0 nil))))))
 
 (defn hide-cursor!
   []

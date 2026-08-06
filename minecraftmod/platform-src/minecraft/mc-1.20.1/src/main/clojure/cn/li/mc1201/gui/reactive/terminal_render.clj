@@ -38,8 +38,10 @@
     (.identity ^Matrix3f (.normal entry))))
 
 (defn apply-perspective!
-  "Upstream TerminalUI.draw() camera. Not used by the Screen host path -- kept
-   for a future AuxGui-style renderer."
+  "Install the upstream TerminalUI camera for this Screen frame.
+
+   The matching `render-cursor!` call flushes the terminal tape and restores
+   the Screen projection and pose before control returns to Minecraft."
   [^GuiGraphics gg ^UiRt rt mx my _pt]
   (let [fd (rt/user-signal rt :terminal-fd)
         fi (rt/user-signal rt :terminal-fi)
@@ -91,14 +93,16 @@
   (ResourceLocations/of "academy" "textures/guis/data_terminal/cursor.png"))
 
 (defn render-cursor!
-  "Screen-space custom reticle at panel-local (buffX, buffY+120), matching
-   upstream cursor placement without the perspective camera."
+  "Draw the terminal reticle in the same perspective camera, then restore the
+   normal Screen projection and GuiGraphics pose."
   [^GuiGraphics gg ^UiRt rt _mx _my _pt]
   (let [fd (rt/user-signal rt :terminal-fd)
-        fi (rt/user-signal rt :terminal-fi)]
-    (when (and fd fi)
+        fi (rt/user-signal rt :terminal-fi)
+        render-state (rt/user-signal rt :terminal-render-state)]
+    (when (and fd fi render-state)
       (let [^doubles fd fd
             ^ints fi fi
+            ^objects render-state render-state
             ^INode back (rt/node-by-id rt :back)
             ox (if back (.getAbsX back) 0.0)
             oy (if back (.getAbsY back) 0.0)
@@ -121,9 +125,24 @@
         (RenderSystem/blendFunc GlStateManager$SourceFactor/SRC_ALPHA
                                 GlStateManager$DestFactor/ONE)
         (RenderSystem/setShaderColor 1.0 1.0 1.0 0.4)
+        ;; TerminalUI pushes a local cursor matrix and translates it by -2 in
+        ;; design-space Z before drawing.  Preserve that small perspective
+        ;; offset so its apparent size and placement match the panel exactly.
+        (.pushPose ^PoseStack (.pose gg))
+        (.translate ^PoseStack (.pose gg) 0.0 0.0 -2.0)
         (.blit gg cursor-rl ix iy 0 0 is is is is)
+        ;; GuiGraphics batches textured quads.  Flush before popping the
+        ;; terminal pose or this cursor would be submitted under the restored
+        ;; orthographic matrices instead of the terminal camera.
+        (.flush gg)
+        (.popPose ^PoseStack (.pose gg))
         (RenderSystem/defaultBlendFunc)
-        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)))))
+        (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
+        (when-let [saved-proj (aget render-state 0)]
+          (.popPose ^PoseStack (.pose gg))
+          (RenderSystem/setProjectionMatrix saved-proj VertexSorting/DISTANCE_TO_ORIGIN)
+          (RenderSystem/disableDepthTest)
+          (aset render-state 0 nil))))))
 
 (defn hide-cursor!
   []
