@@ -8,7 +8,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
-            [cn.li.mc1201.client.session :as client-session])
+            [cn.li.mcbase.client.session :as client-session])
   (:import [net.minecraft.client Minecraft]
            [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents]))
 

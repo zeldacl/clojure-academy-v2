@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mc1211.client.session :as client-session]
+            [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [cn.li.mc1211.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]

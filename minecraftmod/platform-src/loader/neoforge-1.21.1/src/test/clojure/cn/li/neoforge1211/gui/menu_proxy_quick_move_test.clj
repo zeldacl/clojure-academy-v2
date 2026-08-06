@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.gui.menu-proxy-quick-move-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc1211.gui.menu.proxy :as menu-proxy]
+            [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.mcmod.gui.tabbed-gui :as tabbed]))
 
 (deftest quick-move-allowed-policy-test

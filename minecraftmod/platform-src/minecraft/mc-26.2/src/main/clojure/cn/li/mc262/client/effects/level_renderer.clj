@@ -3,7 +3,7 @@
 
    Effect plans are extracted before level submission and emitted through
    SubmitNodeCollector, with all GPU state owned by RenderType."
-  (:require [cn.li.mc262.client.session :as client-session]
+  (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
            [cn.li.mc262.client.effects LevelEffectGeometry]

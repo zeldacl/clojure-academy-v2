@@ -4,7 +4,7 @@
   Content-specific action ids and state mutations are registered by content
   modules through cn.li.mcmod.command.actions."
   (:require [cn.li.mc1211.command.executor-core :as executor]
-            [cn.li.mc1211.command.feedback :as feedback]
+            [cn.li.mcbase.command.feedback :as feedback]
             [cn.li.mcmod.command.actions :as cmd-actions])
   (:import [net.minecraft.commands CommandSourceStack]))
 

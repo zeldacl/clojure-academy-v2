@@ -1,6 +1,6 @@
 (ns cn.li.mc262.client.session-cleanup-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.mc262.client.session :as client-session]
+            [cn.li.mcbase.client.session :as client-session]
             [cn.li.mc262.client.session-cleanup :as cleanup]))
 
 (def ^:private owner-a {:client-session-id [:client :session-a]

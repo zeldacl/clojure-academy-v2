@@ -1,6 +1,3 @@
-integration/events/loot.clj
-setup/capability_setup.clj
-setup/capability_wiring.clj
 setup/common.clj
 setup/registry_binding.clj
 setup/shared_event_install.clj

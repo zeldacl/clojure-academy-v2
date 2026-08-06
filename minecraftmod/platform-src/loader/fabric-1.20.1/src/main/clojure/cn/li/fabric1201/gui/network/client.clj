@@ -9,7 +9,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mc1201.client.session :as mc-session])
+            [cn.li.mcbase.client.session :as mc-session])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.network FriendlyByteBuf]
            [net.fabricmc.fabric.api.client.networking.v1 ClientPlayNetworking ClientPlayNetworking$PlayChannelHandler]

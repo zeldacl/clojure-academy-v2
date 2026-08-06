@@ -3,7 +3,8 @@
 
   Centralizes installer call sequences so platform SPI bootstraps keep only
   adapter creation and platform-specific hook maps/extensions."
-  (:require [cn.li.mc1211.bootstrap.installer-core :as core]
+  (:require [cn.li.mc1211.gui.menu-bridge-install :as menu-bridge-install]
+            [cn.li.mc1211.bootstrap.installer-core :as core]
             [cn.li.mc1211.runtime.accessor-registry :as accessor-registry]))
 
 (defn install-platform-core!
@@ -17,3 +18,5 @@
   [adapter world-fns-map be-fns-map]
   (core/install-platform-services! adapter world-fns-map be-fns-map)
   (accessor-registry/init-default-accessors!))
+
+(menu-bridge-install/install!)

@@ -3,7 +3,7 @@
 
   Platform adapters supply only registration API and optional render-tail
   callbacks. The 26.2 host-container and reactive render tape are live."
-  (:require [cn.li.mc262.client.session :as client-session]
+  (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mc262.gui.reactive.host-container :as reactive-host]
             [cn.li.mcmod.gui.container-state :as container-state]
             [cn.li.mcmod.gui.registry :as gui-reg]

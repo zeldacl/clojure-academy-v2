@@ -3,7 +3,7 @@
    Build/update fns come from the client bridge (installed by ac via merge-client-bridge!,
    keys :reactive-overlay-build / :reactive-overlay-update). Zero static ac dependency."
   (:require [cn.li.mc1211.gui.reactive.overlay-host :as overlay-host]
-            [cn.li.mc1211.client.session :as client-session]
+            [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.client.event RenderGuiEvent$Post]

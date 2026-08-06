@@ -1,8 +1,9 @@
 (ns cn.li.mc1201.entity.hooks
-  "Data-driven scripted entity hook registration entrypoint."
-  (:require [cn.li.mc1201.entity.hook-registry-core :as hook-core]))
+  "Versioned entry: install hook class package prefix then register shared hooks."
+  (:require [cn.li.mcbase.entity.hook-registry-core :as hook-core]
+            [cn.li.mcbase.entity.hooks :as shared-hooks]))
 
 (defn register-all-hooks!
-  "Register all scripted entity hook kinds defined by hook registry specs."
   []
-  (hook-core/register-all-scripted-hooks!))
+  (hook-core/install-hook-class-prefix! "cn.li.mc1201")
+  (shared-hooks/register-all-hooks!))

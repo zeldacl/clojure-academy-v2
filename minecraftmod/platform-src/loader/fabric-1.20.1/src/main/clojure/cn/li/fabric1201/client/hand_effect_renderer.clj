@@ -4,7 +4,7 @@
   Fabric does not expose a Forge-style RenderHandEvent in this project path,
   so this adapter currently applies shared hand-effect ticking and camera pitch
   deltas, while first-person hand transform rendering remains Forge-specific."
-  (:require [cn.li.mc1201.client.effects.hand :as hand]
+  (:require [cn.li.mcbase.client.effects.hand :as hand]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]

@@ -1,6 +1,6 @@
 (ns cn.li.mc262.gui.menu.proxy-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc262.gui.menu.proxy :as menu-proxy]
+            [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (deftest owner-map-for-player-context-requires-client-session-test

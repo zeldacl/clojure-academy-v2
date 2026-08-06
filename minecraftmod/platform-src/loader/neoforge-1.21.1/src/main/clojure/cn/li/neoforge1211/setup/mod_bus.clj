@@ -4,7 +4,7 @@
 	Owns deferred-register registration and mod lifecycle/event listeners so
 	mod.clj stays focused on bootstrap flow. The mod bus is injected from
 	MyMod1211 (no FMLJavaModLoadingContext)."
-	(:require [cn.li.neoforge1211.setup.capability-setup :as capability-setup]
+	(:require [cn.li.neoforgebase.setup.capability-setup :as capability-setup]
 				[cn.li.neoforge1211.setup.event-registration :as event-registration]
 				[cn.li.neoforge1211.setup.registry-binding :as registry-binding])
 	(:import [net.neoforged.bus.api IEventBus]

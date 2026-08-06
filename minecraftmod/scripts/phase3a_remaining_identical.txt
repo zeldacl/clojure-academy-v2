@@ -1,14 +1,9 @@
 bootstrap/init_common.clj
 bootstrap/platform_init.clj
-client/overlay/state.clj
-client/runtime/hand_effect_renderer_core.clj
 command/action_impls.clj
 command/brigadier_registry.clj
-entity/hooks.clj
-gui/provider_bridge.clj
+gui/menu_bridge_install.clj
 gui/screen/registry.clj
-gui/slots/data_slot.clj
-gui/slots/sync.clj
 platform/runtime_ops.clj
 runtime/adapter/block_manipulation.clj
 runtime/adapter/world_effects.clj

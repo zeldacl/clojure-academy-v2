@@ -3,7 +3,7 @@
 
   Uses reify factories and delegates menu construction to shared provider dispatcher."
   (:require [cn.li.mcbase.gui.provider.dispatcher :as provider-dispatcher]
-            [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
+            [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.mcbase.gui.provider.common :as provider-common]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.platform.target :as target]

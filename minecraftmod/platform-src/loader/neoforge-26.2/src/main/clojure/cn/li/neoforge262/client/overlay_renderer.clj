@@ -4,7 +4,7 @@
   26.2: RenderGuiEvent$Post supplies GuiGraphicsExtractor (not GuiGraphics);
   overlay-host layout, clock, and render-tape submission are live."
   (:require [cn.li.mc262.gui.reactive.overlay-host :as overlay-host]
-            [cn.li.mc262.client.session :as client-session]
+            [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.client.event RenderGuiEvent$Post]

@@ -1,9 +1,9 @@
 (ns cn.li.mc1201.client.session-cleanup
   "Shared client owner cleanup/orchestration for disconnects and server switches."
   (:require [cn.li.mc1201.client.effects.level-renderer :as level-renderer]
-            [cn.li.mc1201.client.overlay.state :as overlay-state]
+            [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc1201.gui.reactive.overlay-host :as overlay-host]
-            [cn.li.mc1201.client.session :as client-session]
+            [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.runtime.deferred :as deferred]
@@ -25,7 +25,7 @@
 
 (def ^:private session-cleanup-runtime-override
   "Plain root var, nil in production. Test-only swap target for
-   call-with-session-cleanup-runtime â€” replaces the prior ^:dynamic +
+   call-with-session-cleanup-runtime â€?replaces the prior ^:dynamic +
    binding pair. Single-threaded test execution only."
   nil)
 

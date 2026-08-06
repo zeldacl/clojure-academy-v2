@@ -4,8 +4,8 @@
   Platform-agnostic design: Uses metadata-driven approach."
   (:require [cn.li.mcmod.gui.registry :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mc1201.gui.menu.proxy :as menu-proxy]
-            [cn.li.mc1201.gui.provider-bridge :as provider-bridge]
+            [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
+            [cn.li.mcbase.gui.provider-bridge :as provider-bridge]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc1201.gui.registry.common :as registry-common]
             [cn.li.mcbase.gui.registry.open :as open-core]

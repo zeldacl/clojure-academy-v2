@@ -10,12 +10,12 @@
 
 (deftest imc-dispatcher-wired-into-capability-phase
   (testing "capability phase registers InterModProcessEvent listener"
-    (require 'cn.li.neoforge262.setup.imc-dispatcher)
-    (is (fn? @(resolve 'cn.li.neoforge262.setup.imc-dispatcher/register-imc-listener!)))
+    (require 'cn.li.neoforgebase.setup.imc-dispatcher)
+    (is (fn? @(resolve 'cn.li.neoforgebase.setup.imc-dispatcher/register-imc-listener!)))
     (let [src (slurp
-               (or (let [f (java.io.File. "platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/setup/capability_setup.clj")]
+               (or (let [f (java.io.File. "platform-src/loader/neoforge-shared/src/main/clojure/cn/li/neoforgebase/setup/capability_setup.clj")]
                      (when (.exists f) f))
-                   (java.io.File. "../platform-src/loader/neoforge-26.2/src/main/clojure/cn/li/neoforge262/setup/capability_setup.clj")))]
+                   (java.io.File. "../platform-src/loader/neoforge-shared/src/main/clojure/cn/li/neoforgebase/setup/capability_setup.clj")))]
       (is (re-find #"imc-dispatcher/register-imc-listener!" src)))))
 
 (deftest config-registration-callable

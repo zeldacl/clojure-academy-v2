@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.client.hand-effect-renderer
   "CLIENT-ONLY first-person hand effect renderer for runtime animations."
-  (:require [cn.li.mc1201.client.effects.hand :as hand]
+  (:require [cn.li.mcbase.client.effects.hand :as hand]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.forge1201.shim ForgeClientHelper]
