@@ -1,19 +1,18 @@
-(ns cn.li.mc262.gui.reactive.bake-slots-test
-  "26.2 bake slots use Identifier (not ResourceLocation)."
+(ns cn.li.mcbase.gui.reactive.bake-slots-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc262.gui.reactive.bake-slots :as bake-slots]
-            [cn.li.mc262.gui.reactive.render :as ui-render]
+            [cn.li.mc1201.gui.reactive.bake-slots]
+            [cn.li.mcbase.gui.reactive.bake-slots :as bake-slots]
+            [cn.li.mc1201.gui.reactive.render :as ui-render]
             [cn.li.mcmod.ui.node :as node])
-  (:import [net.minecraft.resources Identifier]
-           [cn.li.mcver ResourceLocations]))
+  (:import [net.minecraft.resources ResourceLocation]))
 
 (deftest bake-image-populates-rl-slot
   (let [^cn.li.mcmod.ui.node.INode n (node/create-node 0 nil :image
                                                         {} 5 6 {})
-        rl (ResourceLocations/of "minecraft" "textures/block/stone.png")]
+        rl (ResourceLocation. "minecraft" "textures/block/stone.png")]
     (.setOSlot n 0 "minecraft:textures/block/stone.png")
     (ui-render/bake-image! n)
-    (is (instance? Identifier (.getOSlot n 2)))
+    (is (instance? ResourceLocation (.getOSlot n 2)))
     (is (= rl (.getOSlot n 2)))
     (is (= n (bake-slots/assert-bake-slots! n)))))
 

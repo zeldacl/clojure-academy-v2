@@ -1,4 +1,4 @@
-package cn.li.mc1201.client;
+package cn.li.mcver;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.renderer.texture.DynamicTexture;

@@ -1,9 +1,9 @@
-package cn.li.mc1211.client;
+package cn.li.mcver;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.TextureManager;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 /**
  * Reads texture dimensions without field reflection.
@@ -22,12 +22,12 @@ public final class TextureSizeAccess {
         return null;
     }
 
-    public static int[] sizeFromManager(TextureManager manager, ResourceLocation resourceLocation) {
-        if (manager == null || resourceLocation == null) {
+    public static int[] sizeFromManager(TextureManager manager, Identifier id) {
+        if (manager == null || id == null) {
             return null;
         }
         try {
-            return size(manager.getTexture(resourceLocation));
+            return size(manager.getTexture(id));
         } catch (Exception ignored) {
             return null;
         }

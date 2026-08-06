@@ -1,4 +1,4 @@
-# Remaining identical-but-blocked files
+﻿# Remaining identical-but-blocked files
 
 ## MSDF note (checked 2026-08-06)
 
@@ -12,14 +12,17 @@ Cannot promote MSDF Java into `minecraft-base`: base compiles for all targets in
 
 Already in mcbase (version-agnostic FX): MsdfTextFx, MsdfGlyphFlags, MsdfGlowAnimator.
 
-## Batch5 / Batch6 promoted
+## Promoted through batch7
 
-Batch5: screen, multipart, adapters, item-use, raycast, commands, neo registry_binding.
-Batch6: `bootstrap/platform_init`, `platform/runtime_ops`, NeoForge `setup/common`
-(version files remain thin install + re-export).
+- `RegistryDispatch` / `TextureSizeAccess` → `cn.li.mcver`
+- `client/i18n`, `gui/reactive/bake-slots` → mcbase (+ version install for id class)
+- NeoForge `runtime/item-handler` → neoforgebase
 
-## MC residual (intentional thin wrappers)
-- gui/menu_bridge_install.clj (versioned DelegatingCMenuBridge factory)
+## MC residual (intentional thin wrappers / install shells)
+- gui/menu_bridge_install.clj
+- bootstrap/platform_init.clj, platform/runtime_ops.clj, entity/hooks.clj
+- runtime/raycast_ops_install.clj, ender_dragon_parts_install.clj
 
-## NeoForge residual (intentional version hub)
+## NeoForge residual (intentional version hubs)
 - setup/shared_event_install.clj
+- setup/common.clj (thin install + re-export)

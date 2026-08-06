@@ -18,4 +18,8 @@ public final class ResourceLocations {
     public static ResourceLocation parse(String id) {
         return ResourceLocation.parse(id);
     }
+    /** Native id class ({@link ResourceLocation}) for type checks. */
+    public static Class<?> idClass() {
+        return ResourceLocation.class;
+    }
 }

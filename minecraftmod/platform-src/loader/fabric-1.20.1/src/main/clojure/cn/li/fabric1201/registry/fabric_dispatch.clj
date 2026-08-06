@@ -3,7 +3,7 @@
   (:require [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1201.shim FabricParticleHelper]
-           [cn.li.mc1201.runtime RegistryDispatch]
+           [cn.li.mcver RegistryDispatch]
            [net.minecraft.world.item Item]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.material Fluid]))

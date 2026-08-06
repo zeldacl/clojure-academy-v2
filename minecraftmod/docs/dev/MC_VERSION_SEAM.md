@@ -35,6 +35,8 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 | `BlockEntityIo` | Block-entity load / update-tag + registries handle |
 | `render.ImmediateDraw` | Immediate-mode mesh begin / vertex / draw |
 | `EnderDragonParts` | Vanilla multipart parent (`EnderDragonPart.parentMob`) |
+| `RegistryDispatch` | `BuiltInRegistries` block/item/fluid register helpers |
+| `TextureSizeAccess` | Dynamic texture pixel size lookup |
 
 Do not add a seam member to one Minecraft version without adding the matching
 public type (same relative path / name) to every other `kind: "minecraft"`
@@ -44,6 +46,7 @@ component.
 
 - `of(String namespace, String path)`
 - `parse(String id)`
+- `idClass()` — native id `Class` (`ResourceLocation` / `Identifier`) for type checks
 
 26.2: `Identifier.fromNamespaceAndPath` / `Identifier.parse` (26.2 renamed
 `ResourceLocation` to `Identifier`; the factory method names were kept).  
@@ -131,6 +134,16 @@ before entering the seam and `endVertex` is a no-op.
 Shared `cn.li.mcbase.runtime.multipart-entity` installs this via a versioned
 side-effect ns (`ender-dragon-parts-install`); do not `Class.forName` Minecraft
 entity class name strings from Clojure.
+
+### `RegistryDispatch`
+
+- `registerBlock` / `registerItem` / `registerFluid` — `BuiltInRegistries` helpers
+  using `ResourceLocations.of` (no Clojure reflection)
+
+### `TextureSizeAccess`
+
+- `size(Object texture)` / `sizeFromManager(TextureManager, id)` — dynamic texture
+  pixel dimensions without field reflection
 
 ## `minecraft-base` (`cn.li.mcbase`)
 
