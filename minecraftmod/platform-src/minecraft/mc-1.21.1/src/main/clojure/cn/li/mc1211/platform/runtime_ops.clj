@@ -2,7 +2,8 @@
   "Minecraft-touching runtime callables shared by Forge/Fabric adapter maps.
 
   Consumed by cn.li.platform.adapter.minecraft-ops/build-adapter-map."
-  (:import [cn.li.mc1211.runtime BlockRegistry ItemInventory ItemPlayerOps
+  (:import [cn.li.mcbase.runtime ItemPlayerOps]
+           [cn.li.mc1211.runtime BlockRegistry ItemInventory
             ItemRegistry ParticleEntity RuntimeAccess]
            [net.minecraft.core BlockPos]
            [net.minecraft.world.entity.item ItemEntity]

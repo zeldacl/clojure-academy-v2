@@ -2,7 +2,7 @@ package cn.li.mc1201.entity;
 
 
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1201.entity.hook.ray.ScriptedRayHooks;
+import cn.li.mcbase.entity.hook.ray.ScriptedRayHooks;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.EntityType;

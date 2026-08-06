@@ -2,7 +2,7 @@
   "Fabric implementation of IWorldEffects protocol."
   (:require [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
-            [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]

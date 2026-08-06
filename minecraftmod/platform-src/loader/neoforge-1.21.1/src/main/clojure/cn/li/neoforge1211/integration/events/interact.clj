@@ -5,7 +5,7 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc1211.integration.event-handlers :as event-handlers]
             [cn.li.neoforge1211.integration.events.event-apply :as event-apply]
-            [cn.li.neoforge1211.integration.events.gui-open-port :as gui-open-port]
+            [cn.li.neoforgebase.integration.events.gui-open-port :as gui-open-port]
             [cn.li.neoforge1211.runtime.owner :as runtime-owner])
   (:import [net.neoforged.neoforge.event.entity.player PlayerInteractEvent$RightClickBlock
             PlayerInteractEvent$LeftClickBlock

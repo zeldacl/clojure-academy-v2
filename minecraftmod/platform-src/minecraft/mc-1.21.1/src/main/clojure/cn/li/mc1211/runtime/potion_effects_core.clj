@@ -3,7 +3,7 @@
 
   Uses BuiltInRegistries.MOB_EFFECT with vanilla ResourceLocations for
   both built-in and custom effects — no Forge-specific bridge needed."
-  (:require [cn.li.mc1211.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])

@@ -3,7 +3,8 @@
 
   Keeps mod namespace focused on registration/bootstrap while this namespace owns
   common setup side effects and event subscriptions."
-  (:require [cn.li.neoforge1211.gui.init :as gui-init]
+  (:require [cn.li.neoforge1211.setup.shared-event-install :as shared-event-install]
+            [cn.li.neoforge1211.gui.init :as gui-init]
             [cn.li.neoforge1211.registry.content-registration :as content-registration]
             [cn.li.neoforge1211.runtime.lifecycle :as runtime-lifecycle]
             [cn.li.neoforge1211.integration.forge-energy :as forge-energy]
@@ -32,3 +33,5 @@
       (world-events/register-on-world-state-changed!)
       (event-registration/register-common-event-listeners!)
       (log/info "Forge common setup wiring complete"))))
+
+(shared-event-install/install!)

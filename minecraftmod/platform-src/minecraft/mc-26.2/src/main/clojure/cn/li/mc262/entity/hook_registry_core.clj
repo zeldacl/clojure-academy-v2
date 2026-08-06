@@ -104,7 +104,7 @@
             :property-key :marker
             :label "scripted-marker"
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :marker %)
-            :impl-key->hook-class {:owner-follow-marker "cn.li.mc262.entity.hook.marker.OwnerFollowMarkerHook"}
+            :impl-key->hook-class {:owner-follow-marker "cn.li.mcbase.entity.hook.marker.OwnerFollowMarkerHook"}
             :conflict-mode :allow-duplicates
             :install-key :marker
             :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass

@@ -1,5 +1,6 @@
 package cn.li.neoforge262.capability;
 
+import cn.li.neoforgebase.capability.ForgeCapabilityQuery;
 import cn.li.mcbase.block.capability.ScriptedCapabilityResolver;
 import cn.li.mc262.block.entity.AbstractScriptedBlockEntity;
 import cn.li.mc262.block.entity.BlockEntityRegistry;

@@ -4,7 +4,8 @@
   Platform-agnostic design: Uses metadata-driven approach.
   Menu types use IMenuTypeExtension + RegistryFriendlyByteBuf;
   opening uses ServerPlayer.openMenu (extra-data Consumer)."
-  (:require [cn.li.mcmod.gui.registry :as gui]
+  (:require [cn.li.neoforgebase.integration.events.gui-open-port :as gui-open-port]
+            [cn.li.mcmod.gui.registry :as gui]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mc262.gui.menu.proxy :as menu-proxy]
             [cn.li.mc262.gui.provider-bridge :as provider-bridge]
@@ -207,3 +208,7 @@
 (defn register-gui-handler! []
   (install-registry-contract!)
   (log/info "NeoForge 26.2 GUI handler ready (menu types registered via DeferredRegister)"))
+
+(gui-open-port/install-open-gui!
+  (fn [player gui-id tile-entity]
+    (open-gui-for-player player gui-id tile-entity)))

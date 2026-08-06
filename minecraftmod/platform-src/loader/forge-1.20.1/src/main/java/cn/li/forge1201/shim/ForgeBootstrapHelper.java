@@ -3,7 +3,7 @@ package cn.li.forge1201.shim;
 import cn.li.forge1201.block.entity.ScriptedBlockEntity;
 import cn.li.mc1201.block.ScriptedLiquidBlock;
 import cn.li.mc1201.block.SharedBootstrapBlockHelper;
-import cn.li.mc1201.block.SharedDynamicStateBlock;
+import cn.li.mcbase.block.SharedDynamicStateBlock;
 import cn.li.mc1201.block.SharedScriptedBlock;
 import cn.li.mc1201.block.ScriptedRenderShapes;
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;

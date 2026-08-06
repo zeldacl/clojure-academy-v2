@@ -8,7 +8,7 @@
 
   Note: set-block and get-block use BuiltInRegistries/BLOCK directly.
   break-block! delegates the permission check to break-guard-fn supplied by the caller."
-  (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]

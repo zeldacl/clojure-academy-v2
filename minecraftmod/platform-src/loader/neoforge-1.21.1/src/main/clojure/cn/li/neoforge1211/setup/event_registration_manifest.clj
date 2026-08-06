@@ -4,7 +4,7 @@
             [cn.li.neoforge1211.integration.events.block :as block-events]
             [cn.li.neoforge1211.integration.events.loot :as loot-events]
             [cn.li.neoforge1211.integration.events.world :as world-events]
-            [cn.li.neoforge1211.integration.events.entity-attributes :as entity-attr-events]
+            [cn.li.neoforgebase.integration.events.entity-attributes :as entity-attr-events]
             [cn.li.neoforge1211.registry.creative-tab-event :as creative-tab-event]))
 
 (defn lifecycle-listener-specs

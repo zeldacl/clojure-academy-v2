@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.runtime.world-effects
   "Forge implementation of IWorldEffects protocol."
   (:require [cn.li.mc1201.runtime.adapter.world-effects :as world-effects]
-            [cn.li.mc1201.runtime.entity-query-core :as query-core]
+            [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.forge1201.adapter.server-context :as server-context])
   (:import [cn.li.mc1201.runtime RuntimeAccess WorldEntity]
            [net.minecraft.server.level ServerLevel]

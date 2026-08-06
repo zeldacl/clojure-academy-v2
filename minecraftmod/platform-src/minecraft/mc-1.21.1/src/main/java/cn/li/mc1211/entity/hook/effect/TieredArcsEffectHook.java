@@ -1,5 +1,9 @@
 package cn.li.mc1211.entity.hook.effect;
 
+import net.minecraft.world.entity.Entity;
+
+import cn.li.mcbase.entity.hook.effect.ScriptedEffectHook;
+
 import cn.li.mc1211.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -56,7 +60,10 @@ public final class TieredArcsEffectHook implements ScriptedEffectHook {
     private static final int[] DEFAULT_TIER_DELAYS = {0, 1, 3, 4, 6, 7, 8};
 
     @Override
-    public void onClientTick(ScriptedEffectEntity entity, ClientLevel level) {
+    public void onClientTick(Entity raw, ClientLevel level) {
+        if (!(raw instanceof ScriptedEffectEntity entity)) {
+            return;
+        }
         spawnTieredArcs(entity);
         spawnArcParticles(entity, level);
         tickArcLifetimes(entity);

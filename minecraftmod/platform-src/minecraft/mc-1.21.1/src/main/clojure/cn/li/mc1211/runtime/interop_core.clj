@@ -3,7 +3,7 @@
 
   All operations use only vanilla MC APIs (ServerPlayer, ServerLevel)
   so this works identically on both Forge and Fabric."
-  (:require [cn.li.mc1211.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])

@@ -1,15 +1,16 @@
 package cn.li.mc262.block;
 
-import net.minecraft.world.item.context.BlockPlaceContext;
+import com.mojang.serialization.MapCodec;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
+
 import java.util.List;
 
 /**
- * Loader-agnostic dynamic block (no BlockEntity).
+ * Version-local SharedDynamicStateBlock that supplies MapCodec required by MC mc262.
  */
-public class SharedDynamicStateBlock extends AbstractDynamicStateBlock {
+public class SharedDynamicStateBlock extends cn.li.mcbase.block.SharedDynamicStateBlock {
 
     public static SharedDynamicStateBlock create(String blockId,
                                                  List<Property<?>> properties,
@@ -27,7 +28,7 @@ public class SharedDynamicStateBlock extends AbstractDynamicStateBlock {
     }
 
     @Override
-    public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return BlockPlacementHelper.withHorizontalFacing(this, this.defaultBlockState(), context);
+    protected MapCodec<? extends Block> codec() {
+        return MapCodec.unit(this);
     }
 }

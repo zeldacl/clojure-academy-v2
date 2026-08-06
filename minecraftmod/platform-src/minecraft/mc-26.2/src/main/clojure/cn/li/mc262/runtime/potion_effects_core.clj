@@ -3,7 +3,7 @@
 
   26.2: MobEffectInstance / addEffect / removeEffect / hasEffect are all keyed by
   Holder<MobEffect>, and Registry.get returns Optional<Holder.Reference<MobEffect>>."
-  (:require [cn.li.mc262.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.protocol.metadata :as registry-metadata]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])

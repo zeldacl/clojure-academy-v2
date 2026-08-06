@@ -1,6 +1,6 @@
 (ns cn.li.mc1211.runtime.entity-motion-core
   "Shared Minecraft-side entity motion helpers (no loader API imports)."
-  (:require [cn.li.mc1211.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1211.entity ScriptedBlockBodyEntity]
            [cn.li.mc1211.runtime WorldEntity]

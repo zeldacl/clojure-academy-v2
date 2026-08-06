@@ -4,7 +4,7 @@
   26.2: the 6-arg teleportTo(ServerLevel,x,y,z,yRot,xRot) and Entity.changeDimension
   are gone; both same- and cross-dimension teleports use
   teleportTo(ServerLevel,x,y,z,Set<Relative>,yRot,xRot,boolean)."
-  (:require [cn.li.mc262.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc262.bridge McAccess]
            [java.util Set]

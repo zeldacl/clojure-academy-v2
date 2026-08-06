@@ -3,7 +3,7 @@
 
   Platforms provide transport functions; shared core wires runtime route/send
   integration with mcmod power-runtime and runtime message registry." 
-  (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcbase.runtime.spi.network-transport :as transport-spi]
             [cn.li.mcbase.runtime.spi.server-context :as server-context-spi]
             [cn.li.mcmod.hooks.core :as network-hooks]

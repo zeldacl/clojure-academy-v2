@@ -11,10 +11,10 @@
             [cn.li.mc262.runtime.teleportation-core :as teleportation-core]
             [cn.li.mc262.runtime.named-position-store-core :as position-store-core]
             [cn.li.mc262.runtime.potion-effects-core :as potion-effects-core]
-            [cn.li.mc262.runtime.player-motion-core :as player-motion-core]
+            [cn.li.mcbase.runtime.player-motion-core :as player-motion-core]
             [cn.li.mc262.runtime.entity-motion-core :as entity-motion-core]
             [cn.li.mc262.runtime.raycast-core :as raycast-core]
-            [cn.li.mc262.runtime.entity-query-core :as entity-query-core]
+            [cn.li.mcbase.runtime.entity-query-core :as entity-query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.entity :as pentity]))

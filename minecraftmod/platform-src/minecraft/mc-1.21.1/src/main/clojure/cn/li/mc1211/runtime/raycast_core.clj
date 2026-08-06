@@ -1,6 +1,6 @@
 (ns cn.li.mc1211.runtime.raycast-core
   "Loader-agnostic IRaycast adapter built on shared Raycast helpers."
-  (:require [cn.li.mc1211.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcbase.runtime.raycast-normalize :as rn]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1211.runtime Raycast]

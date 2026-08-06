@@ -3,7 +3,7 @@
 
   26.2: CompoundTag.contains is key-only; getCompound returns Optional —
   reads go through NbtAccess. getAllKeys → keySet."
-  (:require [cn.li.mc262.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]

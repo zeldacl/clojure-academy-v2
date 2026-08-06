@@ -1,5 +1,7 @@
 package cn.li.neoforge1211.capability;
 
+import cn.li.neoforgebase.capability.CapabilityKeyIndex;
+
 import cn.li.mcmod.ModId;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -33,11 +35,13 @@ public final class CapabilityRegistry {
     public static synchronized <T> void registerBlock(String key, BlockCapability<T, Direction> cap) {
         KEY_TO_BLOCK.put(key, cap);
         BLOCK_TO_KEY.put(cap, key);
+        CapabilityKeyIndex.putBlock(cap, key);
     }
 
     public static synchronized <T> void registerItem(String key, ItemCapability<T, Void> cap) {
         KEY_TO_ITEM.put(key, cap);
         ITEM_TO_KEY.put(cap, key);
+        CapabilityKeyIndex.putItem(cap, key);
     }
 
     /** Maps a string key to a block capability token (NeoForge replacement for Forge Capability tokens). */
@@ -70,12 +74,12 @@ public final class CapabilityRegistry {
 
     @Nullable
     public static String getKey(BlockCapability<?, ?> cap) {
-        return BLOCK_TO_KEY.get(cap);
+        return CapabilityKeyIndex.getKey(cap);
     }
 
     @Nullable
     public static String getKey(ItemCapability<?, ?> cap) {
-        return ITEM_TO_KEY.get(cap);
+        return CapabilityKeyIndex.getKey(cap);
     }
 
     public static Collection<BlockCapability<?, Direction>> allBlockCapabilities() {

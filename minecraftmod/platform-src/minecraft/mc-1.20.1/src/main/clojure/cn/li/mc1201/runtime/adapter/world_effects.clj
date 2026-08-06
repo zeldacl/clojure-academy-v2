@@ -4,7 +4,7 @@
   Platform namespaces provide the server lookup plus platform-specific
   entity/lightning/explosion callbacks; this namespace owns the shared
   world-query orchestration and protocol-var installation."
-  (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mc1201.runtime.multipart-entity :as multipart]
             [cn.li.mc1201.runtime.world-effects-core :as core]
             [cn.li.mcmod.framework :as fw]

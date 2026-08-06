@@ -1,14 +1,16 @@
 package cn.li.mc1211.entity;
 
+import cn.li.mcbase.entity.IScriptedOwnedEntity;
+
 
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1211.entity.hook.marker.ScriptedMarkerHooks;
+import cn.li.mcbase.entity.hook.marker.ScriptedMarkerHooks;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
 
-public class ScriptedMarkerEntity extends ScriptedEffectEntity {
+public class ScriptedMarkerEntity extends ScriptedEffectEntity implements IScriptedOwnedEntity {
     public ScriptedMarkerEntity(EntityType<? extends ScriptedEffectEntity> entityType, Level level) {
         super(entityType, level);
     }

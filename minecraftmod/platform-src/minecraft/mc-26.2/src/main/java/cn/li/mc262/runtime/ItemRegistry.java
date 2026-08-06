@@ -1,5 +1,7 @@
 package cn.li.mc262.runtime;
 
+import cn.li.mcbase.runtime.ItemPlayerOps;
+
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
@@ -8,6 +10,10 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 public final class ItemRegistry {
+    static {
+        ItemPlayerOps.installItemIdLookup(ItemRegistry::getItemById);
+    }
+
     private ItemRegistry() {}
 
     public static Item get(Identifier id) {

@@ -1,5 +1,7 @@
 package cn.li.mc262.entity.hook.effect;
 
+import cn.li.mcbase.entity.hook.effect.ScriptedEffectHook;
+
 import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import java.util.Map;
@@ -7,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
 public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
@@ -17,7 +20,10 @@ public final class OwnerOrbitEffectHook implements ScriptedEffectHook {
     private final Map<UUID, OrbitState> states = new ConcurrentHashMap<>();
 
     @Override
-    public void onServerTick(ScriptedEffectEntity entity, Level level) {
+    public void onServerTick(Entity raw, Level level) {
+        if (!(raw instanceof ScriptedEffectEntity entity)) {
+            return;
+        }
         if (!entity.isAlive()) {
             states.remove(entity.getUUID());
             return;

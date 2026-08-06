@@ -1,15 +1,21 @@
 package cn.li.mc1211.entity.hook.ray;
 
+import cn.li.mcbase.entity.hook.ray.ScriptedRayHook;
+
 import cn.li.mc1211.entity.ScriptedRayEntity;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 
 public final class OwnerFollowRayHook implements ScriptedRayHook {
     private static final double DEFAULT_EYE_OFFSET_Y = 0.1D;
 
     @Override
-    public void onClientTick(ScriptedRayEntity entity, ClientLevel level) {
+    public void onClientTick(Entity raw, ClientLevel level) {
+        if (!(raw instanceof ScriptedRayEntity entity)) {
+            return;
+        }
         Player owner = entity.getOwnerPlayer();
         if (owner == null) {
             return;

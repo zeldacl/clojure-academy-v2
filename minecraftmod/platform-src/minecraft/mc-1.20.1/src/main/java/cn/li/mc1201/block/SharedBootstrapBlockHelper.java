@@ -1,5 +1,7 @@
 package cn.li.mc1201.block;
 
+import cn.li.mcbase.block.SharedDynamicStateBlock;
+
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;

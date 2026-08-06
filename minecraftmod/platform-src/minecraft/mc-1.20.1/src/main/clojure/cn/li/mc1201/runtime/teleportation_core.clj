@@ -3,7 +3,7 @@
 
   All functions take a MinecraftServer instance (passed by the platform adapter)
   rather than using loader-specific lifecycle hooks."
-  (:require [cn.li.mc1201.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]

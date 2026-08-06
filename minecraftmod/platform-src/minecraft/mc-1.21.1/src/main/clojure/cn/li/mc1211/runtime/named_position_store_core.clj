@@ -4,7 +4,7 @@
   All functions take a MinecraftServer instance (passed by the platform adapter)
   rather than using loader-specific lifecycle hooks. NBT storage location is
   selected by content-owned persistence descriptors."
-  (:require [cn.li.mc1211.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
