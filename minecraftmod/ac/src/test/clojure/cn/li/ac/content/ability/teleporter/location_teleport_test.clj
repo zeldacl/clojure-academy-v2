@@ -36,12 +36,6 @@
                   (->> (vals (get @store player-uuid {}))
                        (sort-by :name)
                        vec))
-                loc-tp/get-location-count
-                (fn [player-uuid]
-                  (count (get @store player-uuid {})))
-                loc-tp/has-location?
-                (fn [player-uuid location-name]
-                  (contains? (get @store player-uuid {}) location-name))
                 motion-effects/teleportation-available? (constantly true)
                 motion-effects/player-position (constantly current-pos)
                 motion-effects/player-dimension (constantly (:world-id current-pos))]
@@ -73,7 +67,7 @@
                    loc (first (:locations result))]
                (is (true? (:success? result)))
                (is (= current-pos (:current-pos result)))
-               (is (= 16 (get-in result [:limits :max-saved-locations])))
+               (is (= 16 (get-in result [:limits :max-location-name-length])))
                (is (= "home-base-name-t" (:name loc)))
                (is (false? (:cross-dimension? loc)))
                (is (true? (:can-perform? loc))))))
@@ -82,19 +76,19 @@
                   (loc-tp/delete-saved-location! player-id "home-base-name-that-is-too-long")))
            (is (empty? (vals (get @store player-id {})))))))))
 
-(deftest save-current-location-enforces-ac-max-location-policy-test
+(deftest save-current-location-has-no-limit-test
+  ;; Upstream LocTeleportData has no cap — any number of locations may be
+  ;; saved, and overwriting an existing name is still allowed.
   (let [store (atom {"player-limit" {"home" {:name "home"
                                              :world-id "minecraft:overworld"
                                              :x 0.0 :y 64.0 :z 0.0}}})
         current-pos {:world-id "minecraft:overworld" :x 10.0 :y 65.0 :z 2.0}]
     (with-platform-runtimes! store current-pos
-      #(with-redefs [ability-config/max-saved-locations (fn [] 1)]
-         (testing "new names are rejected when the AC configured limit is reached"
-           (is (= {:success? false
-                   :error :location-limit-reached
-                   :max-locations 1}
-                  (loc-tp/save-current-location! "player-limit" "mine")))
-           (is (nil? (get-in @store ["player-limit" "mine"]))))
+      #(do
+         (testing "new names are accepted without any count limit"
+           (doseq [n ["mine" "another" "yet-another" "one-more"]]
+             (is (= {:success? true :name n}
+                    (loc-tp/save-current-location! "player-limit" n)))))
          (testing "overwriting an existing saved location is still allowed"
            (is (= {:success? true :name "home"}
                   (loc-tp/save-current-location! "player-limit" "home")))

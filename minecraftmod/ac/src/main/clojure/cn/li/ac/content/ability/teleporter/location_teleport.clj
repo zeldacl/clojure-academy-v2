@@ -13,7 +13,6 @@
 
   No Minecraft imports."
   (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
-            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.resource :as rdata]
@@ -106,34 +105,16 @@
 (defn- list-locations [player-id]
   (position-store-call :list-locations player-id))
 
-(defn- get-location-count [player-id]
-  (position-store-call :get-location-count player-id))
-
-(defn- has-location? [player-id location-name]
-  (position-store-call :has-location? player-id location-name))
-
 (defn- all-locations [player-id]
   (if (position-store-available?)
     (vec (list-locations player-id))
     []))
 
-(defn- max-saved-location-count []
-  (long (ability-config/max-saved-locations)))
-
-(defn- location-limit-reached?
-  [player-id location-name]
-  (and (position-store-available?)
-       (not (has-location? player-id location-name))
-       (>= (long (or (get-location-count player-id) 0))
-           (max-saved-location-count))))
-
 (defn- location-limits []
   {:cross-dimension-exp-threshold
    (cfg-double :targeting.cross-dimension-exp-threshold)
    :max-location-name-length
-   (cfg-int :ui.max-location-name-length)
-   :max-saved-locations
-   (max-saved-location-count)})
+   (cfg-int :ui.max-location-name-length)})
 
 (defn- location-with-stats [player-id player-ref exp cur-pos loc]
   (let [cross-dim? (not= (:world-id cur-pos) (:world-id loc))
@@ -194,20 +175,16 @@
 
         :else
         (if-let [pos (current-pos player-id)]
-          (if (location-limit-reached? player-id name*)
-            {:success? false
-             :error :location-limit-reached
-             :max-locations (max-saved-location-count)}
-            (let [ok? (save-location!
-                        player-id
-                        name*
-                        (:world-id pos)
-                        (:x pos)
-                        (:y pos)
-                        (:z pos))]
-              (if ok?
-                {:success? true :name name*}
-                {:success? false :error :save-failed})))
+          (let [ok? (save-location!
+                      player-id
+                      name*
+                      (:world-id pos)
+                      (:x pos)
+                      (:y pos)
+                      (:z pos))]
+            (if ok?
+              {:success? true :name name*}
+              {:success? false :error :save-failed}))
           {:success? false :error :player-pos-unavailable})))
     (catch Exception e
       (log/warn "LocationTeleport save failed:" (ex-message e))

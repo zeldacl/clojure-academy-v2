@@ -167,7 +167,6 @@
         _ (rt/clear-children! rt list-grp)
         {:keys [locations limits]} (screen-st owner-key)
         total (count locations)
-        max-locs (int (or (:max-saved-locations limits) 10))
         scroll-a (rt/user-signal rt :scroll-idx)
         start (max 0 (min @scroll-a (max 0 (- total max-visible))))
         _ (reset! scroll-a start)
@@ -198,7 +197,7 @@
           (let [^INode input-n (ui/item-node add-row :add-row-input)
                 name (str/trim (str (.getOSlot input-n 0)))
                 name-len (int (or (:max-location-name-length limits) 16))]
-            (when (and (not (str/blank? name)) (<= (count name) name-len) (< total max-locs))
+            (when (and (not (str/blank? name)) (<= (count name) name-len))
               (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
               (ui/set-node-prop! rt input-n :text "")))))
       (events/on! rt :add-row-cancel :left-click
@@ -210,7 +209,7 @@
       (let [^INode up (rt/node-by-id rt :scroll-up) ^INode dn (rt/node-by-id rt :scroll-down)]
         (when up (.setVisible up (pos? start)) (.setFlag up node/FLAG-LAYOUT-DIRTY))
         (when dn (.setVisible dn (< start scroll-max)) (.setFlag dn node/FLAG-LAYOUT-DIRTY))))
-    (ui/set-prop! rt :status-line :text (str total " / " max-locs " locations"))))
+    (ui/set-prop! rt :status-line :text (str total " locations"))))
 
 ;; ============================================================================
 ;; Info panel — hover detail or EXP/cross-dim status, refreshed each frame

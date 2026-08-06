@@ -82,8 +82,7 @@
   :level-threshold-all-mastered-discount 0.5
   :skill-learning-cost-base 3.0
   :skill-learning-cost-level-square-factor 0.5
-  :level-up-stim-base 5
-  :max-saved-locations 16})
+  :level-up-stim-base 5})
 
 (def descriptors
   [{:key :attack-player
@@ -330,14 +329,7 @@
     :type :int
     :min 1
     :default (:level-up-stim-base default-values)
-    :comment "Base Developer stim count multiplied by next level when leveling up."}
-     {:key :max-saved-locations
-    :path "progression.saved-locations.max-count"
-    :section :progression.saved-locations
-    :type :int
-    :min 0
-    :default (:max-saved-locations default-values)
-    :comment "Maximum saved teleport locations per player."}])
+    :comment "Base Developer stim count multiplied by next level when leveling up."}])
 
 (defn- raw-value
   [k]
@@ -561,9 +553,6 @@
 (defn level-up-stim-base []
   (positive-int :level-up-stim-base))
 
-(defn max-saved-locations []
-  (non-negative-int :max-saved-locations))
-
 (defn- collect-config-errors
   []
   (let [level-list-errors
@@ -594,8 +583,7 @@
                  :overload-recovery-lerp-start :overload-recovery-lerp-end
                  :max-overload-growth-per-event :reflected-damage-multiplier
                  :reflection-search-radius :level-threshold-all-mastered-discount
-                 :skill-learning-cost-base :skill-learning-cost-level-square-factor
-                 :max-saved-locations]
+                 :skill-learning-cost-base :skill-learning-cost-level-square-factor]
               :let [value (ability-config-common/finite-double (raw-value k) -1.0)]
               :when (neg? value)]
           (str (name k) " must be non-negative"))]

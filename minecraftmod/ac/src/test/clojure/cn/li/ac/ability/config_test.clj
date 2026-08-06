@@ -56,8 +56,7 @@
       :level-threshold-all-mastered-discount 0.25
       :skill-learning-cost-base 4.0
       :skill-learning-cost-level-square-factor 0.75
-      :level-up-stim-base 6
-      :max-saved-locations 32})
+      :level-up-stim-base 6})
     (is (= 2.5 (cfg/damage-scale)))
     (is (false? (cfg/attack-player-enabled?)))
     (is (false? (cfg/destroy-blocks-enabled?)))
@@ -89,8 +88,7 @@
     (is (= 0.25 (cfg/level-threshold-all-mastered-discount)))
     (is (= 4.0 (cfg/skill-learning-cost-base)))
     (is (= 0.75 (cfg/skill-learning-cost-level-square-factor)))
-    (is (= 6 (cfg/level-up-stim-base)))
-    (is (= 32 (cfg/max-saved-locations))))
+    (is (= 6 (cfg/level-up-stim-base))))
   (testing "invalid level lists fall back to defaults"
     (config-reg/set-config-values!
      config-common/ability-domain
