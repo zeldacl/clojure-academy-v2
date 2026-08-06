@@ -1,4 +1,3 @@
-bootstrap/init_common.clj
 bootstrap/platform_init.clj
 command/action_impls.clj
 command/brigadier_registry.clj

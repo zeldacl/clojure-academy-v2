@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.init
   "NeoForge 1.21.1 initialization and version-specific implementations"
-  (:require [cn.li.mc1211.bootstrap.init-common :as init-common]
+  (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]

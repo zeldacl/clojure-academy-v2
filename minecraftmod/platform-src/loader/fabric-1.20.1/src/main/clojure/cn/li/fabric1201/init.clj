@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.init
   "Fabric 1.20.1 initialization - sets version for multimethod dispatch"
-  (:require [cn.li.mc1201.bootstrap.init-common :as init-common]
+  (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.content :as content]
             [cn.li.mcmod.lifecycle :as lifecycle])

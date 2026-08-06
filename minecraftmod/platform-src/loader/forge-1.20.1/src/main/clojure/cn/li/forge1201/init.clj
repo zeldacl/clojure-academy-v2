@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.init
   "Forge 1.20.1 initialization and version-specific implementations"
-  (:require [cn.li.mc1201.bootstrap.init-common :as init-common]
+  (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]

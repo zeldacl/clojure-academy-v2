@@ -1,4 +1,4 @@
-(ns cn.li.mc1211.bootstrap.init-common
+(ns cn.li.mcbase.bootstrap.init-common
   "Shared platform init orchestration for Java entrypoints."
   (:require [cn.li.mcmod.aot :as aot]
             [cn.li.mcmod.framework :as fw]
@@ -11,7 +11,7 @@
 
 (defn set-platform-version!
   [platform-key]
-  (platform-dispatch/install-platform-version! platform-key "mc1211-bootstrap")
+  (platform-dispatch/install-platform-version! platform-key "mc1201-bootstrap")
   (log/info "Set platform dispatch to" platform-key))
 
 (defn assert-platform-ready!
