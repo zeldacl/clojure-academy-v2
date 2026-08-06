@@ -343,6 +343,29 @@
 
 
 
+(defn- mark-teleport-on-key-down-impl!
+
+  "Key-down: seed the hold state and spawn the destination mark immediately
+  (upstream l_start spawns EntityTPMarking on MSG_MADEALIVE)."
+
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+
+  (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :has-target false})
+
+  (when-let [target (resolve-destination player-id player-ref 0)]
+
+    (ctx-skill/replace-skill-state! ctx-id
+
+                           (merge {:hold-ticks 0}
+
+                                  (assoc target :hold-ticks 0 :has-target true)))
+
+    (fx/send! ctx-id {:topic :mark-teleport/fx-start :mode :start} nil
+
+              (build-target-fx-payload target))))
+
+
+
 (defn- mark-teleport-on-key-tick-impl!
 
   "Update destination marker while key is held."
@@ -355,17 +378,36 @@
 
       (if-let [target (resolve-destination player-id player-ref next-ticks)]
 
-        (ctx-skill/replace-skill-state! ctx-id
+        (do
 
-                               (merge (:skill-state ctx)
+          (ctx-skill/replace-skill-state! ctx-id
 
-                                      (assoc target :hold-ticks next-ticks :has-target true)))
+                                 (merge (:skill-state ctx)
+
+                                        (assoc target :hold-ticks next-ticks :has-target true)))
+
+          (fx/send! ctx-id {:topic :mark-teleport/fx-update :mode :update} nil
+
+                    (build-target-fx-payload target)))
 
         (ctx-skill/replace-skill-state! ctx-id
 
                                (merge (:skill-state ctx)
 
                                       {:hold-ticks next-ticks :has-target false}))))))
+
+
+
+(defn- mark-teleport-on-key-abort-impl!
+
+  "Key-abort: clear the hold state and drop the mark (upstream l_onKeyAbort
+  terminates; the client kills EntityTPMarking on MSG_TERMINATED)."
+
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+
+  (ctx-skill/clear-skill-state! ctx-id)
+
+  (fx/send! ctx-id {:topic :mark-teleport/fx-end :mode :end} nil))
 
 
 
@@ -401,6 +443,9 @@
               exp (double (or (:exp target) (skill-exp player-id) 0.0))]
 
           (when (and cost-ok? (>= distance (cfg-double :targeting.min-distance)))
+
+            ;; Upstream dismounts the player before setPositionAndUpdate.
+            (motion-effects/dismount-riding! player-id)
 
             (let [success (motion-effects/teleport-player! player-id
 
@@ -446,9 +491,11 @@
   (release-cast/build-ops
     {:initial-state {:hold-ticks 0 :has-target false}
      :require-cost-on-down? false
+     :down! mark-teleport-on-key-down-impl!
      :abort-log-label "MarkTeleport aborted"
      :tick! mark-teleport-on-key-tick-impl!
-     :up! mark-teleport-on-key-up-impl!}))
+     :up! mark-teleport-on-key-up-impl!
+     :abort! mark-teleport-on-key-abort-impl!}))
 
 (defn mark-teleport-on-key-down [& args] (apply release-cast/down! release-cast-ops args))
 (defn mark-teleport-on-key-tick [& args] (apply release-cast/tick! release-cast-ops args))

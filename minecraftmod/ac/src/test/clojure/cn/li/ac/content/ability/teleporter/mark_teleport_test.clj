@@ -29,10 +29,86 @@
     (with-redefs [ctx/get-context get-context
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   ctx-skill/assoc-skill-state! assoc-skill-state!
-                  ctx-skill/clear-skill-state! clear-skill-state!]
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  raycast/available? (constantly false)]
       (cb/apply-invoke mark/mark-teleport-on-key-down :ctx-id "ctx-1"))
     (is (= {:hold-ticks 0 :has-target false}
            (:skill-state @ctx*)))))
+
+(deftest mark-teleport-on-key-down-resolves-target-and-sends-start-test
+  ;; Upstream l_start spawns EntityTPMarking on MSG_MADEALIVE; fx-start
+  ;; carries the first destination so the mark appears on key-down.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! send!
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/current-cp (fn [_] 1000.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 60.0
+                                               :cost.up.cp-per-block 4.0
+                                               :targeting.eye-height 1.6
+                                               0.0))
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.min-distance 3.0
+                                                  :targeting.range-per-hold-tick 2.0
+                                                  0.0))
+                  raycast/available? (constantly true)
+                  raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                   :x 1.0 :y 64.0 :z 3.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined-from-player (fn [& _] nil)]
+      (cb/apply-invoke mark/mark-teleport-on-key-down :player-id "p1" :ctx-id "ctx-d" :player-ref :player))
+    (is (= :mark-teleport/fx-start (get-in (first @calls*) [1])))
+    (let [payload (get-in (first @calls*) [3])]
+      (is (map? (:target payload)))
+      (is (pos? (:distance payload))))
+    (is (true? (get-in @ctx* [:skill-state :has-target])))))
+
+(deftest mark-teleport-on-key-tick-sends-update-fx-test
+  ;; Upstream l_update moves EntityTPMarking every tick; fx-update carries
+  ;; the growing destination (2 blocks per held tick).
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 1 :has-target true}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! send!
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/current-cp (fn [_] 1000.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 60.0
+                                               :cost.up.cp-per-block 4.0
+                                               :targeting.eye-height 1.6
+                                               0.0))
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.min-distance 3.0
+                                                  :targeting.range-per-hold-tick 2.0
+                                                  0.0))
+                  raycast/available? (constantly true)
+                  raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                   :x 1.0 :y 64.0 :z 3.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined-from-player (fn [& _] nil)]
+      (cb/apply-invoke mark/mark-teleport-on-key-tick :player-id "p1" :ctx-id "ctx-t" :player-ref :player))
+    (is (= :mark-teleport/fx-update (get-in (first @calls*) [1])))
+    (is (= :update (get-in (first @calls*) [2])))
+    (let [payload (get-in (first @calls*) [3])]
+      (is (map? (:target payload)))
+      (is (pos? (:distance payload))))
+    (is (= 2 (get-in @ctx* [:skill-state :hold-ticks])))))
 
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 0 :has-target false}})
@@ -40,6 +116,7 @@
         mocks
         teleport-calls* (atom [])
         reset-calls* (atom [])
+        dismount-calls* (atom [])
         {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
         exp-calls* (atom [])
         cooldown-calls* (atom [])]
@@ -79,6 +156,9 @@
                   motion-effects/player-position (fn [_]
                                                        {:world-id "minecraft:overworld"
                                                         :x 1.0 :y 64.0 :z 3.0})
+                  motion-effects/dismount-riding! (fn [player-id]
+                                                    (swap! dismount-calls* conj player-id)
+                                                    true)
                   motion-effects/teleport-player! (fn [player-id world-id x y z]
                                                     (swap! teleport-calls* conj [player-id world-id x y z])
                                                     true)
@@ -96,6 +176,8 @@
                                                :eye-height 1.6})]
       (cb/apply-invoke mark/mark-teleport-on-key-up :player-id "p1" :ctx-id "ctx-2" :player-ref :player :cost-ok? true))
     (is (= 1 (count @teleport-calls*)))
+    ;; Upstream dismounts the player before setPositionAndUpdate.
+    (is (= ["p1"] @dismount-calls*))
     (is (= ["p1"] @reset-calls*))
     (is (= 1 (count @exp-calls*)))
     (is (= 1 (count @cooldown-calls*)))
@@ -103,6 +185,24 @@
     (is (= :mark-teleport/fx-perform (nth (first @calls*) 1)))
     (is (map? (get (nth (first @calls*) 3) :target)))
     (is (= true (get-in @ctx* [:skill-state :has-target])))))
+
+(deftest mark-teleport-on-key-abort-clears-state-and-sends-end-test
+  ;; Upstream l_onKeyAbort terminates; the client kills EntityTPMarking on
+  ;; MSG_TERMINATED.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 3 :has-target true}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
+        fx-topics* (atom [])]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! (fn [& args]
+                             (swap! fx-topics* conj (:topic (second args)))
+                             nil)]
+      (cb/apply-invoke mark/mark-teleport-on-key-abort :ctx-id "ctx-a"))
+    (is (nil? (:skill-state @ctx*)))
+    (is (= [:mark-teleport/fx-end] @fx-topics*))))
 
 (deftest mark-teleport-on-key-up-cost-fail-has-no-side-effects-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 5
@@ -184,6 +284,7 @@
                   fx/send! (fn [& _] (swap! fx-calls* inc) nil)
                   motion-effects/teleportation-available? (constantly true)
                   motion-effects/player-position (fn [& _] nil)
+                  motion-effects/dismount-riding! (fn [& _] true)
                   motion-effects/teleport-player! (fn [& _] false)
                   motion-effects/reset-fall-damage! (fn [& _] true)
                   skill-effects/add-skill-exp! (fn [& _] (swap! exp-calls* inc) nil)

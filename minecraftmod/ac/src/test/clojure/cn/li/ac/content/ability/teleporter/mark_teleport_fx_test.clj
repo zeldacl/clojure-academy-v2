@@ -53,6 +53,19 @@
       (is (= 1 (count @sounds*)))
       (is (= "academy:tp.tp" (:sound-id (second (first @sounds*))))))))
 
+(deftest perform-clears-mark-state-test
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]
+    (mfx/init!)
+    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start
+                                         {:mode :start :target {:x 1.0 :y 2.0 :z 3.0} :distance 8.0}
+                                         :owner-key [:ctx "ctx-1"])
+    (is (some? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))
+    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-perform
+                                         {:mode :perform :target {:x 1.0 :y 2.0 :z 3.0} :distance 8.0}
+                                         :owner-key [:ctx "ctx-1"])
+    ;; Upstream l_end kills the mark on MSG_TERMINATED.
+    (is (nil? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))))
+
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]

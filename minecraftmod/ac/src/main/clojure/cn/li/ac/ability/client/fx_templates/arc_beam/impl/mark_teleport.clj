@@ -15,12 +15,6 @@
             [clojure.string :as str])
   (:import [cn.li.mcmod.math V3]))
 
-(defn- spawn-tp-marking! []
-  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect {:effect-id "entity_tp_marking"}))
-
-(defn- remove-tp-marking! []
-  (client-bridge/run-client-effect! :mcmod/remove-local-scripted-effect {:effect-id "entity_tp_marking"}))
-
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:effect-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
@@ -31,9 +25,9 @@
                    :source-player-id source-player-id :world-id world-id}]
     (case mode
       :start
-      (do (spawn-tp-marking!)
-          (assoc-in state* [:effect-state owner-key*]
-                    (merge base-meta {:active? true :target nil :distance 0.0 :ticks 0})))
+      (assoc-in state* [:effect-state owner-key*]
+                (merge base-meta {:active? true :target target
+                                  :distance (double (or distance 0.0)) :ticks 0}))
 
       :update
       (assoc-in state* [:effect-state owner-key*]
@@ -43,19 +37,19 @@
                         :ticks (long (or (:ticks (get-in state* [:effect-state owner-key*])) 0))}))
 
       :perform
-      (do (remove-tp-marking!)
-          (when (map? target)
-            (client-particles/queue-particle-effect! (:queue-owner base-meta)
-              {:type :particle :particle-type :portal
-               :x (:x target) :y (double (or (:y target) 0.0)) :z (:z target)
-               :count 16 :speed 0.08 :offset-x 0.9 :offset-y 0.8 :offset-z 0.9})
-            (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-              {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0}))
-          state*)
+      (do
+        (when (map? target)
+          (client-particles/queue-particle-effect! (:queue-owner base-meta)
+            {:type :particle :particle-type :portal
+             :x (:x target) :y (double (or (:y target) 0.0)) :z (:z target)
+             :count 16 :speed 0.08 :offset-x 0.9 :offset-y 0.8 :offset-z 0.9})
+          (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+            {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0}))
+        ;; Upstream l_end kills EntityTPMarking on MSG_TERMINATED.
+        (update state* :effect-state dissoc owner-key*))
 
       :end
-      (do (remove-tp-marking!)
-          (update state* :effect-state dissoc owner-key*))
+      (update state* :effect-state dissoc owner-key*)
 
       state*)))
 
