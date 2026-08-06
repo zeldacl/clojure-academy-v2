@@ -5,7 +5,7 @@
   query callbacks; this namespace owns the damage-flow orchestration."
   (:require [cn.li.mc1201.runtime.entity-damage-core :as core]
             [cn.li.mcbase.runtime.entity-query-core :as query-core]
-            [cn.li.mc1201.runtime.multipart-entity :as multipart]
+            [cn.li.mcbase.runtime.multipart-entity :as multipart]
             [cn.li.mcmod.platform.entity-damage :as damage-effects]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]

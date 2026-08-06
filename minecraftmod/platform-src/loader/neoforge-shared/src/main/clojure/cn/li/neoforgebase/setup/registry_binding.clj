@@ -1,14 +1,24 @@
-(ns cn.li.neoforge1211.setup.registry-binding
-  "Forge registry/config registration binding extracted from mod-bus orchestration."
+(ns cn.li.neoforgebase.setup.registry-binding
+  "Shared NeoForge registry/config phase. Version loaders install Mod* bridges."
   (:require [cn.li.neoforgebase.config.bridge :as config-bridge]
             [cn.li.neoforgebase.integration.side :as side]
-            [cn.li.neoforgebase.setup.deferred-registries :as deferred-registries]
-            [cn.li.neoforge1211.setup.lifecycle-listeners :as lifecycle-listeners])
-  (:import [cn.li.neoforge1211.entity ModEntities]
-           [cn.li.neoforge1211.recipe ModRecipeTypes]
-           [cn.li.neoforge1211.trigger ModCriterionTriggers]
-           [cn.li.neoforge1211.worldgen ModFeatures]
-           [net.neoforged.bus.api IEventBus]))
+            [cn.li.neoforgebase.setup.deferred-registries :as deferred-registries])
+  (:import [net.neoforged.bus.api IEventBus]))
+
+(defonce ^:private registry-bridge-atom (atom nil))
+
+(defn install-registry-bridge!
+  "Install {:register-entities! :register-recipes! :register-triggers!
+            :register-features! :register-client-hooks!}."
+  [bridge]
+  (reset! registry-bridge-atom bridge)
+  bridge)
+
+(defn- bridge! []
+  (let [b @registry-bridge-atom]
+    (when (nil? b)
+      (throw (IllegalStateException. "registry-binding bridge not installed")))
+    b))
 
 (defn register-config-phase!
   ([^IEventBus mod-bus _opts]
@@ -30,13 +40,14 @@
                              block-entities-register
                              creative-tabs-register
                              gui-menu-register]}]
-  (ModEntities/register mod-bus)
-  (ModRecipeTypes/register mod-bus)
-  (ModCriterionTriggers/register mod-bus)
-  (when (and (side/client-side?) (not datagen-run?))
-    (lifecycle-listeners/register-client-hooks!))
-  (ModFeatures/register mod-bus)
-  (deferred-registries/register-deferred-registries! mod-bus [sounds-register
+  (let [b (bridge!)]
+    ((:register-entities! b) mod-bus)
+    ((:register-recipes! b) mod-bus)
+    ((:register-triggers! b) mod-bus)
+    (when (and (side/client-side?) (not datagen-run?))
+      ((:register-client-hooks! b)))
+    ((:register-features! b) mod-bus)
+    (deferred-registries/register-deferred-registries! mod-bus [sounds-register
                                                               effects-register
                                                               particle-types-register
                                                               fluid-types-register
@@ -45,5 +56,5 @@
                                                               items-register
                                                               block-entities-register
                                                               creative-tabs-register
-                                                              gui-menu-register])
+                                                              gui-menu-register]))
   nil)

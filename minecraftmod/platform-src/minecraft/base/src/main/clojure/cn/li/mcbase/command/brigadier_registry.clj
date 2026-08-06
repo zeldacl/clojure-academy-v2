@@ -1,21 +1,34 @@
-(ns cn.li.mc1211.command.brigadier-registry
+(ns cn.li.mcbase.command.brigadier-registry
   "Shared Brigadier command registration flow.
 
   Platform modules should delegate registration to this namespace and
   keep only loader-specific entry signatures."
   (:require [cn.li.mcmod.command.metadata :as cmd-meta]
             [cn.li.mcmod.command.runtime-hooks :as command-hooks]
-            [cn.li.mc1211.command.brigadier-tree :as brig-tree]
-            [cn.li.mc1211.command.action-impls] ; Ensure action implementations are loaded
+            [cn.li.mcbase.command.action-impls] ; Ensure action implementations are loaded
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.brigadier CommandDispatcher]))
+
+(defonce ^:private brig-tree-atom (atom nil))
+
+(defn install-build-command-node!
+  [f]
+  (reset! brig-tree-atom f)
+  f)
+
+(defn- build-command-node
+  [spec]
+  (let [f @brig-tree-atom]
+    (when (nil? f)
+      (throw (IllegalStateException. "brigadier-tree not installed")))
+    (f spec)))
 
 (defn- register-command!
   [^CommandDispatcher dispatcher command-id]
   (try
     (log/info "Registering command:" command-id)
     (when-let [spec (cmd-meta/get-command-spec command-id)]
-      (let [node (brig-tree/build-command-node spec)]
+      (let [node (build-command-node spec)]
         (.register dispatcher node)
         (log/info "Successfully registered command:" command-id)))
     (catch Exception e

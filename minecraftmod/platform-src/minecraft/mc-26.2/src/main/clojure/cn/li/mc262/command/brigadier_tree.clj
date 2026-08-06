@@ -5,7 +5,8 @@
   build-arguments-chain, build-subcommand-node, and build-command-node.
   These functions only use Brigadier and Minecraft command APIs which
   are present on both Forge and Fabric."
-  (:require [cn.li.mcmod.command.context :as cmd-ctx]
+  (:require [cn.li.mcbase.command.brigadier-registry :as brig-reg]
+            [cn.li.mcmod.command.context :as cmd-ctx]
             [cn.li.mcmod.command.actions :as cmd-actions]
             [cn.li.mc262.command.brigadier-util :as brig-util]
             [cn.li.mcbase.command.feedback :as feedback]
@@ -294,3 +295,5 @@
             (.executes literal (build-executor executor-fn [] nil))))))
 
     literal))
+
+(brig-reg/install-build-command-node! build-command-node)

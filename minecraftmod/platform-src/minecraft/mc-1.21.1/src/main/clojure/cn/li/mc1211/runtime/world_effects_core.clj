@@ -1,5 +1,6 @@
 (ns cn.li.mc1211.runtime.world-effects-core
   "Shared Minecraft-side world effects helpers (no loader API imports)."
+  (:require [cn.li.mcbase.runtime.adapter.world-effects :as world-adapter])
   (:import [cn.li.mc1211.entity ScriptedBlockBodyEntity ScriptedEffectEntity]
            [net.minecraft.nbt CompoundTag]
            [net.minecraft.core BlockPos]
@@ -204,3 +205,11 @@
           true)))
     (catch Exception _
       false)))
+
+(world-adapter/install-world-core!
+  {:spawn-projectile-in-level! spawn-projectile-in-level!
+   :entities-in-radius entities-in-radius
+   :entities-in-aabb entities-in-aabb
+   :find-blocks-in-radius-in-level find-blocks-in-radius-in-level
+   :play-sound-in-level! play-sound-in-level!
+   :trigger-behavior-hit-in-level! trigger-behavior-hit-in-level!})

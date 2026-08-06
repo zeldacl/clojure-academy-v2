@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.runtime.adapters.registry
   "Declarative runtime adapter install registry for Fabric."
-  (:require [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
+  (:require [cn.li.mc1201.runtime.raycast-ops-install]
+            [cn.li.fabric1201.runtime.damage-interception :as runtime-damage-interception]
             [cn.li.fabric1201.runtime.player-motion :as runtime-player-motion]
             [cn.li.fabric1201.runtime.entity-damage :as runtime-entity-damage]
             [cn.li.fabric1201.runtime.entity-motion :as runtime-entity-motion]
@@ -11,7 +12,7 @@
             [cn.li.fabric1201.adapter.server-context :as server-context]
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]
             [cn.li.mc1201.runtime.interop-core :as interop-core]
-            [cn.li.mc1201.runtime.raycast-core :as raycast-core]
+            [cn.li.mcbase.runtime.raycast-core :as raycast-core]
             [cn.li.mc1201.runtime.teleportation-core :as teleportation-core]
             [cn.li.mc1201.runtime.named-position-store-core :as named-position-store-core]
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]

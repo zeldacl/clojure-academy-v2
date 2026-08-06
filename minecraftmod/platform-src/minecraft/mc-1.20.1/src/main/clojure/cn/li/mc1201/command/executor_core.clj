@@ -4,7 +4,8 @@
   Content-owned command actions are registered through the generic
   `cn.li.mcmod.command.actions` seam. This shared Minecraft-version namespace
   intentionally avoids content player-state schemas."
-  (:require [cn.li.mcmod.util.log :as log])
+  (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcbase.command.action-impls :as action-impls])
   (:import [net.minecraft.advancements Advancement AdvancementProgress]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.server.level ServerPlayer]))
@@ -71,3 +72,7 @@
   (let [advancement-id (:advancement-id action-map)
         player (:player action-map)]
     (grant-advancement! player advancement-id send-feedback-fn)))
+
+(action-impls/install-executor!
+  {:execute-send-message-action execute-send-message-action
+   :execute-grant-advancement-action execute-grant-advancement-action})

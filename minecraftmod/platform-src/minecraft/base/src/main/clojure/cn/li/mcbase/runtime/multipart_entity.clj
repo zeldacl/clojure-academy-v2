@@ -1,8 +1,40 @@
-(ns cn.li.mc262.runtime.multipart-entity
-  "Shared multipart entity normalization."
+(ns cn.li.mcbase.runtime.multipart-entity
+  "Shared multipart entity normalization (EnderDragonPart package forks via reflection)."
   (:import [cn.li.acapi.entity MultipartEntityApi MultipartEntityApi$ParentValidator MultipartEntityPart]
-           [net.minecraft.world.entity Entity]
-           [net.minecraft.world.entity.boss.enderdragon EnderDragonPart]))
+           [net.minecraft.world.entity Entity]))
+
+(defn- load-class-uninitialized
+  "Resolve a class without <clinit> so unit tests can load this ns without
+   Minecraft Bootstrap (EnderDragonPart → Entity → Registries)."
+  [^String name]
+  (try
+    (Class/forName name false (clojure.lang.RT/baseLoader))
+    (catch ClassNotFoundException _
+      nil)
+    (catch ExceptionInInitializerError _
+      nil)
+    (catch LinkageError _
+      nil)))
+
+(def ^:private ender-dragon-part-class
+  (delay
+    (or (load-class-uninitialized "net.minecraft.world.entity.boss.EnderDragonPart")
+        (load-class-uninitialized "net.minecraft.world.entity.boss.enderdragon.EnderDragonPart")
+        (throw (IllegalStateException. "EnderDragonPart class not found")))))
+
+(defn- ender-dragon-part?
+  [entity]
+  (boolean (and entity (.isInstance ^Class @ender-dragon-part-class entity))))
+
+(defn- ender-dragon-parent-mob
+  [entity]
+  (try
+    (let [^Class cls (.getClass ^Object entity)
+          ^java.lang.reflect.Field f (.getDeclaredField cls "parentMob")]
+      (.setAccessible f true)
+      (.get f entity))
+    (catch Exception _
+      nil)))
 
 (def ^:private ^MultipartEntityApi$ParentValidator entity-parent-validator
   (reify MultipartEntityApi$ParentValidator
@@ -38,8 +70,8 @@
    and registered compatibility contracts, in that order."
   [entity]
   (when entity
-    (or (when (instance? EnderDragonPart entity)
-          (valid-parent entity (.-parentMob ^EnderDragonPart entity)))
+    (or (when (ender-dragon-part? entity)
+          (valid-parent entity (ender-dragon-parent-mob entity)))
         (api-contract-parent entity)
         (registered-parent entity))))
 

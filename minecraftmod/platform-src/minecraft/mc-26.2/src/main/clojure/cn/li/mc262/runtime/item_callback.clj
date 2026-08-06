@@ -1,6 +1,6 @@
 (ns cn.li.mc262.runtime.item-callback
   "Build the single native Item.use callback shared by all loaders."
-  (:require [cn.li.mc262.runtime.event.item-use :as item-use])
+  (:require [cn.li.mcbase.runtime.event.item-use :as item-use])
   (:import [net.minecraft.world InteractionHand InteractionResult]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]

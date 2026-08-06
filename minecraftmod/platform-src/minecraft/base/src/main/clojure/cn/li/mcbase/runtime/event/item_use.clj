@@ -1,13 +1,25 @@
-(ns cn.li.mc262.runtime.event.item-use
+(ns cn.li.mcbase.runtime.event.item-use
   "Shared item-use event semantics for loader platform adapters.
 
   Platform layers should only unpack their event/callback objects and translate
   the returned map into loader-specific results."
-  (:require [cn.li.mcbase.runtime.event.safe-handler :as safe]
-            [cn.li.mc262.runtime.item-handler-core :as core])
+  (:require [cn.li.mcbase.runtime.event.safe-handler :as safe])
   (:import [net.minecraft.world InteractionHand]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]))
+
+(defonce ^:private item-core-atom (atom nil))
+
+(defn install-item-core!
+  [m]
+  (reset! item-core-atom m)
+  m)
+
+(defn- core []
+  (let [m @item-core-atom]
+    (when (nil? m)
+      (throw (IllegalStateException. "item-handler-core not installed")))
+    m))
 
 (defn- ignored-result
   [^Player player]
@@ -23,7 +35,7 @@
    nil
    (fn []
      (when (instance? Player entity)
-       (core/dispatch-dsl-item-finish-using! ^Player entity stack side)))))
+       ((:dispatch-dsl-item-finish-using! (core)) ^Player entity stack side)))))
 
 (defn handle-use
   "Returns the shared item-use result map, or a default non-consuming result
@@ -34,5 +46,5 @@
    (ignored-result player)
    (fn []
      (if (= hand InteractionHand/MAIN_HAND)
-       (core/process-item-use! player hand stack side opts)
+       ((:process-item-use! (core)) player hand stack side opts)
        (ignored-result player)))))

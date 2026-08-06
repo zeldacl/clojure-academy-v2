@@ -12,21 +12,21 @@ Cannot promote MSDF Java into `minecraft-base`: base compiles for all targets in
 
 Already in mcbase (version-agnostic FX): MsdfTextFx, MsdfGlyphFlags, MsdfGlowAnimator.
 
+## Batch5 promoted (SPI unlock → mcbase / neoforgebase)
+
+- `gui/screen/impl.clj` + `gui/screen/registry.clj` (host-container installs create-tech-ui-container-screen)
+- `runtime/multipart_entity.clj` (reflective EnderDragonPart package)
+- `runtime/adapter/block_manipulation.clj` + `runtime/adapter/world_effects.clj` (version cores install maps)
+- `runtime/event/item_use.clj` (item-handler-core installs)
+- `runtime/raycast_core.clj` + per-version `raycast_ops_install.clj`
+- `command/action_impls.clj` + `command/brigadier_registry.clj` (executor / brigadier-tree install)
+- NeoForge `setup/registry_binding.clj` → `neoforgebase` (shared_event_install hub expands)
+
 ## MC (identical across three versions, still blocked)
 - bootstrap/platform_init.clj
-- command/action_impls.clj
-- command/brigadier_registry.clj
 - gui/menu_bridge_install.clj (intentional thin wrapper)
-- gui/screen/registry.clj
 - platform/runtime_ops.clj
-- runtime/adapter/block_manipulation.clj
-- runtime/adapter/world_effects.clj
-- runtime/event/item_use.clj
-- runtime/raycast_core.clj
 
-Promoted this round: `bootstrap/init_common.clj` → mcbase.
-
-## NeoForge (3 files)
+## NeoForge
 - setup/common.clj
-- setup/registry_binding.clj
 - setup/shared_event_install.clj (intentional version hub)

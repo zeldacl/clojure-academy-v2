@@ -5,6 +5,7 @@
   - AbstractArrow / LargeFireball package moves
   - Registry.get → getValue; EntityType.create(Level, EntitySpawnReason)
   - Entity.saveWithoutId(CompoundTag) gone → WorldEntity LargeFireball accessors"
+  (:require [cn.li.mcbase.runtime.adapter.world-effects :as world-adapter])
   (:import [cn.li.mc262.entity ScriptedBlockBodyEntity ScriptedEffectEntity]
            [cn.li.mc262.runtime WorldEntity]
            [net.minecraft.core BlockPos]
@@ -197,3 +198,11 @@
           true)))
     (catch Exception _
       false)))
+
+(world-adapter/install-world-core!
+  {:spawn-projectile-in-level! spawn-projectile-in-level!
+   :entities-in-radius entities-in-radius
+   :entities-in-aabb entities-in-aabb
+   :find-blocks-in-radius-in-level find-blocks-in-radius-in-level
+   :play-sound-in-level! play-sound-in-level!
+   :trigger-behavior-hit-in-level! trigger-behavior-hit-in-level!})

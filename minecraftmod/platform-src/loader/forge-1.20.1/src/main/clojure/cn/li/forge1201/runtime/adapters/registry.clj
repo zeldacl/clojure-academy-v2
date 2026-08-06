@@ -1,6 +1,7 @@
 (ns cn.li.forge1201.runtime.adapters.registry
   "Declarative Forge runtime adapter registry."
-  (:require [cn.li.forge1201.runtime.entity-damage :as entity-damage]
+  (:require [cn.li.mc1201.runtime.raycast-ops-install]
+            [cn.li.forge1201.runtime.entity-damage :as entity-damage]
             [cn.li.forge1201.runtime.multipart-entity :as multipart-entity]
             [cn.li.forge1201.runtime.world-effects :as world-effects]
             [cn.li.forge1201.runtime.block-manipulation :as block-manipulation]
@@ -13,7 +14,7 @@
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
             [cn.li.mcbase.runtime.player-motion-core :as player-motion-core]
             [cn.li.mc1201.runtime.entity-motion-core :as entity-motion-core]
-            [cn.li.mc1201.runtime.raycast-core :as raycast-core]
+            [cn.li.mcbase.runtime.raycast-core :as raycast-core]
             [cn.li.mcbase.runtime.entity-query-core :as entity-query-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]

@@ -2,7 +2,7 @@
   "Forge block-manipulation runtime for IBlockManipulation protocol.
   Loader-agnostic ops delegate to mc1201 adapter.block-manipulation.
   Break/can-break use Forge BlockEvent$BreakEvent inline."
-  (:require [cn.li.mc1201.runtime.adapter.block-manipulation :as block-manipulation]
+  (:require [cn.li.mcbase.runtime.adapter.block-manipulation :as block-manipulation]
             [cn.li.forge1201.adapter.server-context :as server-context])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]

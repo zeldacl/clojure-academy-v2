@@ -8,7 +8,8 @@
 
   Note: set-block and get-block use BuiltInRegistries/BLOCK directly.
   break-block! delegates the permission check to break-guard-fn supplied by the caller."
-  (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
+  (:require [cn.li.mcbase.runtime.adapter.block-manipulation :as block-adapter]
+            [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core BlockPos Holder]
            [net.minecraft.core.registries BuiltInRegistries Registries]
@@ -200,3 +201,15 @@
     (catch Exception e
       (log/warn "Failed to check farmland block:" (ex-message e))
       false)))
+
+(block-adapter/install-block-core!
+  {:break-block! break-block!
+   :set-block! set-block!
+   :get-block get-block
+   :get-block-hardness get-block-hardness
+   :block-collidable? block-collidable?
+   :can-break-block? can-break-block?
+   :requires-high-tier-tool? requires-high-tier-tool?
+   :find-blocks-in-line find-blocks-in-line
+   :liquid-block? liquid-block?
+   :farmland-block? farmland-block?})

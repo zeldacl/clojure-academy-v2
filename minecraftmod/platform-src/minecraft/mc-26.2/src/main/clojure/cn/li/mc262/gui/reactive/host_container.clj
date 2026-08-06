@@ -3,7 +3,8 @@
 
    26.2: graphics handle is GuiGraphicsExtractor; image size is constructor-final;
    draw-tape! submits the reactive render tape through the extractor."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
+  (:require [cn.li.mcbase.gui.screen.impl :as screen-impl]
+            [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.util.log :as log]
@@ -205,3 +206,5 @@
       minecraft-container
       player-inventory
       (or screen-title "Container"))))
+
+(screen-impl/install-create-tech-ui-container-screen! create-tech-ui-container-screen)

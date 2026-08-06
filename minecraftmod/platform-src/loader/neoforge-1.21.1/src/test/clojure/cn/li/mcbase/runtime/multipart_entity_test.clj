@@ -1,7 +1,7 @@
-(ns cn.li.mc262.runtime.multipart-entity-test
+(ns cn.li.mcbase.runtime.multipart-entity-test
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
-            [cn.li.mc262.runtime.multipart-entity :as multipart])
+            [cn.li.mcbase.runtime.multipart-entity :as multipart])
   (:import [cn.li.acapi.entity MultipartEntityApi MultipartEntityApi$ParentResolver MultipartEntityApi$ParentValidator MultipartEntityPart]))
 
 (def ^:private resolver-ids
@@ -33,9 +33,9 @@
 
 (defn- with-parent-validation
   [valid-parent? f]
-  (let [valid-parent-var (ns-resolve 'cn.li.mc262.runtime.multipart-entity
+  (let [valid-parent-var (ns-resolve 'cn.li.mcbase.runtime.multipart-entity
                                      'valid-parent)
-        validator-var (ns-resolve 'cn.li.mc262.runtime.multipart-entity
+        validator-var (ns-resolve 'cn.li.mcbase.runtime.multipart-entity
                                   'entity-parent-validator)]
     (with-redefs-fn
       {valid-parent-var (fn [entity candidate]

@@ -1,10 +1,23 @@
-(ns cn.li.mc262.runtime.raycast-core
+(ns cn.li.mcbase.runtime.raycast-core
   "Loader-agnostic IRaycast adapter built on shared Raycast helpers."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcbase.runtime.raycast-normalize :as rn]
             [cn.li.mcmod.util.log :as log])
-  (:import [cn.li.mc262.runtime Raycast]
-           [net.minecraft.server MinecraftServer]))
+  (:import [net.minecraft.server MinecraftServer]))
+
+(defonce ^:private raycast-ops-atom (atom nil))
+
+(defn install-raycast-ops!
+  "Install map of Raycast static method wrappers."
+  [m]
+  (reset! raycast-ops-atom m)
+  m)
+
+(defn- raycast-ops []
+  (let [m @raycast-ops-atom]
+    (when (nil? m)
+      (throw (IllegalStateException. "Raycast ops not installed")))
+    m))
 
 (defn- resolve-level [^MinecraftServer server world-id]
   (query-core/resolve-level server world-id))
@@ -15,7 +28,7 @@
   {:raycast-blocks (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
                      (try
                        (rn/normalize-bridge-map
-                         (Raycast/raycastBlocks
+                         ((:raycastBlocks (raycast-ops))
                            (resolve-level (get-server) world-id)
                            start-x start-y start-z dir-x dir-y dir-z max-distance))
                        (catch Exception e
@@ -24,7 +37,7 @@
    :raycast-blocks-matching (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance accepted-block-ids]
                               (try
                                 (rn/normalize-bridge-map
-                                  (Raycast/raycastBlocksMatching
+                                  ((:raycastBlocksMatching (raycast-ops))
                                     (resolve-level (get-server) world-id)
                                     start-x start-y start-z dir-x dir-y dir-z max-distance
                                     accepted-block-ids))
@@ -35,7 +48,7 @@
    (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
      (try
        (rn/normalize-bridge-map
-         (Raycast/raycastCollidableBlocksOrWater
+         ((:raycastCollidableBlocksOrWater (raycast-ops))
            (resolve-level (get-server) world-id)
            start-x start-y start-z dir-x dir-y dir-z max-distance))
        (catch Exception e
@@ -44,7 +57,7 @@
    :raycast-entities (fn [world-id start-x start-y start-z dir-x dir-y dir-z max-distance]
                        (try
                          (rn/normalize-bridge-map
-                           (Raycast/raycastEntities
+                           ((:raycastEntities (raycast-ops))
                              (resolve-level (get-server) world-id)
                              start-x start-y start-z dir-x dir-y dir-z max-distance))
                          (catch Exception e
@@ -55,7 +68,7 @@
                          (try
                            (when level
                              (rn/normalize-bridge-map
-                               (Raycast/raycastCombined
+                               ((:raycastCombined (raycast-ops))
                                  level start-x start-y start-z dir-x dir-y dir-z max-distance)))
                            (catch Exception e
                              (log/warn "Failed to raycast combined:" (ex-message e))
@@ -66,7 +79,7 @@
        (try
          (when level
            (rn/normalize-bridge-map
-             (Raycast/raycastCombinedExcluding
+             ((:raycastCombinedExcluding (raycast-ops))
                level
                start-x start-y start-z
                dir-x dir-y dir-z
@@ -80,7 +93,7 @@
                              (try
                                (when level
                                  (rn/normalize-bridge-map
-                                  (Raycast/raycastCombinedAll
+                                  ((:raycastCombinedAll (raycast-ops))
                                    level start-x start-y start-z
                                    dir-x dir-y dir-z max-distance)))
                                (catch Exception e
@@ -90,7 +103,7 @@
    (fn [player-uuid max-distance living-only?]
      (try
        (rn/normalize-bridge-map
-         (Raycast/raycastCombinedFromPlayer
+         ((:raycastCombinedFromPlayer (raycast-ops))
            (query-core/get-player-by-uuid (get-server) player-uuid)
            max-distance
            (boolean living-only?)))
@@ -100,21 +113,21 @@
    :get-player-look-vector (fn [player-uuid]
                              (try
                                (rn/normalize-bridge-map
-                                 (Raycast/getPlayerLookVector (query-core/get-player-by-uuid (get-server) player-uuid)))
+                                 ((:getPlayerLookVector (raycast-ops)) (query-core/get-player-by-uuid (get-server) player-uuid)))
                                (catch Exception e
                                  (log/warn "Failed to get player look vector:" (ex-message e))
                                  nil)))
    :get-player-position (fn [player-uuid]
                           (try
                             (rn/normalize-bridge-map
-                              (Raycast/getPlayerPosition (query-core/get-player-by-uuid (get-server) player-uuid)))
+                              ((:getPlayerPosition (raycast-ops)) (query-core/get-player-by-uuid (get-server) player-uuid)))
                             (catch Exception e
                               (log/warn "Failed to get player position:" (ex-message e))
                               nil)))
    :raycast-from-player (fn [player-uuid max-distance living-only?]
                           (try
                             (rn/normalize-bridge-map
-                              (Raycast/raycastFromPlayer (query-core/get-player-by-uuid (get-server) player-uuid) max-distance living-only?))
+                              ((:raycastFromPlayer (raycast-ops)) (query-core/get-player-by-uuid (get-server) player-uuid) max-distance living-only?))
                             (catch Exception e
                               (log/warn "Failed to raycast from player:" (ex-message e))
                               nil)))})

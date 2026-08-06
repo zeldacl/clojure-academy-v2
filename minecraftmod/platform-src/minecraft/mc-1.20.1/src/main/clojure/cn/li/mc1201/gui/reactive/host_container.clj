@@ -1,7 +1,8 @@
 (ns cn.li.mc1201.gui.reactive.host-container
   "Reactive container screen host — wraps DelegatingCGuiContainerScreen with UiRt.
    Same pattern as host.clj but for container-backed screens."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
+  (:require [cn.li.mcbase.gui.screen.impl :as screen-impl]
+            [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.util.log :as log]
@@ -241,3 +242,5 @@
     (when size-dx (.setImageSize screen (+ 176 (int size-dx)) (.getYSize screen)))
     (when size-dy (.setImageSize screen (.getXSize screen) (+ 166 (int size-dy))))
     screen))
+
+(screen-impl/install-create-tech-ui-container-screen! create-tech-ui-container-screen)

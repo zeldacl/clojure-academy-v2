@@ -2,7 +2,7 @@
   "Forge block-manipulation runtime for IBlockManipulation protocol.
   Loader-agnostic ops delegate to mc262 adapter.block-manipulation.
   Break/can-break use BreakBlockEvent (26.2 relocation of BlockEvent$BreakEvent)."
-  (:require [cn.li.mc262.runtime.adapter.block-manipulation :as block-manipulation]
+  (:require [cn.li.mcbase.runtime.adapter.block-manipulation :as block-manipulation]
             [cn.li.neoforgebase.adapter.server-context :as server-context])
   (:import [net.minecraft.server.level ServerLevel ServerPlayer]
            [net.minecraft.core BlockPos]

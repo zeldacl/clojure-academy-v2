@@ -1,6 +1,7 @@
 (ns cn.li.mc1211.runtime.item-handler-core
   "Shared Minecraft-side item runtime helpers (no loader API imports)."
-  (:require [clojure.string :as str]
+  (:require [cn.li.mcbase.runtime.event.item-use :as item-use]
+            [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.platform.entity :as entity]
@@ -174,3 +175,7 @@
        :item-id item-id
        :player-uuid player-uuid
        :plan plan})))
+
+(item-use/install-item-core!
+  {:dispatch-dsl-item-finish-using! dispatch-dsl-item-finish-using!
+   :process-item-use! process-item-use!})

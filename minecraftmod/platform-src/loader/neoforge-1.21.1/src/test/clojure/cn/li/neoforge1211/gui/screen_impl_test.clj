@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.gui.screen-impl-test
   (:require [clojure.test :refer [deftest is testing]]
-            [cn.li.mc1211.gui.screen.impl :as screen-impl]
+            [cn.li.mcbase.gui.screen.impl :as screen-impl]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (deftest resolve-image-size-test

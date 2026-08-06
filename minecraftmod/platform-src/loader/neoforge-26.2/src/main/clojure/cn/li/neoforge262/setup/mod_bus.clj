@@ -6,7 +6,7 @@
 	MyMod262 (no FMLJavaModLoadingContext)."
 	(:require [cn.li.neoforgebase.setup.capability-setup :as capability-setup]
 				[cn.li.neoforge262.setup.event-registration :as event-registration]
-				[cn.li.neoforge262.setup.registry-binding :as registry-binding])
+				[cn.li.neoforgebase.setup.registry-binding :as registry-binding])
 	(:import [net.neoforged.bus.api IEventBus]
 				 [net.neoforged.fml ModContainer]
 				 [cn.li.neoforge262.gametest ForgeGameTestRegistration]

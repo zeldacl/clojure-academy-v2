@@ -1,6 +1,6 @@
 (ns cn.li.neoforge1211.runtime.item-handler
   "Forge event handler for item finish-using lifecycle events."
-  (:require [cn.li.mc1211.runtime.event.item-use :as item-use]
+  (:require [cn.li.mcbase.runtime.event.item-use :as item-use]
             [cn.li.neoforge1211.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.event.entity.living LivingEntityUseItemEvent$Finish]

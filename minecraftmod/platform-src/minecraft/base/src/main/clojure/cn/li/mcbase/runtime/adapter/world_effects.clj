@@ -1,12 +1,11 @@
-(ns cn.li.mc1211.runtime.adapter.world-effects
+(ns cn.li.mcbase.runtime.adapter.world-effects
   "Shared IWorldEffects adapter factory.
 
   Platform namespaces provide the server lookup plus platform-specific
   entity/lightning/explosion callbacks; this namespace owns the shared
   world-query orchestration and protocol-var installation."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
-            [cn.li.mc1211.runtime.multipart-entity :as multipart]
-            [cn.li.mc1211.runtime.world-effects-core :as core]
+            [cn.li.mcbase.runtime.multipart-entity :as multipart]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
@@ -14,6 +13,19 @@
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity Entity]
            [net.minecraft.world.level.block Block]))
+
+(defonce ^:private world-core-atom (atom nil))
+
+(defn install-world-core!
+  [m]
+  (reset! world-core-atom m)
+  m)
+
+(defn- core []
+  (let [m @world-core-atom]
+    (when (nil? m)
+      (throw (IllegalStateException. "world-effects-core not installed")))
+    m))
 
 (defn- resolve-level [server resolve-level-fn world-id]
   (when server
@@ -31,7 +43,7 @@
                                 false))
         spawn-projectile! (or spawn-projectile-fn
                               (fn [level projectile-spec]
-                                (core/spawn-projectile-in-level!
+                                ((:spawn-projectile-in-level! (core))
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))
         multipart-entity? multipart/multipart?]
@@ -80,7 +92,7 @@
                                 (try
                                   (when-let [^MinecraftServer server (server-fn)]
                                     (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                      (core/entities-in-radius
+                                      ((:entities-in-radius (core))
                                         level
                                         x y z radius
                                         get-entities-in-aabb
@@ -93,7 +105,7 @@
                               (try
                                 (when-let [^MinecraftServer server (server-fn)]
                                   (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                    (core/entities-in-aabb
+                                    ((:entities-in-aabb (core))
                                       level
                                       min-x min-y min-z max-x max-y max-z
                                       get-entities-in-aabb
@@ -106,7 +118,7 @@
                               (try
                                 (when-let [^MinecraftServer server (server-fn)]
                                   (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                    (core/find-blocks-in-radius-in-level
+                                    ((:find-blocks-in-radius-in-level (core))
                                       level x y z radius block-predicate block-id-fn)))
                                 (catch Exception e
                                   (log/warn "Failed to find blocks:" (ex-message e))
@@ -115,7 +127,7 @@
                     (try
                       (when-let [^MinecraftServer server (server-fn)]
                         (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                          (boolean (core/play-sound-in-level! level x y z sound-id source volume pitch))))
+                          (boolean ((:play-sound-in-level! (core)) level x y z sound-id source volume pitch))))
                       (catch Exception e
                         (log/warn "Failed to play world sound:" (ex-message e))
                         false)))
@@ -123,7 +135,7 @@
                              (try
                                (when-let [^MinecraftServer server (server-fn)]
                                  (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                   (boolean (core/trigger-behavior-hit-in-level! level entity-uuid get-entity-by-uuid-fn))))
+                                   (boolean ((:trigger-behavior-hit-in-level! (core)) level entity-uuid get-entity-by-uuid-fn))))
                                (catch Exception e
                                  (log/warn "Failed to trigger behavior hit:" (ex-message e))
                                  false)))
