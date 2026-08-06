@@ -1,46 +1,34 @@
 package cn.li.mc1201.runtime;
 
-import cn.li.mcbase.runtime.ItemPlayerOps;
-
-import cn.li.mcver.ResourceLocations;
-
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
+/**
+ * @deprecated Use {@link cn.li.mcbase.runtime.ItemRegistry}.
+ */
+@Deprecated
 public final class ItemRegistry {
     static {
-        ItemPlayerOps.installItemIdLookup(ItemRegistry::getItemById);
+        // Force shared static init (ItemPlayerOps install).
+        cn.li.mcbase.runtime.ItemRegistry.class.getName();
     }
 
     private ItemRegistry() {
     }
 
-    public static String getItemRegistryPath(Item item) {
-        ResourceLocation key = BuiltInRegistries.ITEM.getKey(item);
-        return key != null ? key.getPath() : null;
+    public static Item getItemById(String itemId) {
+        return cn.li.mcbase.runtime.ItemRegistry.getItemById(itemId);
     }
 
-    public static Item getItemById(String itemId) {
-        try {
-            if (itemId == null || itemId.isEmpty()) {
-                return null;
-            }
-            ResourceLocation id = ResourceLocations.parse(itemId);
-            Item item = BuiltInRegistries.ITEM.get(id);
-            return item == Items.AIR ? null : item;
-        } catch (Exception ignored) {
-            return null;
-        }
+    public static String getItemRegistryPath(Item item) {
+        return cn.li.mcbase.runtime.ItemRegistry.getItemRegistryPath(item);
+    }
+
+    public static String getItemKey(Item item) {
+        return cn.li.mcbase.runtime.ItemRegistry.getItemKey(item);
     }
 
     public static ItemStack createItemStackById(String itemId, int count) {
-        Item item = getItemById(itemId);
-        if (item == null || count <= 0) {
-            return ItemStack.EMPTY;
-        }
-        return new ItemStack(item, count);
+        return cn.li.mcbase.runtime.ItemRegistry.createItemStackById(itemId, count);
     }
 }

@@ -29,7 +29,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
-public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
+public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements cn.li.mcbase.entity.IScriptedBlockBodyEntity {
     private static final String NBT_BLOCK_ID = "BlockId";
     private static final String NBT_GRAVITY = "BlockBodyGravity";
     private static final String NBT_DAMAGE = "BlockBodyDamage";

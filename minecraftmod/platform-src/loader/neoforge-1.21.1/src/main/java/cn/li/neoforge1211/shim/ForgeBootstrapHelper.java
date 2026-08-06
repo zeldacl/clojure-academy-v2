@@ -1,7 +1,7 @@
 package cn.li.neoforge1211.shim;
 
 import cn.li.neoforge1211.block.entity.ScriptedBlockEntity;
-import cn.li.mc1211.block.ScriptedLiquidBlock;
+import cn.li.mcbase.block.ScriptedLiquidBlock;
 import cn.li.mc1211.block.SharedBootstrapBlockHelper;
 import cn.li.mc1211.block.SharedDynamicStateBlock;
 import cn.li.mc1211.block.SharedScriptedBlock;

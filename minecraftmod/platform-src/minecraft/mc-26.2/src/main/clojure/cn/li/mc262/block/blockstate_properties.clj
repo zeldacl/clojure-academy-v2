@@ -1,80 +1,10 @@
 (ns cn.li.mc262.block.blockstate-properties
-  "Minecraft 26.2 orchestration for platform BlockState property adapters.
+  "Thin re-export of cn.li.mcbase.block.blockstate-properties."
+  (:require [cn.li.mcbase.block.blockstate-properties :as shared]))
 
-  BlockState property creation here uses only vanilla Minecraft APIs, so the
-  registry and default constructors can live in the version component rather
-  than being mirrored by Forge/Fabric wrapper namespaces."
-  (:require [cn.li.mcmod.block.blockstate-properties :as shared]
-            [cn.li.mcmod.block.query :as bquery]
-            [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.world.level.block.state.properties IntegerProperty BooleanProperty BlockStateProperties]))
-
-(defn create-adapter-registry []
-  (shared/create-property-registry))
-
-(defonce ^:private property-registry
-  (shared/create-property-registry))
-
-(defn- create-integer-property [property-name min-value max-value]
-  (IntegerProperty/create property-name (int min-value) (int max-value)))
-
-(defn- create-boolean-property [property-name]
-  (BooleanProperty/create property-name))
-
-(defn- create-horizontal-facing-property
-  [_property-name]
-  BlockStateProperties/HORIZONTAL_FACING)
-
-(defn register-block-properties!
-  [property-registry block-id block-state-properties create-integer-fn create-boolean-fn create-facing-fn]
-  (shared/register-block-properties!
-   property-registry block-id block-state-properties
-   create-integer-fn
-   create-boolean-fn
-   create-facing-fn))
-
-(defn register-default-block-properties!
-  [block-id block-state-properties]
-  (register-block-properties!
-   property-registry
-   block-id
-   block-state-properties
-   create-integer-property
-   create-boolean-property
-   create-horizontal-facing-property))
-
-(defn get-property
-  ([property-registry block-id property-key]
-   (shared/get-property property-registry block-id property-key))
-  ([block-id property-key]
-   (shared/get-property property-registry block-id property-key)))
-
-(defn get-all-properties
-  ([property-registry block-id]
-   (shared/get-all-properties property-registry block-id))
-  ([block-id]
-   (shared/get-all-properties property-registry block-id)))
-
-(defn init-all-properties!
-  ([]
-   (init-all-properties!
-    "mc262 shared adapter"
-    property-registry
-    (fn [block-id]
-      (get-in (bquery/get-block-spec block-id)
-              [:block-state :block-state-properties]))
-    create-integer-property
-    create-boolean-property
-    create-horizontal-facing-property)
-   (log/info "Shared BlockState properties initialized"))
-  ([platform-label property-registry resolve-block-properties-fn create-integer-fn create-boolean-fn create-facing-fn]
-   (log/info (str "Initializing BlockState properties (" platform-label ")..."))
-   (doseq [block-id (bquery/list-all-blocks)]
-     (when-let [props (resolve-block-properties-fn block-id)]
-       (register-block-properties!
-        property-registry
-        block-id
-        props
-        create-integer-fn
-        create-boolean-fn
-        create-facing-fn)))))
+(def create-adapter-registry shared/create-adapter-registry)
+(def register-block-properties! shared/register-block-properties!)
+(def register-default-block-properties! shared/register-default-block-properties!)
+(def get-property shared/get-property)
+(def get-all-properties shared/get-all-properties)
+(def init-all-properties! shared/init-all-properties!)

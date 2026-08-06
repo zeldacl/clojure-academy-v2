@@ -1,18 +1,5 @@
 (ns cn.li.mc1201.runtime.accessor-registry
-  "Explicit bootstrap for built-in mc1201 runtime accessor declarations."
-  (:require [cn.li.mcbase.runtime.accessor-registry-world :as world]
-            [cn.li.mcbase.runtime.accessor-registry-entity :as entity]
-            [cn.li.mcbase.runtime.accessor-registry-render :as render]
-            [cn.li.mcbase.runtime.accessor-registry-lifecycle :as lifecycle]))
+  "Thin re-export of cn.li.mcbase.runtime.accessor-registry."
+  (:require [cn.li.mcbase.runtime.accessor-registry :as shared]))
 
-(defn init-default-accessors!
-  "Register all built-in accessor declarations.
-
-  Requiring this namespace only loads declarations; registration happens when
-  this function is explicitly invoked by platform bootstrap."
-  []
-  (world/register-world-accessors!)
-  (entity/register-entity-accessors!)
-  (render/register-render-accessors!)
-  (lifecycle/register-lifecycle-accessors!)
-  nil)
+(def init-default-accessors! shared/init-default-accessors!)

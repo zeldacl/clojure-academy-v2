@@ -1,81 +1,32 @@
 package cn.li.mc1211.runtime;
 
-import cn.li.mcmod.ModId;
-import cn.li.mcver.ResourceLocations;
-import net.minecraft.core.Holder;
-import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.damagesource.DamageType;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.level.Level;
-
 /**
- * Loader-agnostic damage source resolution using direct typed MC API (Loom-remappable).
+ * @deprecated Use {@link cn.li.mcbase.runtime.DamageSourceAccess}.
  */
+@Deprecated
 public final class DamageSourceAccess {
-    public static final ResourceKey<DamageType> VEC_REFLECTION = ResourceKey.create(
-            Registries.DAMAGE_TYPE,
-            ResourceLocations.of(ModId.ID, "vec_reflection"));
+    public static final net.minecraft.resources.ResourceKey<net.minecraft.world.damagesource.DamageType> VEC_REFLECTION =
+            cn.li.mcbase.runtime.DamageSourceAccess.VEC_REFLECTION;
 
     private DamageSourceAccess() {
     }
 
-    private static DamageSource vecReflection(Level level, Object attacker) {
-        Holder<DamageType> type = level.registryAccess()
-                .registryOrThrow(Registries.DAMAGE_TYPE)
-                .getHolderOrThrow(VEC_REFLECTION);
-        return attacker instanceof Entity entity
-                ? new DamageSource(type, entity)
-                : new DamageSource(type);
+    public static boolean isVecReflection(net.minecraft.world.damagesource.DamageSource source) {
+        return cn.li.mcbase.runtime.DamageSourceAccess.isVecReflection(source);
     }
 
-    public static boolean isVecReflection(DamageSource source) {
-        return source != null && source.is(VEC_REFLECTION);
+    public static net.minecraft.world.damagesource.DamageSource resolve(
+            net.minecraft.world.level.Level level, String kind) {
+        return cn.li.mcbase.runtime.DamageSourceAccess.resolve(level, kind);
     }
 
-    public static DamageSource resolve(Level level, String kind) {
-        if (level == null || kind == null) {
-            return null;
-        }
-        return switch (kind) {
-            case "magic" -> level.damageSources().magic();
-            case "lightningBolt" -> level.damageSources().lightningBolt();
-            case "explosion" -> level.damageSources().explosion(null, null);
-            case "generic" -> level.damageSources().generic();
-            default -> level.damageSources().generic();
-        };
+    public static net.minecraft.world.damagesource.DamageSource resolveKeyword(
+            net.minecraft.world.level.Level level, Object sourceType) {
+        return cn.li.mcbase.runtime.DamageSourceAccess.resolveKeyword(level, sourceType);
     }
 
-    public static DamageSource resolveKeyword(Level level, Object sourceType) {
-        if (level != null && ":vec-reflection".equals(String.valueOf(sourceType))) {
-            return vecReflection(level, null);
-        }
-        String kind = switch (String.valueOf(sourceType)) {
-            case ":magic" -> "magic";
-            case ":lightning" -> "lightningBolt";
-            case ":explosion" -> "explosion";
-            case ":generic" -> "generic";
-            default -> "generic";
-        };
-        return resolve(level, kind);
-    }
-
-    /**
-     * Resolve a source that may need an attacking entity. AcademyCraft's
-     * SkillDamageSource is an EntityDamageSource owned by the caster; on
-     * modern Minecraft, playerAttack is the matching armor-respecting,
-     * attacker-attributed vanilla source.
-     */
-    public static DamageSource resolveKeyword(Level level, Object sourceType, Object attacker) {
-        if (level != null && ":vec-reflection".equals(String.valueOf(sourceType))) {
-            return vecReflection(level, attacker);
-        }
-        if (level != null && ":skill".equals(String.valueOf(sourceType)) && attacker instanceof Player player) {
-            return level.damageSources().playerAttack(player);
-        }
-        return resolveKeyword(level, sourceType);
+    public static net.minecraft.world.damagesource.DamageSource resolveKeyword(
+            net.minecraft.world.level.Level level, Object sourceType, Object attacker) {
+        return cn.li.mcbase.runtime.DamageSourceAccess.resolveKeyword(level, sourceType, attacker);
     }
 }

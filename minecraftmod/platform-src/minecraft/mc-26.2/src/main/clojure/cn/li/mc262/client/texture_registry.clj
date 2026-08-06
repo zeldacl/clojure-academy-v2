@@ -1,38 +1,7 @@
 (ns cn.li.mc262.client.texture-registry
-  "Registry for named texture Identifiers.
+  "Thin re-export of cn.li.mcbase.client.texture-registry."
+  (:require [cn.li.mcbase.client.texture-registry :as shared]))
 
-   Delegates path storage to the platform-neutral mcmod registry.
-   Resolves keyword→path-string entries into Minecraft Identifiers
-   for use by mc-26.2 renderers."
-  (:require [cn.li.mcmod.client.texture-registry :as mcmod-tex]
-            [cn.li.mcmod.config :as modid-config]
-            [clojure.string :as str])
-  (:import [cn.li.mcver ResourceLocations]))
-
-(defn register-texture!
-  "Register a named texture. Delegates to the mcmod platform-neutral registry.
-
-   key is a keyword; path is either 'textures/guis/...' (prefixed with current
-   mod-id at resolve time) or 'mod-id:textures/guis/...' (explicit namespace)."
-  [key path]
-  (mcmod-tex/register-texture! key path))
-
-(defn resolve-texture
-  "Return the Identifier registered under key, or nil.
-
-   Reads the path string from the mcmod registry and converts it to an
-   Identifier. Paths without an explicit mod-id prefix are resolved
-   against the current mod-id."
-  [key]
-  (when-let [path (mcmod-tex/get-texture-path key)]
-    (let [s (str path)]
-      (if (str/includes? s ":")
-        (let [idx (.indexOf s ":")]
-          (ResourceLocations/of (subs s 0 idx) (subs s (inc idx))))
-        (ResourceLocations/of modid-config/mod-id s)))))
-
-(defn reset-texture-registry-for-test!
-  "Clear all registered textures. Intended for tests."
-  []
-  (mcmod-tex/reset-texture-registry-for-test!)
-  nil)
+(def register-texture! shared/register-texture!)
+(def resolve-texture shared/resolve-texture)
+(def reset-texture-registry-for-test! shared/reset-texture-registry-for-test!)

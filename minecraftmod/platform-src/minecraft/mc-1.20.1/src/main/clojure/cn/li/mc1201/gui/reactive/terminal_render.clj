@@ -16,7 +16,7 @@
            [cn.li.mcmod.ui.node INode]
            [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.client Minecraft]
-           [net.minecraft.resources ResourceLocation]
+           [cn.li.mcver ResourceLocations]
            [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexSorting]
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.platform Window GlStateManager$SourceFactor
@@ -38,7 +38,7 @@
     (.identity ^Matrix3f (.normal entry))))
 
 (defn apply-perspective!
-  "Upstream TerminalUI.draw() camera. Not used by the Screen host path — kept
+  "Upstream TerminalUI.draw() camera. Not used by the Screen host path -- kept
    for a future AuxGui-style renderer."
   [^GuiGraphics gg ^UiRt rt mx my _pt]
   (let [fd (rt/user-signal rt :terminal-fd)
@@ -88,7 +88,7 @@
         (.scale ps (float scale) (float (- scale)) (float scale))))))
 
 (defonce ^:private cursor-rl
-  (ResourceLocation. "academy" "textures/guis/data_terminal/cursor.png"))
+  (ResourceLocations/of "academy" "textures/guis/data_terminal/cursor.png"))
 
 (defn render-cursor!
   "Screen-space custom reticle at panel-local (buffX, buffY+120), matching

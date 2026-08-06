@@ -101,11 +101,12 @@
             :property-key :effect
             :label "scripted-effect"
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :effect %)
+            ;; Full FQCN for hooks already in mcbase; suffixes for still-versioned hooks.
+            :impl-key->hook-class {:owner-offset "cn.li.mcbase.entity.hook.effect.OwnerOffsetEffectHook"
+                                   :noop "cn.li.mcbase.entity.hook.effect.NoopEffectHook"
+                                   :vertical-ballistic "cn.li.mcbase.entity.hook.effect.NoopEffectHook"}
             :impl-key->hook-suffix {:tiered-arcs "entity.hook.effect.TieredArcsEffectHook"
-                                   :owner-offset "entity.hook.effect.OwnerOffsetEffectHook"
-                                   :owner-orbit "entity.hook.effect.OwnerOrbitEffectHook"
-                                   :noop "entity.hook.effect.NoopEffectHook"
-                                   :vertical-ballistic "entity.hook.effect.NoopEffectHook"}
+                                    :owner-orbit "entity.hook.effect.OwnerOrbitEffectHook"}
             :conflict-mode :by-hook-id
             :install-key :effect
             :register-fn ScriptedEntitySpecAccess/registerScriptedEffectHookClass
@@ -114,7 +115,8 @@
          :property-key :ray
          :label "scripted-ray"
          :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :ray %)
-         :impl-key->hook-suffix {:owner-follow "entity.hook.ray.OwnerFollowRayHook"}
+         :impl-key->hook-class {:owner-follow "cn.li.mcbase.entity.hook.ray.OwnerFollowRayHook"
+                                :noop "cn.li.mcbase.entity.hook.ray.NoopRayHook"}
          :conflict-mode :by-hook-id
          :install-key :ray
          :register-fn ScriptedEntitySpecAccess/registerScriptedRayHookClass
@@ -123,7 +125,8 @@
             :property-key :marker
             :label "scripted-marker"
             :catalog-impl-key-fn #(hook-resolver/resolve-impl-key :marker %)
-            :impl-key->hook-class {:owner-follow-marker "cn.li.mcbase.entity.hook.marker.OwnerFollowMarkerHook"}
+            :impl-key->hook-class {:owner-follow-marker "cn.li.mcbase.entity.hook.marker.OwnerFollowMarkerHook"
+                                   :noop "cn.li.mcbase.entity.hook.marker.NoopMarkerHook"}
             :conflict-mode :allow-duplicates
             :install-key :marker
             :register-fn ScriptedEntitySpecAccess/registerScriptedMarkerHookClass
@@ -132,10 +135,10 @@
 (defn- resolve-scripted-hook-class
   [{:keys [catalog-impl-key-fn impl-key->hook-class impl-key->hook-suffix install-key]}
    {:keys [hook-props hook-id]}]
-  (let [impl-key->hook-class (or impl-key->hook-class
-                                 (into {}
-                                       (map (fn [[k suffix]] [k (hook-class suffix)]))
-                                       impl-key->hook-suffix))
+  (let [from-suffix (into {}
+                          (map (fn [[k suffix]] [k (hook-class suffix)]))
+                          (or impl-key->hook-suffix {}))
+        impl-key->hook-class (merge from-suffix (or impl-key->hook-class {}))
         allowed-classes (hook-support/filter-impl-key->hook-class
                          install-key impl-key->hook-class)
         impl-key (or (some-> (:hook-impl-key hook-props) normalize-impl-key)

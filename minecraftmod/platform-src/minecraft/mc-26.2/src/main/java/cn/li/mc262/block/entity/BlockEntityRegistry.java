@@ -3,55 +3,28 @@ package cn.li.mc262.block.entity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 
 import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
- * Shared registry for scripted block entity types.
- *
- * <p>Forge and Fabric loaders register their platform-specific ScriptedBlockEntity
- * types via this shared utility to avoid duplication of registry logic.</p>
+ * @deprecated Use {@link cn.li.mcbase.block.entity.BlockEntityRegistry}.
  */
+@Deprecated
 public final class BlockEntityRegistry {
-
     private BlockEntityRegistry() {
-        // Utility class; no instantiation
     }
 
-    private static final Map<String, BlockEntityType<?>> TYPES = new HashMap<>();
-
-    /**
-     * Register a scripted block entity type by its ID.
-     *
-     * @param tileId the tile ID string (e.g., "core", "cable")
-     * @param type   the BlockEntityType instance
-     */
     public static void registerType(String tileId, BlockEntityType<?> type) {
-        TYPES.put(tileId, type);
+        cn.li.mcbase.block.entity.BlockEntityRegistry.registerType(tileId, type);
     }
 
-    /**
-     * Retrieve a previously registered scripted block entity type.
-     *
-     * @param tileId the tile ID string
-     * @return the BlockEntityType, or null if not found
-     */
     public static BlockEntityType<?> getType(String tileId) {
-        return TYPES.get(tileId);
+        return cn.li.mcbase.block.entity.BlockEntityRegistry.getType(tileId);
     }
 
-    /**
-     * All registered scripted block-entity types (for NeoForge capability provider registration).
-     */
     public static Collection<BlockEntityType<?>> allTypes() {
-        return Collections.unmodifiableCollection(TYPES.values());
+        return cn.li.mcbase.block.entity.BlockEntityRegistry.allTypes();
     }
 
-    /**
-     * Clear all registered types (primarily for testing).
-     */
     public static void clear() {
-        TYPES.clear();
+        cn.li.mcbase.block.entity.BlockEntityRegistry.clear();
     }
 }

@@ -1,5 +1,7 @@
 package cn.li.mc1201.client.audio;
 
+import cn.li.mcbase.client.audio.PositionalLoopSoundInstance;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.SoundManager;
 import net.minecraft.core.registries.BuiltInRegistries;

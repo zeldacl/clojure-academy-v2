@@ -37,6 +37,16 @@ these seams. Neutral layers (`api`, `mcmod`, `ac`) must not import `cn.li.mcver`
 | `EnderDragonParts` | Vanilla multipart parent (`EnderDragonPart.parentMob`) |
 | `RegistryDispatch` | `BuiltInRegistries` block/item/fluid register helpers |
 | `TextureSizeAccess` | Dynamic texture pixel size lookup |
+| `McAccess` | Player/level/server accessors (`serverOf`, `dimensionId`, `dayTime`, `gameTime`, `clientPartialTick`, …) |
+| `RegistryLookups` | `holderOrThrow(Level, ResourceKey)` across registryOrThrow / lookupOrThrow |
+| `NbtAccess` | CompoundTag/ListTag reads across classic getters vs OrEmpty/Or-default |
+| `ItemUseResults` | `Item.use` success/pass (`InteractionResultHolder` vs `InteractionResult`) |
+| `EntityClasses` | Version-local scripted entity implementation classes |
+| `TeleportAccess` | Absolute teleport preserving rotation |
+| `RegistryValues` | `BuiltInRegistries` item/block get vs getValue |
+| `AdvancementJson` | Datagen path segment + icon JSON key |
+| `WorldOps` | Creeper power / arrow base-damage helpers |
+| `Ingredients` | Ingredient.of item/tag across HolderGetter requirement |
 
 Do not add a seam member to one Minecraft version without adding the matching
 public type (same relative path / name) to every other `kind: "minecraft"`
@@ -144,6 +154,98 @@ entity class name strings from Clojure.
 
 - `size(Object texture)` / `sizeFromManager(TextureManager, id)` — dynamic texture
   pixel dimensions without field reflection
+
+- `size(Object texture)` / `sizeFromManager(TextureManager, id)` — dynamic texture
+  pixel dimensions without field reflection
+
+### `McAccess`
+
+Cross-version accessors for player/level/server APIs that drift by mapping.
+Prefer this over raw `.getServer` / `.location` / `.isClientSide` forks in shared
+`cn.li.mcbase` code.
+
+- `resourceKeyId` / `resourceKeyString` — dimension/tab key → native id / string
+- `serverOf(Player|ServerPlayer)` — owning `MinecraftServer`
+- `dayTime(Level)` / `gameTime(Level)` / `dimensionId(Level)` / `serverTickCount(MinecraftServer)`
+- `isClientSide(Level)` — field on 1.20.1/1.21.1, method on 26.2
+- `windowHandle(Window)` — GLFW handle (`getWindow()` vs `handle()`)
+- `clientPartialTick(Minecraft)` — frame partial tick (`getFrameTime` / `getTimer` / `getDeltaTracker`)
+- `closeScreen(Minecraft)` — `Minecraft.setScreen(null)` vs `Minecraft.gui.setScreen(null)`
+- `hasCommandPermission(CommandSourceStack, int)` — classic level vs 26.2 Permission API
+
+1.20.1 / 1.21.1: classic getters (`player.getServer()`, `level.getDayTime()`,
+`level.getGameTime()`, `level.isClientSide`, `source.hasPermission(level)`,
+`Window.getWindow()`). Partial tick: `Minecraft.getFrameTime()` on 1.20.1;
+`Minecraft.getTimer()` + `DeltaTracker` on 1.21.1.  
+26.2: `level.getServer()`, `getOverworldClockTime()` (also used for `gameTime`),
+`isClientSide()`, `Permission.HasCommandLevel`, `Window.handle()`,
+`Minecraft.getDeltaTracker()` + `getGameTimeDeltaPartialTick`. Native id return type is
+`Identifier` on 26.2 and `ResourceLocation` on older versions (same pattern as
+`ResourceLocations`).
+
+`cn.li.mc262.bridge.McAccess` remains a deprecated thin forwarder for older
+call sites.
+
+### `NbtAccess`
+
+- `contains` / typed getters / `getCompound` / `getList` / `getCompoundAt` / `keySet` / `put`
+
+1.20.1 / 1.21.1: classic `CompoundTag` getters + typed `getList(key, TAG_COMPOUND)`.  
+26.2: `get*Or` / `getCompoundOrEmpty` / `getListOrEmpty` (Optional-style API).
+
+`cn.li.mc262.bridge.NbtAccess` remains a deprecated thin forwarder.
+
+### `ItemUseResults`
+
+- `success(ItemStack)` / `pass(ItemStack)`
+
+1.20.1 / 1.21.1: `InteractionResultHolder.success/pass`.  
+26.2: `InteractionResult.SUCCESS.heldItemTransformedTo` / `PASS`.
+
+### `EntityClasses`
+
+- `scriptedEffectEntity()` — `Class` of the versioned `ScriptedEffectEntity`
+
+Lets shared Clojure (`item-handler-core`) call `Level.getEntitiesOfClass` without
+importing version namespaces.
+
+### `TeleportAccess`
+
+- `teleportPreservingRotation(Entity, ServerLevel, x, y, z)`
+
+1.20.1 / 1.21.1: `Entity.teleportTo(ServerLevel, ..., Set<RelativeMovement>, ...)`.  
+26.2: `Entity.teleportTo(..., Set<Relative>, ..., boolean)`.
+
+### `RegistryValues`
+
+- `getItem(id)` / `getBlock(id)` — null when missing or air
+
+1.20.1 / 1.21.1: `Registry.get`.  
+26.2: `Registry.getValue`.
+
+### `AdvancementJson`
+
+- `dataFolder()` — `"advancements"` vs `"advancement"`
+- `iconKey()` — `"item"` vs `"id"`
+
+### `WorldOps`
+
+- `tryPowerCreeper(ServerLevel, Entity)` — visual-only bolt + `Creeper.thunderHit`
+- `setArrowBaseDamage(Entity, double)` — `AbstractArrow` package fork
+
+### `Ingredients`
+
+- `ofItem(ItemLike)` / `ofTag(TagKey, HolderGetter)`
+
+1.20.1 / 1.21.1: `Ingredient.of(tag)` (getter ignored).  
+26.2: `Ingredient.of(items.getOrThrow(tag))`.
+
+### `RegistryLookups`
+
+- `holderOrThrow(Level, ResourceKey<T>)` — damage-type / registry holder lookup
+
+1.20.1 / 1.21.1: `registryAccess().registryOrThrow(...).getHolderOrThrow(key)`.  
+26.2: `registryAccess().lookupOrThrow(...).getOrThrow(key)`.
 
 ## `minecraft-base` (`cn.li.mcbase`)
 

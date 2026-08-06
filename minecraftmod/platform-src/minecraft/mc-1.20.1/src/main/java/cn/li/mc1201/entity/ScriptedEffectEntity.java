@@ -1,10 +1,10 @@
 package cn.li.mc1201.entity;
 
-import cn.li.mcbase.entity.IScriptedOwnedEntity;
+import cn.li.mcbase.entity.IScriptedEffectEntity;
 
 
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
-import cn.li.mc1201.entity.hook.effect.OwnerOffsetEffectHook;
+import cn.li.mcbase.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc1201.entity.hook.effect.OwnerOrbitEffectHook;
 import cn.li.mcbase.entity.hook.effect.ScriptedEffectHook;
 import cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks;
@@ -33,7 +33,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public class ScriptedEffectEntity extends Entity implements IScriptedOwnedEntity {
+public class ScriptedEffectEntity extends Entity implements IScriptedEffectEntity {
     private static final int BALLISTIC_MAX_LIFE = 120;
     private static final String LIFE_TICKS_OVERRIDE_TAG = "lifeTicksOverride";
     private static final EntityDataAccessor<Optional<UUID>> DATA_OWNER_UUID =

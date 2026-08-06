@@ -1,11 +1,11 @@
 package cn.li.mc262.entity;
 
-import cn.li.mcbase.entity.IScriptedOwnedEntity;
+import cn.li.mcbase.entity.IScriptedEffectEntity;
 
 
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
 import clojure.lang.IFn;
-import cn.li.mc262.entity.hook.effect.OwnerOffsetEffectHook;
+import cn.li.mcbase.entity.hook.effect.OwnerOffsetEffectHook;
 import cn.li.mc262.entity.hook.effect.OwnerOrbitEffectHook;
 import cn.li.mcbase.entity.hook.effect.ScriptedEffectHook;
 import cn.li.mcbase.entity.hook.effect.ScriptedEffectHooks;
@@ -35,7 +35,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
-public class ScriptedEffectEntity extends Entity implements IScriptedOwnedEntity {
+public class ScriptedEffectEntity extends Entity implements IScriptedEffectEntity {
     private static final int BALLISTIC_MAX_LIFE = 120;
     private static final String LIFE_TICKS_OVERRIDE_TAG = "lifeTicksOverride";
     private static final EntityDataAccessor<String> DATA_OWNER_UUID =

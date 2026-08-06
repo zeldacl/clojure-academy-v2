@@ -11,7 +11,7 @@
 
 (deftest login-immediate-sync-clears-dirty-test
   (let [called (atom [])]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
+    (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [_] "p-login")
                      #'runtime-hooks/on-player-login! (fn [_] nil)
                      #'runtime-hooks/build-sync-payload sync-payload}
       (fn []
@@ -31,7 +31,7 @@
 
 (deftest dimension-change-prefers-immediate-sync-over-tick-sync-test
   (let [called (atom [])]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-dim")
+    (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [_] "p-dim")
                      #'runtime-hooks/on-player-dimension-change! (fn [_ _ _] nil)
                      #'runtime-hooks/build-sync-payload sync-payload}
       (fn []
@@ -56,7 +56,7 @@
 
 (deftest clone-immediate-sync-targets-new-player-test
   (let [called (atom [])]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [p] (case p :old "old-uuid" :new "new-uuid"))
+    (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [p] (case p :old "old-uuid" :new "new-uuid"))
                      #'runtime-hooks/on-player-clone! (fn [_old _new] nil)
                      #'runtime-hooks/build-sync-payload sync-payload}
       (fn []
@@ -78,7 +78,7 @@
 
 (deftest login-immediate-sync-requires-two-arity-sender-test
   (let [called (atom [])]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
+    (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [_] "p-login")
                      #'runtime-hooks/on-player-login! (fn [_] nil)
                      #'runtime-hooks/build-sync-payload sync-payload}
       (fn []
@@ -97,7 +97,7 @@
 
 (deftest lifecycle-binds-player-state-owner-test
   (let [seen (atom nil)]
-    (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
+    (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [_] "p-login")
                      #'runtime-hooks/on-player-login! (fn [_]
                                                         (reset! seen (runtime-hooks/player-state-owner)))}
       (fn []
@@ -123,7 +123,7 @@
            @called))))
 
 (deftest sync-owner-is-required-test
-  (with-redefs-fn {#'lifecycle-core/player-uuid (fn [_] "p-login")
+  (with-redefs-fn {#'cn.li.mcbase.runtime.lifecycle-core/player-uuid (fn [_] "p-login")
                    #'runtime-hooks/on-player-login! (fn [_] nil)}
     (fn []
       (is (thrown-with-msg? clojure.lang.ExceptionInfo

@@ -3,7 +3,7 @@ package cn.li.fabric1201.shim;
 import cn.li.mcver.ResourceLocations;
 
 import cn.li.fabric1201.block.entity.ScriptedBlockEntity;
-import cn.li.mc1201.block.ScriptedLiquidBlock;
+import cn.li.mcbase.block.ScriptedLiquidBlock;
 import cn.li.mc1201.block.SharedBootstrapBlockHelper;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;

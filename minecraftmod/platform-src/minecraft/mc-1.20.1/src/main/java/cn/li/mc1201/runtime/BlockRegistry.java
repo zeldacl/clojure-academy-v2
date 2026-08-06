@@ -1,64 +1,41 @@
 package cn.li.mc1201.runtime;
 
-import cn.li.mcver.ResourceLocations;
-
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 
+/**
+ * @deprecated Use {@link cn.li.mcbase.runtime.BlockRegistry}.
+ */
+@Deprecated
 public final class BlockRegistry {
     private BlockRegistry() {
     }
 
     public static Block getBlockById(String blockId) {
-        try {
-            if (blockId == null || blockId.isEmpty()) {
-                return null;
-            }
-            ResourceLocation id = ResourceLocations.parse(blockId);
-            Block block = BuiltInRegistries.BLOCK.get(id);
-            return block == Blocks.AIR ? null : block;
-        } catch (Exception ignored) {
-            return null;
-        }
+        return cn.li.mcbase.runtime.BlockRegistry.getBlockById(blockId);
     }
 
     public static Block findBlock(String namespace, String path) {
-        try {
-            if (namespace == null || namespace.isEmpty() || path == null || path.isEmpty()) {
-                return null;
-            }
-            ResourceLocation id = ResourceLocations.of(namespace, path);
-            return BuiltInRegistries.BLOCK.getOptional(id).orElse(null);
-        } catch (Exception ignored) {
-            return null;
-        }
+        return cn.li.mcbase.runtime.BlockRegistry.findBlock(namespace, path);
     }
 
-    public static String getBlockKey(Block block) {
-        ResourceLocation key = BuiltInRegistries.BLOCK.getKey(block);
-        return key != null ? key.toString() : null;
+    public static String getBlockKey(Object block) {
+        return cn.li.mcbase.runtime.BlockRegistry.getBlockKey(block);
     }
 
     public static boolean isAirBlock(Block block, Block airBlock) {
-        return block == null || block == airBlock;
+        return cn.li.mcbase.runtime.BlockRegistry.isAirBlock(block, airBlock);
     }
 
     public static Block getAirBlock() {
-        return Blocks.AIR;
+        return cn.li.mcbase.runtime.BlockRegistry.getAirBlock();
     }
 
     public static Block blockByItem(Item item) {
-        if (item == null) {
-            return null;
-        }
-        return Block.byItem(item);
+        return cn.li.mcbase.runtime.BlockRegistry.blockByItem(item);
     }
 
-    public static boolean isPlaceableBlockItem(Item item) {
-        Block block = blockByItem(item);
-        return block != null && block != Blocks.AIR;
+    public static boolean isPlaceableBlockItem(Object item) {
+        return cn.li.mcbase.runtime.BlockRegistry.isPlaceableBlockItem(item);
     }
 }

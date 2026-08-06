@@ -1,45 +1,34 @@
 package cn.li.mc262.runtime;
 
-import cn.li.mcbase.runtime.ItemPlayerOps;
-
-import cn.li.mcver.ResourceLocations;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
+/**
+ * @deprecated Use {@link cn.li.mcbase.runtime.ItemRegistry}.
+ */
+@Deprecated
 public final class ItemRegistry {
     static {
-        ItemPlayerOps.installItemIdLookup(ItemRegistry::getItemById);
+        // Force shared static init (ItemPlayerOps install).
+        cn.li.mcbase.runtime.ItemRegistry.class.getName();
     }
 
-    private ItemRegistry() {}
-
-    public static Item get(Identifier id) {
-        return BuiltInRegistries.ITEM.getValue(id);
+    private ItemRegistry() {
     }
 
     public static Item getItemById(String itemId) {
-        try {
-            if (itemId == null || itemId.isEmpty()) return null;
-            Item item = BuiltInRegistries.ITEM.getValue(ResourceLocations.parse(itemId));
-            return item == Items.AIR ? null : item;
-        } catch (Exception ignored) {
-            return null;
-        }
+        return cn.li.mcbase.runtime.ItemRegistry.getItemById(itemId);
     }
 
-    public static ItemStack createItemStackById(String itemId, int count) {
-        Item item = getItemById(itemId);
-        if (item == null || count <= 0) {
-            return ItemStack.EMPTY;
-        }
-        return new ItemStack(item, count);
+    public static String getItemRegistryPath(Item item) {
+        return cn.li.mcbase.runtime.ItemRegistry.getItemRegistryPath(item);
     }
 
     public static String getItemKey(Item item) {
-        Identifier id = BuiltInRegistries.ITEM.getKey(item);
-        return id != null ? id.toString() : null;
+        return cn.li.mcbase.runtime.ItemRegistry.getItemKey(item);
+    }
+
+    public static ItemStack createItemStackById(String itemId, int count) {
+        return cn.li.mcbase.runtime.ItemRegistry.createItemStackById(itemId, count);
     }
 }

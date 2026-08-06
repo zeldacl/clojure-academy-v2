@@ -1,14 +1,5 @@
 (ns cn.li.mc1201.datagen.resource-location
-  "Loader-agnostic ResourceLocation parsing helper for datagen outputs."
-  (:require [clojure.string :as str])
-  (:import [net.minecraft.resources ResourceLocation]))
+  "Thin re-export of cn.li.mcbase.datagen.resource-location."
+  (:require [cn.li.mcbase.datagen.resource-location :as shared]))
 
-(defn parse-resource-location
-  ([s] (parse-resource-location s nil))
-  ([s default-namespace]
-   (let [value (str s)]
-     (if (str/includes? value ":")
-       (let [[namespace path] (str/split value #":" 2)]
-         (ResourceLocation. namespace path))
-       (when default-namespace
-         (ResourceLocation. default-namespace value))))))
+(def parse-resource-location shared/parse-resource-location)

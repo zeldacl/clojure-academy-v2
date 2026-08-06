@@ -27,7 +27,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
-public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity {
+public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements cn.li.mcbase.entity.IScriptedBlockBodyEntity {
     private static final String IMPACT_DETONATION = "impact-detonation";
     private static final String BEHAVIOR_REGISTRY_NS = "cn.li.mcmod.spi.entity-behavior-registry";
     private static final String ENTITY_DAMAGE_NS = "cn.li.mcmod.platform.entity-damage";

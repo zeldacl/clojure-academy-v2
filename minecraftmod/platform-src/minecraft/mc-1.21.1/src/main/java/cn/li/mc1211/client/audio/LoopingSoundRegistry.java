@@ -1,5 +1,7 @@
 package cn.li.mc1211.client.audio;
 
+import cn.li.mcbase.client.audio.PositionalLoopSoundInstance;
+
 import cn.li.mcver.ResourceLocations;
 
 import net.minecraft.client.Minecraft;

@@ -1,80 +1,42 @@
 package cn.li.mc262.runtime;
 
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
-import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
+/**
+ * @deprecated Use {@link cn.li.mcbase.runtime.ItemInventory}.
+ */
+@Deprecated
 public final class ItemInventory {
     private ItemInventory() {
     }
 
     public static boolean isItemStackEmpty(Object stack) {
-        return stack == null || ((ItemStack) stack).isEmpty();
+        return cn.li.mcbase.runtime.ItemInventory.isItemStackEmpty(stack);
     }
 
     public static Object getItemFromStack(Object stack) {
-        return ((ItemStack) stack).getItem();
+        return cn.li.mcbase.runtime.ItemInventory.getItemFromStack(stack);
     }
 
     public static int getItemStackCount(Object stack) {
-        return ((ItemStack) stack).getCount();
+        return cn.li.mcbase.runtime.ItemInventory.getItemStackCount(stack);
     }
 
     public static String getItemKeyString(Object itemOrStack) {
-        Item item;
-        if (itemOrStack instanceof ItemStack stack) {
-            item = stack.getItem();
-        } else if (itemOrStack instanceof Item i) {
-            item = i;
-        } else {
-            return null;
-        }
-        Identifier key = BuiltInRegistries.ITEM.getKey(item);
-        return key != null ? key.toString() : null;
+        return cn.li.mcbase.runtime.ItemInventory.getItemKeyString(itemOrStack);
     }
 
     public static int countPlayerItem(Player player, Item item) {
-        if (player == null || item == null) {
-            return 0;
-        }
-        int total = 0;
-        Inventory inventory = player.getInventory();
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (!stack.isEmpty() && stack.getItem() == item) {
-                total += stack.getCount();
-            }
-        }
-        return total;
+        return cn.li.mcbase.runtime.ItemInventory.countPlayerItem(player, item);
     }
 
     public static boolean consumePlayerItem(Player player, Item item, int amount) {
-        if (player == null || item == null || amount <= 0) {
-            return false;
-        }
-        int remaining = amount;
-        Inventory inventory = player.getInventory();
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            if (remaining <= 0) {
-                break;
-            }
-            ItemStack stack = inventory.getItem(i);
-            if (!stack.isEmpty() && stack.getItem() == item) {
-                int take = Math.min(remaining, stack.getCount());
-                stack.shrink(take);
-                remaining -= take;
-            }
-        }
-        return remaining <= 0;
+        return cn.li.mcbase.runtime.ItemInventory.consumePlayerItem(player, item, amount);
     }
 
     public static boolean givePlayerItemStack(Player player, ItemStack stack) {
-        if (player == null || stack == null || stack.isEmpty()) {
-            return false;
-        }
-        return player.getInventory().add(stack);
+        return cn.li.mcbase.runtime.ItemInventory.givePlayerItemStack(player, stack);
     }
 }
