@@ -481,6 +481,62 @@
 
 
 
+(defn- shift-tp-fx-payload
+
+  "Shared fx payload for start/update: the destination block marker position
+  plus the per-target marker positions (upstream l_tick spawns one red marker
+  per entity in the line, refreshed every 3 ticks)."
+
+  [trace]
+
+  {:x (:dest-x trace)
+
+   :y (:dest-y trace)
+
+   :z (:dest-z trace)
+
+   :target-count (count (:entities trace))
+
+   :target-hit? (:target-hit? trace)
+
+   :hand-valid? true
+
+   :entities (mapv (fn [e]
+
+                     {:x (double (:x e))
+
+                      :y (double (:y e))
+
+                      :z (double (:z e))})
+
+                   (:entities trace))})
+
+
+
+(defn- shift-tp-down-impl!
+
+  "Key-down: spawn the block marker immediately (upstream l_start on
+  MSG_MADEALIVE). An invalid hand skips everything — s_madeAlive terminates
+  the context, so no marker and no cast."
+
+  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
+
+  (let [hand-valid? (hand-placeable-block? player-ref)]
+
+    (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :trace nil :hand-valid? hand-valid?})
+
+    (when hand-valid?
+
+      (when-let [trace (build-trace player-id)]
+
+        (ctx-skill/replace-skill-state! ctx-id {:hold-ticks 0 :trace trace :hand-valid? true})
+
+        (fx/send! ctx-id {:topic :shift-teleport/fx-start :mode :start} nil
+
+                  (shift-tp-fx-payload trace))))))
+
+
+
 (defn- shift-tp-tick-impl!
 
   [ctx-id player-id _skill-id _exp _cost-ok? hold-ticks _cost-stage player-ref]
@@ -502,17 +558,20 @@
 
       (fx/send! ctx-id {:topic :shift-teleport/fx-update :mode :update} nil
 
-                {:x (:dest-x trace)
+                (shift-tp-fx-payload trace)))))
 
-                 :y (:dest-y trace)
 
-                 :z (:dest-z trace)
 
-                 :target-count (count (:entities trace))
+(defn- shift-tp-abort-impl!
 
-                 :target-hit? (:target-hit? trace)
+  "Key-abort: clear the hold state and drop the markers (upstream
+  l_onKeyAbort sends MSG_EXECUTE(false) — the client kills every marker)."
 
-                 :hand-valid? hand-valid?}))))
+  [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
+
+  (ctx-skill/clear-skill-state! ctx-id)
+
+  (fx/send! ctx-id {:topic :shift-teleport/fx-end :mode :end} nil))
 
 
 
@@ -634,9 +693,13 @@
 
     {:initial-state {:hold-ticks 0 :trace nil :hand-valid? true}
 
+     :down! shift-tp-down-impl!
+
      :tick! shift-tp-tick-impl!
 
-     :up! shift-tp-up-impl!}))
+     :up! shift-tp-up-impl!
+
+     :abort! shift-tp-abort-impl!}))
 
 
 

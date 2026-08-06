@@ -54,6 +54,39 @@
       (is (>= (count @particles*) 2))
       (is (empty? @sounds*)))))
 
+(deftest build-plan-emits-block-and-target-markers-test
+  ;; Upstream l_start spawns the grey block marker; l_tick spawns one red
+  ;; marker per entity in the line (refreshed every 3 ticks).
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})]
+    (stfx/init!)
+    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update
+                                         {:mode :update :x 10.0 :y 65.0 :z 12.0
+                                          :target-count 2 :target-hit? true :hand-valid? true
+                                          :entities [{:x 8.0 :y 64.0 :z 9.0}
+                                                     {:x 9.0 :y 64.0 :z 10.0}]}
+                                         :owner-key [:ctx "ctx-1"])
+    (let [{:keys [ops]} (cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan
+                         :shift-teleport nil {:player-uuid "viewer"} 0 nil)]
+      ;; 12 block-marker edges + 2 * 12 entity-marker edges.
+      (is (= 36 (count ops)))
+      (let [block-ops (filter #(= {:r 139 :g 139 :b 139 :a 180} (:color %)) ops)
+            entity-ops (filter #(= {:r 235 :g 81 :b 81 :a 180} (:color %)) ops)]
+        (is (= 12 (count block-ops)))
+        (is (= 24 (count entity-ops)))))))
+
+(deftest perform-clears-marker-state-test
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})]
+    (stfx/init!)
+    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-start
+                                         {:mode :start :x 1.0 :y 2.0 :z 3.0 :hand-valid? true}
+                                         :owner-key [:ctx "ctx-1"])
+    (is (some? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))
+    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform
+                                         {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :x 5.0 :y 64.0 :z 0.0}
+                                         :owner-key [:ctx "ctx-1"])
+    ;; Upstream c_end kills the block marker and every target marker.
+    (is (nil? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))))
+
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "shift-teleport-test"})]

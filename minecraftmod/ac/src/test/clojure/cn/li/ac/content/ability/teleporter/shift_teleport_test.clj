@@ -7,6 +7,7 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.test.support.fx-mocks :as fx-mocks]
             [cn.li.ac.content.ability.teleporter.shift-teleport :as shift]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
             [cn.li.mcmod.platform.block-manipulation :as bm]
@@ -324,17 +325,63 @@
 
     (is (= 0 @fx-calls*))))
 
-(deftest shift-tp-down-respects-cost-gate-test
-  (let [updates* (atom [])]
+(deftest shift-tp-down-initializes-state-regardless-of-cost-test
+  ;; Upstream madeAlive has no cost gate — only hand validity (s_madeAlive
+  ;; terminates an invalid hand). An invalid hand skips the marker.
+  (let [updates* (atom [])
+        fx-calls* (atom 0)]
     (with-redefs [ctx-skill/update-skill-state-root! (fn [ctx-id f & args]
                                                        (swap! updates* conj [ctx-id f args])
-                                                       nil)]
-      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-cost-fail" :cost-ok? false)
-      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-cost-ok" :cost-ok? true))
+                                                       nil)
+                  entity/player-main-hand-placeable-block? (fn [_] false)
+                  fx/send! (fn [& _] (swap! fx-calls* inc) nil)]
+      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-a" :cost-ok? false)
+      (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-b" :cost-ok? true))
 
-    (is (= 1 (count @updates*)))
-    (is (= "ctx-cost-ok" (ffirst @updates*)))
-    (is (= identity (second (first @updates*))))))
+    (is (= 2 (count @updates*)))
+    (is (= 0 @fx-calls*))))
+
+(deftest shift-tp-down-valid-hand-sends-start-test
+  ;; Upstream l_start spawns the block marker on MSG_MADEALIVE; fx-start
+  ;; carries the first destination so the marker appears on key-down.
+  (let [{:keys [ctx* get-context update-skill-state-root!]} (make-context-mocks {:skill-state {}})
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-redefs-fn
+      (merge
+        {#'ctx/get-context get-context
+         #'ctx-skill/update-skill-state-root! update-skill-state-root!
+         #'fx/send! send!
+         #'skill-effects/skill-exp (fn [_ _] 0.5)
+         #'skill-config/lerp-double (fn [_ field _]
+                                      (case field
+                                        :targeting.range 25.0
+                                        :targeting.eye-height 1.6
+                                        0.0))
+         #'helper/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0})
+         #'helper/player-look-vec (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+         #'geom/world-id-of (fn [_] "minecraft:overworld")
+         #'raycast/available? (constantly true)
+         #'raycast/player-position (fn [_] {:x 1.0 :y 64.0 :z 3.0 :eye-y 65.6})
+         #'raycast/raycast-blocks (fn [& _]
+                                    {:face :up
+                                     :x 1 :y 64 :z 5
+                                     :hit-x 1.5 :hit-y 64.0 :hit-z 5.5})
+         #'world-effects/available? (constantly false)
+         #'entity/player-main-hand-placeable-block? (fn [_] true)}
+        (placement-redefs))
+      (fn []
+        (ctx/with-context-owner (test-context-owner "p1")
+          (cb/apply-invoke shift/shift-tp-down! :ctx-id "ctx-c" :player-id "p1"
+                           :player-ref :player :cost-ok? true))))
+
+    (is (= :shift-teleport/fx-start (get-in (first @calls*) [1])))
+    (let [payload (get-in (first @calls*) [3])]
+      ;; Block hit at (1,64,5) with :up face -> dest block (1,65,5), centered.
+      (is (= 1.5 (:x payload)))
+      (is (= 65.0 (:y payload)))
+      (is (= 5.5 (:z payload)))
+      (is (true? (:target-hit? payload)))
+      (is (empty? (:entities payload))))))
 
 (deftest shift-tp-tick-invalid-main-hand-clears-trace-and-skips-fx-test
   (let [updates* (atom [])
