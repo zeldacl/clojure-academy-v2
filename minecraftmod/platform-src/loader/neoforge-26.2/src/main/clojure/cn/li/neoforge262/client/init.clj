@@ -44,6 +44,7 @@
             [cn.li.mcmod.client.render.tesr-api :as tesr-api]
             [cn.li.neoforgebase.registry.state :as registry-state])
   (:import [net.minecraft.client Minecraft KeyMapping KeyMapping$Category]
+           [cn.li.mcver McAccess]
            [net.minecraft.client.renderer.block FluidModel$Unbaked]
            [net.minecraft.client.resources.model.sprite Material]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -203,6 +204,12 @@
 
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
+
+                            :mcmod/get-entity-position
+                            (try
+                              (McAccess/clientEntitySnapshot
+                                (java.util.UUID/fromString (:entity-uuid payload)))
+                              (catch Exception _ nil))
 
                             :mcmod/start-loop-sound
                             (sound/start-loop-sound! (:key payload) (:sound-id payload)

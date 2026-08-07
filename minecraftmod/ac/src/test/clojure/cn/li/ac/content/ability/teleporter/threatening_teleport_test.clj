@@ -135,6 +135,7 @@
               :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
               :attacked? true
               :target-uuid "enemy"
+              :target-width 0.5
               :target-height 0.0}]]
            @calls*))))
 

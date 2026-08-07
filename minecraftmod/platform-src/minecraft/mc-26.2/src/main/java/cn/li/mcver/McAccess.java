@@ -101,4 +101,29 @@ public final class McAccess {
         PermissionLevel required = PermissionLevel.byId(level);
         return source.permissions().hasPermission(new Permission.HasCommandLevel(required));
     }
+
+    /**
+     * Client-side live snapshot of a loaded entity (position + bounding box),
+     * for skill aim markers that must follow a target entity every frame
+     * (upstream EntityMarker.target follow). Returns null when the entity is
+     * not loaded on this client.
+     */
+    public static java.util.Map<String, Object> clientEntitySnapshot(java.util.UUID uuid) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientLevel level = mc.level;
+        if (level == null || uuid == null) {
+            return null;
+        }
+        net.minecraft.world.entity.Entity entity = level.getEntities().get(uuid);
+        if (entity == null) {
+            return null;
+        }
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("x", entity.getX());
+        result.put("y", entity.getY());
+        result.put("z", entity.getZ());
+        result.put("width", entity.getBbWidth());
+        result.put("height", entity.getBbHeight());
+        return result;
+    }
 }

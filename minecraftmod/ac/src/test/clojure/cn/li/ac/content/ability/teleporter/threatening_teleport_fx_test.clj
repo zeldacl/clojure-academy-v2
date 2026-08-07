@@ -100,22 +100,27 @@
     (fn []
       (tfx/init!)
       (enqueue! "ctx-p" :threatening-teleport/fx-update
-                {:mode :update :target-x 10.0 :target-y 11.0 :target-z 12.0 :hit? true})))
+                {:mode :update :target-x 10.0 :target-y 11.0 :target-z 12.0
+                 :hit? true :target-width 0.5 :target-height 0.5})))
   (let [{:keys [ops]} (build-plan)]
-    ;; Wireframe cube: 12 edges centered on the aim point.
-    (is (= 12 (count ops)))
+    ;; Upstream RenderMarker: 8 corners x 3 short line segments.
+    (is (= 24 (count ops)))
     (is (every? #(= :line (:kind %)) ops))
-    (let [centers (map (fn [op]
-                         (let [^cn.li.mcmod.math.V3 p1 (:p1 op)]
-                           [(.x p1) (.y p1) (.z p1)]))
-                       ops)]
+    ;; Payload target-y 11.0 with target-height 0.5 -> marker bottom at the
+    ;; FEET y=10.5; box 0.5x0.5, ticks extend 0.2*width beyond each corner.
+    (let [endpoints (mapcat (fn [op]
+                              (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                                    ^cn.li.mcmod.math.V3 p2 (:p2 op)]
+                                [[(.x p1) (.y p1) (.z p1)]
+                                 [(.x p2) (.y p2) (.z p2)]]))
+                            ops)]
       (is (every? (fn [[x y z]]
-                    (and (< (Math/abs (- x 10.0)) 0.3)
-                         (< (Math/abs (- y 11.0)) 0.3)
-                         (< (Math/abs (- z 12.0)) 0.3)))
-                  centers))
-      ;; Threatening color when targeting an entity (upstream COLOR_THREATENING).
-      (is (= {:r 0xba :g 0xb2 :b 0x23 :a 0x2a} (:color (first ops)))))))
+                    (and (<= 9.65 x 10.35)
+                         (<= 10.4 y 11.1)
+                         (<= 11.65 z 12.35)))
+                  endpoints)))
+    ;; Threatening color when targeting an entity (upstream COLOR_THREATENING).
+    (is (= {:r 0xba :g 0xb2 :b 0x23 :a 0x2a} (:color (first ops))))))
 
 (deftest build-plan-uses-normal-color-without-target-test
   (with-fx-owner
@@ -124,8 +129,42 @@
       (enqueue! "ctx-g" :threatening-teleport/fx-update
                 {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false})))
   (let [{:keys [ops]} (build-plan)]
-    (is (= 12 (count ops)))
+    (is (= 24 (count ops)))
     (is (= {:r 0xba :g 0xba :b 0xba :a 0xba} (:color (first ops))))))
+
+(deftest build-plan-follows-target-entity-live-test
+  ;; Upstream EntityMarker.target follow: the marker snaps to the target's
+  ;; live position every frame and is sized to its bounding box.
+  (with-fx-owner
+    (fn []
+      (tfx/init!)
+      (enqueue! "ctx-f" :threatening-teleport/fx-update
+                {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0
+                 :hit? true :target-uuid "enemy-1"
+                 :target-width 0.6 :target-height 1.8})))
+  (let [calls* (atom [])]
+    (with-redefs [client-bridge/run-client-effect!
+                  (fn [effect-key payload]
+                    (swap! calls* conj [effect-key payload])
+                    (when (= effect-key :mcmod/get-entity-position)
+                      ;; Entity moved to a new spot since the last sync.
+                      {:x 20.0 :y 64.0 :z 30.0 :width 1.0 :height 2.0}))]
+      (let [{:keys [ops]} (build-plan)]
+        (is (= 24 (count ops)))
+        (is (= [[:mcmod/get-entity-position {:entity-uuid "enemy-1"}]] @calls*))
+        ;; Box (1.0 x 2.0) bottom at the entity's live feet; ticks extend
+        ;; 0.2*width beyond the corners.
+        (let [endpoints (mapcat (fn [op]
+                                  (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                                        ^cn.li.mcmod.math.V3 p2 (:p2 op)]
+                                    [[(.x p1) (.y p1) (.z p1)]
+                                     [(.x p2) (.y p2) (.z p2)]]))
+                                ops)]
+          (is (every? (fn [[x y z]]
+                        (and (<= 19.3 x 20.7)
+                             (<= 63.8 y 66.2)
+                             (<= 29.3 z 30.7)))
+                      endpoints)))))))
 
 (deftest perform-clears-marker-and-plays-attack-fx-test
   (let [particles* (atom [])

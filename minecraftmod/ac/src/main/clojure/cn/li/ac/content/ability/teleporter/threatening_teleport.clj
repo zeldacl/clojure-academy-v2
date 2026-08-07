@@ -180,6 +180,8 @@
 
              :target-uuid target-uuid
 
+             :width (double (or (:width hit) 0.5))
+
              :height (double (or (:height hit) 0.0))
 
              :distance (double (or (:distance hit)
@@ -207,6 +209,8 @@
              :attacked? false
 
              :target-uuid nil
+
+             :width 0.5
 
              :height 0.0
 
@@ -258,6 +262,8 @@
    :drop-z (:drop-z trace)
    :attacked? (:attacked? trace)
    :target-uuid (:target-uuid trace)
+   :target-width (double (or (:width trace) 0.5))
+
    :target-height (double (or (:height trace) 0.0))})
 
 (defn- threatening-tp-tick-impl!

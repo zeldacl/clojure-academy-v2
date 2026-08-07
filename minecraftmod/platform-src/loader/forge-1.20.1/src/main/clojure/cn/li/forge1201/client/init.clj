@@ -50,6 +50,7 @@
   (:import [cn.li.mc1201.client ClientHelper]
            [cn.li.forge1201.shim ForgeClientHelper]
            [cn.li.mc1201.client GuiGraphicsHelper]
+           [cn.li.mcver McAccess]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.multiplayer ClientLevel]
@@ -227,6 +228,12 @@
 
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
+
+                            :mcmod/get-entity-position
+                            (try
+                              (McAccess/clientEntitySnapshot
+                                (java.util.UUID/fromString (:entity-uuid payload)))
+                              (catch Exception _ nil))
 
                             :mcmod/start-loop-sound
                             (sound/start-loop-sound! (:key payload) (:sound-id payload)

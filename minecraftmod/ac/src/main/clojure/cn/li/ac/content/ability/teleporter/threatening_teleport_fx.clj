@@ -10,6 +10,8 @@
    :start-y (:start-y p)
    :start-z (:start-z p)
    :hit? (boolean (or (:hit? p) (:attacked? p)))
+   :target-uuid (:target-uuid p)
+   :target-width (double (or (:target-width p) 0.5))
    :target-height (double (or (:target-height p) 0.0))})
 
 (def ^:private spec

@@ -4,35 +4,53 @@
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 ;; Upstream threatening-teleport marker colors (TTContextC):
 ;; normal (no target) 0xba,0xba,0xba,0xba — threatening (targeting) 0xba,0xb2,0x23,0x2a.
 (def ^:private color-normal {:r 0xba :g 0xba :b 0xba :a 0xba})
 (def ^:private color-threatening {:r 0xba :g 0xb2 :b 0x23 :a 0x2a})
 
-(def ^:private marker-half-size 0.25)
+(def ^:private default-marker-size 0.5)
 
-(defn- cube-edges
-  "12 wireframe edges of an axis-aligned cube centered at c (upstream
-  EntityMarker is a small wireframe box the size of one block face)."
-  [c]
-  (let [h marker-half-size
-        x (double (:x c)) y (double (:y c)) z (double (:z c))
-        corners [[(- x h) (- y h) (- z h)] [(+ x h) (- y h) (- z h)]
-                 [(+ x h) (- y h) (+ z h)] [(- x h) (- y h) (+ z h)]
-                 [(- x h) (+ y h) (- z h)] [(+ x h) (+ y h) (- z h)]
-                 [(+ x h) (+ y h) (+ z h)] [(- x h) (+ y h) (+ z h)]]
-        ;; bottom ring 0-1-2-3-0, top ring 4-5-6-7-4, verticals 0-4 1-5 2-6 3-7
-        rings [[0 1] [1 2] [2 3] [3 0]
-               [4 5] [5 6] [6 7] [7 4]
-               [0 4] [1 5] [2 6] [3 7]]]
-    (mapv (fn [[a b]]
-            (let [pa (nth corners a) pb (nth corners b)]
-              (ru/line-op (rv3/v3 (double (nth pa 0)) (double (nth pa 1)) (double (nth pa 2)))
-                          (rv3/v3 (double (nth pb 0)) (double (nth pb 1)) (double (nth pb 2)))
-                          color-normal)))
-          rings)))
+(defn- corner-tick-ops
+  "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
+  line segments — a vertical (len up on bottom corners, down on top corners)
+  plus +x and +z — so the mark reads as 8 corner ticks, not a solid box."
+  [ox oy oz width height color]
+  (let [len (* 0.2 width)
+        corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
+                 [0 1 0] [1 1 0] [1 1 1] [0 1 1]]]
+    (mapcat (fn [[cx cy cz]]
+              (let [x (+ ox (* cx width))
+                    y (+ oy (* cy height))
+                    z (+ oz (* cz width))
+                    rev (< cy 0.5)
+                    vert (if rev len (- len))]
+                [(ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color)
+                 (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color)
+                 (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color)]))
+            corners)))
+
+(defn- marker-ops
+  "Box bottom sits AT the aim point (upstream translates by -width/2 in x/z and
+  keeps y) — a ground hit shows the mark standing on the surface instead of
+  half-buried. When targeting an entity the box follows its live position
+  every frame and is sized to its bounding box (upstream EntityMarker.target
+  follow + RenderMarker target sizing)."
+  [st]
+  (let [color (if (:hit? st) color-threatening color-normal)
+        live (when-let [uuid (:target-uuid st)]
+               (client-bridge/run-client-effect!
+                :mcmod/get-entity-position {:entity-uuid uuid}))
+        width (double (if live (:width live) (or (:target-width st) default-marker-size)))
+        height (double (if live (:height live) (or (:target-height st) default-marker-size)))
+        px (double (if live (:x live) (:x (:aim st))))
+        py (double (if live (:y live) (:y (:aim st))))
+        pz (double (if live (:z live) (:z (:aim st))))]
+    (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
+                     width height color)))
 
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
@@ -54,12 +72,18 @@
       (update state* :fx-state assoc owner-key*
               (merge base-meta {:active? true :ttl 0
                                 :aim (aim payload)
-                                :hit? (boolean (:hit? payload))}))
+                                :hit? (boolean (:hit? payload))
+                                :target-uuid (:target-uuid payload)
+                                :target-width (double (or (:target-width payload) default-marker-size))
+                                :target-height (double (or (:target-height payload) default-marker-size))}))
       :update
       (update state* :fx-state update owner-key*
               (fn [st] (assoc (merge base-meta (or st {:active? true :ttl 0}))
                               :aim (aim payload)
-                              :hit? (boolean (:hit? payload)))))
+                              :hit? (boolean (:hit? payload))
+                              :target-uuid (:target-uuid payload)
+                              :target-width (double (or (:target-width payload) default-marker-size))
+                              :target-height (double (or (:target-height payload) default-marker-size)))))
       :perform
       (do
         (when (:hit? payload)
@@ -113,9 +137,8 @@
         marker-ops
         (vec
          (mapcat (fn [st]
-                   (when-let [aim (:aim st)]
-                     (let [color (if (:hit? st) color-threatening color-normal)]
-                       (mapv (fn [op] (assoc op :color color)) (cube-edges aim)))))
+                   (when (and (:active? st) (:aim st))
+                     (marker-ops st)))
                  states))]
     (when (seq marker-ops)
       {:ops marker-ops})))

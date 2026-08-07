@@ -44,7 +44,8 @@
            [com.mojang.blaze3d.platform Window]
            [net.minecraft.world.entity.player Player]
            [cn.li.mc1201.client GuiGraphicsHelper]
-           [cn.li.mc1201.client.effect ScriptedEffectSpawner]))
+           [cn.li.mc1201.client.effect ScriptedEffectSpawner]
+           [cn.li.mcver McAccess]))
 
 (defn- bind-texture-fabric!
   "Bind a texture for rendering."
@@ -181,6 +182,12 @@
 
                             :mcmod/remove-local-scripted-effect
                             (ScriptedEffectSpawner/removeLocalByUuid (:entity-uuid payload))
+
+                            :mcmod/get-entity-position
+                            (try
+                              (McAccess/clientEntitySnapshot
+                                (java.util.UUID/fromString (:entity-uuid payload)))
+                              (catch Exception _ nil))
 
                             :mcmod/start-loop-sound
                             (sound/start-loop-sound! (:key payload) (:sound-id payload)
