@@ -3,6 +3,7 @@
   (:require [cn.li.mcbase.gui.reactive.host-core :as core]
             [cn.li.mc1201.gui.reactive.render :as render])
   (:import [cn.li.mc1201.shim DelegatingScreen]
+           [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]))
 
 (def ^:private seams
@@ -12,8 +13,29 @@
                         render-cb key-cb char-cb click-cb removed-cb))
 
    :render-background!
-   (fn [screen gg _mx _my _pt]
+   (fn [^DelegatingScreen screen ^GuiGraphics gg _mx _my _pt]
      (.renderBackground screen gg))
+
+   :screen-dimensions
+   (fn [^DelegatingScreen screen]
+     [(double (.-width screen)) (double (.-height screen))])
+
+   :screen-offsets
+   (fn [^DelegatingScreen screen]
+     [(long (.-leftOffset screen)) (long (.-topOffset screen))])
+
+   :close-screen!
+   (fn [^DelegatingScreen screen]
+     (.onClose screen))
+
+   :decorate-screen!
+   (fn [^DelegatingScreen screen release-cb drag-cb move-cb scroll-cb pause-cb]
+     (doto screen
+       (.withMouseReleased release-cb)
+       (.withMouseDragged drag-cb)
+       (.withMouseMoved move-cb)
+       (.withMouseScrolled scroll-cb)
+       (.withIsPauseScreen pause-cb)))
 
    :draw-tape! render/draw-tape!
    :render-embedded-runtime! render/render-embedded-runtime!})

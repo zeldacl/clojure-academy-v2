@@ -3,6 +3,7 @@
   (:require [cn.li.mcbase.gui.reactive.host-container-core :as core]
             [cn.li.mc1211.gui.reactive.render :as render])
   (:import [cn.li.mc1211.shim DelegatingCGuiContainerScreen]
+           [net.minecraft.client.gui GuiGraphics]
            [net.minecraft.network.chat Component]))
 
 (def ^:private seams
@@ -11,14 +12,59 @@
      (DelegatingCGuiContainerScreen. menu inv (Component/literal ^String title)))
 
    :render-background!
-   (fn [screen gg mx my pt]
+   (fn [^DelegatingCGuiContainerScreen screen ^GuiGraphics gg mx my pt]
      (.renderBackground screen gg (int mx) (int my) (float pt)))
+
+   :screen-dimensions
+   (fn [^DelegatingCGuiContainerScreen screen]
+     [(double (.-width screen)) (double (.-height screen))])
+
+   :gui-offsets
+   (fn [^DelegatingCGuiContainerScreen screen]
+     [(int (.getGuiLeft screen)) (int (.getGuiTop screen))])
+
+   :close-screen!
+   (fn [^DelegatingCGuiContainerScreen screen]
+     (.onClose screen))
+
+   :super-render!
+   (fn [^DelegatingCGuiContainerScreen screen ^GuiGraphics gg mx my pt]
+     (.callSuperRender screen gg (int mx) (int my) (float pt)))
+
+   :super-click!
+   (fn [^DelegatingCGuiContainerScreen screen mx my button]
+     (.callSuperMouseClicked screen (double mx) (double my) (int button)))
+
+   :super-mouse-released!
+   (fn [^DelegatingCGuiContainerScreen screen mx my button]
+     (.callSuperMouseReleased screen (double mx) (double my) (int button)))
+
+   :super-mouse-dragged!
+   (fn [^DelegatingCGuiContainerScreen screen mx my button dx dy]
+     (.callSuperMouseDragged screen (double mx) (double my) (int button)
+                             (double dx) (double dy)))
+
+   :decorate-screen!
+   (fn [^DelegatingCGuiContainerScreen screen render-cb bg-cb labels-cb click-cb
+        release-cb drag-cb move-cb scroll-cb key-cb char-cb removed-cb]
+     (doto screen
+       (.withRender render-cb)
+       (.withRenderBg bg-cb)
+       (.withRenderLabels labels-cb)
+       (.withMouseClicked click-cb)
+       (.withMouseReleased release-cb)
+       (.withMouseDragged drag-cb)
+       (.withMouseMoved move-cb)
+       (.withMouseScrolled scroll-cb)
+       (.withKeyPressed key-cb)
+       (.withCharTyped char-cb)
+       (.withRemoved removed-cb)))
 
    :draw-tape! render/draw-tape!
    :render-embedded-runtime! render/render-embedded-runtime!
 
    :apply-image-size!
-   (fn [screen iw ih]
+   (fn [^DelegatingCGuiContainerScreen screen iw ih]
      (.setImageSize screen (int iw) (int ih)))})
 
 (def create-reactive-container-screen

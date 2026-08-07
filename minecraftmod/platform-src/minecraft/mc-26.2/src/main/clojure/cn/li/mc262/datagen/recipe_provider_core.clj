@@ -31,7 +31,7 @@
   [^HolderGetter items ^ShapedRecipeBuilder builder k spec]
   (let [ch (if (char? k) k (first (str k)))
         ^Character key-char (Character/valueOf (char ch))
-        ingredient (metadata-resolver/ingredient-from-spec spec rl/parse-resource-location items)]
+        ^Ingredient ingredient (metadata-resolver/ingredient-from-spec spec rl/parse-resource-location items)]
     (.define builder key-char ingredient)))
 
 (defn- criterion-for-item
