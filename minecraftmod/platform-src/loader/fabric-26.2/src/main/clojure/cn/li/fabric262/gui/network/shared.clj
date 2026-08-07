@@ -6,16 +6,16 @@
             [cn.li.mcmod.util.log :as log])
   (:import [io.netty.buffer Unpooled]
            [net.minecraft.network FriendlyByteBuf]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources Identifier]))
 
-(def ^ResourceLocation c2s-channel
-  (ResourceLocation. mod-config/mod-id "clj_rpc_c2s"))
+(def ^Identifier c2s-channel
+  (Identifier/fromNamespaceAndPath mod-config/mod-id "clj_rpc_c2s"))
 
-(def ^ResourceLocation s2c-channel
-  (ResourceLocation. mod-config/mod-id "clj_rpc_s2c"))
+(def ^Identifier s2c-channel
+  (Identifier/fromNamespaceAndPath mod-config/mod-id "clj_rpc_s2c"))
 
-(def ^ResourceLocation runtime-sync-s2c-channel
-  (ResourceLocation. mod-config/mod-id "runtime_sync_v2"))
+(def ^Identifier runtime-sync-s2c-channel
+  (Identifier/fromNamespaceAndPath mod-config/mod-id "runtime_sync_v2"))
 
 (defn make-buf
   [payload]

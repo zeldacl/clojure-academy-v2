@@ -5,11 +5,11 @@
   - AbstractArrow / LargeFireball package moves
   - Registry.get → getValue; EntityType.create(Level, EntitySpawnReason)
   - Entity.saveWithoutId(CompoundTag) gone → WorldEntity LargeFireball accessors"
-  (:require [cn.li.mcbase.runtime.adapter.world-effects :as world-adapter])
+  (:require [cn.li.mcbase.runtime.adapter.world-effects :as world-adapter]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.entity ScriptedBlockBodyEntity ScriptedEffectEntity]
            [cn.li.mc262.runtime WorldEntity]
            [net.minecraft.core BlockPos]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources Identifier]
            [cn.li.mcver ResourceLocations]
            [net.minecraft.sounds SoundSource SoundEvent]
@@ -110,7 +110,7 @@
 
 (defn play-sound-in-level!
   [^Level level x y z sound-id source volume pitch]
-  (let [^SoundEvent sound-event (.getValue BuiltInRegistries/SOUND_EVENT
+  (let [^SoundEvent sound-event (.getValue (registry/builtin "SOUND_EVENT")
                                            (ResourceLocations/parse ^String sound-id))]
     (when sound-event
       (.playSound level
@@ -142,8 +142,8 @@
   (let [{:keys [entity-id x y z vx vy vz owner-uuid explosion-power]} projectile-spec]
     (try
       (let [^Identifier type-key (ResourceLocations/parse (str entity-id))
-            ^EntityType entity-type (if (.containsKey BuiltInRegistries/ENTITY_TYPE type-key)
-                                      (.getValue BuiltInRegistries/ENTITY_TYPE type-key)
+            ^EntityType entity-type (if (.containsKey (registry/builtin "ENTITY_TYPE") type-key)
+                                      (.getValue (registry/builtin "ENTITY_TYPE") type-key)
                                       (throw (ex-info (str "Unknown entity type id '" entity-id "'")
                                                       {:entity-id entity-id})))]
         (if-not entity-type
@@ -190,7 +190,7 @@
     (when-let [^Level level (some-> player .level)]
       (let [item-id (:id item-stack)
             count (int (max 1 (or (:count item-stack) 1)))
-            ^Item item (.getValue BuiltInRegistries/ITEM (ResourceLocations/parse (str item-id)))
+            ^Item item (.getValue (registry/builtin "ITEM") (ResourceLocations/parse (str item-id)))
             ^ItemStack mc-stack (ItemStack. item count)]
         (let [^ItemEntity entity (ItemEntity. level (double x) (double y) (double z) mc-stack)]
           (.setPickUpDelay entity 10)

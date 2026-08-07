@@ -9,7 +9,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
 import org.joml.Matrix3x2f;
@@ -31,37 +30,17 @@ public final class GuiGraphicsHelper {
                                         float x0, float y0, float x1, float y1,
                                         float u0, float u1, float v0, float v1,
                                         int argb) {
-        float[] warp = GuiPerspectiveWarp.active();
-        if (warp == null) {
-            return false;
-        }
-        PerspectiveQuadRenderState state = PerspectiveQuadRenderState.textured(
-                warp, gge.pose(), pipeline, textures,
-                x0, y0, x1, y1, u0, v0, u1, v1, argb, gge.peekScissorStack());
-        if (state == null) {
-            // Degenerate or behind the eye: drop it rather than fall back to an
-            // affine blit, which would draw the quad in the wrong place entirely.
-            return true;
-        }
-        gge.submitGuiElementRenderState(state);
-        return true;
+        // 26.2 exposes GUI extraction through GuiRenderState rather than a
+        // public submit method on GuiGraphicsExtractor. Keep this seam as a
+        // no-op until the custom perspective state is ported to addGuiElement.
+        return false;
     }
 
     /** Solid/gradient counterpart of {@link #submitWarped}. */
     private static boolean submitWarpedFill(GuiGraphicsExtractor gge, RenderPipeline pipeline,
                                             int x0, int y0, int x1, int y1,
                                             int argbTop, int argbBottom) {
-        float[] warp = GuiPerspectiveWarp.active();
-        if (warp == null) {
-            return false;
-        }
-        PerspectiveQuadRenderState state = PerspectiveQuadRenderState.colored(
-                warp, gge.pose(), pipeline, TextureSetup.noTexture(),
-                x0, y0, x1, y1, argbTop, argbBottom, gge.peekScissorStack());
-        if (state != null) {
-            gge.submitGuiElementRenderState(state);
-        }
-        return true;
+        return false;
     }
 
     /** Solid rectangle, warped when a perspective camera is installed. */
@@ -229,14 +208,8 @@ public final class GuiGraphicsHelper {
             return;
         }
         AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
-        gge.submitGuiElementRenderState(new BlitRenderState(
-                RenderPipelines.MOJANG_LOGO,
-                TextureSetup.singleTexture(tex.getTextureView(), tex.getSampler()),
-                new Matrix3x2f(gge.pose()),
-                x, y, x + w, y + h,
-                0f, 1f, 0f, 1f,
-                argb,
-                gge.peekScissorStack()));
+        gge.blit(tex.getTextureView(), tex.getSampler(),
+                x, y, w, h, 0f, 0f, 1f, 1f);
     }
 
     /**
@@ -266,16 +239,8 @@ public final class GuiGraphicsHelper {
             return;
         }
         AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
-        GpuTextureView view = tex.getTextureView();
-        GpuSampler sampler = tex.getSampler();
-        gge.submitGuiElementRenderState(new BlitRenderState(
-                RenderPipelines.GUI_TEXTURED,
-                TextureSetup.singleTexture(view, sampler),
-                new Matrix3x2f(gge.pose()),
-                x0, y0, x1, y1,
-                u0, u1, v0, v1,
-                argb,
-                gge.peekScissorStack()));
+        gge.blit(tex.getTextureView(), tex.getSampler(),
+                x0, y0, x1 - x0, y1 - y0, u0, v0, u1, v1);
     }
 
     /**
@@ -308,14 +273,9 @@ public final class GuiGraphicsHelper {
         if (submitWarped(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb)) {
             return;
         }
-        gge.submitGuiElementRenderState(new BlitRenderState(
-                pipeline,
-                textures,
-                new Matrix3x2f(gge.pose()),
-                x0, y0, x1, y1,
-                u0, u1, v0, v1,
-                argb,
-                gge.peekScissorStack()));
+        gge.blit(pipeline, texture0, x0, y0, u0, v0,
+                x1 - x0, y1 - y0,
+                x1 - x0, y1 - y0);
     }
 
     /** Submit a solid rectangle with pipeline-owned depth/blend state. */

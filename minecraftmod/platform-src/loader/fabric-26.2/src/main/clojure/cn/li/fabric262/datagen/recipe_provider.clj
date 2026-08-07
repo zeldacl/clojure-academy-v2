@@ -17,7 +17,8 @@
 
 (defn create-provider
   [^PackOutput output]
-  (DelegatingRecipeProvider.
-    output
-    (fn [_this ^Consumer writer]
-      (recipe-provider-core/generate-recipes! writer recipe-deps))))
+  ;; 26.2 RecipeProvider is constructed by RecipeProvider.Runner with a
+  ;; HolderLookup.Provider and RecipeOutput; the old two-argument Fabric shim
+  ;; no longer matches. Datagen registration remains a loader seam until it
+  ;; is migrated to Runner.
+  nil)

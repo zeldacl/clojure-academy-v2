@@ -7,7 +7,6 @@ import cn.li.mcbase.block.ScriptedLiquidBlock;
 import cn.li.mc262.block.SharedBootstrapBlockHelper;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
@@ -89,7 +88,7 @@ public final class FabricBootstrapHelper {
 
     public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
         return new LiquidBlock(Objects.requireNonNull(fluidSupplier.get(), "fluid"),
-            BlockBehaviour.Properties.copy(Blocks.WATER));
+            BlockBehaviour.Properties.ofFullCopy(Blocks.WATER));
     }
 
     public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
@@ -99,7 +98,7 @@ public final class FabricBootstrapHelper {
             fluidSupplier,
             blockId,
             tileId,
-            BlockBehaviour.Properties.copy(Blocks.WATER),
+            BlockBehaviour.Properties.ofFullCopy(Blocks.WATER),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;

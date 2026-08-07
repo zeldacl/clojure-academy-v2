@@ -4,7 +4,8 @@
    Effect plans are extracted before level submission and emitted through
    SubmitNodeCollector, with all GPU state owned by RenderType."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime])
+            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
            [cn.li.mc262.client.effects LevelEffectGeometry]
            [cn.li.mc262.client.render PlasmaRenderTypes]
@@ -14,7 +15,7 @@
            [net.minecraft.client.renderer SubmitNodeCollector SubmitNodeCollector$CustomGeometryRenderer]
            [net.minecraft.client.renderer.rendertype RenderType RenderTypes]
            [net.minecraft.core BlockPos]
-           [net.minecraft.core.registries BuiltInRegistries Registries]
+           [net.minecraft.core.registries Registries]
            [net.minecraft.resources Identifier]
            [net.minecraft.tags BlockTags TagKey]
            [net.minecraft.world.entity.player Abilities]
@@ -152,7 +153,7 @@
 (defn- block-id-for-state
   [^BlockState block-state]
   (let [^Block block (.getBlock block-state)
-        key (.getKey BuiltInRegistries/BLOCK block)]
+        key (.getKey (registry/builtin "BLOCK") block)]
     (when key (str key))))
 
 (defn- harvest-level-for-state

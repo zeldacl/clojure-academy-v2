@@ -27,7 +27,7 @@ public abstract class PlayerPersistentDataMixin implements PlayerPersistentDataA
     @Inject(method = "readAdditionalSaveData", at = @At("RETURN"))
     private void academy$readPersistentData(CompoundTag tag, CallbackInfo ci) {
         if (tag.contains(PERSISTENT_KEY)) {
-            academy$persistentData = tag.getCompound(PERSISTENT_KEY);
+            academy$persistentData = tag.getCompound(PERSISTENT_KEY).orElse(null);
         }
     }
 

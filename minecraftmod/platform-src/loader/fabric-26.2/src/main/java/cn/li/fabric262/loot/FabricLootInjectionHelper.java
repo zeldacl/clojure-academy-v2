@@ -3,7 +3,6 @@ package cn.li.fabric262.loot;
 import cn.li.mcver.ResourceLocations;
 
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.storage.loot.LootPool;
 import net.minecraft.world.level.storage.loot.LootTable;
@@ -28,7 +27,7 @@ public final class FabricLootInjectionHelper {
             return;
         }
 
-        Item item = BuiltInRegistries.ITEM.get(ResourceLocations.parse(itemId));
+        Item item = BuiltInRegistries.ITEM.getValue(ResourceLocations.parse(itemId));
         if (item == null) {
             return;
         }

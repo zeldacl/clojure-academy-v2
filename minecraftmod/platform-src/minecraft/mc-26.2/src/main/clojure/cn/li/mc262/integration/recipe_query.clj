@@ -4,12 +4,12 @@
   26.2: full RecipeManager lives on the integrated server. Dedicated multiplayer
   clients only get RecipeAccess property sets — queries fall back to nil there."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.recipe ContentRecipe]
            [cn.li.mcver ResourceLocations]
            [net.minecraft.client Minecraft]
            [net.minecraft.core Holder]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.item.crafting Ingredient Recipe RecipeHolder RecipeManager
             RecipeMap RecipeType]
@@ -25,8 +25,8 @@
           rl (if (= 2 (count parts))
                (ResourceLocations/of (first parts) (second parts))
                (ResourceLocations/parse item-id))
-          ^Item item (.getValue BuiltInRegistries/ITEM rl)]
-      (when (and item (not= item net.minecraft.world.item.Items/AIR))
+          ^Item item (.getValue (registry/builtin "ITEM") rl)]
+      (when item
         (ItemStack. item)))
     (catch Exception e
       (log/warn "item-id->stack failed for" item-id ":" (ex-message e))
@@ -38,7 +38,7 @@
   (when (and stack (not (.isEmpty stack)))
     (try
       (let [^Item item (.getItem stack)
-            rl (.getKey BuiltInRegistries/ITEM item)]
+            rl (.getKey (registry/builtin "ITEM") item)]
         (when rl (str rl)))
       (catch Exception e
         (log/warn "stack->item-id failed:" (ex-message e))
@@ -75,7 +75,7 @@
   [^Ingredient ing]
   (when (and ing (not (.isEmpty ing)))
     (when-let [^Holder holder (first (iterator-seq (.iterator (.items ing))))]
-      (when-let [rl (.getKey BuiltInRegistries/ITEM (.value holder))]
+      (when-let [rl (.getKey (registry/builtin "ITEM") (.value holder))]
         (str rl)))))
 
 (defn- recipe-ingredients

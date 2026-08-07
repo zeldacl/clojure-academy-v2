@@ -2,10 +2,10 @@
   "CLIENT-ONLY shared sound effect bridge for Minecraft 26.2."
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.sounds SoundManager]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.sounds SoundSource SoundEvent]
            [net.minecraft.resources Identifier]
            [cn.li.mcver ResourceLocations]
@@ -38,7 +38,7 @@
                 pos-x (or x (.getX player))
                 pos-y (or y (.getY player))
                 pos-z (or z (.getZ player))
-                ^SoundEvent sound-event (.getValue BuiltInRegistries/SOUND_EVENT sound-loc)]
+                ^SoundEvent sound-event (.getValue (registry/builtin "SOUND_EVENT") sound-loc)]
             (when sound-event
               (.playLocalSound level pos-x pos-y pos-z
                                sound-event

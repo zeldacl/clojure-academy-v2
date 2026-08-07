@@ -56,46 +56,10 @@ public record ReactivePreviewRenderState(
             return false;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
-        TrackingItemStackRenderState itemState = new TrackingItemStackRenderState();
-        minecraft.getItemModelResolver().updateForNonLiving(
-                itemState,
-                stack,
-                ItemDisplayContext.FIXED,
-                null);
-        if (itemState.isEmpty()) {
-            return false;
-        }
-
-        Matrix3x2fc pose = graphics.pose();
-        Vector2f corner0 = pose.transformPosition((float) x, (float) y, new Vector2f());
-        Vector2f corner1 = pose.transformPosition(
-                (float) (x + width),
-                (float) (y + height),
-                new Vector2f());
-        int left = (int) Math.floor(Math.min(corner0.x, corner1.x));
-        int top = (int) Math.floor(Math.min(corner0.y, corner1.y));
-        int right = (int) Math.ceil(Math.max(corner0.x, corner1.x));
-        int bottom = (int) Math.ceil(Math.max(corner0.y, corner1.y));
-        ScreenRectangle scissor = graphics.peekScissorStack();
-        ScreenRectangle clippedBounds = PictureInPictureRenderState.getBounds(
-                left, top, right, bottom, scissor);
-        if (clippedBounds == null || clippedBounds.width() <= 0 || clippedBounds.height() <= 0) {
-            return true;
-        }
-
-        graphics.submitPictureInPictureRenderState(new ReactivePreviewRenderState(
-                itemState,
-                left,
-                top,
-                right,
-                bottom,
-                (float) modelScale,
-                (float) yawDegrees,
-                (float) yOffset,
-                scissor,
-                clippedBounds));
-        return true;
+        // GuiGraphicsExtractor no longer exposes a public PIP submission or
+        // scissor stack in 26.2. Leave the extraction seam disabled until the
+        // renderer-specific state is wired through GuiRenderState.add... APIs.
+        return false;
     }
 
     @Override

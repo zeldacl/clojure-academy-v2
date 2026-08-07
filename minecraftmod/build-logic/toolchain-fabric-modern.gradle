@@ -82,6 +82,24 @@ loom {
 // sets would create duplicate classes and a main -> client -> main task cycle.
 sourceSets.client.java.setSrcDirs([])
 
+// The existing Java tree still contains shared contracts and client bridges
+// in the main source set. Loom configures the main task with the common jar;
+// append the resolved client classpath at execution time so its client-only
+// classes are visible without making the client task depend back on main.
+tasks.named("compileJava", JavaCompile).configure {
+    doFirst {
+        classpath = classpath.plus(configurations.getByName("clientCompileClasspath") - sourceSets.main.output)
+    }
+}
+
+// Clojure AOT runs against the same merged source tree as the legacy
+// targets. Give it the client named-mapping classpath too; otherwise any
+// namespace that type-hints GuiGraphicsExtractor/Minecraft fails before the
+// target-specific Clojure code is even analyzed.
+tasks.named("compileClojure").configure {
+    classpath.from(configurations.getByName("clientCompileClasspath"))
+}
+
 // Keep the plain jar as the authoritative artifact.  platform-target.gradle
 // supplies source/resource/AOT inputs and the catalog supplies its name.
 tasks.named("jar", Jar).configure {

@@ -1,7 +1,7 @@
 (ns cn.li.mc262.client.player-state-core
   "CLIENT-ONLY shared helpers for reading local player state from Minecraft."
+  (:require [cn.li.mc262.runtime.registry :as registry])
   (:import [net.minecraft.client Minecraft]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world.level ClipContext ClipContext$Block ClipContext$Fluid]
            [net.minecraft.world.phys BlockHitResult HitResult$Type Vec3]
            [net.minecraft.world.phys.shapes CollisionContext]))
@@ -14,7 +14,7 @@
     (when-let [player (.player mc)]
       (let [stack (.getMainHandItem player)]
         (when (and stack (not (.isEmpty stack)))
-          (when-let [key (.getKey BuiltInRegistries/ITEM (.getItem stack))]
+          (when-let [key (.getKey (registry/builtin "ITEM") (.getItem stack))]
             (str key)))))))
 
 (defn local-player-pos

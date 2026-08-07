@@ -15,7 +15,7 @@ import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedProjectileSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 
@@ -168,7 +168,7 @@ public final class FabricScriptedEntityAccess {
         if (entityType == null) {
             return null;
         }
-        ResourceLocation key = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+        Identifier key = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
         return key == null ? null : key.getPath();
     }
 }

@@ -9,10 +9,7 @@
             [cn.li.platform.target :as target]
             [cn.li.mcmod.gui.handler :as gui-handler]
             [cn.li.mcmod.gui.registry :as gui])
-  (:import [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
-           [net.minecraft.network.chat Component]
-           [net.minecraft.nbt CompoundTag]
-           [net.minecraft.server.level ServerPlayer]))
+  (:import [net.minecraft.server.level ServerPlayer]))
 
 (defn- create-menu-proxy
   ([window-id menu-type clj-container]
@@ -41,20 +38,6 @@
      :log-prefix "[FABRIC-MENU-PROVIDER]"}))
 
 (defn create-menu-provider
-  "Create an ExtendedScreenHandlerFactory for opening Fabric GUIs with payload sync."
-  [gui-id tile-entity]
-  (reify ExtendedScreenHandlerFactory
-    (getDisplayName [_]
-      (Component/literal (gui/get-display-name gui-id)))
-    (createMenu [_ sync-id _player-inventory player]
-      (create-menu-from-provider! gui-id tile-entity sync-id player))
-    (getScreenOpeningData [_ ^ServerPlayer player]
-      (let [payload (CompoundTag.)
-            pos (when tile-entity (provider-common/tile->pos tile-entity player))]
-        (.putInt payload "gui-id" (int gui-id))
-        (.putBoolean payload "has-pos" (boolean pos))
-        (when pos
-          (.putInt payload "x" (.getX pos))
-          (.putInt payload "y" (.getY pos))
-          (.putInt payload "z" (.getZ pos)))
-        payload))))
+  "26.2 removed ExtendedScreenHandlerFactory; the loader adapter is disabled."
+  [_gui-id _tile-entity]
+  nil)

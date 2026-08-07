@@ -6,7 +6,7 @@ import cn.li.mc262.recipe.ContentRecipe;
 import cn.li.mcmod.ModId;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.crafting.RecipeSerializer;
 import net.minecraft.world.item.crafting.RecipeType;
 
@@ -26,13 +26,13 @@ public final class ModRecipeTypes {
         Registry.register(
             BuiltInRegistries.RECIPE_SERIALIZER,
             id("content_process"),
-            new ContentRecipe.Serializer("process"));
+            ContentRecipe.createSerializer("process"));
 
     public static final RecipeSerializer<ContentRecipe> CONTENT_MODE_SERIALIZER =
         Registry.register(
             BuiltInRegistries.RECIPE_SERIALIZER,
             id("content_mode"),
-            new ContentRecipe.Serializer("mode"));
+            ContentRecipe.createSerializer("mode"));
 
     static {
         ContentRecipe.install(
@@ -60,7 +60,7 @@ public final class ModRecipeTypes {
             });
     }
 
-    private static ResourceLocation id(String path) {
+    private static Identifier id(String path) {
         return ResourceLocations.of(ModId.ID, path);
     }
 

@@ -13,7 +13,8 @@
             [cn.li.mcbase.runtime.spi.network-transport :as network-transport-spi]
             [cn.li.mcbase.platform.world-block-ops :as world-block-ops]
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
-            [cn.li.mcmod.runtime.install :as install])
+            [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.bridge ItemStackInterop McAccess NbtAccess]
            [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
@@ -189,7 +190,7 @@
                                              rl (ResourceLocations/of ns path)
                                              tag-key (net.minecraft.tags.TagKey/create
                                                       net.minecraft.core.registries.Registries/ITEM rl)
-                                             items (.iterator (.getTagOrEmpty net.minecraft.core.registries.BuiltInRegistries/ITEM tag-key))]
+                                             items (.iterator (.getTagOrEmpty (registry/builtin "ITEM") tag-key))]
                                          (when (.hasNext items)
                                            (let [^Item item (.value ^Holder (.next items))
                                                  stack (ItemStack. item (int count))]

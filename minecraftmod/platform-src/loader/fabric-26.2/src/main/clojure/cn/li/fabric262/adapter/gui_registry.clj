@@ -10,13 +10,9 @@
             [cn.li.platform.target :as target]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.util.log :as log])
-  (:import [net.minecraft.resources ResourceLocation]
+  (:import [net.minecraft.resources Identifier]
            [net.minecraft.core Registry]
-           [net.minecraft.core.registries BuiltInRegistries]
-           [net.minecraft.network.codec ByteBufCodecs]
-           [net.minecraft.nbt CompoundTag]
-           [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerType
-            ExtendedScreenHandlerType$ExtendedFactory]))
+           [net.minecraft.network.codec ByteBufCodecs]))
 
 (def ^:private gui-handler-types
   "Map from GUI ID to registered MenuType instances. Lock-free CAS updates
@@ -54,42 +50,14 @@
   (get (gui-handler-types-snapshot) gui-id))
 
 (defn create-extended-screen-handler-type [gui-id]
-  (let [registry-name (gui/get-registry-name gui-id)
-        resource-id (ResourceLocation/parse (str modid/mod-id ":" registry-name))
-        menu-type (ExtendedScreenHandlerType.
-                   (reify ExtendedScreenHandlerType$ExtendedFactory
-                     (create [_ sync-id player-inventory data]
-                       (let [payload (or data (CompoundTag.))
-                             payload-gui-id (.getInt payload "gui-id")
-                             pos (when (.getBoolean payload "has-pos")
-                                   (net.minecraft.core.BlockPos.
-                                    (.getInt payload "x") (.getInt payload "y") (.getInt payload "z")))
-                             handler (gui-handler/get-gui-handler)]
-                         (registry-common/create-client-menu!
-                          {:gui-id payload-gui-id :window-id sync-id :player-inventory player-inventory
-                           :pos pos :handler handler
-                           :create-container-fn (fn [h gid player world block-pos]
-                                                  (gui-handler/get-server-container h gid player world block-pos))
-                           :create-menu-proxy-fn (fn [window-id type clj-container opts]
-                                                   (menu-proxy/create-menu-proxy window-id type clj-container opts))
-                           :resolve-menu-type-fn get-handler-type
-                           :bridge-opts (menu-proxy/menu-proxy-opts
-                                         {:call-super-removed? true
-                                          :remove-log-message "Fabric menu closed for player"
-                                          :quick-move-error-prefix "Error in Fabric quickMoveStack:"})
-                           :error-prefix "Failed to create container for GUI"
-                           :with-owner! #(@client-owner-wrapper %)}))))
-                   ByteBufCodecs/COMPOUND_TAG)]
-    (Registry/register BuiltInRegistries/MENU resource-id menu-type)))
+  ;; Fabric 26.2 removed ExtendedScreenHandlerType and its payload factory.
+  ;; Keep this seam returning nil until the vanilla StreamCodec menu bridge is
+  ;; implemented; callers already tolerate an unavailable menu type.
+  nil)
 
 (defn register-screen-handler-types! []
-  (log/info "Registering GUI screen handler types for Fabric 26.2")
-  (doseq [gui-id (gui/get-all-gui-ids)]
-    (let [handler-type (create-extended-screen-handler-type gui-id)
-          registry-name (gui/get-registry-name gui-id)]
-      (assoc-gui-handler-type! gui-id handler-type)
-      (log/info "Registered screen handler type:" registry-name "for GUI ID" gui-id)))
-  (log/info "Registered" (count (gui-handler-types-snapshot)) "screen handler types"))
+  (log/info "Fabric 26.2 menu payload API unavailable; GUI screen handler registration deferred")
+  nil)
 
 (defn open-gui-for-player [player gui-id tile-entity]
   (open-core/log-open-start! "[FABRIC-OPEN-GUI]" player gui-id tile-entity)

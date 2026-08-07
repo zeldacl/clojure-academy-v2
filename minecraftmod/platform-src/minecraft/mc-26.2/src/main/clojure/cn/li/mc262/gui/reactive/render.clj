@@ -6,7 +6,8 @@
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.layout :as ui-layout]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
            [cn.li.mc262.client.render ReactivePreviewRenderState]
            [com.mojang.blaze3d.pipeline RenderPipeline]
@@ -16,7 +17,6 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client.gui GuiGraphicsExtractor]
            [net.minecraft.client.renderer.texture MissingTextureAtlasSprite]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.resources Identifier]
            [net.minecraft.world.item Item ItemStack Items]
            [net.minecraft.world.level.block Block Blocks]
@@ -813,14 +813,14 @@
 
 (defn- item-stack-of
   ^ItemStack [^Identifier id]
-  (let [^Item item (.getValue BuiltInRegistries/ITEM id)]
-    (when (and item (not= item Items/AIR))
+  (let [^Item item (.getValue (registry/builtin "ITEM") id)]
+    (when item
       (ItemStack. item))))
 
 (defn- block-stack-of
   ^ItemStack [^Identifier id]
-  (let [^Block block (.getValue BuiltInRegistries/BLOCK id)]
-    (when (and block (not= block Blocks/AIR))
+  (let [^Block block (.getValue (registry/builtin "BLOCK") id)]
+    (when block
       (let [stack (ItemStack. (.asItem block))]
         (when-not (.isEmpty stack) stack)))))
 

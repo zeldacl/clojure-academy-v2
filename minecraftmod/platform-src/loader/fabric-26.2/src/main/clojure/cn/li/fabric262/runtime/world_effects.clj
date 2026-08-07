@@ -4,11 +4,13 @@
             [cn.li.mcbase.runtime.adapter.world-effects :as world-effects]
             [cn.li.mcbase.runtime.entity-query-core :as query-core]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level Level$ExplosionInteraction]
-           [net.minecraft.world.entity Entity EntityType LightningBolt]
+           [net.minecraft.world.entity Entity EntitySpawnReason LightningBolt]
+           [net.minecraft.resources Identifier]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
 
@@ -20,7 +22,9 @@
     get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z visual-only?]
-                           (let [^LightningBolt bolt (.create EntityType/LIGHTNING_BOLT level)]
+                           (let [type (.getValue (registry/builtin "ENTITY_TYPE")
+                                                  (Identifier/parse "minecraft:lightning_bolt"))
+                                 ^LightningBolt bolt (.create type level EntitySpawnReason/COMMAND)]
                              (when bolt
                                (.moveTo bolt (double x) (double y) (double z))
                                (.setVisualOnly bolt (boolean visual-only?))

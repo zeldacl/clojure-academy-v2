@@ -8,9 +8,7 @@
     "LivingEntityDamageMixin",
     "PlayerPersistentDataMixin"
   ],
-  "client": [
-    "ItemRendererObjCompositeMixin"
-  ],
+  "client": [],
   "injectors": {
     "defaultRequire": 1
   }

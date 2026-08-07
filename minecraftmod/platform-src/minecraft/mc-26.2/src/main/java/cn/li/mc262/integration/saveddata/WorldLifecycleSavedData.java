@@ -24,7 +24,7 @@ public class WorldLifecycleSavedData extends SavedData {
         ).apply(instance, WorldLifecycleSavedData::new));
 
     public static final SavedDataType<WorldLifecycleSavedData> TYPE =
-        new SavedDataType<>(ID, WorldLifecycleSavedData::new, CODEC);
+        new SavedDataType<>(ID, WorldLifecycleSavedData::new, CODEC, null);
 
     private CompoundTag handlers;
 

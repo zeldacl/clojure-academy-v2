@@ -13,7 +13,7 @@
     (:import [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]
          [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.resources Identifier]))
 
 (defn- obj-3d-json
   "Vanilla-loadable stand-in for the `_3d` model: no parent and no elements, so
@@ -44,7 +44,8 @@
               writes (atom [])]
           (doseq [{:keys [model-name] :as spec} models
                   :let [json (model-json mod-id spec)]]
-            (let [target-path (.json ^PackOutput$PathProvider path-provider (ResourceLocation. mod-id model-name))
+            (let [target-path (.json ^PackOutput$PathProvider path-provider
+                                     (Identifier/fromNamespaceAndPath mod-id model-name))
                   json-tree (.toJsonTree gson (gson-util/normalize-json json))]
               (swap! writes conj
                      (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))

@@ -7,16 +7,16 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Arrays;
 
 /** Typed-payload bridge for modern Fabric API networking. */
 public final class FabricPayloadBridge {
-    private static final ResourceLocation C2S_ID = ResourceLocation.parse("academycraft:clj_rpc_c2s");
-    private static final ResourceLocation S2C_ID = ResourceLocation.parse("academycraft:clj_rpc_s2c");
-    private static final ResourceLocation RUNTIME_ID = ResourceLocation.parse("academycraft:runtime_sync_v2");
+    private static final Identifier C2S_ID = Identifier.parse("academycraft:clj_rpc_c2s");
+    private static final Identifier S2C_ID = Identifier.parse("academycraft:clj_rpc_s2c");
+    private static final Identifier RUNTIME_ID = Identifier.parse("academycraft:runtime_sync_v2");
     private static final CustomPacketPayload.Type<BytesPayload> C2S_TYPE = new CustomPacketPayload.Type<>(C2S_ID);
     private static final CustomPacketPayload.Type<BytesPayload> S2C_TYPE = new CustomPacketPayload.Type<>(S2C_ID);
     private static final CustomPacketPayload.Type<BytesPayload> RUNTIME_TYPE = new CustomPacketPayload.Type<>(RUNTIME_ID);
@@ -50,7 +50,7 @@ public final class FabricPayloadBridge {
 
     public static synchronized void installServer(IFn requestHandler) {
         if (serverInstalled) return;
-        PayloadTypeRegistry.playC2S().register(C2S_TYPE, C2S_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(C2S_TYPE, C2S_CODEC);
         ServerPlayNetworking.registerGlobalReceiver(C2S_TYPE,
                 (payload, context) -> requestHandler.invoke(payload.bytes(), context.player()));
         serverInstalled = true;
@@ -58,8 +58,8 @@ public final class FabricPayloadBridge {
 
     public static synchronized void installClient(IFn responseHandler, IFn runtimeHandler) {
         if (clientInstalled) return;
-        PayloadTypeRegistry.playS2C().register(S2C_TYPE, S2C_CODEC);
-        PayloadTypeRegistry.playS2C().register(RUNTIME_TYPE, RUNTIME_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(S2C_TYPE, S2C_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(RUNTIME_TYPE, RUNTIME_CODEC);
         ClientPlayNetworking.registerGlobalReceiver(S2C_TYPE,
                 (payload, context) -> responseHandler.invoke(payload.bytes(), context.client()));
         ClientPlayNetworking.registerGlobalReceiver(RUNTIME_TYPE,

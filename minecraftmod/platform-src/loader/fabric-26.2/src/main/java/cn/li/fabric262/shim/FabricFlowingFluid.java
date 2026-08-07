@@ -5,7 +5,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.BlockGetter;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.block.Block;
@@ -42,7 +41,7 @@ public abstract class FabricFlowingFluid extends FlowingFluid {
     }
 
     @Override
-    protected boolean canConvertToSource(Level level) {
+    protected boolean canConvertToSource(net.minecraft.server.level.ServerLevel level) {
         return properties.canConvertToSource;
     }
 

@@ -6,9 +6,9 @@
   in loader-specific platform layers."
   (:require [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
             [cn.li.mcmod.util.log :as log]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mcver ResourceLocations]
-           [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.world.item Item ItemStack Items]))
 
 (defn parse-item-id
@@ -19,8 +19,8 @@
     (let [[id-part count-str] (str/split item-id #"#")
           count (if count-str (Integer/parseInt count-str) 1)
           res-loc (ResourceLocations/parse id-part)
-          ^Item item (.getValue BuiltInRegistries/ITEM res-loc)]
-      (when (and item (not= item Items/AIR))
+          ^Item item (.getValue (registry/builtin "ITEM") res-loc)]
+      (when item
         (ItemStack. item (int count))))
     (catch Exception e
       (log/warn (str "Failed to parse item ID: " item-id " - " (ex-message e)))

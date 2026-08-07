@@ -6,6 +6,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.data.PackOutput;
 import net.minecraft.data.recipes.RecipeOutput;
 import net.minecraft.data.recipes.RecipeProvider;
+import net.minecraft.core.registries.Registries;
 
 /**
  * 26.2 RecipeProvider: buildRecipes() takes no args; registration goes through
@@ -22,7 +23,7 @@ public class DelegatingRecipeProvider extends RecipeProvider {
     }
 
     @Override
-    protected void buildRecipes() {
+    public void buildRecipes() {
         if (buildRecipesFn != null) {
             // Pass provider so Clojure can read items/output fields via bridges.
             buildRecipesFn.invoke(this);
@@ -31,7 +32,7 @@ public class DelegatingRecipeProvider extends RecipeProvider {
 
     /** Exposed for Clojure: HolderGetter&lt;Item&gt; used by shaped/shapeless builders. */
     public net.minecraft.core.HolderGetter<net.minecraft.world.item.Item> itemLookup() {
-        return this.items;
+        return this.registries.lookupOrThrow(Registries.ITEM);
     }
 
     /** Exposed for Clojure: RecipeOutput stored by the parent constructor. */

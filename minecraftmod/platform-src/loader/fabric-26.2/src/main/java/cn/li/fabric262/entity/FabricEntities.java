@@ -4,7 +4,9 @@ import cn.li.mcver.ResourceLocations;
 
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 
@@ -38,7 +40,8 @@ public final class FabricEntities {
                 MobCategory.MISC
         )
                 .sized(0.5f, 0.5f)
-                .build(MOD_ID + ":scripted-projectile");
+                .build(ResourceKey.create(Registries.ENTITY_TYPE,
+                        ResourceLocations.of(MOD_ID, "scripted-projectile")));
         registerEntityType("scripted-projectile", projectileType);
 
         // Register effect entity
@@ -49,7 +52,8 @@ public final class FabricEntities {
                 .sized(0.5f, 0.5f)
                 .noSummon()
                 .noSave()
-                .build(MOD_ID + ":scripted-effect");
+                .build(ResourceKey.create(Registries.ENTITY_TYPE,
+                        ResourceLocations.of(MOD_ID, "scripted-effect")));
         registerEntityType("scripted-effect", effectType);
 
         // Register ray entity
@@ -60,7 +64,8 @@ public final class FabricEntities {
                 .sized(0.5f, 0.5f)
                 .noSummon()
                 .noSave()
-                .build(MOD_ID + ":scripted-ray");
+                .build(ResourceKey.create(Registries.ENTITY_TYPE,
+                        ResourceLocations.of(MOD_ID, "scripted-ray")));
         registerEntityType("scripted-ray", rayType);
 
         // Register marker entity
@@ -71,7 +76,8 @@ public final class FabricEntities {
                 .sized(0.1f, 0.1f)
                 .noSummon()
                 .noSave()
-                .build(MOD_ID + ":scripted-marker");
+                .build(ResourceKey.create(Registries.ENTITY_TYPE,
+                        ResourceLocations.of(MOD_ID, "scripted-marker")));
         registerEntityType("scripted-marker", markerType);
 
         // Register block-body entity
@@ -80,13 +86,14 @@ public final class FabricEntities {
                 MobCategory.MISC
         )
                 .sized(1.0f, 1.0f)
-                .build(MOD_ID + ":scripted-block-body");
+                .build(ResourceKey.create(Registries.ENTITY_TYPE,
+                        ResourceLocations.of(MOD_ID, "scripted-block-body")));
         registerEntityType("scripted-block-body", blockBodyType);
     }
 
         private static <E extends net.minecraft.world.entity.Entity> void registerEntityType(
             String id, EntityType<E> entityType) {
-        ResourceLocation location = ResourceLocations.of(MOD_ID, id);
+        Identifier location = ResourceLocations.of(MOD_ID, id);
         @SuppressWarnings("unchecked")
         EntityType<E> registered = (EntityType<E>) Registry.register(
                 BuiltInRegistries.ENTITY_TYPE,

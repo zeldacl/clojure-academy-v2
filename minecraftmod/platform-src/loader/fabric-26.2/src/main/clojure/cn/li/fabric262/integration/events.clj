@@ -12,15 +12,9 @@
   (:import [net.fabricmc.fabric.api.command.v2 CommandRegistrationCallback]
            [net.fabricmc.fabric.api.loot.v3 LootTableEvents$Modify]
            [net.fabricmc.fabric.api.entity.event.v1 ServerPlayerEvents$CopyFrom
-            ServerLivingEntityEvents$AfterDeath
-            ServerEntityWorldChangeEvents
-            ServerEntityWorldChangeEvents$AfterPlayerChange]
+            ServerLivingEntityEvents$AfterDeath]
            [net.fabricmc.fabric.api.networking.v1 ServerPlayConnectionEvents$Join
             ServerPlayConnectionEvents$Disconnect]
-           [net.fabricmc.fabric.api.event.lifecycle.v1 ServerWorldEvents$Load
-            ServerWorldEvents$Unload
-            ServerTickEvents$EndTick
-            ServerTickEvents$EndWorldTick]
            [net.fabricmc.fabric.api.event.player UseBlockCallback
             AttackBlockCallback
             AttackEntityCallback
@@ -65,21 +59,6 @@
                    (beforeBlockBreak [_ world player pos state block-entity]
                      (block-events/handle-block-break world player pos state block-entity))))
 
-      (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/LOAD
-                 (reify ServerWorldEvents$Load
-                   (onWorldLoad [_ _server world]
-                     (world-events/handle-world-load world))))
-
-      (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents/UNLOAD
-                 (reify ServerWorldEvents$Unload
-                   (onWorldUnload [_ _server world]
-                     (world-events/handle-world-unload world))))
-
-      (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_WORLD_TICK
-                 (reify ServerTickEvents$EndWorldTick
-                   (onEndTick [_ world]
-                     (world-lifecycle/dispatch-world-tick world))))
-
       (.register net.fabricmc.fabric.api.loot.v3.LootTableEvents/MODIFY
                  (reify LootTableEvents$Modify
                    (modifyLootTable [_ id table-builder _source _lookup]
@@ -104,16 +83,6 @@
                  (reify ServerLivingEntityEvents$AfterDeath
                    (afterDeath [_ entity _damage-source]
                      (lifecycle-events/handle-player-death entity))))
-
-      (.register ServerEntityWorldChangeEvents/AFTER_PLAYER_CHANGE_WORLD
-                 (reify ServerEntityWorldChangeEvents$AfterPlayerChange
-                   (afterChangeWorld [_ player origin destination]
-                     (lifecycle-events/handle-player-dimension-change player origin destination))))
-
-      (.register net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents/END_SERVER_TICK
-                 (reify ServerTickEvents$EndTick
-                   (onEndTick [_ server]
-                     (lifecycle-events/handle-player-tick server))))
 
       (.register CommandRegistrationCallback/EVENT
                  (reify CommandRegistrationCallback

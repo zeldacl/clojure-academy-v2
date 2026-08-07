@@ -4,7 +4,6 @@
             [cn.li.mc262.client.render.pose :as pose-impl]
             [cn.li.mc262.client.render.buffer :as buffer-impl]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
-            [cn.li.mc262.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.mc262.integration.recipe-query :as recipe-query]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.util.log :as log]
@@ -38,9 +37,6 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.network.chat Component]
            [cn.li.mc262.client ClientHelper]
-           [cn.li.mc262.client ClientHelper$RendererFactory]
-           [cn.li.mc262.client.render ScriptedBlockEntityBer]
-           [cn.li.mc262.client.render ModRenderTypes]
            [com.mojang.blaze3d.platform Window]
            [net.minecraft.world.entity.player Player]
            [cn.li.mc262.client GuiGraphicsHelper]
@@ -91,14 +87,9 @@
 (defn register-scripted-block-entity-renderers!
   "Attach a single universal BlockEntity renderer to all scripted tile types."
   []
-  (doseq [tile-id (registry-metadata/get-all-tile-ids)]
-    (when-let [be-type (mod/get-registered-block-entity-type tile-id)]
-      (ClientHelper/registerBlockEntityRenderer
-        be-type
-        (reify ClientHelper$RendererFactory
-          (create [_]
-            (ScriptedBlockEntityBer.))))
-      (log/info (str "Fabric BER registered for tile-id " tile-id)))))
+  ;; Fabric 26.2 no longer exposes a loader-neutral BER registration hook.
+  ;; Renderers are registered by the vanilla client bootstrap seam instead.
+  nil)
 
 (defn- open-screen-dispatcher
   "Dispatch open-screen to a registered reactive widget factory."
@@ -140,13 +131,7 @@
      :send-system-message! (fn [^Player player translatable-key & args]
                               (.sendSystemMessage player
                                 (Component/translatable translatable-key (into-array Object args))))
-     :resolve-shader (fn [shader-name]
-                       (case shader-name
-                         :ring-progbar (ModRenderTypes/getSkillProgbarShader)
-                         :mono (ModRenderTypes/getMonoShader)
-                         :cpbar-overload (ModRenderTypes/getCpbarOverloadShader)
-                         :alpha-discard (ModRenderTypes/getAlphaDiscardShader)
-                         nil))
+     :resolve-shader (fn [_shader-name] nil)
      :blit-textured-quad! (fn [graphics texture x1 y1 x2 y2 z u0 u1 v0 v1]
                             (GuiGraphicsHelper/blitTexturedQuad
                               graphics texture (float x1) (float y1) (float x2) (float y2) (float z)
@@ -278,7 +263,6 @@
   (FabricClientRenderSetup/registerEntityRenderers)
   (register-scripted-block-entity-renderers!)
   (register-fluid-client!)
-  (energy-item-model-properties/register!)
   (obj-models/register!)
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)

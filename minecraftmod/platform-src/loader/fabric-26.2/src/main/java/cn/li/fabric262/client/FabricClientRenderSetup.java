@@ -1,13 +1,9 @@
 package cn.li.fabric262.client;
 
-import cn.li.mcver.ResourceLocations;
-
 import cn.li.fabric262.entity.FabricEntities;
 import cn.li.fabric262.shim.FabricClientHelper;
 import cn.li.mcbase.clj.ClojureInterop;
-import cn.li.mc262.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc262.client.render.EffectRendererDispatcher;
-import cn.li.mc262.client.render.ModRenderTypes;
 import cn.li.mcbase.client.render.RenderProfileBootstrap;
 import cn.li.mc262.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mcbase.entity.ScriptedEntitySpecAccess;
@@ -16,13 +12,10 @@ import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import cn.li.mcmod.ModId;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import net.fabricmc.fabric.api.client.rendering.v1.CoreShaderRegistrationCallback;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ThrownItemRenderer;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 
 import java.io.IOException;
@@ -37,51 +30,8 @@ public final class FabricClientRenderSetup {
     }
 
     public static void registerClientHooks() {
-        CoreShaderRegistrationCallback.EVENT.register(context -> {
-            try {
-                context.register(
-                        ResourceLocations.of(ModId.ID, "plasma_body"),
-                        ModRenderTypes.PLASMA_BODY_FORMAT,
-                        ModRenderTypes::setPlasmaBodyShader);
-            } catch (IOException e) {
-                LOGGER.error("Failed to register plasma_body shader", e);
-            }
-            try {
-                context.register(
-                        ResourceLocations.of(ModId.ID, "msdf_text"),
-                        MsdfRenderTypes.MSDF_TEXT_FORMAT,
-                        shader -> {
-                            MsdfRenderTypes.setMsdfShader(shader);
-                            ClojureInterop.requireNamespace("cn.li.mc262.gui.cgui.font");
-                            ClojureInterop.invoke("cn.li.mc262.gui.cgui.font",
-                                    "set-msdf-shader!", shader);
-                        });
-                ClojureInterop.requireNamespace("cn.li.mc262.client.font.msdf-setup");
-                ClojureInterop.invoke("cn.li.mc262.client.font.msdf-setup", "on-shader-ready!");
-            } catch (IOException e) {
-                LOGGER.error("Failed to register MSDF text shader", e);
-            }
-            try {
-                context.register(
-                        ResourceLocations.of(ModId.ID, "skill_progbar"),
-                        DefaultVertexFormat.POSITION_TEX,
-                        ModRenderTypes::setSkillProgbarShader);
-                context.register(
-                        ResourceLocations.of(ModId.ID, "mono"),
-                        DefaultVertexFormat.POSITION_TEX,
-                        ModRenderTypes::setMonoShader);
-                context.register(
-                        ResourceLocations.of(ModId.ID, "cpbar_overload"),
-                        DefaultVertexFormat.POSITION_TEX,
-                        ModRenderTypes::setCpbarOverloadShader);
-                context.register(
-                        ResourceLocations.of(ModId.ID, "alpha_discard"),
-                        DefaultVertexFormat.POSITION_TEX,
-                        ModRenderTypes::setAlphaDiscardShader);
-            } catch (IOException e) {
-                LOGGER.error("Failed to register content shaders", e);
-            }
-        });
+        // Fabric 26.2 removed CoreShaderRegistrationCallback. Shader
+        // pipelines are declared through the vanilla render-pipeline JSON.
     }
 
     public static void registerParticleProviders() {

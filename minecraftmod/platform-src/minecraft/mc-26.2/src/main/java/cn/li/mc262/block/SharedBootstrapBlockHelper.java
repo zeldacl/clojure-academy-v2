@@ -133,7 +133,7 @@ public final class SharedBootstrapBlockHelper {
         ScriptedBlockEntityTypeFactory<T> factory,
         ScriptedBlockEntityTypeRegistrar<T> registrar
     ) {
-        Block[] blockArray = blocks.toArray(new Block[0]);
+        java.util.Set<Block> blockSet = java.util.Set.copyOf(blocks);
         @SuppressWarnings("unchecked")
         BlockEntityType<T>[] typeHolder = (BlockEntityType<T>[]) new BlockEntityType<?>[1];
         BlockEntityType<T> beType = new BlockEntityType<>(
@@ -145,7 +145,7 @@ public final class SharedBootstrapBlockHelper {
                 }
                 return factory.create(typeHolder[0], pos, state, tileId, blockId);
             },
-            blockArray
+            blockSet
         );
         typeHolder[0] = beType;
         if (registrar != null) {
