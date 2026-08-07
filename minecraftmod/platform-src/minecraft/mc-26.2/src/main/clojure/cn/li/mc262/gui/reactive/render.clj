@@ -102,14 +102,14 @@
         iw (unchecked-int (+ x w))  ih (unchecked-int (+ y h))]
     (let [fill-argb (unchecked-int (long (.getDSlot node SLOT-BOX-FILL)))]
       (when (not= fill-argb 0)
-        (.fill gg ix iy iw ih fill-argb)))
+        (GuiGraphicsHelper/fill gg ix iy iw ih fill-argb)))
     (let [outline-argb (unchecked-int (long (.getDSlot node SLOT-BOX-OUTLINE)))
           outline-w    (.getDSlot node SLOT-BOX-OUTLINE-W)]
       (when (and (not= outline-argb 0) (> outline-w 0.0))
-        (.fill gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
-        (.fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
-        (.fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
-        (.fill gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
+        (GuiGraphicsHelper/fill gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
+        (GuiGraphicsHelper/fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
+        (GuiGraphicsHelper/fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
+        (GuiGraphicsHelper/fill gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
     (let [hovered? (.hasFlag node node/FLAG-HOVERED)
           raw (if hovered?
                 (let [ht (.getDSlot node SLOT-BOX-HOVER)]
@@ -119,7 +119,7 @@
                   (unchecked-int (bit-and (bit-shift-right (long raw) 24) 0xFF))
                   (unchecked-int (* 255.0 raw)))]
       (when (pos? alpha)
-        (.fill gg ix iy iw ih (argb alpha 255 255 255))))))
+        (GuiGraphicsHelper/fill gg ix iy iw ih (argb alpha 255 255 255))))))
 
 (defn- resolve-rl
   ^Identifier [src]
@@ -410,7 +410,7 @@
         ;; No fill texture: flat colour run, still honouring the anchor.
         (let [x0 (if anchor-right? (max x (- bar-right filled-w)) x)
               x1 (if anchor-right? bar-right (min bar-right (+ x filled-w)))]
-          (.fill gg (unchecked-int x0) iy (unchecked-int x1) (+ iy ih) tint))))
+          (GuiGraphicsHelper/fill gg (unchecked-int x0) iy (unchecked-int x1) (+ iy ih) tint))))
     (when (and icon-rl cut-x0 cut-w (pos? (double cut-w)))
       (GuiGraphicsHelper/blit gg icon-rl
                               (unchecked-int (double cut-x0))
@@ -725,7 +725,7 @@
         (if horizontal?
           (let [band-w (/ w (double segments))]
             (dotimes [i segments]
-              (.fill gg
+              (GuiGraphicsHelper/fill gg
                      (unchecked-int (+ x (* band-w i)))
                      (unchecked-int y)
                      (unchecked-int (Math/ceil (+ x (* band-w (inc i)))))
@@ -733,7 +733,7 @@
                      (unchecked-int (apply-band-alpha (aget bands i) alpha)))))
           (let [band-h (/ h (double segments))]
             (dotimes [i segments]
-              (.fillGradient gg
+              (GuiGraphicsHelper/fillGradient gg
                              (unchecked-int x)
                              (unchecked-int (+ y (* band-h i)))
                              (unchecked-int (+ x w))
@@ -769,7 +769,7 @@
                   (GuiGraphicsHelper/fillPipeline
                     ^GuiGraphicsExtractor gg ^RenderPipeline pipeline
                     (int x0) (int y0) (int x3) (int y3) (int color))
-                  (.fill ^GuiGraphicsExtractor gg
+                  (GuiGraphicsHelper/fill ^GuiGraphicsExtractor gg
                          (int x0) (int y0) (int x3) (int y3) (int color))))]
     (if (< (Math/abs (- x2 x1)) (Math/abs (- y2 y1)))
       (fill! (unchecked-int (- (/ (+ x1 x2) 2.0) (/ thick 2.0)))
@@ -861,9 +861,15 @@
         ^Matrix3x2fStack pose (.pose gg)]
     (.pushMatrix pose)
     (try
-      (.translate pose
-                  (float (+ x (/ w 2.0)))
-                  (float (+ y (/ h 2.0) (* (double y-off) scale))))
+      ;; Items are composited out of vanilla's GUI item atlas, so their quad is
+      ;; built inside GuiRenderer where a warp cannot reach. Anchoring on the
+      ;; warp's tangent plane at the item's centre still puts it on the panel at
+      ;; the right place, scale and shear; only its own 16px extent stays
+      ;; unforeshortened, which is far below noticing.
+      (let [cx (float (+ x (/ w 2.0)))
+            cy (float (+ y (/ h 2.0) (* (double y-off) scale)))]
+        (when-not (GuiGraphicsHelper/anchorWarp gg cx cy)
+          (.translate pose cx cy)))
       (when (pos? spin)
         (let [phase (turntable-phase spin)
               ;; The default GUI view is corner-on, so face-on is a quarter
@@ -898,12 +904,25 @@
             spin (max 0.0 (double (.getDSlot node SLOT-P3D-SPEED)))
             yaw-degrees (Math/toDegrees (turntable-phase spin))
             y-off (double (.getDSlot node SLOT-P3D-YOFF))
+            ;; A picture-in-picture is rendered to an offscreen texture and
+            ;; composited back axis-aligned, so a warp cannot reach inside it.
+            ;; Anchoring on the tangent plane at the node's own corner still
+            ;; lands it on the panel at the right place and size.
+            ^Matrix3x2fStack pose (.pose gg)
+            _ (.pushMatrix pose)
+            warped? (GuiGraphicsHelper/anchorWarp gg
+                                                  (float (node-abs-x node))
+                                                  (float (node-abs-y node)))
             submitted?
-            (ReactivePreviewRenderState/submit
-              gg stack
-              (node-abs-x node) (node-abs-y node)
-              (scaled-w node) (scaled-h node)
-              model-scale yaw-degrees y-off)]
+            (try
+              (ReactivePreviewRenderState/submit
+                gg stack
+                (if warped? 0.0 (node-abs-x node))
+                (if warped? 0.0 (node-abs-y node))
+                (scaled-w node) (scaled-h node)
+                model-scale yaw-degrees y-off)
+              (finally
+                (.popMatrix pose)))]
         (when-not submitted?
           (render-stack! gg node stack model-scale spin y-off))))))
 
@@ -924,14 +943,14 @@
         len (+ 8 (int (* 2.0 pulse amp)))
         line-color 0xB4E8F8FF
         ring-color 0x88DDF2FF]
-    (.fill gg (- cx len) (dec cy) (- cx gap) (inc cy) line-color)
-    (.fill gg (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
-    (.fill gg (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
-    (.fill gg (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
+    (GuiGraphicsHelper/fill gg (- cx len) (dec cy) (- cx gap) (inc cy) line-color)
+    (GuiGraphicsHelper/fill gg (+ cx gap) (dec cy) (+ cx len) (inc cy) line-color)
+    (GuiGraphicsHelper/fill gg (dec cx) (- cy len) (inc cx) (- cy gap) line-color)
+    (GuiGraphicsHelper/fill gg (dec cx) (+ cy gap) (inc cx) (+ cy len) line-color)
     (doseq [[cos-a sin-a] crosshair-ring-unit-vecs]
       (let [rx (+ cx (int (Math/round (* radius cos-a))))
             ry (+ cy (int (Math/round (* radius sin-a))))]
-        (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
+        (GuiGraphicsHelper/fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
 
 (defn render-embedded-runtime!
   [^GuiGraphicsExtractor gg ^UiRt rt left top w h partial-ticks]

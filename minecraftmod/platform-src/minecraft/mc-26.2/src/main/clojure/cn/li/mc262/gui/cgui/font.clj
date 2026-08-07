@@ -9,9 +9,10 @@
    advance (width of `0`) so terminal/CGui layouts stay columnar without MSDF."
   (:require [clojure.string :as str])
   (:import [cn.li.mcbase.client MinecraftClientAccess]
+           [cn.li.mc262.client.render GuiPerspectiveWarp]
            [net.minecraft.client.gui Font GuiGraphicsExtractor]
            [net.minecraft.network.chat Component MutableComponent Style]
-           [org.joml Matrix3x2fStack]))
+           [org.joml Matrix3x2f Matrix3x2fStack]))
 
 (def ^:private DEFAULT-BASE-HEIGHT 32.0)
 (defonce ^:private registry (atom {}))
@@ -110,6 +111,54 @@
           (.text graphics font (component ch font-desc) (int (Math/round x)) 0 color-i shadow)
           (recur (inc i) (+ x advance)))))))
 
+(defn- draw-warped-text!
+  "Draw a run one glyph at a time, each through its own tangent affine.
+
+   Vanilla submits a whole text run under a single Matrix3x2 pose, and a
+   projective warp cannot be folded into one: linearising at the run's anchor
+   drifts ~19px by the end of a 300px run, which is the same order as the
+   perspective effect itself, so the text would visibly peel off the panel.
+   The error grows with the square of the distance from the anchor, so
+   re-anchoring per glyph — a span of ~10px instead of ~300px — puts it far
+   below a pixel.  Every glyph still shares one pipeline, atlas and scissor, so
+   they coalesce into the same draw."
+  [^GuiGraphicsExtractor graphics ^Matrix3x2fStack pose font-desc ^String text
+   draw-x y scale color shadow?]
+  (let [^Font font (vanilla-font)
+        color-i (unchecked-int color)
+        shadow (boolean shadow?)
+        glyphs (mapv #(String/valueOf (Character/toChars (int %)))
+                     (.toArray (.codePoints text)))
+        mono-advance (when (:monospace? font-desc) (monospace-advance font-desc))
+        ;; Offsets come from prefix widths, the very measurement `text-width`
+        ;; used to align the run. Summing per-glyph widths instead would round
+        ;; each advance separately and let the run creep away from its own
+        ;; alignment box.
+        offsets (if mono-advance
+                  (mapv #(* (double mono-advance) (double %)) (range (count glyphs)))
+                  (mapv (fn [i]
+                          (double (.width font (component (apply str (subvec glyphs 0 i))
+                                                          font-desc))))
+                        (range (count glyphs))))]
+    (dorun
+      (map (fn [^String ch offset]
+             ;; Glyph origin in the caller's own space: the run's anchor plus
+             ;; this glyph's advance, scaled the way the pose would be.
+             ;; localAnchor folds the live pose in, so the tangent plane it
+             ;; returns can replace that pose outright.
+             (let [gx (+ (double draw-x) (* (double scale) (double offset)))
+                   ^Matrix3x2f local (GuiPerspectiveWarp/localAnchor
+                                       pose (float gx) (float y))]
+               (when local
+                 (.pushMatrix pose)
+                 (try
+                   (.set pose local)
+                   (.scale pose scale scale)
+                   (.text graphics font (component ch font-desc) 0 0 color-i shadow)
+                   (finally
+                     (.popMatrix pose))))))
+           glyphs offsets))))
+
 (defn draw-text!
   "Submit vanilla text render state at (`x`,`y`) with CGui scaling/alignment."
   ([^GuiGraphicsExtractor graphics font-desc ^String text
@@ -121,21 +170,26 @@
      (let [width (text-width font-desc text font-size)
            draw-x (aligned-x align x width)
            scale (float (scale-factor font-size))
-           ^Matrix3x2fStack pose (.pose graphics)]
-       (.pushMatrix pose)
-       (try
-         (.translate pose (float draw-x) (float y))
-         (.scale pose scale scale)
-         (if (:monospace? font-desc)
-           (draw-monospace! graphics font-desc text color shadow?)
-           (.text graphics
-                  (vanilla-font)
-                  (component text font-desc)
-                  0 0
-                  (unchecked-int color)
-                  (boolean shadow?)))
-         (finally
-           (.popMatrix pose)))))))
+           ^Matrix3x2fStack pose (.pose graphics)
+           warped? (some? (GuiPerspectiveWarp/active))]
+       (if warped?
+         (draw-warped-text! graphics pose font-desc text
+                            draw-x y scale color shadow?)
+         (do
+           (.pushMatrix pose)
+           (try
+             (.translate pose (float draw-x) (float y))
+             (.scale pose scale scale)
+             (if (:monospace? font-desc)
+               (draw-monospace! graphics font-desc text color shadow?)
+               (.text graphics
+                      (vanilla-font)
+                      (component text font-desc)
+                      0 0
+                      (unchecked-int color)
+                      (boolean shadow?)))
+             (finally
+               (.popMatrix pose)))))))))
 
 (def default-mc-font nil)
 

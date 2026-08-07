@@ -1,12 +1,14 @@
 (ns cn.li.ac.terminal.client.shell-reactive
   "Complete reactive terminal UI aligned with upstream AcademyCraft TerminalUI.
-   Features: 3D perspective (PoseStack, via the Minecraft bridge), mouse edge
-   scrolling, custom cursor with additive blend, selection highlight + audio,
-   stagger fade-in, game-time clock, and loading animation (sine-wave alpha).
 
-   MC-specific rendering (3D perspective + cursor) is delegated to
-   cn.li.mc1201.gui.reactive.terminal-render via platform bridge ops
-   :terminal-apply-perspective! and :terminal-render-cursor!."
+   Owns everything that does not need Minecraft: the virtual pointer and its
+   smoothing, edge scrolling, 3x3 selection with audio, the app grid and its
+   stagger fade-in, the game-time clock and the loading animation.
+
+   The perspective camera and the reticle it carries are Minecraft-side, reached
+   through the :terminal-apply-perspective! and :terminal-render-cursor! bridge
+   ops; each version's terminal-render namespace implements them on top of the
+   shared cn.li.mcbase.gui.reactive.terminal-camera."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.util.uuid :as player-uuid]
             [cn.li.ac.config.modid :as modid]
@@ -32,6 +34,8 @@
 ;; Constants — matching upstream AcademyCraft TerminalUI
 ;; ============================================================================
 
+;; MAX_MX / MAX_MY also bound the camera tilt, so terminal-camera declares them
+;; too — this layer cannot reach across to it without pulling in Minecraft.
 (def ^:private max-mx 605.0)     ;; MAX_MX
 (def ^:private max-my 740.0)     ;; MAX_MY
 (def ^:private balance-speed 3000.0)
@@ -97,6 +101,11 @@
   (let [r (rt/create-runtime)
 
         ;; ===== Instance-local frame state (primitive arrays, zero allocation) =====
+        ;; Published as the :terminal-fd / :terminal-fi user-signals and read back
+        ;; by the platform camera (cn.li.mcbase.gui.reactive.terminal-camera),
+        ;; which drives the tilt and reticle from it — keep the two layouts in
+        ;; step.  This layer stays Minecraft-free, so the coupling is by contract
+        ;; rather than by reference.
         ;; fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y
         ;;     [4]last-mx [5]last-my [6]last-frame-ms [7]create-time-ms [8]aspect
         ^doubles fd (doto (double-array 9)

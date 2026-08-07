@@ -23,7 +23,7 @@
            [com.mojang.blaze3d.systems RenderSystem]
            [com.mojang.blaze3d.vertex VertexSorting]
            [org.lwjgl.opengl GL11 GL13]
-           [org.joml Matrix4f Quaternionf]))
+           [org.joml Matrix4f Matrix4fStack Quaternionf]))
 
 (declare draw-tape!)
 
@@ -1182,8 +1182,11 @@
             ;; Build perspective projection matching upstream gluPerspective(50,1,1,100)
             persp (doto (Matrix4f.)
                     (.setPerspective (float (Math/toRadians 50.0)) aspect 1.0 100.0))
-            ;; Use RenderSystem modelview stack (separate from GuiGraphics PoseStack)
-            ^PoseStack mv (RenderSystem/getModelViewStack)
+            ;; Use RenderSystem modelview stack (separate from GuiGraphics
+            ;; PoseStack). In 1.21.1 this is a JOML Matrix4fStack, not a
+            ;; PoseStack — hinting it as the latter compiles but emits a
+            ;; checkcast that throws the moment a preview node renders.
+            ^Matrix4fStack mv (RenderSystem/getModelViewStack)
             saved-proj (RenderSystem/getProjectionMatrix)]
         ;; Flush any pending 2D GUI geometry queued under the normal ortho
         ;; projection before switching state for this 3D preview.
@@ -1197,18 +1200,23 @@
         ;; offset (0.15,0.1,-1), Y-spin, scale .8, recenter (-.5,-.5,-.5). The
         ;; viewport above now stands in for the NDC remap upstream builds into
         ;; its projection matrix, so the camera chain below is otherwise 1:1.
-        (.pushPose mv)
+        (.pushMatrix mv)
+        ;; The GUI pass seeds this stack with translation(0, 0, 10000 - guiFarPlane)
+        ;; = -1000 to suit vanilla's ortho depth range. Left in place it sits
+        ;; ~1000 beyond the far plane of the near=1/far=100 frustum above and the
+        ;; model is clipped away entirely, so start the camera chain at the eye.
+        (.identity mv)
         (.translate mv 0.0 0.0 -4.0)
         (.translate mv 0.55 0.55 0.5)
         (.scale mv 0.75 -0.75 0.75)
-        (.mulPose mv (doto (Quaternionf.)
-                       (.rotateAxis (float (Math/toRadians -20.0)) 1.0 0.0 0.1)))
+        (.rotate mv (doto (Quaternionf.)
+                      (.rotateAxis (float (Math/toRadians -20.0)) 1.0 0.0 0.1)))
         (.translate mv 0.15 0.1 -1.0)  ;; upstream inner glTranslated(0.15,0.1,-1) pre-rotation offset
         ;; Auto-rotation Y (matching upstream drawBlock time/80°)
         (when (pos? rot-speed)
-          (.mulPose mv (doto (Quaternionf.)
-                         (.rotateY (float (Math/toRadians
-                                            (mod (/ (System/currentTimeMillis) 80.0) 360.0)))))))
+          (.rotate mv (doto (Quaternionf.)
+                        (.rotateY (float (Math/toRadians
+                                           (mod (/ (System/currentTimeMillis) 80.0) 360.0)))))))
         (.scale mv (float uni-scale) (float uni-scale) (float uni-scale))
         (.translate mv -0.5 -0.5 -0.5)  ;; center block/item on all three axes
         (RenderSystem/applyModelViewMatrix)
@@ -1240,7 +1248,7 @@
           (do (.renderFakeItem gg stack -8 -8)
               (.flush gg)))
         ;; Restore
-        (.popPose mv)
+        (.popMatrix mv)
         (RenderSystem/applyModelViewMatrix)
         (RenderSystem/setProjectionMatrix saved-proj VertexSorting/DISTANCE_TO_ORIGIN)
         (RenderSystem/viewport 0 0 fb-w fb-h)))))

@@ -1,5 +1,7 @@
 package cn.li.mc262.client;
 
+import cn.li.mc262.client.render.GuiPerspectiveWarp;
+import cn.li.mc262.client.render.PerspectiveQuadRenderState;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
@@ -18,6 +20,108 @@ import org.joml.Matrix3x2f;
 @OnlyIn(Dist.CLIENT)
 public final class GuiGraphicsHelper {
     private GuiGraphicsHelper() {}
+
+    /**
+     * Route a textured quad through the active {@link GuiPerspectiveWarp}.
+     *
+     * <p>Every textured entry point below tries this first. It returns false
+     * whenever no warp is installed — which is every UI except the terminal, and
+     * the terminal only while its camera is up — so the ordinary affine paths are
+     * reached completely unchanged.</p>
+     */
+    private static boolean submitWarped(GuiGraphicsExtractor gge, RenderPipeline pipeline,
+                                        TextureSetup textures,
+                                        float x0, float y0, float x1, float y1,
+                                        float u0, float u1, float v0, float v1,
+                                        int argb) {
+        float[] warp = GuiPerspectiveWarp.active();
+        if (warp == null) {
+            return false;
+        }
+        PerspectiveQuadRenderState state = PerspectiveQuadRenderState.textured(
+                warp, gge.pose(), pipeline, textures,
+                x0, y0, x1, y1, u0, v0, u1, v1, argb, gge.peekScissorStack());
+        if (state == null) {
+            // Degenerate or behind the eye: drop it rather than fall back to an
+            // affine blit, which would draw the quad in the wrong place entirely.
+            return true;
+        }
+        gge.submitGuiElementRenderState(state);
+        return true;
+    }
+
+    /** Solid/gradient counterpart of {@link #submitWarped}. */
+    private static boolean submitWarpedFill(GuiGraphicsExtractor gge, RenderPipeline pipeline,
+                                            int x0, int y0, int x1, int y1,
+                                            int argbTop, int argbBottom) {
+        float[] warp = GuiPerspectiveWarp.active();
+        if (warp == null) {
+            return false;
+        }
+        PerspectiveQuadRenderState state = PerspectiveQuadRenderState.colored(
+                warp, gge.pose(), pipeline, TextureSetup.noTexture(),
+                x0, y0, x1, y1, argbTop, argbBottom, gge.peekScissorStack());
+        if (state != null) {
+            gge.submitGuiElementRenderState(state);
+        }
+        return true;
+    }
+
+    /** Solid rectangle, warped when a perspective camera is installed. */
+    public static void fill(Object graphics, int x0, int y0, int x1, int y1, int argb) {
+        fillGradient(graphics, x0, y0, x1, y1, argb, argb);
+    }
+
+    /** Top-to-bottom gradient rectangle, warped when a camera is installed. */
+    public static void fillGradient(Object graphics, int x0, int y0, int x1, int y1,
+                                    int argbTop, int argbBottom) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return;
+        }
+        if (submitWarpedFill(gge, RenderPipelines.GUI, x0, y0, x1, y1, argbTop, argbBottom)) {
+            return;
+        }
+        if (argbTop == argbBottom) {
+            gge.fill(x0, y0, x1, y1, argbTop);
+        } else {
+            gge.fillGradient(x0, y0, x1, y1, argbTop, argbBottom);
+        }
+    }
+
+    /**
+     * Replace the current pose with the warp's tangent plane at local
+     * {@code (x, y)}, so content vanilla will only draw through an affine pose
+     * still lands on the warped surface.
+     *
+     * <p>Callers must have pushed the pose themselves and must pop it. Returns
+     * false when no warp is installed, leaving the pose untouched.</p>
+     */
+    public static boolean anchorWarp(Object graphics, float x, float y) {
+        if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return false;
+        }
+        Matrix3x2f anchored = GuiPerspectiveWarp.localAnchor(gge.pose(), x, y);
+        if (anchored == null) {
+            return false;
+        }
+        gge.pose().set(anchored);
+        return true;
+    }
+
+    /** Warp helper for the common "whole texture, default sampler" case. */
+    private static boolean submitWarpedTexture(GuiGraphicsExtractor gge, RenderPipeline pipeline,
+                                               Identifier texture,
+                                               float x0, float y0, float x1, float y1,
+                                               float u0, float u1, float v0, float v1,
+                                               int argb) {
+        if (GuiPerspectiveWarp.active() == null || texture == null) {
+            return false;
+        }
+        AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
+        return submitWarped(gge, pipeline,
+                TextureSetup.singleTexture(tex.getTextureView(), tex.getSampler()),
+                x0, y0, x1, y1, u0, u1, v0, v1, argb);
+    }
 
     public static void blit9(Object graphics, Identifier texture,
                              int x, int y, int w, int h,
@@ -62,6 +166,13 @@ public final class GuiGraphicsHelper {
         if (width <= 0 || height <= 0 || sourceWidth <= 0 || sourceHeight <= 0) {
             return;
         }
+        if (submitWarpedTexture(graphics, RenderPipelines.GUI_TEXTURED, texture,
+                x, y, x + width, y + height,
+                (float) u / textureWidth, (float) (u + sourceWidth) / textureWidth,
+                (float) v / textureHeight, (float) (v + sourceHeight) / textureHeight,
+                -1)) {
+            return;
+        }
         graphics.blit(RenderPipelines.GUI_TEXTURED, texture,
                 x, y, (float) u, (float) v,
                 width, height, sourceWidth, sourceHeight, textureWidth, textureHeight);
@@ -77,6 +188,10 @@ public final class GuiGraphicsHelper {
         int y = Math.round(Math.min(y1, y2));
         int w = Math.max(1, Math.round(Math.abs(x2 - x1)));
         int h = Math.max(1, Math.round(Math.abs(y2 - y1)));
+        if (submitWarpedTexture(gge, RenderPipelines.GUI_TEXTURED, texture,
+                x, y, x + w, y + h, u0, u1, v0, v1, -1)) {
+            return;
+        }
         gge.blit(texture, x, y, w, h, u0, v0, u1, v1);
     }
 
@@ -94,6 +209,10 @@ public final class GuiGraphicsHelper {
         if (!(graphics instanceof GuiGraphicsExtractor gge)) {
             return;
         }
+        if (submitWarpedTexture(gge, RenderPipelines.GUI_TEXTURED, texture,
+                x, y, x + w, y + h, 0f, 1f, 0f, 1f, -1)) {
+            return;
+        }
         gge.blit(RenderPipelines.GUI_TEXTURED, texture, x, y, 0f, 0f, w, h, w, h);
     }
 
@@ -106,6 +225,10 @@ public final class GuiGraphicsHelper {
     public static void blitAdditive(Object graphics, Identifier texture,
                                     int x, int y, int w, int h, int argb) {
         if (!(graphics instanceof GuiGraphicsExtractor gge) || texture == null || w <= 0 || h <= 0) {
+            return;
+        }
+        if (submitWarpedTexture(gge, RenderPipelines.MOJANG_LOGO, texture,
+                x, y, x + w, y + h, 0f, 1f, 0f, 1f, argb)) {
             return;
         }
         AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
@@ -139,6 +262,10 @@ public final class GuiGraphicsHelper {
             return;
         }
         if (x0 >= x1 || y0 >= y1) {
+            return;
+        }
+        if (submitWarpedTexture(gge, RenderPipelines.GUI_TEXTURED, texture,
+                x0, y0, x1, y1, u0, u1, v0, v1, argb)) {
             return;
         }
         AbstractTexture tex = Minecraft.getInstance().getTextureManager().getTexture(texture);
@@ -181,6 +308,9 @@ public final class GuiGraphicsHelper {
                     first.getTextureView(), first.getSampler(),
                     second.getTextureView(), second.getSampler());
         }
+        if (submitWarped(gge, pipeline, textures, x0, y0, x1, y1, u0, u1, v0, v1, argb)) {
+            return;
+        }
         gge.submitGuiElementRenderState(new BlitRenderState(
                 pipeline,
                 textures,
@@ -194,9 +324,13 @@ public final class GuiGraphicsHelper {
     /** Submit a solid rectangle with pipeline-owned depth/blend state. */
     public static void fillPipeline(Object graphics, RenderPipeline pipeline,
                                     int x0, int y0, int x1, int y1, int argb) {
-        if (graphics instanceof GuiGraphicsExtractor gge && pipeline != null) {
-            gge.fill(pipeline, x0, y0, x1, y1, argb);
+        if (!(graphics instanceof GuiGraphicsExtractor gge) || pipeline == null) {
+            return;
         }
+        if (submitWarpedFill(gge, pipeline, x0, y0, x1, y1, argb, argb)) {
+            return;
+        }
+        gge.fill(pipeline, x0, y0, x1, y1, argb);
     }
 
     /** Sprite-sheet region blit. */
@@ -205,6 +339,13 @@ public final class GuiGraphicsHelper {
                                   float u, float v, int regionW, int regionH,
                                   int texW, int texH) {
         if (!(graphics instanceof GuiGraphicsExtractor gge)) {
+            return;
+        }
+        if (submitWarpedTexture(gge, RenderPipelines.GUI_TEXTURED, texture,
+                x, y, x + w, y + h,
+                u / texW, (u + regionW) / texW,
+                v / texH, (v + regionH) / texH,
+                -1)) {
             return;
         }
         gge.blit(RenderPipelines.GUI_TEXTURED, texture,

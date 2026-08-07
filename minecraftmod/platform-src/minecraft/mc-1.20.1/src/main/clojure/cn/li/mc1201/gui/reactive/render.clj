@@ -1197,6 +1197,11 @@
         ;; viewport above now stands in for the NDC remap upstream builds into
         ;; its projection matrix, so the camera chain below is otherwise 1:1.
         (.pushPose mv)
+        ;; The GUI pass seeds this stack with translate(0, 0, 1000 - guiFarPlane)
+        ;; = -10000 to suit vanilla's ortho depth range. Left in place it sits
+        ;; ~10000 beyond the far plane of the near=1/far=100 frustum above and
+        ;; the model is clipped away entirely, so start the camera at the eye.
+        (.setIdentity mv)
         (.translate mv 0.0 0.0 -4.0)
         (.translate mv 0.55 0.55 0.5)
         (.scale mv 0.75 -0.75 0.75)
