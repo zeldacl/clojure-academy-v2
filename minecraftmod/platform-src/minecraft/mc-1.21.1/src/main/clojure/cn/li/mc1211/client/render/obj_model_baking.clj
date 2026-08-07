@@ -31,6 +31,20 @@
   [item-id]
   (model-patterns/registry-model-basename item-id))
 
+(defn obj-3d-item-specs
+  "Per-item OBJ metadata for loader-side mesh registration."
+  []
+  (mapv (fn [item-id]
+          (let [basename (item-id->basename item-id)
+                {:keys [obj-model texture]} (get-in (item-dsl/get-item item-id)
+                                                    [:properties :item-model-3d-obj])]
+            {:item-id item-id
+             :basename basename
+             :model-path (str "item/" basename "_3d")
+             :obj-path (or obj-model (str "models/" basename ".obj"))
+             :texture (or texture (str "models/" basename))}))
+        (obj-3d-item-ids)))
+
 (defn- inventory-mrl
   [mod-id model-path]
   (ModelResourceLocation. (ResourceLocations/of (str mod-id) (str model-path)) "inventory"))

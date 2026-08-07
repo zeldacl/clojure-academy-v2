@@ -12,11 +12,8 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedEffectBillboardRenderer<T extends Entity>
         extends AbstractScriptedGeometryRenderer<T> {
     public ScriptedEffectBillboardRenderer(EntityRendererProvider.Context context) {

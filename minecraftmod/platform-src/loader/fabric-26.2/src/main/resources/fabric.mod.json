@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "id": "${mod_id}",
+  "version": "${mod_version}",
+  "name": "${mod_name} (Fabric)",
+  "description": "A multi-loader Minecraft mod written in Clojure",
+  "authors": ["${mod_authors}"],
+  "contact": {
+    "homepage": "https://example.com/",
+    "sources": "https://github.com/example/${mod_id}"
+  },
+  "license": "MIT",
+  "icon": "assets/${mod_id}/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "cn.li.fabric262.MyModFabric"
+    ],
+    "client": [
+      "cn.li.fabric262.MyModFabricClient"
+    ],
+    "fabric-datagen": [
+      "cn.li.fabric262.datagen.DataGeneratorSetup"
+    ]
+  },
+  "mixins": [
+    "${mod_id}.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "=26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  },
+  "suggests": {
+    "team_reborn_energy": "*",
+    "jei": "*"
+  }
+}

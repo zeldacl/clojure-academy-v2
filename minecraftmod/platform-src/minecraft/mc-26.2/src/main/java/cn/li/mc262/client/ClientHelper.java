@@ -2,8 +2,6 @@ package cn.li.mc262.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.Identifier;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * 26.2 client helpers shared by loader adapters.
@@ -11,7 +9,6 @@ import net.neoforged.api.distmarker.OnlyIn;
  * ({@code bindForSetup} was removed). BER / menu screens register via
  * {@code EntityRenderersEvent} / {@code RegisterMenuScreensEvent} — not here.
  */
-@OnlyIn(Dist.CLIENT)
 public final class ClientHelper {
     private ClientHelper() {}
 

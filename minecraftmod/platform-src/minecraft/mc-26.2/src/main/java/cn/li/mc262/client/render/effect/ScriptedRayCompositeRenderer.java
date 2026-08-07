@@ -9,11 +9,8 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedRayCompositeRenderer<T extends Entity>
         extends AbstractScriptedGeometryRenderer<T> {
     public ScriptedRayCompositeRenderer(EntityRendererProvider.Context context) {

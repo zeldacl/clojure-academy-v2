@@ -9,15 +9,12 @@ import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Shared client-only helper subclass.
  * 26.2: imageWidth/imageHeight are final — pass size via constructor.
  * Mouse/key supers wrap 1.21.1-shaped Clojure args into KeyEvent/MouseButtonEvent.
  */
-@OnlyIn(Dist.CLIENT)
 public class CGuiContainerScreen<T extends AbstractContainerMenu> extends AbstractContainerScreen<T> {
     public CGuiContainerScreen(T menu, Inventory inv, Component title) {
         super(menu, inv, title);

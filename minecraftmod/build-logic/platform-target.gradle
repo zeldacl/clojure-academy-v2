@@ -3,7 +3,7 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "org.ow2.asm:asm:9.7"
+        classpath "org.ow2.asm:asm:9.10.1"
     }
 }
 
@@ -24,11 +24,11 @@ def profile = catalog.buildProfiles[target.buildProfile.toString()]
 // Named platformToolchain (not `toolchain`) so it does not shadow the
 // `java { toolchain { ... } }` DSL block configured below.
 def platformToolchain = (profile?.toolchain ?: "loom").toString()
-def shadowPluginId = (profile?.shadowPluginId ?: "com.github.johnrengelman.shadow").toString()
+def shadowPluginId = profile?.shadowPluginId?.toString()
 
 // Toolchain plugins (loom/mdg/shadow/clojurephant) are applied in
-// platform/build.gradle before this script so versions resolve from
-// settings.gradle pluginManagement for the selected target only.
+// platform/build.gradle before this script. The platform project loads only
+// the selected plugin implementation for the active catalog target.
 if (target.loader == "none") {
     apply plugin: "java-library"
 }
@@ -622,20 +622,22 @@ if (target.loader != "none") {
         archiveClassifier = target.artifact.classifier
     }
 
-    shadowJar {
-        dependsOn verifyNeutralClojurePackaging
-        from(neutralClojureResourceDir) {
-            include "**/*.clj"
-            include "**/*.cljc"
-        }
-        configurations = [project.configurations.runtimeClasspath]
-        archiveBaseName = target.artifact.baseName
-        archiveClassifier = "${target.artifact.classifier}-shadow"
-        dependencies {
-            include(dependency("org.clojure:clojure"))
-            include(dependency("metosin:malli"))
-            include(dependency("org.clojure:spec.alpha"))
-            include(dependency("org.clojure:core.specs.alpha"))
+    if (shadowPluginId) {
+        tasks.named("shadowJar").configure {
+            dependsOn verifyNeutralClojurePackaging
+            from(neutralClojureResourceDir) {
+                include "**/*.clj"
+                include "**/*.cljc"
+            }
+            configurations = [project.configurations.runtimeClasspath]
+            archiveBaseName = target.artifact.baseName
+            archiveClassifier = "${target.artifact.classifier}-shadow"
+            dependencies {
+                include(dependency("org.clojure:clojure"))
+                include(dependency("metosin:malli"))
+                include(dependency("org.clojure:spec.alpha"))
+                include(dependency("org.clojure:core.specs.alpha"))
+            }
         }
     }
 
@@ -898,11 +900,16 @@ if (target.loader != "none") {
         loaderResourceRoots: loaderResourceRoots,
         acResources: acResources,
         clojureRuntimeLibraries: clojureRuntimeLibraries,
-        stripClassLocalVariableTables: stripClassLocalVariableTables
+        stripClassLocalVariableTables: stripClassLocalVariableTables,
+        obfuscationMode: profile?.obfuscationMode,
+        runtimeLibraryPackaging: target.artifact?.runtimeLibraryPackaging,
+        artifact: target.artifact
     ].each { name, value -> ext[name] = value }
 
     if (platformToolchain == "mdg") {
         apply from: rootProject.file("build-logic/toolchain-mdg.gradle")
+    } else if (target.loader == "fabric" && (profile?.obfuscationMode ?: "remapped") == "named") {
+        apply from: rootProject.file("build-logic/toolchain-fabric-modern.gradle")
     } else {
         apply from: rootProject.file("build-logic/toolchain-loom.gradle")
     }

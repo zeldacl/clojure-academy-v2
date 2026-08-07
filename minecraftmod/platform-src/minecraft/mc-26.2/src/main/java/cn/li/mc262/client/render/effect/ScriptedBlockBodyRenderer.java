@@ -16,11 +16,8 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedBlockBodyRenderer<T extends Entity>
         extends AbstractScriptedGeometryRenderer<T> {
     private static final BlockDisplayContext DISPLAY_CONTEXT = BlockDisplayContext.create();

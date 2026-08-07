@@ -63,7 +63,7 @@ platform-builds/
 构建剖面（`buildProfiles`）按 `toolchain` 分组：
 
 - `loom` — Architectury Loom + Gradle 8.8（`forge-1.20.1` / `fabric-1.20.1` / `neoforge-1.21.1`）
-- `mdg` — ModDevGradle + Gradle 9.2 + Java 25（`neoforge-26.2`），隔离 wrapper 在 `platform-builds/mdg-gradle-9.2/`
+- `mdg` — ModDevGradle + Gradle 9.2 + Java 25（`neoforge-26.2`），隔离 wrapper 在 `platform-builds/gradle-9.2/`
 
 当前生产目标（摘要）：
 

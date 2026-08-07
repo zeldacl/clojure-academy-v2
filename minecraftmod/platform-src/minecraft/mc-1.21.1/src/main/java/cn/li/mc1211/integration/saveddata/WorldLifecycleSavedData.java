@@ -3,6 +3,7 @@ package cn.li.mc1211.integration.saveddata;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.util.datafix.DataFixTypes;
 
 public class WorldLifecycleSavedData extends SavedData {
     public static final String NAME = "clj_world_lifecycle";
@@ -23,7 +24,8 @@ public class WorldLifecycleSavedData extends SavedData {
     }
 
     public static Factory<WorldLifecycleSavedData> factory() {
-        return new Factory<>(WorldLifecycleSavedData::new, WorldLifecycleSavedData::load);
+        return new Factory<>(WorldLifecycleSavedData::new, WorldLifecycleSavedData::load,
+            DataFixTypes.LEVEL);
     }
 
     @Override

@@ -8,13 +8,10 @@ import net.minecraft.client.renderer.item.properties.numeric.RangeSelectItemMode
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.ItemOwner;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Numeric item-model property for the energy ratio (0–1) stored in custom data.
  */
-@OnlyIn(Dist.CLIENT)
 public enum EnergyItemPropertyFunction implements RangeSelectItemModelProperty {
     INSTANCE;
 

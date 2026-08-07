@@ -66,13 +66,13 @@
    Backs the terminal Settings app's 'keys' category rebind rows."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.getString (.getDisplayName (.getKey km)))))
+    (.getString (.getTranslatedKeyMessage km))))
 
 (defn get-key-code
   "Current GLFW key code for a registered KeyMapping, or nil."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.getValue (.getKey km))))
+    (.getValue (.getDefaultKey km))))
 
 (defn set-key-mapping-key!
   "Rebind a registered KeyMapping to a new keyboard key-code and persist via

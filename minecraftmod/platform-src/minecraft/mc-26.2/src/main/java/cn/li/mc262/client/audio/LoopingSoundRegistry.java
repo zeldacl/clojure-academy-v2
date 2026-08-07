@@ -11,8 +11,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 import java.util.Map;
 import java.util.UUID;
@@ -23,7 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * key, so ability code (which never holds a Java reference) can start,
  * reposition, and stop a specific loop by key alone.
  */
-@OnlyIn(Dist.CLIENT)
 public final class LoopingSoundRegistry {
 
     private static final Map<String, PositionalLoopSoundInstance> ACTIVE = new ConcurrentHashMap<>();

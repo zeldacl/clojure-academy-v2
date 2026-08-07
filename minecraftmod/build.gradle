@@ -8,13 +8,11 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath "org.ow2.asm:asm:9.7"
+        classpath "org.ow2.asm:asm:9.10.1"
     }
 }
 
 plugins {
-    id "dev.architectury.loom" apply false
-    id "net.neoforged.moddev" apply false
     id "dev.clojurephant.clojure" apply false
 }
 
@@ -663,6 +661,45 @@ tasks.register("verifyVersionSeamParity") {
     }
 }
 
+tasks.register("verifyMinecraftComponentNeutrality") {
+    group = "verification"
+    description = "Ensure Minecraft version components do not import a specific loader API."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def problems = []
+        (catalog.components ?: [:]).each { componentId, component ->
+            if (component.kind?.toString() != "minecraft" || !component.source) {
+                return
+            }
+            def root = file(component.source.toString())
+            if (!root.directory) {
+                problems << "${componentId}: missing source root ${component.source}"
+                return
+            }
+            fileTree(root) {
+                include "**/*.java"
+                include "**/*.clj"
+                include "**/*.cljc"
+                exclude "**/build/**"
+                exclude "**/.gradle/**"
+            }.each { File source ->
+                source.eachLine { String line, int number ->
+                    if (line ==~ /.*\bnet\.(minecraftforge|neoforged|fabricmc)\..*/) {
+                        problems << "${componentId}: loader import in ${source}:${number}: ${line.trim()}"
+                    }
+                    if (line ==~ /.*\bdev\.architectury\..*/) {
+                        problems << "${componentId}: Architectury import in ${source}:${number}: ${line.trim()}"
+                    }
+                }
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new GradleException("Minecraft component neutrality violations:\n" + problems.take(80).join("\n"))
+        }
+        logger.lifecycle("[verifyMinecraftComponentNeutrality] ok")
+    }
+}
+
 tasks.register("verifyCurrentPlatforms") {
     group = "verification"
     description = "Run architecture gates for the catalog-based platform layout."
@@ -677,6 +714,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",
+              "verifyMinecraftComponentNeutrality",
               "verifyVersionSeamParity"
 }
 
@@ -702,11 +740,11 @@ tasks.register("verifyBuildProfiles") {
             if (toolchain == "mdg" && !profile.modDevGradleVersion) {
                 problems << "${profileId}: mdg toolchain must declare modDevGradleVersion"
             }
-            if (!profile.shadowPluginId) {
-                problems << "${profileId}: must declare shadowPluginId"
+            if (!profile.platformPluginId || !profile.platformPluginVersion) {
+                problems << "${profileId}: must declare platformPluginId and platformPluginVersion"
             }
-            if (!profile.shadowVersion) {
-                problems << "${profileId}: must declare shadowVersion"
+            if ((profile.shadowPluginId && !profile.shadowVersion) || (!profile.shadowPluginId && profile.shadowVersion)) {
+                problems << "${profileId}: shadowPluginId and shadowVersion must be declared together"
             }
             if (!profile.clojurephantVersion) {
                 problems << "${profileId}: must declare clojurephantVersion"
@@ -723,16 +761,16 @@ tasks.register("verifyBuildProfiles") {
             if (profile.clojurephantVersion) {
                 clojurephantVersions << profile.clojurephantVersion.toString()
             }
-            if (toolchain && profile.shadowPluginId && profile.shadowVersion) {
-                shadowByToolchain[toolchain] << "${profile.shadowPluginId}:${profile.shadowVersion}"
+            if (profile.shadowPluginId && profile.shadowVersion) {
+                shadowByToolchain[profile.shadowPluginId.toString()] << profile.shadowVersion.toString()
             }
         }
         if (clojurephantVersions.size() > 1) {
             problems << "clojurephantVersion must be identical across all profiles; found ${clojurephantVersions}"
         }
-        shadowByToolchain.each { toolchain, versions ->
+        shadowByToolchain.each { shadowPluginId, versions ->
             if (versions.size() > 1) {
-                problems << "shadow plugin id:version must be identical within toolchain ${toolchain}; found ${versions}"
+                problems << "shadow plugin ${shadowPluginId} must use one version; found ${versions}"
             }
         }
         def rootBuildText = file("build.gradle").text

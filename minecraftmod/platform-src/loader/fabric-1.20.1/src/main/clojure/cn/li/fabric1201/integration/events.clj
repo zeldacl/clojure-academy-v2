@@ -5,6 +5,7 @@
             [cn.li.fabric1201.integration.events.loot :as loot-events]
             [cn.li.fabric1201.integration.events.lifecycle :as lifecycle-events]
             [cn.li.fabric1201.integration.events.world :as world-events]
+            [cn.li.fabric1201.registry.creative-tab-event :as creative-tabs]
             [cn.li.fabric1201.commands :as commands]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
@@ -122,6 +123,7 @@
 
           (lifecycle-events/install-server-stop-cleanup!)
           (world-events/register-on-world-state-changed!)
+          (creative-tabs/register!)
 
           (log/info "Fabric event listeners registered")))
   nil)

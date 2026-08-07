@@ -26,24 +26,8 @@ pluginManagement {
     if (!profile.clojurephantVersion) {
         throw new GradleException("buildProfile '${profileId}' must declare clojurephantVersion")
     }
-    if (!profile.shadowVersion || !profile.shadowPluginId) {
-        throw new GradleException("buildProfile '${profileId}' must declare shadowPluginId and shadowVersion")
-    }
-    // Register BOTH toolchains (no capability conflict) so root can apply-false both.
-    // Register ONLY the selected target's shadow plugin (johnrengelman vs gradleup conflict).
-    def loomVersion = catalog.buildProfiles.values()
-        .findAll { (it.toolchain ?: "loom").toString() == "loom" && it.loomVersion }
-        .collect { it.loomVersion.toString() }
-        .unique()
-    def mdgVersion = catalog.buildProfiles.values()
-        .findAll { it.toolchain?.toString() == "mdg" && it.modDevGradleVersion }
-        .collect { it.modDevGradleVersion.toString() }
-        .unique()
-    if (loomVersion.size() > 1) {
-        throw new GradleException("Multiple loom versions in catalog: ${loomVersion}")
-    }
-    if (mdgVersion.size() > 1) {
-        throw new GradleException("Multiple modDevGradle versions in catalog: ${mdgVersion}")
+    if (!profile.platformPluginId || !profile.platformPluginVersion) {
+        throw new GradleException("buildProfile '${profileId}' must declare platformPluginId and platformPluginVersion")
     }
     repositories {
         maven { url "https://maven.architectury.dev" }
@@ -58,14 +42,7 @@ pluginManagement {
         }
     }
     plugins {
-        if (loomVersion) {
-            id "dev.architectury.loom" version "${loomVersion.first()}"
-        }
-        if (mdgVersion) {
-            id "net.neoforged.moddev" version "${mdgVersion.first()}"
-        }
         id "dev.clojurephant.clojure" version "${profile.clojurephantVersion}"
-        id "${profile.shadowPluginId}" version "${profile.shadowVersion}"
     }
 }
 

@@ -7,11 +7,8 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix4f;
 
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedMarkerBillboardRenderer<T extends Entity>
         extends AbstractScriptedGeometryRenderer<T> {
     public ScriptedMarkerBillboardRenderer(EntityRendererProvider.Context context) {

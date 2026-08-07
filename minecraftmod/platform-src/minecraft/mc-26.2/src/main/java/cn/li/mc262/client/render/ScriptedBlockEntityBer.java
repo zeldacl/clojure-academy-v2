@@ -13,10 +13,7 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedBlockEntityBer<T extends BlockEntity>
         implements BlockEntityRenderer<T, ScriptedBlockEntityBer.State<T>> {
     private static volatile IFn renderTileEntityFn;

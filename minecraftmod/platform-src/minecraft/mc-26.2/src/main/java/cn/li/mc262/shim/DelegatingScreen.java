@@ -9,14 +9,11 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Universal Screen skeleton for 26.2 — GuiGraphicsExtractor + KeyEvent/MouseButtonEvent.
  * Clojure callbacks keep the 1.21.1-shaped args (unwrapped ints / doubles).
  */
-@OnlyIn(Dist.CLIENT)
 public class DelegatingScreen extends Screen {
     private IFn renderFn;
     private IFn keyPressedFn;

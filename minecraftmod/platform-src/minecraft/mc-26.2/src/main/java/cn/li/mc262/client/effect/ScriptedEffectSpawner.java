@@ -8,15 +8,12 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Client-local scripted-effect spawn for Minecraft 26.2.
  * Uses public {@link ClientLevel#addEntity(Entity)} (no reflection).
  * Spawned entities use the shared scripted tick and render pipelines.
  */
-@OnlyIn(Dist.CLIENT)
 public final class ScriptedEffectSpawner {
     /**
      * Client-local entity network ids. Server ids are always positive, so

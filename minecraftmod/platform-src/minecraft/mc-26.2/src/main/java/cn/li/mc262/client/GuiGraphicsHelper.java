@@ -12,12 +12,9 @@ import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.client.renderer.state.gui.BlitRenderState;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.resources.Identifier;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix3x2f;
 
 /** Thin GuiGraphicsExtractor helpers for 26.2. */
-@OnlyIn(Dist.CLIENT)
 public final class GuiGraphicsHelper {
     private GuiGraphicsHelper() {}
 

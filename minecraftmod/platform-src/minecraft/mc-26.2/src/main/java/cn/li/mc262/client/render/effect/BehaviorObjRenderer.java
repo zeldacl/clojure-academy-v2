@@ -11,8 +11,6 @@ import net.minecraft.client.renderer.state.level.CameraRenderState;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Generic OBJ-model renderer for behavior-driven block-body entities.
@@ -24,7 +22,6 @@ import net.neoforged.api.distmarker.OnlyIn;
  * SubmitNodeRenderBufferAdapter}, which records the vertices and replays them
  * from the 26.2 submit-node pipeline.</p>
  */
-@OnlyIn(Dist.CLIENT)
 public final class BehaviorObjRenderer<T extends Entity>
         extends AbstractScriptedGeometryRenderer<T> {
     private static final String REGISTRY_NS = "cn.li.mcmod.spi.entity-render-registry";

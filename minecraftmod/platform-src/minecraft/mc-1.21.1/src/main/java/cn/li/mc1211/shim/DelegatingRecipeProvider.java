@@ -13,6 +13,12 @@ public class DelegatingRecipeProvider extends RecipeProvider {
 
     private final IFn buildRecipesFn;
 
+    /** Fabric's provider factory only exposes PackOutput; keep the legacy
+     * two-argument adapter while recipes remain registry-independent. */
+    public DelegatingRecipeProvider(PackOutput packOutput, IFn buildRecipesFn) {
+        this(packOutput, CompletableFuture.completedFuture(null), buildRecipesFn);
+    }
+
     public DelegatingRecipeProvider(PackOutput packOutput,
                                     CompletableFuture<HolderLookup.Provider> registries,
                                     IFn buildRecipesFn) {
@@ -21,7 +27,7 @@ public class DelegatingRecipeProvider extends RecipeProvider {
     }
 
     @Override
-    protected void buildRecipes(RecipeOutput output) {
+    public void buildRecipes(RecipeOutput output) {
         if (buildRecipesFn != null) {
             buildRecipesFn.invoke(this, output);
         }

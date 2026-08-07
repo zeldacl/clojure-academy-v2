@@ -43,7 +43,7 @@ public class ObjCompositeBakedModel implements BakedModel {
         this.overrides = overrides;
     }
 
-    private BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
+    public BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
         if (displayContext == ItemDisplayContext.GUI) {
             return guiModel;
         }

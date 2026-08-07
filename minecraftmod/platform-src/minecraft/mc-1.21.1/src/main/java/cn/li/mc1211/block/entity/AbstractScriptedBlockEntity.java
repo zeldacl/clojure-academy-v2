@@ -84,7 +84,6 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity implements
         return saveWithoutMetadata(registries);
     }
 
-    @Override
     public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries) {
         loadAdditional(tag, registries);
     }
@@ -94,7 +93,6 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity implements
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    @Override
     public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider registries) {
         CompoundTag tag = pkt.getTag();
         if (tag != null) {

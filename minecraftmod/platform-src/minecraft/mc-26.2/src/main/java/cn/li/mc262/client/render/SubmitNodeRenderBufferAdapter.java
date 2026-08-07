@@ -4,8 +4,6 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderType;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import org.joml.Vector3f;
@@ -23,7 +21,6 @@ import java.util.List;
  * captured for that node, so renderers may continue to mutate their PoseStack
  * after requesting a buffer.</p>
  */
-@OnlyIn(Dist.CLIENT)
 public final class SubmitNodeRenderBufferAdapter {
     private final SubmitNodeCollector collector;
     private final PoseStack poseStack;

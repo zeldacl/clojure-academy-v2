@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.gui.network.server
   "Fabric 1.20.1 GUI/RPC server transport."
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
+            [cn.li.fabricbase.owner :as fabric-owner]
             [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcbase.runtime.network-payload :as runtime-payload]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -11,16 +12,6 @@
            [net.minecraft.network FriendlyByteBuf]
            [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerPlayer]))
-
-(defn- server-player-owner
-  [^ServerPlayer player]
-  {:server-session-id (when-let [server (.getServer player)]
-                        [:server (System/identityHashCode server)])
-   :player-uuid (str (.getUUID player))})
-
-(defn- with-server-player-owner
-  [^ServerPlayer player f]
-  (runtime-hooks/with-client-ctx-fn {:player-owner (server-player-owner player)} f))
 
 (defn send-response-to-client!
   [^ServerPlayer player request-id payload]
@@ -36,7 +27,7 @@
 
 (defn- handle-server-request!
   [^ServerPlayer player msg-id request-id payload]
-  (with-server-player-owner
+  (runtime-hooks/with-client-ctx-fn {:player-owner (fabric-owner/server-owner player)}
     player
     (fn []
       (net-server/handle-request

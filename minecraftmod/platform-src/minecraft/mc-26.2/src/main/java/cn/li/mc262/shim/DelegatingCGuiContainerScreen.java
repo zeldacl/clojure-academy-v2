@@ -9,15 +9,12 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.neoforged.api.distmarker.Dist;
-import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * Universal CGuiContainerScreen skeleton for 26.2.
  * extractRenderState / extractContents replace render / renderBg;
  * Clojure callbacks keep the 1.21.1-shaped args (unwrapped ints / doubles).
  */
-@OnlyIn(Dist.CLIENT)
 public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
         extends CGuiContainerScreen<T> {
 
