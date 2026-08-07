@@ -19,6 +19,7 @@
             [cn.li.fabric1201.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1201.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
+            [cn.li.fabric1201.client.obj-model-registration :as obj-models]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
@@ -278,6 +279,7 @@
   (register-scripted-block-entity-renderers!)
   (register-fluid-client!)
   (energy-item-model-properties/register!)
+  (obj-models/register!)
   (overlay-renderer/init!)
   (hand-effect-renderer/init!)
   (level-effect-renderer/init!)

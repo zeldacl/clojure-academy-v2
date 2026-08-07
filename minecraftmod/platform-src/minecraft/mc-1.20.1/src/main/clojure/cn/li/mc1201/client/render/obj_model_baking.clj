@@ -34,6 +34,24 @@
   [mod-id model-path]
   (ModelResourceLocation. (ResourceLocation. (str mod-id) (str model-path)) "inventory"))
 
+(defn obj-3d-item-specs
+  "Per-item OBJ metadata straight from the DSL, for loaders that build the mesh
+  themselves instead of handing the OBJ to a loader-provided model loader.
+
+  `:model-path` is the `_3d` model's resource path (`item/<base>_3d`) and
+  `:obj-path` the OBJ file's (`models/<name>.obj`), both under the mod namespace."
+  []
+  (mapv (fn [item-id]
+          (let [basename (item-id->basename item-id)
+                {:keys [obj-model texture]} (get-in (item-dsl/get-item item-id)
+                                                    [:properties :item-model-3d-obj])]
+            {:item-id item-id
+             :basename basename
+             :model-path (str "item/" basename "_3d")
+             :obj-path (or obj-model (str "models/" basename ".obj"))
+             :texture (or texture (str "models/" basename))}))
+        (obj-3d-item-ids)))
+
 (defn additional-obj-inventory-model-locations
   "ModelResourceLocations for each item's `_3d` inventory variant.
   Loaders register these on their model-bus RegisterAdditional event."

@@ -43,7 +43,11 @@ public class ObjCompositeBakedModel implements BakedModel {
         this.overrides = overrides;
     }
 
-    private BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
+    /**
+     * Public because Fabric has no {@code applyTransform}: its ItemRenderer mixin swaps the
+     * rendered model itself.
+     */
+    public BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
         if (displayContext == ItemDisplayContext.GUI) {
             return guiModel;
         }
