@@ -284,6 +284,13 @@
 
       (when trace
 
+        (log/info "ThreateningTeleport tick trace"
+                   {:attacked? (boolean (:attacked? trace))
+                    :target-uuid (:target-uuid trace)
+                    :drop [(double (or (:drop-x trace) 0.0))
+                           (double (or (:drop-y trace) 0.0))
+                           (double (or (:drop-z trace) 0.0))]})
+
         (fx/send! ctx-id {:topic :threatening-teleport/fx-update :mode :update} nil
 
                   (trace-fx-payload trace))))
@@ -337,6 +344,15 @@
 
                     (trace-result player-id range))]
 
+      (log/info "ThreateningTeleport up! gates"
+                 {:cost-ok? (boolean cost-ok?)
+                  :trace? (boolean trace)
+                  :trace-attacked? (boolean (get-in trace [:attacked?]))
+                  :trace-drop (when trace [(get-in trace [:drop-x])
+                                           (get-in trace [:drop-y])
+                                           (get-in trace [:drop-z])])
+                  :main-hand-item? (boolean (has-main-hand-item? player-ref))})
+
       (when (and cost-ok? trace (has-main-hand-item? player-ref))
 
         (let [world-id (:world-id trace)
@@ -348,6 +364,14 @@
               drop? (should-drop? attacked?)
 
               consumed? (settle-main-hand-item! player-ref trace drop?)]
+
+          (log/info "ThreateningTeleport settle"
+                     {:attacked? attacked?
+                      :drop? drop?
+                      :consumed? (boolean consumed?)
+                      :drop-pos [(double (or (:drop-x trace) 0.0))
+                                 (double (or (:drop-y trace) 0.0))
+                                 (double (or (:drop-z trace) 0.0))]})
 
           (when consumed?
 
