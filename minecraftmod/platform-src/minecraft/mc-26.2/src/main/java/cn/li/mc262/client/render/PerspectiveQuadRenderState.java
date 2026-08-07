@@ -5,7 +5,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.gui.navigation.ScreenRectangle;
 import net.minecraft.client.gui.render.TextureSetup;
 import net.minecraft.client.renderer.state.gui.GuiElementRenderState;
-import org.joml.Vector2f;
 
 /**
  * A GUI quad warped by a {@link GuiPerspectiveWarp} homography.
@@ -29,6 +28,8 @@ import org.joml.Vector2f;
  */
 public final class PerspectiveQuadRenderState implements GuiElementRenderState {
 
+    /** Below this a corner is at or behind the eye and cannot be projected. */
+    private static final float MIN_W = 1.0e-4F;
     /** Cells beyond this buy nothing visible and cost vertices. */
     private static final int MAX_SUBDIVISIONS = 12;
     /** Target on-screen size of one cell, in GUI-scaled pixels. */
@@ -150,20 +151,21 @@ public final class PerspectiveQuadRenderState implements GuiElementRenderState {
         // A homography maps the rectangle to a quadrilateral with these four
         // corners, so their AABB is the element's true screen bounds. Those
         // bounds drive GuiRenderState's automatic layering, so they must be real.
-        Vector2f corner = new Vector2f();
-        float minX = Float.MAX_VALUE, minY = Float.MAX_VALUE;
-        float maxX = -Float.MAX_VALUE, maxY = -Float.MAX_VALUE;
-        float[] xs = {x0, x1, x0, x1};
-        float[] ys = {y0, y0, y1, y1};
-        for (int i = 0; i < 4; i++) {
-            if (!GuiPerspectiveWarp.project(h, xs[i], ys[i], corner)) {
-                return null;
-            }
-            minX = Math.min(minX, corner.x);
-            minY = Math.min(minY, corner.y);
-            maxX = Math.max(maxX, corner.x);
-            maxY = Math.max(maxY, corner.y);
+        float w00 = h[6] * x0 + h[7] * y0 + h[8];
+        float w10 = h[6] * x1 + h[7] * y0 + h[8];
+        float w01 = h[6] * x0 + h[7] * y1 + h[8];
+        float w11 = h[6] * x1 + h[7] * y1 + h[8];
+        if (!(w00 > MIN_W) || !(w10 > MIN_W) || !(w01 > MIN_W) || !(w11 > MIN_W)) {
+            return null;
         }
+        float ax = (h[0] * x0 + h[1] * y0 + h[2]) / w00, ay = (h[3] * x0 + h[4] * y0 + h[5]) / w00;
+        float bx = (h[0] * x1 + h[1] * y0 + h[2]) / w10, by = (h[3] * x1 + h[4] * y0 + h[5]) / w10;
+        float cx = (h[0] * x0 + h[1] * y1 + h[2]) / w01, cy = (h[3] * x0 + h[4] * y1 + h[5]) / w01;
+        float dx = (h[0] * x1 + h[1] * y1 + h[2]) / w11, dy = (h[3] * x1 + h[4] * y1 + h[5]) / w11;
+        float minX = Math.min(Math.min(ax, bx), Math.min(cx, dx));
+        float maxX = Math.max(Math.max(ax, bx), Math.max(cx, dx));
+        float minY = Math.min(Math.min(ay, by), Math.min(cy, dy));
+        float maxY = Math.max(Math.max(ay, by), Math.max(cy, dy));
 
         int left = (int) Math.floor(minX);
         int top = (int) Math.floor(minY);
@@ -204,7 +206,6 @@ public final class PerspectiveQuadRenderState implements GuiElementRenderState {
         float stepY = (this.y1 - this.y0) / this.rows;
         float stepU = (this.u1 - this.u0) / this.cols;
         float stepV = (this.v1 - this.v0) / this.rows;
-        Vector2f scratch = new Vector2f();
         for (int row = 0; row < this.rows; row++) {
             float cellY0 = this.y0 + stepY * row;
             float cellY1 = row == this.rows - 1 ? this.y1 : cellY0 + stepY;
@@ -219,20 +220,27 @@ public final class PerspectiveQuadRenderState implements GuiElementRenderState {
                 float cellU1 = col == this.cols - 1 ? this.u1 : cellU0 + stepU;
                 // Same winding as BlitRenderState / ColoredRectangleRenderState:
                 // TL, BL, BR, TR.
-                emit(vertexConsumer, scratch, cellX0, cellY0, cellU0, cellV0, cellC0);
-                emit(vertexConsumer, scratch, cellX0, cellY1, cellU0, cellV1, cellC1);
-                emit(vertexConsumer, scratch, cellX1, cellY1, cellU1, cellV1, cellC1);
-                emit(vertexConsumer, scratch, cellX1, cellY0, cellU1, cellV0, cellC0);
+                emit(vertexConsumer, cellX0, cellY0, cellU0, cellV0, cellC0);
+                emit(vertexConsumer, cellX0, cellY1, cellU0, cellV1, cellC1);
+                emit(vertexConsumer, cellX1, cellY1, cellU1, cellV1, cellC1);
+                emit(vertexConsumer, cellX1, cellY0, cellU1, cellV0, cellC0);
             }
         }
     }
 
-    private void emit(VertexConsumer vertexConsumer, Vector2f scratch,
+    private void emit(VertexConsumer vertexConsumer,
                       float x, float y, float u, float v, int color) {
-        // `of` already proved all four corners project, and the grid stays inside
-        // them, so this cannot fail for a convex-mapped rectangle.
-        GuiPerspectiveWarp.project(this.homography, x, y, scratch);
-        VertexConsumer vertex = vertexConsumer.addVertex(scratch.x, scratch.y, 0.0F);
+        // Projected inline rather than through a Vector2f: this runs once per
+        // grid vertex, which is the only genuinely hot loop in the warp path.
+        // `of` already proved all four corners project and the grid stays inside
+        // them, so w cannot go non-positive for a convex-mapped rectangle.
+        float[] h = this.homography;
+        float w = h[6] * x + h[7] * y + h[8];
+        float invW = 1.0F / w;
+        VertexConsumer vertex = vertexConsumer.addVertex(
+                (h[0] * x + h[1] * y + h[2]) * invW,
+                (h[3] * x + h[4] * y + h[5]) * invW,
+                0.0F);
         if (this.useUv) {
             vertex.setUv(u, v);
         }

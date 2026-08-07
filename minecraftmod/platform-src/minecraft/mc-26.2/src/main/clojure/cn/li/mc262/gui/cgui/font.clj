@@ -10,6 +10,7 @@
   (:require [clojure.string :as str])
   (:import [cn.li.mcbase.client MinecraftClientAccess]
            [cn.li.mc262.client.render GuiPerspectiveWarp]
+           [net.minecraft.client StringSplitter]
            [net.minecraft.client.gui Font GuiGraphicsExtractor]
            [net.minecraft.network.chat Component MutableComponent Style]
            [org.joml Matrix3x2f Matrix3x2fStack]))
@@ -125,39 +126,51 @@
   [^GuiGraphicsExtractor graphics ^Matrix3x2fStack pose font-desc ^String text
    draw-x y scale color shadow?]
   (let [^Font font (vanilla-font)
+        ;; Advances come from the splitter, unrounded. `Font.width` is just
+        ;; `ceil` of the same sum, and vanilla lays a run out at these float
+        ;; advances too, so accumulating them keeps the glyphs on the alignment
+        ;; box `text-width` measured without an O(n^2) walk over prefixes.
+        ^StringSplitter splitter (.getSplitter font)
+        ;; Only bold/italic need a styled Component; a plain run can go through
+        ;; the String overload and skip two allocations per glyph.
+        styled? (boolean (or (:bold? font-desc) (:italic? font-desc)))
+        mono-advance (double (if (:monospace? font-desc)
+                               (monospace-advance font-desc)
+                               -1.0))
         color-i (unchecked-int color)
         shadow (boolean shadow?)
-        glyphs (mapv #(String/valueOf (Character/toChars (int %)))
-                     (.toArray (.codePoints text)))
-        mono-advance (when (:monospace? font-desc) (monospace-advance font-desc))
-        ;; Offsets come from prefix widths, the very measurement `text-width`
-        ;; used to align the run. Summing per-glyph widths instead would round
-        ;; each advance separately and let the run creep away from its own
-        ;; alignment box.
-        offsets (if mono-advance
-                  (mapv #(* (double mono-advance) (double %)) (range (count glyphs)))
-                  (mapv (fn [i]
-                          (double (.width font (component (apply str (subvec glyphs 0 i))
-                                                          font-desc))))
-                        (range (count glyphs))))]
-    (dorun
-      (map (fn [^String ch offset]
-             ;; Glyph origin in the caller's own space: the run's anchor plus
-             ;; this glyph's advance, scaled the way the pose would be.
-             ;; localAnchor folds the live pose in, so the tangent plane it
-             ;; returns can replace that pose outright.
-             (let [gx (+ (double draw-x) (* (double scale) (double offset)))
-                   ^Matrix3x2f local (GuiPerspectiveWarp/localAnchor
-                                       pose (float gx) (float y))]
-               (when local
-                 (.pushMatrix pose)
-                 (try
-                   (.set pose local)
-                   (.scale pose scale scale)
-                   (.text graphics font (component ch font-desc) 0 0 color-i shadow)
-                   (finally
-                     (.popMatrix pose))))))
-           glyphs offsets))))
+        ;; One anchor matrix reused for the whole run: `.set` copies it into the
+        ;; pose stack, so nothing retains it.
+        ^Matrix3x2f anchor (Matrix3x2f.)
+        len (.length text)]
+    (loop [i 0
+           advance 0.0]
+      (when (< i len)
+        (let [cp (.codePointAt text i)
+              step (Character/charCount cp)
+              ^String ch (.substring text i (+ i step))
+              ^Component glyph (when styled? (component ch font-desc))
+              ;; Glyph origin in the caller's own space: the run's anchor plus
+              ;; this glyph's advance, scaled the way the pose would be.
+              ;; localAnchorInto folds the live pose in, so the tangent plane it
+              ;; writes can replace that pose outright.
+              gx (+ (double draw-x) (* (double scale) advance))]
+          (when (GuiPerspectiveWarp/localAnchorInto pose (float gx) (float y) anchor)
+            (.pushMatrix pose)
+            (try
+              (.set pose anchor)
+              (.scale pose scale scale)
+              (if glyph
+                (.text graphics font glyph 0 0 color-i shadow)
+                (.text graphics font ch 0 0 color-i shadow))
+              (finally
+                (.popMatrix pose))))
+          (recur (+ i step)
+                 (+ advance
+                    (cond
+                      (not (neg? mono-advance)) mono-advance
+                      glyph (double (.stringWidth splitter glyph))
+                      :else (double (.stringWidth splitter ch))))))))))
 
 (defn draw-text!
   "Submit vanilla text render state at (`x`,`y`) with CGui scaling/alignment."

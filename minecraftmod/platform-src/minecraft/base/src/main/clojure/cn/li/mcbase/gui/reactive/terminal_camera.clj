@@ -86,7 +86,7 @@
 
 (defn projection-matrix
   "gluPerspective(50, aspect, 1, 100)."
-  ^Matrix4f [aspect]
+  ^Matrix4f [^double aspect]
   (doto (Matrix4f.)
     (.setPerspective (float fov-radians) (float aspect) (float z-near) (float z-far))))
 
@@ -95,7 +95,7 @@
 
    JOML post-multiplies exactly as glTranslated/glRotated/glScaled do, so the
    calls below read in upstream's own order."
-  ^Matrix4f [aspect ^doubles fd ^double t-sec]
+  ^Matrix4f [^double aspect ^doubles fd ^double t-sec]
   (let [yaw (+ -18.0
                (* -4.0 (- (/ (buff-x fd) max-mx) 0.5))
                (Math/sin (/ t-sec 1000.0)))

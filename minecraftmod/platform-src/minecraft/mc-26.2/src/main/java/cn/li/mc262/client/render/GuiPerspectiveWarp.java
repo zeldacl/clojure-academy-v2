@@ -52,12 +52,22 @@ public final class GuiPerspectiveWarp {
      * own local coordinates. The pose runs first, then the projection.
      */
     public static float[] compose(float[] h, Matrix3x2fc pose) {
-        if (pose == null) {
+        // pose as a 3x3: columns are (m00,m01), (m10,m11), (m20,m21).
+        float a00 = pose == null ? 1.0F : pose.m00();
+        float a01 = pose == null ? 0.0F : pose.m10();
+        float a02 = pose == null ? 0.0F : pose.m20();
+        float a10 = pose == null ? 0.0F : pose.m01();
+        float a11 = pose == null ? 1.0F : pose.m11();
+        float a12 = pose == null ? 0.0F : pose.m21();
+        // The reactive tape draws at absolute coordinates under an identity
+        // pose, so this is the overwhelmingly common case and it runs once per
+        // element and once per glyph. Aliasing the caller's matrix is safe:
+        // a warp is published as a fresh array each frame and never mutated in
+        // place, and render states are consumed within that frame.
+        if (a00 == 1.0F && a01 == 0.0F && a02 == 0.0F
+                && a10 == 0.0F && a11 == 1.0F && a12 == 0.0F) {
             return h;
         }
-        // pose as a 3x3: columns are (m00,m01), (m10,m11), (m20,m21).
-        float a00 = pose.m00(), a01 = pose.m10(), a02 = pose.m20();
-        float a10 = pose.m01(), a11 = pose.m11(), a12 = pose.m21();
         float[] out = new float[9];
         for (int row = 0; row < 3; row++) {
             float r0 = h[row * 3];
@@ -98,6 +108,38 @@ public final class GuiPerspectiveWarp {
     public static Matrix3x2f localAnchor(Matrix3x2fc pose, float x, float y) {
         float[] warp = active;
         return warp == null ? null : localAffine(compose(warp, pose), x, y);
+    }
+
+    /**
+     * {@link #localAnchor} writing into a caller-owned matrix.
+     *
+     * <p>Text anchors once per glyph, so the allocation-free form is the one the
+     * font path uses.</p>
+     *
+     * @return false when no warp is installed or the anchor cannot be projected,
+     *         leaving {@code dest} untouched
+     */
+    public static boolean localAnchorInto(Matrix3x2fc pose, float x, float y, Matrix3x2f dest) {
+        float[] warp = active;
+        if (warp == null) {
+            return false;
+        }
+        float[] h = compose(warp, pose);
+        float w = h[6] * x + h[7] * y + h[8];
+        if (!(w > MIN_W)) {
+            return false;
+        }
+        float xw = h[0] * x + h[1] * y + h[2];
+        float yw = h[3] * x + h[4] * y + h[5];
+        float invW = 1.0F / w;
+        float invW2 = invW * invW;
+        dest.m00 = (h[0] * w - xw * h[6]) * invW2;
+        dest.m01 = (h[3] * w - yw * h[6]) * invW2;
+        dest.m10 = (h[1] * w - xw * h[7]) * invW2;
+        dest.m11 = (h[4] * w - yw * h[7]) * invW2;
+        dest.m20 = xw * invW;
+        dest.m21 = yw * invW;
+        return true;
     }
 
     /**
