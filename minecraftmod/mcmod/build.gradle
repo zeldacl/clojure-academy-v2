@@ -62,11 +62,20 @@ tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' 
     })
 }
 
-// Exclude Clojure sources from JAR — AOT classes are the only runtime representation.
-tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
+// Source-first by default; full-AOT mode uses classes as the only runtime representation.
+tasks.named('processResources').configure {
+    if (rootProject.ext.fullAotEnabled) {
+        exclude '**/*.clj', '**/*.cljc'
+    } else {
+        from(sourceSets.main.clojure.srcDirs) {
+            include '**/*.clj', '**/*.cljc'
+        }
+    }
+}
 
 // mcmod Clojure imports local Java SPI/bootstrap classes; compile them first.
 tasks.named('compileClojure').configure {
+    onlyIf { rootProject.ext.fullAotEnabled }
     dependsOn 'compileJava'
     classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
 }
@@ -99,6 +108,7 @@ tasks.named('compileClojure').configure { task ->
 // TinyRemapper (Loom 1.13) can crash on bad/nested LVT slots from Clojure AOT.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
+    onlyIf { rootProject.ext.fullAotEnabled }
     def classesDir = layout.buildDirectory.dir('clojure/main')
     def strippedDir = layout.buildDirectory.dir('clojure/main-stripped')
     inputs.dir(classesDir)
@@ -159,9 +169,18 @@ def stripAotLvt = tasks.register('stripAotLvt') {
         }
     }
 }
+def clearNeutralAotOutput = tasks.register('clearNeutralAotOutput') {
+    onlyIf { !rootProject.ext.fullAotEnabled }
+    doLast {
+        delete(layout.buildDirectory.dir('clojure/main').get().asFile)
+        delete(layout.buildDirectory.dir('clojure/main-stripped').get().asFile)
+    }
+}
+tasks.named('classes').configure { dependsOn clearNeutralAotOutput }
 // LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.
 tasks.named('jar', Jar).configure {
     dependsOn stripAotLvt
+    dependsOn clearNeutralAotOutput
     // During migration, stale mirror classes can coexist with AOT outputs.
     // Keep first entry so packaging stays deterministic and non-failing.
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE

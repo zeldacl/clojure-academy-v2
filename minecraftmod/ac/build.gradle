@@ -6,7 +6,7 @@ plugins {
 // Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
 // but cannot infer a dependency automatically.
 tasks.named('compileJava').configure {
-    dependsOn project(':mcmod').tasks.named('compileClojure')
+    dependsOn project(':mcmod').tasks.named(rootProject.ext.fullAotEnabled ? 'compileClojure' : 'compileJava')
 }
 
 // 反射拦截器
@@ -31,14 +31,23 @@ tasks.matching { it.name == 'compileClojure' || it.name == 'compileTestClojure' 
     })
 }
 
-// Exclude Clojure sources from JAR — AOT classes are the only runtime representation.
-tasks.named('processResources').configure { exclude '**/*.clj', '**/*.cljc' }
+// Source-first by default; full-AOT mode uses classes as the only runtime representation.
+tasks.named('processResources').configure {
+    if (rootProject.ext.fullAotEnabled) {
+        exclude '**/*.clj', '**/*.cljc'
+    } else {
+        from(sourceSets.main.clojure.srcDirs) {
+            include '**/*.clj', '**/*.cljc'
+        }
+    }
+}
 
 // Emit AOT classes to a dedicated Clojure output directory (not classes/java/main).
 // Sharing output directories between compileJava and compileClojure is a Gradle
 // anti-pattern: task output tracking breaks, and one task may silently delete the
 // other's outputs. Keep them isolated so the build is deterministic.
 tasks.named('compileClojure').configure { task ->
+    onlyIf { rootProject.ext.fullAotEnabled }
     def targetDirProvider = layout.buildDirectory.dir('clojure/main')
     def targetDirFile = targetDirProvider.get().asFile
     task.forkOptions.memoryMaximumSize = '512m'
@@ -58,6 +67,7 @@ tasks.named('compileClojure').configure { task ->
 // TinyRemapper (Loom 1.13) can crash on bad/nested LVT slots from Clojure AOT.
 def stripAotLvt = tasks.register('stripAotLvt') {
     dependsOn tasks.named('compileClojure')
+    onlyIf { rootProject.ext.fullAotEnabled }
     def classesDir = layout.buildDirectory.dir('clojure/main')
     def strippedDir = layout.buildDirectory.dir('clojure/main-stripped')
     inputs.dir(classesDir)
@@ -118,8 +128,19 @@ def stripAotLvt = tasks.register('stripAotLvt') {
         }
     }
 }
+def clearNeutralAotOutput = tasks.register('clearNeutralAotOutput') {
+    onlyIf { !rootProject.ext.fullAotEnabled }
+    doLast {
+        delete(layout.buildDirectory.dir('clojure/main').get().asFile)
+        delete(layout.buildDirectory.dir('clojure/main-stripped').get().asFile)
+    }
+}
+tasks.named('classes').configure { dependsOn clearNeutralAotOutput }
 // LVT stripping only needed for packaging (TinyRemapper); skip for dev runs.
-tasks.named('jar').configure { dependsOn stripAotLvt }
+tasks.named('jar').configure {
+    dependsOn stripAotLvt
+    dependsOn clearNeutralAotOutput
+}
 
 configurations {
     cloverageRuntime

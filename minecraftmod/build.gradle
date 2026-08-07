@@ -27,6 +27,18 @@ ext {
         specAlpha: findProperty("spec_alpha_version") ?: "0.6.249",
         coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
+
+    // Neutral runtime projects (:ac and :mcmod) are source-first by default.
+    // Pass -PfullAot or -PfullAot=true to restore the historical full-AOT build.
+    def fullAotRaw = findProperty("fullAot")
+    def fullAotText = fullAotRaw == null ? "false" : fullAotRaw.toString().trim()
+    if (fullAotText.isEmpty()) {
+        fullAotText = "true"
+    }
+    if (!fullAotText.equalsIgnoreCase("true") && !fullAotText.equalsIgnoreCase("false")) {
+        throw new GradleException("-PfullAot must be true or false (or pass -PfullAot for true), got '${fullAotRaw}'")
+    }
+    fullAotEnabled = fullAotText.equalsIgnoreCase("true")
 }
 
 allprojects {
@@ -60,7 +72,13 @@ subprojects {
             clojure {
                 builds {
                     main {
-                        aotAll()
+                        if (rootProject.ext.fullAotEnabled || !(project.path in [":ac", ":mcmod"])) {
+                            aotAll()
+                        } else {
+                            // Empty AOT set keeps the plugin available for source
+                            // compilation/checking while avoiding neutral-project AOT.
+                            aotNamespaces.set([])
+                        }
                         checkAll()
                         reflection = "fail"
                     }
@@ -69,6 +87,9 @@ subprojects {
 
             tasks.named("compileClojure").configure { task ->
                 doLast {
+                    if (!rootProject.ext.fullAotEnabled && project.path in [":ac", ":mcmod"]) {
+                        return
+                    }
                     def sourceRoots = sourceSets.main.clojure.srcDirs.findAll { it.isDirectory() }
                     def missingAotClasses = sourceRoots.collectMany { File sourceRoot ->
                         fileTree(sourceRoot) { include "**/*.clj" }.files.collect { File sourceFile ->
@@ -131,7 +152,6 @@ subprojects {
             options.release = 17
         }
         tasks.withType(Jar).configureEach {
-            exclude "**/*.clj", "**/*.cljc"
             duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         }
     }
