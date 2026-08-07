@@ -13,15 +13,10 @@
             [cn.li.mcbase.platform.menu-inventory-ops :as menu-inventory-ops]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.adapter.minecraft-ops :as minecraft-ops])
-  (:import [net.minecraft.core BlockPos]
+  (:import [cn.li.mcbase.block.entity IScriptedBlockEntity]
+           [net.minecraft.core BlockPos]
            [net.minecraft.world.level Level]
            [net.minecraft.world.level.block.state BlockState]))
-
-(defn- scripted-be-class
-  []
-  ;; Resolve after Minecraft bootstrap; Class/forName is intentionally kept
-  ;; out of the namespace import table so AOT does not initialize BlockEntity.
-  (Class/forName "cn.li.fabric262.block.entity.ScriptedBlockEntity"))
 
 (defn- resolve-binding! [binding-name]
   (require 'cn.li.fabric262.platform.bindings)
@@ -31,14 +26,14 @@
 
 (defn- install-be-ops! []
   (core/install-be-fns!
-    {:be-get-level (fn [be] (.getLevel be))
-     :be-get-world (fn [be] (.getLevel be))
-     :be-get-custom-state (fn [be] (.getCustomState be))
-     :be-set-custom-state! (fn [be state] (.setCustomState be state))
-     :be-get-block-id (fn [be] (.getBlockId be))
-     :be-set-changed! (fn [be] (.setChanged be))
-     :be-sync-to-client! (fn [be] (.syncCustomStateToClient be))
-     :be-get-fluid-height (fn [be]
+    {:be-get-level (fn [^IScriptedBlockEntity be] (.getLevel be))
+     :be-get-world (fn [^IScriptedBlockEntity be] (.getLevel be))
+     :be-get-custom-state (fn [^IScriptedBlockEntity be] (.getCustomState be))
+     :be-set-custom-state! (fn [^IScriptedBlockEntity be state] (.setCustomState be state))
+     :be-get-block-id (fn [^IScriptedBlockEntity be] (.getBlockId be))
+     :be-set-changed! (fn [^IScriptedBlockEntity be] (.setChanged be))
+     :be-sync-to-client! (fn [^IScriptedBlockEntity be] (.syncCustomStateToClient be))
+     :be-get-fluid-height (fn [^IScriptedBlockEntity be]
                             (try
                               (when-let [^Level level (.getLevel be)]
                                 (let [^BlockPos pos (.getBlockPos be)
@@ -53,7 +48,7 @@
   (minecraft-ops/build-adapter-map
    (merge (runtime-ops/standard-runtime-ops)
           {:local-player-class (fn [] nil)
-           :scripted-be-class scripted-be-class
+           :scripted-be-class (fn [] nil)
            :world-place-block-by-id
            (fn [level block-id pos flags]
              ((resolve-binding! 'world-place-block-by-id) level block-id pos flags))})))

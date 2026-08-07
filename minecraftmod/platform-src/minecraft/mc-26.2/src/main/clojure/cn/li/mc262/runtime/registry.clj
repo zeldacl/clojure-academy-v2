@@ -1,6 +1,12 @@
 (ns cn.li.mc262.runtime.registry
-  "Lazy access to 26.2 built-in registries without class-load bootstrap side effects.")
+  "Shared access to 26.2 built-in registries."
+  (:import [net.minecraft.core.registries BuiltInRegistries]))
 
-(defn builtin [field-name]
-  (let [klass (Class/forName "net.minecraft.core.registries.BuiltInRegistries")]
-    (.get (.getField klass field-name) nil)))
+(defn builtin
+  [field-name]
+  (case field-name
+    "ITEM" BuiltInRegistries/ITEM
+    "BLOCK" BuiltInRegistries/BLOCK
+    "SOUND_EVENT" BuiltInRegistries/SOUND_EVENT
+    "ENTITY_TYPE" BuiltInRegistries/ENTITY_TYPE
+    (throw (ex-info "Unknown built-in registry" {:field field-name}))))
