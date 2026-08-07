@@ -4,13 +4,13 @@
   Supported model types:
   - :item/generated (simple items with a single layer texture)
   - Energy-tier items (generated base + half/full tier models with :energy predicate)
-  - forge:obj 3D items (OBJ model with display transforms per perspective)
+  - neoforge:obj 3D items (OBJ model with display transforms per perspective)
 
   Optional :item-model-energy-levels in :properties generates base + tiered
   sibling models and overrides on predicate <modid>:energy (see client
   `cn.li.mc1211.client.energy-item-model-properties`).
 
-  Optional :item-model-3d-obj in :properties generates a forge:obj loader model
+  Optional :item-model-3d-obj in :properties generates a neoforge:obj loader model
   with perspective-specific display transforms.
 
   Optional :item-model-display in :properties writes vanilla `display` transforms
@@ -102,17 +102,27 @@
     obj))
 
 (defn- obj-model-json
+  "Emit neoforge:obj loader JSON.
+
+  The loader is registered as `neoforge:obj` on 1.21.1 — there is no `forge:`
+  alias. Key names are the ones ObjLoader#read actually reads (snake_case);
+  the material texture must go in `textures`, because the MTL's
+  `map_Kd #default` is resolved through the model's texture slots, not through
+  `custom` data. Slot values are atlas paths — no `textures/` prefix and no
+  `.png`. `emissive_ambient` is off so the mesh takes normal world lighting
+  like upstream's ObjLegacyRender (the MTL's Ka 1,1,1 would fullbright it)."
   ^com.google.gson.JsonObject [mod-id {:keys [obj-model texture display]}]
   (let [json (com.google.gson.JsonObject.)
-        _ (.addProperty json "loader" "forge:obj")
+        texture-id (str mod-id ":" texture)
+        _ (.addProperty json "loader" "neoforge:obj")
         _ (.addProperty json "model" (str mod-id ":" obj-model))
-        _ (.addProperty json "flip-v" true)
-        _ (.addProperty json "detectCullableFaces" false)
-        ;; Material: default → texture
-        mats (doto (com.google.gson.JsonObject.)
-               (.add "default" (doto (com.google.gson.JsonObject.)
-                                 (.addProperty "texture" (str mod-id ":textures/" texture)))))
-        _ (.add json "custom" mats)
+        _ (.addProperty json "flip_v" true)
+        _ (.addProperty json "automatic_culling" false)
+        _ (.addProperty json "emissive_ambient" false)
+        textures (doto (com.google.gson.JsonObject.)
+                   (.addProperty "particle" texture-id)
+                   (.addProperty "default" texture-id))
+        _ (.add json "textures" textures)
         ;; Display transforms per perspective
         display-json (reduce-kv (fn [^com.google.gson.JsonObject obj k v]
                                   (.add obj (name k) (perspective-json v))
@@ -123,9 +133,9 @@
     json))
 
 (defn- apply-obj-model-spec!
-  "Generate a forge:obj model JSON for a 3D item via datagen.
+  "Generate a neoforge:obj model JSON for a 3D item via datagen.
 
-  Uses ItemModelBuilder.customLoader to emit a forge:obj loader model with
+  Uses ItemModelBuilder.customLoader to emit a neoforge:obj loader model with
   perspective display transforms matching the upstream
   BakedModelForTEISR transform matrices.
 
@@ -136,7 +146,7 @@
   [^ItemModelProvider provider ^ExistingFileHelper _exfile-helper {:keys [model-name] :as spec}]
   (let [^ItemModelBuilder builder (.withExistingParent provider (str model-name) "item/generated")
         mod-id (str modid/mod-id)
-        loader-rl (rl/parse-resource-location "forge:obj")]
+        loader-rl (rl/parse-resource-location "neoforge:obj")]
     (.customLoader builder
                    (reify java.util.function.BiFunction
                      (apply [_ parent-builder helper]
@@ -154,7 +164,7 @@
       (let [{:keys [all-item-count energy-tier-count obj-3d-count simple-count bucket-count models]}
             (item-model-core/gather-model-specs)]
         ;; Standard models: item/generated, energy-tier, fluid buckets
-        ;; OBJ 3D models: forge:obj loader
+        ;; OBJ 3D models: neoforge:obj loader
         (doseq [model-spec models]
           (if (:obj-model model-spec)
             (apply-obj-model-spec! this-provider exfile-helper model-spec)

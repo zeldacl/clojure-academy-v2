@@ -51,12 +51,20 @@
                       :energy-capacity 10000.0
                       :energy-bandwidth 50.0
                       :battery-type "developer_portable"
-                      :item-model-3d-obj {:obj-model "models/developer_portable.obj"
+                      ;; Upstream ItemDeveloper#onModelBake (BakedModelForTEISR):
+         ;; FP rotate(0,180,0) + scale .3 + translate(.34,-.1,-.1);
+         ;; TP rotate(0,180,0) + scale .2;
+         ;; ground scale(-.15,-.15,.15) + translate(0,.1,0).
+         ;; TransformChain composes T*S*R, so the translation is in whole
+         ;; blocks; JSON `display` translation is in 1/16-block units (*16).
+         ;; The engine clamps translation to ±5, so FP x lands on 5.0 (0.3125)
+         ;; instead of 5.44 — a ~0.03-block offset from upstream.
+         :item-model-3d-obj {:obj-model "models/developer_portable.obj"
                                           :texture "models/developer_portable"
-                                          :display {:firstperson_righthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [0.34 -0.1 -0.1]}
-                                                    :firstperson_lefthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [0.34 -0.1 -0.1]}
+                                          :display {:firstperson_righthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
+                                                    :firstperson_lefthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
                                                     :thirdperson_righthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
                                                     :thirdperson_lefthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
-                                                    :ground {:scale [-0.15 -0.15 0.15] :translation [0 0.1 0]}}}}
+                                                    :ground {:scale [-0.15 -0.15 0.15] :translation [0 1.6 0]}}}}
          :on-right-click open-portable-developer!}))
     (log/info "Energy items initialized: energy_unit, developer_portable"))))

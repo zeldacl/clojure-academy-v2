@@ -22,19 +22,25 @@ import java.util.List;
  *   <li>Hand / ground / item-frame — 3D world mesh</li>
  * </ul>
  *
- * Energy-tier override models are themselves wrapped as composites at bake time
- * ({@code obj-model-baking}), so {@link #getOverrides()} can safely delegate to the
- * GUI model without a custom {@link ItemOverrides} subclass (Fabric makes the empty
- * ctor private).
+ * {@link #getOverrides()} delegates to the GUI model by default. Energy-tier items pass an
+ * override list that re-wraps whatever the predicate resolves to, because {@link ItemOverrides}
+ * captures its targets at bake time and cannot be reached by editing the baking-result registry.
+ * That subclass lives in the loader modules — Fabric keeps the empty ctor private.
  */
 public class ObjCompositeBakedModel implements BakedModel {
 
     private final BakedModel guiModel;
     private final BakedModel worldModel;
+    private final ItemOverrides overrides;
 
     public ObjCompositeBakedModel(BakedModel guiModel, BakedModel worldModel) {
+        this(guiModel, worldModel, guiModel.getOverrides());
+    }
+
+    public ObjCompositeBakedModel(BakedModel guiModel, BakedModel worldModel, ItemOverrides overrides) {
         this.guiModel = guiModel;
         this.worldModel = worldModel;
+        this.overrides = overrides;
     }
 
     private BakedModel selectModel(@Nullable ItemDisplayContext displayContext) {
@@ -94,6 +100,6 @@ public class ObjCompositeBakedModel implements BakedModel {
 
     @Override
     public @NotNull ItemOverrides getOverrides() {
-        return guiModel.getOverrides();
+        return overrides;
     }
 }

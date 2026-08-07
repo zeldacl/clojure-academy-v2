@@ -59,13 +59,16 @@
   "Emit neoforge:obj loader JSON per NeoForge 26.x schema.
 
    Texture keys are atlas paths (no textures/ prefix, no .png). MTL files
-   should reference them as #default / #particle."
+   should reference them as #default / #particle.
+
+   Culling is off and emissive_ambient is off so the mesh renders every face
+   under normal world lighting, matching upstream's ObjLegacyRender."
   [{:keys [obj-model texture display]}]
   (let [tex (str modid/mod-id ":" texture)]
     (cond-> {:loader "neoforge:obj"
              :model (str modid/mod-id ":" obj-model)
              :flip_v true
-             :automatic_culling true
+             :automatic_culling false
              :shade_quads true
              :emissive_ambient false
              :textures {:particle tex

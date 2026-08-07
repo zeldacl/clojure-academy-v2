@@ -102,17 +102,26 @@
     obj))
 
 (defn- obj-model-json
+  "Emit forge:obj loader JSON.
+
+  Key names are the ones ObjLoader#read actually reads (snake_case); the
+  material texture must go in `textures`, because the MTL's `map_Kd #default`
+  is resolved through the model's texture slots, not through `custom` data.
+  Slot values are atlas paths — no `textures/` prefix and no `.png`.
+  `emissive_ambient` is off so the mesh takes normal world lighting like
+  upstream's ObjLegacyRender (the MTL's Ka 1,1,1 would otherwise fullbright it)."
   ^com.google.gson.JsonObject [mod-id {:keys [obj-model texture display]}]
   (let [json (com.google.gson.JsonObject.)
+        texture-id (str mod-id ":" texture)
         _ (.addProperty json "loader" "forge:obj")
         _ (.addProperty json "model" (str mod-id ":" obj-model))
-        _ (.addProperty json "flip-v" true)
-        _ (.addProperty json "detectCullableFaces" false)
-        ;; Material: default → texture
-        mats (doto (com.google.gson.JsonObject.)
-               (.add "default" (doto (com.google.gson.JsonObject.)
-                                 (.addProperty "texture" (str mod-id ":textures/" texture)))))
-        _ (.add json "custom" mats)
+        _ (.addProperty json "flip_v" true)
+        _ (.addProperty json "automatic_culling" false)
+        _ (.addProperty json "emissive_ambient" false)
+        textures (doto (com.google.gson.JsonObject.)
+                   (.addProperty "particle" texture-id)
+                   (.addProperty "default" texture-id))
+        _ (.add json "textures" textures)
         ;; Display transforms per perspective
         display-json (reduce-kv (fn [^com.google.gson.JsonObject obj k v]
                                   (.add obj (name k) (perspective-json v))
