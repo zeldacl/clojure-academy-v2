@@ -323,6 +323,7 @@ if (target.loader != "none") {
     def neutralAotBasesManifest = neutralClojureReportDir.map { it.file("aot-bases.txt") }
     def neutralSourceBasesManifest = neutralClojureReportDir.map { it.file("source-bases.txt") }
     def neutralAotClassesManifest = neutralClojureReportDir.map { it.file("aot-class-files.txt") }
+    def neutralStagedResourcesManifest = neutralClojureReportDir.map { it.file("staged-resources.txt") }
 
     // Build the source side of the mixed runtime representation. Clojure's
     // compiler may AOT neutral namespaces transitively while compiling the
@@ -399,8 +400,8 @@ if (target.loader != "none") {
     // Clojurephant's compileClojure task consumes SourceSet resources. Feeding
     // this generated directory back through processResources would therefore
     // create compileClojure -> processResources -> prepare -> compileClojure.
-    // Jar/Shadow consume the filtered directory directly; run tasks add it to
-    // their launch classpath below.
+    // The staging task below copies the filtered directory into the standard
+    // resources output after processResources has completed.
     def verifyNeutralClojurePackaging = tasks.register("verifyNeutralClojurePackaging") {
         group = "verification"
         description = "Verify neutral Clojure source/class namespace exclusivity."
@@ -434,6 +435,51 @@ if (target.loader != "none") {
                 throw new GradleException("Full-AOT mode unexpectedly copied neutral Clojure sources: ${copiedBases.sort()}")
             }
         }
+    }
+    def stageNeutralClojureRuntimeResources = tasks.register("stageNeutralClojureRuntimeResources", Copy) {
+        group = "build"
+        description = "Stage filtered neutral Clojure sources into the standard runtime resources output."
+        dependsOn tasks.named("processResources"), prepareNeutralClojureRuntimeSources
+        from(neutralClojureResourceDir) {
+            include "**/*.clj"
+            include "**/*.cljc"
+        }
+        into layout.buildDirectory.dir("resources/main")
+        duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        outputs.file(neutralStagedResourcesManifest)
+        doFirst {
+            def manifest = neutralStagedResourcesManifest.get().asFile
+            def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
+            if (manifest.isFile() && resourcesRoot.isDirectory()) {
+                manifest.readLines().findAll { !it.trim().isEmpty() }.each { String rel ->
+                    def stale = new File(resourcesRoot, rel.trim())
+                    if (stale.isFile()) {
+                        stale.delete()
+                    }
+                }
+            }
+        }
+        doLast {
+            def sourceDir = neutralClojureResourceDir.get().asFile
+            def staged = [] as TreeSet<String>
+            if (sourceDir.isDirectory()) {
+                fileTree(sourceDir) {
+                    include "**/*.clj"
+                    include "**/*.cljc"
+                }.files.each { File sourceFile ->
+                    staged << sourceDir.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                }
+            }
+            def manifest = neutralStagedResourcesManifest.get().asFile
+            manifest.parentFile.mkdirs()
+            manifest.text = staged.join(System.lineSeparator()) + System.lineSeparator()
+        }
+    }
+    tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
+        dependsOn stageNeutralClojureRuntimeResources
+    }
+    tasks.matching { it.name == "checkClojure" }.configureEach {
+        dependsOn stageNeutralClojureRuntimeResources
     }
     // Platform AOT is exhaustive. Derive its deterministic namespace set from
     // selected Clojure source roots instead of maintaining a second list.
@@ -597,7 +643,6 @@ if (target.loader != "none") {
     def platformRuntimeLaunchClasspath = files(
         layout.buildDirectory.dir("classes/java/main"),
         layout.buildDirectory.dir("resources/main"),
-        neutralClojureResourceDir,
         configurations.runtimeClasspath
     )
     tasks.matching { it.name in ["runClient", "runServer", "runData", "runDatagen", "runGametestServer"] }.configureEach {
@@ -612,11 +657,7 @@ if (target.loader != "none") {
 
     tasks.named("jar", Jar).configure {
         dependsOn copyClojureClassesToJavaOutput
-        dependsOn verifyNeutralClojurePackaging
-        from(neutralClojureResourceDir) {
-            include "**/*.clj"
-            include "**/*.cljc"
-        }
+        dependsOn verifyNeutralClojurePackaging, stageNeutralClojureRuntimeResources
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveBaseName = target.artifact.baseName
         archiveClassifier = target.artifact.classifier
@@ -624,11 +665,7 @@ if (target.loader != "none") {
 
     if (shadowPluginId) {
         tasks.named("shadowJar").configure {
-            dependsOn verifyNeutralClojurePackaging
-            from(neutralClojureResourceDir) {
-                include "**/*.clj"
-                include "**/*.cljc"
-            }
+            dependsOn verifyNeutralClojurePackaging, stageNeutralClojureRuntimeResources
             configurations = [project.configurations.runtimeClasspath]
             archiveBaseName = target.artifact.baseName
             archiveClassifier = "${target.artifact.classifier}-shadow"
@@ -643,9 +680,16 @@ if (target.loader != "none") {
 
     def configurePackagedRuntimeProject = { Project contentProject, String label ->
         def javaClasses = contentProject.layout.buildDirectory.dir("classes/java/main")
-        def clojureClasses = contentProject.layout.buildDirectory.dir("clojure/main")
+        def neutralAotStripTask = rootProject.ext.fullAotEnabled
+            ? contentProject.tasks.findByName("stripAotLvt")
+            : null
+        def clojureClasses = contentProject.layout.buildDirectory.dir(
+            neutralAotStripTask != null ? "clojure/main-stripped" : "clojure/main")
         def resources = contentProject.layout.buildDirectory.dir("resources/main")
         def packagingDeps = [contentProject.tasks.named("classes")]
+        if (neutralAotStripTask != null) {
+            packagingDeps << neutralAotStripTask
+        }
         def runtimeClassDependencies = runtimeClassTasks(contentProject)
         def includeStandaloneAotClasses = rootProject.ext.fullAotEnabled || !(contentProject.path in [":ac", ":mcmod"])
 
@@ -704,6 +748,9 @@ if (target.loader != "none") {
 
         def copyTask = tasks.register("copy${label}RuntimeClassesToPlatformOutput", Copy) {
             dependsOn runtimeClassDependencies
+            if (neutralAotStripTask != null) {
+                dependsOn neutralAotStripTask
+            }
             group = "build"
             description = "Mirror ${label} runtime classes into the selected platform target output."
             mustRunAfter tasks.named("compileJava")

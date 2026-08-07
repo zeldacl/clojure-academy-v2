@@ -39,7 +39,7 @@ In source-first mode, the platform compile writes AOT classes to its target-loca
 
 The comparison uses resource-relative paths rather than namespace-string normalization, so hyphen/underscore naming cannot create a false match. `verifyNeutralClojurePackaging` fails if the generated source set does not equal `all-neutral-sources - current-platform-aot-namespaces`.
 
-The filtered source directory is added directly to Jar/Shadow Jar and to the development launch classpath. It is intentionally not routed through `processResources`: Clojurephant's `compileClojure` consumes the SourceSet resources, and doing so would create a `compileClojure -> processResources -> prepare -> compileClojure` task cycle.
+The filtered source directory is staged into the standard `resources/main` output after `processResources` completes. Jar/Shadow Jar and loader run tasks therefore see the same resources. It is intentionally not added as a `processResources` input: Clojurephant's `compileClojure` consumes the SourceSet resources, and doing so would create a `compileClojure -> processResources -> prepare -> compileClojure` task cycle.
 
 When switching from full AOT back to source-first mode, the build removes old neutral AOT classes mirrored into the platform output and clears stale `ac`/`mcmod` Clojure output. This makes switching `-PfullAot=true` and the default mode safe without a manual clean.
 
