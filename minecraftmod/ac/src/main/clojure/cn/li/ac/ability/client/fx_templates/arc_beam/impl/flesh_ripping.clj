@@ -24,7 +24,8 @@
 
 (defn- corner-tick-ops
   "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
-  line segments (vertical + +x + +z), so the mark reads as 8 corner ticks."
+  line segments (vertical + +x + +z), so the mark reads as 8 corner ticks.
+  Lines are translucent (upstream marker colors carry low alpha)."
   [ox oy oz width height color]
   (let [len (* 0.2 width)
         corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
@@ -35,16 +36,17 @@
                     z (+ oz (* cz width))
                     rev (< cy 0.5)
                     vert (if rev len (- len))]
-                [(ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color)
-                 (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color)
-                 (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color)]))
+                [(assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color) :translucent? true)]))
             corners)))
 
 (defn- marker-ops
-  "Box bottom sits AT the aim point; when targeting an entity the box follows
-  its LIVE client-side position every frame and is sized to the target box x1.2
-  (upstream l_updateEffect + EntityMarker follow)."
-  [st]
+  "Box bottom sits just ABOVE the aim point (upstream y + 0.05*sin float);
+  when targeting an entity the box follows its LIVE client-side position every
+  frame and is sized to the target box x1.2 (upstream l_updateEffect +
+  EntityMarker follow)."
+  [st tick]
   (let [color (if (:hit? st) color-threatening color-disabled)
         live (when-let [uuid (:target-uuid st)]
                (client-bridge/run-client-effect!
@@ -52,7 +54,8 @@
         width (double (if live (* 1.2 (:width live)) (or (:target-width st) 0.6)))
         height (double (if live (* 1.2 (:height live)) (or (:target-height st) 1.8)))
         px (double (if live (:x live) (:x (:aim st))))
-        py (double (if live (:y live) (:y (:aim st))))
+        py (+ (double (if live (:y live) (:y (:aim st))))
+              (* 0.05 (Math/sin (/ (double tick) 400.0))))
         pz (double (if live (:z live) (:z (:aim st))))]
     (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
                      width height color)))
@@ -132,13 +135,13 @@
                 {}
                 states)))))
 
-(defn- build-plan [_camera-pos _hand-center-pos _tick]
+(defn- build-plan [_camera-pos _hand-center-pos tick]
   (let [states (vals (:fx-state (level-effects/effect-state-snapshot :flesh-ripping)))
         marker-ops
         (vec
          (mapcat (fn [st]
                    (when (and (:active? st) (:aim st))
-                     (marker-ops st)))
+                     (marker-ops st tick)))
                  states))]
     (when (seq marker-ops)
       {:ops marker-ops})))

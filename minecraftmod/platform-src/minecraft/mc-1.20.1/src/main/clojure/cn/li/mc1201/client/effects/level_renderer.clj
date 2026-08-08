@@ -352,15 +352,19 @@
   (emit-quad-vertex! vc mat p3 u1 v0 color))
 
 (defn- sort-ops
-  "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
-  :plasma [...]} with transients / HashMap — avoids per-op persistent conj/update."
+  "Single pass over `ops`, bucketing into {:lines [...] :translucent-lines [...]
+  :quads {texture [...]} :plasma [...]} with transients / HashMap — avoids
+  per-op persistent conj/update."
   [ops]
   (let [lines (transient [])
+        tlines (transient [])
         plasma (transient [])
         ^java.util.HashMap quads-t (java.util.HashMap.)]
     (doseq [op ops]
       (case (:kind op)
-        :line (conj! lines op)
+        :line (if (:translucent? op)
+                (conj! tlines op)
+                (conj! lines op))
         :quad (let [tex (:texture op)
                     bucket (or (.get quads-t tex)
                                (let [b (transient [])]
@@ -370,6 +374,7 @@
         :plasma-body (conj! plasma op)
         nil))
     {:lines (persistent! lines)
+     :translucent-lines (persistent! tlines)
      :quads (persistent!
              (reduce (fn [m ^java.util.Map$Entry e]
                        (assoc! m (.getKey e) (persistent! (.getValue e))))
@@ -496,7 +501,7 @@
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
-      (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
+      (let [{:keys [lines translucent-lines quads plasma]} (sort-ops (:ops plan))]
         (.pushPose pose-stack)
         (.translate pose-stack
                     (double (- (:x camera-pos)))
@@ -507,6 +512,10 @@
             (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
               (doseq [op lines]
                 (emit-line! line-vc mat op))))
+          (when (seq translucent-lines)
+            (let [^VertexConsumer tline-vc (.getBuffer buffer-source (ModRenderTypes/academyLinesTranslucent))]
+              (doseq [op translucent-lines]
+                (emit-line! tline-vc mat op))))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]

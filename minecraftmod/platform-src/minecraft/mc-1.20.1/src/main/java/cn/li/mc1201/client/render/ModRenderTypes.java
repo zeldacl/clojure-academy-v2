@@ -39,6 +39,29 @@ public final class ModRenderTypes extends RenderType {
                     PLASMA_BODY_STATE
             ));
 
+    /**
+     * Translucent LINES render type for ability aim markers — vanilla
+     * RenderType.lines() has no transparency, so marker colors with low alpha
+     * (upstream EntityMarker colors) render fully opaque and look wrong.
+     */
+    private static final RenderType ACADEMY_LINES_TRANSLUCENT = create(
+            "academy_lines_translucent",
+            DefaultVertexFormat.POSITION_COLOR_NORMAL,
+            VertexFormat.Mode.LINES,
+            256,
+            false,
+            false,
+            CompositeState.builder()
+                    .setShaderState(RENDERTYPE_LINES_SHADER)
+                    .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                    .setWriteMaskState(COLOR_DEPTH_WRITE)
+                    .setCullState(NO_CULL)
+                    .createCompositeState(false));
+
+    public static RenderType academyLinesTranslucent() {
+        return ACADEMY_LINES_TRANSLUCENT;
+    }
+
     private ModRenderTypes(String name, VertexFormat format, VertexFormat.Mode mode, int bufferSize,
                            boolean affectsCrumbling, boolean sortOnUpload,
                            Runnable setupState, Runnable clearState) {

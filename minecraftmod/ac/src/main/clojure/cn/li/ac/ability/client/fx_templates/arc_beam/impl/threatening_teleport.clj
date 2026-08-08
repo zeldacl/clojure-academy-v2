@@ -17,7 +17,8 @@
 (defn- corner-tick-ops
   "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
   line segments — a vertical (len up on bottom corners, down on top corners)
-  plus +x and +z — so the mark reads as 8 corner ticks, not a solid box."
+  plus +x and +z — so the mark reads as 8 corner ticks, not a solid box.
+  Lines are translucent (upstream marker colors carry low alpha)."
   [ox oy oz width height color]
   (let [len (* 0.2 width)
         corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
@@ -28,18 +29,18 @@
                     z (+ oz (* cz width))
                     rev (< cy 0.5)
                     vert (if rev len (- len))]
-                [(ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color)
-                 (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color)
-                 (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color)]))
+                [(assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color) :translucent? true)]))
             corners)))
 
 (defn- marker-ops
-  "Box bottom sits AT the aim point (upstream translates by -width/2 in x/z and
-  keeps y) — a ground hit shows the mark standing on the surface instead of
-  half-buried. When targeting an entity the box follows its live position
-  every frame and is sized to its bounding box (upstream EntityMarker.target
-  follow + RenderMarker target sizing)."
-  [st]
+  "Box bottom sits just ABOVE the aim point — upstream RenderMarker translates
+  by -width/2 in x/z and y + 0.05*sin, so the mark floats a hair above a
+  surface hit instead of burying its bottom corners. When targeting an entity
+  the box follows its live position every frame and is sized to its bounding
+  box (upstream EntityMarker.target follow + RenderMarker target sizing)."
+  [st tick]
   (let [color (if (:hit? st) color-threatening color-normal)
         live (when-let [uuid (:target-uuid st)]
                (client-bridge/run-client-effect!
@@ -47,7 +48,8 @@
         width (double (if live (:width live) (or (:target-width st) default-marker-size)))
         height (double (if live (:height live) (or (:target-height st) default-marker-size)))
         px (double (if live (:x live) (:x (:aim st))))
-        py (double (if live (:y live) (:y (:aim st))))
+        py (+ (double (if live (:y live) (:y (:aim st))))
+              (* 0.05 (Math/sin (/ (double tick) 400.0))))
         pz (double (if live (:z live) (:z (:aim st))))]
     (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
                      width height color)))
@@ -132,13 +134,13 @@
     (update state* :fx-state
             (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))))
 
-(defn- build-plan [_camera-pos _hand-center-pos _tick]
+(defn- build-plan [_camera-pos _hand-center-pos tick]
   (let [states (vals (:fx-state (level-effects/effect-state-snapshot :threatening-teleport)))
         marker-ops
         (vec
          (mapcat (fn [st]
                    (when (and (:active? st) (:aim st))
-                     (marker-ops st)))
+                     (marker-ops st tick)))
                  states))]
     (when (seq marker-ops)
       {:ops marker-ops})))
