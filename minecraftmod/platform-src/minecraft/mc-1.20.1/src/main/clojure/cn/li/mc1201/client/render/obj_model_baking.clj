@@ -16,6 +16,8 @@
             [cn.li.mcbase.datagen.item-model-patterns :as model-patterns]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.resources.model BakedModel ModelResourceLocation]
+           [net.minecraft.core Direction]
+           [net.minecraft.util RandomSource]
            [net.minecraft.resources ResourceLocation]
            [java.util Map]
            [cn.li.mc1201.client.render.item ObjCompositeBakedModel]))
@@ -61,6 +63,14 @@
             (inventory-mrl mod-id (str (item-id->basename item-id) "_3d")))
           (obj-3d-item-ids))))
 
+(defn- world-quad-count
+  "Total baked quads on the mesh model — 0 means the OBJ produced nothing and the
+  item will render empty in hand, which is the failure this logging exists to name."
+  [^BakedModel world-model]
+  (let [rand (RandomSource/create)]
+    (reduce + (count (.getQuads world-model nil nil rand))
+             (map #(count (.getQuads world-model nil % rand)) (Direction/values)))))
+
 (defn install-obj-composite-models!
   "Replace each 3D item's inventory baked model with ObjCompositeBakedModel.
 
@@ -80,7 +90,9 @@
             (.put models base-mrl
                   (ObjCompositeBakedModel. flat-base world-model
                                            (overrides-fn flat-base world-model)))
-            (log/debug "[obj-model-baking] composite installed for" item-id))
-          (log/debug "[obj-model-baking] skipping" item-id
-                     "- flat-base?" (boolean flat-base)
-                     "world-model?" (boolean world-model)))))))
+            (log/info "[obj-model-baking] composite installed for" item-id
+                      "- mesh quads:" (world-quad-count world-model)))
+          (log/warn "[obj-model-baking] no composite for" item-id
+                    "- it will render as a flat icon everywhere."
+                    "flat-base?" (boolean flat-base)
+                    "world-model?" (boolean world-model)))))))
