@@ -127,22 +127,34 @@
 ;; Row / add-row builders
 ;; ============================================================================
 
-(defn- hide-row-sections! [^INode item]
+(defn- hide-row-sections! [^UiRt rt ^INode item]
   (doseq [id [:elem-row :add-row]]
     (when-let [^INode n (ui/item-node item id)]
-      (.setVisible n false))))
+      (.setVisible n false)
+      ;; setVisible alone does not dirty the render tape — without this the
+      ;; hidden section stays hittable and swallows the row's clicks.
+      (.setFlag n node/FLAG-LAYOUT-DIRTY))))
 
-(defn- show-row-section! [^INode item section-id]
-  (hide-row-sections! item)
+(defn- show-row-section! [^UiRt rt ^INode item section-id]
+  (hide-row-sections! rt item)
   (when-let [^INode n (ui/item-node item section-id)]
-    (.setVisible n true)))
+    (.setVisible n true)
+    (.setFlag n node/FLAG-LAYOUT-DIRTY))
+  (rt/mark-tree-dirty! rt))
 
 ;; ============================================================================
 ;; List rebuild — the visible scroll window + optional add-row
 ;; ============================================================================
 
 (defn- hovered-location [^UiRt rt hit-map]
-  (get hit-map (rt/hovered-idx rt)))
+  ;; hit-test returns the DEEPEST node (name text, icon) — walk up to the
+  ;; row entry so hovering anywhere on a row shows its info panel.
+  (let [idx (rt/hovered-idx rt)]
+    (loop [n (when (>= idx 0) (rt/node-by-idx rt idx))]
+      (cond
+        (nil? n) nil
+        (contains? hit-map (.getIdx ^INode n)) (get hit-map (.getIdx ^INode n))
+        :else (recur (.getParentNode ^INode n))))))
 
 (defn- rebuild-list!
   [^UiRt rt player-uuid owner-key]
@@ -166,13 +178,14 @@
                 ^INode name-n (ui/item-node item :name)
                 ^INode tp-n (ui/item-node item :btn-tp)
                 ^INode del-n (ui/item-node item :btn-del)]
-            (show-row-section! item :elem-row)
+            (show-row-section! rt item :elem-row)
             (ui/set-node-prop! rt name-n :text (str (or (:name loc) "?")))
             (ui/set-node-prop! rt name-n :color
                               (if can? color-text-normal color-text-disabled))
             (when tp-n
               (.setVisible tp-n can?)
-              (.setFlag tp-n node/FLAG-LAYOUT-DIRTY))
+              (.setFlag tp-n node/FLAG-LAYOUT-DIRTY)
+              (rt/mark-tree-dirty! rt))
             ;; Hit-map value carries the row's design y so the info panel can
             ;; follow the hovered row (upstream setMessage moves info to ypos).
             (swap! hit-map assoc (.getIdx item)
@@ -190,7 +203,7 @@
           :add
           (let [^INode input-n (ui/item-node item :input)
                 ^INode ok-n (ui/item-node item :ok)]
-            (show-row-section! item :add-row)
+            (show-row-section! rt item :add-row)
             (rt/register-event! rt (.getIdx ok-n) :left-click
               (fn [_ _ _]
                 (let [name (str/trim (str (.getOSlot input-n 0)))
@@ -224,7 +237,9 @@
                          (str (int (or (:cp-cost loc) 0)) " CP")]]
               (when info
                 (when-not (.isVisible info)
-                  (.setVisible info true))
+                  (.setVisible info true)
+                  (.setFlag info node/FLAG-LAYOUT-DIRTY)
+                  (rt/mark-tree-dirty! rt))
                 (.setY info (double (:y entry)))
                 (.setFlag info node/FLAG-LAYOUT-DIRTY))
               (doseq [[i line] (map-indexed vector lines)]
@@ -233,7 +248,8 @@
             (when info
               (when (.isVisible info)
                 (.setVisible info false)
-                (.setFlag info node/FLAG-LAYOUT-DIRTY))))
+                (.setFlag info node/FLAG-LAYOUT-DIRTY)
+                (rt/mark-tree-dirty! rt))))
           nil)))))
 
 ;; ============================================================================
