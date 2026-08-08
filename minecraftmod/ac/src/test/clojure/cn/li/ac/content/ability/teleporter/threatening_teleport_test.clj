@@ -191,7 +191,9 @@
                                                                           :start-x 1.0 :start-y 2.0 :start-z 3.0
                                                                           :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
                                                                           :attacked? true
-                                                                          :target-uuid "enemy"}}})
+                                                                          :target-uuid "enemy"
+                                                                          :width 0.6
+                                                                          :height 1.95}}})
         damage-calls* (atom [])
         exp-calls* (atom [])
         cooldown-calls* (atom [])
@@ -266,13 +268,17 @@
       (is (some? perform-payload))
       (is (= true (get perform-payload :attacked? false))))
     (is (= [{:x 4.0
-             :y 5.0
+             ;; Crit payload y = target FEET (drop-y top minus height) so the
+             ;; client burst spreads over the box like upstream.
+             :y 3.05
              :z 6.0
              :crit-level 1
              :crit-rate 1.6
              :message-key "ability.teleporter.critical_hit"
              :message-args ["x1.6"]
              :target-uuid "enemy"
+             :target-width 0.6
+             :target-height 1.95
              :skill-id :threatening-teleport}]
            @crit-fx-calls*))))
 
@@ -392,7 +398,9 @@
                                                                           :start-x 1.0 :start-y 2.0 :start-z 3.0
                                                                           :drop-x 4.0 :drop-y 5.0 :drop-z 6.0
                                                                           :attacked? true
-                                                                          :target-uuid "enemy"}}})
+                                                                          :target-uuid "enemy"
+                                                                          :width 0.6
+                                                                          :height 1.95}}})
         fx-calls* (atom [])
         crit-fx-calls* (atom [])]
     (with-redefs [ctx/get-context get-context

@@ -287,13 +287,6 @@
 
       (when trace
 
-        (log/info "ThreateningTeleport tick trace"
-                   {:attacked? (boolean (:attacked? trace))
-                    :target-uuid (:target-uuid trace)
-                    :drop [(double (or (:drop-x trace) 0.0))
-                           (double (or (:drop-y trace) 0.0))
-                           (double (or (:drop-z trace) 0.0))]})
-
         (fx/send! ctx-id {:topic :threatening-teleport/fx-update :mode :update} nil
 
                   (trace-fx-payload trace))))
@@ -347,15 +340,6 @@
 
                     (trace-result player-id range))]
 
-      (log/info "ThreateningTeleport up! gates"
-                 {:cost-ok? (boolean cost-ok?)
-                  :trace? (boolean trace)
-                  :trace-attacked? (boolean (get-in trace [:attacked?]))
-                  :trace-drop (when trace [(get-in trace [:drop-x])
-                                           (get-in trace [:drop-y])
-                                           (get-in trace [:drop-z])])
-                  :main-hand-item? (boolean (has-main-hand-item? player-ref))})
-
       (when (and cost-ok? trace (has-main-hand-item? player-ref))
 
         (let [world-id (:world-id trace)
@@ -367,14 +351,6 @@
               drop? (should-drop? attacked?)
 
               consumed? (settle-main-hand-item! player-ref trace drop?)]
-
-          (log/info "ThreateningTeleport settle"
-                     {:attacked? attacked?
-                      :drop? drop?
-                      :consumed? (boolean consumed?)
-                      :drop-pos [(double (or (:drop-x trace) 0.0))
-                                 (double (or (:drop-y trace) 0.0))
-                                 (double (or (:drop-z trace) 0.0))]})
 
           (when consumed?
 
@@ -389,16 +365,13 @@
 
               (when (helper/crit-applied? damage-result)
 
-                (log/info "ThreateningTeleport crit fired"
-                          {:crit-level (:crit-level damage-result)
-                           :crit-rate (:crit-rate damage-result)
-                           :target-uuid target-uuid})
-
                 (fx/send! ctx-id {:topic :teleporter/fx-crit-hit} nil
 
                           {:x (:drop-x trace)
 
-                           :y (:drop-y trace)
+                           :y (- (double (:drop-y trace))
+
+                                 (double (:height trace)))
 
                            :z (:drop-z trace)
 
@@ -411,6 +384,10 @@
                            :message-args (:message-args damage-result)
 
                            :target-uuid target-uuid
+
+                           :target-width (double (:width trace))
+
+                           :target-height (double (:height trace))
 
                            :skill-id threatening-teleport-skill-id}))
 

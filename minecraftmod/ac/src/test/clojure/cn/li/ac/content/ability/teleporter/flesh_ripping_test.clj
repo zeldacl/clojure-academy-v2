@@ -158,6 +158,8 @@
                                       :message-key "ability.teleporter.critical_hit"
                                       :message-args ["x2.6"]
                                       :target-uuid "target-1"
+                                      :target-width 0.6
+                                      :target-height 1.8
                                       :skill-id :flesh-ripping}]]
            @fx-calls*))))
 
@@ -202,6 +204,8 @@
                                       :message-key nil
                                       :message-args nil
                                       :target-uuid "target-1"
+                                      :target-width 0.6
+                                      :target-height 1.8
                                       :skill-id :flesh-ripping}]]
            @fx-calls*))))
 

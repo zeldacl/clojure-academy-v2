@@ -28,7 +28,7 @@
   (arc-beam/effect-build-plan :threatening-teleport nil {:player-uuid "viewer"} 0 nil))
 
 (defn- with-fx-owner [f]
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "tt-test"})]
+  (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "tt-test"})]
     (f)))
 
 (deftest init-registers-threatening-teleport-fx-channels-test
@@ -49,7 +49,7 @@
              @registered-topics*)))))
 
 (deftest two-owners-keep-threatening-teleport-state-independent-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "threatening-teleport-test"})]
+  (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "threatening-teleport-test"})]
     (tfx/init!)
     (enqueue! "ctx-a" :threatening-teleport/fx-start {:mode :start :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? true})
     (enqueue! "ctx-b" :threatening-teleport/fx-start {:mode :start :target-x 4.0 :target-y 5.0 :target-z 6.0 :hit? false})
@@ -182,13 +182,9 @@
                              (<= 29.3 z 30.7)))
                       endpoints)))))))
 
-(deftest perform-clears-marker-and-plays-attack-fx-test
-  (let [particles* (atom [])
-        sounds* (atom [])]
-    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "tt-test"})
-                  client-particles/queue-particle-effect! (fn [owner fx]
-                                                            (swap! particles* conj fx)
-                                                            nil)
+(deftest perform-clears-marker-plays-sound-and-spawns-green-trail-test
+  (let [sounds* (atom [])]
+    (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "tt-test"})
                   client-sounds/queue-sound-effect! (fn [owner fx]
                                                       (swap! sounds* conj fx)
                                                       nil)]
@@ -203,8 +199,39 @@
                  :hit? true})
       ;; Marker dies on execute (upstream c_end marker.setDead).
       (is (nil? (get (:fx-state (tfx/fx-snapshot)) [:ctx "ctx-f"])))
-      ;; Hit cue burst + portal trail + tp sound.
-      (is (some? (some #(and (= :particle (:type %)) (= 8 (:count %))) @particles*)))
-      (is (pos? (count (filter #(= 1 (:count %)) @particles*))))
+      ;; Hit: tp sound + one green TPParticle trail burst (upstream c_end).
       (is (= 1 (count @sounds*)))
-      (is (= (modid/namespaced-path "tp.tp") (:sound-id (first @sounds*)))))))
+      (is (= (modid/namespaced-path "tp.tp") (:sound-id (first @sounds*))))
+      (let [trails (:trails (tfx/fx-snapshot))]
+        (is (= 1 (count trails)))
+        (is (seq (first trails)))
+        (is (every? #(= (modid/asset-path "textures/effects" "tp_particle.png")
+                        (:texture %))
+                    (first trails))))
+      ;; Build plan renders the trail as textured billboard quads (upstream
+      ;; Particle sprite, camera-facing), no vanilla particles involved.
+      (let [{:keys [ops]} (arc-beam/effect-build-plan
+                           :threatening-teleport {:x 0.0 :y 0.0 :z 0.0}
+                           {:player-uuid "viewer"} 0 nil)]
+        (is (seq ops))
+        (is (every? #(= :quad (:kind %)) ops))
+        (is (every? #(= (modid/asset-path "textures/effects" "tp_particle.png")
+                        (:texture %))
+                    ops))))))
+
+(deftest perform-miss-plays-no-sound-and-no-trail-test
+  (let [sounds* (atom [])]
+    (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "tt-test"})
+                  client-sounds/queue-sound-effect! (fn [owner fx]
+                                                      (swap! sounds* conj fx)
+                                                      nil)]
+      (tfx/init!)
+      (enqueue! "ctx-m" :threatening-teleport/fx-perform
+                {:mode :perform
+                 :start-x 1.0 :start-y 2.0 :start-z 3.0
+                 :target-x 4.0 :target-y 5.0 :target-z 6.0
+                 :hit? false})
+      ;; Upstream c_end: sound + trail only when attacked.
+      (is (zero? (count @sounds*)))
+      (is (empty? (:trails (tfx/fx-snapshot))))
+      (is (nil? (build-plan))))))

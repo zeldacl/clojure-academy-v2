@@ -274,6 +274,10 @@
 
                        :target-uuid e-uuid
 
+                       :target-width (:target-width trace)
+
+                       :target-height (:target-height trace)
+
                        :skill-id flesh-ripping-skill-id}))
 
           (when (and (< (rand) (cfg-probability :effect.nausea-chance))

@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.threatening-teleport
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
+  (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -80,12 +80,56 @@
     (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
                      width height color)))
 
+(defn- rand-range
+  [a b]
+  (+ a (rand (- b a))))
+
+(def ^:private tp-particle-texture
+  (modid/asset-path "textures/effects" "tp_particle.png"))
+
+(defn- trail-particles
+  "Upstream c_end TPParticleFactory walk: from the caster (posY - 0.5, which
+  is what :start-y carries) to the drop point + 0.5 (:target-* is the
+  normalized drop position), advancing 1..2 blocks per step; each particle
+  drifts with velocity (-0.02..0.02, -0.02..0.05, -0.02..0.02), size
+  0.1-0.2, alpha 153-204, fadeAfter(20, 20) with the template fade-in 5."
+  [{:keys [start-x start-y start-z target-x target-y target-z]}]
+  (let [from-x (double (or start-x 0.0))
+        from-y (double (or start-y 0.0))
+        from-z (double (or start-z 0.0))
+        to-x (+ 0.5 (double (or target-x 0.0)))
+        to-y (+ 0.5 (double (or target-y 0.0)))
+        to-z (+ 0.5 (double (or target-z 0.0)))
+        dx (- to-x from-x)
+        dy (- to-y from-y)
+        dz (- to-z from-z)
+        dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+        len (max 1.0e-5 dist)
+        lx (/ dx len) ly (/ dy len) lz (/ dz len)]
+    (loop [pos-x from-x, pos-y from-y, pos-z from-z
+           move 1.0, x 1.0, acc []]
+      (if (> x dist)
+        acc
+        (let [nx (+ pos-x (* move lx))
+              ny (+ pos-y (* move ly))
+              nz (+ pos-z (* move lz))
+              move* (double (rand-range 1.0 2.0))]
+          (recur nx ny nz move* (+ x move*)
+                 (conj acc {:x nx :y ny :z nz
+                            :vx (rand-range -0.02 0.02)
+                            :vy (rand-range -0.02 0.05)
+                            :vz (rand-range -0.02 0.02)
+                            :size (rand-range 0.1 0.2)
+                            :texture tp-particle-texture
+                            :start-alpha (long (rand-range 153 204))
+                            :age 0 :life 20 :fade-in 5 :fade-out 20})))))))
+
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
         base-meta {:owner-key owner-key*
-                   :queue-owner (client-particles/current-effect-owner)
+                   :queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id :channel channel
                    :source-player-id source-player-id :world-id world-id}
         aim (fn [p]
@@ -113,42 +157,16 @@
                               :target-width (double (or (:target-width payload) default-marker-size))
                               :target-height (double (or (:target-height payload) default-marker-size)))))
       :perform
-      (do
-        (when (:hit? payload)
-          (client-particles/queue-particle-effect! (:queue-owner base-meta)
-            {:type :particle :particle-type :portal
-             :x (double (or (:target-x payload) 0.0))
-             :y (+ 1.0 (double (or (:target-y payload) 0.0)))
-             :z (double (or (:target-z payload) 0.0))
-             :count 8 :speed 0.08 :offset-x 0.3 :offset-y 0.3 :offset-z 0.3}))
-        ;; AcademyCraft draws a loose teleport-particle path from the caster
-        ;; to the item drop point (upstream c_end TPParticleFactory walk).
-        (let [from-x (double (or (:start-x payload) 0.0))
-              from-y (double (or (:start-y payload) 0.0))
-              from-z (double (or (:start-z payload) 0.0))
-              to-x (+ 0.5 (double (or (:target-x payload) 0.0)))
-              to-y (+ 0.5 (double (or (:target-y payload) 0.0)))
-              to-z (+ 0.5 (double (or (:target-z payload) 0.0)))
-              dx (- to-x from-x)
-              dy (- to-y from-y)
-              dz (- to-z from-z)
-              dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-              steps (max 1 (int (Math/ceil (/ dist 1.5))))]
-          (dotimes [idx steps]
-            (let [t (/ (double (inc idx)) (double steps))]
-              (client-particles/queue-particle-effect! (:queue-owner base-meta)
-                {:type :particle
-                 :particle-type :portal
-                 :x (+ from-x (* dx t))
-                 :y (+ from-y (* dy t))
-                 :z (+ from-z (* dz t))
-                 :count 1
-                 :speed 0.04
-                 :offset-x 0.02
-                 :offset-y 0.05
-                 :offset-z 0.02}))))
-        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
+      (let [state* (if (:hit? payload)
+                     ;; Upstream c_end: only on a hit — tp.tp sound + a loose
+                     ;; green teleport-particle path (TPParticleFactory) from
+                     ;; the caster to the item drop point. :hit? is the
+                     ;; normalized attacked flag.
+                     (do
+                       (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+                         {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
+                       (update state* :trails conj (trail-particles payload)))
+                     state*)]
         ;; Upstream c_end kills the marker on execute.
         (update state* :fx-state dissoc owner-key*))
       :end
@@ -157,19 +175,32 @@
 
 (defn- tick-state! [state]
   (let [state* (or state {:fx-state {}})]
-    (update state* :fx-state
-            (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))))
+    (-> state*
+        (update :fx-state
+                (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))
+        (update :trails
+                (fn [trails]
+                  (into [] (keep (fn [burst]
+                                   (let [alive (bp/tick-particles! burst)]
+                                     (when (seq alive) alive))))
+                        trails))))))
 
-(defn- build-plan [_camera-pos _hand-center-pos tick]
-  (let [states (vals (:fx-state (level-effects/effect-state-snapshot :threatening-teleport)))
+(defn- build-plan [camera-pos _hand-center-pos tick]
+  (let [store (level-effects/effect-state-snapshot :threatening-teleport)
+        trails (:trails store)
+        cam (when (seq trails) (rv3/map->v3 camera-pos))
         marker-ops
         (vec
          (mapcat (fn [st]
                    (when (and (:active? st) (:aim st))
                      (marker-ops st tick)))
-                 states))]
-    (when (seq marker-ops)
-      {:ops marker-ops})))
+                 (vals (:fx-state store))))
+        trail-ops (if cam
+                    (vec (mapcat (fn [burst] (bp/particle-ops cam burst)) trails))
+                    [])
+        ops (into marker-ops trail-ops)]
+    (when (seq ops)
+      {:ops ops})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:threatening-teleport :level] [_ _] {:fx-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:threatening-teleport :level]
