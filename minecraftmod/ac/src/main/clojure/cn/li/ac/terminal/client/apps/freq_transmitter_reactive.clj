@@ -3,6 +3,7 @@
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.client.toast :as toast]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.terminal.freq-network :as freq-net]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.i18n :as i18n]
