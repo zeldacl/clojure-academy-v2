@@ -8,6 +8,7 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.damagesource.DamageType;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -73,6 +74,16 @@ public final class DamageSourceAccess {
         }
         if (level != null && ":skill".equals(String.valueOf(sourceType)) && attacker instanceof Player player) {
             return level.damageSources().playerAttack(player);
+        }
+        if (level != null && ":magic".equals(String.valueOf(sourceType)) && attacker instanceof Player player) {
+            // Upstream TPSkillHelper.attackIgnoreArmor uses
+            // SkillDamageSource(player).setDamageBypassesArmor(): an
+            // armor-bypassing source attributed to the caster. MAGIC is in
+            // the BYPASSES_ARMOR tag, so attributing it to the player keeps
+            // the bypass while vanilla's LivingEntity.hurt applies the
+            // player-attack knockback (0.4) it otherwise would not for an
+            // unattributed magic source.
+            return new DamageSource(RegistryLookups.holderOrThrow(level, DamageTypes.MAGIC), player);
         }
         return resolveKeyword(level, sourceType);
     }
