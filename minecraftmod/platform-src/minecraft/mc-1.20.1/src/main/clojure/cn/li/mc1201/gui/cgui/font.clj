@@ -115,6 +115,26 @@
 
 ;; ---- draw ----
 
+(defn- end-vanilla-draw!
+  "Undo the depth state GuiGraphics leaves behind after a drawString.
+
+  `GuiGraphics.drawString` flushes whenever the graphics is unmanaged — which
+  is every Screen — and `GuiGraphics.flush` ends with glEnable(GL_DEPTH_TEST),
+  because vanilla's own GUI pass wants the test back on. The reactive tape's
+  contract is the opposite: depth test OFF unless a node opts in through
+  :depth-func (see render.clj's pop-depth!), since blits carry no state of
+  their own and every quad after this one inherits whatever we leave behind.
+
+  Under the ortho GUI projection the difference is invisible — coplanar quads
+  land on bit-identical depth, so LEQUAL passes everywhere. Under the
+  terminal's perspective camera it is not: an app icon and the app_back plate
+  it sits on are coplanar but built from different vertices, so their
+  interpolated depths disagree by float rounding, LEQUAL starts rejecting
+  fragments of the icon, and the icon tears apart and reassembles as the
+  camera sways."
+  []
+  (RenderSystem/disableDepthTest))
+
 (defn- draw-run! [^GuiGraphics gg ^Font font ^Component comp x y color shadow?]
   (RenderSystem/enableBlend)
   (RenderSystem/defaultBlendFunc)
@@ -122,7 +142,8 @@
   (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
   (when-let [shader @msdf-shader]
     (RenderSystem/setShader (fn [] shader)))
-  (.drawString gg font comp (int x) (int y) (unchecked-int color) (boolean shadow?)))
+  (.drawString gg font comp (int x) (int y) (unchecked-int color) (boolean shadow?))
+  (end-vanilla-draw!))
 
 ;; ---- width ----
 
@@ -232,7 +253,8 @@
       (.drawString gg mc-font comp 0 0 (unchecked-int color) (boolean shadow?))
       (finally
         (.popPose ps)))
-    (.endBatch (.bufferSource gg))))
+    (.endBatch (.bufferSource gg))
+    (end-vanilla-draw!)))
 
 (defn- draw-msdf-runs! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?
                        & {:keys [glyph-styles]}]
