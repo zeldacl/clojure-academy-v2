@@ -55,10 +55,13 @@
 
 (defn obj-3d-model-spec
   "Build the 3D OBJ model spec from item DSL properties.
-  Returns a map with :model-name (suffixed with _3d), :obj-model, :texture, :display."
+  Returns a map with :model-name (suffixed with _3d), :obj-model, :texture, :display.
+
+  The texture default lives under `item/` because the mesh samples an atlas, and
+  the block/item atlases only stitch `textures/block` and `textures/item`."
   [item-id {:keys [obj-model texture display]}]
   (let [base (registry-model-basename item-id)]
     {:model-name (str base "_3d")
      :obj-model (or obj-model (str "models/" base ".obj"))
-     :texture (or texture (str "models/" base))
+     :texture (or texture (str "item/" base "_3d"))
      :display (or display {})}))

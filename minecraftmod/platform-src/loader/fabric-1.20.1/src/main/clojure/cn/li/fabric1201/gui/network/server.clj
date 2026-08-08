@@ -28,7 +28,6 @@
 (defn- handle-server-request!
   [^ServerPlayer player msg-id request-id payload]
   (runtime-hooks/with-client-ctx-fn {:player-owner (fabric-owner/server-owner player)}
-    player
     (fn []
       (net-server/handle-request
         (str msg-id)
