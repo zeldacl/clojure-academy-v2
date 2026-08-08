@@ -95,10 +95,10 @@
             n (valid-coordinate value)
             position (if (= axis :x) [n y] [x n])]
         (persist-position! config-key position)
-        (ui/set-prop! r (if (= axis :x) :edit-x-bg :edit-y-bg) :fill edit-bg-ok)
+        (ui/set-prop! r (if (= axis :x) :edit_x_bg :edit_y_bg) :fill edit-bg-ok)
         (set-preview-position! r element sw sh))
       (catch NumberFormatException _
-        (ui/set-prop! r (if (= axis :x) :edit-x-bg :edit-y-bg) :fill edit-bg-error)))))
+        (ui/set-prop! r (if (= axis :x) :edit_x_bg :edit_y_bg) :fill edit-bg-error)))))
 
 (defn- select-element! [r selected rows {:keys [id]}]
   ;; Upstream changeEditFocus opens with `if (node == prevFocus) return;`.
@@ -109,10 +109,10 @@
       ;; set-prop! could only throw. This one fired on the first element click.
       (.setVisible ^INode (rt/node-by-id r :editbox) true)
       (position-editbox! r (get @rows id))
-      (ui/set-prop! r :edit-x :text (str x))
-      (ui/set-prop! r :edit-y :text (str y))
-      (ui/set-prop! r :edit-x-bg :fill edit-bg-ok)
-      (ui/set-prop! r :edit-y-bg :fill edit-bg-ok)
+      (ui/set-prop! r :edit_x :text (str x))
+      (ui/set-prop! r :edit_y :text (str y))
+      (ui/set-prop! r :edit_x_bg :fill edit-bg-ok)
+      (ui/set-prop! r :edit_y_bg :fill edit-bg-ok)
       (set-selected-preview! r id))))
 
 (defn create-runtime []
@@ -142,9 +142,9 @@
       (set-preview-position! r element sw sh)
       (events/on! r (:preview-id element) :left-click
         (fn [_ _ _] (select-element! r selected rows element))))
-    (events/on-confirm-input r :edit-x
+    (events/on-confirm-input r :edit_x
       (fn [_ _ value] (edit-position! r selected :x value sw sh)))
-    (events/on-confirm-input r :edit-y
+    (events/on-confirm-input r :edit_y
       (fn [_ _ value] (edit-position! r selected :y value sw sh)))
     r))
 

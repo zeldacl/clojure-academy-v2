@@ -13,10 +13,10 @@
   </image>
   <box id="editbox" pos="167.0,121.0" size="90.0,16.0" align="left,top" fill="#BB222222" visible="false">
     <text id="text_x" pos="2.0,3.0" size="10.0,10.0" align="left,top" text="X" font-size="10.0" color="#FFFFFFFF"/>
-    <box id="edit-x-bg" pos="10.0,3.0" size="34.0,10.0" align="left,top" fill="#FF333333"/>
+    <box id="edit_x_bg" pos="10.0,3.0" size="34.0,10.0" align="left,top" fill="#FF333333"/>
     <text id="edit_x" pos="10.0,3.0" size="34.0,10.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" editable="true"/>
     <text id="text_y" pos="46.0,3.0" size="10.0,10.0" align="left,top" text="Y" font-size="10.0" color="#FFFFFFFF"/>
-    <box id="edit-y-bg" pos="53.0,3.0" size="34.0,10.0" align="left,top" fill="#FF333333"/>
+    <box id="edit_y_bg" pos="53.0,3.0" size="34.0,10.0" align="left,top" fill="#FF333333"/>
     <text id="edit_y" pos="53.0,3.0" size="34.0,10.0" align="left,top" text="" font-size="10.0" color="#FFFFFFFF" editable="true"/>
   </box>
   <group id="preview-cpbar" pos="0.0,0.0" size="193.0,29.0" align="left,top">
