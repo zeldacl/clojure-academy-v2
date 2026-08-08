@@ -2,7 +2,8 @@
   "NeoForge event handler for item finish-using lifecycle events.
 
   Version loaders install with-player-owner before init!."
-  (:require [cn.li.mcbase.runtime.event.item-use :as item-use]
+  (:require [cn.li.mcbase.runtime.item-handler-core]
+            [cn.li.mcbase.runtime.event.item-use :as item-use]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.event.entity.living LivingEntityUseItemEvent$Finish]
            [net.neoforged.neoforge.common NeoForge]

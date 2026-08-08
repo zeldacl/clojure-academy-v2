@@ -4,7 +4,8 @@
   Delegates tree-building to the shared cn.li.mc1201.command.brigadier-tree
   namespace; this file only contains the Forge-specific command registration
   entry point called from ForgeEventBusManager.java."
-  (:require [cn.li.mcbase.command.brigadier-registry :as brig-reg])
+  (:require [cn.li.mc1201.command.executor-core]
+            [cn.li.mcbase.command.brigadier-registry :as brig-reg])
   (:import [com.mojang.brigadier CommandDispatcher]))
 
 

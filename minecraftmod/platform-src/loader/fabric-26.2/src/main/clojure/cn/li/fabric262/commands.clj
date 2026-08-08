@@ -4,7 +4,8 @@
   Delegates tree-building to the shared cn.li.mc262.command.brigadier-tree
   namespace; this file only contains the Fabric-specific command registration
   entry point wired via ServerLifecycleEvents."
-  (:require [cn.li.mcbase.command.brigadier-registry :as brig-reg])
+  (:require [cn.li.mc262.command.executor-core]
+            [cn.li.mcbase.command.brigadier-registry :as brig-reg])
   (:import [com.mojang.brigadier CommandDispatcher]))
 
 ;; ============================================================================

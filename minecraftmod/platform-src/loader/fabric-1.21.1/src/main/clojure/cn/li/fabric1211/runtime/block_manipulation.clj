@@ -2,7 +2,8 @@
   "Fabric block-manipulation runtime for IBlockManipulation protocol.
   Delegates to mc1211 adapter.block-manipulation using Fabric server-context.
   break-guard uses vanilla build and spawn-protection checks."
-  (:require [cn.li.mcbase.runtime.adapter.block-manipulation :as block-manipulation]
+  (:require [cn.li.mc1211.runtime.block-manipulation-core]
+            [cn.li.mcbase.runtime.adapter.block-manipulation :as block-manipulation]
             [cn.li.fabric1211.adapter.server-context :as server-ctx]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core BlockPos]
