@@ -39,7 +39,6 @@
             ^Matrix4f cam (camera/camera-matrix aspect fd (camera/game-seconds))
             ^PoseStack pose (.pose gg)
             ^Matrix4fStack modelview (RenderSystem/getModelViewStack)]
-        (camera/record-pointer! fd mx my)
         ;; Anything already queued belongs to the Screen's own projection.
         (.flush gg)
         (aset saved 0 (RenderSystem/getProjectionMatrix))

@@ -107,7 +107,10 @@
         ;; step.  This layer stays Minecraft-free, so the coupling is by contract
         ;; rather than by reference.
         ;; fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y
-        ;;     [4]last-mx [5]last-my [6]last-frame-ms [7]create-time-ms [8]aspect
+        ;;     [4]last-px [5]last-py [6]last-frame-ms [7]create-time-ms [8]aspect
+        ;;
+        ;; [4]/[5] are the previous frame's raw pointer in physical pixels, so
+        ;; the delta below matches upstream's Mouse.getDX/getDY.
         ;;
         ;; [7] is the stagger clock the app grid fades in against. It lives in
         ;; the array rather than in a closed-over constant because it is
@@ -195,13 +198,25 @@
                 ;; LWJGL Mouse.getDY() (positive = mouse moved UP). Screen `my`
                 ;; grows downward, so Screen deltas already have the opposite Y
                 ;; sign — add dy here, do not subtract.
+                ;;
+                ;; Upstream's dx/dy are *raw physical pixels*. The Screen's mx/my
+                ;; are not: GameRenderer hands the screen
+                ;; (int)(xpos * guiScaledWidth / screenWidth), so a delta taken
+                ;; from them is guiScale times smaller than upstream's and drops
+                ;; everything finer than one GUI unit. At the usual scale of 3-4
+                ;; that alone makes the pointer crawl across MAX_MX = 605. Ask
+                ;; the loader for the raw cursor and fall back to the Screen's
+                ;; coordinates where it does not expose one.
+                raw (bridge/call-adapter :get-mouse-pos)
+                px (if raw (double (nth raw 0)) (double mx))
+                py (if raw (double (nth raw 1)) (double my))
                 first-pointer-frame? (Double/isNaN (aget fd 4))
                 dx (if first-pointer-frame?
                      0.0
-                     (* (- mx (aget fd 4)) sensitivity))
+                     (* (- px (aget fd 4)) sensitivity))
                 dy (if first-pointer-frame?
                      0.0
-                     (* (- my (aget fd 5)) sensitivity))
+                     (* (- py (aget fd 5)) sensitivity))
                 new-mx (max 0.0 (min max-mx (+ (aget fd 0) dx)))
                 new-my (max 0.0 (min max-my (+ (aget fd 1) dy)))
                 ;; Smooth balance
@@ -235,7 +250,7 @@
             ;; Write frame state to primitive arrays
             (aset fd 0 (double new-mx)) (aset fd 1 (double new-my))
             (aset fd 2 (double new-bx)) (aset fd 3 (double new-by))
-            (aset fd 4 (double mx)) (aset fd 5 (double my))
+            (aset fd 4 px) (aset fd 5 py)
             (aset fd 6 (double now-ms))
             ;; Save old state before overwriting (for change detection below)
             (let [old-scroll (aget fi 0)]
@@ -291,9 +306,13 @@
               (let [^INode li (rt/node-by-id r :icon_loading)
                     ^INode lt (rt/node-by-id r :text_loading)]
                 (.setVisible li loading?) (.setVisible lt loading?))
-              (ui/set-prop! r :arrow_up :alpha (if (> (aget fi 0) 0) 1.0 0.35))
+              ;; Upstream toggles DrawTexture.enabled, i.e. the arrow is not
+              ;; drawn at all when it cannot scroll — alpha 0 is how this
+              ;; renderer says the same thing (render-image! skips a
+              ;; non-positive alpha).
+              (ui/set-prop! r :arrow_up :alpha (if (> (aget fi 0) 0) 1.0 0.0))
               (ui/set-prop! r :arrow_down :alpha
-                (if (< (aget fi 0) max-scroll) 1.0 0.35)))
+                (if (< (aget fi 0) max-scroll) 1.0 0.0)))
             ;; Set up TerminalUI's original perspective camera immediately
             ;; before this frame's tape is baked and drawn.
             (bridge/call-adapter :terminal-apply-perspective! gg rt* mx my pt)))

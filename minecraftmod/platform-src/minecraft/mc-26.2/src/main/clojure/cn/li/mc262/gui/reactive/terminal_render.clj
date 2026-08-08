@@ -44,7 +44,6 @@
       (let [screen-w (max 1.0 (double (rt/screen-w rt)))
             screen-h (max 1.0 (double (rt/screen-h rt)))
             cam (camera/camera-matrix (/ screen-w screen-h) fd (camera/game-seconds))]
-        (camera/record-pointer! fd mx my)
         (GuiPerspectiveWarp/set (camera/homography cam screen-w screen-h))
         (aset state 0 Boolean/TRUE)))))
 

@@ -38,8 +38,11 @@
 ;;
 ;; Allocated and integrated by cn.li.ac.terminal.client.shell-reactive; read
 ;; here so the index layout is written down exactly once.
-;;   fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y [4]last-mx [5]last-my
+;;   fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y [4]last-px [5]last-py
 ;;       [6]last-frame-ms [7]create-time-ms [8]aspect
+;;
+;; [4]/[5] are the previous frame's *raw* pointer, in physical pixels, owned
+;; and written by shell-reactive alone — see the delta it takes from them.
 ;;   fi: [0]scroll [1]selection [2]last-selected-app-index [3]installed-count
 ;; ============================================================================
 
@@ -51,12 +54,6 @@
 (defn buff-y
   ^double [^doubles fd]
   (aget fd 3))
-
-(defn record-pointer!
-  "Store this frame's Screen pointer so the next frame can take a delta."
-  [^doubles fd mx my]
-  (aset fd 4 (double mx))
-  (aset fd 5 (double my)))
 
 (defn app-selected?
   "Whether the 3x3 cell under the reticle holds an installed app.

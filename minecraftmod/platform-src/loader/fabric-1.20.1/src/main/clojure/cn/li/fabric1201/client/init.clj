@@ -138,6 +138,13 @@
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
      :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+     ;; Raw cursor position in physical pixels. The terminal integrates
+     ;; deltas from this because the Screen's own mouseX/mouseY are
+     ;; GUI-scaled ints, which makes its pointer guiScale times slower.
+     :get-mouse-pos (fn []
+                      (let [^Minecraft mc (Minecraft/getInstance)
+                            mh (.mouseHandler mc)]
+                        [(double (.xpos mh)) (double (.ypos mh))]))
      :send-system-message! (fn [^Player player translatable-key & args]
                               (.sendSystemMessage player
                                 (Component/translatable translatable-key (into-array Object args))))
