@@ -17,6 +17,8 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.resources.model BakedModel ModelResourceLocation]
            [net.minecraft.core Direction]
+           [net.minecraft.client.renderer.block.model ItemTransform]
+           [net.minecraft.world.item ItemDisplayContext]
            [net.minecraft.util RandomSource]
            [net.minecraft.resources ResourceLocation]
            [cn.li.mcver ResourceLocations]
@@ -68,6 +70,15 @@
     (reduce + (count (.getQuads world-model nil nil rand))
              (map #(count (.getQuads world-model nil % rand)) (Direction/values)))))
 
+(defn- describe-fp-transform
+  "First-person display transform actually baked onto the mesh. NO_TRANSFORM here
+  means the model JSON's `display` block never reached the baked model, which
+  leaves the mesh at raw OBJ scale — big enough to swallow the camera."
+  [^BakedModel world-model]
+  (let [^ItemTransform t (.getTransform (.getTransforms world-model)
+                                        ItemDisplayContext/FIRST_PERSON_RIGHT_HAND)]
+    (str "translation=" (.translation t) " rotation=" (.rotation t) " scale=" (.scale t))))
+
 (defn install-obj-composite-models!
   "Replace each 3D item's inventory baked model with ObjCompositeBakedModel.
 
@@ -88,7 +99,8 @@
                   (ObjCompositeBakedModel. flat-base world-model
                                            (overrides-fn flat-base world-model)))
             (log/info "[obj-model-baking] composite installed for" item-id
-                      "- mesh quads:" (world-quad-count world-model)))
+                      "- mesh quads:" (world-quad-count world-model)
+                      "- first-person:" (describe-fp-transform world-model)))
           (log/warn "[obj-model-baking] no composite for" item-id
                     "- it will render as a flat icon everywhere."
                     "flat-base?" (boolean flat-base)
