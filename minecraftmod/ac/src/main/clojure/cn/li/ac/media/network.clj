@@ -7,9 +7,10 @@
             [cn.li.mcmod.network.server :as net-server]
             [cn.li.mcmod.util.log :as log]))
 
-;; Ad-hoc app message id, matching the freq-transmitter app's convention
-;; (integer ids outside the core terminal:* string protocol).
-(def media-get-state-msg 1010)
+;; Message ids are strings: register-handler documents that contract, and the
+;; loader transports declare `^String msg-id` (ClojureNetwork/sendToServer), so
+;; an integer id threw ClassCastException before it ever reached the wire.
+(def media-get-state-msg "media:get-state")
 
 (defn- media->wire
   [media]

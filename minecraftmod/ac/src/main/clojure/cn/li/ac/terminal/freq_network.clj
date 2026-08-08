@@ -10,8 +10,9 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.acapi.wireless IWirelessNode]))
 
-(def freq-scan-msg 1005)
-(def freq-config-msg 1006)
+;; Strings, not integers -- see cn.li.ac.media.network for why.
+(def freq-scan-msg "freq-transmitter:scan")
+(def freq-config-msg "freq-transmitter:config")
 
 (defn- resolve-hit-target [player]
   (when-let [hit (entity/player-raytrace-block player 4.0 false)]

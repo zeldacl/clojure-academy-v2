@@ -4,6 +4,7 @@
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
@@ -66,7 +67,10 @@
 ;; ============================================================================
 
 (defn- request-alternate! [container dir]
-  (net-client/send-to-server (msg :alternate)
+  ;; Explicit owner: this fires from a button click, and the ThreadLocal
+  ;; send-to-server would otherwise fall back to is not bound there.
+  ;; default-client-owner reads the live connection instead.
+  (net-client/send-to-server (runtime-hooks/default-client-owner) (msg :alternate)
     (action-payload/action-payload container {:dir (int dir)})
     (fn [resp] (when (and (:success resp) (:mode resp))
                  (reset! (:mode container) (recipes/normalize-mode (:mode resp)))))))

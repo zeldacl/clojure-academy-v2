@@ -14,12 +14,19 @@
   (:import [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]))
 
-(def ^:private freq-scan-msg 1005)
-(def ^:private freq-config-msg 1006)
 (def ^:private normal-timeout-ms 20000)
 (def ^:private transmitting-timeout-ms 3000)
 
 (defonce ^:private overlay-sessions (atom {}))
+
+(defn- net-owner
+  "Owner for every RPC here. Without one send-to-server falls back to
+   hooks/client-session-id, a ThreadLocal bound only inside a client-context
+   callback -- these run from UI events and overlay ticks, where nothing binds
+   it. default-client-owner derives the session from the live connection, so it
+   holds on any client thread."
+  []
+  (runtime-hooks/default-client-owner))
 
 (defn- player-uuid [player]
   (or (uuid/player-uuid player)
@@ -114,7 +121,7 @@
          :timeout-ms transmitting-timeout-ms)
   (rebuild! r state puuid)
   (net-client/send-to-server
-    freq-scan-msg {:player-uuid puuid :range 4.0}
+    (net-owner) freq-net/freq-scan-msg {:player-uuid puuid :range 4.0}
     (fn [response]
       (if (:success response)
         (let [{:keys [type pos ssid node-name]} (:device response)]
@@ -138,7 +145,7 @@
          :timeout-ms transmitting-timeout-ms)
   (rebuild! r state puuid)
   (net-client/send-to-server
-    freq-config-msg
+    (net-owner) freq-net/freq-config-msg
     {:operation :authorize
      :source-type (:source-type @state)
      :source-pos (:source-pos @state)
@@ -157,7 +164,7 @@
          :timeout-ms transmitting-timeout-ms)
   (rebuild! r state puuid)
   (net-client/send-to-server
-    freq-config-msg
+    (net-owner) freq-net/freq-config-msg
     {:operation :link-target
      :source-type (:source-type @state)
      :source-pos (:source-pos @state)
@@ -290,7 +297,7 @@
                   :phase-start-ms (System/currentTimeMillis)
                   :timeout-ms transmitting-timeout-ms))
     (net-client/send-to-server
-      freq-config-msg
+      (net-owner) freq-net/freq-config-msg
       {:operation :link-target
        :source-type (:source-type session)
        :source-pos (:source-pos session)

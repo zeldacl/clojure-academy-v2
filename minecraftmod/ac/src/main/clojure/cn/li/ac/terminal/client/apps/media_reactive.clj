@@ -7,6 +7,7 @@
   (:require [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.media.catalog :as catalog]
+            [cn.li.ac.media.network :as media-net]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -22,7 +23,6 @@
   (:import [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]))
 
-(def ^:private media-get-state-msg 1010)
 (def ^:private row-h 60.0)
 (def ^:private visible-h 302.0)
 (def ^:private thumb-min-y 169.0)
@@ -61,7 +61,7 @@
   ;; open. default-client-owner derives the session from the live connection
   ;; instead, so it holds anywhere on the client.
   (if-let [owner (runtime-hooks/default-client-owner)]
-    (net-client/send-to-server owner media-get-state-msg {}
+    (net-client/send-to-server owner media-net/media-get-state-msg {}
       (fn [response]
         (swap! state assoc :granted-internal
                (if (:success response) (:medias response) []))
