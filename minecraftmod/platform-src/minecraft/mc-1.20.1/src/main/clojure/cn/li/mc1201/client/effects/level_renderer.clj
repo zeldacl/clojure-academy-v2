@@ -514,8 +514,12 @@
                 (emit-line! line-vc mat op))))
           (when (seq translucent-lines)
             (let [^VertexConsumer tline-vc (.getBuffer buffer-source (ModRenderTypes/academyLinesTranslucent))]
+              ;; Upstream RenderMarker draws the corner ticks with
+              ;; GL11.glLineWidth(3f).
+              (org.lwjgl.opengl.GL11/glLineWidth 3.0)
               (doseq [op translucent-lines]
-                (emit-line! tline-vc mat op))))
+                (emit-line! tline-vc mat op))
+              (org.lwjgl.opengl.GL11/glLineWidth 1.0)))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
