@@ -11,6 +11,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]))
 
 (defn- crit-particle-config
@@ -33,14 +34,20 @@
           x (double (or (:x payload) 0.0))
           y (double (or (:y payload) 0.0))
           z (double (or (:z payload) 0.0))]
-      (when (:message-key payload)
-        (runtime-hooks/client-show-combat-notice!
-          :teleporter-crit
-          {:message-key (:message-key payload)
-           :args (:message-args payload)
-           :duration-ms 1500
-           :color [255 226 120]}))
-      (client-particles/queue-current-particle-effect!
+        (log/info "Teleporter crit fx enqueue"
+                  {:crit-level (:crit-level payload)
+                   :x x :y y :z z
+                   :primary-count primary-count})
+        (when (:message-key payload)
+          (log/info "Teleporter crit fx notice" {:message-key (:message-key payload)})
+          (runtime-hooks/client-show-combat-notice!
+            :teleporter-crit
+            {:message-key (:message-key payload)
+             :args (:message-args payload)
+             :duration-ms 1500
+             :color [255 226 120]}))
+        (log/info "Teleporter crit fx particles" {:count primary-count})
+        (client-particles/queue-current-particle-effect!
         {:type :particle :particle-type :portal
          :x x :y (+ y 0.4) :z z
          :count primary-count :speed speed

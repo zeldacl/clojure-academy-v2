@@ -60,6 +60,10 @@ public final class ModRenderTypes extends RenderType {
                     .setWriteMaskState(COLOR_DEPTH_WRITE)
                     .setCullState(NO_CULL)
                     .setDepthTestState(NO_DEPTH_TEST)
+                    // Upstream RenderMarker draws the corner ticks with
+                    // GL11.glLineWidth(3f); let the render type own the GL
+                    // state (Minecraft's LineStateShard) instead of raw GL.
+                    .setLineState(new LineStateShard(java.util.OptionalDouble.of(3.0D)))
                     .createCompositeState(false));
 
     public static RenderType academyLinesTranslucent() {

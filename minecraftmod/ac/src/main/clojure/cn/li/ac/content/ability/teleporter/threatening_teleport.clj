@@ -389,6 +389,11 @@
 
               (when (helper/crit-applied? damage-result)
 
+                (log/info "ThreateningTeleport crit fired"
+                          {:crit-level (:crit-level damage-result)
+                           :crit-rate (:crit-rate damage-result)
+                           :target-uuid target-uuid})
+
                 (fx/send! ctx-id {:topic :teleporter/fx-crit-hit} nil
 
                           {:x (:drop-x trace)
