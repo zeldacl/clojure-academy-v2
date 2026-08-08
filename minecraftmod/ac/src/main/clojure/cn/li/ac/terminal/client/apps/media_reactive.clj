@@ -159,6 +159,32 @@
       (platform/call-adapter-optional fw-atom :media-library :save-track-meta!
                                       (clojure.core/name (:id track)) field value))))
 
+(defn- seek-to-fraction!
+  "Jump to `frac` (0..1) through the playing track.
+
+   Not upstream — its backend cannot set the play position, so its progress
+   bar is display-only. Ours binds the whole track to one static OpenAL
+   buffer, which makes AL_SEC_OFFSET writable.
+
+   The fraction comes from an absolute pointer x, not an accumulated delta:
+   node abs coords already live in the pointer's space, so only the width
+   needs the cumScale (#back is 0.32)."
+  [^UiRt r state ^INode pad mx]
+  (when-let [track (current-track)]
+    (let [len (double (or (:length-secs track) 0.0))
+          w (* (.getW pad) (max 0.001 (.getCumScale pad)))
+          frac (max 0.0 (min 1.0 (/ (- (double mx) (.getAbsX pad)) w)))]
+      (when (pos? len)
+        (media-playback-call :seek! (* frac len))
+        (update-now-playing-display! r state)))))
+
+(defn- attach-progress-seek! [^UiRt r state]
+  (let [handler (fn [_ ^INode n evt]
+                  (seek-to-fraction! r state n (:x evt 0)))]
+    (events/on! r :progress-hit :left-click handler)
+    ;; Dragging scrubs, which is what anyone expects of a seek bar.
+    (events/on! r :progress-hit :drag handler)))
+
 (defn- build-row! [^UiRt r state item idx track]
   (rt/clear-children! r item)
   (let [prefix (str "media-" idx "-")
@@ -348,6 +374,7 @@
     (events/on! r :pop :left-click (fn [_ _ _] (toggle-play-pause! r state)))
     (events/on! r :stop :left-click (fn [_ _ _] (stop! r state)))
     (attach-scrollbar! r state)
+    (attach-progress-seek! r state)
     (attach-volume-drag! r state)
     (fetch-granted! state rebuild!)
     (rebuild!)

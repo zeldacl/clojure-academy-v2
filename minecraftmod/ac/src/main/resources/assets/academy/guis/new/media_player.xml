@@ -19,6 +19,15 @@
     </group>
     <image id="scroll_bar" pos="604.0,169.0" size="5.0,55.0" align="left,top" tint="#82FFFFFF"/>
     <group id="progress" pos="52.0,120.0" size="554.0,6.0" align="left,top"/>
+    <!--
+      Seek target. Not upstream: its progress bar is display-only, because
+      the paulscode backend it uses exposes the play position read-only.
+      Same x/width as #progress so a fraction across this pad maps straight
+      onto the bar; taller only because 6px is not a clickable target.
+      Declared after #progress and clear of #area (y 169+), so it wins the
+      hit test without stealing from the track list.
+    -->
+    <box id="progress-hit" pos="52.0,114.0" size="554.0,18.0" align="left,top" fill="#00000000"/>
     <text id="title" pos="-50.0,77.8" size="275.6,30.0" align="right,top" text="Only My Railgun" font-size="36.0" color="#99FFFFFF"/>
     <image id="stop" pos="114.8,71.8" size="50.0,42.0" align="left,top" src="academy:textures/guis/apps/media_player/stop.png" tint="#C8FFFFFF"/>
     <image id="pop" pos="51.9,71.8" size="50.0,42.0" align="left,top" src="academy:textures/guis/apps/media_player/play.png" tint="#C8FFFFFF"/>
