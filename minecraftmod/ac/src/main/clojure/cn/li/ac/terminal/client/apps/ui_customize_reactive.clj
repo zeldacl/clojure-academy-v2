@@ -73,7 +73,9 @@
 (defn- select-element! [r selected {:keys [id]}]
   (reset! selected id)
   (let [[x y] (gameplay/hud-position id)]
-    (ui/set-prop! r :editbox :visible? true)
+    ;; Same reason as create-runtime: :visible? has no prop-writer, so
+    ;; set-prop! could only throw. This one fired on the first element click.
+    (.setVisible ^INode (rt/node-by-id r :editbox) true)
     (ui/set-prop! r :edit-x :text (str x))
     (ui/set-prop! r :edit-y :text (str y))
     (ui/set-prop! r :edit-x :color 0xFFFFFFFF)
