@@ -43,6 +43,9 @@ public final class ModRenderTypes extends RenderType {
      * Translucent LINES render type for ability aim markers — vanilla
      * RenderType.lines() has no transparency, so marker colors with low alpha
      * (upstream EntityMarker colors) render fully opaque and look wrong.
+     * Depth test is disabled so the marker's bottom ring stays visible when it
+     * sits flush with a surface hit (upstream shift_teleport's blockMarker
+     * uses ignoreDepth = true for the same reason).
      */
     private static final RenderType ACADEMY_LINES_TRANSLUCENT = create(
             "academy_lines_translucent",
@@ -56,6 +59,7 @@ public final class ModRenderTypes extends RenderType {
                     .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
                     .setWriteMaskState(COLOR_DEPTH_WRITE)
                     .setCullState(NO_CULL)
+                    .setDepthTestState(NO_DEPTH_TEST)
                     .createCompositeState(false));
 
     public static RenderType academyLinesTranslucent() {
