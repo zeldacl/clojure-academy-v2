@@ -44,14 +44,27 @@
   (atom {:current nil :last-track nil}))
 
 (defn- wire-track->local [{:keys [id name desc external?]}]
-  {:id (keyword id) :name name :desc desc :external? (boolean external?)
-   :source nil :length-secs 0.0})
+  ;; Upstream keeps the whole catalog client-side (MediaManager.allMedias) and
+  ;; the server only reports which of them a player has acquired. Resolve the
+  ;; id back through our catalog so :source, :length-secs and :cover survive:
+  ;; hard-coding source nil / length 0 here meant a granted track could never
+  ;; play and its row always read "--:--", even once real audio was supplied.
+  (let [k (keyword id)
+        base (or (catalog/media-by-id k)
+                 {:id k :source nil :length-secs 0.0})]
+    (assoc base
+           :id k
+           :name (or name (:name base))
+           :desc (or desc (:desc base))
+           :external? (boolean external?))))
 
 (defn- all-tracks [state]
-  (into (->> (catalog/external-medias)
+  ;; Catalog order, like upstream's allMedias.filter(isInstalled): internal
+  ;; first, then the externally scanned files.
+  (into (mapv wire-track->local (:granted-internal @state))
+        (->> (catalog/external-medias)
              (sort-by (comp name :id))
-             vec)
-        (map wire-track->local (:granted-internal @state))))
+             vec)))
 
 (defn- fetch-granted! [state rebuild!]
   ;; Pass the owner explicitly. Without one send-to-server falls back to
@@ -214,12 +227,16 @@
     (events/on! r :scroll_bar :drag-start
                 (fn [_ ^INode n _] (reset! drag-start-y (.getY n))))
     (events/on! r :scroll_bar :drag
-                (fn [_ _ evt]
-                  (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h)
+                (fn [_ ^INode n evt]
+                  ;; Drag deltas are screen-space; thumb Y is design-space, and
+                  ;; #back is scale 0.32 — without the divide the bar crawls at
+                  ;; a third of the mouse.
+                  (let [sc (max 0.001 (.getCumScale n))
+                        max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h)
                                                 visible-h))
                         new-y (max thumb-min-y
                                    (min thumb-max-y
-                                        (+ @drag-start-y (double (:dy evt)))))
+                                        (+ @drag-start-y (/ (double (:dy evt)) sc))))
                         progress (/ (- new-y thumb-min-y) thumb-travel)]
                     (set-scroll! r state (* progress max-scroll)))))))
 
@@ -228,10 +245,13 @@
     (events/on! r :volume_bar :drag-start
                 (fn [_ ^INode n _] (reset! drag-start-x (.getX n))))
     (events/on! r :volume_bar :drag
-                (fn [_ _ evt]
-                  (let [new-x (max vol-min-x
+                (fn [_ ^INode n evt]
+                  ;; Same screen-space vs design-space divide as the scrollbar:
+                  ;; the knob has to travel with the cursor, not at 0.32x of it.
+                  (let [sc (max 0.001 (.getCumScale n))
+                        new-x (max vol-min-x
                                    (min vol-max-x
-                                        (+ @drag-start-x (double (:dx evt)))))
+                                        (+ @drag-start-x (/ (double (:dx evt)) sc))))
                         ^INode bar (rt/node-by-id r :volume_bar)
                         progress (/ (- new-x vol-min-x) vol-travel)]
                     (.setX bar new-x)
