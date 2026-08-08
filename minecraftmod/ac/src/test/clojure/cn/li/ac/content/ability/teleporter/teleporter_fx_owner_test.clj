@@ -42,6 +42,7 @@
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
                 client-particles/queue-particle-effect! (fn [& _] nil)
                 client-particles/current-effect-owner (fn [] {:client-session-id "teleporter-owner-test"})
+                client-sounds/current-effect-owner (fn [] {:client-session-id "teleporter-owner-test"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)]
     (flashing-fx/init!)
     (flesh-ripping-fx/init!)

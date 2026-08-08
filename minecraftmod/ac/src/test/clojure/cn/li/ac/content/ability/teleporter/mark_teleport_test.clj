@@ -110,6 +110,98 @@
       (is (pos? (:distance payload))))
     (is (= 2 (get-in @ctx* [:skill-state :hold-ticks])))))
 
+(deftest mark-teleport-entity-hit-dest-uses-entity-feet-plus-eye-height-test
+  ;; Upstream getDest: LambdaLib's entity raycast builds the result via
+  ;; new RayTraceResult(entity) — hitVec is the entity's FEET position, not
+  ;; the intersection — so dest.y = entity feet + eye height. Regression:
+  ;; the previous code used the intersection (:hit-y), floating the marker up
+  ;; to an eye-height too high.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
+        {:keys [get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! send!
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/current-cp (fn [_] 1000.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 60.0
+                                               :cost.up.cp-per-block 4.0
+                                               :targeting.eye-height 1.6
+                                               0.0))
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.min-distance 3.0
+                                                  :targeting.range-per-hold-tick 2.0
+                                                  0.0))
+                  raycast/available? (constantly true)
+                  raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                   :x 1.0 :y 64.0 :z 3.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined-from-player (fn [& _]
+                                              {:hit-type :entity
+                                               :x 8.0 :y 62.0 :z 3.0
+                                               :hit-x 8.0 :hit-y 63.5 :hit-z 3.0
+                                               :eye-height 1.62
+                                               :distance 7.0})]
+      (cb/apply-invoke mark/mark-teleport-on-key-down :player-id "p1" :ctx-id "ctx-e" :player-ref :player))
+    (let [payload (get-in (first @calls*) [3])]
+      ;; The teleport dest (feet + eye height, upstream) floats; the MARKER
+      ;; stands at the entity's feet — the landing spot.
+      (is (= {:x 8.0 :y 62.0 :z 3.0} (:target payload))
+          "marker = entity feet (landing spot), not the floating dest"))))
+
+(deftest mark-teleport-block-up-hit-marker-stands-on-surface-test
+  ;; Up-face ground hit: the teleport dest floats 1.8 above the top face
+  ;; (upstream case UP => y += 1.8 — the player drops onto the block), but
+  ;; the humanoid marker stands ON the surface at the aim point.
+  (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
+        {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
+        mocks
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)]
+    (with-redefs [ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  ctx-skill/assoc-skill-state! assoc-skill-state!
+                  ctx-skill/clear-skill-state! clear-skill-state!
+                  fx/send! send!
+                  skill-effects/skill-exp (fn [_ _] 0.5)
+                  skill-effects/current-cp (fn [_] 1000.0)
+                  skill-config/lerp-double (fn [_ field-id _]
+                                             (case field-id
+                                               :targeting.range 60.0
+                                               :cost.up.cp-per-block 4.0
+                                               :targeting.eye-height 1.6
+                                               0.0))
+                  skill-config/tunable-double (fn [_ field-id]
+                                                (case field-id
+                                                  :targeting.min-distance 3.0
+                                                  :targeting.range-per-hold-tick 2.0
+                                                  0.0))
+                  raycast/available? (constantly true)
+                  raycast/player-position (fn [_] {:world-id "minecraft:overworld"
+                                                   :x 1.0 :y 64.0 :z 3.0})
+                  raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
+                  raycast/raycast-combined-from-player (fn [& _]
+                                              ;; The platform normalizes
+                                              ;; :face to a keyword.
+                                              {:hit-type :block
+                                               :x 8.0 :y 63.0 :z 6.0
+                                               :hit-x 8.0 :hit-y 64.0 :hit-z 6.0
+                                               :face :up
+                                               :distance 7.0})]
+      (cb/apply-invoke mark/mark-teleport-on-key-down :player-id "p1" :ctx-id "ctx-b" :player-ref :player))
+    (let [payload (get-in (first @calls*) [3])
+          st (:skill-state @ctx*)]
+      ;; The teleport dest floats 1.8 above the top face (upstream), the
+      ;; marker stands ON the surface at y=64.
+      (is (= 65.8 (get-in st [:target-y])))
+      (is (= {:x 8.0 :y 64.0 :z 6.0} (:target payload))
+          "marker = the hit surface, not the floating dest"))))
+
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 0 :has-target false}})
         {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}

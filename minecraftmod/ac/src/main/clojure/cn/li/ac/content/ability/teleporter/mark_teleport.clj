@@ -115,15 +115,18 @@
 
 (defn- build-target-fx-payload
 
+  "The fx payload carries the MARKER anchor (the humanoid's feet — the
+  landing spot), not the teleport dest (which floats above the surface)."
+
   [target]
 
   (when target
 
-    {:target {:x (double (:target-x target))
+    {:target {:x (double (or (:marker-x target) (:target-x target)))
 
-              :y (double (:target-y target))
+              :y (double (or (:marker-y target) (:target-y target)))
 
-              :z (double (:target-z target))}
+              :z (double (or (:marker-z target) (:target-z target)))}
 
      :distance (double (:distance target))}))
 
@@ -161,11 +164,23 @@
 
     (if (= (:hit-type hit) :entity)
 
-      {:target-x hit-x
+      ;; Upstream getDest: LambdaLib's entity raycast builds the result via
+      ;; new RayTraceResult(entity) — hitVec is the entity's FEET position,
+      ;; not the intersection — so dest = entity pos + eye height. The MARKER
+      ;; (the humanoid) stands at the entity's feet — the landing spot.
+      {:target-x (double (or (:x hit) hit-x))
 
-       :target-y (+ hit-y (double (or (:eye-height hit) 1.6)))
+       :target-y (+ (double (or (:y hit) hit-y))
 
-       :target-z hit-z}
+                    (double (or (:eye-height hit) 1.6)))
+
+       :target-z (double (or (:z hit) hit-z))
+
+       :marker-x (double (or (:x hit) hit-x))
+
+       :marker-y (double (or (:y hit) hit-y))
+
+       :marker-z (double (or (:z hit) hit-z))}
 
       (let [face (:face hit)
 
@@ -183,21 +198,41 @@
 
                        :east {:target-x (+ hit-x 0.6) :target-y (+ block-y 1.7) :target-z hit-z}
 
-                       {:target-x hit-x :target-y hit-y :target-z hit-z})]
+                       {:target-x hit-x :target-y hit-y :target-z hit-z})
 
-        (if (and (#{:north :south :west :east} face)
+            resolved (if (and (#{:north :south :west :east} face)
 
-                 (destination-head-blocked? player
+                              (destination-head-blocked? player
 
-                                            (:target-x resolved)
+                                                         (:target-x resolved)
 
-                                            (:target-y resolved)
+                                                         (:target-y resolved)
 
-                                            (:target-z resolved)))
+                                                         (:target-z resolved)))
 
-          (update resolved :target-y - 1.25)
+                       (update resolved :target-y - 1.25)
 
-          resolved)))))
+                       resolved)
+
+            ;; The teleport dest floats above the surface (up +1.8, sides
+            ;; +1.7, down -1.0 — the player drops onto the landing spot); the
+            ;; MARKER stands ON the landing spot: the hit surface for blocks,
+            ;; the dest itself for down-face/ceiling hits.
+            surface-y (case face
+
+                        :down (:target-y resolved)
+
+                        :up hit-y
+
+                        (+ block-y 1.0))]
+
+        (assoc resolved
+
+               :marker-x (:target-x resolved)
+
+               :marker-y surface-y
+
+               :marker-z (:target-z resolved))))))
 
 
 
@@ -268,7 +303,8 @@
 
       (or (when (get-in ctx-data [:skill-state :has-target])
             (select-keys (:skill-state ctx-data)
-                         [:world-id :target-x :target-y :target-z :distance :exp]))
+                         [:world-id :target-x :target-y :target-z
+                          :marker-x :marker-y :marker-z :distance :exp]))
           (resolve-destination player-id player hold-ticks)))))
 
 
