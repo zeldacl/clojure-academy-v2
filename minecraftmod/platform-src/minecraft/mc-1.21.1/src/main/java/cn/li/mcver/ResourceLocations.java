@@ -22,4 +22,14 @@ public final class ResourceLocations {
     public static Class<?> idClass() {
         return ResourceLocation.class;
     }
+
+    /**
+     * PackOutput.PathProvider.json() takes the version's own resource-location
+     * type, and on 26.2 it is overloaded, so Clojure cannot resolve the call
+     * from a shared (mcbase) datagen shell where the id is just an Object.
+     * Cast it here, where the concrete type is known.
+     */
+    public static java.nio.file.Path jsonPath(net.minecraft.data.PackOutput.PathProvider provider, Object id) {
+        return provider.json((net.minecraft.resources.ResourceLocation) id);
+    }
 }

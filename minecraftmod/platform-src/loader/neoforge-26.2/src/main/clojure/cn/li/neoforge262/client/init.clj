@@ -58,7 +58,10 @@
            [net.neoforged.neoforge.client.event EntityRenderersEvent$RegisterRenderers]
            [net.neoforged.bus.api EventPriority]
            [com.mojang.blaze3d.platform Window]
-           [cn.li.mc262.bridge McAccess]
+           ;; Only cn.li.mcver.McAccess is imported: this ns also calls
+           ;; clientEntitySnapshot, which exists only there, and importing both
+           ;; McAccess classes is a hard name collision. cn.li.mc262.bridge's
+           ;; dayTime simply delegates to mcver's, so nothing changes.
            [cn.li.mcver ResourceLocations]
            [cn.li.neoforge262.bridge ClientTimeInterop]
            [cn.li.mc262.client GuiGraphicsHelper ClientHelper]

@@ -159,7 +159,7 @@
             (.pushMatrix pose)
             (try
               (.set pose anchor)
-              (.scale pose scale scale)
+              (.scale pose (float scale) (float scale))
               (if glyph
                 (.text graphics font glyph 0 0 color-i shadow)
                 (.text graphics font ch 0 0 color-i shadow))

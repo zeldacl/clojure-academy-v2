@@ -66,8 +66,8 @@
 (defn- emit-smelting!
   [^RecipeOutput writer recipe]
   (let [metadata (recipe-patterns/cooking-recipe-metadata recipe)
-        result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
-        ingredient (metadata-resolver/ingredient-from-spec (:ingredient metadata) rl/parse-resource-location)
+        ^ItemLike result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
+        ^Ingredient ingredient (metadata-resolver/ingredient-from-spec (:ingredient metadata) rl/parse-resource-location)
         experience (:experience metadata)
         cooking-time (:cooking-time metadata)
         ^SimpleCookingRecipeBuilder builder

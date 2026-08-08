@@ -80,8 +80,8 @@
 (defn- emit-smelting!
   [^HolderGetter items ^RecipeOutput writer recipe]
   (let [metadata (recipe-patterns/cooking-recipe-metadata recipe)
-        result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
-        ingredient (metadata-resolver/ingredient-from-spec (:ingredient metadata) rl/parse-resource-location items)
+        ^ItemLike result-item (metadata-resolver/resolve-item (get-in metadata [:result :item]) rl/parse-resource-location)
+        ^Ingredient ingredient (metadata-resolver/ingredient-from-spec (:ingredient metadata) rl/parse-resource-location items)
         experience (:experience metadata)
         cooking-time (:cooking-time metadata)
         ^SimpleCookingRecipeBuilder builder

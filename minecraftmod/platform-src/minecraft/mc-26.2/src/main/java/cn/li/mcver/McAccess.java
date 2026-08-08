@@ -114,7 +114,16 @@ public final class McAccess {
         if (level == null || uuid == null) {
             return null;
         }
-        net.minecraft.world.entity.Entity entity = level.getEntities().get(uuid);
+        // ClientLevel.getEntities() is protected, so the entity store is not
+        // reachable from here — iterate the client's render list and match the
+        // UUID, exactly as the 1.20.1 seam does.
+        net.minecraft.world.entity.Entity entity = null;
+        for (net.minecraft.world.entity.Entity candidate : level.entitiesForRendering()) {
+            if (uuid.equals(candidate.getUUID())) {
+                entity = candidate;
+                break;
+            }
+        }
         if (entity == null) {
             return null;
         }

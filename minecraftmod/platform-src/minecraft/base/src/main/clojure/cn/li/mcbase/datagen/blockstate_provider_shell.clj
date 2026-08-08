@@ -4,7 +4,8 @@
   (:require [cn.li.mcbase.datagen.blockstate-provider-core :as blockstate-core]
             [cn.li.mcbase.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.gson-util :as gson-util])
-  (:import [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
+  (:import [cn.li.mcver ResourceLocations]
+           [net.minecraft.data CachedOutput DataProvider PackOutput PackOutput$PathProvider PackOutput$Target]
            [com.google.gson Gson JsonElement]
            [java.util.concurrent CompletableFuture]))
 
@@ -19,7 +20,9 @@
   (DataProvider/saveStable
    cached-output
    ^JsonElement (.toJsonTree gson (gson-util/normalize-json payload))
-   (.json path-provider id)))
+   ;; Via the seam: `id` is the version's own resource-location type, which
+   ;; this shared shell cannot name, and 26.2 overloads json().
+   (ResourceLocations/jsonPath path-provider id)))
 
 (defn create-provider
   [^PackOutput output provider-name]
