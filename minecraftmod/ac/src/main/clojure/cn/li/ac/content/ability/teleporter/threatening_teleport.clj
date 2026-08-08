@@ -151,7 +151,10 @@
 
                 hit-z (double (or (:hit-z hit) (:z hit) sz))
 
-                target-uuid (or (:entity-uuid hit) (:uuid hit))
+                ;; The platform entity hit map carries the uuid as "entity-id"
+                ;; (normalized :entity-id) — the entity-uuid alias is accepted
+                ;; for mocks/other callers.
+                target-uuid (or (:entity-uuid hit) (:uuid hit) (:entity-id hit))
 
                 attacked? (= :entity (:hit-type hit))
                 drop-x (if attacked?

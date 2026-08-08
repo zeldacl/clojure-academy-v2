@@ -42,7 +42,7 @@
                   raycast/available? (constantly true)
                   raycast/raycast-combined-from-player (fn [& _]
                                               {:hit-type :entity
-                                               :entity-uuid "enemy"
+                                               :entity-id "enemy"
                                                :x 4.0 :y 5.0 :z 6.0
                                                :hit-x 4.0 :hit-y 6.0 :hit-z 6.0
                                                :height 1.95
@@ -121,7 +121,7 @@
                   raycast/available? (constantly true)
                   raycast/raycast-combined-from-player (fn [& _]
                                               {:hit-type :entity
-                                               :entity-uuid "enemy"
+                                               :entity-id "enemy"
                                                :hit-x 4.0 :hit-y 5.0 :hit-z 6.0
                                                :distance 7.0})]
       (cb/apply-invoke tt/threatening-tp-tick! :player-id "p1" :ctx-id "ctx-2" :hold-ticks 9 :player-ref :player))
@@ -156,7 +156,7 @@
                   raycast/available? (constantly true)
                   raycast/raycast-combined-from-player (fn [& _]
                                               {:hit-type :entity
-                                               :entity-uuid "enemy"
+                                               :entity-id "enemy"
                                                :x 4.0 :y 5.0 :z 6.0
                                                :hit-x 4.0 :hit-y 6.0 :hit-z 6.0
                                                :height 1.95

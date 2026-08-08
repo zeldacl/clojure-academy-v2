@@ -17,22 +17,37 @@
 (defn- corner-tick-ops
   "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
   line segments — a vertical (len up on bottom corners, down on top corners)
-  plus +x and +z — so the mark reads as 8 corner ticks, not a solid box.
-  Lines are translucent (upstream marker colors carry low alpha)."
+  plus two horizontal ticks. The horizontal ticks are rotated per corner
+  (rotArray 0/-90/-180/-270) so they run ALONG the box edges — extending them
+  traces the cube outline. Lines are translucent (upstream colors carry low
+  alpha)."
   [ox oy oz width height color]
   (let [len (* 0.2 width)
+        ;; rotArray per corner (degrees around Y): 0, -90, -180, -270 per ring.
+        rots [0.0 -90.0 -180.0 -270.0 0.0 -90.0 -180.0 -270.0]
+        ;; Local +x / +z axes rotated by theta around Y.
+        axis (fn [theta]
+               (let [r (Math/toRadians theta)
+                     c (Math/cos r)
+                     s (Math/sin r)]
+                 ;; local (1,0,0) -> (c, 0, -s); local (0,0,1) -> (s, 0, c)
+                 {:x1 c :z1 (- s) :x2 s :z2 c}))
         corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
                  [0 1 0] [1 1 0] [1 1 1] [0 1 1]]]
-    (mapcat (fn [[cx cy cz]]
+    (mapcat (fn [[cx cy cz] theta]
               (let [x (+ ox (* cx width))
                     y (+ oy (* cy height))
                     z (+ oz (* cz width))
                     rev (< cy 0.5)
-                    vert (if rev len (- len))]
+                    vert (if rev len (- len))
+                    {ax1 :x1 az1 :z1 ax2 :x2 az2 :z2} (axis theta)]
                 [(assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color) :translucent? true)
-                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color) :translucent? true)
-                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color) :translucent? true)]))
-            corners)))
+                 (assoc (ru/line-op (rv3/v3 x y z)
+                                    (rv3/v3 (+ x (* ax1 len)) y (+ z (* az1 len))) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z)
+                                    (rv3/v3 (+ x (* ax2 len)) y (+ z (* az2 len))) color) :translucent? true)]))
+            corners
+            rots)))
 
 (defn- marker-ops
   "Box bottom sits just ABOVE the aim point — upstream RenderMarker translates
@@ -48,6 +63,7 @@
         width (double (if live (:width live) (or (:target-width st) default-marker-size)))
         height (double (if live (:height live) (or (:target-height st) default-marker-size)))
         px (double (if live (:x live) (:x (:aim st))))
+        ;; Upstream RenderMarker: y + 0.05 * sin(absTime / 400.0).
         py (+ (double (if live (:y live) (:y (:aim st))))
               (* 0.05 (Math/sin (/ (double tick) 400.0))))
         pz (double (if live (:z live) (:z (:aim st))))]

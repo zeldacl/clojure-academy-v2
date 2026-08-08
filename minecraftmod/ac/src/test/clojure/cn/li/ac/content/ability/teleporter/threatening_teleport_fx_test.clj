@@ -107,7 +107,9 @@
     (is (= 24 (count ops)))
     (is (every? #(= :line (:kind %)) ops))
     ;; Payload target-y 11.0 with target-height 0.5 -> marker bottom at the
-    ;; FEET y=10.5; box 0.5x0.5, ticks extend 0.2*width beyond each corner.
+    ;; FEET y=10.5 (tick 0 -> upstream float 0.05*sin(0)=0); box 0.5x0.5,
+    ;; ticks extend 0.2*width beyond each corner (rotated along the edges,
+    ;; same extent).
     (let [endpoints (mapcat (fn [op]
                               (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
                                     ^cn.li.mcmod.math.V3 p2 (:p2 op)]

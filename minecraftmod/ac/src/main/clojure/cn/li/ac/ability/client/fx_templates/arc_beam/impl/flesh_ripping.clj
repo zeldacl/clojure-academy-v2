@@ -24,22 +24,33 @@
 
 (defn- corner-tick-ops
   "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
-  line segments (vertical + +x + +z), so the mark reads as 8 corner ticks.
-  Lines are translucent (upstream marker colors carry low alpha)."
+  line segments (vertical + two horizontal ticks rotated per corner so they
+  run along the box edges — extending them traces the cube outline). Lines
+  are translucent (upstream marker colors carry low alpha)."
   [ox oy oz width height color]
   (let [len (* 0.2 width)
+        rots [0.0 -90.0 -180.0 -270.0 0.0 -90.0 -180.0 -270.0]
+        axis (fn [theta]
+               (let [r (Math/toRadians theta)
+                     c (Math/cos r)
+                     s (Math/sin r)]
+                 {:x1 c :z1 (- s) :x2 s :z2 c}))
         corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
                  [0 1 0] [1 1 0] [1 1 1] [0 1 1]]]
-    (mapcat (fn [[cx cy cz]]
+    (mapcat (fn [[cx cy cz] theta]
               (let [x (+ ox (* cx width))
                     y (+ oy (* cy height))
                     z (+ oz (* cz width))
                     rev (< cy 0.5)
-                    vert (if rev len (- len))]
+                    vert (if rev len (- len))
+                    {ax1 :x1 az1 :z1 ax2 :x2 az2 :z2} (axis theta)]
                 [(assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color) :translucent? true)
-                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color) :translucent? true)
-                 (assoc (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color) :translucent? true)]))
-            corners)))
+                 (assoc (ru/line-op (rv3/v3 x y z)
+                                    (rv3/v3 (+ x (* ax1 len)) y (+ z (* az1 len))) color) :translucent? true)
+                 (assoc (ru/line-op (rv3/v3 x y z)
+                                    (rv3/v3 (+ x (* ax2 len)) y (+ z (* az2 len))) color) :translucent? true)]))
+            corners
+            rots)))
 
 (defn- marker-ops
   "Box bottom sits just ABOVE the aim point (upstream y + 0.05*sin float);
@@ -54,6 +65,7 @@
         width (double (if live (* 1.2 (:width live)) (or (:target-width st) 0.6)))
         height (double (if live (* 1.2 (:height live)) (or (:target-height st) 1.8)))
         px (double (if live (:x live) (:x (:aim st))))
+        ;; Upstream RenderMarker: y + 0.05 * sin(absTime / 400.0).
         py (+ (double (if live (:y live) (:y (:aim st))))
               (* 0.05 (Math/sin (/ (double tick) 400.0))))
         pz (double (if live (:z live) (:z (:aim st))))]
