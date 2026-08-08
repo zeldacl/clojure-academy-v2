@@ -235,7 +235,7 @@
                  (str (i18n/translate (st-key "skill_exp")) " " (int (* 100.0 (or exp 0.0))) "%"))
           (when skill-description
             (doseq [[i line] (map-indexed vector (wrap-text skill-description 42))]
-              (ctext (+ cy 50.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
+              (ctext (+ cy 49.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
         (do
           (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate (st-key "skill_not_learned")))
           ;; Requirement icons (upstream: "Req." label + condition icons, greyed
@@ -245,7 +245,7 @@
                 step 16.0 isz 14.0
                 left (- cx (/ (* step (double n)) 2.0))]
             (when (pos? n)
-              (rt/build-child! rt {:kind :text :props {:x (- left 44.0) :y (+ cy 52.0) :w 40.0 :h 12.0
+              (rt/build-child! rt {:kind :text :props {:x (- left 42.0) :y (+ cy 53.0) :w 40.0 :h 12.0
                                                        :text (i18n/translate (st-key "req"))
                                                        :font-size 9.0 :color 0xFFAAAAAA :align "right"}} layer)
               (doseq [[i c] (map-indexed vector conds)]
@@ -257,9 +257,9 @@
           ;; Viewer (SkillTreeAppUI, developer == null): conditions still show,
           ;; but there is no device to learn with — no prompt, no LEARN button.
           (when (and message (not (:viewer? node)))
-            (ctext (+ cy 66.0) 280 10.0 0xFFCCCCCC message))
+            (ctext (+ cy 65.0) 280 10.0 0xFFCCCCCC message))
           (when-not (or developing? (:viewer? node))
-            (let [btn-x (- cx 16.0) btn-y (+ cy 82.0)]
+            (let [btn-x (- cx 16.0) btn-y (+ cy 80.0)]
               (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                         :src (tex-src :tex-button)}} layer)
               (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
@@ -303,9 +303,14 @@
                                                   :texture-1 (tex-src :skill-mask)}}} layer)
       (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
              (i18n/translate (st-key "uplevel") (str "Lv." target-level)))
+      ;; Upstream: Font.draw(local.get("req") + " %.0f".format(estmCons), 0, 16)
+      ;; -- the energy this level-up will cost. It was missing entirely.
+      (when est-consumption
+        (ctext (+ cy 41.0) 260 9.0 0xFFAAAAAA
+               (str (i18n/translate (st-key "req")) " " (long est-consumption))))
       (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
       (when (and (not developing?) (nil? result))
-        (let [btn-x (- cx 16.0) btn-y (+ cy 70.0)]
+        (let [btn-x (- cx 16.0) btn-y (+ cy 65.0)]
           (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                     :src (tex-src :tex-button)}} layer)
           (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))
@@ -551,7 +556,7 @@
   (rt/mark-tree-dirty! rt))
 
 (defn refresh-levelup-overlay!
-  [^UiRt rt target-level dev-state]
+  [^UiRt rt target-level dev-state & [est-consumption]]
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))

@@ -575,7 +575,7 @@
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
         cx 200.0 cy 93.5
-        btn-x (- cx 16.0) btn-y (+ cy 82.0)
+        btn-x (- cx 16.0) btn-y (+ cy 80.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-updated (atom nil)
@@ -656,11 +656,11 @@
         ;; Upstream LearningHelper.getEstimatedConsumption: CPS * stimulations.
         est-consumption (long (* (:cps dev-spec 700.0) (progression/level-up-stims current-level)))
         cx 200.0 cy 93.5
-        btn-x (- cx 16.0) btn-y (+ cy 70.0)
+        btn-x (- cx 16.0) btn-y (+ cy 65.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-state (atom nil)
-        popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a)]
+        popup-rt (skill-tree-reactive/create-levelup-overlay-runtime target-level @state-a est-consumption)]
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a] (and (not (:is-developing? s)) (nil? (:result s)))))
@@ -690,7 +690,7 @@
             (let [s @state-a]
               (when (not= s @last-state)
                 (reset! last-state s)
-                (skill-tree-view/refresh-levelup-overlay! popup-rt target-level s))))
+                (skill-tree-view/refresh-levelup-overlay! popup-rt target-level s est-consumption))))
           nil)))))
 
 ;; ============================================================================

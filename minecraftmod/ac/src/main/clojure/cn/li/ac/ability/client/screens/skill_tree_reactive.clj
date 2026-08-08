@@ -13,7 +13,7 @@
     (view/refresh-detail-overlay! r node)
     r))
 
-(defn create-levelup-overlay-runtime [target-level dev-state]
+(defn create-levelup-overlay-runtime [target-level dev-state & [est-consumption]]
   (let [r (rt/create-runtime)]
-    (view/refresh-levelup-overlay! r target-level dev-state)
+    (view/refresh-levelup-overlay! r target-level dev-state est-consumption)
     r))
