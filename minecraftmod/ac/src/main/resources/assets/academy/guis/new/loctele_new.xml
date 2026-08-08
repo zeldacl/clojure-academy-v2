@@ -36,12 +36,11 @@
       </group>
     </box>
 
-    <!-- Upstream loctele_new.xml anchors info with alignWidth=RIGHT at
-         x=-23.33 on the 1920-wide CGUI root — its right edge lands at
-         1896.67, i.e. x 1560.84 (the panel sits right of the menu). The
-         reactive 0-size root has no width to right-align against, so the
-         position is expressed explicitly. -->
-    <box id="info" pos="1560.84,-179.44" size="335.83,191.94" align="left,top" fill="#80353535" outline="#9E7A929C" outline-width="2.0" visible="false">
+    <!-- The info panel (upstream MessageTab) sits just right of the menu and
+         follows the hovered row's y (setMessage moves it to the row's ypos).
+         The reactive 0-size root has no width to right-align against, so the
+         x is the menu's right edge. -->
+    <box id="info" pos="462.0,-179.44" size="335.83,191.94" align="left,top" fill="#80353535" outline="#9E7A929C" outline-width="2.0" visible="false">
       <text id="info-line-0" pos="20.0,20.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
       <text id="info-line-1" pos="20.0,62.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
       <text id="info-line-2" pos="20.0,104.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
