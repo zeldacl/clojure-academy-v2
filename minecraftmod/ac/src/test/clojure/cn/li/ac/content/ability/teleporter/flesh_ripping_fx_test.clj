@@ -83,14 +83,26 @@
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})
                 client-bridge/run-client-effect! (fn [& _] nil)]
     (frfx/init!)
-    ;; No target: disabled color, 1.0x1.0 box, 8 corners x 3 ticks.
+    ;; No target: disabled color, 1.0x1.0 box, 8 corners x 3 ticks. A block
+    ;; hit carries target-height 0.0 — the box must stay 1.0 tall.
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update
-                                         {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}
+                                         {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0
+                                          :hit? false :target-width 1.0 :target-height 0.0}
                                          :owner-key [:ctx "ctx-1"])
     (let [{:keys [ops]} (cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan
                          :flesh-ripping nil {:player-uuid "viewer"} 0 nil)]
       (is (= 24 (count ops)))
-      (is (= {:r 74 :g 74 :b 74 :a 160} (:color (first ops)))))
+      (is (= {:r 74 :g 74 :b 74 :a 160} (:color (first ops))))
+      ;; Box bottom at aim y=2.0, full 1.0 height -> endpoints span [1.8..3.2].
+      (let [endpoints (mapcat (fn [op]
+                                (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                                      ^cn.li.mcmod.math.V3 p2 (:p2 op)]
+                                  [[(.x p1) (.y p1) (.z p1)]
+                                   [(.x p2) (.y p2) (.z p2)]]))
+                              ops)]
+        (is (every? (fn [[_ y _]] (<= 1.8 y 3.2)) endpoints))
+        (is (some (fn [[_ y _]] (>= y 2.9)) endpoints)
+            "top corners must exist above the bottom plane")))
     ;; Target: threatening color, box scaled to width*1.2 / height*1.2.
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update
                                          {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0

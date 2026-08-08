@@ -66,8 +66,14 @@
                                :mcmod/get-entity-position {:entity-uuid uuid})]
                  (into {} (map (fn [[k v]] [(keyword k) v])) raw)))
         aim (:aim st)
-        width (double (if live (* 1.2 (:width live)) (:target-width st)))
-        height (double (if live (* 1.2 (:height live)) (:target-height st)))
+        ;; Upstream l_updateEffect pins the marker at 1.0x1.0 without a target;
+        ;; only a targeted entity resizes it (target box x1.2). The synced
+        ;; :target-height is 0.0 for a block hit — never let it collapse the
+        ;; box.
+        width (double (if live (* 1.2 (:width live))
+                        (if (:hit? st) (:target-width st) 1.0)))
+        height (double (if live (* 1.2 (:height live))
+                        (if (:hit? st) (:target-height st) 1.0)))
         px (double (if live (:x live) (:x aim)))
         ;; Upstream RenderMarker: y + 0.05 * sin(absTime / 400.0).
         py (+ (double (if live (:y live) (:y aim)))

@@ -64,8 +64,14 @@
                                :mcmod/get-entity-position {:entity-uuid uuid})]
                  (into {} (map (fn [[k v]] [(keyword k) v])) raw)))
         aim (:aim st)
-        width (double (if live (:width live) (:target-width st)))
-        height (double (if live (:height live) (:target-height st)))
+        ;; Upstream l_start pins the marker at 0.5x0.5; only a targeted entity
+        ;; resizes it (RenderMarker uses the target box). The synced
+        ;; :target-height is 0.0 for a block hit — never let it collapse the
+        ;; box.
+        width (double (if live (:width live)
+                        (if (:hit? st) (:target-width st) default-marker-size)))
+        height (double (if live (:height live)
+                        (if (:hit? st) (:target-height st) default-marker-size)))
         px (double (if live (:x live) (:x aim)))
         ;; Upstream RenderMarker: y + 0.05 * sin(absTime / 400.0).
         py (+ (double (if live (:y live) (:y aim)))

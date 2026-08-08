@@ -128,11 +128,25 @@
   (with-fx-owner
     (fn []
       (tfx/init!)
+      ;; Real server payload: a block hit carries target-height 0.0 — the box
+      ;; must stay 0.5x0.5 (upstream l_start pins the marker size), not
+      ;; collapse flat.
       (enqueue! "ctx-g" :threatening-teleport/fx-update
-                {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false})))
+                {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0
+                 :hit? false :target-width 0.5 :target-height 0.0})))
   (let [{:keys [ops]} (build-plan)]
     (is (= 24 (count ops)))
-    (is (= {:r 0xba :g 0xba :b 0xba :a 0xba} (:color (first ops))))))
+    (is (= {:r 0xba :g 0xba :b 0xba :a 0xba} (:color (first ops))))
+    ;; Box bottom at aim y=2.0, full 0.5 height -> endpoints span [1.9..2.6].
+    (let [endpoints (mapcat (fn [op]
+                              (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                                    ^cn.li.mcmod.math.V3 p2 (:p2 op)]
+                                [[(.x p1) (.y p1) (.z p1)]
+                                 [(.x p2) (.y p2) (.z p2)]]))
+                            ops)]
+      (is (every? (fn [[_ y _]] (<= 1.9 y 2.6)) endpoints))
+      (is (some (fn [[_ y _]] (>= y 2.4)) endpoints)
+          "top corners must exist above the bottom plane"))))
 
 (deftest build-plan-follows-target-entity-live-test
   ;; Upstream EntityMarker.target follow: the marker snaps to the target's
