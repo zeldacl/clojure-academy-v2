@@ -33,6 +33,12 @@
 (def ^:private vol-travel (- vol-max-x vol-min-x))
 (def ^:private progress-full-w 554.0)
 
+;; Upstream wrapEdit: new DrawTexture(null).setColor(Colors.monoBlend(.4f, 0))
+;; behind the editable text, alpha lifted to Colors.f2i(.2f) = 51 while that
+;; field is open for editing.
+(def ^:private edit-hl-off 0x00666666)
+(def ^:private edit-hl-on  0x33666666)
+
 (def ^:private t-play
   (modid/asset-path "textures" "guis/apps/media_player/play.png"))
 (def ^:private t-pause
@@ -156,7 +162,20 @@
         edit-name-id (id "edit-name")
         edit-desc-id (id "edit-desc")
         external? (:external? track)
+        title-hl-id (id "title-hl")
+        desc-hl-id (id "desc-hl")
         child (fn [spec] (rt/build-child! r spec item))
+        ;; Edit highlight, upstream wrapEdit's DrawTexture: monoBlend(.4, 0)
+        ;; behind the text, alpha raised to f2i(.2) while that field is being
+        ;; edited and back to 0 on commit. Built before the text so it sits
+        ;; under it in paint order.
+        _ (when external?
+            (child {:kind :box
+                    :props {:id title-hl-id :x 65.0 :y 1.0 :w 300.0 :h 30.0
+                            :fill edit-hl-off}})
+            (child {:kind :box
+                    :props {:id desc-hl-id :x 66.1 :y 29.0 :w 300.0 :h 23.0
+                            :fill edit-hl-off}}))
         ^INode title
         (child {:kind :text
                 :props {:id title-id :x 65.0 :y 1.0 :w 300.0 :h 30.0
@@ -184,17 +203,24 @@
                       :src (modid/asset-path "textures" "guis/icons/edit.png")
                       :alpha 0.4}})
       (events/on! r edit-name-id :left-click
-                  (fn [_ _ _] (events/gain-focus! r (.getIdx title))))
+                  (fn [_ _ _]
+                    (ui/set-prop! r title-hl-id :fill edit-hl-on)
+                    (events/gain-focus! r (.getIdx title))))
       (events/on! r edit-desc-id :left-click
-                  (fn [_ _ _] (events/gain-focus! r (.getIdx desc))))
-      (doseq [[^INode n field] [[title :name] [desc :desc]]]
+                  (fn [_ _ _]
+                    (ui/set-prop! r desc-hl-id :fill edit-hl-on)
+                    (events/gain-focus! r (.getIdx desc))))
+      (doseq [[^INode n field hl-id] [[title :name title-hl-id]
+                                      [desc :desc desc-hl-id]]]
         (rt/register-event! r (.getIdx n) :confirm-input
                             (fn [_ _ evt]
                               (edit-track-field! track field (:value evt))
+                              (ui/set-prop! r hl-id :fill edit-hl-off)
                               (events/remove-focus! r)))
         (rt/register-event! r (.getIdx n) :lost-focus
                             (fn [_ node _]
-                              (edit-track-field! track field (.getOSlot ^INode node 0))))))
+                              (edit-track-field! track field (.getOSlot ^INode node 0))
+                              (ui/set-prop! r hl-id :fill edit-hl-off)))))
     (rt/register-event! r (.getIdx ^INode item) :left-click
                         (fn [_ _ _]
                           (let [latest (or (catalog/media-by-id (:id track)) track)]
@@ -206,22 +232,39 @@
                   (let [idx (quot (long (.getY ^INode item)) (long row-h))]
                     (build-row! rt state item idx track)))))
 
-(defn- set-scroll! [^UiRt r state new-px]
-  (let [max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h) visible-h))
-        px (max 0.0 (min max-scroll (double new-px)))
-        progress (if (pos? max-scroll) (/ px max-scroll) 0.0)
+(defn- visible-rows
+  "Rows ElementList.updateList would lay out: it stops once the next row would
+   overflow the viewport, so a partly-visible row is never drawn."
+  ^long []
+  (max 1 (long (quot visible-h row-h))))
+
+(defn- max-scroll-row
+  "Upstream ElementList.getMaxProgress: the last start index whose remaining
+   rows still fill the viewport."
+  ^long [state]
+  (max 0 (- (count (all-tracks state)) (visible-rows))))
+
+(defn- set-scroll-row!
+  "Scroll by whole rows, as upstream does. ElementList.progress is a row index
+   and updateList lays each visible row out from y=0, so the list can only ever
+   rest on a row boundary -- it never shows a half row."
+  [^UiRt r state new-row]
+  (let [max-row (max-scroll-row state)
+        row (max 0 (min max-row (long new-row)))
+        progress (if (pos? max-row) (/ (double row) (double max-row)) 0.0)
         ^INode thumb (rt/node-by-id r :scroll_bar)]
-    (swap! state assoc :scroll-px px)
-    (ui/set-prop! r :media-list :scroll-offset px)
+    (swap! state assoc :scroll-row row)
+    (ui/set-prop! r :media-list :scroll-offset (* row row-h))
     (.setY thumb (+ thumb-min-y (* progress thumb-travel)))
     (.setFlag thumb node/FLAG-LAYOUT-DIRTY)))
 
 (defn- attach-scrollbar! [^UiRt r state]
   (let [drag-start-y (atom thumb-min-y)
+        ;; One row per wheel notch, now that scrolling is row-quantised.
         scroll-handler (fn [_ _ evt]
-                         (set-scroll! r state
-                                      (- (:scroll-px @state)
-                                         (* (double (:delta evt 0.0)) 10.0))))]
+                         (set-scroll-row! r state
+                                          (- (:scroll-row @state 0)
+                                             (long (Math/signum (double (:delta evt 0.0)))))))]
     (events/on! r :scroll_bar :mouse-scroll scroll-handler)
     (events/on! r :area :mouse-scroll scroll-handler)
     (events/on! r :scroll_bar :drag-start
@@ -232,13 +275,14 @@
                   ;; #back is scale 0.32 — without the divide the bar crawls at
                   ;; a third of the mouse.
                   (let [sc (max 0.001 (.getCumScale n))
-                        max-scroll (max 0.0 (- (* (count (all-tracks state)) row-h)
-                                                visible-h))
                         new-y (max thumb-min-y
                                    (min thumb-max-y
                                         (+ @drag-start-y (/ (double (:dy evt)) sc))))
                         progress (/ (- new-y thumb-min-y) thumb-travel)]
-                    (set-scroll! r state (* progress max-scroll)))))))
+                    ;; Upstream: list.setProgress((bar.getProgress * maxProgress).toInt)
+                    ;; -- truncation, not rounding.
+                    (set-scroll-row! r state
+                                     (long (* progress (max-scroll-row state)))))))))
 
 (defn- attach-volume-drag! [^UiRt r state]
   (let [drag-start-x (atom vol-min-x)]
@@ -269,7 +313,7 @@
                                   :w 0.0 :h 6.0 :fill 0xFFFFFFFF}}
                          (rt/node-by-id r :progress))
         volume (:volume (playback-state))
-        state (atom {:granted-internal [] :volume volume :scroll-px 0.0
+        state (atom {:granted-internal [] :volume volume :scroll-row 0
                      :progress-fill-node progress-fill})
         ^INode volume-bar (rt/node-by-id r :volume_bar)
         rebuild! #(rebuild-list! r state)]
