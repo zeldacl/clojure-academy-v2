@@ -21,6 +21,14 @@
            [java.net URI]))
 
 (def ^:private font-size 30.0)
+
+(def ^:private link-slot
+  "Index in :donation/:text that stands in for upstream's inline \"!!\" entry.
+
+   about.conf keeps links and prose in one list; about.edn splits them, leaving
+   a blank line at this index where the link used to be."
+  2)
+
 (def ^:private viewport-h 540.0)
 (def ^:private thumb-min-y 58.0)
 (def ^:private thumb-max-y 528.0)
@@ -70,7 +78,11 @@
     (vswap! y + (* 1.5 font-size))
     (doseq [[idx donor] (map-indexed vector (shuffle donators))]
       (let [col (rem idx 3)]
-        (conj! items {:x (+ 30.0 (* col 220.0)) :y @y :w 150.0
+        ;; Upstream: margin + col * (620 - 2*margin - tw) / 2, margin 30,
+        ;; tw 150 — a step of 205, not 220. At 220 the third column starts at
+        ;; 470 and runs to 620, flush against the scroll area's right edge,
+        ;; while upstream ends it at 590 and keeps the 30px margin symmetric.
+        (conj! items {:x (+ 30.0 (* col 205.0)) :y @y :w 150.0
                       :text donor :align :left :size (* 0.8 font-size)})
         (when (= col 2)
           (vswap! y + (* 0.8 font-size)))))
@@ -83,19 +95,24 @@
   (let [items (transient [])
         y (volatile! 100.0)]
     (doseq [[idx line] (map-indexed vector text)]
-      (when (= idx 2)
+      (if (= idx link-slot)
+        ;; Upstream walks ONE list where a "!!text|url" entry *is* the line —
+        ;; the link occupies that slot rather than being inserted next to it.
+        ;; Our data splits :text and :links, so index `link-slot` is the blank
+        ;; standing in for it. Emitting the link *and* the blank line pushed
+        ;; everything below it down by a whole row.
         (doseq [{link-text :text :keys [url]} links]
           (vswap! y + 10.0)
           (conj! items {:x 30.0 :y @y :w 560.0 :text link-text :url url
                         :align :left :size 40.0})
-          (vswap! y + 50.0)))
-      (let [right? (str/starts-with? line "]")
-            line (if right? (subs line 1) line)]
-        (conj! items {:x 30.0 :y @y :w 560.0
-                      :text line :align (if right? :right :left)
-                      :size font-size})
-        (vswap! y + font-size)))
-    (when (< (count text) 3)
+          (vswap! y + 50.0))
+        (let [right? (str/starts-with? line "]")
+              line (if right? (subs line 1) line)]
+          (conj! items {:x 30.0 :y @y :w 560.0
+                        :text line :align (if right? :right :left)
+                        :size font-size})
+          (vswap! y + font-size))))
+    (when (<= (count text) link-slot)
       (doseq [{link-text :text :keys [url]} links]
         (vswap! y + 10.0)
         (conj! items {:x 30.0 :y @y :w 560.0 :text link-text :url url
