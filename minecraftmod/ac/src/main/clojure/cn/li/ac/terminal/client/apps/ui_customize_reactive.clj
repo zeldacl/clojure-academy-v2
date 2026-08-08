@@ -33,11 +33,20 @@
 (def ^:private preview-outline 0xFFFFFFFF)
 (def ^:private preview-outline-off 0x00000000)
 
-(defn- persist-position! [config-key position]
+(defn- set-position!
+  "Upstream Node.setPosition only writes the in-memory Property; nothing
+   touches the file until SettingsUI.onGuiClosed calls config.save(). Record
+   the key so the close handler can flush exactly what changed."
+  [dirty config-key position]
   (config-reg/set-config-value! config-common/gameplay-domain config-key position)
+  (swap! dirty assoc config-key position))
+
+(defn- flush-positions! [dirty]
   (when-let [fw-atom (fw/fw-atom)]
-    (platform/call-adapter fw-atom :config-persist :persist!
-                           config-common/gameplay-domain config-key position)))
+    (doseq [[config-key position] @dirty]
+      (platform/call-adapter fw-atom :config-persist :persist!
+                             config-common/gameplay-domain config-key position)))
+  (reset! dirty {}))
 
 (defn- local [suffix]
   (or (i18n/translate (str "gui." modid/MOD-ID ".uiedit." suffix)) suffix))
@@ -87,14 +96,14 @@
       (throw (NumberFormatException. "HUD coordinate is outside [-512, 512]")))
     n))
 
-(defn- edit-position! [r selected axis value sw sh]
+(defn- edit-position! [r selected dirty axis value sw sh]
   (when-let [{:keys [id config-key] :as element}
              (some #(when (= (:id %) @selected) %) elements)]
     (try
       (let [[x y] (gameplay/hud-position id)
             n (valid-coordinate value)
             position (if (= axis :x) [n y] [x n])]
-        (persist-position! config-key position)
+        (set-position! dirty config-key position)
         (ui/set-prop! r (if (= axis :x) :edit_x_bg :edit_y_bg) :fill edit-bg-ok)
         (set-preview-position! r element sw sh))
       (catch NumberFormatException _
@@ -122,8 +131,9 @@
         sh (double sh)
         selected (atom nil)
         ;; The editbox anchors to the clicked list row, so keep each row node
-        ;; by element id — a preview click has to find the same row.
-        rows (atom {})]
+        ;; by element id.
+        rows (atom {})
+        dirty (atom {})]
     (rt/build! r (ui-xml/load-spec (modid/namespaced-path "guis/new/ui_edit.xml")))
     (ui/set-prop! r :header :text (local "elements"))
     ;; :visible? is a build-time node prop, not a prop-writer — set-prop!
@@ -138,15 +148,18 @@
                            :text (local (str "elm." (name (:id element)))))
         (rt/register-event! runtime (.getIdx ^INode item) :left-click
           (fn [_ _ _] (select-element! r selected rows element)))))
+    ;; Previews are shown, not clicked: upstream attaches no listener to them,
+    ;; the element list is the only way to change focus.
     (doseq [element elements]
-      (set-preview-position! r element sw sh)
-      (events/on! r (:preview-id element) :left-click
-        (fn [_ _ _] (select-element! r selected rows element))))
+      (set-preview-position! r element sw sh))
     (events/on-confirm-input r :edit_x
-      (fn [_ _ value] (edit-position! r selected :x value sw sh)))
+      (fn [_ _ value] (edit-position! r selected dirty :x value sw sh)))
     (events/on-confirm-input r :edit_y
-      (fn [_ _ value] (edit-position! r selected :y value sw sh)))
+      (fn [_ _ value] (edit-position! r selected dirty :y value sw sh)))
+    (rt/put-user-signal! r :uiedit-on-close #(flush-positions! dirty))
     r))
 
 (defn open! []
-  (bridge/open-reactive-screen! (create-runtime) "Customize UI"))
+  (let [r (create-runtime)]
+    (bridge/open-reactive-screen! r "Customize UI"
+      {:on-close (rt/user-signal r :uiedit-on-close)})))
