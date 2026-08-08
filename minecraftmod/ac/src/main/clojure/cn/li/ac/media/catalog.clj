@@ -27,7 +27,8 @@
 (defn register-external-media!
   "Register (or replace) one externally-scanned track. `media` must include
   :id (keyword), :name, :desc, :source (absolute file path string),
-  :length-secs, and optionally :cover (absolute file path string or nil)."
+  :length-secs, and optionally :cover (a registered texture location
+  string, as produced by the loader's cover scan -- not a disk path)."
   [media]
   (swap! external-catalog assoc (:id media) (assoc media :external? true))
   nil)

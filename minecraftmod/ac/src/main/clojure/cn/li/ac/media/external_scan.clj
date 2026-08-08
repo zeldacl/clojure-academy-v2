@@ -1,9 +1,9 @@
 (ns cn.li.ac.media.external-scan
   "Client-only: scans the external-media folder and registers found tracks
   into cn.li.ac.media.catalog. Matches upstream's acmedia/source/*.ogg
-  folder scanning; unlike upstream, custom cover art loading and persisted
-  custom name/desc are out of scope for this pass — edited names/descriptions
-  live in memory only for the current session."
+  folder scanning, including acmedia/cover/<id>.png cover art. Unlike
+  upstream, edited names/descriptions are not persisted — they live in memory
+  for the current session only."
   (:require [cn.li.ac.media.catalog :as catalog]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -20,12 +20,15 @@
                         fw-atom :media-library :scan-external-tracks!))]
       (do
         (catalog/reset-external-media!)
-        (doseq [{:keys [id source length-secs]} tracks]
+        (doseq [{:keys [id name desc source cover length-secs]} tracks]
           (catalog/register-external-media!
             {:id (keyword id)
-             :name id
-             :desc "External track"
+             ;; Upstream defaults both to the id, and the loader has already
+             ;; applied whatever the player renamed them to.
+             :name (or name id)
+             :desc (or desc id)
              :source source
+             :cover cover
              :length-secs length-secs}))
         (log/info "Scanned external media tracks:" (count (catalog/external-medias))))
       ;; No :media-library adapter yet. Content init runs in the mod

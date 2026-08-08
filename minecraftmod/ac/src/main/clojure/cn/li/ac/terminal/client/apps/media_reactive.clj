@@ -152,7 +152,12 @@
 
 (defn- edit-track-field! [track field value]
   (when (:external? track)
-    (catalog/update-external-media! (:id track) {field value})))
+    (catalog/update-external-media! (:id track) {field value})
+    ;; Upstream writes the edit straight into media.<id>_name / _desc, so a
+    ;; renamed track keeps its name across restarts; ours only lived in memory.
+    (when-let [fw-atom (fw/fw-atom)]
+      (platform/call-adapter-optional fw-atom :media-library :save-track-meta!
+                                      (clojure.core/name (:id track)) field value))))
 
 (defn- build-row! [^UiRt r state item idx track]
   (rt/clear-children! r item)
