@@ -605,12 +605,16 @@
 
 (defn- send-slot-key-message!
   [msg-id player-uuid key-idx]
-  (when-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+  (if-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
     (when-let [ctx-id (context-id-for-slot! player-uuid key-idx skill-id)]
+      (log/info "Slot key message sent"
+                {:msg-id msg-id :key-idx key-idx :skill-id skill-id :ctx-id ctx-id})
       (send-with-client-owner! player-uuid msg-id {:ctx-id ctx-id
                                                    :skill-id skill-id
                                                    :key-idx key-idx})
-      ctx-id)))
+      ctx-id)
+    (log/info "Slot key pressed but no skill bound to slot"
+              {:msg-id msg-id :key-idx key-idx :player-uuid player-uuid})))
 
 (defn- send-slot-keepalive!
   [player-uuid key-idx]

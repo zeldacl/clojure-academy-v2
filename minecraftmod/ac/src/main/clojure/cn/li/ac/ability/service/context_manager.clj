@@ -256,6 +256,8 @@
    flight) keep the context alive and ticked without any held key — without
    this refresh the keepalive timeout would terminate the context mid-flight."
   [owner callback player {:keys [id skill-id]}]
+  (when (= skill-id :threatening-teleport)
+    (log/info "Server tick driving threatening-teleport context" {:ctx-id id}))
   (when-let [session-id (owner/store-session-id owner)]
     (command-rt/run-command-in-session!
      session-id
