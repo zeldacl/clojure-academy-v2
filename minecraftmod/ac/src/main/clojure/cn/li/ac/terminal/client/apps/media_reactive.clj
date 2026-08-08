@@ -10,7 +10,9 @@
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.network.client :as net-client]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.node :as node]
@@ -52,11 +54,20 @@
         (map wire-track->local (:granted-internal @state))))
 
 (defn- fetch-granted! [state rebuild!]
-  (net-client/send-to-server media-get-state-msg {}
-    (fn [response]
-      (swap! state assoc :granted-internal
-             (if (:success response) (:medias response) []))
-      (rebuild!))))
+  ;; Pass the owner explicitly. Without one send-to-server falls back to
+  ;; hooks/client-session-id, which reads a ThreadLocal that is only bound
+  ;; inside a client-context callback — and this runs straight out of
+  ;; create-runtime, so it was always nil and the app threw before it could
+  ;; open. default-client-owner derives the session from the live connection
+  ;; instead, so it holds anywhere on the client.
+  (if-let [owner (runtime-hooks/default-client-owner)]
+    (net-client/send-to-server owner media-get-state-msg {}
+      (fn [response]
+        (swap! state assoc :granted-internal
+               (if (:success response) (:medias response) []))
+        (rebuild!)))
+    ;; No connection means no server-granted tracks; external ones still list.
+    (log/warn "[AC-Media] no client owner available; skipping granted-media query")))
 
 (defn- media-playback-call [fn-key & args]
   (when-let [fw-atom (fw/fw-atom)]
