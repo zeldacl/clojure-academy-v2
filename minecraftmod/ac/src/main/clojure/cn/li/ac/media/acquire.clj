@@ -55,9 +55,15 @@
     nil))
 
 (defn installed-medias
-  "All medias currently usable by `player`: every external track plus
-  whichever internal tracks they've acquired."
+  "Internal tracks `player` has acquired.
+
+  External tracks are deliberately excluded. They are scanned from the
+  player's own disk and only exist client-side, so the server has nothing to
+  say about them — it could only ever see them in single-player, where client
+  and server share one JVM and therefore one catalog atom. That leak made the
+  media list report every external track as \"granted\", and the app then
+  listed it a second time from its own scan: every external row appeared
+  twice in single-player and once on a dedicated server."
   [player]
   (let [acquired (acquired-ids player)]
-    (into (catalog/external-medias)
-          (filter #(contains? acquired (:id %)) (catalog/internal-medias)))))
+    (filterv #(contains? acquired (:id %)) (catalog/internal-medias))))

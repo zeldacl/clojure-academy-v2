@@ -329,12 +329,22 @@
         rebuild! #(rebuild-list! r state)]
     (.setX volume-bar (+ vol-min-x (* volume vol-travel)))
     (.setFlag volume-bar node/FLAG-LAYOUT-DIRTY)
-    (rt/put-user-signal!
-      r :media-progress-tick
-      (sig/computed-o [(rt/clock-ms-sig r) (rt/partial-ticks-sig r)]
-                      (fn [_ _]
-                        (update-now-playing-display! r state)
-                        nil)))
+    ;; Bind the ticker, do not merely stash it. A computed signal only
+    ;; recomputes when something pulls it, and nothing pulls a bare
+    ;; user-signal — so this ran once at build and never again, freezing the
+    ;; elapsed time, the progress bar and the play/pause icon for the whole
+    ;; session. Anchoring it as a Binding puts it in the runtime's dirty queue,
+    ;; which flush! drains every frame (the pattern set-tick! uses elsewhere).
+    (let [^INode anchor (rt/node-by-id r :back)
+          tick (sig/computed-o [(rt/clock-ms-sig r) (rt/partial-ticks-sig r)]
+                               (fn [_ _]
+                                 (update-now-playing-display! r state)
+                                 nil))
+          b (sig/bind! tick anchor
+                       (fn [_node source] (.sGet ^cn.li.mcmod.uipojo.signal.ISigO source) nil)
+                       (rt/get-dirty-bindings-q r))]
+      (rt/register-binding! r (.getIdx anchor) b)
+      (rt/put-user-signal! r :media-progress-tick b))
     (events/on! r :pop :left-click (fn [_ _ _] (toggle-play-pause! r state)))
     (events/on! r :stop :left-click (fn [_ _ _] (stop! r state)))
     (attach-scrollbar! r state)
