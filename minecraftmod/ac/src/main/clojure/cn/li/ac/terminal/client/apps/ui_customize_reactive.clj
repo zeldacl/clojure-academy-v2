@@ -21,6 +21,18 @@
    {:id :media :config-key :hud-media-position :preview-id :preview-media}
    {:id :notification :config-key :hud-notification-position :preview-id :preview-notification}])
 
+;; Upstream wrapEdit tints the edit field's own DrawTexture on confirm --
+;; Colors.fromRGBA32(0x333333ff) when the value took, 0xbb3333ff when it did
+;; not. Those are RGBA32; ours are the same colours as ARGB.
+(def ^:private edit-bg-ok 0xFF333333)
+(def ^:private edit-bg-error 0xFFBB3333)
+
+;; Upstream marks the selected element by adding an Outline component to its
+;; preview widget, which defaults to white at lineWidth 2. The mark boxes carry
+;; outline-width="2.0"; only the colour is switched at runtime.
+(def ^:private preview-outline 0xFFFFFFFF)
+(def ^:private preview-outline-off 0x00000000)
+
 (defn- persist-position! [config-key position]
   (config-reg/set-config-value! config-common/gameplay-domain config-key position)
   (when-let [fw-atom (fw/fw-atom)]
@@ -48,8 +60,26 @@
 
 (defn- set-selected-preview! [r selected-id]
   (doseq [{:keys [id]} elements]
-    (ui/set-prop! r (keyword (str "preview-" (name id) "-mark")) :fill
-                  (if (= id selected-id) 0x55FB8525 0x00FFFFFF))))
+    (ui/set-prop! r (keyword (str "preview-" (name id) "-mark")) :outline
+                  (if (= id selected-id) preview-outline preview-outline-off))))
+
+(defn- position-editbox!
+  "Park the edit box beside the row that was clicked, as upstream does:
+
+     edit.pos(button.x + button.transform.width * button.scale + 5,
+              button.y + button.transform.height * button.scale / 2
+                       - edit.transform.height / 2)
+
+   The row's absolute position already folds in #main's 0.5 scale, and
+   #editbox hangs off the unscaled root, so its own x/y are that same space."
+  [r ^INode row]
+  (when row
+    (let [^INode box (rt/node-by-id r :editbox)
+          s (.getCumScale row)]
+      (.setX box (+ (.getAbsX row) (* (.getW row) s) 5.0))
+      (.setY box (- (+ (.getAbsY row) (/ (* (.getH row) s) 2.0))
+                    (/ (.getH box) 2.0)))
+      (.setFlag box node/FLAG-LAYOUT-DIRTY))))
 
 (defn- valid-coordinate [value]
   (let [n (Double/parseDouble (str value))]
@@ -65,29 +95,35 @@
             n (valid-coordinate value)
             position (if (= axis :x) [n y] [x n])]
         (persist-position! config-key position)
-        (ui/set-prop! r (if (= axis :x) :edit-x :edit-y) :color 0xFFFFFFFF)
+        (ui/set-prop! r (if (= axis :x) :edit-x-bg :edit-y-bg) :fill edit-bg-ok)
         (set-preview-position! r element sw sh))
       (catch NumberFormatException _
-        (ui/set-prop! r (if (= axis :x) :edit-x :edit-y) :color 0xFFFF5555)))))
+        (ui/set-prop! r (if (= axis :x) :edit-x-bg :edit-y-bg) :fill edit-bg-error)))))
 
-(defn- select-element! [r selected {:keys [id]}]
-  (reset! selected id)
-  (let [[x y] (gameplay/hud-position id)]
-    ;; Same reason as create-runtime: :visible? has no prop-writer, so
-    ;; set-prop! could only throw. This one fired on the first element click.
-    (.setVisible ^INode (rt/node-by-id r :editbox) true)
-    (ui/set-prop! r :edit-x :text (str x))
-    (ui/set-prop! r :edit-y :text (str y))
-    (ui/set-prop! r :edit-x :color 0xFFFFFFFF)
-    (ui/set-prop! r :edit-y :color 0xFFFFFFFF)
-    (set-selected-preview! r id)))
+(defn- select-element! [r selected rows {:keys [id]}]
+  ;; Upstream changeEditFocus opens with `if (node == prevFocus) return;`.
+  (when-not (= @selected id)
+    (reset! selected id)
+    (let [[x y] (gameplay/hud-position id)]
+      ;; Same reason as create-runtime: :visible? has no prop-writer, so
+      ;; set-prop! could only throw. This one fired on the first element click.
+      (.setVisible ^INode (rt/node-by-id r :editbox) true)
+      (position-editbox! r (get @rows id))
+      (ui/set-prop! r :edit-x :text (str x))
+      (ui/set-prop! r :edit-y :text (str y))
+      (ui/set-prop! r :edit-x-bg :fill edit-bg-ok)
+      (ui/set-prop! r :edit-y-bg :fill edit-bg-ok)
+      (set-selected-preview! r id))))
 
 (defn create-runtime []
   (let [r (rt/create-runtime)
         [sw sh] (or (bridge/get-window-size) [854 480])
         sw (double sw)
         sh (double sh)
-        selected (atom nil)]
+        selected (atom nil)
+        ;; The editbox anchors to the clicked list row, so keep each row node
+        ;; by element id — a preview click has to find the same row.
+        rows (atom {})]
     (rt/build! r (ui-xml/load-spec (modid/namespaced-path "guis/new/ui_edit.xml")))
     (ui/set-prop! r :header :text (local "elements"))
     ;; :visible? is a build-time node prop, not a prop-writer — set-prop!
@@ -97,14 +133,15 @@
     (.setVisible ^INode (rt/node-by-id r :editbox) false)
     (ui/list-set! r :hud-list elements
       (fn [runtime item element]
+        (swap! rows assoc (:id element) item)
         (ui/set-node-prop! runtime (ui/item-node item :label)
                            :text (local (str "elm." (name (:id element)))))
         (rt/register-event! runtime (.getIdx ^INode item) :left-click
-          (fn [_ _ _] (select-element! r selected element)))))
+          (fn [_ _ _] (select-element! r selected rows element)))))
     (doseq [element elements]
       (set-preview-position! r element sw sh)
       (events/on! r (:preview-id element) :left-click
-        (fn [_ _ _] (select-element! r selected element))))
+        (fn [_ _ _] (select-element! r selected rows element))))
     (events/on-confirm-input r :edit-x
       (fn [_ _ value] (edit-position! r selected :x value sw sh)))
     (events/on-confirm-input r :edit-y
