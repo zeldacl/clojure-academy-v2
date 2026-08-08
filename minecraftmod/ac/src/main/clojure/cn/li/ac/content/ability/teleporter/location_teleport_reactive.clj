@@ -111,22 +111,26 @@
   (net-client/send-to-server (net-owner player-uuid)
     catalog/MSG-REQ-SAVED-POS-QUERY {}
     (fn [resp]
-      (log/info "Loctele query resp" {:success? (:success? resp)
-                                      :count (count (:locations resp))})
-      (when (and resp (:success? resp))
-        (update-screen! owner-key
-          (fn [_] {:locations (vec (or (:locations resp) []))
-                   :exp (double (or (:exp resp) 0.0))
-                   :current-pos (:current-pos resp)
-                   :limits (or (:limits resp) {})}))
-        (rebuild-list! rt player-uuid owner-key)))))
+      ;; The server wraps the query result in {:action ... :snapshot ...} —
+      ;; read the snapshot, not the top level.
+      (let [snapshot (or (:snapshot resp) resp)]
+        (log/info "Loctele query resp" {:success? (:success? snapshot)
+                                        :count (count (:locations snapshot))})
+        (when (and snapshot (:success? snapshot))
+          (update-screen! owner-key
+            (fn [_] {:locations (vec (or (:locations snapshot) []))
+                     :exp (double (or (:exp snapshot) 0.0))
+                     :current-pos (:current-pos snapshot)
+                     :limits (or (:limits snapshot) {})}))
+          (rebuild-list! rt player-uuid owner-key))))))
 
 (defn- send-action! [^UiRt rt player-uuid msg-id payload owner-key]
   (net-client/send-to-server (net-owner player-uuid) msg-id payload
     (fn [resp]
       (log/info "Loctele action resp" {:msg-id msg-id
-                                       :success? (:success? resp)
-                                       :error (:error resp)})
+                                       :top-level (select-keys resp [:success? :error])
+                                       :action (select-keys (:action resp) [:success? :error :op])
+                                       :snapshot-success? (:success? (:snapshot resp))})
       (send-query! rt player-uuid owner-key))))
 
 ;; ============================================================================
