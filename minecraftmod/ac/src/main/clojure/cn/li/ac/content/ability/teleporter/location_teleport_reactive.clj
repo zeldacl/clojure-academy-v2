@@ -204,6 +204,15 @@
           (let [^INode input-n (ui/item-node item :input)
                 ^INode ok-n (ui/item-node item :ok)]
             (show-row-section! rt item :add-row)
+            ;; Hide the "Add..." placeholder while the input has text —
+            ;; otherwise the typed characters overlap it.
+            (rt/register-event! rt (.getIdx input-n) :change-content
+              (fn [_ _ _]
+                (let [has-text? (pos? (count (str (.getOSlot input-n 0))))]
+                  (when-let [^INode ph-n (ui/item-node item :ph)]
+                    (.setVisible ph-n (not has-text?))
+                    (.setFlag ph-n node/FLAG-LAYOUT-DIRTY)
+                    (rt/mark-tree-dirty! rt)))))
             (rt/register-event! rt (.getIdx ok-n) :left-click
               (fn [_ _ _]
                 (let [name (str/trim (str (.getOSlot input-n 0)))
