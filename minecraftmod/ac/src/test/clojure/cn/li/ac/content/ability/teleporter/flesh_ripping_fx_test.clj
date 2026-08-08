@@ -80,15 +80,16 @@
       (is (= "academy:tp.guts" (:sound-id (second (first @sounds*))))))))
 
 (deftest build-plan-emits-scaled-marker-cube-test
-  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})]
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (frfx/init!)
-    ;; No target: disabled color, 1.0x1.0 box.
+    ;; No target: disabled color, 1.0x1.0 box, 8 corners x 3 ticks.
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update
                                          {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0 :hit? false}
                                          :owner-key [:ctx "ctx-1"])
     (let [{:keys [ops]} (cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan
                          :flesh-ripping nil {:player-uuid "viewer"} 0 nil)]
-      (is (= 12 (count ops)))
+      (is (= 24 (count ops)))
       (is (= {:r 74 :g 74 :b 74 :a 160} (:color (first ops)))))
     ;; Target: threatening color, box scaled to width*1.2 / height*1.2.
     (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update
@@ -98,11 +99,45 @@
                                          :owner-key [:ctx "ctx-1"])
     (let [{:keys [ops]} (cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan
                          :flesh-ripping nil {:player-uuid "viewer"} 0 nil)]
-      (is (= 12 (count ops)))
+      (is (= 24 (count ops)))
       (is (= {:r 185 :g 25 :b 25 :a 180} (:color (first ops))))
-      ;; Half-extents 0.6 / 1.2 -> edge endpoints stay within half a block of center.
+      ;; Box 1.2 x 2.4 (target 1.0x2.0 x1.2), bottom at aim y=3.0.
       (let [^cn.li.mcmod.math.V3 p1 (:p1 (first ops))]
-        (is (< (Math/abs (- (.y p1) 2.0)) 1.3))))))
+        (is (< (Math/abs (- (.y p1) 3.0)) 2.5))))))
+
+(deftest build-plan-follows-target-entity-live-test
+  ;; Upstream l_updateEffect recomputes getAttackTarget client-side every
+  ;; tick; the marker follows the target's live position.
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "flesh-ripping-test"})]
+    (frfx/init!)
+    (level-effects/enqueue-level-effect! :flesh-ripping "ctx-1" :flesh-ripping/fx-update
+                                         {:mode :update :target-x 1.0 :target-y 2.0 :target-z 3.0
+                                          :hit? true :target-uuid "enemy-1"
+                                          :target-width 0.6 :target-height 1.8}
+                                         :owner-key [:ctx "ctx-1"]))
+  (let [calls* (atom [])]
+    (with-redefs [client-bridge/run-client-effect!
+                  (fn [effect-key payload]
+                    (swap! calls* conj [effect-key payload])
+                    (when (= effect-key :mcmod/get-entity-position)
+                      {:x 20.0 :y 64.0 :z 30.0 :width 1.0 :height 2.0}))]
+      (let [{:keys [ops]} (cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan
+                           :flesh-ripping nil {:player-uuid "viewer"} 0 nil)]
+        (is (= 24 (count ops)))
+        (is (= [[:mcmod/get-entity-position {:entity-uuid "enemy-1"}]] @calls*))
+        ;; Box 1.2 x 2.4 bottom at the entity's live feet; ticks extend
+        ;; 0.2*width beyond the corners.
+        (let [endpoints (mapcat (fn [op]
+                                  (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                                        ^cn.li.mcmod.math.V3 p2 (:p2 op)]
+                                    [[(.x p1) (.y p1) (.z p1)]
+                                     [(.x p2) (.y p2) (.z p2)]]))
+                                ops)]
+          (is (every? (fn [[x y z]]
+                        (and (<= 19.16 x 20.84)
+                             (<= 63.76 y 66.64)
+                             (<= 29.16 z 30.84)))
+                      endpoints)))))))
 
 (deftest perform-clears-marker-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)

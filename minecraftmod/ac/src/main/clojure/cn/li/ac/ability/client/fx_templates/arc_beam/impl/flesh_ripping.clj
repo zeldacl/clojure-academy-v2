@@ -22,25 +22,40 @@
   (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect-at
     {:effect-id "entity_blood_splash" :x x :y y :z z}))
 
-(defn- marker-cube-ops
-  "Wireframe cube centered at c. Upstream l_updateEffect sizes the marker by
-  the target (width*1.2 / height*1.2) or 1.0x1.0 without one."
-  [c half-x half-y half-z color]
-  (let [x (double (:x c)) y (double (:y c)) z (double (:z c))
-        hx (double half-x) hy (double half-y) hz (double half-z)
-        corners [[(- x hx) (- y hy) (- z hz)] [(+ x hx) (- y hy) (- z hz)]
-                 [(+ x hx) (- y hy) (+ z hz)] [(- x hx) (- y hy) (+ z hz)]
-                 [(- x hx) (+ y hy) (- z hz)] [(+ x hx) (+ y hy) (- z hz)]
-                 [(+ x hx) (+ y hy) (+ z hz)] [(- x hx) (+ y hy) (+ z hz)]]
-        edges [[0 1] [1 2] [2 3] [3 0]
-               [4 5] [5 6] [6 7] [7 4]
-               [0 4] [1 5] [2 6] [3 7]]]
-    (mapv (fn [[a b]]
-            (let [pa (nth corners a) pb (nth corners b)]
-              (ru/line-op (rv3/v3 (double (nth pa 0)) (double (nth pa 1)) (double (nth pa 2)))
-                          (rv3/v3 (double (nth pb 0)) (double (nth pb 1)) (double (nth pb 2)))
-                          color)))
-          edges)))
+(defn- corner-tick-ops
+  "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
+  line segments (vertical + +x + +z), so the mark reads as 8 corner ticks."
+  [ox oy oz width height color]
+  (let [len (* 0.2 width)
+        corners [[0 0 0] [1 0 0] [1 0 1] [0 0 1]
+                 [0 1 0] [1 1 0] [1 1 1] [0 1 1]]]
+    (mapcat (fn [[cx cy cz]]
+              (let [x (+ ox (* cx width))
+                    y (+ oy (* cy height))
+                    z (+ oz (* cz width))
+                    rev (< cy 0.5)
+                    vert (if rev len (- len))]
+                [(ru/line-op (rv3/v3 x y z) (rv3/v3 x (+ y vert) z) color)
+                 (ru/line-op (rv3/v3 x y z) (rv3/v3 (+ x len) y z) color)
+                 (ru/line-op (rv3/v3 x y z) (rv3/v3 x y (+ z len)) color)]))
+            corners)))
+
+(defn- marker-ops
+  "Box bottom sits AT the aim point; when targeting an entity the box follows
+  its LIVE client-side position every frame and is sized to the target box x1.2
+  (upstream l_updateEffect + EntityMarker follow)."
+  [st]
+  (let [color (if (:hit? st) color-threatening color-disabled)
+        live (when-let [uuid (:target-uuid st)]
+               (client-bridge/run-client-effect!
+                :mcmod/get-entity-position {:entity-uuid uuid}))
+        width (double (if live (* 1.2 (:width live)) (or (:target-width st) 0.6)))
+        height (double (if live (* 1.2 (:height live)) (or (:target-height st) 1.8)))
+        px (double (if live (:x live) (:x (:aim st))))
+        py (double (if live (:y live) (:y (:aim st))))
+        pz (double (if live (:z live) (:z (:aim st))))]
+    (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
+                     width height color)))
 
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
@@ -122,16 +137,8 @@
         marker-ops
         (vec
          (mapcat (fn [st]
-                   (when-let [aim (:aim st)]
-                     (let [hit? (:hit? st)
-                           color (if hit? color-threatening color-disabled)
-                           half-x (if hit?
-                                    (* 0.5 (double (or (:target-width st) 0.6)) 1.2)
-                                    0.5)
-                           half-y (if hit?
-                                    (* 0.5 (double (or (:target-height st) 1.8)) 1.2)
-                                    0.5)]
-                       (marker-cube-ops aim half-x half-y half-x color))))
+                   (when (and (:active? st) (:aim st))
+                     (marker-ops st)))
                  states))]
     (when (seq marker-ops)
       {:ops marker-ops})))
