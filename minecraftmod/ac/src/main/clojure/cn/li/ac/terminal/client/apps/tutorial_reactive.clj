@@ -12,11 +12,10 @@
    this file's own logo1/logo2 abs position against rx/rw, both of which
    matched independently, so confidence is high).
 
-   Simplifications versus the original (documented, cosmetic-only):
-   - 3D block auto-rotation: upstream rotates blocks around Y axis at
-     (time/80)%360 degrees; v2 renders stationary scaled ItemStack model.
-   - Full GL perspective projection (gluPerspective/FOV 50): replaced by
-     PoseStack-transformed GuiGraphics.renderFakeItem for the preview area."
+   The preview area is not a simplification of upstream: :preview-3d rebuilds
+   upstream's own camera — FOV 50 perspective, the showArea/drawsBlockImpl
+   transform chain, and the (time/80)%360 Y spin — on RenderSystem state. See
+   render-preview-3d! in each mc-<version>/gui/reactive/render.clj."
   (:require [cn.li.ac.ability.util.uuid :as uuid]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.tutorial.content :as tut-content]

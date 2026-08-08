@@ -1231,9 +1231,22 @@
             vp-h (int (max 1 (Math/round (* h gui-scale))))
             vp-y (int (Math/round (- fb-h (* (+ y h) gui-scale))))
             aspect (float (if (pos? h) (/ w h) 1.0))
-            ;; Build perspective projection matching upstream gluPerspective(50,1,1,100)
-            persp (doto (Matrix4f.)
-                    (.setPerspective (float (Math/toRadians 50.0)) aspect 1.0 100.0))
+            ;; Upstream builds its projection as glScaled(scale, -scale*aspect, -0.5)
+            ;; *followed by* gluPerspective(50,1,1,100), i.e. P = S · Perspective.
+            ;; The viewport above already does S's x/y magnitude job, but not its
+            ;; two sign flips, and both of those carry meaning:
+            ;;   -y  cancels the modelview's own scale(.75,-.75,.75) so screen-space
+            ;;       winding comes out unreversed and back-face culling keeps the
+            ;;       cube's front faces instead of its far ones;
+            ;;   -0.5 remaps clip z so the block lands at depth ~0.36. Without it it
+            ;;       sits at ~0.77, while every 2D GUI quad drawn before it wrote
+            ;;       0.5 (the ortho GUI pass puts pose z=0 exactly mid-range), so
+            ;;       LEQUAL rejected every fragment — the block was submitted and
+            ;;       flushed correctly, just never visible.
+            persp (-> (Matrix4f.)
+                      (.scaling (float 1.0) (float -1.0) (float -0.5))
+                      (.perspective (float (Math/toRadians 50.0)) aspect
+                                    (float 1.0) (float 100.0)))
             ;; Use RenderSystem modelview stack (separate from GuiGraphics
             ;; PoseStack). In 1.21.1 this is a JOML Matrix4fStack, not a
             ;; PoseStack — hinting it as the latter compiles but emits a
@@ -1296,9 +1309,20 @@
                   ;; appeared at all.
                   (.flush gg)
                   (RenderSystem/disableDepthTest)))))
-          ;; :item — renderFakeItem in the perspective modelview
-          (do (.renderFakeItem gg stack -8 -8)
-              (.flush gg)))
+          ;; :item — GuiGraphics.renderItem bakes translate(0,0,150) + scale(16,-16,16)
+          ;; into gg's own pose, sized and offset for vanilla's ortho GUI. Under
+          ;; this perspective camera the 150 lands the model far behind the eye
+          ;; (the frustum only reaches 100), so undo both here — upstream's
+          ;; drawsItemImpl does the same with its own glScaled(-1/16,-1/16,1).
+          ;; Cancelling renderItem's -16 also leaves winding matching the block
+          ;; path, so the projection's -y flip keeps the item upright.
+          (let [^PoseStack ps (.pose gg)]
+            (.pushPose ps)
+            (.scale ps (float (/ 1.0 16.0)) (float (/ -1.0 16.0)) (float (/ 1.0 16.0)))
+            (.translate ps 0.0 0.0 -150.0)
+            (.renderFakeItem gg stack -8 -8)
+            (.flush gg)
+            (.popPose ps)))
         ;; Restore
         (.popMatrix mv)
         (RenderSystem/applyModelViewMatrix)
