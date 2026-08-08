@@ -108,11 +108,18 @@
         ;; rather than by reference.
         ;; fd: [0]mouse-x [1]mouse-y [2]buff-x [3]buff-y
         ;;     [4]last-mx [5]last-my [6]last-frame-ms [7]create-time-ms [8]aspect
+        ;;
+        ;; [7] is the stagger clock the app grid fades in against. It lives in
+        ;; the array rather than in a closed-over constant because it is
+        ;; restarted once, when the installed list actually arrives — see the
+        ;; initial query below.
+        open-ms (double (System/currentTimeMillis))
         ^doubles fd (doto (double-array 9)
                       (aset 0 150.0) (aset 1 150.0)    ;; mouse-x, mouse-y
                       (aset 2 150.0) (aset 3 150.0)    ;; buff-x, buff-y
                       (aset 4 Double/NaN) (aset 5 Double/NaN)
-                      (aset 6 (double (System/currentTimeMillis))))  ;; last-frame-ms
+                      (aset 6 open-ms)                 ;; last-frame-ms
+                      (aset 7 open-ms))                ;; create-time-ms
         ;; fi: [0]scroll [1]selection [2]last-selected-app-index
         ;;     [3]last-installed-count
         ^ints fi (doto (int-array 4)
@@ -124,14 +131,13 @@
 
         ;; ===== Per-instance constants =====
         owner (player-owner player)
-        create-time-ms (double (System/currentTimeMillis))
         ;; AppTutorial.getIcon() randomizes once when its widget is created.
         ;; Cache every icon for this terminal instance so animation/selection
         ;; refreshes cannot make the tutorial icon flicker.
         app-icons (into {} (map (fn [app] [(:id app) (catalog/app-icon app)])
                                 catalog/apps))
 
-        ;; forward decl (cyclic: update-grid! references create-time-ms)
+        ;; forward decl (cyclic: update-grid! references the stagger clock)
         update-grid!-fn (volatile! nil)
 
         ;; ===== 1. Build XML UI =====
@@ -258,7 +264,7 @@
               ;; Upstream AppHandler recomputes stagger alpha every frame.
               ;; Keep updating only while the opening animation can still be
               ;; active; after that, updates remain event-driven.
-              (when (< (- now-ms create-time-ms)
+              (when (< (- now-ms (aget fd 7))
                        (+ 400.0 (* 100.0 installed-count)))
                 (when-let [f @update-grid!-fn] (f))))
             ;; --- Header display update ---
@@ -303,7 +309,7 @@
           (let [installed (installed-apps owner)
                 scroll (aget fi 0) sel (aget fi 1)
                 start-idx (* scroll 3)
-                lifetime (/ (- (double (System/currentTimeMillis)) create-time-ms) 1000.0)]
+                lifetime (/ (- (double (System/currentTimeMillis)) (aget fd 7)) 1000.0)]
             (dotimes [i 9]
               (let [id (keyword (str "app-" i))
                     ^INode w (rt/node-by-id r id)
@@ -347,6 +353,22 @@
         _ (query-terminal-state! owner
             (fn [_]
               (term-rt/dispatch-event! owner :terminal/set-page {:page 0})
+              ;; Restart the stagger clock now that the app list exists.
+              ;;
+              ;; Upstream initGui assigns createTime twice — once on entry and
+              ;; again on the line right after updateAppList(data) — so the
+              ;; fade-in is always measured from the moment the app widgets
+              ;; exist. It can afford to: TerminalData.get(player) is local and
+              ;; synchronous, so the two assignments are microseconds apart.
+              ;;
+              ;; Ours arrives over RPC. Measuring from create-runtime instead
+              ;; means the round trip is spent inside the animation: each app
+              ;; only starts fading at (index+1)*0.1s and the whole sequence is
+              ;; over by ~1s, so by the time the response lands every app is
+              ;; already clamped to mAlpha 1 and the grid pops in all at once
+              ;; instead of one app at a time. This is the same instant
+              ;; upstream measures from.
+              (aset fd 7 (double (System/currentTimeMillis)))
               (update-grid!)))
 
         ;; ===== 8. Store hooks + frame state in user-signals =====

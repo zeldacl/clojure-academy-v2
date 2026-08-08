@@ -1,6 +1,7 @@
 (ns cn.li.mc262.client.session-cleanup-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcbase.client.session :as client-session]
+            [cn.li.mcbase.client.session-cleanup-core :as cleanup-core]
             [cn.li.mc262.client.session-cleanup :as cleanup]))
 
 (def ^:private owner-a {:client-session-id [:client :session-a]
@@ -19,11 +20,17 @@
   (let [connection-key* (atom :conn-a)
         owner* (atom owner-a)
         cleared (atom [])]
+    ;; Redef the core var, not the version module's re-export. `(def
+    ;; clear-owner-state! shared/clear-owner-state!)` copies the *value* into a
+    ;; second var, so rebinding that copy leaves the one `tick-connection-change!`
+    ;; actually resolves untouched — the real cleanup would run instead, throw
+    ;; on the headless Minecraft/getInstance, get swallowed by the caller's
+    ;; try/catch, and the assertion below would see an empty log.
     (with-redefs [client-session/connection-key (fn [] @connection-key*)
                   client-session/current-local-player-owner (fn [] @owner*)
-                  cleanup/clear-owner-state! (fn [owner opts]
-                                               (swap! cleared conj [owner opts])
-                                               nil)]
+                  cleanup-core/clear-owner-state! (fn [owner opts]
+                                                    (swap! cleared conj [owner opts])
+                                                    nil)]
       (cleanup/tick-connection-change!)
       (is (= {:connection-key :conn-a
               :owner owner-a}

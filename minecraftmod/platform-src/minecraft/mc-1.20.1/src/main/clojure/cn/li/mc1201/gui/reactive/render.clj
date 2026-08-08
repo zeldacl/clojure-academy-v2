@@ -155,6 +155,25 @@
     (RenderSystem/depthFunc (int GL11/GL_LEQUAL))
     (RenderSystem/disableDepthTest)))
 
+(defn- end-vanilla-draw!
+  "Undo the depth state GuiGraphics leaves behind after a batched draw.
+
+   `GuiGraphics.fill` / `fillGradient` / `drawString` flush whenever the
+   graphics is unmanaged — which is every Screen — and `GuiGraphics.flush` ends
+   with glEnable(GL_DEPTH_TEST), because vanilla's own GUI pass wants the test
+   back on. That is the opposite of the default pop-depth! documents above, and
+   blits carry no state of their own, so every quad drawn after this one
+   inherits whatever we leave behind.
+
+   Ortho hides the damage: coplanar quads land on bit-identical depth and
+   LEQUAL passes everywhere. A perspective camera does not — two coplanar quads
+   built from different vertices interpolate depths that disagree by float
+   rounding, LEQUAL starts rejecting fragments, and the nearer quad tears apart
+   and reassembles as the camera moves. cgui.font keeps the same contract on
+   its own drawString path."
+  []
+  (RenderSystem/disableDepthTest))
+
 ;; ============================================================================
 ;; :box
 ;; ============================================================================
@@ -192,7 +211,8 @@
                   (unchecked-int (bit-and (bit-shift-right (long raw) 24) 0xFF))
                   (unchecked-int (* 255.0 raw)))]
       (when (pos? alpha)
-        (.fill gg ix iy iw ih (argb alpha 255 255 255))))))
+        (.fill gg ix iy iw ih (argb alpha 255 255 255))))
+    (end-vanilla-draw!)))
 
 (defn bake-box! [^INode _node] nil)
 
@@ -1284,7 +1304,8 @@
     (doseq [[cos-a sin-a] crosshair-ring-unit-vecs]
       (let [rx (+ cx (int (Math/round (* radius cos-a))))
             ry (+ cy (int (Math/round (* radius sin-a))))]
-        (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))))
+        (.fill gg (dec rx) (dec ry) (inc rx) (inc ry) ring-color)))
+    (end-vanilla-draw!)))
 
 (defn bake-crosshair! [^INode _node] nil)
 
