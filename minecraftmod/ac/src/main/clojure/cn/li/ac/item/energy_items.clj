@@ -55,10 +55,17 @@
          ;; FP rotate(0,180,0) + scale .3 + translate(.34,-.1,-.1);
          ;; TP rotate(0,180,0) + scale .2;
          ;; ground scale(-.15,-.15,.15) + translate(0,.1,0).
-         ;; TransformChain composes T*S*R, so the translation is in whole
-         ;; blocks; JSON `display` translation is in 1/16-block units (*16).
-         ;; The engine clamps translation to ±5, so FP x lands on 5.0 (0.3125)
-         ;; instead of 5.44 — a ~0.03-block offset from upstream.
+         ;;
+         ;; Two conversions are needed to say the same thing in vanilla `display`:
+         ;;
+         ;; - LambdaLib's TransformUtils.rotateEuler(x, y, z) does NOT take angles
+         ;;   about x/y/z: its second argument rotates about X and its first about
+         ;;   Y. So rotate(0,180,0) is a 180° flip about X — vanilla spells that
+         ;;   [180 0 0]. Reading it as [0 180 0] flipped the device about the wrong
+         ;;   axis and dropped it below the first-person viewport.
+         ;; - TransformChain composes T*S*R, so its translation is in whole blocks,
+         ;;   while JSON `display` translation is in 1/16-block units (*16).
+         ;;
          ;; The mesh texture has to sit under `textures/item/`: it is sampled from
          ;; an atlas, and every MC version here only scans `textures/block` and
          ;; `textures/item` for one. Upstream kept it beside the OBJ under
@@ -66,10 +73,10 @@
          ;; other `models/*.png` still do that from block-entity renderers.
          :item-model-3d-obj {:obj-model "models/developer_portable.obj"
                                           :texture "item/developer_portable_3d"
-                                          :display {:firstperson_righthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
-                                                    :firstperson_lefthand {:rotation [0 180 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
-                                                    :thirdperson_righthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
-                                                    :thirdperson_lefthand {:rotation [0 180 0] :scale [0.2 0.2 0.2]}
+                                          :display {:firstperson_righthand {:rotation [180 0 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
+                                                    :firstperson_lefthand {:rotation [180 0 0] :scale [0.3 0.3 0.3] :translation [5.44 -1.6 -1.6]}
+                                                    :thirdperson_righthand {:rotation [180 0 0] :scale [0.2 0.2 0.2]}
+                                                    :thirdperson_lefthand {:rotation [180 0 0] :scale [0.2 0.2 0.2]}
                                                     :ground {:scale [-0.15 -0.15 0.15] :translation [0 1.6 0]}}}}
          :on-right-click open-portable-developer!}))
     (log/info "Energy items initialized: energy_unit, developer_portable"))))
