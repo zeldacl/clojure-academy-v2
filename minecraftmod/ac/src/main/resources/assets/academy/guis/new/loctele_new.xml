@@ -36,11 +36,12 @@
       </group>
     </box>
 
-    <!-- The info panel (upstream MessageTab) sits just right of the menu and
-         follows the hovered row's y (setMessage moves it to the row's ypos).
-         The reactive 0-size root has no width to right-align against, so the
-         x is the menu's right edge. -->
-    <box id="info" pos="462.0,-179.44" size="335.83,191.94" align="left,top" fill="#80353535" outline="#9E7A929C" outline-width="2.0" visible="false">
+    <!-- Upstream loctele_new.xml: info x=-23.33 alignWidth=RIGHT, width
+         335.83, on the 0-size root -> x + parentW - w = -23.33 - 335.83 =
+         -359.16: the panel's right edge sits 23.33 left of the root origin
+         (the screen center), beside the menu/rows. setMessage moves it to
+         the hovered row's y. -->
+    <box id="info" pos="-359.16,-179.44" size="335.83,191.94" align="left,top" fill="#80353535" outline="#9E7A929C" outline-width="2.0" visible="false">
       <text id="info-line-0" pos="20.0,20.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
       <text id="info-line-1" pos="20.0,62.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
       <text id="info-line-2" pos="20.0,104.0" size="295.83,42.0" text="" font-size="40.0" color="#FFC1CFD5" text-align="right"/>
