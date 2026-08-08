@@ -57,16 +57,20 @@
   box (upstream EntityMarker.target follow + RenderMarker target sizing)."
   [st tick]
   (let [color (if (:hit? st) color-threatening color-normal)
+        ;; McAccess.clientEntitySnapshot returns a String-keyed map —
+        ;; keywordize so the keyword reads below actually resolve.
         live (when-let [uuid (:target-uuid st)]
-               (client-bridge/run-client-effect!
-                :mcmod/get-entity-position {:entity-uuid uuid}))
-        width (double (if live (:width live) (or (:target-width st) default-marker-size)))
-        height (double (if live (:height live) (or (:target-height st) default-marker-size)))
-        px (double (if live (:x live) (:x (:aim st))))
+               (when-let [raw (client-bridge/run-client-effect!
+                               :mcmod/get-entity-position {:entity-uuid uuid})]
+                 (into {} (map (fn [[k v]] [(keyword k) v])) raw)))
+        aim (:aim st)
+        width (double (if live (:width live) (:target-width st)))
+        height (double (if live (:height live) (:target-height st)))
+        px (double (if live (:x live) (:x aim)))
         ;; Upstream RenderMarker: y + 0.05 * sin(absTime / 400.0).
-        py (+ (double (if live (:y live) (:y (:aim st))))
+        py (+ (double (if live (:y live) (:y aim)))
               (* 0.05 (Math/sin (/ (double tick) 400.0))))
-        pz (double (if live (:z live) (:z (:aim st))))]
+        pz (double (if live (:z live) (:z aim)))]
     (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
                      width height color)))
 
