@@ -111,6 +111,8 @@
   (net-client/send-to-server (net-owner player-uuid)
     catalog/MSG-REQ-SAVED-POS-QUERY {}
     (fn [resp]
+      (log/info "Loctele query resp" {:success? (:success? resp)
+                                      :count (count (:locations resp))})
       (when (and resp (:success? resp))
         (update-screen! owner-key
           (fn [_] {:locations (vec (or (:locations resp) []))
@@ -121,7 +123,11 @@
 
 (defn- send-action! [^UiRt rt player-uuid msg-id payload owner-key]
   (net-client/send-to-server (net-owner player-uuid) msg-id payload
-    (fn [_resp] (send-query! rt player-uuid owner-key))))
+    (fn [resp]
+      (log/info "Loctele action resp" {:msg-id msg-id
+                                       :success? (:success? resp)
+                                       :error (:error resp)})
+      (send-query! rt player-uuid owner-key))))
 
 ;; ============================================================================
 ;; Row / add-row builders
@@ -158,7 +164,7 @@
 
 (defn- rebuild-list!
   [^UiRt rt player-uuid owner-key]
-  (let [{:keys [locations limits]} (screen-st owner-key)
+  (let [{:keys [locations limits current-pos]} (screen-st owner-key)
         total (count locations)
         scroll-a (rt/user-signal rt :scroll-idx)
         start (max 0 (min @scroll-a (max 0 (- total max-visible))))
@@ -204,25 +210,33 @@
           (let [^INode input-n (ui/item-node item :input)
                 ^INode ok-n (ui/item-node item :ok)]
             (show-row-section! rt item :add-row)
-            ;; Hide the "Add..." placeholder as soon as the input is focused
-            ;; (upstream TextBox draws the default content that typing
-            ;; replaces) and while it has text.
-            (let [sync-ph! (fn []
-                             (let [has-text? (pos? (count (str (.getOSlot input-n 0))))]
-                               (when-let [^INode ph-n (ui/item-node item :ph)]
-                                 (.setVisible ph-n (not has-text?))
-                                 (.setFlag ph-n node/FLAG-LAYOUT-DIRTY)
-                                 (rt/mark-tree-dirty! rt))))]
+            ;; Upstream newAdd: hovering the add row shows the CURRENT
+            ;; position (dimension + feet coords, no CP).
+            (swap! hit-map assoc (.getIdx item)
+                   {:loc (or current-pos {}) :add? true
+                    :y (double (+ list-y (* (count visible-locs)
+                                            (+ entry-h entry-spacing))))})
+            ;; The "Add..." placeholder hides as soon as the input is
+            ;; clicked (focus) and while it has text; it returns when the
+            ;; input is cleared and focus leaves.
+            (let [set-ph! (fn [visible?]
+                            (when-let [^INode ph-n (ui/item-node item :ph)]
+                              (.setVisible ph-n visible?)
+                              (.setFlag ph-n node/FLAG-LAYOUT-DIRTY)
+                              (rt/mark-tree-dirty! rt)))
+                  has-text? (fn [] (pos? (count (str (.getOSlot input-n 0)))))]
               (rt/register-event! rt (.getIdx input-n) :left-click
-                (fn [_ _ _] (sync-ph!)))
+                (fn [_ _ _] (set-ph! false)))
               (rt/register-event! rt (.getIdx input-n) :change-content
-                (fn [_ _ _] (sync-ph!)))
+                (fn [_ _ _] (set-ph! (not (has-text?)))))
               (rt/register-event! rt (.getIdx input-n) :lost-focus
-                (fn [_ _ _] (sync-ph!))))
+                (fn [_ _ _] (set-ph! (not (has-text?))))))
             (rt/register-event! rt (.getIdx ok-n) :left-click
               (fn [_ _ _]
                 (let [name (str/trim (str (.getOSlot input-n 0)))
                       name-len (int (or (:max-location-name-length limits) 16))]
+                  (log/info "Loctele add click" {:name name :len (count name)
+                                                 :max-len name-len})
                   (when (and (not (str/blank? name)) (<= (count name) name-len))
                     (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
                     (ui/set-node-prop! rt input-n :text ""))))))
@@ -242,14 +256,23 @@
         (let [hit-map @(or (rt/user-signal rt :hit-map) (atom {}))
               entry (hovered-location rt hit-map)
               ^INode info (rt/node-by-id rt :info)]
+          (log/info "Loctele hover tick" {:hovered-idx (rt/hovered-idx rt)
+                                          :entry (boolean entry)})
           (if entry
             (let [loc (:loc entry)
-                  lines [(str (or (:world-id loc) "?") " (#" (int (or (:dim-id loc) 0)) ")")
-                         (format "(%.0f, %.0f, %.0f)"
+                  coords (format "(%.0f, %.0f, %.0f)"
                                  (double (or (:x loc) 0.0))
                                  (double (or (:y loc) 0.0))
                                  (double (or (:z loc) 0.0)))
-                         (str (int (or (:cp-cost loc) 0)) " CP")]]
+                  ;; Upstream: the add row shows the CURRENT position
+                  ;; (dimension + coords, no CP); a saved row shows its
+                  ;; stored location + CP cost.
+                  lines (if (:add? entry)
+                          [(str (or (:world-id loc) "?") " (#" (int (or (:dim-id loc) 0)) ")")
+                           coords]
+                          [(str (or (:world-id loc) "?") " (#" (int (or (:dim-id loc) 0)) ")")
+                           coords
+                           (str (int (or (:cp-cost loc) 0)) " CP")])]
               (when info
                 (when-not (.isVisible info)
                   (.setVisible info true)
@@ -259,7 +282,9 @@
                 (.setFlag info node/FLAG-LAYOUT-DIRTY))
               (doseq [[i line] (map-indexed vector lines)]
                 (ui/set-prop! rt (keyword (str "info-line-" i)) :text line))
-              (ui/set-prop! rt :info-line-3 :text ""))
+              ;; Clear the unused trailing message lines.
+              (doseq [i (range (count lines) 4)]
+                (ui/set-prop! rt (keyword (str "info-line-" i)) :text "")))
             (when info
               (when (.isVisible info)
                 (.setVisible info false)
