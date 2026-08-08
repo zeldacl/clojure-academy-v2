@@ -12,7 +12,8 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (defn- spawn-tp-marking! []
   (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect {:effect-id "entity_tp_marking"}))

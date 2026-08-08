@@ -10,7 +10,8 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private prepare-duration-ms 150.0)
 (def ^:private punch-duration-ms 300.0)

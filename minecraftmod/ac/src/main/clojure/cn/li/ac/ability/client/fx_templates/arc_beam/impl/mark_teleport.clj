@@ -14,6 +14,7 @@
   (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.config.modid :as modid]))

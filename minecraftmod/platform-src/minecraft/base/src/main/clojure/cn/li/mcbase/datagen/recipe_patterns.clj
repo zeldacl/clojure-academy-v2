@@ -4,6 +4,7 @@
   Provides utilities for recipe metadata transformation, unlock condition
   generation, and common recipe processing logic. Platform-specific recipe
   builder invocations remain in loader-specific implementations."
+  (:require [clojure.string])
   (:import [clojure.lang Keyword]
            [java.util.function Function]))
 

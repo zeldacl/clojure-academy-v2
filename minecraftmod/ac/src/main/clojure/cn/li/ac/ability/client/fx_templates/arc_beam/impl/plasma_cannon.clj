@@ -13,7 +13,8 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.util.log :as log]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private loop-sound (modid/namespaced-path "vecmanip.plasma_cannon"))
 (def ^:private charged-sound (modid/namespaced-path "vecmanip.plasma_cannon_t"))

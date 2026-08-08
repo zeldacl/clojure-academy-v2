@@ -3,7 +3,8 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 ;; Upstream STContextC marker colors: CRL_BLOCK_MARKER (139,139,139,180) for
 ;; the destination block, CRL_ENTITY_MARKER (235,81,81,180) per target.

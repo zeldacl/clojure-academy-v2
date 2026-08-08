@@ -11,7 +11,8 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private sound-id (modid/namespaced-path "vecmanip.groundshock"))
 

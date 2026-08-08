@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3]))
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private loop-sound (modid/namespaced-path "em.move_loop"))
 

@@ -13,7 +13,8 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
 (def ^:private sound-id (modid/namespaced-path "vecmanip.vec_deviation"))
