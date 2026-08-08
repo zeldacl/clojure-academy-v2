@@ -10,7 +10,10 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.spi.key-scheme-provider :as key-provider]
-            [cn.li.ac.ability.client.input-state-machine :as input-state-machine]))
+            [cn.li.ac.ability.client.input-state-machine :as input-state-machine])
+  (:import [cn.li.mcver McAccess]
+           [net.minecraft.client Minecraft]
+           [org.lwjgl.glfw GLFW GLFWScrollCallback GLFWScrollCallbackI]))
 
 ;; GLFW key codes (shared constants)
 (def GLFW_KEY_C 67)
@@ -155,6 +158,31 @@
   (reset! last-poll-time {})
   (reset! v-toggle-state (input-state-machine/initial-button-state))
   nil)
+
+(defn install-scroll-callback!
+  "Install a mouse-wheel scroll callback that CHAINS the previous GLFW
+  callback — vanilla MouseHandler's onScroll (GUI/hotbar scrolling must keep
+  working) — then hands the raw delta (yoffset, ~1.0 per notch, the same
+  units as Forge/NeoForge InputEvent$MouseScrollingEvent.getDeltaY) to
+  `on-scroll`.
+
+  Used by Fabric loaders (Fabric API has no scroll event); Forge/NeoForge
+  receive the same input from InputEvent$MouseScrollingEvent. The wheel
+  feeds upstream PenetrateTeleport's distance control."
+  [on-scroll]
+  (let [window (try (.getWindow ^Minecraft (Minecraft/getInstance))
+                    (catch Throwable _ nil))]
+    (when window
+      (let [handle (long (McAccess/windowHandle window))]
+        (when-not (zero? handle)
+          (let [prev (atom nil)]
+            (reset! prev (GLFW/glfwSetScrollCallback
+                          handle
+                          (reify GLFWScrollCallbackI
+                            (invoke [_ w xoffset yoffset]
+                              (when-let [p @prev]
+                                (.invoke ^GLFWScrollCallback p w xoffset yoffset))
+                              (on-scroll (double yoffset))))))))))))
 
 ;; ============================================================================
 ;; Per-frame held-key state — shared by Forge (runtime_bridge.clj) and Fabric

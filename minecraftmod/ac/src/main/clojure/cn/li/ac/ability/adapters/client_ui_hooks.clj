@@ -703,20 +703,6 @@
                                                                 :channel channel
                                                                 :payload payload}))
 
-(defn- send-slot-wheel-message!
-  [player-uuid key-idx delta]
-  (when (and (gameplay/use-mouse-wheel-enabled?)
-             (number? delta)
-             (not (zero? (double delta))))
-    (let [slot-key (slot-context-key player-uuid key-idx)
-          ctx-id (get (slot-context-ids-snapshot) slot-key)
-          skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
-      (when (and ctx-id (= skill-id :penetrate-teleport))
-        (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
-                                 {:ctx-id ctx-id
-                                  :channel :penetrate-tp/set-distance
-                                  :payload {:delta (double delta)}})))))
-
 (defn- active-context-ids-for-skill
   [player-uuid skill-id]
   ;; Scan the CLIENT context registry, not the slot map: the slot entry is
@@ -731,6 +717,23 @@
                  (:id ctx-data))))
        distinct
        vec))
+
+(defn- send-active-wheel-message!
+  "Mouse-wheel distance control (upstream PenetrateTeleport
+  onPlayerUseWheel): route the raw wheel delta to every ACTIVE
+  penetrate-teleport context. The loader input listener only knows the
+  player, not which slot is bound to penetrate — resolve the contexts from
+  the client context registry (the slot map entry is cleared at key-up, so
+  keep-active contexts are never found there)."
+  [player-uuid delta]
+  (when (and (gameplay/use-mouse-wheel-enabled?)
+             (number? delta)
+             (not (zero? (double delta))))
+    (doseq [ctx-id (active-context-ids-for-skill player-uuid :penetrate-teleport)]
+      (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
+                               {:ctx-id ctx-id
+                                :channel :penetrate-tp/set-distance
+                                :payload {:delta (double delta)}}))))
 
 (defn- send-movement-message!
   [player-uuid transition movement-key]
@@ -1184,8 +1187,8 @@
        (send-movement-message! player-uuid :up movement-key))
 
      :client-on-slot-wheel!
-     (fn [player-uuid key-idx delta]
-       (send-slot-wheel-message! player-uuid key-idx delta))
+     (fn [player-uuid _key-idx delta]
+       (send-active-wheel-message! player-uuid delta))
 
      :client-clear-owner-state!
      (fn [owner]

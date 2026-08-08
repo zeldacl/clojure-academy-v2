@@ -249,26 +249,26 @@
     (is (nil? (hud-rd/build-hud-render-data model 320 180 {})))))
 
 (deftest client-slot-wheel-sends-ctx-channel-only-for-penetrate-with-active-context-test
+  ;; The wheel listener only knows the player — the adapter resolves the
+  ;; ACTIVE penetrate context from the client context registry (upstream
+  ;; registers the wheel listener on MSG_MADEALIVE and unregisters on
+  ;; terminate).
   (let [sent (atom [])
-        hooks (client-ui-hooks/runtime-client-ui-hooks)]
-    (with-redefs [client-keybinds/get-skill-id-for-slot-public
-                  (fn [_ key-idx]
-                    (case key-idx
-                      0 :penetrate-teleport
-                      1 :railgun
-                      nil))
-                  ctx-mgr/activate-context!
-                  (fn [_owner _player-uuid _skill-id] {:id "ctx-penetrate"})
+        hooks (client-ui-hooks/runtime-client-ui-hooks)
+        ctx-data (fn [id skill-id active?]
+                   {:id id :player-uuid "p1" :skill-id skill-id :active? active?})]
+    (with-redefs [ctx/get-all-contexts
+                  (fn []
+                    {"c1" (ctx-data "ctx-penetrate" :penetrate-teleport true)
+                     "c2" (ctx-data "ctx-railgun" :railgun true)
+                     "c3" (ctx-data "ctx-dead" :penetrate-teleport false)})
+                  ctx/active-context? (fn [ctx-data] (:active? ctx-data))
                   gameplay/use-mouse-wheel-enabled? (fn [] true)
                   net-client/send-to-server (network-support/capture-send-to-server! sent)]
-      ((:client-on-slot-key-down! hooks) "p1" 0)
       ((:client-on-slot-wheel! hooks) "p1" 0 2.0)
-      ((:client-on-slot-wheel! hooks) "p1" 1 2.0)
       (with-redefs [gameplay/use-mouse-wheel-enabled? (fn [] false)]
         ((:client-on-slot-wheel! hooks) "p1" 0 1.0))
-      (is (= [{:msg-id catalog/MSG-SLOT-KEY-DOWN
-               :payload {:ctx-id "ctx-penetrate" :skill-id :penetrate-teleport :key-idx 0}}
-              {:msg-id catalog/MSG-CTX-CHANNEL
+      (is (= [{:msg-id catalog/MSG-CTX-CHANNEL
                :payload {:ctx-id "ctx-penetrate"
                          :channel :penetrate-tp/set-distance
                          :payload {:delta 2.0}}}]

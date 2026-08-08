@@ -85,6 +85,16 @@
              (accept [_this minecraft]
                (on-client-tick-end minecraft))))
 
+         ;; Upstream PenetrateTeleport onPlayerUseWheel: mouse wheel adjusts
+         ;; the teleport distance. GLFW scroll callback (chains vanilla's —
+         ;; GUI/hotbar scrolling keeps working); the hook resolves the
+         ;; active penetrate context itself.
+         (glfw-polling/install-scroll-callback!
+           (fn [yoffset]
+             (when-let [player-uuid (get-player-uuid-str)]
+               (client-session/with-current-client-session
+                 #(power-runtime/client-on-slot-wheel! player-uuid 0 yoffset)))))
+
          (log/info "Fabric keyboard handler installed")))
 
     (catch Exception e

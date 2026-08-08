@@ -8,11 +8,13 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post]
            [net.neoforged.neoforge.client.event InputEvent$Key]
+           [net.neoforged.neoforge.client.event InputEvent$MouseScrollingEvent]
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
 
@@ -71,6 +73,19 @@
     (catch Exception e
       (log/warn e "Error in Forge client tick keyboard polling"))))
 
+(defn ^:private on-mouse-scroll
+  [^InputEvent$MouseScrollingEvent evt]
+  ;; Upstream PenetrateTeleport onPlayerUseWheel: mouse wheel adjusts the
+  ;; teleport distance (raw GLFW delta, ~1.0 per notch — NeoForge names it
+  ;; getScrollDeltaY). The hook resolves the active penetrate context
+  ;; itself.
+  (try
+    (when-let [player-uuid (get-current-player-uuid)]
+      (client-session/with-current-client-session
+        #(power-runtime/client-on-slot-wheel! player-uuid 0 (.getScrollDeltaY evt))))
+    (catch Exception e
+      (log/warn e "Error in Forge mouse scroll handler"))))
+
 (defn install-forge-event-handler!
   "Register the Forge InputEvent$Key listener."
   []
@@ -92,6 +107,14 @@
                        (reify java.util.function.Consumer
                          (accept [_ evt]
                            (on-client-tick evt))))
+
+         (.addListener NeoForge/EVENT_BUS
+                       EventPriority/NORMAL
+                       false
+                       InputEvent$MouseScrollingEvent
+                       (reify java.util.function.Consumer
+                         (accept [_ evt]
+                           (on-mouse-scroll evt))))
 
          (log/info "Forge keyboard event handler installed")))
 

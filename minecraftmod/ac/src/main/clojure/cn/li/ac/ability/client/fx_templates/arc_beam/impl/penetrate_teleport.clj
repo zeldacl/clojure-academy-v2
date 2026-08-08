@@ -1,48 +1,66 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.penetrate-teleport
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  "Upstream PenetrateTeleport alignment (PTContext + EntityTPMarking +
+  MarkRender).
+
+  The aim marker is the same EntityTPMarking as MarkTeleport: a tp_mark
+  7-frame humanoid. Upstream l_updateMark positions it at
+  mark.setPosition(dest.x, dest.y + player.eyeHeight, dest.z) — the humanoid
+  floats at eye level above the destination — and sets mark.available =
+  dest.available. MarkRender tints the model: white when available, red
+  glColor4d(1, 0.2, 0.2, 1) when the destination is still inside a wall.
+  EntityTPMarking.onUpdate spawns green TPParticleFactory particles only
+  while available (rand.nextDouble() < 0.4). On key-up upstream plays
+  tp.tp (local) before server validation — no portal burst."
+  (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
+            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]))
 
-;; Upstream EntityTPMarking renders grey when the destination is unavailable
-;; (mark.available = dest.available).
-(def ^:private color-available {:r 230 :g 236 :b 255 :a 180})
-(def ^:private color-unavailable {:r 74 :g 74 :b 74 :a 120})
+(def ^:private eye-height
+  "Upstream l_updateMark adds player.eyeHeight — vanilla EntityPlayer eye
+  height 1.62 — so the humanoid's feet hover at the player's eye level above
+  the destination."
+  1.62)
+
+(def ^:private color-available {:r 255 :g 255 :b 255 :a 255})
+
+(def ^:private color-unavailable
+  "Upstream MarkRender: glColor4d(1, 0.2, 0.2, 1) when !mark.available."
+  {:r 255 :g 51 :b 51 :a 255})
 
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key* :queue-owner (client-particles/current-effect-owner)
-                   :ctx-id ctx-id :channel channel :source-player-id source-player-id :world-id world-id}]
+        base-meta {:owner-key owner-key* :queue-owner (client-sounds/current-effect-owner)
+                   :ctx-id ctx-id :channel channel :source-player-id source-player-id :world-id world-id}
+        target-state {:active? true :ticks 0
+                      :target {:x (double (or (:x payload) 0.0))
+                               :y (+ (double (or (:y payload) 0.0)) eye-height)
+                               :z (double (or (:z payload) 0.0))}
+                      :available? (boolean (:available? payload))
+                      :distance (double (or (:distance payload) 0.0))
+                      :ambient-particles []}]
     (case (:mode payload)
       :start
       (update state* :fx-state assoc owner-key*
-              (merge base-meta {:active? true :ttl 0
-                                :x (double (or (:x payload) 0.0))
-                                :y (double (or (:y payload) 0.0))
-                                :z (double (or (:z payload) 0.0))
-                                :available? (boolean (:available? payload))
-                                :distance (double (or (:distance payload) 0.0))}))
+              (merge base-meta target-state))
       :update
       (update state* :fx-state update owner-key*
               (fn [st]
-                (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                       :active? true
-                       :ttl 0
-                       :x (double (or (:x payload) 0.0))
-                       :y (double (or (:y payload) 0.0))
-                       :z (double (or (:z payload) 0.0))
-                       :available? (boolean (:available? payload))
-                       :distance (double (or (:distance payload) 0.0)))))
+                ;; Refresh target/available/distance only — keep :ticks and
+                ;; :ambient-particles across updates (the mark ticks every
+                ;; frame; a reset would freeze the tp_mark frame sequence).
+                (merge base-meta (or st target-state)
+                       {:target (:target target-state)
+                        :available? (boolean (:available? payload))
+                        :distance (double (or (:distance payload) 0.0))})))
       :perform
       (do
-        (client-particles/queue-particle-effect! (:queue-owner base-meta)
-          {:type :particle :particle-type :portal
-           :x (double (or (:to-x payload) 0.0)) :y (+ 1.0 (double (or (:to-y payload) 0.0))) :z (double (or (:to-z payload) 0.0))
-           :count 10 :speed 0.06 :offset-x 0.25 :offset-y 0.5 :offset-z 0.25})
+        ;; Upstream l_onKeyUp: ACSounds.playClient(player, "tp.tp", ...) —
+        ;; local release sound before server validation, no particles.
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
         ;; Upstream c_endEffect kills the mark on MSG_TERMINATED.
@@ -53,33 +71,28 @@
 
 (defn- tick-state! [state]
   (let [state* (or state {:fx-state {}})]
-    (update state* :fx-state (fn [states] (reduce-kv (fn [acc k st] (assoc acc k (update st :ttl (fnil inc 0)))) {} states)))))
+    (update state* :fx-state
+            (fn [states]
+              (reduce-kv (fn [acc k st]
+                           (if (:active? st)
+                             ;; Upstream EntityTPMarking.onUpdate: particles
+                             ;; only while available.
+                             (assoc acc k (tp-mark/tick-marker! st (fn [st] (:available? st))))
+                             acc))
+                         {}
+                         states)))))
 
-(defn- ground-ring-ops [x y z distance available?]
-  (let [radius (+ 0.45 (* 0.05 (min 1.0 (/ (double distance) 30.0))))
-        color (if available? color-available color-unavailable)
-        segments 24]
-    (vec (for [idx (range segments)
-               :let [a0 (/ (* 2.0 Math/PI idx) segments)
-                     a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                     p0 (rv3/v3 (+ x (* radius (Math/cos a0))) (+ y 0.02) (+ z (* radius (Math/sin a0))))
-                     p1 (rv3/v3 (+ x (* radius (Math/cos a1))) (+ y 0.02) (+ z (* radius (Math/sin a1))))]]
-           (ru/line-op p0 p1 color)))))
-
-(defn- build-plan [_camera-pos _hand-center-pos _tick]
-  (let [states (vals (:fx-state (level-effects/effect-state-snapshot :penetrate-teleport)))
-        marker-ops
-        (vec
-         (mapcat (fn [st]
-                   (when (:active? st)
-                     (ground-ring-ops (double (or (:x st) 0.0))
-                                      (double (or (:y st) 0.0))
-                                      (double (or (:z st) 0.0))
-                                      (double (or (:distance st) 0.0))
-                                      (:available? st))))
-                 states))]
-    (when (seq marker-ops)
-      {:ops marker-ops})))
+(defn- build-plan [camera-pos _hand-center-pos _tick]
+  (let [store (level-effects/effect-state-snapshot :penetrate-teleport)
+        cam (rv3/map->v3 camera-pos)
+        ops (vec (mapcat (fn [st]
+                           (when (:active? st)
+                             (let [color (if (:available? st) color-available color-unavailable)]
+                               (into (tp-mark/humanoid-ops cam (:target st) (:ticks st) color)
+                                     (bp/particle-ops cam (:ambient-particles st))))))
+                         (vals (:fx-state store))))]
+    (when (seq ops)
+      {:ops ops})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:penetrate-teleport :level] [_ _] {:fx-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:penetrate-teleport :level]

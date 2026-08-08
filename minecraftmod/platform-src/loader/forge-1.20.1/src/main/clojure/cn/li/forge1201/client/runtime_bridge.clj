@@ -14,6 +14,7 @@
   (:import [cn.li.mc1201.client.effect ScriptedEffectSpawner]
             [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
+           [net.minecraftforge.client.event InputEvent$MouseScrollingEvent]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraft.client Minecraft]))
 
@@ -121,6 +122,14 @@
   (when (= TickEvent$Phase/END (.phase evt))
     (tick-client!)))
 
+(defn- on-mouse-scroll [^InputEvent$MouseScrollingEvent evt]
+  ;; Upstream PenetrateTeleport onPlayerUseWheel: mouse wheel adjusts the
+  ;; teleport distance (raw GLFW delta, ~1.0 per notch — Forge 1.20.1 names
+  ;; it getScrollDelta). The hook resolves the active penetrate context
+  ;; itself.
+  (client-session/with-current-client-session
+    #(power-runtime/client-on-slot-wheel! (get-player-uuid-str) 0 (.getScrollDelta evt))))
+
 (defn init! []
   (power-runtime/client-register-push-handlers!)
   (install/process-once! ::tick-listener-registered
@@ -128,4 +137,9 @@
                    EventPriority/NORMAL false TickEvent$ClientTickEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-client-tick evt)))))
+  (install/process-once! ::wheel-listener-registered
+    #(.addListener (MinecraftForge/EVENT_BUS)
+                   EventPriority/NORMAL false InputEvent$MouseScrollingEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-mouse-scroll evt)))))
   (log/info "Client runtime bridge initialized"))

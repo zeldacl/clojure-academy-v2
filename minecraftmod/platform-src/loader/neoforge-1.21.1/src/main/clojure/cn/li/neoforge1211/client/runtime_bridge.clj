@@ -14,6 +14,7 @@
   (:import [cn.li.mc1211.client.effect ScriptedEffectSpawner]
             [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post]
+           [net.neoforged.neoforge.client.event InputEvent$MouseScrollingEvent]
            [net.neoforged.bus.api EventPriority]
            [net.minecraft.client Minecraft]))
 
@@ -118,6 +119,14 @@
 (defn- on-client-tick [^ClientTickEvent$Post evt]
   (tick-client!))
 
+(defn- on-mouse-scroll [^InputEvent$MouseScrollingEvent evt]
+  ;; Upstream PenetrateTeleport onPlayerUseWheel: mouse wheel adjusts the
+  ;; teleport distance (raw GLFW delta, ~1.0 per notch — NeoForge names it
+  ;; getScrollDeltaY). The hook resolves the active penetrate context
+  ;; itself.
+  (client-session/with-current-client-session
+    #(power-runtime/client-on-slot-wheel! (get-player-uuid-str) 0 (.getScrollDeltaY evt))))
+
 (defn init! []
   (power-runtime/client-register-push-handlers!)
   (install/process-once! ::tick-listener-registered
@@ -125,4 +134,9 @@
                    EventPriority/NORMAL false ClientTickEvent$Post
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-client-tick evt)))))
+  (install/process-once! ::wheel-listener-registered
+    #(.addListener (NeoForge/EVENT_BUS)
+                   EventPriority/NORMAL false InputEvent$MouseScrollingEvent
+                   (reify java.util.function.Consumer
+                     (accept [_ evt] (on-mouse-scroll evt)))))
   (log/info "Client runtime bridge initialized"))

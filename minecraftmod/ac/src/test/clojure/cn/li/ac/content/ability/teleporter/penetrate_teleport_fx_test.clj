@@ -1,8 +1,8 @@
 (ns cn.li.ac.content.ability.teleporter.penetrate-teleport-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport-fx :as pfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
@@ -17,6 +17,8 @@
           (level-effects/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-penetrate-teleport-fx-runtime)
+
+(defn- owner [] {:client-session-id "penetrate-teleport-test"})
 
 (deftest init-registers-penetrate-fx-channels-test
   (let [registered-level* (atom nil)
@@ -35,14 +37,89 @@
                :penetrate-teleport/fx-end}
              @registered-topics*)))))
 
-(deftest perform-and-tick-emit-particles-and-sound-test
-  (let [particle-calls* (atom [])
-        sound-calls* (atom [])]
+(defn- humanoid-quads [ops]
+  (filter #(re-find #"^academy:textures/effects/tp_mark/\d+\.png$"
+                    (str (:texture %)))
+          ops))
+
+(defn- ambient-quads [ops]
+  (filter #(re-find #"^academy:textures/effects/tp_particle\.png$"
+                    (str (:texture %)))
+          ops))
+
+(deftest marker-is-humanoid-at-dest-plus-eye-height-test
+  ;; Upstream l_updateMark: mark.setPosition(dest.x, dest.y + player.eyeHeight,
+  ;; dest.z); MarkRender draws the tp_mark humanoid there.
+  (with-redefs [client-sounds/current-effect-owner owner
+                ;; rand-range calls (rand (- b a)) — keep both arities.
+                clojure.core/rand (fn [& _] 0.0)]
+    (pfx/init!)
+    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+                                         {:mode :start :available? true :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
+                                         :owner-key [:ctx "ctx-1"])
+    (let [{:keys [ops]} (arc-beam/effect-build-plan
+                         :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
+                         {:player-uuid "viewer"} 0 nil)
+          humanoid (humanoid-quads ops)
+          ys (mapcat (fn [op]
+                       (let [^cn.li.mcmod.math.V3 p1 (:p1 op)
+                             ^cn.li.mcmod.math.V3 p2 (:p2 op)
+                             ^cn.li.mcmod.math.V3 p3 (:p3 op)]
+                         [(.y p1) (.y p2) (.y p3)]))
+                     humanoid)]
+      (is (= 36 (count humanoid)))
+      ;; Feet at dest.y + eyeHeight (1.62): y = 64 + 1.62.
+      (is (some #(<= (Math/abs (- % 65.62)) 0.001) ys)
+          "humanoid feet float at dest + eye height")
+      (is (some #(>= % 67.42) ys)
+          "head reaches the model top above the eye-level feet"))))
+
+(deftest unavailable-marker-is-red-tinted-and-silent-test
+  ;; Upstream MarkRender tints the model glColor4d(1, 0.2, 0.2, 1) when
+  ;; !mark.available, and EntityTPMarking spawns no particles while
+  ;; unavailable.
+  (with-redefs [client-sounds/current-effect-owner owner
+                clojure.core/rand (fn [& _] 0.0)]
+    (pfx/init!)
+    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+                                         {:mode :start :available? false :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
+                                         :owner-key [:ctx "ctx-1"])
+    (dotimes [_ 3] (level-effects/tick-level-effects!))
+    (let [{:keys [ops]} (arc-beam/effect-build-plan
+                         :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
+                         {:player-uuid "viewer"} 0 nil)]
+      (is (= 36 (count (humanoid-quads ops))))
+      (is (every? #(= {:r 255 :g 51 :b 51 :a 255} (:color %)) (humanoid-quads ops)))
+      (is (empty? (ambient-quads ops))
+          "no TPParticleFactory particles while unavailable"))))
+
+(deftest available-marker-spawns-green-ambient-particles-test
+  ;; Upstream EntityTPMarking.onUpdate: available && rand.nextDouble() < 0.4.
+  (with-redefs [client-sounds/current-effect-owner owner
+                clojure.core/rand (fn [& _] 0.0)]
+    (pfx/init!)
+    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+                                         {:mode :start :available? true :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
+                                         :owner-key [:ctx "ctx-1"])
+    ;; l_updateMark runs every tick — an update must refresh the target but
+    ;; keep the accumulated :ticks / :ambient-particles.
+    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update
+                                         {:mode :update :available? true :distance 14.0 :x 1.0 :y 64.0 :z 3.0}
+                                         :owner-key [:ctx "ctx-1"])
+    (dotimes [_ 2] (level-effects/tick-level-effects!))
+    (let [{:keys [ops]} (arc-beam/effect-build-plan
+                         :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
+                         {:player-uuid "viewer"} 0 nil)]
+      (is (= 36 (count (humanoid-quads ops))))
+      (is (seq (ambient-quads ops))
+          "green TPParticle particles spawn while available"))))
+
+(deftest perform-plays-sound-without-burst-and-clears-state-test
+  ;; Upstream l_onKeyUp plays tp.tp (local) — no portal burst — then the
+  ;; server terminate kills the mark (c_endEffect).
+  (let [sound-calls* (atom [])]
     (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)
-                  client-particles/current-effect-owner (fn [] {:client-session-id "penetrate-teleport-test"})
-                  client-particles/queue-particle-effect! (fn [& args]
-                                                            (swap! particle-calls* conj args)
-                                                            nil)
+                  client-sounds/current-effect-owner owner
                   client-sounds/queue-sound-effect! (fn [& args]
                                                       (swap! sound-calls* conj args)
                                                       nil)]
@@ -55,13 +132,12 @@
       (is (true? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
       (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-perform {:mode :perform :to-x 4.0 :to-y 5.0 :to-z 6.0}
                                          :owner-key [:ctx "ctx-1"])
-      (is (= 1 (count @particle-calls*)))
       (is (= 1 (count @sound-calls*)))
+      (is (= "academy:tp.tp" (:sound-id (second (first @sound-calls*)))))
       ;; Upstream c_endEffect kills the mark on MSG_TERMINATED.
       (is (nil? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"]]))))))
 
-
-
 (deftest fx-snapshot-default-without-registered-state-test
+  (pfx/init!)
   (is (= {:fx-state {}}
          (pfx/fx-snapshot))))
