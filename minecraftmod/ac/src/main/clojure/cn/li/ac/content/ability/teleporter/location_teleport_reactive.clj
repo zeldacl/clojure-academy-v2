@@ -263,7 +263,14 @@
           (log/info "Loctele hover tick" {:hovered-idx (rt/hovered-idx rt)
                                           :entry (boolean entry)})
           (if entry
-            (let [loc (:loc entry)
+            (let [;; The add row shows the CURRENT position — the local
+                  ;; player's live feet coords (upstream player.posX/Y/Z), no
+                  ;; server round-trip; the world id falls back to the
+                  ;; snapshot's current-pos.
+                  loc (if (:add? entry)
+                        (merge (:loc entry)
+                               (or (bridge/call-adapter :local-player-pos) {}))
+                        (:loc entry))
                   coords (format "(%.0f, %.0f, %.0f)"
                                  (double (or (:x loc) 0.0))
                                  (double (or (:y loc) 0.0))
