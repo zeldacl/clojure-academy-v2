@@ -106,14 +106,18 @@
 
 ;; --- Condition checking (called by events.clj) ---
 
+(defn mark-conditions-dirty
+  "Mark condition flags and set the dirty flag — pure state transform.
+  (Regression: the previous `->` threading inserted the state as the reduce
+  FUNCTION, so a map got called as a fn and returned the last condition
+  index; mark-dirty! then assoc'd onto a Long.)"
+  [s matching-conditions]
+  (model/mark-dirty! (reduce model/mark-condition! s matching-conditions)))
+
 (defn mark-conditions-and-set-dirty!
   "Mark condition flags and set dirty flag in one update."
   [player matching-conditions]
-  (update-state! player
-                 (fn [s]
-                   (-> s
-                       (reduce model/mark-condition! matching-conditions)
-                       (model/mark-dirty!)))))
+  (update-state! player #(mark-conditions-dirty % matching-conditions)))
 
 (defn process-pending!
   "If state is dirty, check for new activations and clear dirty flag.
