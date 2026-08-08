@@ -7,6 +7,7 @@
   (:require [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.media.catalog :as catalog]
+            [cn.li.ac.media.external-scan :as external-scan]
             [cn.li.ac.media.network :as media-net]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.framework :as fw]
@@ -304,6 +305,10 @@
                     (media-playback-call :set-volume! progress))))))
 
 (defn create-runtime []
+  ;; Rescan on open. The startup scan runs during content init, before the
+  ;; loader installs :media-library, so it can never see the folder; this also
+  ;; picks up files dropped in while the game is running.
+  (external-scan/rescan!)
   (let [r (rt/create-runtime)
         _ (rt/build! r (ui-xml/load-spec (modid/namespaced-path "guis/new/media_player.xml")))
         progress-fill

@@ -64,6 +64,12 @@
 (defn scan-external-tracks!
   []
   (try
+    ;; Upstream MediaManager.checkPath mkdirs the folder on load, so players
+    ;; have somewhere to drop files. listOggFiles just returns empty for a
+    ;; missing directory, which left no hint that the path even existed.
+    (let [^File dir (source-folder)]
+      (when-not (.isDirectory dir)
+        (.mkdirs dir)))
     (->> (OggMetadata/listOggFiles (source-folder))
          (keep file->track)
          vec)
