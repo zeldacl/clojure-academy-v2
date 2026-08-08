@@ -88,7 +88,11 @@
         selected (atom nil)]
     (rt/build! r (ui-xml/load-spec (modid/namespaced-path "guis/new/ui_edit.xml")))
     (ui/set-prop! r :header :text (local "elements"))
-    (ui/set-prop! r :editbox :visible? false)
+    ;; :visible? is a build-time node prop, not a prop-writer — set-prop!
+    ;; throws "no prop-writer" on it. Visibility is a node field at runtime.
+    ;; (ui_edit.xml already declares visible="false"; this keeps a re-opened
+    ;; runtime from inheriting a shown editbox.)
+    (.setVisible ^INode (rt/node-by-id r :editbox) false)
     (ui/list-set! r :hud-list elements
       (fn [runtime item element]
         (ui/set-node-prop! runtime (ui/item-node item :label)
