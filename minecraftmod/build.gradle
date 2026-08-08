@@ -480,6 +480,60 @@ tasks.register("compareDatagenParityManifests") {
     }
 }
 
+tasks.register("verifyUiXmlIds") {
+    group = "verification"
+    description = "Report reactive-UI node ids referenced from Clojure that no XML or build-child! declares. Run on demand; deliberately NOT part of any gate."
+    doLast {
+        // Why this is not a gate: a wrong id costs nothing until the branch
+        // holding it actually runs, so it ships green and fails in front of a
+        // player. But the match is textual -- ids built at runtime are invisible
+        // to it -- so it advises rather than blocks.
+        def xmlById = [:]
+        fileTree(file("ac/src/main/resources/assets")) { include "**/guis/**/*.xml" }.each { File x ->
+            xmlById[x.name] = (x.getText("UTF-8") =~ /id="([^"]+)"/).collect { it[1] } as Set
+        }
+
+        // Accessor forms that take a literal node id keyword.
+        def refPattern = ~/(?:node-by-id|set-prop!|set-node-prop!|on-confirm-input|events\/on!|list-set!|register-event!)\s+\w+\s+(:[\w?*<>=+.\-]+)/
+        def declPattern = ~/:id\s+(:[\w?*<>=+.\-]+)/
+        def xmlRefPattern = ~/([\w\-]+\.xml)/
+
+        def findings = []
+        fileTree(file("ac/src/main/clojure")) { include "**/*.clj"; include "**/*.cljc" }.each { File src ->
+            def text = src.getText("UTF-8")
+            def names = (text =~ xmlRefPattern).collect { it[1] }.unique().findAll { xmlById.containsKey(it) }
+            if (!names) return
+            // Ids this namespace declares itself via rt/build-child! specs count
+            // as declared -- tutorial's glow lines exist only at runtime.
+            def declared = ((declPattern.matcher(text).collect { it[1] }) as Set)
+            names.each { declared.addAll(xmlById[it].collect { id -> ":" + id }) }
+            def refs = refPattern.matcher(text).collect { it[1] }
+            // A keyword that also appears away from an accessor call is being
+            // declared somewhere this scan cannot model -- a build-child! spec
+            // built by a local helper, say. Only ids that exist *purely* as
+            // lookups are suspect.
+            def unresolved = (refs as Set)
+                .findAll { !declared.contains(it) }
+                .findAll { kw ->
+                    def total = (text =~ (java.util.regex.Pattern.quote(kw) + /(?![\w?*<>=+.\-])/)).count
+                    total <= refs.count { it == kw }
+                }
+                .sort()
+            if (unresolved) {
+                findings << "  ${rootProject.relativePath(src)} (${names.join(', ')}): ${unresolved.join(' ')}"
+            }
+        }
+
+        if (findings) {
+            logger.lifecycle("[verifyUiXmlIds] {} file(s) reference ids nothing declares:", findings.size())
+            findings.each { logger.lifecycle(it) }
+            logger.lifecycle("[verifyUiXmlIds] Note: ids assembled at runtime cannot be seen here; confirm before changing anything.")
+        } else {
+            logger.lifecycle("[verifyUiXmlIds] ok ({} gui xml files)", xmlById.size())
+        }
+    }
+}
+
 tasks.register("verifyNeutralClojureNoMinecraftApis") {
     group = "verification"
     description = "Fail if ac/mcmod Clojure sources or build.gradle files import or reference Minecraft/Forge/Fabric/NeoForge APIs."
