@@ -169,4 +169,24 @@ public final class ExternalOggPlayer {
             return 0.0f;
         }
     }
+
+    /**
+     * Jump to {@code seconds} into the current track.
+     *
+     * <p>Playback binds the whole decoded track to one static buffer (no
+     * queued streaming), so AL_SEC_OFFSET addresses the track itself and is
+     * writable as a seek. Upstream has no equivalent: its paulscode backend
+     * exposes the play position read-only, which is why its progress bar is
+     * display-only.
+     */
+    public static void seek(float seconds) {
+        int source = currentSource;
+        if (source == 0) {
+            return;
+        }
+        try {
+            AL10.alSourcef(source, AL11.AL_SEC_OFFSET, Math.max(0.0f, seconds));
+        } catch (Throwable ignored) {
+        }
+    }
 }

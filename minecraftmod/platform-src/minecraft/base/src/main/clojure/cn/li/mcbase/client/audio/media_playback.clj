@@ -41,6 +41,10 @@
   []
   (ExternalOggPlayer/isPlaying))
 
+(defn seek!
+  [seconds]
+  (ExternalOggPlayer/seek (float seconds)))
+
 (defn playback-state
   []
   {:status (keyword (ExternalOggPlayer/getPlaybackState))
@@ -236,6 +240,7 @@
        :pause! pause!
        :resume! resume!
        :set-volume! set-volume!
+       :seek! seek!
        :playing? playing?
        :state playback-state})
     (platform/install-adapter!
