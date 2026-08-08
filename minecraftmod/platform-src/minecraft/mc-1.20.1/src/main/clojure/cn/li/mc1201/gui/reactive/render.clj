@@ -181,7 +181,8 @@
 ;; ============================================================================
 
 (defn render-box! [^GuiGraphics gg ^INode node]
-  (let [x  (node-abs-x node)  y  (node-abs-y node)
+  (let [drew? (volatile! false)
+        x  (node-abs-x node)  y  (node-abs-y node)
         w  (scaled-w node)    h  (scaled-h node)
         ix (unchecked-int x)  iy (unchecked-int y)
         iw (unchecked-int (+ x w))  ih (unchecked-int (+ y h))]
@@ -191,11 +192,13 @@
     ;; white). double->long->int wraps correctly and preserves the ARGB bits.
     (let [fill-argb (unchecked-int (long (.getDSlot node SLOT-BOX-FILL)))]
       (when (not= fill-argb 0)
+        (vreset! drew? true)
         (.fill gg ix iy iw ih fill-argb)))
     ;; Outline (same double->long->int wrap as fill above)
     (let [outline-argb (unchecked-int (long (.getDSlot node SLOT-BOX-OUTLINE)))
           outline-w    (.getDSlot node SLOT-BOX-OUTLINE-W)]
       (when (and (not= outline-argb 0) (> outline-w 0.0))
+        (vreset! drew? true)
         (.fill gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
         (.fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
         (.fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
@@ -213,7 +216,19 @@
                   (unchecked-int (bit-and (bit-shift-right (long raw) 24) 0xFF))
                   (unchecked-int (* 255.0 raw)))]
       (when (pos? alpha)
+        (vreset! drew? true)
         (.fill gg ix iy iw ih (argb alpha 255 255 255))))
+    ;; Land the fills in tape order. GuiGraphics.fill queues into
+    ;; RenderType.gui(), and BufferSource.endBatch() replays render types in
+    ;; fixedBuffers map order -- not submission order -- so a batched fill is
+    ;; re-sorted against text, which flushes on every drawString. A box could
+    ;; therefore never cover text drawn before it: the skill detail overlay's
+    ;; black cover dimmed the images beneath it but left every label bright,
+    ;; mixing both layers' text together. Flushing here puts the box back
+    ;; where the tape put it. (flush re-enables depth test; end-vanilla-draw!
+    ;; below turns it off again.)
+    (when @drew?
+      (.flush gg))
     (end-vanilla-draw!)))
 
 (defn bake-box! [^INode _node] nil)

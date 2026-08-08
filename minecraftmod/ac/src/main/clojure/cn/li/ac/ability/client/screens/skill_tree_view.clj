@@ -4,6 +4,7 @@
   (:require [cn.li.ac.ability.client.screens.skill-tree :as logic]
             [cn.li.ac.ability.client.condition-icons :as condition-icons]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.texture-registry :as tex-reg]
             [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.ui.core :as ui]
@@ -169,23 +170,35 @@
   (when-let [^INode layer (ui/node rt :popup-layer)]
     (rt/clear-children! rt layer)))
 
+(defn- text-width
+  "Rendered width of `s` at `font-size`, or nil when no loader font is bound
+   (headless tests)."
+  [^String s font-size]
+  (try
+    (some-> (client-bridge/font-text-width {} s (double font-size)) double)
+    (catch Throwable _ nil)))
+
 (defn- wrap-text
-  "Word-aware wrap of `s` into lines of at most `max-chars` (approximate upstream
-   Font.drawSeperated width-wrap; CJK strings with no spaces fall through as one
-   run and are hard-chunked)."
-  [^String s max-chars]
-  (cond
-    (or (nil? s) (= "" s)) []
-    (<= (count s) max-chars) [s]
-    :else
-    (loop [words (seq (.split s " ")) line "" lines []]
-      (if (empty? words)
-        (if (= "" line) lines (conj lines line))
-        (let [w (first words)
-              cand (if (= "" line) w (str line " " w))]
-          (if (<= (count cand) (int max-chars))
-            (recur (next words) cand lines)
-            (recur (next words) w (conj lines line))))))))
+  "Word wrap to a pixel width, as upstream Font.drawSeperated(s, x, y, 200, opt)
+   does -- character counting broke on CJK and on any proportional font, since
+   a wide glyph and a narrow one counted the same. Falls back to the old
+   character budget when the font cannot be measured."
+  [^String s max-px font-size fallback-chars]
+  (let [fits? (if (text-width "M" font-size)
+                (fn [^String c] (<= (or (text-width c font-size) 0.0) (double max-px)))
+                (fn [^String c] (<= (count c) (int fallback-chars))))]
+    (cond
+      (or (nil? s) (= "" s)) []
+      (fits? s) [s]
+      :else
+      (loop [words (seq (.split s " ")) line "" lines []]
+        (if (empty? words)
+          (if (= "" line) lines (conj lines line))
+          (let [w (first words)
+                cand (if (= "" line) w (str line " " w))]
+            (if (fits? cand)
+              (recur (next words) cand lines)
+              (recur (next words) w (conj lines line)))))))))
 
 (defn- refresh-detail-popup!
   "Skill detail popup — matches upstream skillViewArea. Centered on the w×h popup
@@ -234,7 +247,7 @@
           (ctext (+ cy 40.0) 220 8.0 0xFFa1e1ff
                  (str (i18n/translate (st-key "skill_exp")) " " (int (* 100.0 (or exp 0.0))) "%"))
           (when skill-description
-            (doseq [[i line] (map-indexed vector (wrap-text skill-description 42))]
+            (doseq [[i line] (map-indexed vector (wrap-text skill-description 200.0 9.0 42))]
               (ctext (+ cy 49.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
         (do
           (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate (st-key "skill_not_learned")))
