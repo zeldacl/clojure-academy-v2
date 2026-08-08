@@ -18,10 +18,13 @@
       <image id="btn-tp" pos="335.0,29.92" size="33.33,33.33" align="left,top" src="academy:textures/guis/icons/icon_location_on.png"/>
       <image id="btn-del" pos="375.0,29.92" size="33.33,33.33" align="left,top" src="academy:textures/guis/icons/icon_clear.png"/>
     </group>
-    <!-- add_template: input + confirm check -->
+    <!-- add_template: input + confirm check. The placeholder sits BEHIND the
+         editable input (declared first) so the input is the deepest hit —
+         an overlapping placeholder on top would swallow every click and the
+         input could never take focus. -->
     <group id="add-row" pos="0.0,0.0" size="442.0,80.0" align="left,top">
-      <text id="input" pos="45.28,19.70" size="280.56,55.56" align="left,center" text="" font-size="43.0" color="#7FA4D4E9" editable="true"/>
       <text id="ph" pos="45.28,19.70" size="280.56,55.56" align="left,center" text="Add..." font-size="43.0" color="#7FA4D4E9"/>
+      <text id="input" pos="45.28,19.70" size="280.56,55.56" align="left,center" text="" font-size="43.0" color="#7FA4D4E9" editable="true"/>
       <image id="ok" pos="375.83,29.92" size="33.33,33.33" align="left,top" src="academy:textures/guis/check.png"/>
     </group>
   </template>
