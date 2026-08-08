@@ -116,11 +116,17 @@
         r (rv3/v3 (.z f) 0.0 (- (.x f)))
         u rv3/unit-y]
     (mapcat (fn [part]
-              (face-quads texture
-                          (rv3/v3 (+ feet-x (:cx part))
-                                  (+ feet-y (:cy part))
-                                  feet-z)
-                          part f r u part color))
+              ;; Upstream MarkRender disables GL_DEPTH_TEST + GL_CULL_FACE:
+              ;; the humanoid stays visible through walls even when the
+              ;; destination is still inside one (penetrate's unavailable
+              ;; case) — the renderer emits these with a no-depth, no-cull
+              ;; translucent render type.
+              (mapv #(assoc % :no-depth-test? true)
+                    (face-quads texture
+                                (rv3/v3 (+ feet-x (:cx part))
+                                        (+ feet-y (:cy part))
+                                        feet-z)
+                                part f r u part color)))
             model-parts)))
 
 (defn ambient-particle

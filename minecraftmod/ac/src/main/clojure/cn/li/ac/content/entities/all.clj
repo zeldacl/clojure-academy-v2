@@ -39,7 +39,8 @@
          :update-interval 1
          :properties {:effect {:life-ticks 32
                                :follow-owner? true
-                               :renderer-id "railgun-charge-glow"}}}))
+                               :renderer-id "railgun-charge-glow"
+                               :hook :noop}}}))
     (edsl/register-entity!
       (edsl/create-entity-spec
         "intensify_effect"

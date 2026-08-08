@@ -292,7 +292,7 @@
               (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
 
 
-(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state w h bg?]
+(defn- refresh-levelup-popup! [^UiRt rt target-level dev-state w h bg? & [est-consumption]]
   (clear-popup! rt)
   (when-let [^INode layer (ui/node rt :popup-layer)]
     (when bg?
@@ -587,5 +587,5 @@
   (when-not (ui/node rt :root)
     (rt/build! rt {:kind :group :id :root :props {:w 400.0 :h 187.0}
                    :children [{:kind :group :id :popup-layer :props {:x 0.0 :y 0.0 :w 400.0 :h 187.0}}]}))
-  (refresh-levelup-popup! rt target-level dev-state 400 187 false)
+  (refresh-levelup-popup! rt target-level dev-state 400 187 false est-consumption)
   (rt/mark-tree-dirty! rt))

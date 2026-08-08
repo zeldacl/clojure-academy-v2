@@ -51,7 +51,8 @@
   ;; :default mirrors AcademyCraft SettingsUI / domain defaults.
   [{:key :attack-player  :prop-id "attackPlayer"  :category "generic" :get ability-config/attack-player-enabled?    :domain config-common/ability-domain  :sp-only? true  :default true}
    {:key :destroy-blocks :prop-id "destroyBlocks" :category "generic" :get ability-config/destroy-blocks-enabled?   :domain config-common/ability-domain  :sp-only? true  :default true}
-   {:key :heads-or-tails :prop-id "headsOrTails"  :category "generic" :get tutorial-config/heads-or-tails-enabled?  :domain config-common/tutorial-domain :sp-only? false :default false}])
+   {:key :heads-or-tails :prop-id "headsOrTails"  :category "generic" :get tutorial-config/heads-or-tails-enabled?  :domain config-common/tutorial-domain :sp-only? false :default false}
+   {:key :use-mouse-wheel :prop-id "useMouseWheel" :category "generic" :get gameplay-config/use-mouse-wheel-enabled? :domain config-common/gameplay-domain :sp-only? false :default false}])
 
 (def ^:private upstream-key-rows
   [{:source :settings :config-key :ability-key-0 :prop-id "ability_0" :default-code -100}

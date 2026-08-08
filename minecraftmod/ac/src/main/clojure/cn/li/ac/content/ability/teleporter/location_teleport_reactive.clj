@@ -26,6 +26,7 @@
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.ui.xml :as ui-xml]
             [clojure.string :as str])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]
@@ -60,17 +61,28 @@
                                  :limits (or limits {})}))
     nil))
 
-(defn- net-owner [player-uuid] {:logical-side :client :player-uuid player-uuid})
+(defn- net-owner [player-uuid]
+  ;; The RPC owner contract requires :client-session-id; default-client-owner
+  ;; derives it from the live connection (a bare :player-uuid map throws
+  ;; ":client-owner contract violation" in send-to-server).
+  (assoc (runtime-hooks/default-client-owner) :player-uuid player-uuid))
 
 ;; ============================================================================
 ;; Layout constants
 ;; ============================================================================
 
-(def ^:private panel-w 280.0)
-(def ^:private entry-h 24.0)
-(def ^:private max-visible 7)
-(def ^:private list-y 30.0)
-(def ^:private panel-h (+ list-y (* (inc max-visible) entry-h) 12.0))
+;; Layout lives in guis/new/loctele_new.xml (upstream loctele_new.xml: root
+;; centered at scale 0.24, menu 442x530, rows 442x80 spacing 2, info panel
+;; right-aligned). These constants drive the row placement math and scroll
+;; window only.
+(def ^:private list-y 18.0)
+(def ^:private entry-h 80.0)
+(def ^:private entry-spacing 2.0)
+(def ^:private max-visible 6)
+
+;; Upstream DefColors — the row text toggles between them at runtime.
+(def ^:private color-text-normal 0xFFC1CFD5)
+(def ^:private color-text-disabled 0xFFA2A2A2)
 
 ;; ============================================================================
 ;; set-tick! — force a per-frame side-effecting computed-o to actually run
@@ -115,44 +127,15 @@
 ;; Row / add-row builders
 ;; ============================================================================
 
-(defn- row-spec [id loc can? cross?]
-  (let [name-str (str (or (:name loc) "?") (when cross? " [D]"))
-        dist (int (or (:distance loc) 0)) cp (int (or (:cp-cost loc) 0))
-        name-color (if can? 0xFFC1CFD5 0xFFA2A2A2)]
-    {:kind :box
-     :props {:id id :x 0.0 :y 0.0 :w 274.0 :h entry-h
-             :fill (if can? 0x19000000 0x10000000) :hover-tint 0.15}
-     :children
-     [{:kind :text :props {:id (keyword (str (name id) "-name")) :x 4.0 :y 4.0 :w 120.0 :h 16.0
-                            :text name-str :font-size 9.0 :color name-color}}
-      {:kind :text :props {:id (keyword (str (name id) "-dist")) :x 126.0 :y 4.0 :w 80.0 :h 16.0
-                            :text (str dist "m  " cp "IF") :font-size 8.0
-                            :color (if can? 0xFF888888 0xFF666666)}}
-      {:kind :box :props {:id (keyword (str (name id) "-tp")) :x 210.0 :y 4.0 :w 30.0 :h 16.0
-                           :fill 0xFF224466 :hover-tint 0.25 :visible? can?}
-       :children [{:kind :text :props {:x 0.0 :y 0.0 :w 30.0 :h 16.0 :text "TP" :font-size 8.0
-                                        :color 0xFFFFFFFF :align "center"}}]}
-      {:kind :box :props {:id (keyword (str (name id) "-del")) :x 242.0 :y 4.0 :w 28.0 :h 16.0
-                           :fill 0xFF442222 :hover-tint 0.25}
-       :children [{:kind :text :props {:x 0.0 :y 0.0 :w 28.0 :h 16.0 :text "Del" :font-size 9.0
-                                        :color 0xFFFFFFFF :align "center"}}]}]}))
+(defn- hide-row-sections! [^INode item]
+  (doseq [id [:elem-row :add-row]]
+    (when-let [^INode n (ui/item-node item id)]
+      (.setVisible n false))))
 
-(defn- add-row-spec [id]
-  {:kind :box
-   :props {:id id :x 0.0 :y 0.0 :w 274.0 :h entry-h :fill 0x15000000}
-   :children
-   [{:kind :text :props {:id (keyword (str (name id) "-input")) :x 8.0 :y 4.0 :w 152.0 :h 16.0
-                          :text "" :font-size 9.0 :color 0xFFC1CFD5 :editable? true}}
-    {:kind :text :props {:id (keyword (str (name id) "-ph")) :x 8.0 :y 4.0 :w 152.0 :h 16.0
-                          :text "Click to save location..." :font-size 8.0 :color 0xFF666666}}
-    {:kind :box :props {:id (keyword (str (name id) "-ok")) :x 168.0 :y 4.0 :w 50.0 :h 16.0
-                         :fill 0xFF224422 :hover-tint 0.25}
-     :children [{:kind :text :props {:x 0.0 :y 0.0 :w 50.0 :h 16.0 :text "Save" :font-size 8.0
-                                      :color 0xFFFFFFFF :align "center"}}]}
-    {:kind :box :props {:id (keyword (str (name id) "-cancel")) :x 220.0 :y 4.0 :w 50.0 :h 16.0
-                         :fill 0xFF333333 :hover-tint 0.25}
-     :children [{:kind :text :props {:x 0.0 :y 0.0 :w 50.0 :h 16.0 :text "Clear" :font-size 8.0
-                                      :color 0xFF888888 :align "center"}}]}]})
+(defn- show-row-section! [^INode item section-id]
+  (hide-row-sections! item)
+  (when-let [^INode n (ui/item-node item section-id)]
+    (.setVisible n true)))
 
 ;; ============================================================================
 ;; List rebuild — the visible scroll window + optional add-row
@@ -163,91 +146,101 @@
 
 (defn- rebuild-list!
   [^UiRt rt player-uuid owner-key]
-  (let [list-grp ^INode (rt/node-by-id rt :list-ctr)
-        _ (rt/clear-children! rt list-grp)
-        {:keys [locations limits]} (screen-st owner-key)
+  (let [{:keys [locations limits]} (screen-st owner-key)
         total (count locations)
         scroll-a (rt/user-signal rt :scroll-idx)
         start (max 0 (min @scroll-a (max 0 (- total max-visible))))
         _ (reset! scroll-a start)
         visible-locs (vec (drop start (take (+ start max-visible) locations)))
+        items (into (mapv (fn [idx loc] {:type :elem :loc loc :idx idx})
+                          (range) visible-locs)
+                    [{:type :add}])
         hit-map (atom {})]
-    (doseq [[idx loc] (map-indexed vector visible-locs)]
-      (let [can? (boolean (:can-perform? loc))
-            cross? (boolean (:cross-dimension? loc))
-            id (keyword (str "loc-row-" idx))
-            spec (assoc-in (row-spec id loc can? cross?) [:props :y] (double (* idx entry-h)))
-            ^INode row (rt/build-child! rt spec list-grp)]
-        (swap! hit-map assoc (.getIdx row) loc)
-        (when can?
-          (events/on! rt (keyword (str (name id) "-tp")) :left-click
-            (fn [_ _ _]
-              (client-sounds/queue-current-sound-effect!
-                {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
-              (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-PERFORM {:name (:name loc)} owner-key)
-              (bridge/close-screen!))))
-        (events/on! rt (keyword (str (name id) "-del")) :left-click
-          (fn [_ _ _]
-            (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-REMOVE {:name (:name loc)} owner-key)))))
-    (let [add-y (double (* (count visible-locs) entry-h))
-          spec (assoc-in (add-row-spec :add-row) [:props :y] add-y)
-          ^INode add-row (rt/build-child! rt spec list-grp)]
-      (events/on! rt :add-row-ok :left-click
-        (fn [_ _ _]
-          (let [^INode input-n (ui/item-node add-row :add-row-input)
-                name (str/trim (str (.getOSlot input-n 0)))
-                name-len (int (or (:max-location-name-length limits) 16))]
-            (when (and (not (str/blank? name)) (<= (count name) name-len))
-              (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
-              (ui/set-node-prop! rt input-n :text "")))))
-      (events/on! rt :add-row-cancel :left-click
-        (fn [_ _ _]
-          (let [^INode input-n (ui/item-node add-row :add-row-input)]
-            (ui/set-node-prop! rt input-n :text "")))))
-    (rt/put-user-signal! rt :hit-map hit-map)
-    (let [scroll-max (max 0 (- total max-visible))]
-      (let [^INode up (rt/node-by-id rt :scroll-up) ^INode dn (rt/node-by-id rt :scroll-down)]
-        (when up (.setVisible up (pos? start)) (.setFlag up node/FLAG-LAYOUT-DIRTY))
-        (when dn (.setVisible dn (< start scroll-max)) (.setFlag dn node/FLAG-LAYOUT-DIRTY))))
-    (ui/set-prop! rt :status-line :text (str total " locations"))))
+    (ui/list-set! rt :list-ctr items
+      (fn [rt ^INode item row]
+        (case (:type row)
+          :elem
+          (let [loc (:loc row)
+                idx (:idx row)
+                can? (boolean (:can-perform? loc))
+                ^INode name-n (ui/item-node item :name)
+                ^INode tp-n (ui/item-node item :btn-tp)
+                ^INode del-n (ui/item-node item :btn-del)]
+            (show-row-section! item :elem-row)
+            (ui/set-node-prop! rt name-n :text (str (or (:name loc) "?")))
+            (ui/set-node-prop! rt name-n :color
+                              (if can? color-text-normal color-text-disabled))
+            (when tp-n
+              (.setVisible tp-n can?)
+              (.setFlag tp-n node/FLAG-LAYOUT-DIRTY))
+            ;; Hit-map value carries the row's design y so the info panel can
+            ;; follow the hovered row (upstream setMessage moves info to ypos).
+            (swap! hit-map assoc (.getIdx item)
+                   {:loc loc :y (double (+ list-y (* idx (+ entry-h entry-spacing))))})
+            (when can?
+              (rt/register-event! rt (.getIdx tp-n) :left-click
+                (fn [_ _ _]
+                  (client-sounds/queue-current-sound-effect!
+                    {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
+                  (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-PERFORM {:name (:name loc)} owner-key)
+                  (bridge/close-screen!))))
+            (rt/register-event! rt (.getIdx del-n) :left-click
+              (fn [_ _ _]
+                (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-REMOVE {:name (:name loc)} owner-key))))
+          :add
+          (let [^INode input-n (ui/item-node item :input)
+                ^INode ok-n (ui/item-node item :ok)]
+            (show-row-section! item :add-row)
+            (rt/register-event! rt (.getIdx ok-n) :left-click
+              (fn [_ _ _]
+                (let [name (str/trim (str (.getOSlot input-n 0)))
+                      name-len (int (or (:max-location-name-length limits) 16))]
+                  (when (and (not (str/blank? name)) (<= (count name) name-len))
+                    (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
+                    (ui/set-node-prop! rt input-n :text ""))))))
+          nil)))
+    (rt/put-user-signal! rt :hit-map hit-map)))
 
 ;; ============================================================================
 ;; Info panel — hover detail or EXP/cross-dim status, refreshed each frame
 ;; ============================================================================
 
-(defn- attach-info-panel-tick! [^UiRt rt owner-key]
+(defn- attach-info-panel-tick! [^UiRt rt _owner-key]
+  ;; Upstream MessageTab: the info panel shows the hovered row's message
+  ;; (dimension, coords, CP cost) and moves to the row's y; hidden otherwise.
   (set-tick! rt :info-tick
     (sig/computed-o [(rt/clock-ms-sig rt)]
       (fn [_]
         (let [hit-map @(or (rt/user-signal rt :hit-map) (atom {}))
-              loc (hovered-location rt hit-map)]
-          (if loc
-            (ui/set-prop! rt :status :text
-              (str "Dim: " (or (:world-id loc) "?")
-                   "  (" (int (or (:x loc) 0)) ", " (int (or (:y loc) 0)) ", " (int (or (:z loc) 0)) ")"
-                   "  " (int (or (:cp-cost loc) 0)) "IF"))
-            (let [st (screen-st owner-key)
-                  exp (double (or (:exp st) 0.0))
-                  limits (or (:limits st) {})
-                  cross-exp (double (or (:cross-dimension-exp-threshold limits) 0.8))]
-              (ui/set-prop! rt :status :text
-                (str "EXP: " (int (* 100.0 exp)) "%  "
-                     (if (>= exp cross-exp) "Cross-Dim OK" "Same Dim Only"))))))
-        nil))))
+              entry (hovered-location rt hit-map)
+              ^INode info (rt/node-by-id rt :info)]
+          (if entry
+            (let [loc (:loc entry)
+                  lines [(str (or (:world-id loc) "?") " (#" (int (or (:dim-id loc) 0)) ")")
+                         (format "(%.0f, %.0f, %.0f)"
+                                 (double (or (:x loc) 0.0))
+                                 (double (or (:y loc) 0.0))
+                                 (double (or (:z loc) 0.0)))
+                         (str (int (or (:cp-cost loc) 0)) " CP")]]
+              (when info
+                (when-not (.isVisible info)
+                  (.setVisible info true))
+                (.setY info (double (:y entry)))
+                (.setFlag info node/FLAG-LAYOUT-DIRTY))
+              (doseq [[i line] (map-indexed vector lines)]
+                (ui/set-prop! rt (keyword (str "info-line-" i)) :text line))
+              (ui/set-prop! rt :info-line-3 :text ""))
+            (when info
+              (when (.isVisible info)
+                (.setVisible info false)
+                (.setFlag info node/FLAG-LAYOUT-DIRTY))))
+          nil)))))
 
 ;; ============================================================================
 ;; Scroll handling
 ;; ============================================================================
 
 (defn- attach-scroll! [^UiRt rt player-uuid owner-key]
-  (events/on! rt :scroll-up :left-click
-    (fn [_ _ _]
-      (swap! (rt/user-signal rt :scroll-idx) #(max 0 (dec %)))
-      (rebuild-list! rt player-uuid owner-key)))
-  (events/on! rt :scroll-down :left-click
-    (fn [_ _ _]
-      (swap! (rt/user-signal rt :scroll-idx) inc)
-      (rebuild-list! rt player-uuid owner-key)))
   (events/on! rt :list-bg :mouse-scroll
     (fn [_ _ evt]
       (let [{:keys [locations]} (screen-st owner-key)
@@ -262,28 +255,9 @@
 ;; ============================================================================
 
 (defn- root-spec []
-  {:kind :box
-   :props {:id :root :x 0.0 :y 0.0 :w panel-w :h panel-h :fill 0xCC1A2226}
-   :children
-   [{:kind :box :props {:id :info-panel :x 0.0 :y 0.0 :w panel-w :h 28.0 :fill 0xAA111820}
-     :children
-     [{:kind :text :props {:id :title :x 6.0 :y 2.0 :w 100.0 :h 12.0
-                            :text "Location Teleport" :font-size 10.0 :color 0xFFC1CFD5}}
-      {:kind :text :props {:id :status :x 6.0 :y 15.0 :w 268.0 :h 12.0
-                            :text "" :font-size 8.0 :color 0xFF888888}}]}
-    {:kind :group :props {:id :list-bg :x 0.0 :y list-y :w 260.0 :h (* max-visible entry-h) :clip? true}
-     :children [{:kind :group :props {:id :list-ctr :x 3.0 :y 0.0
-                                       :w 254.0 :h (* entry-h (inc max-visible))}}]}
-    {:kind :box :props {:id :scroll-up :x 262.0 :y list-y :w 16.0 :h 14.0
-                         :fill 0xFF334455 :hover-tint 0.3 :visible? false}
-     :children [{:kind :text :props {:x 0.0 :y 0.0 :w 16.0 :h 14.0 :text "^" :font-size 8.0
-                                      :color 0xFF888888 :align "center"}}]}
-    {:kind :box :props {:id :scroll-down :x 262.0 :y (+ list-y (- (* max-visible entry-h) 14.0)) :w 16.0 :h 14.0
-                         :fill 0xFF334455 :hover-tint 0.3 :visible? false}
-     :children [{:kind :text :props {:x 0.0 :y 0.0 :w 16.0 :h 14.0 :text "v" :font-size 8.0
-                                      :color 0xFF888888 :align "center"}}]}
-    {:kind :text :props {:id :status-line :x 6.0 :y (- panel-h 12.0) :w 268.0 :h 10.0
-                          :text "" :font-size 8.0 :color 0xFF666666 :align "center"}}]})
+  ;; The whole layout (geometry + templates) lives in
+  ;; guis/new/loctele_new.xml — upstream loctele_new.xml port.
+  (ui-xml/load-spec (modid/namespaced-path "guis/new/loctele_new.xml")))
 
 (defn create-runtime [player]
   (let [r (rt/create-runtime)
@@ -321,6 +295,10 @@
   (install/framework-once! ::init
     (fn []
       (widget-registry/register-widget-factory! :ac/saved-position
-        (fn [{:keys [player payload]}] (open-screen! player (or payload {}))))
+        ;; The :location-teleport/ui-open channel payload carries only the
+        ;; query data — resolve the client player here like the skill-tree
+        ;; widget factory does (a payload :player would be nil).
+        (fn [payload]
+          (open-screen! (bridge/get-client-player) (or payload {}))))
       (log/info "Location Teleport reactive screen registered")))
   nil)

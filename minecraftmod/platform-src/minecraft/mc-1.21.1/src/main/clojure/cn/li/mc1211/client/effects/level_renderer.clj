@@ -514,9 +514,18 @@
                 (emit-line! line-vc mat op))))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
-              (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
-                (doseq [op texture-ops]
-                  (emit-quad! quad-vc pose-stack op)))))
+              (let [depth-ops (remove :no-depth-test? texture-ops)
+                    ;; Upstream MarkRender disables depth test + cull for the
+                    ;; tp_mark humanoid so it stays visible through walls.
+                    no-depth-ops (filter :no-depth-test? texture-ops)]
+                (when (seq depth-ops)
+                  (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
+                    (doseq [op depth-ops]
+                      (emit-quad! quad-vc pose-stack op))))
+                (when (seq no-depth-ops)
+                  (let [^VertexConsumer nd-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent loc))]
+                    (doseq [op no-depth-ops]
+                      (emit-quad! nd-vc pose-stack op)))))))
           (when (seq plasma)
             (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source

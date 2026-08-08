@@ -724,16 +724,32 @@
   penetrate-teleport context. The loader input listener only knows the
   player, not which slot is bound to penetrate — resolve the contexts from
   the client context registry (the slot map entry is cleared at key-up, so
-  keep-active contexts are never found there)."
+  keep-active contexts are never found there).
+
+  Returns true when at least one context consumed the wheel — the loader
+  input listener then cancels the scroll (hotbar stays put, matching
+  upstream's wheel-as-distance-control while the skill key is held)."
   [player-uuid delta]
   (when (and (gameplay/use-mouse-wheel-enabled?)
              (number? delta)
              (not (zero? (double delta))))
-    (doseq [ctx-id (active-context-ids-for-skill player-uuid :penetrate-teleport)]
-      (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
-                               {:ctx-id ctx-id
-                                :channel :penetrate-tp/set-distance
-                                :payload {:delta (double delta)}}))))
+    (let [ctx-ids (active-context-ids-for-skill player-uuid :penetrate-teleport)]
+      (doseq [ctx-id ctx-ids]
+        (send-with-client-owner! player-uuid catalog/MSG-CTX-CHANNEL
+                                 {:ctx-id ctx-id
+                                  :channel :penetrate-tp/set-distance
+                                  :payload {:delta (double delta)}})
+        ;; The server side updates its skill-state for the release cost, but
+        ;; the client's tick! recomputes the preview from the CLIENT
+        ;; skill-state — dispatch the same channel locally so the marker
+        ;; follows the wheel (upstream l_updateMark reads curDist directly
+        ;; on the client). The wheel callback only binds the session, so
+        ;; scope the context owner for the dispatch (the ctx-on! handler
+        ;; calls update-skill-state-root! with the bound owner).
+        (ctx/with-context-owner (client-context-owner player-uuid)
+          (ctx/ctx-send-to-local! ctx-id :penetrate-tp/set-distance
+                                  {:delta (double delta)})))
+      (boolean (seq ctx-ids)))))
 
 (defn- send-movement-message!
   [player-uuid transition movement-key]

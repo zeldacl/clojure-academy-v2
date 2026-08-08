@@ -558,12 +558,28 @@
                      (try
                        (Identifier/tryParse (str texture))
                        (catch Exception _ nil))]
-            (submit-custom-geometry!
-              submit-node-collector pose-stack
-              (RenderTypes/entityTranslucent identifier)
-              (fn [pose consumer]
-                (doseq [op texture-ops]
-                  (emit-quad! consumer pose op))))))
+            (let [depth-ops (remove :no-depth-test? texture-ops)
+                  ;; Upstream MarkRender disables depth test + cull for the
+                  ;; tp_mark humanoid so it stays visible through walls.
+                  no-depth-ops (filter :no-depth-test? texture-ops)]
+              (when (seq depth-ops)
+                (submit-custom-geometry!
+                  submit-node-collector pose-stack
+                  (RenderTypes/entityTranslucent identifier)
+                  (fn [pose consumer]
+                    (doseq [op depth-ops]
+                      (emit-quad! consumer pose op)))))
+              (when (seq no-depth-ops)
+                ;; Vanilla see-through text type: texture x vertex colour
+                ;; (no lightmap), depth test disabled — the tp_mark humanoid
+                ;; stays visible through walls (upstream MarkRender disables
+                ;; GL_DEPTH_TEST). NB: keeps vanilla culling.
+                (submit-custom-geometry!
+                  submit-node-collector pose-stack
+                  (RenderTypes/textSeeThrough identifier)
+                  (fn [pose consumer]
+                    (doseq [op no-depth-ops]
+                      (emit-quad! consumer pose op))))))))
         (when (seq plasma)
           (submit-custom-geometry!
             submit-node-collector pose-stack (PlasmaRenderTypes/plasmaBody)

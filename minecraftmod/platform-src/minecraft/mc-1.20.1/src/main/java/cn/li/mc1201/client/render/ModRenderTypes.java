@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.Util;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.function.Function;
 
@@ -38,6 +39,40 @@ public final class ModRenderTypes extends RenderType {
                     false,
                     PLASMA_BODY_STATE
             ));
+
+    /**
+     * Translucent textured-QUADS render type for the tp_mark humanoid — the
+     * vanilla textSeeThrough pattern (RENDERTYPE_TEXT_SHADER samples the
+     * texture times vertex colour, no lightmap modulation — the same
+     * "texture true colours" semantics as upstream's ShaderSimple) with
+     * depth test disabled and cull disabled. Upstream MarkRender draws the
+     * mark with GL11.glDisable(GL_DEPTH_TEST) + glDisable(GL_CULL_FACE), so
+     * the humanoid stays visible through walls when the destination is still
+     * inside one (penetrate_teleport's unavailable case) and its back faces
+     * never cull away. COLOR_WRITE skips depth writes like the vanilla
+     * see-through types.
+     */
+    private static final Function<ResourceLocation, RenderType> ACADEMY_QUADS_TRANSLUCENT_BY_TEXTURE =
+            Util.memoize(texture -> create(
+                    "academy_quads_translucent",
+                    DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP,
+                    VertexFormat.Mode.QUADS,
+                    256,
+                    false,
+                    true,
+                    CompositeState.builder()
+                            .setShaderState(RENDERTYPE_TEXT_SHADER)
+                            .setTextureState(new TextureStateShard(texture, false, false))
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setCullState(NO_CULL)
+                            .setLightmapState(LIGHTMAP)
+                            .setDepthTestState(NO_DEPTH_TEST)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .createCompositeState(false)));
+
+    public static RenderType academyQuadsTranslucent(ResourceLocation texture) {
+        return ACADEMY_QUADS_TRANSLUCENT_BY_TEXTURE.apply(texture);
+    }
 
     /**
      * Translucent LINES render type for ability aim markers — vanilla

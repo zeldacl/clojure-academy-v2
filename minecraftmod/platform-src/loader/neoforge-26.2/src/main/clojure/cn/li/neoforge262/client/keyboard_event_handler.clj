@@ -78,11 +78,13 @@
   ;; Upstream PenetrateTeleport onPlayerUseWheel: mouse wheel adjusts the
   ;; teleport distance (raw GLFW delta, ~1.0 per notch — NeoForge names it
   ;; getScrollDeltaY). The hook resolves the active penetrate context
-  ;; itself.
+  ;; itself; when it consumed the wheel, cancel the event so the vanilla
+  ;; hotbar does not switch items.
   (try
     (when-let [player-uuid (get-current-player-uuid)]
       (client-session/with-current-client-session
-        #(power-runtime/client-on-slot-wheel! player-uuid 0 (.getScrollDeltaY evt))))
+        #(when (power-runtime/client-on-slot-wheel! player-uuid 0 (.getScrollDeltaY evt))
+           (.setCanceled evt true))))
     (catch Exception e
       (log/warn e "Error in Forge mouse scroll handler"))))
 

@@ -180,9 +180,12 @@
                           handle
                           (reify GLFWScrollCallbackI
                             (invoke [_ w xoffset yoffset]
-                              (when-let [p @prev]
-                                (.invoke ^GLFWScrollCallback p w xoffset yoffset))
-                              (on-scroll (double yoffset))))))))))))
+                              ;; When the penetrate distance control consumed
+                              ;; the wheel, skip vanilla's callback so the
+                              ;; hotbar does not switch items.
+                              (when-not (on-scroll (double yoffset))
+                                (when-let [p @prev]
+                                  (.invoke ^GLFWScrollCallback p w xoffset yoffset)))))))))))))
 
 ;; ============================================================================
 ;; Per-frame held-key state — shared by Forge (runtime_bridge.clj) and Fabric
