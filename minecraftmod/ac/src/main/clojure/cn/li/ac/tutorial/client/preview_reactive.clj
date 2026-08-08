@@ -5,9 +5,9 @@
    builders (create-icon-preview, create-recipe-preview, load-recipe-widget,
    etc.) are replaced with native node specs.
 
-   :block-3d and :item-3d views now render as scaled ItemStacks via the
-   :preview-item kind (using GuiGraphics.renderFakeItem), replacing the
-   previous empty placeholder boxes with actual item model rendering."
+   :block-3d and :item-3d views render through the :preview-3d kind, which
+   reproduces upstream's perspective preview camera (FOV 50, Y turntable)
+   rather than flattening them into 2D item icons."
   (:require [clojure.string :as str]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as terminal-catalog]
@@ -33,21 +33,36 @@
     "Crafting" :crafting
     :crafting))
 
-(defn- find-recipe-kind-for
-  "Look through ALL recipe types to find which one has recipes for this item.
-   Returns [kind-string recipes] or nil."
+(def ^:private recipe-kinds
+  "Query kind → display kind, in upstream RecipeHandler.recipeOfStack order:
+   vanilla crafting, then ImagFusor, then MetalFormer, then smelting."
+  [[:crafting "Crafting"]
+   [:imag-fusor "ImagFusor"]
+   [:metal-former "MetalFormer"]
+   [:smelting "Smelting"]])
+
+(defn- all-recipe-views
+  "Every recipe producing `item-id`, one entry per recipe, ACROSS all kinds.
+
+   Upstream RecipeHandler.recipeOfStack concatenates the vanilla crafting,
+   ImagFusor, MetalFormer and smelting hits into one Widget[] — an item made
+   both in a Metal Former and on a crafting table gets two sub-views, which is
+   what gives the preview's left/right arrows something to page through.
+
+   Returns [[kind-name {:input [item-id...] :count n}] ...]. `find-recipes` is
+   asked first purely to skip the kinds that have nothing, so the common
+   one-machine item costs two queries rather than four."
   [item-id]
   (try
-    (when-let [result (platform-bridge/find-recipes item-id)]
-      (let [kinds [[:crafting "Crafting"]
-                   [:smelting "Smelting"]
-                   [:imag-fusor "ImagFusor"]
-                   [:metal-former "MetalFormer"]]]
-        (some (fn [[qk kind-name]]
-                (when-let [recipes (seq (get result qk))]
-                  [kind-name recipes]))
-              kinds)))
-    (catch Throwable _
+    (let [available (or (platform-bridge/find-recipes item-id) {})]
+      (into []
+            (mapcat (fn [[query-kind kind-name]]
+                      (when (seq (get available query-kind))
+                        (map (fn [recipe] [kind-name recipe])
+                             (platform-bridge/all-recipes-for item-id query-kind)))))
+            recipe-kinds))
+    (catch Throwable e
+      (log/warn "Recipe query failed for" item-id (ex-message e))
       nil)))
 
 (defn- expand-recipe-sub-views
@@ -55,28 +70,27 @@
    matching recipes and create one sub-view per recipe variant.  Multiple
    recipes stay as sub-views within the same view group — the left/right
    arrows switch between them (matching upstream AcademyCraft's
-   RecipeHandler.recipeOfStack() → ViewGroup.getSubViews() array)."
+   RecipeHandler.recipeOfStack() → ViewGroup.getSubViews() array).
+
+   The :recipe-kind declared in build-view-groups is only a guess at which
+   machine makes the item; each sub-view takes the kind of the recipe it
+   actually shows, so a group can mix e.g. a MetalFormer and a Crafting page."
   [vg]
   (let [svs (:sub-views vg)
         sv (first svs)
         sv-type (:type sv)]
     (if (and (= 1 (count svs))
              (or (= :recipe sv-type) (= :crafting-grid sv-type)))
-      (let [item-id (:item-id sv)
-            hardcoded-kind (:recipe-kind sv)
-            [actual-kind recipes] (find-recipe-kind-for item-id)]
-        (if recipes
-          (let [kind-changed? (not= hardcoded-kind actual-kind)
-                base (if kind-changed?
-                       (assoc sv :recipe-kind actual-kind :type :recipe)
-                       (assoc sv :type :recipe))]
-            (assoc vg :sub-views
-                   (mapv (fn [recipe]
-                           (assoc base :recipe-input (:input recipe)
-                                    :recipe-count (:count recipe)))
-                         recipes)))
-          ;; No recipe found → fall back to 3D item view
-          (assoc vg :sub-views [(assoc sv :type :item-3d)])))
+      (if-let [found (seq (all-recipe-views (:item-id sv)))]
+        (assoc vg :sub-views
+               (mapv (fn [[kind-name recipe]]
+                       (assoc sv :type :recipe
+                                 :recipe-kind kind-name
+                                 :recipe-input (:input recipe)
+                                 :recipe-count (:count recipe)))
+                     found))
+        ;; No recipe found → fall back to 3D item view
+        (assoc vg :sub-views [(assoc sv :type :item-3d)]))
       ;; Non-recipe groups pass through unchanged
       vg)))
 
