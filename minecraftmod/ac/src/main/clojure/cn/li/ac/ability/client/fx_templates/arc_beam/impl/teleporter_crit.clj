@@ -19,7 +19,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private formula-frame-count 10)
 

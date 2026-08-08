@@ -13,7 +13,8 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private mark-frame-count 7)
 

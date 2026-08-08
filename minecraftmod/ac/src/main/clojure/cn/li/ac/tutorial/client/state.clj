@@ -11,7 +11,8 @@
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log]
+            [clojure.set]))
 
 ;; --- State atom ---
 

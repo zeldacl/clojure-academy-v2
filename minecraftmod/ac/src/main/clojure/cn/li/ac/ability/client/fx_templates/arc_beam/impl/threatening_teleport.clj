@@ -5,7 +5,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 ;; Upstream threatening-teleport marker colors (TTContextC):
 ;; normal (no target) 0xba,0xba,0xba,0xba — threatening (targeting) 0xba,0xb2,0x23,0x2a.

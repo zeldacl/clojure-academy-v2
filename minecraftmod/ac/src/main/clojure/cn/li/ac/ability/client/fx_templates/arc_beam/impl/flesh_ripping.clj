@@ -5,7 +5,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private stale-owner-ttl-ticks 80)
 

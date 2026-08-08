@@ -20,7 +20,8 @@
             [cn.li.mcmod.gui.container.action-payload :as action-payload]
             [cn.li.ac.wireless.gui.message.registry :as msg-registry]
             [cn.li.ac.energy.operations :as energy]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.mcmod.ui.events]))
 
 ;; ============================================================================
 ;; Schema + container

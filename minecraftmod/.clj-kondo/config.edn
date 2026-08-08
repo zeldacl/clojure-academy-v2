@@ -6,6 +6,12 @@
                       clojure.core/ns hooks.forbid-loader-api/analyze-ns}}
  :linters
  {:unresolved-symbol {:level :warning}
+  ;; An alias or fully-qualified call whose namespace is never required is
+  ;; never intentional, and nothing else in the build catches it: most ac
+  ;; namespaces are not AOT-compiled (fullAot=false), so the file only fails
+  ;; when it is first loaded — in front of a player. Errors here, unlike
+  ;; :unresolved-symbol, have no legitimate dynamic counterpart.
+  :unresolved-namespace {:level :error}
   :unused-private-var {:level :warning}
   ;; *framework* is initialized to nil and injected via alter-var-root at runtime.
   ;; clj-kondo cannot track the runtime injection, so suppress false-positive

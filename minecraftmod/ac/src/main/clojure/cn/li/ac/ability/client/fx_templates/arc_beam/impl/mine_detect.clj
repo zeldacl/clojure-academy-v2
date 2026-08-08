@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private mineview-texture
   (modid/namespaced-path "textures/effects/mineview.png"))

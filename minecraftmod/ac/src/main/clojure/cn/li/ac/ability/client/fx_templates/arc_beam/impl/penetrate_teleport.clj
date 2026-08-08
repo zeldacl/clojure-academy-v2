@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.config.modid :as modid]))
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 ;; Upstream EntityTPMarking renders grey when the destination is unavailable
 ;; (mark.available = dest.available).

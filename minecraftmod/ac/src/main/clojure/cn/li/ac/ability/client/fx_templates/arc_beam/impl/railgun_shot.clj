@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3])
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.fx-templates.arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
 (def ^:private beam-life-ticks 50)

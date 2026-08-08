@@ -1,7 +1,9 @@
 (ns cn.li.mcbase.gui.reactive.input
   "Input wiring: DelegatingScreen callbacks -> event dispatch."
   (:require [cn.li.mcmod.ui.events :as events]
-            [cn.li.mcmod.ui.layout :as layout])
+            [cn.li.mcmod.ui.layout :as layout]
+            [cn.li.mcmod.ui.node]
+            [cn.li.mcmod.ui.runtime])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn handle-key-pressed

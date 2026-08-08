@@ -1,5 +1,6 @@
 (ns cn.li.mcbase.datagen.json-util
-  "Loader-agnostic JSON serialization helper for datagen outputs.")
+  "Loader-agnostic JSON serialization helper for datagen outputs."
+  (:require [clojure.string]))
 
 (defn- escape-json-string [s]
   (-> (str s)
