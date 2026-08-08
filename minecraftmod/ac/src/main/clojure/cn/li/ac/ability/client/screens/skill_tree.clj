@@ -140,10 +140,12 @@
         conds (check-learn-conditions sid ad (:level ad) developer-type)
         exp (double (or (adata/get-skill-exp ad sid) 0.0))
         prog (clamp01 exp)
+        ;; Upstream treats "no parent" as parent-learned, both for mAlpha and
+        ;; for canBePotentiallyLearned.
+        parent-learned? (let [pid (some-> (:prerequisites skill) first :skill-id)]
+                          (or (nil? pid) (adata/is-learned? ad pid)))
         m-alpha (cond learned? 1.0
-                      (empty? (:prerequisites skill)) 0.7   ;; no parent = always accessible
-                      (let [pid (some-> (:prerequisites skill) first :skill-id)]
-                        (adata/is-learned? ad pid)) 0.7      ;; parent learned
+                      parent-learned? 0.7
                       :else 0.25)]
     {:x x :y y :idx idx :learned learned? :can-learn (:pass? conds)
      :conditions (:failures conds) :skill-id sid
@@ -151,6 +153,7 @@
      :skill-description (translate-field skill :description-key "")
      :skill-icon (skill/get-skill-icon-path sid)
      :skill-level (:level skill) :exp prog :m-alpha m-alpha
+     :parent-learned? parent-learned?
      :progress-segments (int (Math/round (double (* prog max-progress-segments))))}))
 
 (defn- resolve-category [ad] (when-let [cid (:category-id ad)] (category/get-category cid)))
@@ -162,6 +165,23 @@
      :overload {:cur (:cur-overload rd) :max (:max-overload rd)}
      :can-level-up (can-level-up-ability? ad)}))
 
+(defn potentially-learnable?
+  "Upstream LearningHelper.canBePotentiallyLearned, which decides what the tree
+   shows at all:
+
+     level >= skill.level || isLearned(skill)
+       || skill.parent == null || isLearned(skill.parent)
+
+   An OR chain, so a skill above your level still shows once its parent is
+   learned. Everything it admits is drawn, and everything drawn is clickable --
+   the detail panel exists precisely to spell out what a dimmed node still
+   needs (upstream's foSkillReq / foSkillReqDetail)."
+  [node]
+  (boolean
+    (or (not (:locked? node))
+        (:learned node)
+        (:parent-learned? node))))
+
 (defn build-render-data-for-player-state [ps dev-type & [{:keys [hover-skill]}]]
   (when ps
     (let [ad (:ability-data ps) cid (:category-id ad)
@@ -170,7 +190,13 @@
                    (filter #(get % :enabled) (skill/get-skills-for-category cid)))
           pos (when skills (calculate-skill-positions skills))]
       {:ability-info (build-ability-info-render-data ps) :category-color (:color cat)
-       :skill-nodes (when pos (mapv (fn [p] (let [n (build-skill-node-render-data p ps (or dev-type :normal))] (assoc n :locked? (> (:skill-level n) (:level (:ability-data ps)))))) pos))
+       :skill-nodes (when pos
+                      (->> pos
+                           (mapv (fn [p]
+                                   (let [n (build-skill-node-render-data p ps (or dev-type :normal))]
+                                     (assoc n :locked?
+                                            (> (:skill-level n) (:level (:ability-data ps)))))))
+                           (filterv potentially-learnable?)))
        :connections (when pos (build-skill-connections pos ps (or dev-type :normal)))
        :hover-skill hover-skill})))
 

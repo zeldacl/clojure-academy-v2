@@ -723,8 +723,12 @@
         uuid-str (when player (uuid/player-uuid player))
         dev-type (current-developer-type container)
         get-pstate #(when uuid-str (store/get-player-state session-id uuid-str))
-        clickable-of (fn [rd] (filterv #(and (or (:can-learn %) (:learned %)) (not (:locked? %)))
-                                       (:skill-nodes rd)))
+        ;; Every node the tree draws is clickable, as upstream: it attaches a
+        ;; LeftClickEvent to each widget it creates, and the detail panel is
+        ;; where a dimmed node explains what it still needs. Filtering to
+        ;; can-learn/learned here left those unreachable — and the :conditions
+        ;; we already compute for them unused.
+        clickable-of (fn [rd] (vec (:skill-nodes rd)))
         pstate0 (get-pstate)
         rd0 (skill-tree/build-render-data-for-player-state pstate0 dev-type)
         ;; Node layout is stable (authored positions, learning doesn't move nodes),
