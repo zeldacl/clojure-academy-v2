@@ -180,9 +180,40 @@
 ;; :box
 ;; ============================================================================
 
+(defn- fill-quad!
+  "One ARGB rectangle, drawn immediately in tape order.
+
+   Not GuiGraphics.fill: that queues into RenderType.gui(), and
+   BufferSource.endBatch() replays render types by iterating
+   fixedBuffers.keySet() -- map order, not submission order -- while text
+   flushes on its own with every drawString. A batched fill therefore gets
+   re-sorted against text and a :box could never cover text drawn before it
+   (the skill detail cover dimmed the art beneath it but left both layers'
+   labels bright and overlapping).
+
+   Flushing after each fill would fix the order but throw away the batching
+   that made fills cheap, and pay a full endBatch per box on top. Drawing the
+   quad ourselves costs one draw call, the same as every other immediate kind
+   in this renderer -- gradient, line, nine-slice, glow all work this way."
+  [^GuiGraphics gg x0 y0 x1 y1 argb-int]
+  (let [a (float (/ (double (bit-and (bit-shift-right (int argb-int) 24) 0xFF)) 255.0))
+        r (float (/ (double (bit-and (bit-shift-right (int argb-int) 16) 0xFF)) 255.0))
+        g (float (/ (double (bit-and (bit-shift-right (int argb-int) 8) 0xFF)) 255.0))
+        b (float (/ (double (bit-and (int argb-int) 0xFF)) 255.0))
+        ^PoseStack ps (.pose gg)
+        ^Matrix4f pm (.pose (.last ps))]
+    (RenderSystem/enableBlend)
+    (RenderSystem/defaultBlendFunc)
+    (RenderSystem/setShader (StaticShaderSupplier. (GameRenderer/getPositionColorShader)))
+    (ImmediateDraw/begin ImmediateDraw$Mode/QUADS ImmediateDraw$Format/POSITION_COLOR)
+    (-> (ImmediateDraw/vertex pm (float x0) (float y1) 0.0) (.color r g b a) (.endVertex))
+    (-> (ImmediateDraw/vertex pm (float x1) (float y1) 0.0) (.color r g b a) (.endVertex))
+    (-> (ImmediateDraw/vertex pm (float x1) (float y0) 0.0) (.color r g b a) (.endVertex))
+    (-> (ImmediateDraw/vertex pm (float x0) (float y0) 0.0) (.color r g b a) (.endVertex))
+    (ImmediateDraw/draw)))
+
 (defn render-box! [^GuiGraphics gg ^INode node]
-  (let [drew? (volatile! false)
-        x  (node-abs-x node)  y  (node-abs-y node)
+  (let [x  (node-abs-x node)  y  (node-abs-y node)
         w  (scaled-w node)    h  (scaled-h node)
         ix (unchecked-int x)  iy (unchecked-int y)
         iw (unchecked-int (+ x w))  ih (unchecked-int (+ y h))]
@@ -192,17 +223,15 @@
     ;; white). double->long->int wraps correctly and preserves the ARGB bits.
     (let [fill-argb (unchecked-int (long (.getDSlot node SLOT-BOX-FILL)))]
       (when (not= fill-argb 0)
-        (vreset! drew? true)
-        (.fill gg ix iy iw ih fill-argb)))
+        (fill-quad! gg ix iy iw ih fill-argb)))
     ;; Outline (same double->long->int wrap as fill above)
     (let [outline-argb (unchecked-int (long (.getDSlot node SLOT-BOX-OUTLINE)))
           outline-w    (.getDSlot node SLOT-BOX-OUTLINE-W)]
       (when (and (not= outline-argb 0) (> outline-w 0.0))
-        (vreset! drew? true)
-        (.fill gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
-        (.fill gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
-        (.fill gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
-        (.fill gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
+        (fill-quad! gg ix iy iw (unchecked-int (+ iy outline-w)) outline-argb)
+        (fill-quad! gg ix (unchecked-int (- ih outline-w)) iw ih outline-argb)
+        (fill-quad! gg ix iy (unchecked-int (+ ix outline-w)) ih outline-argb)
+        (fill-quad! gg (unchecked-int (- iw outline-w)) iy iw ih outline-argb)))
     ;; Tint overlay — both :tint and :hover-tint prop-writers store
     ;; raw ARGB doubles; extract the alpha byte so (* 255.0 raw) does
     ;; not overflow (0x33FFFFFF = 855M → alpha*255 overflows to garbage).
@@ -216,19 +245,7 @@
                   (unchecked-int (bit-and (bit-shift-right (long raw) 24) 0xFF))
                   (unchecked-int (* 255.0 raw)))]
       (when (pos? alpha)
-        (vreset! drew? true)
-        (.fill gg ix iy iw ih (argb alpha 255 255 255))))
-    ;; Land the fills in tape order. GuiGraphics.fill queues into
-    ;; RenderType.gui(), and BufferSource.endBatch() replays render types in
-    ;; fixedBuffers map order -- not submission order -- so a batched fill is
-    ;; re-sorted against text, which flushes on every drawString. A box could
-    ;; therefore never cover text drawn before it: the skill detail overlay's
-    ;; black cover dimmed the images beneath it but left every label bright,
-    ;; mixing both layers' text together. Flushing here puts the box back
-    ;; where the tape put it. (flush re-enables depth test; end-vanilla-draw!
-    ;; below turns it off again.)
-    (when @drew?
-      (.flush gg))
+        (fill-quad! gg ix iy iw ih (argb alpha 255 255 255))))
     (end-vanilla-draw!)))
 
 (defn bake-box! [^INode _node] nil)

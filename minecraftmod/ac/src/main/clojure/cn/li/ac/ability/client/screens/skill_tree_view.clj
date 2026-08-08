@@ -266,7 +266,21 @@
                   (rt/build-child! rt {:kind :image
                                        :props {:x (+ left (* step (double i))) :y (+ cy 50.0) :w isz :h isz
                                                :src (icon-src (:icon-path info))
-                                               :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))))
+                                               :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))
+              ;; Hovered condition's hint, upstream:
+              ;;   Font.draw(s"(${cond.getHintText})", len/2 + 3, 27,
+              ;;             accepted ? foSkillReqDetail : foSkillReqDetail2)
+              (let [hi (:hover-cond node)]
+                (when-let [c (and (integer? hi) (< -1 hi n) (nth conds hi nil))]
+                  (when-let [info (condition-icons/condition-display-info c)]
+                    (rt/build-child! rt
+                      {:kind :text
+                       :props {:x (+ left (* step (double n)) 3.0) :y (+ cy 52.0)
+                               :w 150.0 :h 12.0
+                               :text (str "(" (:hint-text info) ")")
+                               :font-size 9.0 :align "left"
+                               :color (if (:accepted c) 0xFFEEFFFF 0xFFee5858)}}
+                      layer))))))
           ;; Viewer (SkillTreeAppUI, developer == null): conditions still show,
           ;; but there is no device to learn with — no prompt, no LEARN button.
           (when (and message (not (:viewer? node)))

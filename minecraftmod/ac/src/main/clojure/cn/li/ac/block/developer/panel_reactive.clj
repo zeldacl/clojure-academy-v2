@@ -579,6 +579,7 @@
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-updated (atom nil)
+        hover-cond-a (atom nil)
         node-data {:skill-id skill-id :skill-name skill-name :skill-level skill-level
                    :skill-icon skill-icon :skill-description skill-description
                    :viewer? (not (container-has-developer? container))
@@ -588,6 +589,26 @@
                                  skill-spec ad0 (int (or (:level ad0) 1)) dev-type)}
         popup-rt (skill-tree-reactive/create-detail-overlay-runtime node-data)]
     (add-embedded-runtime! rt {:child-rt popup-rt :x 0.0 :y 0.0 :w classic-w :h classic-h :visible?-fn nil :overlay? true})
+    ;; Condition-icon hover. The popup is an embedded runtime, so its nodes are
+    ;; not on the host tape hit-test that drives FLAG-HOVERED — resolve the row
+    ;; by hand from the host pointer, the same way popup-click-region! resolves
+    ;; the button. Chain the tree area's own handler rather than replace it:
+    ;; :on-pointer-move is a single slot.
+    (let [prev-move (rt/user-signal rt :on-pointer-move)
+          conds (:conditions node-data)
+          n (count conds)
+          step 16.0 isz 14.0
+          left (- cx (/ (* step (double n)) 2.0))
+          top (+ cy 50.0)]
+      (rt/put-user-signal! rt :on-pointer-move
+        (fn [mx my]
+          (when prev-move (prev-move mx my))
+          (reset! hover-cond-a
+                  (when (and (pos? n)
+                             (>= (double my) top) (< (double my) (+ top isz))
+                             (>= (double mx) left) (< (double mx) (+ left (* step (double n)))))
+                    (let [i (long (quot (- (double mx) left) step))]
+                      (when (< (- (double mx) left (* step (double i))) isz) i)))))))
     (popup-click-region! rt btn-x btn-y 32.0 16.0
       (fn [] (let [s @state-a]
                (and (container-has-developer? container)
@@ -636,6 +657,7 @@
                   updated (assoc node-data :learned learned?
                                  :exp (double (if learned? (or (adata/get-skill-exp ad skill-id) 0.0) 0.0))
                                  :message message
+                                 :hover-cond @hover-cond-a
                                  :dev-state s)]
               ;; Rebuild the popup only when its content changes (idle = skip).
               (when (not= updated @last-updated)
