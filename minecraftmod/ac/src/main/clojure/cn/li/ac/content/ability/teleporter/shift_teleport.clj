@@ -507,7 +507,11 @@
 
                       :y (double (:y e))
 
-                      :z (double (:z e))})
+                      :z (double (:z e))
+
+                      :width (double (or (:width e) 0.6))
+
+                      :height (double (or (:height e) 1.8))})
 
                    (:entities trace))})
 

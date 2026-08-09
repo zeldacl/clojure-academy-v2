@@ -28,6 +28,7 @@
            [net.minecraft.world.inventory AbstractContainerMenu]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.level Level]
+           [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
            [net.minecraft.world.level.block.state.properties Property]
            [net.minecraft.world.level.block.entity BlockEntity]
@@ -259,16 +260,20 @@
                                                                                    :pos {:x px :y py :z pz}
                                                                                    :face face}]
                                                                   (try
-                                                                    (if-let [{:keys [placeable? item-id]} (block-item-info this)]
-                                                                      (if-not (and placeable? (seq item-id))
-                                                                        base-result
+                                                                    ;; Resolve the block from the held item itself (upstream
+                                                                    ;; Block.getBlockFromItem) — the item-id path only knew
+                                                                    ;; mod-registered blocks, so vanilla block items (dirt,
+                                                                    ;; stone, ...) never placed and were consumed silently.
+                                                                    (let [^ItemStack stack (.getMainHandItem this)
+                                                                          ^Block block (when-not (.isEmpty stack)
+                                                                                         (BlockRegistry/blockByItem (.getItem stack)))]
+                                                                      (if (and block (not (BlockRegistry/isAirBlock block (BlockRegistry/getAirBlock))))
                                                                         (let [level (player-ops/player-level adapter this)
-                                                                              ^BlockPos pos (BlockPos. px py pz)
-                                                                              placed? (boolean (world-block-ops/world-place-block-by-id adapter level item-id pos 3))]
+                                                                              placed? (boolean (.setBlock level (BlockPos. px py pz) (.defaultBlockState block) 3))]
                                                                           (assoc base-result
                                                                                  :placed? placed?
-                                                                                 :fallback-drop? (not placed?))))
-                                                                      base-result)
+                                                                                 :fallback-drop? (not placed?)))
+                                                                        base-result))
                                                                     (catch Throwable _
                                                                       base-result))))
                          :player-drop-main-hand-item-at! (fn [this amount x y z]

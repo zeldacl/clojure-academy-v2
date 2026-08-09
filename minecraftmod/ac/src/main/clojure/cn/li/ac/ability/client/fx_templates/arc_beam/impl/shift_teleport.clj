@@ -1,15 +1,24 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.shift-teleport
-  (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+  (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 ;; Upstream STContextC marker colors: CRL_BLOCK_MARKER (139,139,139,180) for
 ;; the destination block, CRL_ENTITY_MARKER (235,81,81,180) per target.
 (def ^:private color-block-marker {:r 139 :g 139 :b 139 :a 180})
 (def ^:private color-entity-marker {:r 235 :g 81 :b 81 :a 180})
+
+;; Upstream TPParticleFactory template: the white tp_particle texture, unlit.
+;; (The vanilla :portal alias renders the purple portal swirl instead.)
+(def ^:private tp-particle-texture
+  (modid/asset-path "textures/effects" "tp_particle.png"))
+
+(defn- rand-range
+  [a b]
+  (+ a (rand (- b a))))
 
 (defn- cube-edges
   "12 wireframe edges of an axis-aligned cube centered at c with half-extents."
@@ -30,12 +39,44 @@
                           color)))
           edges)))
 
+(defn- trail-particles
+  "Upstream c_end: walk the player->destination ray, one TPParticleFactory
+  particle per step. First step 1.0, then rand(0.6, 1.0); the destination is
+  the block CENTER (dest[1] + 0.5); each particle drifts with the upstream
+  random velocity and fades after (20, 20) ticks."
+  [from-pos to-pos]
+  (let [dx (- (double (:x to-pos)) (double (:x from-pos)))
+        dy (- (double (:y to-pos)) (double (:y from-pos)))
+        dz (- (double (:z to-pos)) (double (:z from-pos)))
+        dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+        dv (if (pos? dist)
+             {:x (/ dx dist) :y (/ dy dist) :z (/ dz dist)}
+             {:x 0.0 :y 0.0 :z 0.0})]
+    (loop [pos from-pos
+           move 1.0
+           x 1.0
+           acc []]
+      (if (> x dist)
+        acc
+        (let [p {:x (+ (double (:x pos)) (* (double (:x dv)) move))
+                 :y (+ (double (:y pos)) (* (double (:y dv)) move))
+                 :z (+ (double (:z pos)) (* (double (:z dv)) move))}]
+          (recur p (double (rand-range 0.6 1.0)) (+ x move)
+                 (conj acc (assoc p
+                                  :vx (rand-range -0.05 0.05)
+                                  :vy (rand-range -0.02 0.05)
+                                  :vz (rand-range -0.05 0.05)
+                                  :size (rand-range 0.1 0.2)
+                                  :texture tp-particle-texture
+                                  :start-alpha (long (rand-range 153 204))
+                                  :age 0 :life 20 :fade-in 5 :fade-out 20))))))))
+
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key* :queue-owner (client-particles/current-effect-owner)
-                   :ctx-id ctx-id :channel channel :source-player-id source-player-id :world-id world-id}
+        base-meta {:owner-key owner-key* :ctx-id ctx-id :channel channel
+                   :source-player-id source-player-id :world-id world-id}
         target (fn [p]
                  {:x (double (or (:x p) 0.0))
                   :y (double (or (:y p) 0.0))
@@ -62,29 +103,20 @@
                                                (:hand-valid? payload) true))
                        :entities (vec (:entities payload)))))
       :perform
-      (do
-        ;; Burst particles at destination (upstream c_end trail endpoint).
-        (when-let [x (:x payload)]
-          (client-particles/queue-particle-effect! (:queue-owner base-meta)
-            {:type :particle :particle-type :portal :x (double x) :y (double (:y payload)) :z (double (:z payload))
-             :count 10 :speed 0.1 :offset-x 0.6 :offset-y 0.8 :offset-z 0.6}))
-        ;; Trail particles from source to destination (upstream c_end
-        ;; TPParticleFactory walk, step 0.6-1.0).
-        (let [fx-target {:x (double (or (:x payload) 0.0)) :y (double (or (:y payload) 0.0)) :z (double (or (:z payload) 0.0))}
-              from-pos {:x (double (or (:from-x payload) (:x payload) 0.0))
-                        :y (double (or (:from-y payload) (:y payload) 0.0))
-                        :z (double (or (:from-z payload) (:z payload) 0.0))}
-              dx (- (:x fx-target) (:x from-pos)) dy (- (:y fx-target) (:y from-pos)) dz (- (:z fx-target) (:z from-pos))
-              dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
-              steps (max 1 (int (/ dist 0.8)))]
-          (dotimes [idx steps]
-            (let [t (/ (double (inc idx)) (double steps))]
-              (client-particles/queue-particle-effect! (:queue-owner base-meta)
-                {:type :particle :particle-type :portal
-                 :x (+ (:x from-pos) (* dx t)) :y (+ (:y from-pos) (* dy t)) :z (+ (:z from-pos) (* dz t))
-                 :count 2 :speed 0.05 :offset-x 0.2 :offset-y 0.2 :offset-z 0.2}))))
-        ;; Upstream c_end kills the block marker and every target marker.
-        (update state* :fx-state dissoc owner-key*))
+      ;; Upstream c_end: kill the block marker and every target marker, then
+      ;; leave the white TPParticleFactory trail — the state lingers (active?
+      ;; false) until the particles have faded out.
+      (update state* :fx-state update owner-key*
+              (fn [st]
+                (-> (merge base-meta (or st {:active? true :ttl 0}))
+                    (assoc :active? false)
+                    (assoc :particles (trail-particles
+                                       {:x (double (or (:from-x payload) 0.0))
+                                        :y (double (or (:from-y payload) 0.0))
+                                        :z (double (or (:from-z payload) 0.0))}
+                                       {:x (double (or (:x payload) 0.0))
+                                        :y (+ 0.5 (double (or (:y payload) 0.0)))
+                                        :z (double (or (:z payload) 0.0))})))))
       :end
       (update state* :fx-state dissoc owner-key*)
       state*)))
@@ -95,41 +127,52 @@
             (fn [states]
               (reduce-kv
                 (fn [acc owner-key st]
-                  (let [next-st (update st :ttl (fnil inc 0))]
-                    ;; Light particles at the destination as an extra cue;
-                    ;; the marker cubes themselves come from build-plan.
-                    (when (and (:active? next-st) (:target next-st) (:hand-valid? next-st)
-                               (zero? (mod (long (:ttl next-st)) 6)))
-                      (client-particles/queue-particle-effect! (:queue-owner next-st)
-                        {:type :particle
-                         :particle-type (if (:target-hit? next-st) :electric_spark :portal)
-                         :x (double (get-in next-st [:target :x]))
-                         :y (+ 0.4 (double (get-in next-st [:target :y])))
-                         :z (double (get-in next-st [:target :z]))
-                         :count (if (pos? (long (:target-count next-st))) 2 1)
-                         :speed 0.02 :offset-x 0.25 :offset-y 0.25 :offset-z 0.25}))
-                    (assoc acc owner-key next-st)))
+                  (if (:active? st)
+                    ;; Markers are static during hold; nothing advances.
+                    (assoc acc owner-key st)
+                    (let [particles (bp/tick-particles! (:particles st))]
+                      (if (seq particles)
+                        (assoc acc owner-key (assoc st :particles particles))
+                        acc))))
                 {} states)))))
 
-(defn- build-plan [_camera-pos _hand-center-pos _tick]
-  (let [states (vals (:fx-state (level-effects/effect-state-snapshot :shift-teleport)))
+(defn- build-plan [camera-pos _hand-center-pos _tick]
+  (let [cam (rv3/map->v3 camera-pos)
+        states (vals (:fx-state (level-effects/effect-state-snapshot :shift-teleport)))
         marker-ops
         (vec
          (mapcat (fn [st]
                    (when (and (:active? st) (:hand-valid? st))
                      (concat
-                       ;; Destination block marker: 1.2x1.2 (upstream
-                       ;; blockMarker.width/height = 1.2f).
+                       ;; Destination block marker: 1.2x1.2x1.2 cube whose
+                       ;; BOTTOM sits at the destination block (upstream
+                       ;; blockMarker.setPosition(dest[0]+.5, dest[1], ...)
+                       ;; with height/width 1.2 — the entity position is the
+                       ;; box's feet, so it spans dest[1]..dest[1]+1.2;
+                       ;; drawing it centered at dest[1] sank the lower half
+                       ;; into the block below).
                        (when-let [t (:target st)]
-                         (cube-edges t 0.6 0.6 0.6 color-block-marker))
+                         (cube-edges (assoc t :y (+ 0.6 (double (:y t))))
+                                     0.6 0.6 0.6 color-block-marker))
                        ;; One red marker per entity in the line (upstream
-                       ;; targetMarkers, refreshed every 3 ticks).
+                       ;; EntityMarker(e): a width x height x width box
+                       ;; following the target's feet position).
                        (mapcat (fn [e]
-                                 (cube-edges e 0.25 0.25 0.25 color-entity-marker))
+                                 (let [w (double (or (:width e) 0.6))
+                                       h (double (or (:height e) 1.8))]
+                                   (cube-edges (assoc e :y (+ (/ h 2.0) (double (:y e))))
+                                               (/ w 2.0) (/ h 2.0) (/ w 2.0)
+                                               color-entity-marker)))
                                (:entities st)))))
-                 states))]
-    (when (seq marker-ops)
-      {:ops marker-ops})))
+                 states))
+        ;; White TPParticleFactory trail left by a performed release — lingers
+        ;; until the particles fade out.
+        particle-ops
+        (vec (mapcat (fn [st]
+                       (bp/particle-ops cam (:particles st)))
+                     states))]
+    (when (seq (concat marker-ops particle-ops))
+      {:ops (vec (concat marker-ops particle-ops))})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {:fx-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:shift-teleport :level]
