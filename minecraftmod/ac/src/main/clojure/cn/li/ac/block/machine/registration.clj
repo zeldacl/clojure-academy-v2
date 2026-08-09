@@ -77,13 +77,25 @@
       (when before (before))
       (when tile-kind (register-tile-kind! tile-kind))
       (let [ids (or tile-ids (mapv #(get % :id) tiles))
+            capability-tile-ids (set ids)
             cap-keys (when (seq capabilities)
                        (declare-and-register-capabilities! capabilities ids))]
         (doseq [tile tiles]
           (register-tile-spec!
             (assoc tile
                    :container (get containers (:id tile))
-                   :capability-keys (or (:capability-keys tile) cap-keys)))))
+                   ;; :tile-ids selects which of a multi-tile machine's tiles
+                   ;; actually carry the capability — the wind generator holds
+                   ;; its energy in the base, not the rotor head or the pillar.
+                   ;; declare-and-register-capabilities! already targets those
+                   ;; ids, but register-tile! then overwrites the whole spec,
+                   ;; so the keys have to be scoped here too or every tile of
+                   ;; the machine ends up advertising the capability and the
+                   ;; wireless network will happily resolve a vblock against a
+                   ;; part that stores nothing.
+                   :capability-keys (or (:capability-keys tile)
+                                        (when (contains? capability-tile-ids (:id tile))
+                                          cap-keys))))))
       (when blocks (register-blocks! blocks))
       (when after (after))
       (register-machine-hooks! {:network-handler network-handler
