@@ -105,7 +105,7 @@
 			(let [ticks (double (or (:ticks state) 0))
 						phase (* 0.22 ticks)
 						y (+ 0.02 (* 0.01 (Math/sin phase)))]
-				{:translate [0.0 y 0.0]}))))
+				{:tx 0.0 :ty y :tz 0.0 :rot-x 0.0 :rot-y 0.0 :rot-z 0.0}))))
 
 (defn- on-fx-hold [ctx-id channel payload]
 	(when-let [mode (:mode payload)]

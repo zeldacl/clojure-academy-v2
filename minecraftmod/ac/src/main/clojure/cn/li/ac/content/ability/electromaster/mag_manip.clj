@@ -174,7 +174,7 @@
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (when-let [entity-pos (held-entity-position ss)]
           (let [player-pos (skill-effects/player-path
-                             player-id :position {:x 0.0 :y 0.0 :z 0.0})]
+                             player-id [:position] {:x 0.0 :y 0.0 :z 0.0})]
             (< (geom/vdist-sq player-pos entity-pos)
                (max-hold-distance-sq))))))))
 
@@ -334,7 +334,7 @@
   (let [range (cfg-double :targeting.throw-range)
         eye (geom/eye-pos player-id)
         body (skill-effects/player-path
-               player-id :position {:x 0.0 :y 0.0 :z 0.0})
+               player-id [:position] {:x 0.0 :y 0.0 :z 0.0})
         hit (when (raycast/available?)
               (raycast/raycast-combined
                 world-id
@@ -370,7 +370,7 @@
                                (assoc ss :fired false :mode :idle))
         (let [entity-pos (held-entity-position ss)
               player-pos (skill-effects/player-path
-                           player-id :position {:x 0.0 :y 0.0 :z 0.0})
+                           player-id [:position] {:x 0.0 :y 0.0 :z 0.0})
               too-far? (and entity-pos
                             (>= (geom/vdist-sq player-pos entity-pos)
                                 (max-hold-distance-sq)))]

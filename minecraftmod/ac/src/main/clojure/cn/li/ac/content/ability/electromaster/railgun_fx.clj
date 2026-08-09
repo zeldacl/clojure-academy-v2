@@ -2,10 +2,12 @@
   (:require [cn.li.ac.ability.client.effects.beam-ops :as beam-ops]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
-(def ^:private charge-glow-effect-id (modid/namespaced-path "railgun_charge"))
+;; Plain registry id, not a namespaced resource path: the platform entity
+;; registries (ModEntities) are keyed by the bare registry name, and the
+;; spawner resolves the EntityType with that exact string.
+(def ^:private charge-glow-effect-id "railgun_charge")
 
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
