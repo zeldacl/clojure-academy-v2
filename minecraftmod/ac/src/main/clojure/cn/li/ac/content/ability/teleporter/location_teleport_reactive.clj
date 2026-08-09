@@ -118,8 +118,6 @@
       ;; The server wraps the query result in {:action ... :snapshot ...} —
       ;; read the snapshot, not the top level.
       (let [snapshot (or (:snapshot resp) resp)]
-        (log/info "Loctele query resp" {:success? (:success? snapshot)
-                                        :count (count (:locations snapshot))})
         (when (and snapshot (:success? snapshot))
           (update-screen! owner-key
             (fn [_] {:locations (vec (or (:locations snapshot) []))
@@ -131,10 +129,6 @@
 (defn- send-action! [^UiRt rt player-uuid msg-id payload owner-key]
   (net-client/send-to-server (net-owner player-uuid) msg-id payload
     (fn [resp]
-      (log/info "Loctele action resp" {:msg-id msg-id
-                                       :top-level (select-keys resp [:success? :error])
-                                       :action (select-keys (:action resp) [:success? :error :op])
-                                       :snapshot-success? (:success? (:snapshot resp))})
       (send-query! rt player-uuid owner-key))))
 
 ;; ============================================================================
@@ -246,8 +240,6 @@
               (fn [_ _ _]
                 (let [name (str/trim (str (.getOSlot input-n 0)))
                       name-len (int (or (:max-location-name-length limits) 16))]
-                  (log/info "Loctele add click" {:name name :len (count name)
-                                                 :max-len name-len})
                   (when (and (not (str/blank? name)) (<= (count name) name-len))
                     (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-ADD {:name name} owner-key)
                     (ui/set-node-prop! rt input-n :text ""))))))
@@ -267,8 +259,6 @@
         (let [hit-map @(or (rt/user-signal rt :hit-map) (atom {}))
               entry (hovered-location rt hit-map)
               ^INode info (rt/node-by-id rt :info)]
-          (log/info "Loctele hover tick" {:hovered-idx (rt/hovered-idx rt)
-                                          :entry (boolean entry)})
           (if entry
             (let [;; The add row shows the CURRENT position — the local
                   ;; player's live feet coords (upstream player.posX/Y/Z), no
