@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojure.string :as str]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.tornado :as tornado]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.vecmanip.storm-wing-fx :as swfx]
@@ -105,8 +106,8 @@
 
 
 (deftest improved-noise-matches-reference-implementation-test
-  (let [fade (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/fade)
-        noise (var-get #'cn.li.ac.content.ability.vecmanip.storm-wing-fx/perlin-noise)]
+  (let [fade tornado/fade
+        noise tornado/perlin-noise]
     ;; 6t^5 - 15t^4 + 10t^3: an S-curve pinned to [0,1] over [0,1]. The old
     ;; port folded the +10 into the product, giving fade(1) = -90 and noise
     ;; values in the hundreds.

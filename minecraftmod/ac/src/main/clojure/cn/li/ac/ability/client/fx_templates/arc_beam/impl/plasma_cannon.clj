@@ -3,6 +3,7 @@
             [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.tornado :as tornado]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -20,6 +21,18 @@
 (def ^:private charged-sound (modid/namespaced-path "vecmanip.plasma_cannon_t"))
 (defn- loop-sound-key [ctx-id] (str "plasma-cannon/" ctx-id))
 
+;; ---------------------------------------------------------------------------
+;; Charge tornado (original PlasmaCannon's private Tornado LocalEntity)
+;; ---------------------------------------------------------------------------
+
+;; Original: new TornadoEffect(12, 8, 1, 0.3) — one column, far bigger than
+;; Storm Wing's four, standing on the ground under the charge position.
+(def ^:private tornado-params {:ht 12.0 :sz 8.0 :dscale 0.3})
+
+;; Tornado.alpha: fade in over the first 20 ticks, and once dead fade back out
+;; over 20 more (setDead at 30). onUpdate then halves it: alpha * 0.5.
+(def ^:private tornado-fade-ticks 20.0)
+(def ^:private tornado-dead-ticks 30)
 
 
 
@@ -27,12 +40,50 @@
 
 
 
+
+
+(defn- tornado-base-fallback
+	"Used only when the start payload carried no ground point: the original's
+	miss case puts the column at the bottom of the 20-block downward ray."
+	[charge-pos]
+	(when (map? charge-pos)
+		{:x (double (:x charge-pos))
+		 :y (- (double (:y charge-pos)) 20.0)
+		 :z (double (:z charge-pos))}))
+
+(defn- tornado-alpha
+	"Tornado.alpha times the 0.5 applied in onUpdate. Fades in over the first 20
+	ticks; once dead (original: `ctx.state == STATE_GO`) it fades back out over
+	20 more."
+	^double [^long ticks ^long dead-ticks dead?]
+	(* 0.5
+		 (if dead?
+			 (max 0.0 (- 1.0 (/ (double dead-ticks) tornado-fade-ticks)))
+			 (min 1.0 (/ (double ticks) tornado-fade-ticks)))))
+
+(defn- tick-tornado
+	"Advance one owner's charge tornado: age it, sample its rings for this tick,
+	and drop it 30 ticks after it died (original setDead)."
+	[st ^long ticks]
+	(if-not (:tornado st)
+		st
+		(let [dead? (boolean (or (:tornado-dead? st) (= :go (:state st))))
+					dead-ticks (if dead? (inc (long (or (:tornado-dead-ticks st) 0))) 0)]
+			(if (>= dead-ticks tornado-dead-ticks)
+				(dissoc st :tornado :tornado-rings :tornado-alpha :tornado-base)
+				(assoc st
+							 :tornado-dead? dead?
+							 :tornado-dead-ticks dead-ticks
+							 :tornado-alpha (tornado-alpha ticks dead-ticks dead?)
+							 :tornado-rings (tornado/ring-states (tornado/effect-time ticks)
+																									 tornado-params
+																									 (:tornado st)))))))
 
 (defn- enqueue-state!
 	[store ctx-id channel owner-key payload]
 	(let [store* (or store {:effect-state {}})
 				owner-key* (or owner-key [:ctx ctx-id])
-				{:keys [mode charge-ticks fully-charged? charge-pos flight-ticks
+				{:keys [mode charge-ticks fully-charged? charge-pos tornado-base flight-ticks
 								state destination pos performed? source-player-id world-id]} (or payload {})
 				base-meta {:owner-key owner-key*
 									 :queue-owner (client-particles/current-effect-owner)
@@ -56,7 +107,12 @@
 									(merge base-meta
 												 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
 												:flight-ticks 0 :state :charging :destination nil
-												:performed? false})))
+												:performed? false
+												;; Original c_begin also spawns the Tornado entity, seated on
+												;; the ground under the charge position and fading in from 0.
+												:tornado (tornado/new-column tornado-params)
+												:tornado-base (or tornado-base (tornado-base-fallback charge-pos))
+												:tornado-dead-ticks 0})))
 			:update
 			(let [updated (assoc-in store* [:effect-state owner-key*]
 												(assoc (merge base-meta (or (get-in store* [:effect-state owner-key*]) {}))
@@ -128,7 +184,7 @@
 										:x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
 										:count 4 :speed 0.2
 										:offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-						 (assoc st :ticks ticks))))))))
+						 (tick-tornado (assoc st :ticks ticks) ticks))))))))
 
 (defn- plasma-balls
 	[{:keys [x y z]} ticks state]
@@ -158,6 +214,19 @@
 			:y (+ y (* 0.22 (Math/sin (+ (* 0.59 t) 0.4))))
 			:z (+ z (* 0.3 (Math/sin (+ (* 0.53 t) 1.3))))
 			:size 0.4}]))
+
+(defn- tornado-ops
+	"The charge tornado's ring quads. TornadoEntityRenderer only translates to
+	the entity position before TornadoRenderer.doRender, so the column stands
+	upright in world space — no rotation to fold in, unlike Storm Wing's."
+	[st]
+	(let [base (:tornado-base st)
+				rings (:tornado-rings st)]
+		(when (and (map? base) (seq rings))
+			(tornado/ring-quad-ops (double (:x base)) (double (:y base)) (double (:z base))
+														 tornado/identity-linear
+														 (double (or (:tornado-alpha st) 0.0))
+														 rings))))
 
 (defn- plasma-state-ops
 	[st]
@@ -200,7 +269,10 @@
 				;; Render at the interpolated position without writing it back —
 				;; the state stays authoritative (server syncs only).
 				ops (mapcat (fn [st]
-												(plasma-state-ops (assoc st :charge-pos (rendered-charge-pos st))))
+												;; The tornado is seated on the ground at :start and never moves,
+												;; so the flight interpolation applies to the plasma body only.
+												(concat (tornado-ops st)
+																(plasma-state-ops (assoc st :charge-pos (rendered-charge-pos st)))))
 										state)]
 		(when (seq ops)
 			{:ops (vec ops)})))
