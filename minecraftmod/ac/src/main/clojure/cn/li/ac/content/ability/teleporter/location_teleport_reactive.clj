@@ -203,7 +203,10 @@
             (when can?
               (rt/register-event! rt (.getIdx tp-n) :left-click
                 (fn [_ _ _]
-                  (client-sounds/queue-current-sound-effect!
+                  ;; UI events carry no session binding — pass the screen's
+                  ;; session explicitly (owner-key's first element).
+                  (client-sounds/queue-sound-effect!
+                    (first owner-key)
                     {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
                   (send-action! rt player-uuid catalog/MSG-REQ-SAVED-POS-PERFORM {:name (:name loc)} owner-key)
                   (bridge/close-screen!))))
