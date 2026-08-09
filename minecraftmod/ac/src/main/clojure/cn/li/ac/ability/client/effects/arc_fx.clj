@@ -318,6 +318,73 @@
       (segment->quads (mapv #(update % :alpha * scale) segments)))))
 
 ;; ---------------------------------------------------------------------------
+;; Public API: EntitySurroundArc BOLD support (thunder-clap charge surround)
+;; ---------------------------------------------------------------------------
+
+(def ^:private surround-bold-width 0.35)
+(def ^:private surround-bold-max-offset 1.2)
+(def ^:private surround-bold-branch-factor 0.45)
+(def ^:private surround-bold-passes 3)
+(def ^:private surround-bold-width-shrink 0.7)
+(def ^:private surround-bold-template-count 10)
+
+(defn surround-arc-templates
+  "Generate BOLD surround-arc templates — the static ArcType.BOLD ArcFactory
+  config in upstream EntitySurroundArc: 10 templates, length 3.5–4.5, width
+  0.35, maxOffset 1.2, passes 3, branchFactor 0.45, widthShrink 0.7. Each
+  entry is {:length double :segments [segment-list ...]} (length is needed by
+  SubArcHandler.drawAll to center the template on its spawn point)."
+  []
+  (vec
+   (for [_ (range surround-bold-template-count)
+         :let [length (+ 3.5 (rand))]]
+     {:length length
+      :segments (generate-arc-segments
+                 length surround-bold-width surround-bold-max-offset
+                 surround-bold-passes surround-bold-branch-factor
+                 surround-bold-width-shrink)})))
+
+(defn- v-rotate-x [^cn.li.mcmod.math.V3 a rad]
+  (let [cos (Math/cos rad) sin (Math/sin rad)]
+    (vec3/v3 (.-x a)
+             (- (* (.-y a) cos) (* (.-z a) sin))
+             (+ (* (.-z a) cos) (* (.-y a) sin)))))
+
+(defn- v-rotate-z [^cn.li.mcmod.math.V3 a rad]
+  (let [cos (Math/cos rad) sin (Math/sin rad)]
+    (vec3/v3 (+ (* (.-x a) cos) (* (.-y a) sin))
+             (- (* (.-y a) cos) (* (.-x a) sin))
+             (.-z a))))
+
+(defn- rotate-xyz [p rx ry rz]
+  ;; OpenGL applies the last transformation call first: SubArcHandler.drawAll
+  ;; calls glRotate(rotZ) then (rotY) then (rotX), so vertices pass through
+  ;; Rx, then Ry, then Rz.
+  (v-rotate-z (v-rotate-yaw (v-rotate-x p rx) ry) rz))
+
+(defn surround-arc-ops
+  "Render one SubArc (matching SubArcHandler.drawAll): template drawn at
+  world `pos`, rotated rot-x/rot-y/rot-z degrees around it, scaled by
+  `scale` (EntitySurroundArc uses 0.3), centered on `pos`."
+  [template pos rot-x rot-y rot-z scale]
+  (let [length (:length template)
+        rx (* (double rot-x) (/ Math/PI 180.0))
+        ry (* (double rot-y) (/ Math/PI 180.0))
+        rz (* (double rot-z) (/ Math/PI 180.0))
+        center (v* (vec3/v3 length 0.0 0.0) 0.5)
+        to-world (fn [p] (v+ pos (rotate-xyz (v* (v- p center) (double scale)) rx ry rz)))]
+    (mapv (fn [op]
+            (-> op
+                (update :p0 to-world)
+                (update :p1 to-world)
+                (update :p2 to-world)
+                (update :p3 to-world)))
+          ;; segment->quads expects a FLAT segment list — generate-arc-segments
+          ;; returns segment-LISTS (trunk + branches), so flatten first (the
+          ;; railgun-arc-ops caller does the same).
+          (segment->quads (vec (mapcat identity (:segments template)))))))
+
+;; ---------------------------------------------------------------------------
 ;; Public API: arc ops for railgun beam
 ;; ---------------------------------------------------------------------------
 
