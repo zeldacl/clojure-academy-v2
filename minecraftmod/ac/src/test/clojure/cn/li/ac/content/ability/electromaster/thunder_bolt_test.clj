@@ -143,9 +143,11 @@
       (is (= ["p2" :thunder-bolt 0.005] (first @exp*)))
       (let [[_ _ payload] (first @fx*)]
         (is (= :entity (:hit-kind payload)))
-        ;; main arcs terminate on the trace's hit point (upstream
-        ;; end = result.hitVec), same point the AOE arcs originate from
-        (is (= {:x 10.2 :y 65.0 :z 10.2} (:end payload)))
+        ;; c_spawnEffect spawns the three main arcs with mainArc.length =
+        ;; RANGE and never calls setFromTo, so they run the full range along
+        ;; the caster's look direction and pass through the target; only the
+        ;; AOE arcs start at AttackData.point.
+        (is (= {:x 1.0 :y 66.0 :z 21.0} (:end payload)))
         (is (= {:x 10.2 :y 65.0 :z 10.2} (:aoe-origin payload)))
         (is (= 1 (count (:aoe-points payload))))))))
 

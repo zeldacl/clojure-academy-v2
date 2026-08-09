@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-bolt-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -138,3 +139,58 @@
 (deftest fx-snapshot-defaults-without-registered-state-test
   (is (= {:arcs {}}
          (tb-fx/fx-snapshot))))
+
+(defn- perform-arcs []
+  ;; the perform sound needs a client session owner, which these arc-shape
+  ;; tests do not set up
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+    (arc-beam/enqueue-for-test! :thunder-bolt-strike "ctx-arcs" :thunder-bolt/fx-perform
+    {:mode :perform
+     :start {:x 0.0 :y 65.62 :z 0.0}
+     :end {:x 0.0 :y 65.0 :z 20.0}
+     :aoe-origin {:x 0.0 :y 65.0 :z 20.0}
+     :aoe-points [{:x 3.0 :y 65.5 :z 21.0} {:x -2.0 :y 65.5 :z 19.0}]
+     :source-player-id "player-a"}))
+  (mapcat val (:arcs (level-effects/effect-state-snapshot :thunder-bolt-strike))))
+
+(deftest three-main-arcs-are-independent-bolts-test
+  ;; c_spawnEffect loops `for(i <- 0 to 2)` and spawns three separate
+  ;; EntityArcs, each drawing its own template. Building them with `repeat`
+  ;; evaluated arc-item once and reused the identical vertex path three times,
+  ;; so all three drew exactly on top of each other and read as a single bolt.
+  (let [arcs (perform-arcs)
+        main (filter #(= :strong (:pattern-key %)) arcs)]
+    (is (= 3 (count main)))
+    (is (= 3 (count (distinct (map :vertices main))))
+        "each main arc has its own zigzag path")))
+
+(deftest aoe-arcs-connect-the-impact-point-to-every-chained-target-test
+  ;; Upstream spawns one aoeArc per AOE victim, setFromTo(point -> victim eye),
+  ;; with Life(15..25). Those are the arcs that show the chain to B.
+  (let [arcs (perform-arcs)
+        aoe (filter #(= :aoe (:pattern-key %)) arcs)
+        endpoints (map (fn [a] [(.-x ^V3 (:pos (first (:vertices a))))
+                                (.-z ^V3 (:pos (peek (:vertices a))))])
+                       aoe)]
+    (is (= 2 (count aoe)) "one arc per chained target")
+    (is (every? (fn [a] (<= 15 (:ttl a) 25)) aoe))
+    (is (= #{[0.0 21.0] [0.0 19.0]} (set endpoints))
+        "each starts at the impact point and ends on its victim")))
+
+(deftest arc-patterns-match-upstream-arc-factory-test
+  ;; ArcPatterns' strongArc/aoeArc: width and maxOffset over a 20-block
+  ;; reference length. :amplitude is a fraction of length here, so maxOffset
+  ;; 1.4 -> 0.07 and 1.2 -> 0.06; passes 5 <=> ceil(log2 20) segments.
+  (let [strong (arc-patterns/get-pattern :strong)
+        aoe (arc-patterns/get-pattern :aoe)]
+    (is (= 0.3 (:width strong)) "strongArc fac.width = 0.3")
+    (is (= 0.07 (:amplitude strong)) "strongArc maxOffset 1.4 / 20")
+    (is (= 20 (:segments strong)) "strongArc passes = 5")
+    (is (= 0.13 (:width aoe)) "aoeArc fac.width = 0.13")
+    (is (= 0.06 (:amplitude aoe)) "aoeArc maxOffset 1.2 / 20")
+    (is (= 20 (:segments aoe)) "aoeArc passes = 5")
+    ;; ArcFactory branches are short offshoots; :fork-length is a fraction of
+    ;; the whole beam, so the old 0.45/0.5 drew secondary bolts half as long
+    ;; as the arc itself.
+    (is (every? #(<= (:fork-length %) 0.1) [strong aoe]))))
+
