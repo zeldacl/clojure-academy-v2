@@ -108,9 +108,13 @@
 (declare rebuild-list!)
 
 (defn- send-query! [^UiRt rt player-uuid owner-key]
-  (net-client/send-to-server (net-owner player-uuid)
-    catalog/MSG-REQ-SAVED-POS-QUERY {}
-    (fn [resp]
+  ;; A screen closed (disposed) after a teleport still has pending network
+  ;; callbacks — they must not touch the disposed runtime (its userSignals
+  ;; are cleared) or fire further requests.
+  (when-not (rt/disposed? rt)
+    (net-client/send-to-server (net-owner player-uuid)
+      catalog/MSG-REQ-SAVED-POS-QUERY {}
+      (fn [resp]
       ;; The server wraps the query result in {:action ... :snapshot ...} —
       ;; read the snapshot, not the top level.
       (let [snapshot (or (:snapshot resp) resp)]
@@ -122,7 +126,7 @@
                      :exp (double (or (:exp snapshot) 0.0))
                      :current-pos (:current-pos snapshot)
                      :limits (or (:limits snapshot) {})}))
-          (rebuild-list! rt player-uuid owner-key))))))
+          (rebuild-list! rt player-uuid owner-key)))))))
 
 (defn- send-action! [^UiRt rt player-uuid msg-id payload owner-key]
   (net-client/send-to-server (net-owner player-uuid) msg-id payload
