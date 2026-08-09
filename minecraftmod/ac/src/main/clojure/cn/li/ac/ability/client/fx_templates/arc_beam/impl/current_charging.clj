@@ -27,6 +27,7 @@
    :target nil
   :caster-pos nil
    :block-pos nil
+   :block-bounds nil
    :charged 0.0
    :visual-ticks 0
    :beam-visible? true
@@ -155,6 +156,7 @@
                           :target (:target payload*)
                           :caster-pos (:caster-pos payload*)
                           :block-pos nil
+                          :block-bounds nil
                           :charged 0.0
                           :visual-ticks 0
                           ;; EntityArc starts with show=true and template 0.
@@ -189,6 +191,8 @@
                              (assoc :caster-pos (:caster-pos payload*)))
                            (cond-> (contains? payload* :block-pos)
                              (assoc :block-pos (:block-pos payload*)))
+                           (cond-> (contains? payload* :block-bounds)
+                             (assoc :block-bounds (:block-bounds payload*)))
                            (cond-> (contains? payload* :charged)
                              (assoc :charged (double (:charged payload*)))))))))
 
@@ -566,17 +570,41 @@
      :depth (* 1.3 width)
      :yaw-rad (double (or (:player-yaw-rad view-pos) 0.0))}))
 
+(defn- structure-bounds?
+  [bounds]
+  (and (sequential? bounds) (= 6 (count bounds)) (every? number? bounds)))
+
 (defn- target-body
-  [[bx by bz]]
-  ;; Original updatePos(blockX + .5, blockY, blockZ + .5) combined with a
-  ;; 1x1x1 CubePointFactory whose Y axis is not centered.
-  {:x (+ (double bx) 0.5)
-   :y (double by)
-   :z (+ (double bz) 0.5)
-   :width 1.0
-   :height 1.0
-   :depth 1.0
-   :yaw-rad 0.0})
+  "The cube the sparks cling to. CubePointFactory is centered on X/Z only, and
+  EntitySurroundArc sits at updatePos(blockX + .5, blockY, blockZ + .5), so the
+  body origin is bottom-center.
+
+  Upstream hardcodes 1x1x1 because it can only ever target a multiblock's
+  origin cell; this port charges through the controller from any cell, so it
+  wraps the machine's full extent when the server reported one instead of
+  hopping between cells with the crosshair. Sizing only changes where the
+  anchors land — the spark count and template scale stay at upstream's values,
+  so a big machine reads as sparser rather than as scaled-up arcs."
+  [[bx by bz] bounds]
+  (if (structure-bounds? bounds)
+    (let [[min-x min-y min-z max-x max-y max-z] (map double bounds)
+          width (inc (- max-x min-x))
+          height (inc (- max-y min-y))
+          depth (inc (- max-z min-z))]
+      {:x (+ min-x (* 0.5 width))
+       :y min-y
+       :z (+ min-z (* 0.5 depth))
+       :width width
+       :height height
+       :depth depth
+       :yaw-rad 0.0})
+    {:x (+ (double bx) 0.5)
+     :y (double by)
+     :z (+ (double bz) 0.5)
+     :width 1.0
+     :height 1.0
+     :depth 1.0
+     :yaw-rad 0.0}))
 
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
@@ -602,6 +630,7 @@
                         caster-pos (:caster-pos st)
                         target (:target st)
                         block-pos (:block-pos st)
+                        block-bounds (:block-bounds st)
                         item? (boolean (:is-item st))
                         good? (boolean (:good? st))
                         cast-salt (long (or (:started-at-ms st) 0))
@@ -630,7 +659,7 @@
                                             (map? surround-state))
                                    (academy-arc/surround-arc-ops
                                     cam-v
-                                    (target-body block-pos)
+                                    (target-body block-pos block-bounds)
                                     :normal
                                     surround-state
                                     cast-salt))

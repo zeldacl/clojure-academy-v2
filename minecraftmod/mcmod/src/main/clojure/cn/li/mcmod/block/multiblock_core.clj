@@ -104,6 +104,33 @@
     :else
     nil))
 
+(defn structure-bounds
+  "Block-coordinate bounding box of the whole structure that `pos` belongs to,
+  as [min-x min-y min-z max-x max-y max-z] (inclusive), or nil when `pos` is
+  not part of a multiblock. Works from a part cell as well as the controller.
+
+  Callers that want to draw or scan over a machine rather than a single cell
+  (the charging surround arc) need the extent, not just the controller."
+  [{:keys [world pos block-id]}]
+  (when-let [controller-pos (resolve-controller-pos {:world world :pos pos :block-id block-id})]
+    (let [controller-block-id
+          (if (bquery/is-controller-block? block-id)
+            block-id
+            (some-> (world/get-tile-entity world controller-pos)
+                    platform-be/get-block-id))
+          spec (when controller-block-id (bquery/get-block-spec controller-block-id))]
+      (when (get-in spec [:multi-block :multi-block?])
+        (let [cells (structure-positions controller-pos spec)]
+          (when (seq cells)
+            (reduce (fn [[min-x min-y min-z max-x max-y max-z] cell]
+                      (let [x (pos/pos-x cell) y (pos/pos-y cell) z (pos/pos-z cell)]
+                        [(min min-x x) (min min-y y) (min min-z z)
+                         (max max-x x) (max max-y y) (max max-z z)]))
+                    (let [c (first cells)]
+                      [(pos/pos-x c) (pos/pos-y c) (pos/pos-z c)
+                       (pos/pos-x c) (pos/pos-y c) (pos/pos-z c)])
+                    (rest cells))))))))
+
 (defn route-to-controller-context
   "Route ctx from part to controller if possible.
   Keeps :original-block-id and :original-pos for break decisions." 

@@ -520,14 +520,26 @@
                 (emit-line! tline-vc mat op))))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
-              (let [depth-ops (remove :no-depth-test? texture-ops)
+              (let [depth-ops (remove #(or (:no-depth-test? %) (:no-depth-write? %)) texture-ops)
                     ;; Upstream MarkRender disables depth test + cull for the
                     ;; tp_mark humanoid so it stays visible through walls.
-                    no-depth-ops (filter :no-depth-test? texture-ops)]
+                    no-depth-ops (filter :no-depth-test? texture-ops)
+                    ;; Depth-tested but not depth-writing: upstream's
+                    ;; SubArcHandler.drawAll batch (glDepthMask(false)).
+                    read-only-ops (filter #(and (:no-depth-write? %)
+                                                (not (:no-depth-test? %)))
+                                          texture-ops)]
                 (when (seq depth-ops)
                   (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                     (doseq [op depth-ops]
                       (emit-quad! quad-vc mat op))))
+                ;; Depth test on, depth WRITE off — vanilla entityNoOutline is
+                ;; entityTranslucent with COLOR_WRITE, i.e. exactly what
+                ;; upstream's SubArcHandler.drawAll gets from glDepthMask(false).
+                (when (seq read-only-ops)
+                  (let [^VertexConsumer ro-vc (.getBuffer buffer-source (RenderType/entityNoOutline loc))]
+                    (doseq [op read-only-ops]
+                      (emit-quad! ro-vc mat op))))
                 (when (seq no-depth-ops)
                   (let [^VertexConsumer nd-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent loc))]
                     (doseq [op no-depth-ops]

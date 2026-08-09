@@ -200,7 +200,10 @@
     (nth bank (mod (int template-id) (count bank)))))
 
 (defn- template-ops
-  [camera-pos {:keys [lines]} point-transform width-scale max-local-x effect-part]
+  "`extra-op-keys` is merged onto every emitted quad (render-state flags that
+  differ per call site — see surround-arc-ops' depth-write note)."
+  [camera-pos {:keys [lines]} point-transform width-scale max-local-x effect-part
+   extra-op-keys]
   (vec
    (mapcat
     (fn [line]
@@ -216,14 +219,15 @@
                    end-width (* (double width-scale) (double (:width end)))
                    s-off (v/v* right start-width)
                    e-off (v/v* right end-width)]
-               (assoc
-                (ru/quad-op line-texture
-                            (v/v+ p0 s-off)
-                            (v/v- p0 s-off)
-                            (v/v- p1 e-off)
-                            (v/v+ p1 e-off)
-                            (white-argb (* 255.0 alpha)))
-                :effect-part effect-part)))))
+               (cond-> (assoc
+                        (ru/quad-op line-texture
+                                    (v/v+ p0 s-off)
+                                    (v/v- p0 s-off)
+                                    (v/v- p1 e-off)
+                                    (v/v+ p1 e-off)
+                                    (white-argb (* 255.0 alpha)))
+                        :effect-part effect-part)
+                 extra-op-keys (merge extra-op-keys))))))
        line))
     lines)))
 
@@ -251,7 +255,7 @@
                                     (v/v+ (v/v* y-axis (.-y p))
                                           (v/v* z-axis (.-z p))))))]
         (template-ops camera-pos template transform 1.0 length
-                      :current-charging/beam)))))
+                      :current-charging/beam nil)))))
 
 (defn- state-rng
   ^Random [salt generation spark-index visual-tick stream]
@@ -417,5 +421,13 @@
                         yawed (rotate-y body-local body-yaw)]
                     (v/v+ body-origin yawed)))]
             (template-ops camera-pos template transform render-scale nil
-                          :current-charging/surround))))
+                          :current-charging/surround
+                          ;; SubArcHandler.drawAll wraps the whole batch in
+                          ;; glDepthMask(false): the sparks depth-TEST against
+                          ;; the world (the half buried in the block stays
+                          ;; hidden) but never write depth, so they blend with
+                          ;; each other instead of the nearest one punching a
+                          ;; hole through the rest. EntityArc's own renderer
+                          ;; has no such call, so the beam keeps depth write.
+                          {:no-depth-write? true}))))
       sparks))))

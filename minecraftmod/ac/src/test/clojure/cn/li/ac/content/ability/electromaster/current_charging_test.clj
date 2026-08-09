@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -171,6 +171,41 @@
                 :source-player-id "p1"}]]
              @fx*)))))
 
+(deftest multiblock-target-reports-structure-bounds-test
+  ;; Upstream can only ever target a multiblock's origin cell (the other cells
+  ;; hold a bare TileMulti and fail EnergyBlockHelper.isSupported), so its
+  ;; surround arc is always a 1x1x1 cube on that one cell. This port charges
+  ;; through the controller from any cell, so it also reports the machine's
+  ;; extent and the client wraps the whole structure instead of hopping between
+  ;; cells with the crosshair.
+  (let [bounds-of
+        (var-get
+         (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
+                     'target-structure-bounds))
+        asked* (atom [])]
+    (with-redefs [platform-be/be-get-world-safe (constantly :server-level)
+                  position/block-pos (constantly :developer-part-pos)
+                  platform-be/get-block-id (constantly "developer-normal-part")
+                  multiblock/structure-bounds
+                  (fn [ctx]
+                    (swap! asked* conj ctx)
+                    [10 64 -3 11 65 -2])]
+      (is (= [10 64 -3 11 65 -2] (bounds-of :developer-part)))
+      (is (= [{:world :server-level
+               :pos :developer-part-pos
+               :block-id "developer-normal-part"}]
+             @asked*))))
+  (testing "a plain block reports no extent, so the client keeps upstream's 1x1x1"
+    (let [bounds-of
+          (var-get
+           (ns-resolve 'cn.li.ac.content.ability.electromaster.current-charging
+                       'target-structure-bounds))]
+      (with-redefs [platform-be/be-get-world-safe (constantly :server-level)
+                    position/block-pos (constantly :plain-pos)
+                    platform-be/get-block-id (constantly "metal-former")
+                    multiblock/structure-bounds (constantly nil)]
+        (is (nil? (bounds-of :plain-block)))))))
+
 (deftest tick-item-path-updates-state-exp-and-fx-test
   (let [ctx-id "ctx-item"
         {:keys [contexts* get-context update-skill-state-root! assoc-skill-state!
@@ -311,6 +346,8 @@
               :target {:x 2.0 :y 64.0 :z 0.0}
               :caster-pos {:x 0.0 :y 64.0 :z 0.0}
               :block-pos [1 2 3]
+              ;; plain block: no multiblock extent to report
+              :block-bounds nil
               :source-player-id "p1"}]]
            @fx*))))
 

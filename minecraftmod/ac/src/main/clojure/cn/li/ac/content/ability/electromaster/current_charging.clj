@@ -62,6 +62,25 @@
        nil))
    hit-tile))
 
+(defn- target-structure-bounds
+  "Block bounds of the machine the hit cell belongs to, or nil for a plain
+  block. Upstream always draws the surround arc as a fixed 1x1x1 cube on the
+  hit cell (EntitySurroundArc(world, x, y, z, 1, 1)) because it can only ever
+  target the origin cell — a multiblock's other cells hold a bare TileMulti
+  and fail EnergyBlockHelper.isSupported. This port charges through the
+  controller from any cell, so it also reports the structure's extent and
+  wraps the whole machine instead of whichever cell the crosshair landed on."
+  [hit-tile]
+  (try
+    (when-let [level (platform-be/be-get-world-safe hit-tile)]
+      (let [hit-pos (position/block-pos hit-tile)
+            block-id (platform-be/get-block-id hit-tile)]
+        (when (and hit-pos block-id)
+          (multiblock/structure-bounds
+           {:world level :pos hit-pos :block-id block-id}))))
+    (catch Throwable _
+      nil)))
+
 (defn- view->pos [view]
   (when (map? view)
     {:x (double (:x view))
@@ -227,32 +246,36 @@
       {:effective? false :charged 0.0 :block-pos nil :ray-end target}
       (let [bx (int (:x hit)) by (int (:y hit)) bz (int (:z hit))
             hit-be (block-entity-at world-id bx by bz)
-            energy-be (resolve-energy-target-tile hit-be)]
+            energy-be (resolve-energy-target-tile hit-be)
+            bounds (when hit-be (target-structure-bounds hit-be))]
         (if-not energy-be
-          {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end target}
+          {:effective? false :charged 0.0 :block-pos [bx by bz] :block-bounds bounds
+           :ray-end target}
           (cond
             (energy/is-node-supported? energy-be)
             {:effective? true
              :charged (max 0.0 (- (double charge)
                                   (double (energy/charge-node energy-be charge true))))
-             :block-pos [bx by bz] :ray-end target}
+             :block-pos [bx by bz] :block-bounds bounds :ray-end target}
 
             (energy/is-receiver-supported? energy-be)
             {:effective? true
              :charged (max 0.0 (- (double charge)
                                   (double (energy/charge-receiver energy-be charge))))
-             :block-pos [bx by bz] :ray-end target}
+             :block-pos [bx by bz] :block-bounds bounds :ray-end target}
 
             :else
-            {:effective? false :charged 0.0 :block-pos [bx by bz] :ray-end target}))))))
+            {:effective? false :charged 0.0 :block-pos [bx by bz] :block-bounds bounds
+             :ray-end target}))))))
 
 (defn- charge-block-tick!
   [player-id ctx-id _player charge charge-ticks]
   (let [view (player-view player-id)
         caster-pos (view->pos view)
         result (when view (charge-block-target! player-id view charge))
-        {:keys [effective? charged block-pos ray-end]}
-        (or result {:effective? false :charged 0.0 :block-pos nil :ray-end nil})]
+        {:keys [effective? charged block-pos block-bounds ray-end]}
+        (or result {:effective? false :charged 0.0 :block-pos nil :block-bounds nil
+                    :ray-end nil})]
     (skill-effects/add-skill-exp! player-id current-charging-skill-id
                                   (if effective?
                                     (cfg-double :progression.exp-effective)
@@ -270,7 +293,8 @@
                            :charge-ticks charge-ticks
                            :target ray-end
                            :caster-pos caster-pos
-                           :block-pos block-pos}))))
+                           :block-pos block-pos
+                           :block-bounds block-bounds}))))
 
 (defn- current-charging-cost-fail!
   [ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]

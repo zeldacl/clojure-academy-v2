@@ -1,6 +1,10 @@
 (ns cn.li.ac.content.ability.electromaster.current-charging-fx-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+            ;; arc-beam MUST precede the impl (AOT classes don't self-require);
+            ;; the impl ns is otherwise loaded lazily by init!, so target-body
+            ;; would not resolve at load time.
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -255,3 +259,54 @@
          (current-charging-fx/fx-snapshot)))
   (is (= false
          (:active? (current-charging-fx/current-state :missing-selector)))))
+
+(def ^:private target-body
+  (var-get (ns-resolve 'cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging
+                       'target-body)))
+
+(deftest surround-cube-wraps-the-whole-multiblock-test
+  ;; Upstream EntitySurroundArc(world, x, y, z, 1, 1) is a fixed 1x1x1 cube on
+  ;; the hit cell, because upstream can only ever target a multiblock's origin
+  ;; cell. This port charges through the controller from any cell, so it sizes
+  ;; the cube to the machine the server reported.
+  ;;
+  ;; CubePointFactory is centered on X/Z only and EntitySurroundArc sits at
+  ;; (blockX + .5, blockY, blockZ + .5), so the body origin is bottom-center.
+  (is (= {:x 11.0 :y 64.0 :z 11.0
+          :width 2.0 :height 2.0 :depth 2.0
+          :yaw-rad 0.0}
+         (target-body [10 64 10] [10 64 10 11 65 11])))
+  (testing "no extent reported -> upstream's exact 1x1x1 cube on the hit cell"
+    (is (= {:x 0.5 :y 64.0 :z 10.5
+            :width 1.0 :height 1.0 :depth 1.0
+            :yaw-rad 0.0}
+           (target-body [0 64 10] nil)))
+    (is (= (target-body [0 64 10] nil)
+           (target-body [0 64 10] [1 2 3]))
+        "a malformed extent must not be trusted")))
+
+(deftest surround-sparks-render-depth-read-only-test
+  ;; SubArcHandler.drawAll wraps the batch in glDepthMask(false): the sparks
+  ;; depth-TEST against the world but never write depth, so overlapping arcs
+  ;; blend instead of punching holes through each other. EntityArc's renderer
+  ;; has no such call, so the beam keeps depth write.
+  (invoke-hand-enqueue! "ctx-depth" :current-charging/fx-start
+    {:mode :start :is-item false
+     :caster-pos {:x 0.5 :y 65.62 :z 0.5}
+     :target {:x 0.5 :y 64.5 :z 10.0}})
+  (invoke-hand-enqueue! "ctx-depth" :current-charging/fx-update
+    {:mode :update :is-item false :good? true :charge-ticks 1
+     :caster-pos {:x 0.5 :y 65.62 :z 0.5}
+     :target {:x 0.5 :y 64.5 :z 10.0}
+     :block-pos [0 64 10]})
+  (level-effects/tick-level-effects!)
+  (let [ops (:ops (level-effects/build-level-effect-plan
+                   {:x 0.5 :y 65.62 :z 0.5}
+                   {:player-uuid "local-player"}
+                   1
+                   (fn [& _] [])))
+        surround (filter #(= :current-charging/surround (:effect-part %)) ops)
+        beam (filter #(= :current-charging/beam (:effect-part %)) ops)]
+    (is (seq surround))
+    (is (every? :no-depth-write? surround))
+    (is (not-any? :no-depth-write? beam))))

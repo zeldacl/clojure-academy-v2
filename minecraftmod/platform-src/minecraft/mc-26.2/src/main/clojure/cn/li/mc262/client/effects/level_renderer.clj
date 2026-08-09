@@ -558,6 +558,14 @@
                      (try
                        (Identifier/tryParse (str texture))
                        (catch Exception _ nil))]
+            ;; NOTE: ops carrying :no-depth-write? (upstream's SubArcHandler
+            ;; glDepthMask(false) batches) fall in with the ordinary depth ops
+            ;; here. 1.20.1/1.21.1 route them to vanilla entityNoOutline —
+            ;; entityTranslucent with COLOR_WRITE — but 26.2 removed that type,
+            ;; and its replacement needs a custom RenderPipeline with a texture
+            ;; bind group (see PlasmaRenderTypes). Until that exists, 26.2 keeps
+            ;; writing depth for those quads: overlapping arcs occlude instead
+            ;; of blending, which is the pre-existing behaviour, not a new one.
             (let [depth-ops (remove :no-depth-test? texture-ops)
                   ;; Upstream MarkRender disables depth test + cull for the
                   ;; tp_mark humanoid so it stays visible through walls.
