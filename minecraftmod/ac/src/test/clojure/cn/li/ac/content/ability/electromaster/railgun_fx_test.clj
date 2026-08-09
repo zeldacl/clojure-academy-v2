@@ -92,8 +92,43 @@
       (is (= 1 (count (get (:beam-effects snapshot) [:ctx "ctx-b"]))))
       (railgun-fx/clear-fx-owner! [:ctx "ctx-a"])
       (let [after-clear (railgun-fx/fx-snapshot)]
-        (is (nil? (get (:beam-effects after-clear) [:ctx "ctx-a"])))
+        ;; Clearing an owner leaves its live beams alone — they are one-shot
+        ;; world visuals that expire on their own ttl (see the regression test
+        ;; below) — and never touches another owner's.
+        (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-a"]))))
         (is (= 1 (count (get (:beam-effects after-clear) [:ctx "ctx-b"]))))))))
+
+(deftest fired-beam-outlives-its-context-test
+  ;; Railgun's context ends on the same tick the shot goes out (the charge
+  ;; window closes), and client_ui_hooks' MSG-CTX-TERMINATED handler calls
+  ;; level-effects/clear-effect-owner!. Upstream's EntityRailgunFX is a world
+  ;; entity with its own ~2.5 s life that the ability context never kills, so
+  ;; the beam has to survive that: clearing the owner used to delete it a tick
+  ;; or two after firing, and the shot rendered nothing at all.
+  (arc-beam/enqueue-for-test! :railgun-shot "ctx-fire" :railgun/fx-shot
+    {:start {:x 0.0 :y 64.0 :z 0.0}
+     :end {:x 0.0 :y 64.0 :z 30.0}
+     :hit-distance 30.0})
+  (railgun-fx/clear-fx-owner! [:ctx "ctx-fire"])
+  (is (= 1 (count (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx "ctx-fire"])))
+      "a fired beam survives its context ending")
+  (is (seq (:ops (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)))
+      "and still renders")
+  ;; It is the ttl, not the context, that ends it.
+  (dotimes [_ 51]
+    (level-effects/update-effect-state! :railgun-shot
+      (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store))))
+  (is (empty? (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx "ctx-fire"]))
+      "and expires on its own ttl"))
+
+(deftest clear-owner-still-stops-the-charge-marker-test
+  ;; The charge marker is context-bound: it exists to keep the effect non-idle
+  ;; while charging, so an externally aborted context must still stop it.
+  (arc-beam/enqueue-for-test! :railgun-shot "ctx-charge" :railgun/fx-charge-start
+    {:mode :charge-start :source-player-id "player-a"})
+  (is (some? (get (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"])))
+  (railgun-fx/clear-fx-owner! [:ctx "ctx-charge"])
+  (is (nil? (get (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-charge"]))))
 
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:beam-effects {} :charging {}}

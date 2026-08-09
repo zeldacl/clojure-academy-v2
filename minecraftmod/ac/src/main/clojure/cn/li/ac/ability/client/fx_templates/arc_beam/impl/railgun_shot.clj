@@ -249,6 +249,16 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :railgun-shot [_ store owner-key]
-  (-> store
-      (update :beam-effects dissoc owner-key)
-      (update :charging dissoc owner-key)))
+  ;; Only the charge marker is context-bound — it exists to keep the effect
+  ;; non-idle while charging, and must stop when the context does.
+  ;;
+  ;; The beam must NOT be dropped here. Upstream's EntityRailgunFX is a world
+  ;; entity spawned by performClient with its own ~2.5 s life; nothing kills it
+  ;; when the ability context ends. Railgun's context ends immediately after
+  ;; firing (the charge window closes on the same tick the shot goes out, and
+  ;; MSG-CTX-TERMINATED then reaches client_ui_hooks' clear-effect-owner!),
+  ;; so clearing :beam-effects here deleted every beam a tick or two after it
+  ;; was created — the shot landed and dealt damage, the charge animation
+  ;; played, and the beam itself was never drawn. Live beams expire on their
+  ;; own ttl (beam-life-ticks) via tick-state!.
+  (update store :charging dissoc owner-key))
