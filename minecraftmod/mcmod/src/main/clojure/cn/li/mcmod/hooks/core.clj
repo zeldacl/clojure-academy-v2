@@ -71,6 +71,8 @@
    :set-client-overlay-activated! (fn [_ _] nil)
    :client-poll-particle-effects (fn [_owner] [])
    :client-poll-sound-effects (fn [_owner] [])
+   :client-tick-start! noop
+   :client-font-init! noop
    :client-tick-keys! noop
    :client-active-contexts (fn [] {})
    :client-latest-sync (fn [_] nil)
@@ -645,6 +647,21 @@
    (client-poll-sound-effects nil))
   ([owner]
    ((:client-poll-sound-effects (hooks-core-state-snapshot)) owner)))
+
+(defn client-tick-start!
+  "Per-frame hook fired at the START of the client tick — before vanilla
+  handleKeybinds reads the KeyMappings. Used for vanilla-input suppression of
+  skill-owned keys (flashing's WASD sub-keys) that the END-phase hook cannot
+  stop: KeyboardHandler re-reads movement keys from GLFW every tick."
+  [get-player-uuid-fn]
+  ((:client-tick-start! (hooks-core-state-snapshot)) get-player-uuid-fn))
+
+(defn client-font-init!
+  "Register AC MSDF font keywords. Called by the platform AFTER the client
+  bridge is fully installed (the content client-init hook may fire earlier,
+  on RegisterRenderers, before the bridge ops exist)."
+  []
+  ((:client-font-init! (hooks-core-state-snapshot))))
 
 (defn client-tick-keys!
   [key-state-fn get-player-uuid-fn]

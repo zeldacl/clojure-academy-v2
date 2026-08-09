@@ -29,8 +29,13 @@
   (.setDown mapping false))
 
 (defn suppress-key-codes!
-  "For each AC key-code in `key-codes`, force matching vanilla interaction
-   KeyMappings (attack/use/pick) off for this frame.
+  "For each AC key-code in `key-codes`, force matching vanilla KeyMappings
+   off for this frame: the interaction mappings (attack/use/pick) plus the
+   movement mappings (up/down/left/right).
+
+   Movement suppression mirrors upstream ControlOverrider owning the Flashing
+   KEY_GROUP WASD sub-keys: while a flashing context is alive the movement
+   keys drive the flash preview instead of walking.
 
    Matching is by the mapping's *current* bound key, so rebinding vanilla
    attack away from LMB (or ability slots onto other keys) still works.
@@ -42,7 +47,11 @@
         (when-let [^Options opts (get-options)]
           (doseq [^KeyMapping mapping [(.keyAttack opts)
                                        (.keyUse opts)
-                                       (.keyPickItem opts)]]
+                                       (.keyPickItem opts)
+                                       (.keyUp opts)
+                                       (.keyDown opts)
+                                       (.keyLeft opts)
+                                       (.keyRight opts)]]
             (when (and mapping (contains? codes (ac-key-code mapping)))
               (drain-and-release! mapping))))
         (catch Exception e

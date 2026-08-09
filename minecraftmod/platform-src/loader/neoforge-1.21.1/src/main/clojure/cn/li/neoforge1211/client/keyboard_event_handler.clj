@@ -6,12 +6,13 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
+            [cn.li.mcmod.hooks.core :as power-runtime]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [cn.li.mc1211.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
-           [net.neoforged.neoforge.client.event ClientTickEvent$Post]
+           [net.neoforged.neoforge.client.event ClientTickEvent$Post ClientTickEvent$Pre]
            [net.neoforged.neoforge.client.event InputEvent$Key]
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
@@ -98,6 +99,18 @@
     (catch Exception e
       (log/warn e "Error in Forge client tick keyboard polling"))))
 
+(defn ^:private on-client-tick-pre
+  "NeoForge ClientTickEvent$Pre fires before vanilla handleKeybinds reads the
+   KeyMappings — the only point that can suppress skill-owned movement keys
+   (flashing's WASD sub-keys); KeyboardHandler re-reads them from GLFW every
+   tick, so the Post-phase setDown would be clobbered."
+  [^ClientTickEvent$Pre _event]
+  (try
+    (client-session/with-current-client-session
+      #(power-runtime/client-tick-start! get-current-player-uuid))
+    (catch Exception e
+      (log/warn e "Error in client tick pre keyboard suppression"))))
+
 (defn install-forge-event-handler!
   "Register the Forge InputEvent$Key listener.
    
@@ -118,6 +131,14 @@
                        (reify java.util.function.Consumer
                          (accept [_ evt]
                            (on-key-input evt))))
+
+         (.addListener NeoForge/EVENT_BUS
+                       EventPriority/NORMAL
+                       false
+                       ClientTickEvent$Pre
+                       (reify java.util.function.Consumer
+                         (accept [_ evt]
+                           (on-client-tick-pre evt))))
 
          (.addListener NeoForge/EVENT_BUS
                        EventPriority/NORMAL

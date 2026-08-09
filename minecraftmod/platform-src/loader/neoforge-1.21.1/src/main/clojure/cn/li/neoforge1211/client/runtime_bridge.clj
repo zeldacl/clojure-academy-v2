@@ -56,6 +56,12 @@
   [effect-id owner-uuid]
   (ScriptedEffectSpawner/spawnAtPlayerWithUuid effect-id owner-uuid))
 
+(defn move-local-scripted-effect!
+  "Move a client-local scripted effect entity to an absolute position
+  (upstream Flashing localTick: marking.setPosition(dest))."
+  [entity-uuid x y z]
+  (ScriptedEffectSpawner/moveLocalByUuid entity-uuid (double x) (double y) (double z)))
+
 (defn remove-local-scripted-effect! [entity-uuid]
   (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))
 

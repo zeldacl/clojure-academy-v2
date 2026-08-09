@@ -97,6 +97,7 @@
                                                      :eye-y 64.0
                                                      :world-id "minecraft:overworld"})
                     raycast/raycast-combined-excluding (fn [& _] nil)
+                    raycast/raycast-blocks (fn [& _] nil)
                     geom/world-id-of (fn [_] "minecraft:overworld")
                     helper/teleport-to! (fn [player-id world-id x y z]
                                         (swap! teleports* conj [player-id world-id x y z])

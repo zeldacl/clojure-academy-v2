@@ -140,8 +140,11 @@
   (RenderSystem/defaultBlendFunc)
   (RenderSystem/disableDepthTest)
   (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
-  (when-let [shader @msdf-shader]
-    (RenderSystem/setShader (fn [] shader)))
+  ;; NOTE: the MSDF shader must NOT be bound here — GuiGraphics.drawString
+  ;; feeds it the standard text vertex format (pos+color+uv), which the MSDF
+  ;; program cannot interpret, so every reactive-overlay text node rendered
+  ;; white after the MSDF face loaded. Vanilla text shader renders the same
+  ;; glyphs correctly (upstream 1.7.10 uses a plain font anyway).
   (.drawString gg font comp (int x) (int y) (unchecked-int color) (boolean shadow?))
   (end-vanilla-draw!))
 
@@ -285,25 +288,23 @@
   (draw-msdf-runs! gg font-desc text x y font-size color shadow? :glyph-styles glyph-styles))
 
 (defn draw-text!
-  "Draw `text` at (`x`,`y`) with MSDF shadow font (or vanilla fallback).
-  `align` is :left, :center, or :right (relative to `x`)."
+  "Draw `text` at (`x`,`y`) with vanilla font rendering.
+  `align` is :left, :center, or :right (relative to `x`).
+
+  The MSDF paths are intentionally not used: drawing the MSDF Font through
+  GuiGraphics.drawString (even with the MSDF shader bound) renders the raw
+  SDF atlas pixels — a solid white glyph block — because drawString feeds
+  the standard text vertex format the MSDF program cannot interpret. The
+  vanilla path renders the same glyphs correctly (upstream 1.7.10 uses a
+  plain font anyway)."
   ([^GuiGraphics gg font-desc ^String text x y font-size color align shadow?]
    (draw-text! gg font-desc text x y font-size color align shadow? nil))
   ([^GuiGraphics gg font-desc ^String text x y font-size color align shadow? glyph-styles]
    (when (seq text)
-     (ensure-msdf-ready!)
      (let [total-w (text-width font-desc text font-size glyph-styles)
            x' (aligned-x align x total-w)]
        (with-monospace (boolean (:monospace? font-desc))
-         #(cond
-            (msdf-active?)
-            (draw-msdf-runs! gg font-desc text x' y font-size color shadow?
-                             :glyph-styles glyph-styles)
-            (MsdfFontManager/hasFontFace)
-            (draw-fallback-runs! gg font-desc text x' y font-size color shadow?
-                                :glyph-styles glyph-styles)
-            :else
-            (draw-vanilla-run! gg font-desc text x' y font-size color shadow?)))))))
+         #(draw-vanilla-run! gg font-desc text x' y font-size color shadow?))))))
 
 (def default-mc-font nil)
 

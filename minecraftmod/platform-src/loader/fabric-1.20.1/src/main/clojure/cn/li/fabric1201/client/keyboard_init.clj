@@ -78,7 +78,17 @@
   []
   (try
     (install/process-once! ::keyboard-handler-installed
-      #(do
+      (fn []
+         ;; Register start-of-tick listener: vanilla-input suppression must run
+         ;; before handleKeybinds reads the KeyMappings (skill-owned movement
+         ;; keys like flashing's WASD are re-read from GLFW by KeyboardHandler
+         ;; every tick, so the END-phase suppression cannot stop them).
+         (.register ClientTickEvents/START_CLIENT_TICK
+           (reify java.util.function.Consumer
+             (accept [_this minecraft]
+               (client-session/with-current-client-session
+                 #(power-runtime/client-tick-start! get-player-uuid-str)))))
+
          ;; Register end-of-tick listener
          (.register ClientTickEvents/END_CLIENT_TICK
            (reify java.util.function.Consumer

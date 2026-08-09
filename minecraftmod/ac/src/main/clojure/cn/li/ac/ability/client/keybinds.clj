@@ -13,6 +13,7 @@
             [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.input-command-builder :as cmd-builder]
             [cn.li.ac.ability.client.input-processor :as processor]
+            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
             [cn.li.ac.config.gameplay :as gameplay-config]
@@ -428,13 +429,31 @@
                                                (cmd-builder/toggle-activated-command current))
              (runtime-hooks/set-client-overlay-activated! player-uuid (not current)))))))))
 
+(def ^:private flashing-movement-key-codes
+  "Upstream Flashing KEY_GROUP: the WASD sub-keys registered in
+  localMakeAlive while the context is alive. rebuildOverrides pushes every
+  delegate keyID into ControlOverrider while the ability is activated, so
+  vanilla movement is suppressed for the whole active window — the sub-keys
+  drive the flash preview instead of walking."
+  [87 65 83 68])
+
+(defn- flashing-active?
+  [player-uuid]
+  (boolean
+   (some (fn [[_ ctx-data]]
+           (and (= :flashing (:skill-id ctx-data))
+                (= (str player-uuid) (:player-uuid ctx-data))
+                (ctx/active-context? ctx-data)))
+         (ctx/get-all-contexts))))
+
 (defn vanilla-override-key-codes
   "AC key ids that must suppress matching vanilla KeyMappings this frame.
 
   Mirrors upstream ClientRuntime.rebuildOverrides + ControlOverrider:
   - ability mode off → no overrides
   - Frequency Transmitter pass-on → LMB/RMB owned by the overlay
-  - ability mode on → only slots that currently have a skill delegate"
+  - ability mode on → slots that currently have a skill delegate, plus the
+    flashing WASD sub-keys while a flashing context is alive"
   ([]
    (vanilla-override-key-codes (get-client-player-uuid)))
   ([player-uuid]
@@ -442,18 +461,27 @@
      (nil? player-uuid) []
      (freq-transmitter/overlay-active? player-uuid) [-100 -99]
      (activated? player-uuid)
-     (into []
-           (keep (fn [idx]
-                   (when (get-delegate-for-key idx)
-                     (gameplay-config/input-key
-                       (keyword (str "ability-key-" idx)))))
-                 (range 4)))
+     (into (into []
+                 (keep (fn [idx]
+                         (when (get-delegate-for-key idx)
+                           (gameplay-config/input-key
+                             (keyword (str "ability-key-" idx)))))
+                       (range 4)))
+           (when (flashing-active? player-uuid)
+             flashing-movement-key-codes))
      :else [])))
 
-(defn- sync-vanilla-input-overrides!
-  "Apply ControlOverrider-equivalent suppression for this client tick."
-  [player-uuid]
-  (vanilla-input/suppress-vanilla-inputs! (vanilla-override-key-codes player-uuid)))
+(defn sync-vanilla-input-overrides!
+  "Apply ControlOverrider-equivalent suppression for this client tick.
+
+  Called both at the START of the client tick (before vanilla handleKeybinds
+  reads the KeyMappings — the only point that can stop skill-owned movement
+  keys, since KeyboardHandler re-reads them from GLFW every tick) and at the
+  END via tick-keys! (consumes attack/use clicks)."
+  ([]
+   (sync-vanilla-input-overrides! (get-client-player-uuid)))
+  ([player-uuid]
+   (vanilla-input/suppress-vanilla-inputs! (vanilla-override-key-codes player-uuid))))
 
 (defn tick-keys!
   "Main tick function called by forge layer. key-state-fn returns boolean for each key."

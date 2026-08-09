@@ -4,7 +4,8 @@
   This namespace must be loaded via the side-checked client resolver from the
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
-  (:require [cn.li.mcmod.client.platform-bridge :as client-bridge]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+          [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.client.ui.registry :as widget-registry]
@@ -226,6 +227,8 @@
                             (runtime-bridge/spawn-scripted-effect-at-player!
                               (:effect-id payload) (:owner-uuid payload))
 
+                            :mcmod/move-local-scripted-effect
+                            (runtime-bridge/move-local-scripted-effect! (:entity-uuid payload) (:x payload) (:y payload) (:z payload))
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
 
@@ -422,6 +425,10 @@
 
   ;; Run content-owned client initialization without naming a concrete suite.
   (lifecycle/run-client-init!)
+  ;; MSDF font registration needs the full bridge (the content client-init
+  ;; hook may have fired earlier, on RegisterRenderers, before the bridge
+  ;; ops existed) — retry now that the bridge is complete.
+  (power-runtime/client-font-init!)
   ;; Then register renderers
   (register-renderers)
   (register-fluid-render-layers!)

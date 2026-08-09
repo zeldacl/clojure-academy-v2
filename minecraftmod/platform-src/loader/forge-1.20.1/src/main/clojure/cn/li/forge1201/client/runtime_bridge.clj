@@ -56,6 +56,12 @@
   [effect-id owner-uuid]
   (ScriptedEffectSpawner/spawnAtPlayerWithUuid effect-id owner-uuid))
 
+(defn move-local-scripted-effect!
+  "Move a client-local scripted effect entity to an absolute position
+  (upstream Flashing localTick: marking.setPosition(dest))."
+  [entity-uuid x y z]
+  (ScriptedEffectSpawner/moveLocalByUuid entity-uuid (double x) (double y) (double z)))
+
 (defn remove-local-scripted-effect! [entity-uuid]
   (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))
 
@@ -119,6 +125,12 @@
   (client-session/with-current-client-session #(power-runtime/client-tick!)))
 
 (defn- on-client-tick [^TickEvent$ClientTickEvent evt]
+  ;; START fires before vanilla handleKeybinds — the only point that can
+  ;; suppress skill-owned movement keys (KeyboardHandler re-reads them from
+  ;; GLFW every tick, so the END-phase setDown would be clobbered).
+  (when (= TickEvent$Phase/START (.phase evt))
+    (client-session/with-current-client-session
+      #(power-runtime/client-tick-start! get-player-uuid-str)))
   (when (= TickEvent$Phase/END (.phase evt))
     (tick-client!)))
 

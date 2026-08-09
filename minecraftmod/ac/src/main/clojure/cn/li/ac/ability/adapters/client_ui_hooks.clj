@@ -751,20 +751,39 @@
                                   {:delta (double delta)})))
       (boolean (seq ctx-ids)))))
 
+(def ^:private movement-skill-channel-maps
+  "Keep-active skills that steer via WASD movement sub-keys (upstream
+  KEY_GROUP) -> per-transition context channel."
+  {:flashing {:down :flashing/move-down
+              :tick :flashing/move-tick
+              :up :flashing/move-up}
+   :storm-wing {:down :storm-wing/move-down
+                :tick :storm-wing/move-tick
+                :up :storm-wing/move-up}})
+
+(defn- active-movement-contexts
+  "One registry pass collecting [skill-id ctx-id] for every alive
+  keep-active movement context of `player-uuid`. A single get-all-contexts
+  instead of one full snapshot+projection per skill — the movement tick
+  fires per frame while a WASD key is held, and the scan is the dominant
+  cost, so it must not scale with the number of keep-active skills."
+  [player-uuid]
+  (->> (ctx/get-all-contexts)
+       (reduce-kv (fn [acc _k ctx-data]
+                    (if (and (contains? movement-skill-channel-maps (:skill-id ctx-data))
+                             (= (str player-uuid) (:player-uuid ctx-data))
+                             (ctx/active-context? ctx-data))
+                      (conj acc [(:skill-id ctx-data) (:id ctx-data)])
+                      acc))
+                  [])
+       distinct
+       vec))
+
 (defn- send-movement-message!
   [player-uuid transition movement-key]
-  (doseq [[skill-id channel]
-          [[:flashing
-            (case transition
-              :down :flashing/move-down
-              :tick :flashing/move-tick
-              :up :flashing/move-up)]
-           [:storm-wing
-            (case transition
-              :down :storm-wing/move-down
-              :tick :storm-wing/move-tick
-              :up :storm-wing/move-up)]]
-          ctx-id (active-context-ids-for-skill player-uuid skill-id)]
+  (doseq [[skill-id ctx-id] (active-movement-contexts player-uuid)
+          :let [channel (get-in movement-skill-channel-maps [skill-id transition])]
+          :when channel]
     (send-with-client-owner!
      player-uuid
      catalog/MSG-CTX-CHANNEL

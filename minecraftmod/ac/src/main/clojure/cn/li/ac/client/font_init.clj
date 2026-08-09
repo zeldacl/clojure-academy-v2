@@ -7,6 +7,8 @@
 	(:require [cn.li.mcmod.util.log :as log]
 	          [cn.li.mcmod.client.platform-bridge :as platform-bridge]))
 
+(defonce ^:private fonts-registered? (atom false))
+
 (defn- register-ac-fonts!
 	[]
 	(platform-bridge/register-font! :ac-normal {})
@@ -15,10 +17,15 @@
 
 (defn init-fonts!
 	"Register :ac-normal / :ac-bold / :ac-italic for CGui.
-	Idempotent — safe to call multiple times."
+	Idempotent — safe to call multiple times (the content client-init hook can
+	fire before the platform bridge is installed; the platform retries after
+	its bridge merge via the :client-font-init! hook). Only marks success on
+	actual registration so a too-early failure can retry."
 	[]
-	(try
-		(register-ac-fonts!)
-		(log/info "AC MSDF font keywords registered (:ac-normal, :ac-bold, :ac-italic)")
-		(catch Exception e
-			(log/error "Failed to initialize AC fonts:" (ex-message e)))))
+	(when-not @fonts-registered?
+	  (try
+	    (register-ac-fonts!)
+	    (reset! fonts-registered? true)
+	    (log/info "AC MSDF font keywords registered (:ac-normal, :ac-bold, :ac-italic)")
+	    (catch Exception e
+	      (log/error "Failed to initialize AC fonts:" (ex-message e))))))

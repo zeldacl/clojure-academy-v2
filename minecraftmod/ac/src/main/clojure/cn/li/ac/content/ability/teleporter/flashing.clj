@@ -255,7 +255,20 @@
 
                        (resolve-hit-destination world-id hit {:x end-x :y end-y :z end-z})
 
-                       {:to-x end-x :to-y end-y :to-z end-z})]
+                       ;; No collision along the look ray: the marker would
+                       ;; float at eye level. Drop it onto the ground beneath
+                       ;; the endpoint (vertical probe) so the marking stays
+                       ;; grounded like the hit case.
+                       (let [ground (when (raycast/available?)
+                                      (raycast/raycast-blocks world-id
+                                                              end-x end-y end-z
+                                                              0.0 -1.0 0.0
+                                                              128.0))]
+                         {:to-x end-x
+                          :to-y (if ground
+                                  (+ 1.0 (double (or (:hit-y ground) (:y ground) end-y)))
+                                  end-y)
+                          :to-z end-z}))]
 
         {:direction direction
 
@@ -545,7 +558,15 @@
 
                                       (dissoc :preview))))
 
-      (register-movement-listeners! ctx-id))
+      (register-movement-listeners! ctx-id)
+
+      ;; Upstream localMakeAlive: when the context goes alive the client
+      ;; registers the WASD sub-keys (and their hint icons). The port's
+      ;; :state-start channel spawns the tp-marking and creates the level fx
+      ;; state the movement-hint column reads — without this dispatch the fx
+      ;; state only materialized lazily on the first preview, so the marking
+      ;; never appeared and the hint column had nothing to read.
+      (fx/send! ctx-id {:topic :flashing/fx-state-start :mode :state-start} nil {}))
     (ctx/terminate-context! ctx-id nil))))
 
 

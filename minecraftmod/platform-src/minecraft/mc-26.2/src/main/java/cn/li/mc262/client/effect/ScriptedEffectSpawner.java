@@ -125,6 +125,37 @@ public final class ScriptedEffectSpawner {
         return effect.getUUID().toString();
     }
 
+    /**
+     * Move a client-local scripted effect entity to an absolute position
+     * (upstream Flashing localTick: marking.setPosition(dest)).
+     */
+    public static boolean moveLocalByUuid(String entityUuid, double x, double y, double z) {
+        if (entityUuid == null || entityUuid.isBlank()) {
+            return false;
+        }
+
+        final UUID targetUuid;
+        try {
+            targetUuid = UUID.fromString(entityUuid);
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+
+        Minecraft mc = Minecraft.getInstance();
+        ClientLevel level = mc.level;
+        if (level == null) {
+            return false;
+        }
+
+        for (Entity entity : level.entitiesForRendering()) {
+            if (entity instanceof ScriptedEffectEntity && targetUuid.equals(entity.getUUID())) {
+                entity.setPos(x, y, z);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean removeLocalByUuid(String entityUuid) {
         if (entityUuid == null || entityUuid.isBlank()) {
             return false;

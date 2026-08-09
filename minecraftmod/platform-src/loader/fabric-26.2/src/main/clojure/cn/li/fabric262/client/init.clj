@@ -172,6 +172,8 @@
                             (ScriptedEffectSpawner/spawnAtPlayerWithUuid
                               (:effect-id payload) (:owner-uuid payload))
 
+                            :mcmod/move-local-scripted-effect
+                            (ScriptedEffectSpawner/moveLocalByUuid (:entity-uuid payload) (:x payload) (:y payload) (:z payload))
                             :mcmod/remove-local-scripted-effect
                             (ScriptedEffectSpawner/removeLocalByUuid (:entity-uuid payload))
 

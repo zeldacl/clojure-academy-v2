@@ -4,7 +4,8 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.font-init :as font-init]))
 
 (defn runtime-client-effect-hooks
   []
@@ -34,6 +35,21 @@
    :client-level-effect-fov-offset
    (fn [player-uuid]
      (level-effects/current-fov-offset player-uuid))
+
+   :client-tick-start!
+   (fn [get-player-uuid-fn]
+     ;; START-of-tick vanilla-input suppression: must run before handleKeybinds
+     ;; reads the KeyMappings — the END-phase call cannot stop skill-owned
+     ;; movement keys because KeyboardHandler re-reads them from GLFW.
+     (binding [cn.li.ac.ability.client.keybinds/*get-player-uuid-fn* get-player-uuid-fn]
+       (client-keybinds/sync-vanilla-input-overrides!)))
+
+   :client-font-init!
+   (fn []
+     ;; The content client-init hook (RegisterRenderers) can fire before the
+     ;; platform bridge is installed — the platform calls this again after
+     ;; its bridge merge so the MSDF fonts register with the real ops.
+     (font-init/init-fonts!))
 
    :client-tick-keys!
    (fn [key-state-fn get-player-uuid-fn]

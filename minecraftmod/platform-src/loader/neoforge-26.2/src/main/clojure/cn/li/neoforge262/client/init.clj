@@ -2,7 +2,8 @@
   "NeoForge 26.2 client init.
 
    Client setup for session, input, runtime tick, rendering and model hooks."
-  (:require [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+          [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
             [cn.li.mcmod.lifecycle :as lifecycle]
@@ -205,6 +206,8 @@
                             (runtime-bridge/spawn-scripted-effect-at-player!
                               (:effect-id payload) (:owner-uuid payload))
 
+                            :mcmod/move-local-scripted-effect
+                            (runtime-bridge/move-local-scripted-effect! (:entity-uuid payload) (:x payload) (:y payload) (:z payload))
                             :mcmod/remove-local-scripted-effect
                             (runtime-bridge/remove-local-scripted-effect! (:entity-uuid payload))
 
@@ -402,6 +405,10 @@
     (catch Exception e
       (log/error e "Failed to run content client init")
       (log/stacktrace "Failed to run content client init" e)))
+  ;; MSDF font registration needs the full bridge (the content client-init
+  ;; hook may have fired earlier, before the bridge ops existed) — retry now
+  ;; that the bridge is complete.
+  (power-runtime/client-font-init!)
 
   (runtime-bridge/init!)
   (overlay-renderer/init!)

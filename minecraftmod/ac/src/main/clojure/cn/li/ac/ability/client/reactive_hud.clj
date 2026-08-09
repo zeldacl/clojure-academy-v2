@@ -521,16 +521,31 @@
    [:left "A" "左"]
    [:right "D" "右"]])
 
-(defn build-movement-hints-data
-  "Upstream KeyHintUI's key-group column: when storm-wing is charging or
-  flying, show the four WASD hints in a column to the LEFT of the skill-slot
-  hints, highlighting the key currently held.
+(def ^:private flashing-sub-key-icons
+  "Upstream Flashing KEY_GROUP delegates: getIcon() returns
+  abilities/teleporter/flashing/{w,s,a,d}.png per movement sub-key."
+  {:forward "textures/abilities/teleporter/flashing/w.png"
+   :back "textures/abilities/teleporter/flashing/s.png"
+   :left "textures/abilities/teleporter/flashing/a.png"
+   :right "textures/abilities/teleporter/flashing/d.png"})
 
-  Driven by the storm-wing LEVEL FX state (the same state that renders the
-  wings), not the client context mirror — the mirror is not reliably synced
-  with the skill-state phase."
+(defn build-movement-hints-data
+  "Upstream KeyHintUI's key-group column: while storm-wing is charging or
+  flying, or flashing is active, show the four WASD hints in a column to the
+  LEFT of the skill-slot hints, highlighting the key currently held.
+
+  Driven by the LEVEL FX state (the same state that renders the wings /
+  tp-marking), not the client context mirror — the mirror is not reliably
+  synced with the skill-state phase."
   [player-uuid _contexts screen-w screen-h]
-  (let [sw-storm
+  (let [fx-state (fn [effect-id]
+                   ;; Storm-wing stores its state under :effect-state, flashing
+                   ;; under :fx-state — read whichever key the effect uses.
+                   (vals (or (:effect-state
+                              (level-effects/effect-state-snapshot effect-id))
+                             (:fx-state
+                              (level-effects/effect-state-snapshot effect-id)))))
+        sw-storm
         (some (fn [st]
                 (when (and (:active? st)
                            (contains? #{:charging :flying} (:phase st))
@@ -538,22 +553,33 @@
                                (= (str player-uuid)
                                   (str (:source-player-id st)))))
                   :storm-wing))
-              (vals (:effect-state
-                     (level-effects/effect-state-snapshot :storm-wing))))
-        key-state (keybinds/key-state-snapshot player-uuid)]
-    (when sw-storm
+              (fx-state :storm-wing))
+        flashing-active? (boolean (seq (fx-state :flashing)))
+        key-state (keybinds/key-state-snapshot player-uuid)
+        hint-item (fn [[movement-key key-label dir-label] icon-src]
+                    {:key-label key-label
+                     :label dir-label
+                     :skill-icon icon-src
+                     :active? (boolean (get-in key-state
+                                               [:movement-keys movement-key]))})]
+    (cond
+      sw-storm
       (let [skill-icon (skill-query/get-skill-icon-path sw-storm)]
         {:kind :movement-hints
          :x (- screen-w 165)
          :y (- screen-h 100)
          :skill-icon skill-icon
-         :items (mapv (fn [[movement-key key-label dir-label]]
-                        {:key-label key-label
-                         :label dir-label
-                         :skill-icon skill-icon
-                         :active? (boolean (get-in key-state
-                                                   [:movement-keys movement-key]))})
-                      movement-hint-keys)}))))
+         :items (mapv #(hint-item % skill-icon) movement-hint-keys)})
+
+      flashing-active?
+      {:kind :movement-hints
+       :x (- screen-w 165)
+       :y (- screen-h 100)
+       :skill-icon (skill-query/get-skill-icon-path :flashing)
+       :items (mapv (fn [[movement-key :as hint]]
+                      (hint-item hint (modid/namespaced-path
+                                       (flashing-sub-key-icons movement-key))))
+                    movement-hint-keys)})))
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.
