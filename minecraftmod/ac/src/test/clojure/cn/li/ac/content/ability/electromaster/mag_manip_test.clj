@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.ability.effects.motion :as motion]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -118,7 +120,7 @@
         up! (get (skill-actions) :up!)]
     (with-redefs [mag-manip/skill-exp (fn [_] 0.5)
                   mag-manip/max-hold-distance-sq (fn [] 1.0)
-                  skill-effects/player-path (fn [& _] {:x 0.0 :y 0.0 :z 0.0})
+                  geom/body-pos (fn [_] {:x 0.0 :y 0.0 :z 0.0})
                   entity/player-creative? (fn [_] false)
                   entity/player-give-item-stack! (fn [player stack]
                                                    (swap! give-calls* conj [player stack])
@@ -169,7 +171,7 @@
         up! (get (skill-actions) :up!)]
     (with-redefs [mag-manip/skill-exp (fn [_] 0.6)
                   mag-manip/max-hold-distance-sq (fn [] 100.0)
-                  skill-effects/player-path (fn [& _] {:x 1.0 :y 2.0 :z 3.0})
+                  geom/body-pos (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   mag-manip/look-dir (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   motion/entity-motion-available? (fn [] true)
                   motion/entity-position (fn [_world-id _uuid]
@@ -217,7 +219,7 @@
         up! (get (skill-actions) :up!)]
     (with-redefs [mag-manip/skill-exp (fn [_] 0.6)
                   mag-manip/max-hold-distance-sq (fn [] 100.0)
-                  skill-effects/player-path (fn [& _] {:x 1.0 :y 2.0 :z 3.0})
+                  geom/body-pos (fn [_] {:x 1.0 :y 2.0 :z 3.0})
                   mag-manip/look-dir (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                   motion/entity-motion-available? (fn [] true)
                   motion/entity-position (fn [_world-id _uuid] {:x 1.0 :y 2.0 :z 3.0})
@@ -250,3 +252,55 @@
       (is (< (Math/abs (double y)) 1.0e-9))
       ;; speed = lerp(0.5, 1.0, 0.6) = 0.8, thrown straight along +Z
       (is (< (Math/abs (- 0.8 (double z))) 1.0e-6)))))
+
+(deftest up-throws-when-player-is-far-from-the-world-origin-test
+  ;; The distance guard used to read [:position] out of the ability player
+  ;; state, which nothing ever writes: it always came back as the {0,0,0}
+  ;; default, so anywhere but spawn the held block measured as "too far" and
+  ;; was released without a throw — it just dropped. Upstream compares
+  ;; player.getDistanceSq(entity) on the live entities.
+  (let [ctx-id "ctx-far-from-origin"
+        contexts* (mk-context-store ctx-id
+                                    {:skill-state {:mode :holding
+                                                   :focus {:x 1002.0 :y 65.0 :z 1000.0}
+                                                   :entity-uuid "uuid-far"
+                                                   :world-id "w"
+                                                   :held-block {:block-id "minecraft:iron_block"
+                                                                :from-hand? true
+                                                                :from-world? false}}})
+        velocity-calls* (atom [])
+        {:keys [calls* send!]} (fx-mocks/capture-fx-send!)
+        up! (get (skill-actions) :up!)]
+    (with-redefs [mag-manip/skill-exp (fn [_] 0.5)
+                  ;; player far from origin, block held 2 blocks in front
+                  geom/body-pos (fn [_] {:x 1000.0 :y 64.0 :z 1000.0})
+                  geom/eye-pos (fn [_] {:x 1000.0 :y 65.62 :z 1000.0})
+                  motion/entity-motion-available? (fn [] true)
+                  motion/entity-position (fn [_ _] {:x 1002.0 :y 65.0 :z 1000.0})
+                  motion/set-block-body-place-when-collide! (fn [& _] true)
+                  motion/set-entity-velocity! (fn [& args]
+                                                (swap! velocity-calls* conj args)
+                                                true)
+                  raycast/available? (fn [] true)
+                  raycast/player-look-vector (fn [_] {:x 1.0 :y 0.0 :z 0.0})
+                  raycast/raycast-combined (fn [& _] nil)
+                  ctx/get-context (fn
+                                    ([id] (get @contexts* id))
+                                    ([_owner id] (get @contexts* id)))
+                  ctx-skill/update-skill-state-root! (fn [id f & args]
+                                                       (swap! contexts* update id
+                                                              (fn [ctx]
+                                                                (assoc ctx :skill-state
+                                                                       (if (and (= f identity) (= 1 (count args)))
+                                                                         (first args)
+                                                                         (apply f (or (:skill-state ctx) {}) args)))))
+                                                       nil)
+                  skill-effects/set-main-cooldown! (fn [& _] nil)
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  fx/send! send!]
+      (cb/apply-invoke up! :player-id "p1" :ctx-id ctx-id :player-ref {:id "p"} :cost-ok? true))
+    (is (= :thrown (get-in @contexts* [ctx-id :skill-state :mode])))
+    (is (= 1 (count @velocity-calls*)) "the block is launched, not dropped")
+    (is (some (fn [[_ topic _ payload]]
+                (and (= :mag-manip/fx-end topic) (= :performed (:reason payload))))
+              @calls*))))

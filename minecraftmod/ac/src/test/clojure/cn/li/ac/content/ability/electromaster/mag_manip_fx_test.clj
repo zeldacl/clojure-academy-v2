@@ -2,12 +2,17 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
   (arc-beam/enqueue-for-test! :mag-manip ctx-id channel payload {:runtime :hand}))
+
+(defn- invoke-tick! []
+  (hand-effects/update-effect-state! :mag-manip
+    (fn [store] (arc-beam/effect-tick-state! :hand :mag-manip store))))
 
 (defn- with-fresh-mag-manip-fx-runtime [f]
   (try
@@ -81,3 +86,42 @@
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:states {}}
          (mag-manip-fx/fx-snapshot))))
+
+(deftest hold-loop-sound-runs-for-the-skill-and-stops-with-it-test
+  ;; Original MagManipContextC builds one FollowEntitySound("em.lf_loop").setLoop()
+  ;; on MSG_MADEALIVE and stops it in c_terminate. Queuing em.lf_loop as
+  ;; one-shots every 12 ticks instead left the last sample playing past the end
+  ;; of the skill with nothing able to stop it.
+  (let [effects* (atom [])
+        sounds* (atom [])]
+    (with-redefs [client-bridge/run-client-effect! (fn [op payload]
+                                                     (swap! effects* conj [op (:key payload) (:sound-id payload)])
+                                                     nil)
+                  client-sounds/current-effect-owner (fn [] {:client-session-id "mag-manip-test"})
+                  client-sounds/queue-current-sound-effect! (fn [s] (swap! sounds* conj (:sound-id s)) nil)
+                  client-sounds/queue-sound-effect! (fn [_ s] (swap! sounds* conj (:sound-id s)) nil)]
+      (invoke-hand-enqueue! "ctx-loop" :mag-manip/fx-hold
+        {:mode :hold-start :source-player-id "player-a" :block-id "minecraft:iron_block"})
+      (is (= [[:mcmod/start-loop-sound-at-player "mag-manip/ctx-loop" "academy:em.lf_loop"]]
+             @effects*))
+      (dotimes [_ 30] (invoke-tick!))
+      (is (= 1 (count @effects*)) "ticking never re-triggers the hold loop")
+      (is (empty? @sounds*) "and nothing goes through the one-shot queue")
+      ;; The throw keeps its one-shot (upstream c_perform plays em.mag_manip once).
+      (invoke-hand-enqueue! "ctx-loop" :mag-manip/fx-throw
+        {:mode :throw :start {:x 0.0 :y 0.0 :z 0.0} :end {:x 0.0 :y 0.0 :z 5.0}})
+      (is (= ["academy:em.mag_manip"] @sounds*))
+      (invoke-hand-enqueue! "ctx-loop" :mag-manip/fx-end {:mode :end :reason :performed})
+      (is (= [:mcmod/stop-loop-sound "mag-manip/ctx-loop"] (take 2 (last @effects*)))))))
+
+(deftest externally-aborted-context-also-stops-the-hold-loop-test
+  (let [effects* (atom [])]
+    (with-redefs [client-bridge/run-client-effect! (fn [op payload]
+                                                     (swap! effects* conj [op (:key payload)])
+                                                     nil)
+                  client-sounds/current-effect-owner (fn [] {:client-session-id "mag-manip-test"})
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (invoke-hand-enqueue! "ctx-abort" :mag-manip/fx-hold
+        {:mode :hold-start :source-player-id "player-a"})
+      (mag-manip-fx/clear-fx-owner! [:ctx "ctx-abort"])
+      (is (= [:mcmod/stop-loop-sound "mag-manip/ctx-abort"] (last @effects*))))))

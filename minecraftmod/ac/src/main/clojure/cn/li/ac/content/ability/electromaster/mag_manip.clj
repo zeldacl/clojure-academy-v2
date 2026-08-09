@@ -173,8 +173,10 @@
     (let [ss (:skill-state ctx-data)]
       (when (and (= :holding (:mode ss)) (:held-block ss))
         (when-let [entity-pos (held-entity-position ss)]
-          (let [player-pos (skill-effects/player-path
-                             player-id [:position] {:x 0.0 :y 0.0 :z 0.0})]
+          ;; Nothing ever writes [:position] into the ability player state, so
+          ;; reading it here always yielded the default and the distance was
+          ;; measured from the world origin. geom/body-pos asks the live entity.
+          (let [player-pos (geom/body-pos player-id)]
             (< (geom/vdist-sq player-pos entity-pos)
                (max-hold-distance-sq))))))))
 
@@ -241,8 +243,11 @@
            :entity-uuid entity-uuid
            :world-id world-id
            :creative? (boolean (:creative? held-block))})
+        ;; :source-player-id anchors the looping hold sound to the caster
+        ;; (original FollowEntitySound(player, "em.lf_loop")).
         (fx/send! ctx-id {:topic :mag-manip/fx-hold :mode :hold-start} nil
-                  {:focus focus
+                  {:source-player-id player-id
+                   :focus focus
                    :block-id (:block-id held-block)})
         true)
       (do
@@ -333,8 +338,9 @@
   [player-id world-id dir]
   (let [range (cfg-double :targeting.throw-range)
         eye (geom/eye-pos player-id)
-        body (skill-effects/player-path
-               player-id [:position] {:x 0.0 :y 0.0 :z 0.0})
+        ;; [:position] is never written into the ability player state; reading
+        ;; it here aimed the no-hit fallback 20 blocks from the world ORIGIN.
+        body (geom/body-pos player-id)
         hit (when (raycast/available?)
               (raycast/raycast-combined
                 world-id
@@ -369,8 +375,12 @@
         (ctx-skill/replace-skill-state! ctx-id
                                (assoc ss :fired false :mode :idle))
         (let [entity-pos (held-entity-position ss)
-              player-pos (skill-effects/player-path
-                           player-id [:position] {:x 0.0 :y 0.0 :z 0.0})
+              ;; Same as holding-nearby?: [:position] is never populated, so
+              ;; this compared the held block against the world origin and
+              ;; every release outside spawn came out "too far" — the block was
+              ;; released without a throw and simply fell (upstream compares
+              ;; player.getDistanceSq(entity) against 25).
+              player-pos (geom/body-pos player-id)
               too-far? (and entity-pos
                             (>= (geom/vdist-sq player-pos entity-pos)
                                 (max-hold-distance-sq)))]

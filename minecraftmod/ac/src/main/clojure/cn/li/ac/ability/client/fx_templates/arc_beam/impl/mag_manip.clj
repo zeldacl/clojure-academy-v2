@@ -16,6 +16,29 @@
 
 (def ^:private hold-loop-sound (modid/namespaced-path "em.lf_loop"))
 (def ^:private perform-sound (modid/namespaced-path "em.mag_manip"))
+(defn- loop-sound-key [ctx-id] (str "mag-manip/" ctx-id))
+
+(defn- start-hold-loop! [ctx-id source-player-id]
+  ;; Original MagManipContextC: FollowEntitySound(player, "em.lf_loop").setLoop()
+  ;; started on MSG_MADEALIVE and stopped in c_terminate. Queuing it as
+  ;; one-shots instead left the last sample playing past the end of the skill
+  ;; with no handle to stop it — and em.lf_loop is a loop sample.
+  (try
+    (client-bridge/run-client-effect!
+     :mcmod/start-loop-sound-at-player
+     {:key (loop-sound-key ctx-id)
+      :sound-id hold-loop-sound
+      :owner-uuid (str source-player-id)
+      :volume 0.5
+      :pitch 1.0})
+    (catch Throwable _ nil)))
+
+(defn- stop-hold-loop! [ctx-id]
+  (try
+    (client-bridge/run-client-effect!
+     :mcmod/stop-loop-sound
+     {:key (loop-sound-key ctx-id)})
+    (catch Throwable _ nil)))
 
 
 (def ^:private default-state
@@ -49,8 +72,7 @@
 		(case mode
 			:hold-start
 			(do
-				(client-sounds/queue-current-sound-effect!
-					{:type :sound :sound-id hold-loop-sound :volume 0.5 :pitch 1.0})
+				(start-hold-loop! ctx-id source-player-id)
 				(assoc-in store* [:states owner-key*]
 									(merge default-state base-meta
 												 {:active? true
@@ -75,7 +97,9 @@
 						(merge default-state state base-meta {:active? false}))))
 
 			:end
-			(update store* :states dissoc owner-key*)
+			(do
+				(stop-hold-loop! ctx-id)
+				(update store* :states dissoc owner-key*))
 
 			store*)))
 
@@ -89,11 +113,9 @@
 							(map (fn [[owner-key state]]
 										 (if-not (:active? state)
 											 [owner-key state]
-											 (let [ticks (inc (long (or (:ticks state) 0)))]
-												 (when (zero? (mod ticks 12))
-													 (client-sounds/queue-sound-effect! (:queue-owner state)
-														 {:type :sound :sound-id hold-loop-sound :volume 0.35 :pitch 1.0}))
-												 [owner-key (assoc state :ticks ticks)]))))
+											 ;; The hold loop is one continuous FollowEntitySound
+											 ;; started on :hold-start and stopped on :end.
+											 [owner-key (assoc state :ticks (inc (long (or (:ticks state) 0))))])))
 							states)))))
 
 (defn- current-hand-transform []
@@ -118,4 +140,7 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mag-manip :hand] [_ _ store] (tick-state! store))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :mag-manip [_effect-id] (current-hand-transform))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-manip [_ store owner-key]
+  ;; Externally aborted contexts never get :end — stop the hold loop here too,
+  ;; or it plays forever.
+  (stop-hold-loop! (second owner-key))
   (assoc store :states (dissoc (:states store) owner-key)))
