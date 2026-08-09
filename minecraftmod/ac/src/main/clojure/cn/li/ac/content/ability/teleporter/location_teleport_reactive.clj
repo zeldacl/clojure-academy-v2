@@ -107,6 +107,14 @@
 
 (declare rebuild-list!)
 
+(defn- scroll-idx-signal [^UiRt rt]
+  ;; The query response callback may run before/without the runtime's
+  ;; :scroll-idx signal in edge cases — create and persist it instead of
+  ;; dereffing nil.
+  (or (rt/user-signal rt :scroll-idx)
+      (do (rt/put-user-signal! rt :scroll-idx (atom 0))
+          (rt/user-signal rt :scroll-idx))))
+
 (defn- send-query! [^UiRt rt player-uuid owner-key]
   (net-client/send-to-server (net-owner player-uuid)
     catalog/MSG-REQ-SAVED-POS-QUERY {}
@@ -170,7 +178,7 @@
   [^UiRt rt player-uuid owner-key]
   (let [{:keys [locations limits current-pos]} (screen-st owner-key)
         total (count locations)
-        scroll-a (rt/user-signal rt :scroll-idx)
+        scroll-a (scroll-idx-signal rt)
         start (max 0 (min @scroll-a (max 0 (- total max-visible))))
         _ (reset! scroll-a start)
         visible-locs (vec (drop start (take (+ start max-visible) locations)))
@@ -317,7 +325,7 @@
             scroll-max (max 0 (- (count locations) max-visible))
             delta (double (or (:delta evt) 0.0))]
         (when (pos? scroll-max)
-          (swap! (rt/user-signal rt :scroll-idx) #(max 0 (min scroll-max (+ % (if (neg? delta) 1 -1)))))
+          (swap! (scroll-idx-signal rt) #(max 0 (min scroll-max (+ % (if (neg? delta) 1 -1)))))
           (rebuild-list! rt player-uuid owner-key))))))
 
 ;; ============================================================================
