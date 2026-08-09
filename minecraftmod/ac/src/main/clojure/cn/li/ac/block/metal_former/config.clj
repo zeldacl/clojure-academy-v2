@@ -9,6 +9,11 @@
   "Maximum energy storage"
   3000.0)
 
+(def receiver-bandwidth
+  "Wireless receiver bandwidth (IF/tick). Original TileMetalFormer passes
+  IFConstants.LATENCY_MK1 to TileReceiverBase."
+  50.0)
+
 (def work-ticks
   "Ticks required to complete one recipe."
   60)

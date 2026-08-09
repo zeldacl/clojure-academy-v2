@@ -209,6 +209,24 @@
                  (* dz max-distance))}))
       {:x eye-x :y eye-y :z eye-z})))
 
+(defn- tornado-base-pos
+  "Original Tornado's constructor: trace straight down from the charge
+  position (blocks only, `EntitySelectors.nothing`) and seat the column on the
+  first block hit; on a miss it sits at the end of the ray. The entity never
+  moves afterwards, so this is resolved once, when the charge starts."
+  [world-id charge-pos]
+  (let [search (cfg-double :effect.tornado-ground-search-distance)
+        x (double (:x charge-pos))
+        y (double (:y charge-pos))
+        z (double (:z charge-pos))
+        hit (when (raycast/available?)
+              (raycast/raycast-blocks world-id x y z 0.0 -1.0 0.0 search))]
+    (if hit
+      {:x (double (or (:hit-x hit) (:x hit) x))
+       :y (double (or (:hit-y hit) (:y hit) (- y search)))
+       :z (double (or (:hit-z hit) (:z hit) z))}
+      {:x x :y (- y search) :z z})))
+
 (defn- send-end-and-terminate! [ctx-id performed?]
   (fx/send-local-and-nearby!
    ctx-id
@@ -256,6 +274,9 @@
          {:topic :plasma-cannon/fx-start :mode :start}
          nil
          {:charge-pos spawn-pos
+          :tornado-base (tornado-base-pos (or (:world-id position)
+                                              (get-world-id player-id))
+                                          spawn-pos)
           :player-id player-id})
         (fx/send-local-and-nearby!
          ctx-id

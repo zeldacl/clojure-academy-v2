@@ -1,10 +1,22 @@
 (ns cn.li.ac.block.metal-former.block
   "Metal Former block registration and runtime wiring."
   (:require [cn.li.ac.block.machine.registration :as machine-reg]
+            [cn.li.ac.block.metal-former.config :as former-config]
             [cn.li.ac.block.metal-former.handlers :as former-handlers]
             [cn.li.ac.block.metal-former.logic :as former-logic]
+            [cn.li.ac.block.role-impls :as impls]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.block.dsl :as bdsl]))
+            [cn.li.mcmod.block.dsl :as bdsl])
+  (:import [cn.li.acapi.wireless IWirelessReceiver]))
+
+(defn- former-max-energy [state]
+  (or (:max-energy state) former-config/max-energy))
+
+(defn- former-receiver-bandwidth [_state]
+  former-config/receiver-bandwidth)
+
+(defn- former-receiver-cap-factory [be _side]
+  (impls/->WirelessReceiverImpl be former-max-energy former-receiver-bandwidth))
 
 (defn init-metal-former!
   []
@@ -17,7 +29,17 @@
               :tick-fn former-logic/former-tick-fn
               :read-nbt-fn former-logic/former-scripted-load-fn
               :write-nbt-fn former-logic/former-scripted-save-fn}]
+     :tile-ids ["metal-former"]
      :containers {"metal-former" former-logic/former-container-fns}
+     ;; Upstream TileMetalFormer extends TileReceiverBase implements
+     ;; IWirelessReceiver (3000 IF, LATENCY_MK1 bandwidth) — it takes wireless
+     ;; energy and is a valid CurrentCharging target. Without the capability
+     ;; key on the tile spec, cn.li.ac.wireless.core.capability-lookup resolves
+     ;; nothing here, so the skill's raytrace found "not an energy block":
+     ;; no charging, and no surround arc on the block.
+     :capabilities [{:key :wireless-receiver
+                     :interface IWirelessReceiver
+                     :factory former-receiver-cap-factory}]
      :blocks [(bdsl/create-block-spec
                 "metal-former"
                 {:registry-name "metal_former"

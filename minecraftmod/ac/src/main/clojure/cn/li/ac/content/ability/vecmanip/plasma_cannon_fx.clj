@@ -7,7 +7,12 @@
     {:effect-id :plasma-cannon
      :initial-state (fn [] {:effect-state {}})
      :channels {:start {:topic :plasma-cannon/fx-start :mode :start
-												:level-payload (fn [_ _ p] {:charge-pos (:charge-pos p)})}
+												:level-payload (fn [_ _ p]
+													{:charge-pos (:charge-pos p)
+													 ;; Ground point under the charge position, resolved server-side
+													 ;; (original Tornado ctor's downward raytrace): the charge
+													 ;; tornado is seated there and never moves.
+													 :tornado-base (:tornado-base p)})}
 								:update {:topic :plasma-cannon/fx-update :mode :update
 												 :level-payload (fn [_ _ p]
 																				{:charge-ticks (long (or (:charge-ticks p) 0))
