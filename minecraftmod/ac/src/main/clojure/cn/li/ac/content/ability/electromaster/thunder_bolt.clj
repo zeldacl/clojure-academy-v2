@@ -117,13 +117,13 @@
                             :y (+ (double y) (double (or eye-height 0.0)))
                             :z (double z)})
                          victims)
-        ;; Original getAttackData: end = result.hitVec on a hit, the
-        ;; full-range miss point otherwise — the main arcs terminate exactly
-        ;; where the crosshair's trace lands, not run through the target.
-        main-end (case hit-kind
-                   :entity impact
-                   :block impact
-                   (attack/fallback-end-point eye look range))
+        ;; c_spawnEffect never calls setFromTo on the main arcs: it spawns
+        ;; three EntityArcs at the caster's eye along their look direction with
+        ;; `mainArc.length = RANGE`, so they always run the full 20 blocks and
+        ;; pass through whatever was hit. AttackData.point (the trace result)
+        ;; is used only as the AOE arcs' origin. Ending the main arcs at the
+        ;; impact point instead made a close-range hit draw a short stub.
+        main-end (attack/fallback-end-point eye look range)
         effective? (boolean (or target-uuid (seq victims)))]
     (when target-uuid
       (attack-target! player-id world-id target-uuid direct-damage)

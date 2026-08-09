@@ -45,11 +45,17 @@
     :fork-length   0.5
     :fork-angle    0.5}
 
+   ;; Original ArcPatterns.strongArc: branchFactor 0.3, passes 5, width 0.3,
+   ;; maxOffset 1.4, generated over a 20-block reference length. maxOffset is
+   ;; an absolute offset there and :amplitude here is a FRACTION of the arc's
+   ;; length, so 1.4/20 = 0.07; segments 20 gives ceil(log2 20) = 5 passes.
+   ;; The port's own numbers (width 0.07, amplitude 0.25) made thunder bolt's
+   ;; main arc a quarter as thick and three times as scattered as the original.
    :strong
    {:name          "strongArc"
-    :segments      14
-    :amplitude     0.25
-    :width         0.07
+    :segments      20
+    :amplitude     0.07
+    :width         0.3
     :core-ratio    0.4
     :tex-wiggle    0.5
     :show-wiggle   0.15
@@ -59,15 +65,20 @@
     :color-inner   {:r 230 :g 245 :b 255}
     :color-line    {:r 200 :g 240 :b 255}
     :flicker       0.95
+    ;; ArcFactory branches are short offshoots of a local segment, not
+    ;; secondary bolts spanning half the arc (:fork-length is a fraction of
+    ;; the whole beam) — same correction already applied to :charging.
     :fork-count    2
-    :fork-length   0.45
-    :fork-angle    0.5}
+    :fork-length   0.08
+    :fork-angle    0.17}
 
+   ;; Original ArcPatterns.aoeArc: branchFactor 0.28, passes 5, width 0.13,
+   ;; maxOffset 1.2 over the same 20-block reference — 1.2/20 = 0.06.
    :aoe
    {:name          "aoeArc"
-    :segments      10
-    :amplitude     0.2
-    :width         0.05
+    :segments      20
+    :amplitude     0.06
+    :width         0.13
     :core-ratio    0.4
     :tex-wiggle    0.6
     :show-wiggle   0.1
@@ -77,9 +88,9 @@
     :color-inner   {:r 220 :g 240 :b 255}
     :color-line    {:r 190 :g 230 :b 255}
     :flicker       0.9
-    :fork-count    3
-    :fork-length   0.5
-    :fork-angle    0.6}
+    :fork-count    2
+    :fork-length   0.08
+    :fork-angle    0.17}
 
    :charging
    {:name          "chargingArc"

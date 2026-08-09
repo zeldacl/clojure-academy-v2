@@ -242,8 +242,13 @@
       (cond
         (and (:aoe-points? opts) start end)
         (let [aoe-start (if (map? aoe-origin) aoe-origin end)
-              main-arcs (vec (repeat 3 (arc-item base start end arc-life arc-pattern
-                                                  :hand-origin? (:hand-origin? opts))))
+              ;; repeat would evaluate arc-item ONCE and hand back the same
+              ;; item three times — identical seed, identical vertices, three
+              ;; bolts drawn exactly on top of each other, reading as one.
+              ;; Upstream spawns three independent EntityArcs, each picking its
+              ;; own template out of the pattern's bank.
+              main-arcs (vec (repeatedly 3 #(arc-item base start end arc-life arc-pattern
+                                                     :hand-origin? (:hand-origin? opts))))
               aoe-arcs (->> aoe-points
                             (keep (fn [pt]
                                     (when (map? pt)
