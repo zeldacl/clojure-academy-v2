@@ -102,6 +102,14 @@
 (defn- scale-factor [font-size]
   (* (/ (double font-size) (get-msdf-base-height)) 1.0))
 
+(def ^:private vanilla-line-height 9.0)
+
+(defn- vanilla-scale-factor [font-size]
+  ;; Vanilla font is 9px tall (8px glyphs + 1px line gap) at scale 1.0, so a
+  ;; :font-size N fallback draw needs N/9 — the MSDF em's N/32 would shrink
+  ;; every glyph to ~28% when the MSDF face is unavailable.
+  (/ (double font-size) vanilla-line-height))
+
 (defn- component-for-run [^String text font-desc]
   (let [^MutableComponent c (Component/literal (or text ""))]
     (.withStyle c ^Style (build-style (or font-desc {})))))
@@ -140,11 +148,8 @@
   (RenderSystem/defaultBlendFunc)
   (RenderSystem/disableDepthTest)
   (RenderSystem/setShaderColor 1.0 1.0 1.0 1.0)
-  ;; NOTE: the MSDF shader must NOT be bound here — GuiGraphics.drawString
-  ;; feeds it the standard text vertex format (pos+color+uv), which the MSDF
-  ;; program cannot interpret, so every reactive-overlay text node rendered
-  ;; white after the MSDF face loaded. Vanilla text shader renders the same
-  ;; glyphs correctly (upstream 1.7.10 uses a plain font anyway).
+  (when-let [shader @msdf-shader]
+    (RenderSystem/setShader (fn [] shader)))
   (.drawString gg font comp (int x) (int y) (unchecked-int color) (boolean shadow?))
   (end-vanilla-draw!))
 
@@ -234,7 +239,8 @@
        (with-monospace (boolean (:monospace? font-desc))
          #(* scale (segmented-width font-desc text :glyph-styles glyph-styles)))
        :else
-       (* (double (.width (vanilla-font) (Component/literal text))) scale)))))
+       (* (double (.width (vanilla-font) (Component/literal text)))
+          (vanilla-scale-factor font-size))))))
 
 ;; ---- draw-msdf-runs! ----
 
@@ -247,7 +253,7 @@
 (defn- draw-vanilla-run! [^GuiGraphics gg font-desc ^String text x y font-size color shadow?]
   (let [^Font mc-font (vanilla-font)
         ^Component comp (component-for-run text font-desc)
-        scale (float (scale-factor font-size))
+        scale (float (vanilla-scale-factor font-size))
         ^PoseStack ps (.pose gg)]
     (.pushPose ps)
     (try
@@ -288,23 +294,25 @@
   (draw-msdf-runs! gg font-desc text x y font-size color shadow? :glyph-styles glyph-styles))
 
 (defn draw-text!
-  "Draw `text` at (`x`,`y`) with vanilla font rendering.
-  `align` is :left, :center, or :right (relative to `x`).
-
-  The MSDF paths are intentionally not used: drawing the MSDF Font through
-  GuiGraphics.drawString (even with the MSDF shader bound) renders the raw
-  SDF atlas pixels — a solid white glyph block — because drawString feeds
-  the standard text vertex format the MSDF program cannot interpret. The
-  vanilla path renders the same glyphs correctly (upstream 1.7.10 uses a
-  plain font anyway)."
+  "Draw `text` at (`x`,`y`) with MSDF shadow font (or vanilla fallback).
+  `align` is :left, :center, or :right (relative to `x`)."
   ([^GuiGraphics gg font-desc ^String text x y font-size color align shadow?]
    (draw-text! gg font-desc text x y font-size color align shadow? nil))
   ([^GuiGraphics gg font-desc ^String text x y font-size color align shadow? glyph-styles]
    (when (seq text)
+     (ensure-msdf-ready!)
      (let [total-w (text-width font-desc text font-size glyph-styles)
            x' (aligned-x align x total-w)]
        (with-monospace (boolean (:monospace? font-desc))
-         #(draw-vanilla-run! gg font-desc text x' y font-size color shadow?))))))
+         #(cond
+            (msdf-active?)
+            (draw-msdf-runs! gg font-desc text x' y font-size color shadow?
+                             :glyph-styles glyph-styles)
+            (MsdfFontManager/hasFontFace)
+            (draw-fallback-runs! gg font-desc text x' y font-size color shadow?
+                                :glyph-styles glyph-styles)
+            :else
+            (draw-vanilla-run! gg font-desc text x' y font-size color shadow?)))))))
 
 (def default-mc-font nil)
 
