@@ -189,3 +189,23 @@
               [:mcmod/stop-loop-sound {:key "meltdowner/ctx-cadence"}]]
              @bridge*)
           "loop stopped on :end"))))
+
+(deftest fired-ray-outlives-its-context-test
+  ;; Upstream c_perform spawns EntityMDRay into the world; c_terminate only
+  ;; restores walk speed and stops the charge loop sound, so the ray lives out
+  ;; its own life. clear-effect-owner! (MSG-CTX-TERMINATED) must not take it.
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
+   (arc-beam/enqueue-for-test! :meltdowner "ctx-clear" :meltdowner/fx-perform
+    {:mode :perform
+     :start {:x 1.0 :y 64.0 :z 0.0}
+     :end {:x 2.0 :y 64.0 :z 1.0}
+     :charge-ticks 20
+     :beam-length 30.0
+     :source-player-id "player-a"})
+  (is (some? (get (:rays (md-fx/fx-snapshot)) [:ctx "ctx-clear"])))
+  (md-fx/clear-fx-owner! [:ctx "ctx-clear"])
+  (is (some? (get (:rays (md-fx/fx-snapshot)) [:ctx "ctx-clear"]))
+      "a fired ray survives its context ending")
+   (is (nil? (get (:effect-state (md-fx/fx-snapshot)) [:ctx "ctx-clear"]))
+       "the context-bound charge state is still cleared")))
+

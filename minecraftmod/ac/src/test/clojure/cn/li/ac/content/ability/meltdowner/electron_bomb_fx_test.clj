@@ -142,3 +142,24 @@
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
           "beam flash plan should disappear when ttl decays to zero"))))
+
+(deftest settlement-beam-outlives-its-context-test
+  ;; Upstream's EntityMdRaySmall is a spawned world entity with its own 14-tick
+  ;; life. This skill is :instant, so its context ends right after the press —
+  ;; long before the delayed settlement beam arrives — and clear-effect-owner!
+  ;; (client_ui_hooks, MSG-CTX-TERMINATED) used to take the beam with it.
+  (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "eb-clear-test"})
+                client-particles/queue-particle-effect! (fn [& _] nil)
+                client-sounds/queue-sound-effect! (fn [& _] nil)]
+    (arc-beam/enqueue-for-test! :electron-bomb "ctx-clear" :electron-bomb/fx-beam
+      {:mode :beam
+       :start {:x 1.0 :y 64.0 :z 2.0}
+       :end {:x 1.0 :y 64.0 :z 17.0}
+       :performed? true})
+    (is (= 1 (count (get (:beams (electron-bomb-fx/fx-snapshot)) [:ctx "ctx-clear"]))))
+    (electron-bomb-fx/clear-fx-owner! [:ctx "ctx-clear"])
+    (is (= 1 (count (get (:beams (electron-bomb-fx/fx-snapshot)) [:ctx "ctx-clear"])))
+        "a fired settlement beam survives its context ending")
+    (is (nil? (get (:effect-state (electron-bomb-fx/fx-snapshot)) [:ctx "ctx-clear"]))
+        "the context-bound ball state is still cleared")))
+

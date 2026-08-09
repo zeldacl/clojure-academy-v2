@@ -156,4 +156,8 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
-  (-> store (update :effect-state dissoc owner-key) (update :beams dissoc owner-key)))
+  ;; The ball/marker state is context-bound; the settlement beam is upstream's
+  ;; EntityMdRaySmall — a world entity with its own 14-tick life. This skill is
+  ;; :instant, so the context is usually gone before the delayed beam even
+  ;; arrives. See railgun_shot.clj's clear-owner.
+  (update store :effect-state dissoc owner-key))

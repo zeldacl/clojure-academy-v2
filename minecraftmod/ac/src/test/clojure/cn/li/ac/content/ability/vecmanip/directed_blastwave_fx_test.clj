@@ -114,7 +114,9 @@
         (is (= 1 (count (get (:waves snapshot) [:ctx "ctx-b"]))))
         (blastwave-fx/clear-fx-owner! [:ctx "ctx-a"])
         (let [after-clear (blastwave-fx/fx-snapshot)]
-          (is (nil? (get (:waves after-clear) [:ctx "ctx-a"])))
+          ;; The wave is a spawned WaveEffect upstream: the context ending does
+          ;; not kill it, it expires on its own ttl.
+          (is (= 1 (count (get (:waves after-clear) [:ctx "ctx-a"]))))
           (is (= 1 (count (get (:waves after-clear) [:ctx "ctx-b"])))))))))
 
 

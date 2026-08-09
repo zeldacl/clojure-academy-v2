@@ -205,4 +205,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-blastwave [_ store owner-key]
-  (-> store (update :effect-state dissoc owner-key) (update :waves dissoc owner-key)))
+  ;; The hand effect is context-bound (upstream l_handEffectTerminate stops the
+  ;; render override); the wave is a spawned WaveEffect entity that nothing
+  ;; kills when the context ends. See railgun_shot.clj's clear-owner.
+  (update store :effect-state dissoc owner-key))

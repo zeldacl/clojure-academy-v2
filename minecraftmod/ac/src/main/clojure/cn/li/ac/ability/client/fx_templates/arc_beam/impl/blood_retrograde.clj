@@ -184,4 +184,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :blood-retrograde [_ store owner-key]
-  (-> store (update :effect-state dissoc owner-key) (update :splashes dissoc owner-key) (update :sprays dissoc owner-key)))
+  ;; Splashes and sprays are spawned world entities upstream (l_terminate only
+  ;; restores walk speed), so they outlive the channel that produced them and
+  ;; expire on their own ttl. See railgun_shot.clj's clear-owner.
+  (update store :effect-state dissoc owner-key))
