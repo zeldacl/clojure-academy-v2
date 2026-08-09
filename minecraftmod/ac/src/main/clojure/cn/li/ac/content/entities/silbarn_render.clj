@@ -32,7 +32,9 @@
     [(.nextInt rng) (.nextInt rng) (.nextInt rng)]))
 
 (defn render!
-  [entity-id hit? age-ticks yaw partial-tick pose-stack buffer-source packed-light packed-overlay]
+  ;; `pitch` is passed by BehaviorObjRenderer for entities that orient along
+  ;; their flight direction (the mag hook); the silbarn spins on its own axis.
+  [entity-id hit? age-ticks yaw _pitch partial-tick pose-stack buffer-source packed-light packed-overlay]
   (when-not hit?
     (try
       (let [{:keys [model texture]} (silbarn-resources)

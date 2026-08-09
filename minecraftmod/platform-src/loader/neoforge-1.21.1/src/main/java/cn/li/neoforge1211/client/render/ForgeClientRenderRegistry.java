@@ -22,7 +22,6 @@ import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
-import net.minecraft.client.renderer.entity.ThrownItemRenderer;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
@@ -64,7 +63,10 @@ public final class ForgeClientRenderRegistry {
         EntityType<ScriptedProjectileEntity> magHook =
             ModEntities.getEntityType("entity_mag_hook", ScriptedProjectileEntity.class);
         if (magHook != null) {
-            event.registerEntityRenderer(magHook, ThrownItemRenderer::new);
+            // Upstream RendererMagHook draws maghook.obj, swapping to
+            // maghook_open.obj once the hook bites (EntityMagHook.isHit).
+            // ThrownItemRenderer drew a flat item sprite that never opened.
+            event.registerEntityRenderer(magHook, BehaviorObjRenderer::new);
         }
 
         for (String registryName : ModEntities.getScriptedRayRegistryNames()) {

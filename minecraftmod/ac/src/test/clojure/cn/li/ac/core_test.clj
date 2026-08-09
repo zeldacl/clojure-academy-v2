@@ -55,7 +55,9 @@
     (with-redefs [ability-client/init-client-fx!
                   (fn [] (swap! calls conj :ability-fx) nil)
                   cn.li.mcmod.spi.entity-render-registry/register-entity-render-ns!
-                  (fn [& _] (swap! calls conj :entity-render-ns) nil)
+                  (fn [hook-id render-ns]
+                    (swap! calls conj [:entity-render-ns hook-id render-ns])
+                    nil)
                   cn.li.mcmod.spi.entity-behavior-registry/register-behavior!
                   (fn [& _] (swap! calls conj :entity-behavior) nil)
                   cn.li.ac.terminal.client.actions/install-ui-hooks!
@@ -72,4 +74,10 @@
                   (fn [] (swap! calls conj :media-scan) nil)]
       (#'ac-core/init-client-renderers))
     (is (= :ability-fx (first @calls)))
-    (is (= 1 (count (filter #{:ability-fx} @calls))))))
+    (is (= 1 (count (filter #{:ability-fx} @calls))))
+    ;; The mag hook is a scripted projectile, so BehaviorObjRenderer resolves
+    ;; its render namespace by registry name rather than a block-body hook id.
+    ;; Without this registration the bridge finds nothing and the hook falls
+    ;; back to no model at all.
+    (is (some #{[:entity-render-ns "entity_mag_hook" "cn.li.ac.entity.mag-hook-render"]}
+              @calls))))

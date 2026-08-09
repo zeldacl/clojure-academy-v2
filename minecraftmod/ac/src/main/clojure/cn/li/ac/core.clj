@@ -62,6 +62,10 @@
   ;; hardcoding AC namespace strings.
   (entity-render-registry/register-entity-render-ns!
     "silbarn" "cn.li.ac.content.entities.silbarn-render")
+  ;; Keyed by the entity's registry name: the mag hook is a scripted
+  ;; projectile, so it has no block-body hook id.
+  (entity-render-registry/register-entity-render-ns!
+    "entity_mag_hook" "cn.li.ac.entity.mag-hook-render")
   (entity-behavior-registry/register-behavior!
     :impact-detonation
     {:gravity-delay-ticks 50

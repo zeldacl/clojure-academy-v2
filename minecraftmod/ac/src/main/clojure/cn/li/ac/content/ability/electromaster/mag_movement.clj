@@ -258,9 +258,13 @@
         ;; Original's s_onEffectStart/s_onEffectUpdate both use sendToClient
         ;; (owner + nearby) — the arc + loop sound are ordinary world FX, not
         ;; gated to isLocal like MineDetect's overlay.
-        (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-start :mode :start} nil nil)
+        ;; :source-player-id is what anchors the looping sound to the caster on
+        ;; every recipient's client (original FollowEntitySound(player, SOUND)).
+        (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-start :mode :start} nil
+                  {:source-player-id player-id})
         (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
-                  {:target {:x (double target-x)
+                  {:source-player-id player-id
+                   :target {:x (double target-x)
                             :y (double target-y)
                             :z (double target-z)}})
         (log/debug "MagMovement started" (:target-kind target-state)))
@@ -332,8 +336,13 @@
                                                 :motion-x next-x
                                                 :motion-y next-y
                                                 :motion-z next-z))
+                  ;; Carry the caster on every update: the client's :update
+                  ;; branch merges base-meta over the stored state, so omitting
+                  ;; it here nulled :source-player-id and every viewer then drew
+                  ;; the arc from their OWN hand instead of only the caster's.
                   (fx/send-local-and-nearby! ctx-id {:topic :mag-movement/fx-update :mode :update} nil
-                            {:target {:x tx :y ty :z tz}})
+                            {:source-player-id player-id
+                             :target {:x tx :y ty :z tz}})
                   (when (zero? (mod movement-ticks 10))
                     (log/debug "MagMovement: moving for" (/ movement-ticks 20.0) "seconds")))))))))))
 

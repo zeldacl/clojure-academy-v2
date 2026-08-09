@@ -20,8 +20,13 @@ import net.minecraft.world.entity.Entity;
  */
 public final class BehaviorObjRenderer<T extends Entity> extends EntityRenderer<T> {
     private static final String REGISTRY_NS = "cn.li.mcmod.spi.entity-render-registry";
-    /** Cached after first successful resolution. */
-    private static volatile String renderNamespace = null;
+    /**
+     * Cached per hook id. A single static slot pinned whichever entity
+     * resolved first, so a second model-rendering entity would have been drawn
+     * with the first one's namespace.
+     */
+    private static final java.util.Map<String, String> RENDER_NAMESPACES =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     static {
         try {
@@ -35,18 +40,32 @@ public final class BehaviorObjRenderer<T extends Entity> extends EntityRenderer<
         super(context);
     }
 
+    private String hookIdOf(T entity) {
+        var spec = ScriptedEntitySpecAccess.getScriptedBlockBodySpec(entity.getType());
+        if (spec != null && spec.getHookId() != null && !spec.getHookId().isBlank()) {
+            return spec.getHookId();
+        }
+        // Entities without a block-body spec (the mag hook is a scripted
+        // projectile) key off their registry name instead.
+        var key = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
+        return key == null ? "" : key.getPath();
+    }
+
     private String resolveRenderNamespace(T entity) {
-        if (renderNamespace != null) {
-            return renderNamespace;
+        String hookId = hookIdOf(entity);
+        if (hookId.isEmpty()) {
+            return null;
+        }
+        String cached = RENDER_NAMESPACES.get(hookId);
+        if (cached != null) {
+            return cached;
         }
         try {
-            var spec = ScriptedEntitySpecAccess.getScriptedBlockBodySpec(entity.getType());
-            String hookId = spec == null ? "" : spec.getHookId();
             Object result = ClojureInterop.invoke(REGISTRY_NS, "get-entity-render-ns", hookId);
             if (result instanceof String) {
                 String ns = (String) result;
                 ClojureInterop.requireNamespace(ns);
-                renderNamespace = ns;
+                RENDER_NAMESPACES.put(hookId, ns);
                 return ns;
             }
         } catch (Throwable ignored) {
@@ -71,6 +90,7 @@ public final class BehaviorObjRenderer<T extends Entity> extends EntityRenderer<
             hit,
             (double) entity.tickCount,
             (double) entityYaw,
+            (double) entity.getXRot(),
             (double) partialTick,
             poseStack,
             bufferSource,

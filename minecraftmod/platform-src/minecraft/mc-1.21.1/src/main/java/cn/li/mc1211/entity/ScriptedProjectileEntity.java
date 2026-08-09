@@ -99,6 +99,16 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         applyAnchoredState();
     }
 
+    /**
+     * Anchored state under the name the client render bridge probes for
+     * reflectively (ScriptedRenderAccess.isBehaviorHit). Upstream's
+     * EntityMagHook exposes the same flag as {@code isHit} and its renderer
+     * swaps to the opened model on it.
+     */
+    public boolean isBehaviorHit() {
+        return isAnchored();
+    }
+
     private boolean isAnchored() {
         return this.anchored || this.entityData.get(DATA_ANCHORED);
     }

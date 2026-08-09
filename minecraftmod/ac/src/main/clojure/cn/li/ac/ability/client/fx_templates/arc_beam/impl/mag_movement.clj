@@ -1,13 +1,37 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement
   (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
             [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private loop-sound (modid/namespaced-path "em.move_loop"))
+(defn- loop-sound-key [ctx-id] (str "mag-movement/" ctx-id))
+
+(defn- start-loop-sound! [ctx-id source-player-id]
+  ;; Original c_startEffect: FollowEntitySound(player, SOUND).setLoop(), stopped
+  ;; in c_endEffect. Queuing em.move_loop as one-shots instead left the last
+  ;; sample playing past the end of the skill with no handle to stop it, and it
+  ;; is a loop sample — so it kept going long after the arc was gone.
+  (try
+    (client-bridge/run-client-effect!
+     :mcmod/start-loop-sound-at-player
+     {:key (loop-sound-key ctx-id)
+      :sound-id loop-sound
+      :owner-uuid (str source-player-id)
+      :volume 0.58
+      :pitch 1.0})
+    (catch Throwable _ nil)))
+
+(defn- stop-loop-sound! [ctx-id]
+  (try
+    (client-bridge/run-client-effect!
+     :mcmod/stop-loop-sound
+     {:key (loop-sound-key ctx-id)})
+    (catch Throwable _ nil)))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -17,7 +41,7 @@
         owner-key* (or owner-key [:ctx ctx-id])
         {:keys [mode target source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
-                   :queue-owner (client-sounds/current-effect-owner)
+                   :queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -25,8 +49,7 @@
     (case mode
       :start
       (do
-        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id loop-sound :volume 0.58 :pitch 1.0})
+        (start-loop-sound! ctx-id source-player-id)
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :target target :ticks 0})))
       :update
@@ -36,7 +59,9 @@
                      (merge st base-meta {:target target})
                      (merge base-meta {:active? true :target target :ticks 0}))))
       :end
-      (update store* :effect-state dissoc owner-key*)
+      (do
+        (stop-loop-sound! ctx-id)
+        (update store* :effect-state dissoc owner-key*))
       store*)))
 
 (defn- tick-state!
@@ -49,11 +74,9 @@
         (store-tick/map-active-states
          states
          (fn [_owner-key st]
-           (let [ticks (inc (long (or (:ticks st) 0)))]
-             (when (zero? (mod ticks 10))
-               (client-sounds/queue-sound-effect! (:queue-owner st)
-                 {:type :sound :sound-id loop-sound :volume 0.4 :pitch 1.0}))
-             (assoc st :ticks ticks))))))))
+           ;; The charge loop is one continuous FollowEntitySound started on
+           ;; :start and stopped on :end — not a re-queued one-shot.
+           (assoc st :ticks (inc (long (or (:ticks st) 0))))))))))
 
 (def ^:private mag-movement-pattern
   (arc-patterns/get-pattern :thin-continuous))
@@ -81,9 +104,17 @@
             target-v (vec3/map->v3 (:target mag-move))
             vertices (arc-patterns/generate-zigzag-segments hand-v target-v mag-movement-pattern)]
         {:ops (vec (ru/zigzag-arc-ops (vec3/map->v3 camera-pos) vertices mag-movement-pattern
-                                      {:life-ratio 1.0
+                                      ;; life-fade-alpha fades OUT over the last
+                                      ;; 20% of life, so life-ratio 1.0 ("about to
+                                      ;; die") multiplies every colour by alpha 0
+                                      ;; — the arc was emitted fully transparent
+                                      ;; every frame. This arc is upstream's
+                                      ;; thinContiniousArc: it lives as long as the
+                                      ;; skill and never fades, so it sits in the
+                                      ;; curve's flat full-brightness middle.
+                                      {:life-ratio 0.5
                                        :wiggle-phase (arc-patterns/wiggle-phase)
-                                       :effective-wiggle (arc-patterns/effective-wiggle-amount mag-movement-pattern 1.0)}))}))))
+                                       :effective-wiggle (arc-patterns/effective-wiggle-amount mag-movement-pattern 0.5)}))}))))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-movement :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-movement :level]
@@ -93,4 +124,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-movement [_ store owner-key]
+  ;; Externally aborted contexts never get :end — stop the loop here too, or it
+  ;; plays forever.
+  (stop-loop-sound! (second owner-key))
   (update store :effect-state dissoc owner-key))
