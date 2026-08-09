@@ -280,6 +280,11 @@
     {:kind :group
      :props {:id :root :x 0.0 :y 0.0 :w root-w :h root-h}
      :children [page-spec
+                ;; Input catcher only — permanently transparent. The visible dim
+                ;; is drawn by the cover embed (see cover-overlay-spec): host-tape
+                ;; nodes are painted before every embedded runtime, so a filled
+                ;; box here darkened the page chrome but never the skill-tree
+                ;; embed drawn on top of it.
                 {:kind :box
                  :props {:id :dev-cover :x 0.0 :y 0.0 :w classic-w :h classic-h :fill 0x00000000}}]}))
 
@@ -405,14 +410,27 @@
 (defn- cover-fullscreen! [^UiRt rt]
   ;; :dev-cover is a child of :root, drawn at getGuiLeft/Top. The runtime is
   ;; resized to the whole screen, so offset the cover by -getGuiLeft/-getGuiTop
-  ;; and size it to the screen — a full-screen dark backdrop + click catcher,
-  ;; matching upstream's blackCover(gui).
+  ;; and size it to the screen — a full-screen click catcher whose absolute
+  ;; position also anchors the cover embed that paints the dim.
   (let [^INode n (rt/node-by-id rt :dev-cover)
         sw (double (rt/screen-w rt)) sh (double (rt/screen-h rt))]
     (.setX n (- (/ (- sw classic-w) 2.0)))
     (.setY n (- (/ (- sh classic-h) 2.0)))
     (.setW n sw) (.setH n sh)
     (.setFlag n node/FLAG-LAYOUT-DIRTY)))
+
+(defn- cover-overlay-spec
+  "The visible half of upstream's blackCover, hosted in its own embedded
+   runtime. The host screen paints its tape first and the embedded runtimes
+   afterwards, in insertion order — so a dim on the host tape sits *under* the
+   skill-tree embed and leaves the tree at full brightness while everything
+   around it darkens. begin-cover! inserts this embed after the tree and before
+   the overlay embed, which puts the dim exactly between them."
+  [^double sw ^double sh]
+  {:kind :group
+   :props {:id :root :x 0.0 :y 0.0 :w sw :h sh}
+   :children [{:kind :box
+               :props {:id :cover-fill :x 0.0 :y 0.0 :w sw :h sh :fill 0x00000000}}]})
 
 (defn- cover-fill-signal [alpha-target clock]
   (let [smoothed-a (ranim/smoothed alpha-target clock cover-fade-rate)]
@@ -445,12 +463,17 @@
 (defn- clear-modal! [^UiRt rt]
   (rt/put-user-signal! rt :active-modal (atom nil)))
 
-(defn- bind-cover-fill! [^UiRt rt fill-sig]
+(defn- bind-cover-fill!
+  "Bind the animated dim colour onto the cover embed's box. The Binding carries
+   its own flush queue, so it belongs to `cover-rt` even though the driving
+   clock/alpha signals live on the host — the embed's per-frame flush! pulls it.
+   The host keeps the handle so finish-cover-close! can unbind it."
+  [^UiRt rt ^UiRt cover-rt fill-sig]
   (when-let [old (rt/user-signal rt :cover-fill-binding)] (sig/unbind! old))
-  (let [^INode n (rt/node-by-id rt :dev-cover)
+  (let [^INode n (rt/node-by-id cover-rt :cover-fill)
         writer (slot-write/resolve-sig-writer (get node/kinds :box) :fill)
-        b (sig/bind! fill-sig n writer (rt/get-dirty-bindings-q rt))]
-    (rt/register-binding! rt (.getIdx n) b)
+        b (sig/bind! fill-sig n writer (rt/get-dirty-bindings-q cover-rt))]
+    (rt/register-binding! cover-rt (.getIdx n) b)
     (rt/put-user-signal! rt :cover-fill-binding b)))
 
 (defn- begin-cover!
@@ -461,12 +484,26 @@
   (set-tick! rt :cover-fade-tick nil)
   (rt/put-user-signal! rt :cover-closing? false)
   (rt/put-user-signal! rt :cover-on-closed nil)
+  ;; A cover left over from an open that never faded out would stack a second
+  ;; dim on this one (blackCover is one layer, not N).
+  (remove-embedded-runtimes! rt :cover?)
   (let [alpha-target (sig/signal-d cover-dim-alpha)
-        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))]
+        fill-sig (cover-fill-signal alpha-target (rt/clock-ms-sig rt))
+        sw (double (rt/screen-w rt)) sh (double (rt/screen-h rt))
+        cover-rt (rt/create-runtime)]
+    (rt/build! cover-rt (cover-overlay-spec sw sh))
     (rt/put-user-signal! rt :cover-alpha-target alpha-target)
-    (bind-cover-fill! rt fill-sig)
+    (bind-cover-fill! rt cover-rt fill-sig)
     (set-cover-visible! rt true)
     (cover-fullscreen! rt)
+    ;; Anchored to :dev-cover so the dim tracks the click catcher's own
+    ;; full-screen offset. Tagged :overlay? so finish-cover-close! disposes it
+    ;; with the popup, and inserted here — before the caller adds its overlay
+    ;; embed — so the popup still draws above the dim.
+    (add-embedded-runtime! rt {:child-rt cover-rt
+                               :anchor-node (rt/node-by-id rt :dev-cover)
+                               :x 0.0 :y 0.0 :w sw :h sh
+                               :visible?-fn nil :overlay? true :cover? true})
     alpha-target))
 
 (defn- finish-cover-close!
