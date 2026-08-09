@@ -12,6 +12,26 @@
   (when (aget ^booleans frozen 0)
     (throw (ex-info "Level effect registry is frozen" {}))))
 
+(defonce ^:private ^java.util.HashSet reported-effect-failures (java.util.HashSet.))
+
+(defn- report-effect-failure!
+  "Log an effect's first tick/build-plan failure, then stay quiet for that
+  effect+phase — these run 20x/s (tick) and once per frame (build-plan), so an
+  unthrottled log would bury the rest of the client log within seconds."
+  [effect-id phase ^Throwable e]
+  (let [k [effect-id phase]]
+    (when (.add reported-effect-failures k)
+      (log/error "Level effect" effect-id phase "failed (isolated; this effect's"
+                 "visual may be frozen or missing, other effects keep running):"
+                 (.getMessage e))
+      (log/stacktrace (str "Level effect " effect-id " " phase " failed") e)))
+  nil)
+
+(defn reset-effect-failure-reports-for-test!
+  []
+  (.clear reported-effect-failures)
+  nil)
+
 (defn- default-empty-state?
   "True for the standard level-effect state shape: a map whose values are
   all empty collections (per-owner tables). Non-map / scalar-bearing states
@@ -113,7 +133,15 @@
     (let [eid (.get effect-order i)]
       (when-some [state (.get effect-states eid)]
         (when-let [tick-state-fn (:tick-state-fn (.get registry eid))]
-          (put-effect-state! eid (tick-state-fn state))))))
+          ;; One effect's throw used to abort the whole loop, so every effect
+          ;; registered AFTER it silently stopped advancing its per-tick state
+          ;; while still rendering from whatever state it last had — the
+          ;; failure shows up as a frozen or half-missing visual on an
+          ;; unrelated skill, with nothing in the log to point at the culprit.
+          (try
+            (put-effect-state! eid (tick-state-fn state))
+            (catch Throwable e
+              (report-effect-failure! eid :tick e)))))))
   nil)
 
 (defn any-level-effect-active? []
@@ -133,7 +161,11 @@
               state (.get effect-states eid)
               build-plan-fn (when state (:build-plan-fn (.get registry eid)))
               result (when build-plan-fn
-                       (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn))
+                       (try
+                         (build-plan-fn camera-pos hand-center-pos tick query-nearby-blocks-fn)
+                         (catch Throwable e
+                           (report-effect-failure! eid :build-plan e)
+                           nil)))
               ops* (if-let [r (:ops result)] (reduce conj! ops r) ops)
               ws (:local-walk-speed result)
               walk-speed* (if (number? ws)
