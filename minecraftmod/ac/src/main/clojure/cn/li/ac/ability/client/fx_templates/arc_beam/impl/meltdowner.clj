@@ -295,7 +295,11 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
+  ;; Charge state and loop sound are context-bound; a fired ray is not.
+  ;; Upstream c_perform spawns EntityMDRay into the world and c_terminate only
+  ;; restores walk speed and stops the sound — the ray lives out its own life.
+  ;; See railgun_shot.clj's clear-owner for the full shape of this bug.
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
    {:key (loop-sound-key (second owner-key))})
-  (-> store (update :effect-state dissoc owner-key) (update :rays dissoc owner-key)))
+  (update store :effect-state dissoc owner-key))

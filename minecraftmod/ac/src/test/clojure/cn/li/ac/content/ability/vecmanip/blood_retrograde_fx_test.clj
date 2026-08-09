@@ -156,7 +156,9 @@
       (brfx/clear-fx-owner! [:ctx "ctx-a"])
       (let [after-clear (brfx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
-        (is (nil? (get (:splashes after-clear) [:ctx "ctx-a"])))
+        ;; Splashes and sprays are spawned world entities upstream — the
+        ;; channel ending does not kill them, they expire on their own ttl.
+        (is (= 1 (count (get (:splashes after-clear) [:ctx "ctx-a"]))))
         (is (= 1 (count (get (:sprays after-clear) [:ctx "ctx-b"]))))))))
 
 
