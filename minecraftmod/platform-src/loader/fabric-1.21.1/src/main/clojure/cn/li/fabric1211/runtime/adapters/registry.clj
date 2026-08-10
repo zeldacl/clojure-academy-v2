@@ -21,7 +21,9 @@
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.platform.neutral.hooks :as power-runtime]))
 
-(def runtime-install-steps
+(defn runtime-install-steps
+  "Build the callback vector after neutral facade IFns have been installed."
+  []
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)
    (adapter-registry/step :player-motion
                           #(when-let [fw-atom (fw/fw-atom)]

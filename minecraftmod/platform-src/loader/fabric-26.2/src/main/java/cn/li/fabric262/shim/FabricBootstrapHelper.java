@@ -32,6 +32,10 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createStoneProperties();
     }
 
+    public static BlockBehaviour.Properties createStoneProperties(String registryId) {
+        return SharedBootstrapBlockHelper.createStoneProperties(registryId);
+    }
+
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         return SharedBootstrapBlockHelper.carrierBlockProperties(base);
     }
@@ -86,19 +90,20 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createPlainBlock(blockProperties);
     }
 
-    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
+    public static Block createLiquidBlock(String registryId, Supplier<? extends FlowingFluid> fluidSupplier) {
         return new LiquidBlock(Objects.requireNonNull(fluidSupplier.get(), "fluid"),
-            BlockBehaviour.Properties.ofFullCopy(Blocks.WATER));
+            SharedBootstrapBlockHelper.createWaterProperties(registryId));
     }
 
-    public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
+    public static Block createScriptedLiquidBlock(String registryId,
+                                                   Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
                                                    String tileId) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            BlockBehaviour.Properties.ofFullCopy(Blocks.WATER),
+            SharedBootstrapBlockHelper.createWaterProperties(registryId),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;
@@ -110,10 +115,10 @@ public final class FabricBootstrapHelper {
             });
     }
 
-    public static Item createFluidBucket(Supplier<? extends Fluid> fluidSupplier) {
+    public static Item createFluidBucket(String registryId, Supplier<? extends Fluid> fluidSupplier) {
         return new net.minecraft.world.item.BucketItem(
             Objects.requireNonNull(fluidSupplier.get(), "fluid"),
-            new Item.Properties()
+            SharedBootstrapBlockHelper.createItemProperties(registryId)
                 .stacksTo(1)
                 .craftRemainder(Items.BUCKET)
         );
@@ -157,8 +162,9 @@ public final class FabricBootstrapHelper {
         return Registry.register(BuiltInRegistries.FLUID, ResourceLocations.of(modId, id), fluid);
     }
 
-    public static Item createBlockItem(Block block) {
-        return SharedBootstrapBlockHelper.createBlockItem(block);
+    public static Item createBlockItem(String registryId, Block block) {
+        return SharedBootstrapBlockHelper.createBlockItem(
+            block, SharedBootstrapBlockHelper.createItemProperties(registryId));
     }
 
     @SuppressWarnings("unchecked")

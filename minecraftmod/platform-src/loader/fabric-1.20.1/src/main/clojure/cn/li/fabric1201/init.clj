@@ -25,7 +25,10 @@
    (fn []
      (ModRecipeTypes/register)
      (ModTriggers/init)
-     (achievement-bridge/init!)
-     (optional-integrations/init!)
+     ;; Achievement and optional-integration bridges consume the neutral
+     ;; runtime facades.  Install the validated provider maps first; otherwise
+     ;; their eager registration observes the unavailable facade stubs.
      (let [target-model (target/current-target!)]
-       (platform-bootstrap/initialize-common-content! target-model)))))
+       (platform-bootstrap/initialize-common-content! target-model))
+     (achievement-bridge/init!)
+     (optional-integrations/init!))))

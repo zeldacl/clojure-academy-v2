@@ -6,12 +6,19 @@
             [cn.li.fabric1201.gui.init :as gui-init]
             [cn.li.platform.target :as target]))
 
+(defn preload-platform-runtime!
+  "Force the AOT runtime-adapter graph to initialize before neutral facade
+   roots are installed from validated provider maps."
+  []
+  nil)
+
 (defn install-runtime!
   []
-  (adapter-registry/run-install-steps! (:id (target/current-target!)) runtime-adapters-registry/runtime-install-steps)
-  (gui-init/init-common!)
-  (gui-init/init-server!)
-  (fabric-runtime/install! {:target (target/current-target!)
-                             :runtime-adapters runtime-adapters-registry/runtime-install-steps
-                             :gui-init true})
+  (let [runtime-adapters (runtime-adapters-registry/runtime-install-steps)]
+    (adapter-registry/run-install-steps! (:id (target/current-target!)) runtime-adapters)
+    (gui-init/init-common!)
+    (gui-init/init-server!)
+    (fabric-runtime/install! {:target (target/current-target!)
+                               :runtime-adapters runtime-adapters
+                               :gui-init true}))
   nil)

@@ -66,6 +66,7 @@
         ((:swap-state! registered-fluids-flowing) #(assoc % fluid-id registered-flowing))
         (when (:has-bucket? block-spec)
           (let [bucket (FabricBootstrapHelper/createFluidBucket
+                         (:bucket-registry-name block-spec)
                          (reify Supplier
                            (get [_] @source-holder)))
                 registered-bucket (fabric-dispatch/register-item
@@ -76,7 +77,7 @@
              #(assoc % (:bucket-item-id block-spec) registered-bucket))))))))
 
 (defn- create-fluid-backed-block
-  [block-id fluid-id has-be? tile-id registered-fluids-source]
+  [registry-name block-id fluid-id has-be? tile-id registered-fluids-source]
   (let [source (registry-core/lookup registered-fluids-source fluid-id)]
     (when-not source
       (throw (ex-info "Fluid source missing for liquid block"
@@ -86,8 +87,8 @@
                              (cast FlowingFluid source)))
           block-inst (if has-be?
                        (FabricBootstrapHelper/createScriptedLiquidBlock
-                         fluid-supplier block-id tile-id)
-                       (FabricBootstrapHelper/createLiquidBlock fluid-supplier))]
+                         registry-name fluid-supplier block-id tile-id)
+                       (FabricBootstrapHelper/createLiquidBlock registry-name fluid-supplier))]
       (when-let [block-holder (get @fluid-block-holders fluid-id)]
         (reset! block-holder block-inst))
       block-inst)))
@@ -101,24 +102,33 @@
         (let [block-inst (cond
                            (and fluid-id fluid-block?)
                            (create-fluid-backed-block
-                             block-id fluid-id has-be? tile-id registered-fluids-source)
+                             registry-name block-id fluid-id has-be? tile-id registered-fluids-source)
 
                            (and fluid-id (not fluid-block?))
-                           (FabricBootstrapHelper/createPlainBlock base-properties)
+                           (FabricBootstrapHelper/createPlainBlock
+                             (FabricBootstrapHelper/createStoneProperties registry-name))
 
                            (and needs-dynamic-properties? has-be?)
                            (let [props (bsp/get-all-properties block-id)]
-                             (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
+                             (FabricBootstrapHelper/createCarrierScriptedDynamicBlock
+                               block-id tile-id props
+                               (FabricBootstrapHelper/carrierBlockProperties
+                                 (FabricBootstrapHelper/createStoneProperties registry-name))))
 
                            needs-dynamic-properties?
                            (let [props (bsp/get-all-properties block-id)]
-                             (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
+                             (FabricBootstrapHelper/createDynamicStateBlock
+                               block-id props (FabricBootstrapHelper/createStoneProperties registry-name)))
 
                            has-be?
-                           (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
+                           (FabricBootstrapHelper/createCarrierScriptedBlock
+                             block-id tile-id
+                             (FabricBootstrapHelper/carrierBlockProperties
+                               (FabricBootstrapHelper/createStoneProperties registry-name)))
 
                            :else
-                           (FabricBootstrapHelper/createPlainBlock base-properties))
+                           (FabricBootstrapHelper/createPlainBlock
+                             (FabricBootstrapHelper/createStoneProperties registry-name)))
               _ (install-bundle-on-block! block-inst tile-id bundles)
               registered (fabric-dispatch/register-block registry-name block-inst)]
           ((:swap-state! registered-blocks) #(assoc % block-id registered)))))))
@@ -154,14 +164,14 @@
               ((:swap-state! registered-block-entities) #(assoc % tile-id registered)))))))))
 
 (defn- create-standalone-item
-  [item-spec]
-  (item-properties/create-standalone-item item-spec))
+  [item-spec registry-name]
+  (item-properties/create-standalone-item item-spec (fn [_player _side f] (f)) registry-name))
 
 (defn register-all-items!
   [{:keys [registered-items registered-blocks]}]
   (core/for-each-item-plan!
     (fn [{:keys [item-id registry-name item-spec]}]
-      (let [item-inst (create-standalone-item item-spec)
+      (let [item-inst (create-standalone-item item-spec registry-name)
             registered (fabric-dispatch/register-item registry-name item-inst)]
         ((:swap-state! registered-items) #(assoc % item-id registered)))))
   (core/for-each-block-plan!
@@ -169,7 +179,7 @@
       (when (core/should-register-block-item? plan)
         (let [{:keys [block-id registry-name]} plan]
           (when-let [block-inst (registry-core/lookup registered-blocks block-id)]
-            (let [block-item (FabricBootstrapHelper/createBlockItem block-inst)
+            (let [block-item (FabricBootstrapHelper/createBlockItem registry-name block-inst)
                   registered (fabric-dispatch/register-item registry-name block-item)]
               ((:swap-state! registered-items) #(assoc % (str block-id "-item") registered)))))))))
 

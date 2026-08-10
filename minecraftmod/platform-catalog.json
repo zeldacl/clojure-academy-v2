@@ -582,7 +582,7 @@
         "capability": ["neoforge-26.2"]
       },
       "dependencies": {
-        "neoForgeVersion": "26.2.0.10-beta"
+      "neoForgeVersion": "26.2.0.25-beta"
       },
       "datagenParityGroup": "mc-262",
       "entrypoint": {
@@ -665,7 +665,7 @@
       "dependencies": {
         "minecraft": "com.mojang:minecraft:26.2",
         "fabricLoader": "net.fabricmc:fabric-loader:0.19.3",
-        "fabricApi": "net.fabricmc.fabric-api:fabric-api:0.154.2+26.2",
+      "fabricApi": "net.fabricmc.fabric-api:fabric-api:0.155.0+26.2",
         "fabricEnergyApi": "teamreborn:energy:5.0.0",
         "fabricEnergyRuntime": "teamreborn:energy:5.0.0",
         "jeiCommonApi": "mezz.jei:jei-26.2-common-api:30.16.0.124",

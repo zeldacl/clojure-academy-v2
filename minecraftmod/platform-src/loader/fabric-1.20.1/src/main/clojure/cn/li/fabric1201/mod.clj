@@ -93,6 +93,7 @@
     (alter-var-root #'fw/framework (constantly fw-inst)))
   (lifecycle-init/init-lifecycle!
     {:init-platform! platform-bootstrap/start!
+     :preload-platform-runtime! runtime-setup/preload-platform-runtime!
      :init-from-java! init/init-from-java
      :load-config! #(do (config-bridge/load-all!)
                          (config-bridge/install-config-persist-op!))

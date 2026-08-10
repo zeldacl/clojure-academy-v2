@@ -10,7 +10,10 @@
 (defn- lifecycle-manifest []
   {:label (:id (target/current-target!))
    :phases [{:id :platform-init
-             :actions [:init-platform! :init-from-java!]}
+             ;; AOT platform namespaces that reference neutral facades must
+             ;; finish their namespace initialization before the facade roots
+             ;; are replaced with provider IFns in :init-from-java!.
+             :actions [:init-platform! :preload-platform-runtime! :init-from-java!]}
             {:id :runtime-activation
              :actions [:load-config! :activate-runtime-content!]}
             {:id :resource-init

@@ -9,7 +9,7 @@
             [cn.li.mc262.datagen.advancement-provider-shell :as advancement-shell]
             [cn.li.mc262.datagen.blockstate-provider-shell :as blockstate-shell]
             [cn.li.mc262.datagen.lang-provider-shell :as lang-shell])
-  (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory]))
+  (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory FabricDataGenerator$Pack$RegistryDependentFactory]))
 
 (def ^:private blockstate-provider-name
   "Fabric Blockstate Provider")
@@ -22,7 +22,7 @@
     :blockstate (blockstate-shell/create-provider output blockstate-provider-name)
     :item-model (item-model-provider/create-provider output)
     :advancement (advancement-shell/create output)
-    :recipe (recipe-provider/create-provider output)
+    :recipe (throw (ex-info "Recipe providers require Fabric registries" {:provider provider}))
     :worldgen (worldgen-provider/create-provider output)
     (throw (ex-info "Unknown Fabric datagen provider factory"
                     {:provider provider}))))
@@ -34,8 +34,16 @@
     (create [_ output]
       (create-provider provider output))))
 
+(defn- recipe-provider-pack-factory [provider]
+  (reify FabricDataGenerator$Pack$RegistryDependentFactory
+    (create [_ output registries]
+      (recipe-provider/create-provider output registries))))
+
 (defn add-provider!
   "Register one shared provider manifest entry with a FabricDataGenerator pack."
   [^FabricDataGenerator$Pack pack provider]
-  (let [^FabricDataGenerator$Pack$Factory factory (provider-pack-factory provider)]
-    (.addProvider pack factory)))
+  (if (= :recipe (:factory provider))
+    (.addProvider pack ^FabricDataGenerator$Pack$RegistryDependentFactory
+                  (recipe-provider-pack-factory provider))
+    (let [^FabricDataGenerator$Pack$Factory factory (provider-pack-factory provider)]
+      (.addProvider pack factory))))

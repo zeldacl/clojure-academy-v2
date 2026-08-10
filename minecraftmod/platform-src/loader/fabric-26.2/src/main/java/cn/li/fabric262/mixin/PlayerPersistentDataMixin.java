@@ -3,6 +3,8 @@ package cn.li.fabric262.mixin;
 import cn.li.fabric262.access.PlayerPersistentDataAccess;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -25,16 +27,14 @@ public abstract class PlayerPersistentDataMixin implements PlayerPersistentDataA
     }
 
     @Inject(method = "readAdditionalSaveData", at = @At("RETURN"))
-    private void academy$readPersistentData(CompoundTag tag, CallbackInfo ci) {
-        if (tag.contains(PERSISTENT_KEY)) {
-            academy$persistentData = tag.getCompound(PERSISTENT_KEY).orElse(null);
-        }
+    private void academy$readPersistentData(ValueInput input, CallbackInfo ci) {
+        academy$persistentData = input.read(PERSISTENT_KEY, CompoundTag.CODEC).orElse(null);
     }
 
     @Inject(method = "addAdditionalSaveData", at = @At("RETURN"))
-    private void academy$writePersistentData(CompoundTag tag, CallbackInfo ci) {
+    private void academy$writePersistentData(ValueOutput output, CallbackInfo ci) {
         if (academy$persistentData != null && !academy$persistentData.isEmpty()) {
-            tag.put(PERSISTENT_KEY, academy$persistentData);
+            output.store(PERSISTENT_KEY, CompoundTag.CODEC, academy$persistentData);
         }
     }
 }
