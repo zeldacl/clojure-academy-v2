@@ -5,7 +5,7 @@
   HashMaps and primitive counters are confined to that thread; no per-call
   atom, persistent scheduler map, result map, or periodic full snapshot is
   created."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.runtime.deferred :as deferred])
   (:import [java.util ArrayList HashMap Iterator Map$Entry]))
 

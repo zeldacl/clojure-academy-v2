@@ -2,7 +2,7 @@
   "Shared overlay element renderer for legacy plan-based tests.
    Not used by reactive overlay."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.systems RenderSystem]
            [net.minecraft.client Minecraft]

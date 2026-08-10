@@ -3,10 +3,10 @@
   (:require [cn.li.mcbase.runtime.event.item-use :as item-use]
             [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.mcmod.platform.entity :as entity]
-            [cn.li.mcmod.hooks.core :as hooks-core]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.hooks :as hooks-core]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcbase.entity IScriptedEffectEntity]
            [cn.li.mcver EntityClasses McAccess]

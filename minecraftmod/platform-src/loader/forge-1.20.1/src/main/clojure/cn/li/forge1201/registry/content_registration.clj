@@ -7,7 +7,7 @@
             [cn.li.forge1201.runtime.owner :as runtime-owner]
             [cn.li.mcbase.block.logic-pipeline :as logic-pipeline]
             [cn.li.mcbase.entity.mob-logic-pipeline :as mob-pipeline]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mc1201.block.blockstate-properties :as blockstate-props]
             [cn.li.platform.registry.content-registration-core :as core])
   (:import [cn.li.forge1201.entity ModEntities]

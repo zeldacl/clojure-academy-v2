@@ -4,8 +4,8 @@
   Platform adapters should supply only registration API and optional render-tail
   callbacks (e.g. Forge event bus hooks)."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.gui.container-state :as container-state]
-            [cn.li.mcmod.gui.registry :as gui-reg]
+            [cn.li.platform.neutral.gui-runtime :as container-state]
+            [cn.li.platform.neutral.gui-runtime :as gui-reg]
             [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
 (defonce ^:private create-tech-ui-container-screen-atom

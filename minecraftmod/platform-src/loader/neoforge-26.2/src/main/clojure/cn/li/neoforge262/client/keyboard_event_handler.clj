@@ -4,11 +4,12 @@
    Purpose: Forge-specific event handling that abstracts platform differences.
    Routes Forge keyboard events to the universal mcmod protocol."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
+            [cn.li.platform.neutral.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
+            [cn.li.platform.neutral.client-render :as input-buttons]
             [cn.li.mc262.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
@@ -18,8 +19,7 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
 
-(def ^:private v-toggle-state-atom
-  (atom (cn.li.ac.ability.client.input-state-machine/initial-button-state)))
+(def ^:private v-toggle-state-atom nil)
 
 (defn- get-current-player-uuid
   "Get the current player's UUID from client session"
@@ -106,6 +106,11 @@
   (try
     (install/process-once! ::event-handler-installed
       #(do
+         ;; Providers are installed before listener registration, not before
+         ;; namespace construction. Cache the neutral initial state once so
+         ;; key events remain on the atom-only path.
+         (alter-var-root #'v-toggle-state-atom
+                         (constantly (atom (input-buttons/initial-button-state))))
          (.addListener NeoForge/EVENT_BUS
                        EventPriority/NORMAL
                        false

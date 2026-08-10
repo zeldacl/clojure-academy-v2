@@ -51,3 +51,10 @@
             [:slot-abort "p1" 0]
             [:movement-up "p1" :forward]]
            @calls))))
+
+(deftest install-client-bridge-clears-replaced-hot-operations-test
+  (client-bridge/install-client-bridge! {:run-client-effect (fn [_ _] :first)})
+  (is (= :first (client-bridge/run-client-effect! :effect {})))
+  (client-bridge/install-client-bridge! {})
+  (is (thrown? NullPointerException
+               (client-bridge/run-client-effect! :effect {}))))

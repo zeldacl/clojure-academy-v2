@@ -5,7 +5,7 @@
   to enable both Forge and Fabric to use identical core event processing logic."
   (:require [cn.li.mcmod.platform.block-manipulation :as block-manip]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.block.query :as bquery]
+            [cn.li.platform.neutral.block-runtime :as bquery]
             [cn.li.mcbase.integration.event-feedback :as event-feedback]
             [cn.li.mcbase.integration.event-helpers-core :as event-helpers])
   (:import [net.minecraft.world.entity.player Player]))

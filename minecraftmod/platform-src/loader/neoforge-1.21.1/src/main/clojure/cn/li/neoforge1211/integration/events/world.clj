@@ -1,10 +1,10 @@
 (ns cn.li.neoforge1211.integration.events.world
   "Forge world load/unload event handlers."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.events.world-save-cache :as world-save-cache]
-            [cn.li.mcmod.events.world-state-notify :as world-state-notify]
-            [cn.li.mcmod.events.world-owner-key :as wok]
+            [cn.li.platform.neutral.event-runtime :as world-lifecycle]
+            [cn.li.platform.neutral.event-runtime :as world-save-cache]
+            [cn.li.platform.neutral.event-runtime :as world-state-notify]
+            [cn.li.platform.neutral.event-runtime :as wok]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mc1211.integration.saveddata.world-lifecycle :as wl-saved])
 	  (:import [net.minecraft.server.level ServerLevel]

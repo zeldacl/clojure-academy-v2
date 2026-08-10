@@ -5,8 +5,8 @@
   injected via shared/install-client-owner-functions! from client init."
   (:require [cn.li.neoforge1211.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
+            [cn.li.platform.neutral.client-network :as net-client]
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.target :as target]))
 

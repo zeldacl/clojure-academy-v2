@@ -1,6 +1,6 @@
 (ns cn.li.mcbase.datagen.lang-provider-shell
   "Shared DataProvider shell that emits all merged language files."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcbase.datagen.lang-provider-core :as lang-core]
             [cn.li.mcbase.datagen.gson-util :as gson-util])
   (:import [net.minecraft.data DataProvider CachedOutput PackOutput]

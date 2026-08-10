@@ -5,8 +5,8 @@
   transports may read/write bytes or buffers, but request/response/push envelope
   semantics live here."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.network.binary-codec :as codec]
-            [cn.li.mcmod.network.client :as net-client]))
+            [cn.li.platform.neutral.network-runtime :as codec]
+            [cn.li.platform.neutral.client-network :as net-client]))
 
 (defn make-packet
   [packet-id payload]

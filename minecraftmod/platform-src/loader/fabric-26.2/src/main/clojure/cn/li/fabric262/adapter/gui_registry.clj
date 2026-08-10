@@ -1,14 +1,14 @@
 (ns cn.li.fabric262.adapter.gui-registry
   "Fabric 26.2 GUI Registration Implementation"
-  (:require [cn.li.mcmod.gui.registry :as gui]
-            [cn.li.mcmod.gui.handler :as gui-handler]
+  (:require [cn.li.platform.neutral.gui-runtime :as gui]
+            [cn.li.platform.neutral.gui-runtime :as gui-handler]
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.fabric262.gui.provider-bridge :as provider-bridge]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.mc262.gui.registry.common :as registry-common]
             [cn.li.mcbase.gui.registry.open :as open-core]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources Identifier]
            [net.minecraft.core Registry]

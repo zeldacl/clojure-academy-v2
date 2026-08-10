@@ -2,7 +2,7 @@
   "Shared Minecraft-side damage interception helpers (no loader API imports)."
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.hooks.core :as damage-hooks]
+            [cn.li.platform.neutral.hooks :as damage-hooks]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver McAccess]
            [cn.li.mcbase.runtime DamageInterception]

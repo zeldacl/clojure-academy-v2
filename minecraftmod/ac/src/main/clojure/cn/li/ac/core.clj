@@ -109,3 +109,11 @@
     (when should-register?
       (register-lifecycle-hooks-body!)))
   nil)
+
+(defn runtime-provider
+  "Neutral content-provider factory loaded from generated target metadata.
+
+   The returned function values intentionally contain no Minecraft or loader
+   classes; platform code supplies those capabilities through host ports."
+  [_context]
+  {:register-content! register-lifecycle-hooks!})

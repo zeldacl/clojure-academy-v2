@@ -6,7 +6,7 @@
   (:require [cn.li.mcbase.gui.provider.dispatcher :as provider-dispatcher]
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.gui.handler :as gui-handler]
+            [cn.li.platform.neutral.gui-runtime :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world MenuProvider]
            [net.minecraft.network.chat Component]))

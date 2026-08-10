@@ -3,8 +3,8 @@
 
   Platform modules should delegate registration to this namespace and
   keep only loader-specific entry signatures."
-  (:require [cn.li.mcmod.command.metadata :as cmd-meta]
-            [cn.li.mcmod.command.runtime-hooks :as command-hooks]
+  (:require [cn.li.platform.neutral.command-runtime :as cmd-meta]
+            [cn.li.platform.neutral.command-runtime :as command-hooks]
             [cn.li.mcbase.command.action-impls] ; Ensure action implementations are loaded
             [cn.li.mcbase.command.brigadier-tree :as brig-tree]
             [cn.li.mcmod.util.log :as log])

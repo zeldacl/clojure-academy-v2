@@ -4,8 +4,8 @@
             [cn.li.fabricbase.owner :as fabric-owner]
             [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcbase.runtime.network-payload :as runtime-payload]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
+            [cn.li.platform.neutral.network-runtime :as net-server]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.networking.v1 ServerPlayNetworking ServerPlayNetworking$PlayChannelHandler]
@@ -56,6 +56,7 @@
   []
   (install/process-once! ::server-initialized
     (fn []
+      (shared/install-channels!)
       (let [receiver (reify ServerPlayNetworking$PlayChannelHandler
                        (receive [_ server player _handler buf _sender]
                          (on-server-play-receive server player _handler buf _sender)))]

@@ -1,9 +1,9 @@
 (ns cn.li.mcbase.datagen.blockstate-provider-core
   "Shared blockstate/model/item-model datagen inference helpers."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.block.blockstate-definition :as blockstate-def]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as blockstate-def]
             [cn.li.mcbase.datagen.blockstate-support :as bs-support]))
 
 (defn normalize-candidates

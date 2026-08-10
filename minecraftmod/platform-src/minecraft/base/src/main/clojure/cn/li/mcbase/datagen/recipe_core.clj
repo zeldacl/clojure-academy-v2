@@ -2,7 +2,7 @@
   "Shared recipe datagen helpers used by Forge/Fabric providers."
   (:require [clojure.string :as str]
             [cn.li.mcbase.datagen.recipe-patterns :as recipe-patterns]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata]))
 
 (defn load-recipes

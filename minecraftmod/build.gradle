@@ -303,9 +303,26 @@ tasks.register("verifyPlatformCatalog") {
             ["buildProfile", "gradleJvmVersion", "compileJavaVersion", "runtimeJavaVersion"].each { key ->
                 if (!target[key]) problems << "${targetId} missing ${key}"
             }
-            (target.contentModules ?: []).each { module ->
-                ["id", "namespace", "function"].each { key ->
-                    if (!module[key]) problems << "${targetId} content module missing ${key}"
+            if (target.loader?.toString() != "none" && !(target.neutralAotWhitelist instanceof Collection)) {
+                problems << "${targetId} must declare neutralAotWhitelist (the reviewed mcmod AOT boundary)"
+            }
+            def manifests = target.providerManifests
+            def expectedProviderSides = ["common", "server", "client", "datagen"] as Set
+            def manifestSides = manifests instanceof Map
+                ? (manifests.keySet().collect { it.toString() } as Set)
+                : ([] as Set)
+            if (!(manifests instanceof Map) || manifestSides != expectedProviderSides) {
+                problems << "${targetId} providerManifests must contain exactly common/server/client/datagen"
+            } else {
+                manifests.each { side, modules ->
+                    if (!(modules instanceof Collection)) {
+                        problems << "${targetId} provider manifest ${side} must be a collection"
+                    }
+                    (modules ?: []).each { module ->
+                        ["id", "namespace", "function", "provides"].each { key ->
+                            if (!module[key]) problems << "${targetId} provider manifest ${side} missing ${key}"
+                        }
+                    }
                 }
             }
             (target.contentProjects ?: []).each { projectId ->
@@ -546,6 +563,10 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
         ].findAll { it.directory }
         // Real API refs look like net.minecraft.Foo ??docstrings saying "net.minecraft.*" do not match.
         def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
+        // Neutral source is shipped as .clj in remapped Loom jars.  Project
+        // platform classes are just as unsafe there as net.minecraft names:
+        // Clojure would compile the original symbol after remap has finished.
+        def internalPlatformForbidden = ~/cn\.li\.(mc1201|mc1211|mc262|mcbase|fabric1201|fabric1211|fabric262|fabricbase|forge1201|neoforge1211|neoforge262|neoforgebase)\.[A-Za-z_]/
         def violations = []
         roots.each { File root ->
             fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.each { File src ->
@@ -584,6 +605,10 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
                     while (matcher.find()) {
                         violations << "${src}:${idx + 1}: ${matcher.group()}"
                     }
+                    def internalMatcher = internalPlatformForbidden.matcher(code)
+                    while (internalMatcher.find()) {
+                        violations << "${src}:${idx + 1}: ${internalMatcher.group()}"
+                    }
                 }
             }
         }
@@ -615,6 +640,100 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
                 (violations.size() > 40 ? "\n... and ${violations.size() - 40} more" : ""))
         }
         logger.lifecycle("[verifyNeutralClojureNoMinecraftApis] ok ({} roots)", roots.size())
+    }
+}
+
+def targetProviderDescriptors = { target ->
+    ((target.providerManifests ?: [:]).values().collectMany { modules -> modules ?: [] })
+}
+
+tasks.register("verifyNeutralProviderClosure") {
+    group = "verification"
+    description = "Verify generated runtime providers resolve only platform-neutral source namespaces."
+    doLast {
+        def catalog = rootProject.ext.platformCatalog()
+        def roots = [file("api/src/main/clojure"), file("mcmod/src/main/clojure"), file("ac/src/main/clojure")]
+            .findAll { it.directory }
+        def forbidden = java.util.regex.Pattern.compile("(?:net\\.(minecraft|minecraftforge|fabricmc|neoforged)|cn\\.li\\.(mc1201|mc1211|mc262|mcbase|fabric1201|fabric1211|fabric262|fabricbase|forge1201|neoforge1211|neoforge262|neoforgebase))\\.")
+        def findSource = { String namespaceName ->
+            def rel = namespaceName.replace('.', '/').replace('-', '_') + ".clj"
+            roots.collect { new File(it, rel) }.find { it.isFile() }
+        }
+        def violations = []
+        def descriptors = catalog.targets.values().collectMany { target -> targetProviderDescriptors(target) }
+        descriptors.each { descriptor ->
+            def rootNamespace = descriptor.namespace?.toString()
+            if (!rootNamespace) {
+                violations << "provider without namespace: ${descriptor}"
+                return
+            }
+            def queue = new ArrayDeque<String>()
+            def visited = new LinkedHashSet<String>()
+            queue.add(rootNamespace)
+            while (!queue.isEmpty()) {
+                def namespaceName = queue.removeFirst()
+                if (!visited.add(namespaceName)) continue
+                def source = findSource(namespaceName)
+                if (source == null) {
+                    violations << "${descriptor.id}: provider closure namespace is not neutral source: ${namespaceName}"
+                    continue
+                }
+                def text = source.getText("UTF-8")
+                // Direct imports and type references are covered globally by
+                // verifyNeutralClojureNoMinecraftApis. Here the transitive
+                // closure check focuses on static namespace edges and the one
+                // source-level escape hatch that can hide a class reference.
+                if (text.readLines().any { String line ->
+                    line.contains("Class/forName") && forbidden.matcher(line).find()
+                }) {
+                    violations << "${descriptor.id}: provider closure reflectively names a platform class: ${source}"
+                }
+                // Require vectors are the only permitted static edge for a
+                // neutral provider. Dynamic require remains prohibited by the
+                // provider implementation contract and hot-path tests.
+                def matcher = java.util.regex.Pattern.compile("\\[\\s*(cn\\.li\\.[A-Za-z0-9_.-]+)").matcher(text)
+                while (matcher.find()) {
+                    def dependency = matcher.group(1)
+                    if (findSource(dependency) != null) queue.add(dependency)
+                    if (dependency.startsWith("cn.li.platform.") ||
+                        dependency ==~ /cn\.li\.(mc1201|mc1211|mc262|mcbase|fabric1201|fabric1211|fabric262|fabricbase|forge1201|neoforge1211|neoforge262|neoforgebase)(\..*)?/) {
+                        violations << "${descriptor.id}: provider closure requires platform namespace ${dependency}"
+                    }
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Neutral provider closure violations:\n" + violations.unique().join("\n"))
+        }
+        logger.lifecycle("[verifyNeutralProviderClosure] ok ({} provider descriptors)", descriptors.size())
+    }
+}
+
+tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
+    group = "verification"
+    description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
+    dependsOn ":api:classes", ":mcmod:classes", ":ac:classes"
+    def neutralProjects = [project(":api"), project(":mcmod"), project(":ac")]
+    // Gradle 9 rejects resolving a child project's Configuration while this
+    // JavaExec task's inputs are being snapshotted.  Resolve this deliberately
+    // at configuration time instead: it still contains only api/mcmod/ac
+    // runtime entries, and the task continues to launch a fresh, isolated JVM.
+    def neutralRuntimeClasspath = neutralProjects.collectMany {
+        it.sourceSets.main.runtimeClasspath.files
+    }
+    classpath = files(neutralRuntimeClasspath)
+    mainClass = "clojure.main"
+    doFirst {
+        def catalog = rootProject.ext.platformCatalog()
+        def factorySymbols = catalog.targets.values()
+            .collectMany { target -> targetProviderDescriptors(target) }
+            .collect { descriptor -> "${descriptor.namespace}/${descriptor.function}" }
+            .unique()
+            .sort()
+        // The command intentionally does no factory invocation: it proves the
+        // source closure can be required on an isolated neutral classpath,
+        // while provider validation itself remains an initialization concern.
+        args = ["-e", "(doseq [factory '[${factorySymbols.join(' ')}]] (requiring-resolve factory))"]
     }
 }
 
@@ -768,6 +887,8 @@ tasks.register("verifyCurrentPlatforms") {
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",
+              "verifyNeutralProviderClosure",
+              "verifyNeutralProviderRuntimeLoad",
               "verifyMinecraftComponentNeutrality",
               "verifyVersionSeamParity"
 }

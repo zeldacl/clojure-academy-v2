@@ -2,8 +2,8 @@
   "Registers item model predicates for :item-model-energy-levels items.
 
   Predicate id is `<modid>:energy` (see datagen item_model_provider)."
-  (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+  (:require [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]
            [cn.li.mcver ResourceLocations]

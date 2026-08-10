@@ -11,8 +11,8 @@
   - Adds each item + optional NBT variants (energy fully-charged, filled-variant)."
   (:require [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [clojure.string :as str])
   (:import [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]

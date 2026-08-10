@@ -7,7 +7,7 @@
   plain vanilla model that only carries the display transforms and the atlas
   texture. The mesh is attached at bake time — see
   `cn.li.fabric262.client.obj-model-registration`."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcbase.datagen.gson-util :as gson-util]
             [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core])
     (:import [com.google.gson Gson JsonElement]

@@ -4,7 +4,7 @@
   Platform layers provide concrete persistence/sync callbacks and event binding."
   (:require [cn.li.mcbase.runtime.server-runtime :as server-runtime]
             [cn.li.mcbase.runtime.spi.server-context :as server-context-spi]
-            [cn.li.mcmod.hooks.core :as player-hooks]
+            [cn.li.platform.neutral.hooks :as player-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [java.util HashMap]

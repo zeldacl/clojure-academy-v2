@@ -1,9 +1,9 @@
 (ns cn.li.neoforge1211.integration.forge-energy
   "Forge Energy integration for descriptor-declared content endpoints."
   (:require [cn.li.mcmod.capability.registry :as cap-registry]
-            [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
-            [cn.li.mcmod.content.registry :as content-registry]
-            [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.platform.neutral.integration-runtime :as energy-hooks]
+            [cn.li.platform.neutral.network-runtime :as content-registry]
+            [cn.li.platform.neutral.block-runtime :as tdsl]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.neoforge1211.capability CapabilityRegistry ForgeEnergyAdapter]
            [cn.li.mcmod.energy IEnergyCapable]

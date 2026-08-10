@@ -2,7 +2,7 @@
   "Forge 1.20.1 GUI/RPC server transport via ClojureNetwork SimpleChannel."
   (:require [cn.li.forge1201.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
-            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.platform.neutral.network-runtime :as net-server]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server.level ServerPlayer]))
 

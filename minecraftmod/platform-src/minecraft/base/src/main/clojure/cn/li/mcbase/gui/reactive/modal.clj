@@ -5,8 +5,8 @@
   {:child-rt :x :y :w :h :on-close-outside} in GUI-local coords) under the
   parent UiRt's user-signals. When present, mouse/key input is captured by
   the modal child."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.events :as events])
+  (:require [cn.li.platform.neutral.ui :as rt]
+            [cn.li.platform.neutral.ui :as events])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn active-modal

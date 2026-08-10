@@ -1,5 +1,5 @@
 (ns cn.li.neoforge262.registry.creative-tab-event
-  "BuildCreativeModeTabContentsEvent handler �?1.20+ data-driven creative tab population.
+  "BuildCreativeModeTabContentsEvent handler 鈥?1.20+ data-driven creative tab population.
 
   Replaces the legacy `displayItems` callback on CreativeModeTab.builder()
   with the event-driven pattern recommended by official NeoForge 26.2 docs.
@@ -11,8 +11,8 @@
   - Adds each item + optional NBT variants (energy fully-charged, filled-variant)."
   (:require [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [clojure.string :as str])
   (:import [cn.li.mc262.bridge McAccess] [net.minecraft.world.item ItemStack]
            [net.minecraft.world.level ItemLike]
@@ -22,7 +22,7 @@
            [cn.li.mc262.bridge ItemStackInterop]))
 
 
-;; ── NBT variant helpers ──────────────────────────────────────────────
+;; 鈹€鈹€ NBT variant helpers 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 (defn- ^:private accept-energy-charged-variant
   "Add a fully-charged energy item variant to the creative tab output.
@@ -75,7 +75,7 @@
     (catch Exception e (log/warn "Failed to create filled variant for" item-id (ex-message e)) nil)))
 
 
-;; ── Event handler ────────────────────────────────────────────────────
+;; 鈹€鈹€ Event handler 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
 (defn- ^:private accept-entry!
   "Add a single registry metadata entry (item or block-item) and any NBT
@@ -87,7 +87,7 @@
     (when item-obj
       ;; Default (empty) instance
       (.accept event ^ItemLike item-obj)
-      ;; Stateful variants �?only for standalone items, not block-items
+      ;; Stateful variants 鈥?only for standalone items, not block-items
       (when (= type :item)
         (when-let [spec (registry-metadata/get-item-spec id)]
           (let [props (:properties spec)]

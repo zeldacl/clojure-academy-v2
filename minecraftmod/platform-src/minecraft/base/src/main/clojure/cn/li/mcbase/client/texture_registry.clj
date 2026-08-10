@@ -3,8 +3,8 @@
 
    Delegates path storage to the platform-neutral mcmod registry.
    Resolves keyword->path-string entries via ResourceLocations seam."
-  (:require [cn.li.mcmod.client.texture-registry :as mcmod-tex]
-            [cn.li.mcmod.config :as modid-config]
+  (:require [cn.li.platform.neutral.client-runtime :as mcmod-tex]
+            [cn.li.platform.neutral.config :as modid-config]
             [clojure.string :as str])
   (:import [cn.li.mcver ResourceLocations]))
 

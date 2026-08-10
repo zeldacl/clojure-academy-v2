@@ -1,8 +1,8 @@
 (ns cn.li.mcbase.block.logic-pipeline
   "Loader-neutral tile bundle compile/install pipeline (shared by Forge and Fabric)."
   (:require [cn.li.mcbase.block.logic-compile :as logic-compile]
-            [cn.li.mcmod.block.tile-dsl :as tdsl]
-            [cn.li.mcmod.block.tile-kind :as tile-kind])
+            [cn.li.platform.neutral.block-runtime :as tdsl]
+            [cn.li.platform.neutral.block-runtime :as tile-kind])
   (:import [cn.li.mcbase.block IScriptedBlock]
            [cn.li.mcbase.block.logic TileLogicBundle]))
 

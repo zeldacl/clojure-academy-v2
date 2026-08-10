@@ -6,7 +6,7 @@
    for both :alternative and :original scheme inputs."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [cn.li.mcbase.client.session :as client-session])
   (:import [net.minecraft.client Minecraft]
@@ -53,7 +53,7 @@
     (let [player-uuid (get-current-player-uuid)
           session-id (get-client-session-id)]
       (when (and player-uuid session-id)
-        (let [screen-open? (some? (.screen ^Minecraft minecraft))]
+         (let [screen-open? (some? (.screen (.gui ^Minecraft minecraft)))]
           ;; Poll one-shot inputs (R, V key presses) via glfw-polling-core
           (glfw-polling/poll-all-inputs! minecraft player-uuid session-id
                                          {:suppress-triggers? screen-open?})

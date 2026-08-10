@@ -8,7 +8,7 @@
   (:require [cn.li.mc262.datagen.metadata-resolver :as metadata-resolver]
             [cn.li.mc262.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
-            [cn.li.mcmod.config :as modid])
+            [cn.li.platform.neutral.config :as modid])
   (:import [cn.li.mc262.recipe ContentRecipe]
            [cn.li.mc262.shim DelegatingFinishedRecipe]
            [cn.li.mcver ResourceLocations]

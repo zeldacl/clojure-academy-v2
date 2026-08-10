@@ -4,7 +4,7 @@
    Registers all data generators for the mod.
    Triggered during setup phase when running:
      ./gradlew :platform:runData -PplatformTarget=<target-id>"
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.neoforge1211.datagen.provider-factory :as provider-factory]
             [cn.li.mcbase.datagen.provider-registration :as provider-registration]
             [cn.li.mc1211.datagen.setup-common :as setup-common]

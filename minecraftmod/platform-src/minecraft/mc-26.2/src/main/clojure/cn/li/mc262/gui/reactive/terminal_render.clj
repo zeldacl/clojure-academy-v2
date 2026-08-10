@@ -12,8 +12,8 @@
    the drawing helpers project their own geometry through it — see
    GuiPerspectiveWarp and PerspectiveQuadRenderState."
   (:require [cn.li.mcbase.gui.reactive.terminal-camera :as camera]
-            [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.ui.runtime :as rt])
+            [cn.li.platform.neutral.client-runtime :as bridge]
+            [cn.li.platform.neutral.ui :as rt])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
            [cn.li.mc262.client.render GuiPerspectiveWarp]
            [cn.li.mcmod.uipojo.runtime UiRt]
@@ -41,8 +41,10 @@
       ;; The extractor works in GUI-scaled units, so the whole camera is built
       ;; in that space rather than in framebuffer pixels; the aspect ratio is
       ;; the same either way.
-      (let [screen-w (max 1.0 (double (rt/screen-w rt)))
-            screen-h (max 1.0 (double (rt/screen-h rt)))
+      ;; UiRt is a neutral Java API.  Read its dimensions directly so this
+      ;; platform renderer does not pull the Clojure UI runtime into AOT.
+      (let [screen-w (max 1.0 (double (.getScreenW rt)))
+            screen-h (max 1.0 (double (.getScreenH rt)))
             cam (camera/camera-matrix (/ screen-w screen-h) fd (camera/game-seconds))]
         (GuiPerspectiveWarp/set (camera/homography cam screen-w screen-h))
         (aset state 0 Boolean/TRUE)))))

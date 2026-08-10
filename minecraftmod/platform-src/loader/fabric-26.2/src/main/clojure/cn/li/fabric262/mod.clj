@@ -3,7 +3,7 @@
 
   Owns Fabric-specific bootstrap ordering and delegates cross-loader lifecycle
   phases to shared setup namespaces."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.fabric262.init :as init]
             [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.mc262.block.blockstate-properties :as bsp]
@@ -12,11 +12,10 @@
             [cn.li.fabric262.setup.runtime-setup :as runtime-setup]
             [cn.li.fabric262.setup.event-wiring :as event-wiring]
             [cn.li.fabric262.config.bridge :as config-bridge]
-            [cn.li.mcmod.lifecycle :as lifecycle]
             [cn.li.mcmod.protocol.core :as registry-core]
             [cn.li.mcmod.runtime.deferred :as deferred]
 	            [cn.li.mcmod.framework :as fw]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc262.entity.hooks :as entity-hooks])
   (:import [cn.li.fabric262.shim FabricBootstrapHelper]))
@@ -97,7 +96,7 @@
      :init-from-java! init/init-from-java
      :load-config! #(do (config-bridge/load-all!)
                          (config-bridge/install-config-persist-op!))
-     :activate-runtime-content! lifecycle/run-runtime-content-activation!
+     :activate-runtime-content! (platform-bootstrap/runtime-content-activation-callback!)
      :init-blockstate-properties! bsp/init-all-properties!
      :register-content! #(do
                            (content-registration/register-content! (registration-context))

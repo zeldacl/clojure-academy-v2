@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.gui.reactive.clock
   "Clock driver -- set the three clock signals each frame."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.signal :as sig])
+  (:require [cn.li.platform.neutral.ui :as rt]
+            [cn.li.platform.neutral.ui :as sig])
   (:import [cn.li.mcver McAccess]
            [cn.li.mcmod.uipojo.runtime UiRt]
            [net.minecraft.client Minecraft]))

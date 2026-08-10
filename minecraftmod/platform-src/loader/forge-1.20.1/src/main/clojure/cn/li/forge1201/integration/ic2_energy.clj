@@ -4,7 +4,7 @@
   SANCTIONED REFLECTION ISLAND: optional third-party ic2.api.* types are not
   Minecraft/Forge symbols and are allowlisted by verifyNoPlatformReflection."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.integration.energy-hooks :as energy-hooks])
+            [cn.li.platform.neutral.integration-runtime :as energy-hooks])
   (:import [cn.li.mcmod.energy IEnergyCapable]
            [java.lang.reflect InvocationHandler Proxy]))
 

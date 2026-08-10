@@ -5,7 +5,7 @@
 
    Fabric uses different event system than Forge, so this module
    provides utilities to be called during data generation phase."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.fabric1211.datagen.provider-factory :as provider-factory]
             [cn.li.mcbase.datagen.provider-registration :as provider-registration]
             [cn.li.mc1211.datagen.setup-common :as setup-common]

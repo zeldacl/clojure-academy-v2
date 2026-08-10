@@ -4,8 +4,8 @@
             [cn.li.fabricbase.owner :as fabric-owner]
             [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcbase.runtime.network-payload :as runtime-payload]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.network.server :as net-server]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
+            [cn.li.platform.neutral.network-runtime :as net-server]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1211.network FabricPayloadBridge]
@@ -34,7 +34,7 @@
 (defn init-server! []
   (install/process-once! ::server-initialized
     #(do
-       (FabricPayloadBridge/installServer
+       (FabricPayloadBridge/installServer (shared/configured-mod-id!)
          (fn [bytes player]
            (let [^ServerPlayer player player
                  server (.getServer player)]

@@ -19,7 +19,7 @@
             [cn.li.mc1201.runtime.potion-effects-core :as potion-effects-core]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.hooks.core :as power-runtime]))
+            [cn.li.platform.neutral.hooks :as power-runtime]))
 
 (def runtime-install-steps
   [(adapter-registry/step :damage-interception runtime-damage-interception/install-damage-interception!)

@@ -72,7 +72,7 @@
     (aset-boolean flags 0 (boolean is-down)))
   nil)
 
-(defn- local-player-uuid [] (bridge/call-adapter :local-player-uuid))
+(defn- local-player-uuid [] (bridge/local-player-uuid))
 
 (defn- mask-vec [{:keys [r g b a]}]
   [(double (or r 0.0)) (double (or g 0.0)) (double (or b 0.0)) (double (or a 0.0))])
@@ -559,10 +559,10 @@
 
 (defn- overlay-input-state [player-uuid now-ms]
   (let [owner {:player-uuid player-uuid}]
-    {:activated-override (bridge/call-adapter :client-overlay-activated-override owner)
+    {:activated-override (bridge/client-overlay-activated-override owner)
      :showing-numbers? (aget ^booleans mode-switch-flags 1)
      :last-show-value-change-ms (aget ^longs mode-switch-time 0)
-     :active-overlay-app (bridge/call-adapter :client-active-overlay-app owner)
+     :active-overlay-app (bridge/client-active-overlay-app owner)
      :now-ms now-ms}))
 
 (defn- set-node-visible! [r ^INode n visible?]
@@ -609,8 +609,8 @@
             text (str hint)
             font-size (get-in layout [:activation-hint :font-size])
             text-width (double
-                         (or (bridge/call-adapter :font-text-width {} text font-size)
-                             (bridge/call-adapter :font-width text)
+                         (or (bridge/font-text-width-optional {} text font-size)
+                             (bridge/font-width-optional text)
                              (* 0.5 font-size (count text))))
             box (hud/cpbar-activation-hint-box sw text-width)
             frame (:frame layout)

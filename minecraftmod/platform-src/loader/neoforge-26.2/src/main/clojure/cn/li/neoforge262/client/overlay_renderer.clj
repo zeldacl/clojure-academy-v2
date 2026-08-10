@@ -5,7 +5,7 @@
   overlay-host layout, clock, and render-tape submission are live."
   (:require [cn.li.mc262.gui.reactive.overlay-host :as overlay-host]
             [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.client.event RenderGuiEvent$Post]
            [net.neoforged.neoforge.common NeoForge]
@@ -14,10 +14,10 @@
            [cn.li.neoforge262.bridge ClientTimeInterop]))
 
 (defn- bridge-build-fn [w h]
-  (client-bridge/call-adapter :reactive-overlay-build w h))
+  (client-bridge/reactive-overlay-build w h))
 
 (defn- bridge-update-fn [rt]
-  (client-bridge/call-adapter :reactive-overlay-update rt))
+  (client-bridge/reactive-overlay-update rt))
 
 (defn- on-render-gui-overlay [^RenderGuiEvent$Post event]
   (let [^Minecraft mc (Minecraft/getInstance)
@@ -31,9 +31,9 @@
 
 (defn on-mode-switch-key-state!
   ([is-down]
-   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down))
+   (client-bridge/reactive-overlay-mode-switch! is-down))
   ([_owner is-down]
-   (client-bridge/call-adapter :reactive-overlay-mode-switch! is-down)))
+   (client-bridge/reactive-overlay-mode-switch! is-down)))
 
 (defn init! []
   (.addListener (NeoForge/EVENT_BUS)

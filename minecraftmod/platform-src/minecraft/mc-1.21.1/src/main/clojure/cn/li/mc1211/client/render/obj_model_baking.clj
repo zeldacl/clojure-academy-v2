@@ -11,8 +11,8 @@
   the raw flat tier model and would drop back to a 2D icon in hand. Only a
   custom ItemOverrides can re-wrap that result, and its no-arg super ctor is
   reachable on Forge/NeoForge but private on Fabric."
-  (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.item.dsl :as item-dsl]
+  (:require [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as item-dsl]
             [cn.li.mcbase.datagen.item-model-patterns :as model-patterns]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.resources.model BakedModel ModelResourceLocation]
@@ -26,8 +26,8 @@
 (defn- obj-3d-item-ids
   "Item DSL ids that request a 3D world model beside the flat GUI icon."
   []
-  (set (filter #(model-patterns/obj-3d-item? (item-dsl/get-item %))
-               (item-dsl/list-items))))
+  (set (filter #(model-patterns/obj-3d-item? (item-dsl/get-item-spec %))
+               (item-dsl/get-all-item-ids))))
 
 (defn- item-id->basename
   [item-id]
@@ -38,7 +38,7 @@
   []
   (mapv (fn [item-id]
           (let [basename (item-id->basename item-id)
-                {:keys [obj-model texture]} (get-in (item-dsl/get-item item-id)
+                {:keys [obj-model texture]} (get-in (item-dsl/get-item-spec item-id)
                                                     [:properties :item-model-3d-obj])]
             {:item-id item-id
              :basename basename

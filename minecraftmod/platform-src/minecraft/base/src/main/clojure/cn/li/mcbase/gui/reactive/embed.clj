@@ -3,7 +3,7 @@
 
   Entries live under UiRt user-signal :embedded-runtimes as an atom of
   {:child-rt :x :y :w :h :visible?-fn :anchor-node?} maps."
-  (:require [cn.li.mcmod.ui.runtime :as rt])
+  (:require [cn.li.platform.neutral.ui :as rt])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
 

@@ -4,8 +4,8 @@
   (:require [cn.li.fabric1201.gui.network.shared :as shared]
             [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcbase.runtime.network-payload :as runtime-payload]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
+            [cn.li.platform.neutral.client-network :as net-client]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log]
@@ -80,6 +80,7 @@
   []
   (install/process-once! ::client-initialized
     (fn []
+      (shared/install-channels!)
       (net-client/register-request-transport!
         (target/current-target-key!)
         (fn [msg-id payload request-id]

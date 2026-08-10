@@ -2,12 +2,12 @@
   "Shared datagen setup utilities, platform-independent.
 
   Provides common content initialization for Forge/Fabric/NeoForge datagen phases."
-  (:require [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.content :as mc-content]
-            [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+  (:require [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata]
-            [cn.li.mcmod.framework :as fw]))
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
+            [cn.li.platform.target :as target]))
 
 (defn- snapshot-counts
   []
@@ -20,12 +20,6 @@
   (or (pos? (long items))
       (pos? (long blocks))
       (pos? (long recipes))))
-
-(defn- run-init-pipeline!
-  []
-  (lifecycle/run-content-init!)
-  (lifecycle/run-runtime-content-activation!)
-  (lifecycle/run-datagen-metadata-init!))
 
 (defn ensure-content-loaded!
   "Datagen runs outside normal mod init.
@@ -40,7 +34,7 @@
    - run content-owned datagen metadata hooks
 
    Called by Forge/Fabric/NeoForge datagen entry points.
-   Note: Uses cn.li.mcmod.config/mod-id for logging, so modid binding
+   Note: Uses cn.li.platform.neutral.config/mod-id for logging, so modid binding
    must be set up before calling this function."
   []
   (try
@@ -50,8 +44,8 @@
     (when (nil? fw/framework)
       (when-let [fw-inst (fw/create-framework)]
         (alter-var-root #'fw/framework (constantly fw-inst))))
-    (mc-content/register-all-content!)
-    (run-init-pipeline!)
+    (let [target-model (target/current-target!)]
+      (platform-bootstrap/initialize-datagen-content! target-model))
     (let [initial (snapshot-counts)]
       (when-not (populated? initial)
         (println (str "[" modid/mod-id "] WARNING: datagen metadata still empty after SPI bootstrap, "

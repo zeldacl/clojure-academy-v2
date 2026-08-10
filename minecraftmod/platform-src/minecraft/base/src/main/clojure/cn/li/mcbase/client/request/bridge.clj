@@ -1,6 +1,6 @@
 (ns cn.li.mcbase.client.request.bridge
   "Provides a neutral client request dispatch helper for runtime operations."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.util.log :as log]))
 
 (defn dispatch!

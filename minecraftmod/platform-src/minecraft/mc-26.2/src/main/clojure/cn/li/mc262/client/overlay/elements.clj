@@ -4,7 +4,7 @@
 
    26.2: GuiGraphicsExtractor + GuiGraphicsHelper blit/fill/text."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
            [cn.li.mcver ResourceLocations]

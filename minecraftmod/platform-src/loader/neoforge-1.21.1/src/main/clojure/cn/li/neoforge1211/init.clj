@@ -2,10 +2,9 @@
   "NeoForge 1.21.1 initialization and version-specific implementations"
   (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
-            [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.content :as content]
             [cn.li.neoforge1211.capability.fluid-handler :as fluid-handler]
             [cn.li.neoforgebase.integration.imc-dispatch :as imc-dispatch]
             [cn.li.neoforge1211.achievement.bridge :as achievement-bridge])
@@ -35,6 +34,6 @@
       ;; handler factories are available when register-tile-capability! is called).
       (fluid-handler/register!)
       ;; Ensure discovered content init providers are registered through the generic content SPI.
-      (content/register-all-content!)
-      (lifecycle/run-content-init!)
+      (let [target-model (target/current-target!)]
+        (platform-bootstrap/initialize-common-content! target-model))
       (achievement-bridge/init!))))

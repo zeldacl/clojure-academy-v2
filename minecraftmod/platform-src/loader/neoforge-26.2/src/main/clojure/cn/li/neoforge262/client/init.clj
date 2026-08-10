@@ -2,14 +2,14 @@
   "NeoForge 26.2 client init.
 
    Client setup for session, input, runtime tick, rendering and model hooks."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
           [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
-            [cn.li.mcmod.lifecycle :as lifecycle]
-            [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.client.content-actions :as content-actions]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
+            [cn.li.platform.neutral.integration-runtime :as tutorial-hooks]
+            [cn.li.platform.neutral.client-runtime :as client-bridge]
+            [cn.li.platform.neutral.client-runtime :as content-actions]
             [cn.li.neoforge262.runtime.owner :as runtime-owner]
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
@@ -34,15 +34,15 @@
             [cn.li.mcbase.client.request.bridge :as request-bridge]
             [cn.li.mc262.client.render.pose :as pose-impl]
             [cn.li.mc262.client.render.buffer :as buffer-impl]
-            [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.mcmod.client.render.buffer :as buffer]
+            [cn.li.platform.neutral.client-runtime :as pose]
+            [cn.li.platform.neutral.client-runtime :as buffer]
             [cn.li.mc262.gui.reactive.host :as reactive-host]
             [cn.li.mc262.gui.reactive.terminal-render :as terminal-render]
-            [cn.li.mcmod.client.ui.registry :as widget-registry]
+            [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.client.render.init :as render-init]
-            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.platform.registry.metadata :as registry-metadata]
+            [cn.li.platform.neutral.client-runtime :as render-init]
+            [cn.li.platform.neutral.client-runtime :as tesr-api]
             [cn.li.neoforgebase.registry.state :as registry-state])
   (:import [net.minecraft.client Minecraft KeyMapping KeyMapping$Category]
            [cn.li.mcver McAccess]
@@ -356,7 +356,7 @@
       (log/stacktrace "Failed to install keyboard input SPI providers" e)))
 
   (try
-    (lifecycle/run-post-spi-client-init!)
+    ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
       (log/error e "Failed to run post-SPI content keybinding init")
       (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
@@ -401,7 +401,7 @@
   (i18n/install-client-i18n!)
 
   (try
-    (lifecycle/run-client-init!)
+    ((platform-bootstrap/client-init-callback!))
     (catch Exception e
       (log/error e "Failed to run content client init")
       (log/stacktrace "Failed to run content client init" e)))

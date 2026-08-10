@@ -1,9 +1,9 @@
 (ns cn.li.mcbase.datagen.item-model-provider-core
   "Shared item model datagen helpers for loader-specific providers."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcbase.datagen.item-model-patterns :as item-model-patterns]))
 
 (defn- texture-path

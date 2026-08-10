@@ -6,8 +6,8 @@
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
             [cn.li.mcbase.gui.provider.common :as provider-common]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mcmod.gui.registry :as gui])
+            [cn.li.platform.neutral.gui-runtime :as gui-handler]
+            [cn.li.platform.neutral.gui-runtime :as gui])
   (:import [net.fabricmc.fabric.api.screenhandler.v1 ExtendedScreenHandlerFactory]
            [net.minecraft.network.chat Component]
            [net.minecraft.nbt CompoundTag]

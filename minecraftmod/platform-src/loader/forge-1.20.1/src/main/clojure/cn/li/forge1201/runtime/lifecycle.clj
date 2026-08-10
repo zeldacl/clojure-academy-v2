@@ -10,8 +10,8 @@
             [cn.li.mcbase.runtime.adapter-registry :as adapter-registry]
             [cn.li.forge1201.runtime.lifecycle-event-binding :as lifecycle-event-binding]
             [cn.li.forge1201.adapter.network :as runtime-network]
-            [cn.li.mcmod.hooks.core :as power-runtime]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.platform.neutral.hooks :as power-runtime]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.mcmod.server.platform-bridge :as server-bridge]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
@@ -103,11 +103,12 @@
   (lifecycle-core/install-server-stop-cleanup!
     {:cleanup-session! (fn [session-id]
                          (runtime-sync/clear-session-scheduler-state! session-id))})
-  (let [tick-callbacks {:mark-player-dirty! runtime-sync/mark-player-dirty!
+  (let [world-tick-callback (platform-bootstrap/world-tick-callback!)
+        tick-callbacks {:mark-player-dirty! runtime-sync/mark-player-dirty!
                         :tick-sync! runtime-sync/tick-sync!
                         :send-sync-fn runtime-network/send-sync-to-client!
                         :world-tick! (fn [_runtime level]
-                                       (lifecycle/run-world-tick! level))}]
+                                       (world-tick-callback level))}]
     (lifecycle-event-binding/register-lifecycle-listeners!
       {:on-player-login on-player-login
        :on-player-logout on-player-logout

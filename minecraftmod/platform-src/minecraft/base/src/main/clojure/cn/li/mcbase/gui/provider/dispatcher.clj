@@ -2,7 +2,7 @@
   "Shared GUI provider callback dispatcher used by Forge/Fabric wrappers."
   (:require [cn.li.mcbase.gui.provider.common :as provider-common]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
-            [cn.li.mcmod.gui.handler :as gui-handler]
+            [cn.li.platform.neutral.gui-runtime :as gui-handler]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.entity.player Player]))
 

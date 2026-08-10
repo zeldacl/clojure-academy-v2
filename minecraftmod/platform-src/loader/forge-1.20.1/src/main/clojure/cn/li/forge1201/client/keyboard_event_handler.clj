@@ -4,12 +4,12 @@
    Purpose: Forge-specific event handling that abstracts platform differences.
    Routes Forge keyboard events to the universal mcmod protocol."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
+            [cn.li.platform.neutral.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [cn.li.mc1201.client.key-mapping-adapter :as key-mapping-adapter]
-            [cn.li.ac.ability.client.input-state-machine])
+            [cn.li.platform.neutral.client-render :as input-buttons])
   (:import [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.eventbus.api EventPriority]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
@@ -18,7 +18,7 @@
            [net.minecraft.client KeyMapping]))
 
 (def ^:private v-toggle-state-atom
-  (atom (cn.li.ac.ability.client.input-state-machine/initial-button-state)))
+  (atom {:was-down false :down-at-ns nil}))
 
 ;; ===== Forge Event Handler Registration =====
 

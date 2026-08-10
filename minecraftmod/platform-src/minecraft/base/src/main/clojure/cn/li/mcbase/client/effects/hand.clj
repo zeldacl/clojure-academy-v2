@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.client.effects.hand
   "Shared client hand-effect helpers for Minecraft 1.20.1."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime])
+            [cn.li.platform.neutral.hooks :as power-runtime])
   (:import [net.minecraft.client.player LocalPlayer]))
 
 (defn tick-hand-effects!

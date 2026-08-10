@@ -2,8 +2,7 @@
   "Fabric 26.2 initialization - sets version for multimethod dispatch"
   (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.content :as content]
-            [cn.li.mcmod.lifecycle :as lifecycle])
+            [cn.li.platform.bootstrap :as platform-bootstrap])
   (:import [cn.li.fabric262.recipe ModRecipeTypes]
            [cn.li.mc262.trigger ModTriggers]))
 
@@ -24,5 +23,5 @@
    (fn []
      (ModRecipeTypes/register)
      (ModTriggers/init)
-     (content/register-all-content!)
-     (lifecycle/run-content-init!))))
+     (let [target-model (target/current-target!)]
+       (platform-bootstrap/initialize-common-content! target-model)))))

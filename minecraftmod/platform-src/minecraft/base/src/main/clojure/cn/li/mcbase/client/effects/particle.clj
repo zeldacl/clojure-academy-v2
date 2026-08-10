@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.client.effects.particle
   "CLIENT-ONLY shared particle effect bridge."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.client Minecraft]

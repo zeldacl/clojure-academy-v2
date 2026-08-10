@@ -3,7 +3,7 @@
 
   Compiler runs outside render hot paths. Renderers should consume draw plans
   directly without re-validating or re-normalizing profile maps."
-  (:require [cn.li.mcmod.client.render.script-render-abi :as abi]))
+  (:require [cn.li.platform.neutral.client-render :as abi]))
 
 (def ^:private compiled-state-keys [:depth-test :blend :cull :layer])
 

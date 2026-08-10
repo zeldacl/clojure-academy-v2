@@ -2,7 +2,7 @@
   "NeoForge 26.2 GUI System Initialization"
   (:require [cn.li.mcbase.gui.init.orchestrator :as gui-orchestrator]
             [cn.li.mcbase.gui.init.checks :as init-checks]
-            [cn.li.mcmod.gui.registry :as gui]
+            [cn.li.platform.neutral.gui-runtime :as gui]
             [cn.li.mcmod.util.log :as log]
             [cn.li.neoforge262.gui.network.server :as network-server]
             [cn.li.neoforge262.gui.network.client :as network-client]

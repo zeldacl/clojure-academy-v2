@@ -8,9 +8,9 @@
    - Forge: call poll-all-inputs! in client tick event (AFTER event parsing)
    - Fabric: call poll-all-inputs! in client tick event (primary input mechanism)"
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
+            [cn.li.platform.neutral.keyboard-input :as kb-proto]
             [cn.li.mcmod.spi.key-scheme-provider :as key-provider]
-            [cn.li.ac.ability.client.input-state-machine :as input-state-machine])
+            [cn.li.platform.neutral.client-render :as input-buttons])
   (:import [cn.li.mcver McAccess]
            [net.minecraft.client Minecraft]
            [org.lwjgl.glfw GLFW GLFWScrollCallback GLFWScrollCallbackI]))
@@ -41,14 +41,14 @@
 (def ^:private v-toggle-threshold-ns (* 300 1000 1000))
 
 (def ^:private v-toggle-state
-  (atom (input-state-machine/initial-button-state)))
+  (atom {:was-down false :down-at-ns nil}))
 
 (defn handle-v-toggle-input!
   [state-atom is-down {:keys [player-uuid client-session-id suppress-triggers?
                                emit-fn now-ns short-press-threshold-ns]
                         :or {now-ns (System/nanoTime)
                              short-press-threshold-ns v-toggle-threshold-ns}}]
-  (input-state-machine/handle-button-state!
+  (input-buttons/handle-button-state!
     state-atom is-down
     {:now-ns now-ns
      :short-press-threshold-ns short-press-threshold-ns
@@ -156,7 +156,7 @@
   "Reset debounce state (for testing or platform restart)"
   []
   (reset! last-poll-time {})
-  (reset! v-toggle-state (input-state-machine/initial-button-state))
+  (reset! v-toggle-state {:was-down false :down-at-ns nil})
   nil)
 
 (defn install-scroll-callback!

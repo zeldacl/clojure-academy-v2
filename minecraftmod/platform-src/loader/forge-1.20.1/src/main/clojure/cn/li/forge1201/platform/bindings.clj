@@ -4,7 +4,7 @@
 	These functions use direct typed calls so Loom remapping remains valid in packaged jars."
 	(:require [cn.li.mcmod.platform.position :as pos]
 					[cn.li.mcmod.platform.be :as pbe]
-					[cn.li.mcmod.protocol.metadata :as registry-metadata]
+					[cn.li.platform.registry.metadata :as registry-metadata]
 					[cn.li.mcmod.util.log :as log]
 					[cn.li.forge1201.registry.state :as registry-state])
 	(:import [net.minecraft.core BlockPos]

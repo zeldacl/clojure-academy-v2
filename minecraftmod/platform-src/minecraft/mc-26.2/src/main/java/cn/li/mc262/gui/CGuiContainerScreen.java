@@ -51,6 +51,14 @@ public class CGuiContainerScreen<T extends AbstractContainerMenu> extends Abstra
         this.topPos = top;
     }
 
+    public int getGuiLeft() {
+        return this.leftPos;
+    }
+
+    public int getGuiTop() {
+        return this.topPos;
+    }
+
     public boolean callSuperMouseClicked(double mouseX, double mouseY, int button) {
         return super.mouseClicked(new MouseButtonEvent(mouseX, mouseY, new MouseButtonInfo(button, 0)), false);
     }

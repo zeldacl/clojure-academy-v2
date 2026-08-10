@@ -4,12 +4,12 @@
   Platform namespaces provide small callback/config differences (slot add callback,
   loader-specific remove semantics, player inventory mode defaults), while all menu
   proxy and slot/data-slot sync logic lives here."
-  (:require [cn.li.mcmod.gui.registry :as gui-reg]
-            [cn.li.mcmod.gui.container-state :as cs]
-            [cn.li.mcmod.gui.adapter.platform-registry :as platform]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed]
+  (:require [cn.li.platform.neutral.gui-runtime :as gui-reg]
+            [cn.li.platform.neutral.gui-runtime :as cs]
+            [cn.li.platform.neutral.gui-runtime :as platform]
+            [cn.li.platform.neutral.tabbed-gui :as tabbed]
             [cn.li.mcbase.gui.slots.sync :as slots-sync]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as runtime-owner]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcbase.gui CMenuBridge]

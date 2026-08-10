@@ -8,10 +8,9 @@
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcbase.client.audio ExternalOggPlayer]
            [cn.li.mcbase.client.audio OggMetadata]
-           [cn.li.mcver ResourceLocations]
+           [cn.li.mcver ResourceLocations DynamicTextureAccess]
            [com.mojang.blaze3d.platform NativeImage]
            [net.minecraft.client Minecraft]
-           [net.minecraft.client.renderer.texture DynamicTexture]
            [java.io File FileInputStream]
            [java.nio.charset StandardCharsets]
            [java.nio.file Files]))
@@ -194,9 +193,13 @@
     (when (.isFile f)
       (try
         (with-open [in (FileInputStream. f)]
-          (let [tex (DynamicTexture. (NativeImage/read in))
-                safe (-> (str/lower-case (str id))
+          (let [safe (-> (str/lower-case (str id))
                          (str/replace #"[^a-z0-9_.-]" "_"))
+                ;; Constructor shape changed in 26.2.  The version-specific
+                ;; Java shim is platform AOT/remapped; this shared code sees
+                ;; only its stable signature.
+                tex (DynamicTextureAccess/create
+                     (str "acmedia-cover/" safe) (NativeImage/read in))
                 rl (ResourceLocations/of "academy" (str "acmedia_cover/" safe))]
             (.register (.getTextureManager (Minecraft/getInstance)) rl tex)
             (str rl)))

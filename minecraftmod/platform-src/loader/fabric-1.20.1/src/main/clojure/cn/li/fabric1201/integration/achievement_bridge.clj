@@ -1,6 +1,6 @@
 (ns cn.li.fabric1201.integration.achievement-bridge
   "Fabric achievement-trigger bridge, equivalent to Forge's trigger seam."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric1201.adapter.server-context :as server-context])

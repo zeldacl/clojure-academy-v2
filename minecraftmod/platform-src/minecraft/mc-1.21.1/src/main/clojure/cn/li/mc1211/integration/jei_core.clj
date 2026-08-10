@@ -4,7 +4,7 @@
   This namespace provides ~75% of JEI integration that can be shared between
   Forge and Fabric. Platform-specific parts (plugin registration) remain
   in loader-specific platform layers."
-  (:require [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
+  (:require [cn.li.platform.neutral.integration-runtime :as integration-hooks]
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [net.minecraft.core.registries BuiltInRegistries]

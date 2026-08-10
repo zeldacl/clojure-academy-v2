@@ -1,9 +1,9 @@
 (ns cn.li.mcbase.gui.reactive.input
   "Input wiring: DelegatingScreen callbacks -> event dispatch."
-  (:require [cn.li.mcmod.ui.events :as events]
-            [cn.li.mcmod.ui.layout :as layout]
-            [cn.li.mcmod.ui.node]
-            [cn.li.mcmod.ui.runtime])
+  (:require [cn.li.platform.neutral.ui :as events]
+            [cn.li.platform.neutral.ui :as layout]
+            [cn.li.platform.neutral.ui]
+            [cn.li.platform.neutral.ui])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn handle-key-pressed
@@ -17,7 +17,7 @@
     true
     (do
       (events/dispatch-key! rt key-code scan-code modifiers 0)
-      (>= (cn.li.mcmod.ui.runtime/focus-idx rt) 0))))
+      (>= (cn.li.platform.neutral.ui/focus-idx rt) 0))))
 
 (defn handle-char-typed [^UiRt rt code-point _modifiers]
   (if (events/dispatch-editable-key! rt 0 (char code-point))
@@ -52,18 +52,18 @@
         my (- (double mouse-y) (double top))
         ^cn.li.mcmod.ui.node.INode hit (layout/hit-test rt mx my)
         new-idx (if hit (.getIdx hit) -1)
-        old-idx (cn.li.mcmod.ui.runtime/hovered-idx rt)]
+        old-idx (cn.li.platform.neutral.ui/hovered-idx rt)]
     (when (not= new-idx old-idx)
       ;; Clear old hover flag
       (when (>= old-idx 0)
         (when-let [^cn.li.mcmod.ui.node.INode old-node
-                   (cn.li.mcmod.ui.runtime/node-by-idx rt old-idx)]
-          (.clearFlag old-node cn.li.mcmod.ui.node/FLAG-HOVERED)))
+                   (cn.li.platform.neutral.ui/node-by-idx rt old-idx)]
+          (.clearFlag old-node cn.li.platform.neutral.ui/FLAG-HOVERED)))
       ;; Set new hover flag
       (when hit
-        (.setFlag hit cn.li.mcmod.ui.node/FLAG-HOVERED))
-      (cn.li.mcmod.ui.runtime/set-hovered-idx! rt new-idx))
-    (when-let [on-move (cn.li.mcmod.ui.runtime/user-signal rt :on-pointer-move)]
+        (.setFlag hit cn.li.platform.neutral.ui/FLAG-HOVERED))
+      (cn.li.platform.neutral.ui/set-hovered-idx! rt new-idx))
+    (when-let [on-move (cn.li.platform.neutral.ui/user-signal rt :on-pointer-move)]
       (on-move mx my))
     false))
 
@@ -74,4 +74,4 @@
     true))
 
 (defn handle-removed [^UiRt rt]
-  (cn.li.mcmod.ui.runtime/dispose! rt))
+  (cn.li.platform.neutral.ui/dispose! rt))

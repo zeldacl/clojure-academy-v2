@@ -7,7 +7,7 @@
 
   Platform-specific parts (Forge capability registration, Fabric event listeners)
   remain in platform layers."
-  (:require [cn.li.mcmod.integration.energy-conversion :as energy-conversion]
+  (:require [cn.li.platform.neutral.integration-runtime :as energy-conversion]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.energy IEnergyCapable]))
 

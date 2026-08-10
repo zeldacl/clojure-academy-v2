@@ -12,8 +12,7 @@
     [cn.li.neoforge1211.adapter.gui-registry :as gui-registry-impl]
     [cn.li.mc1211.block.blockstate-properties :as blockstate-props]
     [cn.li.mcmod.aot :as aot]
-    [cn.li.mcmod.config :as modid]
-    [cn.li.mcmod.lifecycle :as lifecycle]
+    [cn.li.platform.neutral.config :as modid]
     [cn.li.mcmod.runtime.deferred :as deferred]
     [cn.li.mcmod.framework :as fw]
     [cn.li.mcmod.util.log :as log]
@@ -205,7 +204,7 @@
                       (log/info "[LIFECYCLE] Phase 1: Platform initialization complete"))
     :activate-runtime-content! (fn []
                                  (log/info "[LIFECYCLE] Phase 2: Runtime content activation")
-                                 (lifecycle/run-runtime-content-activation!)
+                                 ((platform-bootstrap/runtime-content-activation-callback!))
                                  (log/info "[LIFECYCLE] Phase 2: Runtime content activation complete"))
     :init-resource-definitions! (fn []
                                   (log/info "[LIFECYCLE] Phase 3: Resource definition initialization")

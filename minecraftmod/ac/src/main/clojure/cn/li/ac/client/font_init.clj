@@ -3,7 +3,7 @@
 
 	This namespace intentionally avoids static compile-time dependencies on
 	mc1201/Minecraft classes. Runtime registration is delegated through
-	`cn.li.mc1201.gui.cgui.font/register-font!` when available."
+	versioned CGui font backend through the neutral client bridge."
 	(:require [cn.li.mcmod.util.log :as log]
 	          [cn.li.mcmod.client.platform-bridge :as platform-bridge]))
 

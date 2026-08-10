@@ -15,7 +15,7 @@
 
   Optional :item-model-display in :properties writes vanilla `display` transforms
   on simple generated models (e.g. ItemCoin hand/ground scales)."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mc1201.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
             [clojure.string :as str])

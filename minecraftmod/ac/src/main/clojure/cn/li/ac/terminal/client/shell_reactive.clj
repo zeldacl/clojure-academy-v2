@@ -8,7 +8,7 @@
    The perspective camera and the reticle it carries are Minecraft-side, reached
    through the :terminal-apply-perspective! and :terminal-render-cursor! bridge
    ops; each version's terminal-render namespace implements them on top of the
-   shared cn.li.mcbase.gui.reactive.terminal-camera."
+   shared platform terminal-camera implementation."
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.util.uuid :as player-uuid]
             [cn.li.ac.config.modid :as modid]
@@ -102,7 +102,7 @@
 
         ;; ===== Instance-local frame state (primitive arrays, zero allocation) =====
         ;; Published as the :terminal-fd / :terminal-fi user-signals and read back
-        ;; by the platform camera (cn.li.mcbase.gui.reactive.terminal-camera),
+        ;; by the platform camera implementation,
         ;; which drives the tilt and reticle from it — keep the two layouts in
         ;; step.  This layer stays Minecraft-free, so the coupling is by contract
         ;; rather than by reference.
@@ -207,7 +207,7 @@
                 ;; that alone makes the pointer crawl across MAX_MX = 605. Ask
                 ;; the loader for the raw cursor and fall back to the Screen's
                 ;; coordinates where it does not expose one.
-                raw (bridge/call-adapter :get-mouse-pos)
+                raw (bridge/get-mouse-pos)
                 px (if raw (double (nth raw 0)) (double mx))
                 py (if raw (double (nth raw 1)) (double my))
                 first-pointer-frame? (Double/isNaN (aget fd 4))
@@ -315,12 +315,12 @@
                 (if (< (aget fi 0) max-scroll) 1.0 0.0)))
             ;; Set up TerminalUI's original perspective camera immediately
             ;; before this frame's tape is baked and drawn.
-            (bridge/call-adapter :terminal-apply-perspective! gg rt* mx my pt)))
+            (bridge/terminal-apply-perspective! gg rt* mx my pt)))
 
         ;; ===== 5. post-render hook — MC cursor rendering =====
         post-render
         (fn post-render-fn [_gg ^UiRt rt* _mx _my _pt]
-          (bridge/call-adapter :terminal-render-cursor! _gg rt* _mx _my _pt))
+          (bridge/terminal-render-cursor! _gg rt* _mx _my _pt))
 
         ;; ===== 6. App grid update (batch, called on scroll/selection change) =====
         update-grid!
@@ -411,7 +411,7 @@
             #(do (term-rt/clear-state! owner)
                  ;; Restore the OS cursor hidden in open! below (upstream
                  ;; shows only its custom reticle while the terminal is open).
-                 (bridge/call-adapter :terminal-cursor-show!)))]
+                 (bridge/terminal-cursor-show!)))]
     r))
 
 ;; ============================================================================
@@ -438,7 +438,7 @@
       ;; This matches TerminalMouseHelper's raw, unbounded delta input and
       ;; leaves only the custom glowing reticle visible.
       (term-rt/mark-ui-open! true)
-      (bridge/call-adapter :terminal-cursor-hide!)
+      (bridge/terminal-cursor-hide!)
       screen)))
 (defn open-terminal!
   "Query install state first; only open if terminal is installed.

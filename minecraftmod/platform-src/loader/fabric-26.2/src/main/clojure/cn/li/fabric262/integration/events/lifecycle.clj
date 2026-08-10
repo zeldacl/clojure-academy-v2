@@ -3,23 +3,31 @@
   (:require [cn.li.mcbase.integration.event-support :as event-support]
             [cn.li.mc262.runtime.nbt-core :as runtime-nbt]
             [cn.li.mcbase.runtime.sync-core :as runtime-sync]
-            [cn.li.ac.wireless.data.world :as wireless-world]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.fabric262.adapter.network :as runtime-network]
             [cn.li.mc262.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]))
 
-;; Immutable loader VTable, captured by ServerRuntime on its first tick.
-(def ^:private tick-callbacks
-  {:mark-player-dirty! runtime-sync/mark-player-dirty!
-   :tick-sync! runtime-sync/tick-sync!
-   :send-sync-fn runtime-network/send-sync-to-client!
-   :world-tick! (fn [_runtime level]
-                  (wireless-world/on-world-tick level))})
+;; Installed after neutral providers, before Fabric listener registration. The
+;; listener retains these concrete IFns; the tick path has no SPI lookup.
+(def ^:private tick-callbacks nil)
+
+(defn install-runtime-callbacks!
+  []
+  (let [world-tick-callback (platform-bootstrap/world-tick-callback!)]
+    (alter-var-root #'tick-callbacks
+                    (constantly
+                      {:mark-player-dirty! runtime-sync/mark-player-dirty!
+                       :tick-sync! runtime-sync/tick-sync!
+                       :send-sync-fn runtime-network/send-sync-to-client!
+                       :world-tick! (fn [_runtime level]
+                                      (world-tick-callback level))})))
+  nil)
 
 (defn- dimension-id
   [^ServerLevel level]
-  (some-> level .dimension .location str))
+  (some-> level .dimension .identifier str))
 
 (defn- server-tick-id
   [^MinecraftServer server]
@@ -37,7 +45,7 @@
 
 (defn- player-owner
   [^ServerPlayer player]
-  (lifecycle-owner (some-> player .getServer)))
+  (lifecycle-owner (some-> player .level .getServer)))
 
 (defn handle-player-login
   [^ServerPlayer player]

@@ -4,9 +4,9 @@
   This namespace is queried by Java dispatchers to decide whether a renderer-id
   should use the scripted rendering path." 
   (:require [cn.li.mcbase.client.render.script-render-compiler :as compiler]
-            [cn.li.mcmod.client.render.script-render-abi :as script-abi]
-            [cn.li.mcmod.config.script-render :as render-config]
-            [cn.li.mcmod.client.render.script-render-registry :as registry]
+            [cn.li.platform.neutral.client-render :as script-abi]
+            [cn.li.platform.neutral.config :as render-config]
+            [cn.li.platform.neutral.client-render :as registry]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log]))
 

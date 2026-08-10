@@ -3,7 +3,7 @@
 
    Uses DynamicSlot (universal Java skeleton) instead of per-feature proxy [Slot].
    reify Predicate/Supplier is safe — JDK core interfaces, never obfuscated."
-  (:require [cn.li.mcmod.gui.slot-registry :as slot-registry]
+  (:require [cn.li.platform.neutral.gui-runtime :as slot-registry]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcbase.shim DynamicSlot]
            [cn.li.mcbase.shim FnPredicate FnSupplier]

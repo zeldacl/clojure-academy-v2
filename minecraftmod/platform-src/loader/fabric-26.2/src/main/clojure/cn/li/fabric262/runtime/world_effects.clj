@@ -9,7 +9,7 @@
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.level Level$ExplosionInteraction]
-           [net.minecraft.world.entity Entity EntitySpawnReason LightningBolt]
+           [net.minecraft.world.entity Entity EntitySpawnReason EntityType LightningBolt]
            [net.minecraft.resources Identifier]
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.phys AABB]))
@@ -22,11 +22,11 @@
     get-server
     {:resolve-level-fn (fn [server world-id] (query-core/resolve-level-strict server world-id))
      :spawn-lightning-fn (fn [^ServerLevel level x y z visual-only?]
-                           (let [type (.getValue (registry/builtin "ENTITY_TYPE")
-                                                  (Identifier/parse "minecraft:lightning_bolt"))
-                                 ^LightningBolt bolt (.create type level EntitySpawnReason/COMMAND)]
-                             (when bolt
-                               (.moveTo bolt (double x) (double y) (double z))
+                            (let [^EntityType type (.getValue (registry/builtin "ENTITY_TYPE")
+                                                                (Identifier/parse "minecraft:lightning_bolt"))
+                                  ^LightningBolt bolt (.create type level EntitySpawnReason/COMMAND)]
+                              (when bolt
+                                (.setPos bolt (double x) (double y) (double z))
                                (.setVisualOnly bolt (boolean visual-only?))
                                (boolean (.addFreshEntity level bolt)))))
      :create-explosion-fn (fn [^ServerLevel level ^Entity source x y z radius fire? terrain?]

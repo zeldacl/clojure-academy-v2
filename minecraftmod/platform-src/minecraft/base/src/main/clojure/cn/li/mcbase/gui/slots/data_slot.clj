@@ -1,6 +1,6 @@
 (ns cn.li.mcbase.gui.slots.data-slot
   "Atom-backed Minecraft DataSlot implementations."
-  (:require [cn.li.mcmod.gui.container.data-slot-codec :as codec])
+  (:require [cn.li.platform.neutral.gui-runtime :as codec])
   (:import [cn.li.mcbase.gui AtomBackedDataSlot AtomBackedDataSlot$Getter AtomBackedDataSlot$Setter]
            [net.minecraft.world.inventory DataSlot]))
 

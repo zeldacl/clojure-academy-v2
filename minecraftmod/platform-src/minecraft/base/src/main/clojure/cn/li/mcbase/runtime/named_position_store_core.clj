@@ -3,7 +3,7 @@
 
   Reads go through cn.li.mcver.NbtAccess. Server is passed by the platform adapter."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])

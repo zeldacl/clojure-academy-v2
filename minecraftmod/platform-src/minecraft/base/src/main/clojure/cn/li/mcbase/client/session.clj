@@ -1,6 +1,6 @@
 (ns cn.li.mcbase.client.session
   "Client-local owner/session helpers for client-owned runtime state."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks])
+  (:require [cn.li.platform.neutral.hooks :as runtime-hooks])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.multiplayer ClientPacketListener]))
 

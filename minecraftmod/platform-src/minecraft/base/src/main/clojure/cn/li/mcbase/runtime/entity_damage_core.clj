@@ -3,7 +3,7 @@
 
   Keeps generic shaping/calculation logic in shared Minecraft glue while
   platform layers own world/entity lookup and concrete damage application calls."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime])
+  (:require [cn.li.platform.neutral.hooks :as power-runtime])
   (:import [cn.li.mcbase.runtime DamageSourceAccess]
            [net.minecraft.world.entity LivingEntity]
            [net.minecraft.world.level Level]

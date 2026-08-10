@@ -6,7 +6,7 @@
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
              [cn.li.mcmod.runtime.install :as install]
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1201.client.player-state-core :as player-state]

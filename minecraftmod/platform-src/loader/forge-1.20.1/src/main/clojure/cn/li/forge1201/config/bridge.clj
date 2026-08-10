@@ -1,6 +1,6 @@
 (ns cn.li.forge1201.config.bridge
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.platform.neutral.config :as config-reg]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])

@@ -1,8 +1,8 @@
 (ns cn.li.fabric1211.registry.creative-tab-event
   "Metadata-driven Fabric creative tab population."
   (:require [cn.li.fabric1211.registry.creative-tab :as tabs]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.itemgroup.v1 ItemGroupEvents ItemGroupEvents$ModifyEntries FabricItemGroupEntries]
            [net.minecraft.world.item ItemStack]

@@ -1,7 +1,7 @@
 (ns cn.li.mc1211.client.effects.level-renderer
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime])
+            [cn.li.platform.neutral.hooks :as power-runtime])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [cn.li.mc1211.bridge RenderInterop]
            [cn.li.mc1211.client.render ModRenderTypes]

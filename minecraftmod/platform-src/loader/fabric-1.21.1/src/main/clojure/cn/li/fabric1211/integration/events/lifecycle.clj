@@ -3,19 +3,28 @@
   (:require [cn.li.mcbase.integration.event-support :as event-support]
             [cn.li.mc1211.runtime.nbt-core :as runtime-nbt]
             [cn.li.mcbase.runtime.sync-core :as runtime-sync]
-            [cn.li.ac.wireless.data.world :as wireless-world]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.fabric1211.adapter.network :as runtime-network]
             [cn.li.mc1211.runtime.lifecycle-core :as lifecycle-core])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel ServerPlayer]))
 
-;; Immutable loader VTable, captured by ServerRuntime on its first tick.
-(def ^:private tick-callbacks
-  {:mark-player-dirty! runtime-sync/mark-player-dirty!
-   :tick-sync! runtime-sync/tick-sync!
-   :send-sync-fn runtime-network/send-sync-to-client!
-   :world-tick! (fn [_runtime level]
-                  (wireless-world/on-world-tick level))})
+;; Installed after neutral common bootstrap, before listener registration.
+(def ^:private tick-callbacks nil)
+
+(defn install-runtime-callbacks!
+  "Capture concrete neutral callbacks once; ticks use the immutable map only."
+  []
+  (when-not tick-callbacks
+    (let [world-tick! (platform-bootstrap/world-tick-callback!)]
+      (alter-var-root
+        #'tick-callbacks
+        (constantly
+          {:mark-player-dirty! runtime-sync/mark-player-dirty!
+           :tick-sync! runtime-sync/tick-sync!
+           :send-sync-fn runtime-network/send-sync-to-client!
+           :world-tick! (fn [_runtime level] (world-tick! level))}))))
+  nil)
 
 (defn- dimension-id
   [^ServerLevel level]

@@ -10,9 +10,9 @@
   will not be loaded."
   (:require [cn.li.mc1201.integration.jei-core :as jei-core]
             [cn.li.forge1201.registry.state :as registry-state]
-            [cn.li.mcmod.integration.runtime-hooks :as integration-hooks]
+            [cn.li.platform.neutral.integration-runtime :as integration-hooks]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.config :as mod-config])
+            [cn.li.platform.neutral.config :as mod-config])
   (:import [cn.li.mc1201.runtime RuntimeAccess]
            [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration

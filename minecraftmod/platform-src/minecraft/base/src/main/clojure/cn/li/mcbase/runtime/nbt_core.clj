@@ -3,7 +3,7 @@
 
   CompoundTag reads go through cn.li.mcver.NbtAccess."
   (:require [cn.li.mcbase.runtime.native-nbt :as native-nbt]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])

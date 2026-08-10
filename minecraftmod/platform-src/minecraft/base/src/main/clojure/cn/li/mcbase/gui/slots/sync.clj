@@ -1,8 +1,8 @@
 (ns cn.li.mcbase.gui.slots.sync
   "Shared slot/data-slot setup logic for menu bridges."
-  (:require [cn.li.mcmod.gui.registry :as gui-reg]
-            [cn.li.mcmod.gui.adapter.platform-registry :as platform]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed]
+  (:require [cn.li.platform.neutral.gui-runtime :as gui-reg]
+            [cn.li.platform.neutral.gui-runtime :as platform]
+            [cn.li.platform.neutral.tabbed-gui :as tabbed]
             [cn.li.mcbase.gui.menu.container :as ca]
             [cn.li.mcbase.gui.slots.common :as slots-common]
             [cn.li.mcbase.gui.slots.data-slot :as data-slot])

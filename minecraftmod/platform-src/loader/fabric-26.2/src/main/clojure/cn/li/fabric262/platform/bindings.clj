@@ -2,7 +2,7 @@
   "Fabric-specific static function bindings for core platform hooks."
   (:require [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as pbe]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric262.mod :as fabric-mod])
   (:import [cn.li.fabric262.block.entity ScriptedBlockEntity]
@@ -43,7 +43,7 @@
 
 (defn world-get-day-time
   [^Level level]
-  (.getDayTime level))
+  (.getOverworldClockTime level))
 
 (defn world-get-game-time
   [^Level level]
@@ -51,7 +51,7 @@
 
 (defn world-get-dimension-id
   [^Level level]
-  (str (.location (.dimension level))))
+  (str (.identifier (.dimension level))))
 
 (defn world-server-session-id
   [^Level level]

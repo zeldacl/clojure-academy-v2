@@ -3,9 +3,10 @@
   (:require [cn.li.mc262.client.texture-registry :as tex-registry]
             [cn.li.mc262.gui.cgui.font :as cgui-font]
             [cn.li.mc262.gui.reactive.clock :as clock]
-            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
-            [cn.li.mcmod.ui.node :as node]
-            [cn.li.mcmod.ui.layout :as ui-layout]
+            [cn.li.platform.neutral.client-runtime :as platform-bridge]
+            [cn.li.platform.neutral.ui :as node]
+            [cn.li.platform.neutral.ui :as ui-layout]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [cn.li.mc262.client GuiGraphicsHelper]
@@ -83,7 +84,7 @@
 
 (defn- resolve-pipeline
   ^RenderPipeline [shader-id]
-  (let [value (platform-bridge/call-adapter :resolve-shader shader-id)]
+  (let [value (platform-bridge/resolve-shader shader-id)]
     (when (instance? RenderPipeline value)
       value)))
 
@@ -152,7 +153,7 @@
             missing-loc (MissingTextureAtlasSprite/getLocation)]
         (when (or (nil? tex)
                   (= (str rl) (str missing-loc)))
-          (cn.li.mcmod.util.log/warn
+          (log/warn
             "UI image texture did not resolve: " (str rl)
             " (node " (str (.getId node)) ") — draws as a blank quad")))
       (catch Throwable _ nil))))
@@ -963,10 +964,10 @@
 
 (defn render-embedded-runtime!
   [^GuiGraphicsExtractor gg ^UiRt rt left top w h partial-ticks]
-  (when (and rt (not (cn.li.mcmod.ui.runtime/disposed? rt)))
+  (when (and rt (not (cn.li.platform.neutral.ui/disposed? rt)))
     (clock/tick! rt partial-ticks)
-    (cn.li.mcmod.ui.runtime/resize! rt (double w) (double h))
-    (cn.li.mcmod.ui.runtime/flush! rt)
+    (cn.li.platform.neutral.ui/resize! rt (double w) (double h))
+    (cn.li.platform.neutral.ui/flush! rt)
     (ui-layout/ensure-layout! rt)
     (ui-layout/ensure-tape! rt)
     (draw-tape! gg rt (int left) (int top))))
@@ -993,7 +994,7 @@
 (defn draw-tape!
   "Render the flat tape via GuiGraphicsExtractor + Matrix3x2fStack."
   [^GuiGraphicsExtractor gg ^UiRt rt left top]
-  (let [^objects tape (cn.li.mcmod.ui.runtime/get-tape-arr rt)
+  (let [^objects tape (cn.li.platform.neutral.ui/get-tape-arr rt)
         n (alength tape)
         push-clip ui-layout/push-clip-sentinel
         pop-clip  ui-layout/pop-clip-sentinel

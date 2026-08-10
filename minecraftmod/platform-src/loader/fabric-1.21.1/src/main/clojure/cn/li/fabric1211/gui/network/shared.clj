@@ -2,20 +2,21 @@
   "Shared Fabric GUI network channel and envelope helpers."
   (:require [cn.li.mcbase.gui.network.packet :as packet-base]
             [cn.li.mcbase.runtime.sync-codec :as sync-codec]
-            [cn.li.mcmod.config :as mod-config]
+            [cn.li.platform.neutral.config :as mod-config]
             [cn.li.mcmod.util.log :as log])
   (:import [io.netty.buffer Unpooled]
-           [net.minecraft.network FriendlyByteBuf]
-           [net.minecraft.resources ResourceLocation]))
+           [net.minecraft.network FriendlyByteBuf]))
 
-(def ^ResourceLocation c2s-channel
-  (ResourceLocation/fromNamespaceAndPath mod-config/mod-id "clj_rpc_c2s"))
-
-(def ^ResourceLocation s2c-channel
-  (ResourceLocation/fromNamespaceAndPath mod-config/mod-id "clj_rpc_s2c"))
-
-(def ^ResourceLocation runtime-sync-s2c-channel
-  (ResourceLocation/fromNamespaceAndPath mod-config/mod-id "runtime_sync_v2"))
+(defn configured-mod-id!
+  "Read the facade only during listener installation.  The Java bridge then
+   caches typed payload IDs, so packet paths neither consult the facade nor
+   construct ResourceLocations."
+  []
+  (let [mod-id (str mod-config/mod-id)]
+    (when (or (empty? mod-id) (= "nil" mod-id))
+      (throw (IllegalStateException.
+               "Fabric network channels require installed config provider")))
+    mod-id))
 
 (defn make-buf
   [payload]

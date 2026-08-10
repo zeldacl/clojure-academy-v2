@@ -1,7 +1,7 @@
 (ns cn.li.forge1201.integration.events.block
   "Forge block place/break event handlers." 
   (:require [cn.li.mcbase.integration.event-support :as event-support]
-            [cn.li.mcmod.events.dispatcher :as dispatcher]
+            [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mc1201.integration.event-handlers :as event-handlers]
             [cn.li.forge1201.integration.events.event-apply :as event-apply])
   (:import [net.minecraftforge.event.level BlockEvent$EntityPlaceEvent BlockEvent$BreakEvent]))

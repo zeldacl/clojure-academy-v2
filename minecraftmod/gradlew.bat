@@ -72,6 +72,16 @@ goto fail
 
 
 
+@rem Loom creates intermediary mapping jars during project configuration. On
+@rem some Windows hosts Restart Manager cannot inspect handles under the user
+@rem Temp directory, causing an AccessDeniedException before any task runs.
+@rem Keep those disposable files inside this project instead. Callers may
+@rem override the location with ACADEMY_LOOM_TMP.
+if not defined ACADEMY_LOOM_TMP set "ACADEMY_LOOM_TMP=%APP_HOME%\build\loom-tmp"
+if not exist "%ACADEMY_LOOM_TMP%" mkdir "%ACADEMY_LOOM_TMP%"
+set "TEMP=%ACADEMY_LOOM_TMP%"
+set "TMP=%ACADEMY_LOOM_TMP%"
+
 @rem Execute Gradle
 "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %GRADLE_OPTS% "-Dorg.gradle.appname=%APP_BASE_NAME%" -jar "%APP_HOME%\gradle\wrapper\gradle-wrapper.jar" %*
 

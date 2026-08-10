@@ -31,6 +31,26 @@ The switch is controlled by the root Gradle property:
 
 ### Mixed Jar representation
 
+#### Non-negotiable packaging contract
+
+The build uses a strict one-of-two representation for every neutral
+namespace. This is a correctness rule, not an optimization switch:
+
+- If platform AOT transitively compiles a namespace, the final Jar keeps all
+  of that namespace's generated `.class` files and must not copy the matching
+  `.clj`/`.cljc` resource.
+- If platform AOT does not compile a neutral namespace, the final Jar carries
+  only its `.clj`/`.cljc` resource.
+- The build must never reduce the AOT boundary by preloading neutral source,
+  deleting transitively generated classes, or modifying the AOT output after
+  compilation.
+- AOT-boundary reduction is permitted only by refactoring platform source to
+  remove its static dependencies on neutral namespaces.
+
+`verifyNeutralClojurePackaging` enforces the first two rules. Any proposed
+build change that violates this contract is rejected, even if it lowers the
+reported AOT count.
+
 In source-first mode, the platform compile writes AOT classes to its target-local Clojure output. `prepareNeutralClojureRuntimeSources` scans that output for `__init.class` files and compares the class paths with the neutral `ac`/`mcmod` source paths. The final Jar/Shadow Jar contains exactly one representation per namespace:
 
 - a namespace with a platform AOT `__init.class` is packaged as classes only;

@@ -1,8 +1,8 @@
 (ns cn.li.mcbase.runtime.potion-effects-core
   "Loader-agnostic potion/mob-effect helpers via cn.li.mcver.Effects."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.core Holder]
            [cn.li.mcver Effects ResourceLocations]

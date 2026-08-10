@@ -7,7 +7,7 @@
    ModelEvent baking). GUI-vs-hand switching uses minecraft:select +
    minecraft:display_context in the item definition (replaces ObjComposite)."
   (:require [cn.li.mcbase.datagen.item-model-provider-core :as item-model-core]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [clojure.string :as str])
   (:import [com.google.gson JsonArray JsonElement JsonNull JsonObject JsonPrimitive]
            [java.util.concurrent CompletableFuture]

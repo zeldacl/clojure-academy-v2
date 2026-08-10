@@ -1,5 +1,12 @@
 # Build and Verify Playbook
 
+## 26.2 MDG release rule
+
+For `neoforge-26.2`, the final release artifact is `:platform:jar`. ModDevGradle
+does not use Loom/ForgeGradle reobfuscation, so this target must not invoke or
+publish a `remapJar` output. The jar still runs the platform AOT coverage and
+neutral Clojure class/source exclusivity checks before it is assembled.
+
 当前平台构建只有一个 Gradle 工程：`:platform`。具体目标由 `platform-catalog.json` 声明，并通过 `scripts/target-gradle.ps1 <target-id>` 选择；默认目标为 catalog 中声明的 `forge-1.20.1`。
 
 ## 快速入口

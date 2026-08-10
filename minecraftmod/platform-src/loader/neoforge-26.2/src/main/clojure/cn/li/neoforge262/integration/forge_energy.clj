@@ -3,9 +3,9 @@
 
   26.2: expose Capabilities.Energy.BLOCK through a native EnergyHandler."
   (:require [cn.li.mcmod.capability.registry :as cap-registry]
-            [cn.li.mcmod.integration.energy-hooks :as energy-hooks]
-            [cn.li.mcmod.content.registry :as content-registry]
-            [cn.li.mcmod.block.tile-dsl :as tdsl]
+            [cn.li.platform.neutral.integration-runtime :as energy-hooks]
+            [cn.li.platform.neutral.network-runtime :as content-registry]
+            [cn.li.platform.neutral.block-runtime :as tdsl]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.neoforge262.capability CapabilityRegistry ForgeEnergyAdapter
             ForgeProvidedCapabilitySupport]

@@ -1,6 +1,6 @@
 (ns cn.li.fabric1211.registry.fabric-dispatch
   "Fabric 1.21.1 registry dispatch."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1211.shim FabricParticleHelper]
            [cn.li.mcver RegistryDispatch]

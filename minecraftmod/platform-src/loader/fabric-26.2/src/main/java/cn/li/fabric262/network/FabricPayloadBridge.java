@@ -14,24 +14,59 @@ import java.util.Arrays;
 
 /** Typed-payload bridge for modern Fabric API networking. */
 public final class FabricPayloadBridge {
-    private static final Identifier C2S_ID = Identifier.parse("academycraft:clj_rpc_c2s");
-    private static final Identifier S2C_ID = Identifier.parse("academycraft:clj_rpc_s2c");
-    private static final Identifier RUNTIME_ID = Identifier.parse("academycraft:runtime_sync_v2");
-    private static final CustomPacketPayload.Type<BytesPayload> C2S_TYPE = new CustomPacketPayload.Type<>(C2S_ID);
-    private static final CustomPacketPayload.Type<BytesPayload> S2C_TYPE = new CustomPacketPayload.Type<>(S2C_ID);
-    private static final CustomPacketPayload.Type<BytesPayload> RUNTIME_TYPE = new CustomPacketPayload.Type<>(RUNTIME_ID);
-
     private static StreamCodec<RegistryFriendlyByteBuf, BytesPayload> codec(CustomPacketPayload.Type<BytesPayload> type) {
         return StreamCodec.of((buf, payload) -> buf.writeByteArray(payload.bytes()),
                 buf -> new BytesPayload(type, buf.readByteArray()));
     }
-    private static final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> C2S_CODEC = codec(C2S_TYPE);
-    private static final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> S2C_CODEC = codec(S2C_TYPE);
-    private static final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> RUNTIME_CODEC = codec(RUNTIME_TYPE);
+
+    /** Built after config facade installation, never from a class initializer. */
+    private static final class ChannelTypes {
+        private final String modId;
+        private final CustomPacketPayload.Type<BytesPayload> c2sType;
+        private final CustomPacketPayload.Type<BytesPayload> s2cType;
+        private final CustomPacketPayload.Type<BytesPayload> runtimeType;
+        private final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> c2sCodec;
+        private final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> s2cCodec;
+        private final StreamCodec<RegistryFriendlyByteBuf, BytesPayload> runtimeCodec;
+
+        private ChannelTypes(String modId) {
+            this.modId = modId;
+            c2sType = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(modId, "clj_rpc_c2s"));
+            s2cType = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(modId, "clj_rpc_s2c"));
+            runtimeType = new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath(modId, "runtime_sync_v2"));
+            c2sCodec = codec(c2sType);
+            s2cCodec = codec(s2cType);
+            runtimeCodec = codec(runtimeType);
+        }
+    }
+
+    private static volatile ChannelTypes channelTypes;
     private static volatile boolean serverInstalled;
     private static volatile boolean clientInstalled;
 
     private FabricPayloadBridge() {}
+
+    private static ChannelTypes configure(String modId) {
+        if (modId == null || modId.isBlank()) {
+            throw new IllegalStateException("Fabric network channels require an installed config mod id");
+        }
+        ChannelTypes configured = channelTypes;
+        if (configured == null) {
+            configured = new ChannelTypes(modId);
+            channelTypes = configured;
+        } else if (!configured.modId.equals(modId)) {
+            throw new IllegalStateException("Fabric network channels were already configured for " + configured.modId);
+        }
+        return configured;
+    }
+
+    private static ChannelTypes requireConfigured() {
+        ChannelTypes configured = channelTypes;
+        if (configured == null) {
+            throw new IllegalStateException("Fabric network channels were used before installation");
+        }
+        return configured;
+    }
 
     public static final class BytesPayload implements CustomPacketPayload {
         private final CustomPacketPayload.Type<BytesPayload> payloadType;
@@ -48,30 +83,33 @@ public final class FabricPayloadBridge {
         return new BytesPayload(type, bytes);
     }
 
-    public static synchronized void installServer(IFn requestHandler) {
+    public static synchronized void installServer(String modId, IFn requestHandler) {
         if (serverInstalled) return;
-        PayloadTypeRegistry.serverboundPlay().register(C2S_TYPE, C2S_CODEC);
-        ServerPlayNetworking.registerGlobalReceiver(C2S_TYPE,
+        ChannelTypes configured = configure(modId);
+        PayloadTypeRegistry.serverboundPlay().register(configured.c2sType, configured.c2sCodec);
+        ServerPlayNetworking.registerGlobalReceiver(configured.c2sType,
                 (payload, context) -> requestHandler.invoke(payload.bytes(), context.player()));
         serverInstalled = true;
     }
 
-    public static synchronized void installClient(IFn responseHandler, IFn runtimeHandler) {
+    public static synchronized void installClient(String modId, IFn responseHandler, IFn runtimeHandler) {
         if (clientInstalled) return;
-        PayloadTypeRegistry.clientboundPlay().register(S2C_TYPE, S2C_CODEC);
-        PayloadTypeRegistry.clientboundPlay().register(RUNTIME_TYPE, RUNTIME_CODEC);
-        ClientPlayNetworking.registerGlobalReceiver(S2C_TYPE,
+        ChannelTypes configured = configure(modId);
+        PayloadTypeRegistry.clientboundPlay().register(configured.s2cType, configured.s2cCodec);
+        PayloadTypeRegistry.clientboundPlay().register(configured.runtimeType, configured.runtimeCodec);
+        ClientPlayNetworking.registerGlobalReceiver(configured.s2cType,
                 (payload, context) -> responseHandler.invoke(payload.bytes(), context.client()));
-        ClientPlayNetworking.registerGlobalReceiver(RUNTIME_TYPE,
+        ClientPlayNetworking.registerGlobalReceiver(configured.runtimeType,
                 (payload, context) -> runtimeHandler.invoke(payload.bytes(), context.client()));
         clientInstalled = true;
     }
 
     public static void sendToClient(ServerPlayer player, String channel, byte[] bytes) {
-        ServerPlayNetworking.send(player, payload(channel.equals("runtime") ? RUNTIME_TYPE : S2C_TYPE, bytes));
+        ChannelTypes configured = requireConfigured();
+        ServerPlayNetworking.send(player, payload(channel.equals("runtime") ? configured.runtimeType : configured.s2cType, bytes));
     }
 
     public static void sendToServer(byte[] bytes) {
-        ClientPlayNetworking.send(payload(C2S_TYPE, bytes));
+        ClientPlayNetworking.send(payload(requireConfigured().c2sType, bytes));
     }
 }

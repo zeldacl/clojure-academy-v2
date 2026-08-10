@@ -1,7 +1,7 @@
 (ns cn.li.mc262.client.effects.sound
   "CLIENT-ONLY shared sound effect bridge for Minecraft 26.2."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [net.minecraft.client Minecraft]

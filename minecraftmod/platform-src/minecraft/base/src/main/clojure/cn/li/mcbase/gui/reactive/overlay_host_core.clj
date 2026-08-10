@@ -1,8 +1,8 @@
 (ns cn.li.mcbase.gui.reactive.overlay-host-core
   "Overlay host core -- manages a persistent UiRt per client session.
    Version modules supply draw-tape! (render pipeline differs on 26.2)."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.layout :as layout]
+  (:require [cn.li.platform.neutral.ui :as rt]
+            [cn.li.platform.neutral.ui :as layout]
             [cn.li.mcbase.gui.reactive.clock :as clock])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [java.util HashMap]))

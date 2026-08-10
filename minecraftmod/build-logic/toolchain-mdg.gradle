@@ -59,7 +59,8 @@ neoForge {
 }
 
 // MDG resolves the Clojure runtime through the shared implementation deps.
-// No remap step: MDG ships an unobfuscated jar directly.
+// It publishes the ordinary jar directly; unlike Loom/ForgeGradle it has no
+// reobfuscation/remapJar release step.
 tasks.named("jar", Jar).configure {
     archiveBaseName = target.artifact.baseName
     archiveClassifier = target.artifact.classifier
@@ -70,13 +71,4 @@ tasks.named("jar", Jar).configure {
 // but no tests are discovered.
 tasks.named("test").configure {
     failOnNoDiscoveredTests = false
-}
-
-// Publish tooling resolves release jars through remapJar. Loom targets produce
-// a remapped jar there; provide a passthrough alias for MDG.
-tasks.register("remapJar", Jar) {
-    dependsOn tasks.named("jar")
-    archiveBaseName = target.artifact.baseName
-    archiveClassifier = target.artifact.classifier
-    from(zipTree(tasks.named("jar", Jar).flatMap { it.archiveFile }))
 }

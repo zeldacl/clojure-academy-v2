@@ -3,7 +3,7 @@
 
   Pack folder and icon key come from cn.li.mcver.AdvancementJson."
   (:require [clojure.string :as str]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcbase.datagen.resource-location :as rl]
             [cn.li.mcbase.datagen.item-registry :as item-registry])
   (:import [cn.li.mcver AdvancementJson]))

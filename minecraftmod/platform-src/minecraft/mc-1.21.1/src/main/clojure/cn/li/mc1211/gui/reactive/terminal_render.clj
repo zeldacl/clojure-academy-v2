@@ -8,8 +8,8 @@
    pass seeds it with `translation(0, 0, 10000 - guiFarPlane)` = -1000 instead of
    -10000. Both still sit far beyond a near=1/far=100 frustum."
   (:require [cn.li.mcbase.gui.reactive.terminal-camera :as camera]
-            [cn.li.mcmod.client.platform-bridge :as bridge]
-            [cn.li.mcmod.ui.runtime :as rt])
+            [cn.li.platform.neutral.client-runtime :as bridge]
+            [cn.li.platform.neutral.ui :as rt])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcver ResourceLocations]
            [net.minecraft.client Minecraft]

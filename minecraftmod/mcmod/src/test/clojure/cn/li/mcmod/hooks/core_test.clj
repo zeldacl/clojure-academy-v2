@@ -48,3 +48,13 @@
          (hooks/register-power-runtime-hooks! {:player-state-dirty? (fn [uuid] (= uuid "dirty-one"))})
          (is (true? (hooks/player-state-dirty? "dirty-one")))
          (is (false? (hooks/player-state-dirty? "clean-one")))))))
+
+(deftest client-tick-hooks-publish-on-registration-test
+  (with-framework
+    #(do
+       (hooks/register-power-runtime-hooks!
+        {:client-tick! (fn [] :client-ticked)
+         :client-on-slot-key-down! (fn [player-uuid key-idx]
+                                      [player-uuid key-idx])})
+       (is (= :client-ticked (hooks/client-tick!)))
+       (is (= ["player" 2] (hooks/client-on-slot-key-down! "player" 2))))))

@@ -1,8 +1,8 @@
 (ns cn.li.fabric262.integration.events.interact
   "Fabric interaction event handlers extracted from monolithic events namespace."
-  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
+  (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.events.interaction-result :as interaction-result]
+            [cn.li.platform.neutral.event-runtime :as interaction-result]
             [cn.li.mc262.integration.event-handlers :as event-handlers]
             [cn.li.fabric262.adapter.gui-registry :as gui-registry-impl])
   (:import [net.minecraft.core BlockPos]

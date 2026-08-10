@@ -4,7 +4,7 @@
   Loaders supply registration callbacks (DeferredRegister, Fabric Registry, etc.).
   This namespace must not import Minecraft, Forge, Fabric, or NeoForge APIs."
   (:require [cn.li.mcmod.entity.dsl :as edsl]
-            [cn.li.mcmod.protocol.metadata :as metadata]
+            [cn.li.platform.registry.metadata :as metadata]
             [cn.li.mcmod.util.log :as log]))
 
 ;; ---------------------------------------------------------------------------

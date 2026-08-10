@@ -8,7 +8,7 @@
   Delegates ore/liquid descriptor storage to the platform-neutral
   cn.li.mcmod.worldgen registry. Content modules call mcmod.worldgen
   functions directly; this namespace reads them at datagen time."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.worldgen :as mcmod-worldgen]))
 
 ;; ============================================================================

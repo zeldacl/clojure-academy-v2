@@ -38,10 +38,10 @@ public class DelegatingScreen extends Screen {
     static {
         IFn push = null, pop = null, clear = null;
         try {
-            ClojureInterop.requireNamespace("cn.li.mcmod.hooks.core");
-            push = Clojure.var("cn.li.mcmod.hooks.core", "push-session-context!");
-            pop = Clojure.var("cn.li.mcmod.hooks.core", "pop-session-context!");
-            clear = Clojure.var("cn.li.mcmod.hooks.core", "clear-session-context!");
+            ClojureInterop.requireNamespace("cn.li.platform.neutral.hooks");
+            push = Clojure.var("cn.li.platform.neutral.hooks", "push-session-context!");
+            pop = Clojure.var("cn.li.platform.neutral.hooks", "pop-session-context!");
+            clear = Clojure.var("cn.li.platform.neutral.hooks", "clear-session-context!");
         } catch (Exception ignored) {
             // AOT / early load: session context optional
         }

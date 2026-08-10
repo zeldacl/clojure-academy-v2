@@ -1,7 +1,7 @@
 (ns cn.li.fabric1211.config.bridge
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
-            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.platform.neutral.config :as config-reg]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.runtime.deferred :as deferred]

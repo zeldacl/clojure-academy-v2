@@ -12,7 +12,7 @@
   capture composites for the energy tiers — on Forge/NeoForge the equivalent
   event runs after baking, so those loaders need a custom ItemOverrides."
   (:require [cn.li.mc1201.client.render.obj-model-baking :as baking]
-            [cn.li.mcmod.config :as modid]
+            [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.fabric1201.client.render.item ObjBakedModel ObjMeshLoader]
            [cn.li.mc1201.client.render.item ObjCompositeBakedModel]

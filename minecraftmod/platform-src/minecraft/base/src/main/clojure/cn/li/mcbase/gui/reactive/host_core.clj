@@ -9,8 +9,8 @@
   - :draw-tape! / :render-embedded-runtime!
 
   Frame order: on-pre-render before layout/tape (terminal fit-scale)."
-  (:require [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.layout :as layout]
+  (:require [cn.li.platform.neutral.ui :as rt]
+            [cn.li.platform.neutral.ui :as layout]
             [cn.li.mcbase.gui.reactive.clock :as clock]
             [cn.li.mcbase.gui.reactive.input :as input]
             [cn.li.mcbase.gui.reactive.perf :as perf]

@@ -3,7 +3,7 @@
 
   Serializers are resolved via ContentRecipe install bindings from the loader."
   (:require [cn.li.mcbase.datagen.recipe-core :as recipe-core]
-            [cn.li.mcmod.config :as modid])
+            [cn.li.platform.neutral.config :as modid])
   (:import [cn.li.mc1201.recipe ContentRecipe]
            [cn.li.mc1201.shim DelegatingFinishedRecipe]
            [com.google.gson JsonObject JsonPrimitive JsonArray JsonElement]

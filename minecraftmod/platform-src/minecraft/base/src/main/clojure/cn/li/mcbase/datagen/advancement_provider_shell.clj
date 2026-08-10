@@ -1,11 +1,11 @@
 (ns cn.li.mcbase.datagen.advancement-provider-shell
   "Shared DataProvider shell for advancement JSON from achievement metadata."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcbase.datagen.gson-util :as gson-util]
             [cn.li.mcbase.datagen.advancement-provider-core :as adv-core]
             [cn.li.mcbase.datagen.item-registry :as item-registry]
             [cn.li.mcmod.datagen.metadata :as datagen-metadata]
-            [cn.li.mcmod.protocol.metadata :as protocol-metadata])
+            [cn.li.platform.registry.metadata :as protocol-metadata])
   (:import [com.google.gson Gson JsonElement]
            [java.nio.file Path]
            [java.util.concurrent CompletableFuture]

@@ -4,10 +4,11 @@
   (:require [cn.li.mc1211.client.texture-registry :as tex-registry]
             [cn.li.mc1211.gui.cgui.font :as cgui-font]
             [cn.li.mc1211.gui.reactive.clock :as clock]
-            [cn.li.mcmod.client.platform-bridge :as platform-bridge]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.ui.node :as node]
-            [cn.li.mcmod.ui.layout :as ui-layout]
+            [cn.li.platform.neutral.client-runtime :as platform-bridge]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.neutral.ui :as node]
+            [cn.li.platform.neutral.ui :as ui-layout]
+            [cn.li.mcmod.util.log :as log]
             [clojure.string :as str])
   (:import [cn.li.mc1211.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
@@ -128,7 +129,7 @@
 (defn- depth-mask-shader
   "The shader the depth stamps are drawn with, or nil when this loader has none."
   ^ShaderInstance []
-  (platform-bridge/call-adapter :resolve-shader :alpha-discard))
+  (platform-bridge/resolve-shader :alpha-discard))
 
 (defn- depth-func-of
   "A node's declared depth func, or nil when depth layering is unavailable."
@@ -294,7 +295,7 @@
   (when (.add seen-image-textures rl)
     (when (identical? (.getTexture (.getTextureManager (Minecraft/getInstance)) rl)
                       (MissingTextureAtlasSprite/getTexture))
-      (cn.li.mcmod.util.log/warn
+      (log/warn
         "UI image texture did not resolve: " (str rl)
         " (node " (str (.getId node)) ") — draws as a blank quad"))))
 
@@ -1372,10 +1373,10 @@
 (defn render-embedded-runtime!
   "Render a UiRt embedded at screen offset (CGUI widget host)."
   [^GuiGraphics gg ^UiRt rt left top w h partial-ticks]
-  (when (and rt (not (cn.li.mcmod.ui.runtime/disposed? rt)))
+  (when (and rt (not (cn.li.platform.neutral.ui/disposed? rt)))
     (clock/tick! rt partial-ticks)
-    (cn.li.mcmod.ui.runtime/resize! rt (double w) (double h))
-    (cn.li.mcmod.ui.runtime/flush! rt)
+    (cn.li.platform.neutral.ui/resize! rt (double w) (double h))
+    (cn.li.platform.neutral.ui/flush! rt)
     (ui-layout/ensure-layout! rt)
     (ui-layout/ensure-tape! rt)
     (draw-tape! gg rt (int left) (int top))))
@@ -1435,7 +1436,7 @@
    input layer already assumes it is (input/* subtracts left/top before
    hit-testing) and where vanilla renders the container slots (leftPos+slot.x)."
   [^GuiGraphics gg ^UiRt rt left top]
-  (let [^objects tape (cn.li.mcmod.ui.runtime/get-tape-arr rt)
+  (let [^objects tape (cn.li.platform.neutral.ui/get-tape-arr rt)
         n (alength tape)
         push-clip ui-layout/push-clip-sentinel
         pop-clip  ui-layout/pop-clip-sentinel

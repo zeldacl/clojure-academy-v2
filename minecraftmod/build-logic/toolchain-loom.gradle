@@ -216,6 +216,47 @@ tasks.named("remapJar").configure {
     dependsOn remapInputTask
 }
 
+tasks.register("verifyRemappedPlatformEntrypoints") {
+    group = "verification"
+    description = "Verify the final Loom-remapped jar retains platform Clojure entrypoints as class-only resources."
+    dependsOn tasks.named("remapJar")
+    doLast {
+        def archive = tasks.named("remapJar").get().archiveFile.get().asFile
+        if (!archive.isFile()) {
+            throw new GradleException("Missing remapped archive for ${target.id}: ${archive}")
+        }
+        // Inside a task closure Groovy resolves bare `components` to Gradle's
+        // SoftwareComponentContainer. Use the catalog map explicitly; source
+        // components such as platform-shared are catalog entries, not Gradle
+        // software components.
+        def catalogComponents = project.ext.components
+        def entrypoints = ((target.sourceComponents ?: [])
+            .collect { componentId -> catalogComponents[componentId.toString()]?.runtimeAotEntrypoint }
+            .findAll { it } + [target.entrypoint?.namespace])
+            .findAll { it }
+            .collect { it.toString() }
+            .unique()
+        def missing = []
+        def sourceLeaks = []
+        new java.util.zip.ZipFile(archive).withCloseable { zip ->
+            entrypoints.each { String namespaceName ->
+                def base = namespaceName.replace(".", "/").replace("-", "_")
+                if (zip.getEntry("${base}__init.class") == null) {
+                    missing << namespaceName
+                }
+                if (zip.getEntry("${base}.clj") != null || zip.getEntry("${base}.cljc") != null) {
+                    sourceLeaks << namespaceName
+                }
+            }
+        }
+        if (!missing.isEmpty() || !sourceLeaks.isEmpty()) {
+            throw new GradleException("Remapped platform entrypoint check failed for ${target.id}: " +
+                "missing=${missing.sort()}, sourceLeaks=${sourceLeaks.sort()}")
+        }
+        logger.lifecycle("[verifyRemappedPlatformEntrypoints] ok ({})", archive.name)
+    }
+}
+
 loom {
     runs {
         client {

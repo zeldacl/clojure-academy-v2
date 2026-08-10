@@ -108,6 +108,64 @@
 
 (def ^:private hooks-path [:registry :hooks :runtime-hooks])
 
+;; These hooks are entered from client tick/input/render callbacks.  Publish
+;; their actual IFns at registration time so the callback does not dereference
+;; Framework or look up an operation in the runtime-hooks map.
+(def ^:private client-tick-start-fn noop)
+(def ^:private client-tick-keys-fn noop)
+(def ^:private client-tick-fn noop)
+(def ^:private client-tick-hand-effects-fn noop)
+(def ^:private client-tick-level-effects-fn noop)
+(def ^:private client-level-effects-active-fn (fn [] false))
+(def ^:private client-build-level-effect-plan-fn (fn [_ _ _ _] nil))
+(def ^:private client-level-effect-fov-offset-fn (fn [_] 0.0))
+(def ^:private client-slot-visual-state-fn (fn [_ _] :idle))
+(def ^:private client-visual-state-fn (fn [_ _] nil))
+(def ^:private client-on-slot-key-down-fn noop)
+(def ^:private client-on-slot-key-tick-fn noop)
+(def ^:private client-on-slot-key-up-fn noop)
+(def ^:private client-on-slot-key-abort-fn noop)
+(def ^:private client-on-movement-key-down-fn noop)
+(def ^:private client-on-movement-key-tick-fn noop)
+(def ^:private client-on-movement-key-up-fn noop)
+(def ^:private client-on-slot-wheel-fn noop)
+(def ^:private client-build-overlay-plan-fn (fn [_ _ _ _] nil))
+(def ^:private client-poll-particle-effects-fn (fn [_] []))
+(def ^:private client-poll-sound-effects-fn (fn [_] []))
+(def ^:private client-current-hand-transform-fn (fn [] nil))
+(def ^:private client-drain-camera-pitch-deltas-fn (fn [_] []))
+
+(def ^:private hot-client-hook-vars
+  {:client-tick-start! #'client-tick-start-fn
+   :client-tick-keys! #'client-tick-keys-fn
+   :client-tick! #'client-tick-fn
+   :client-tick-hand-effects! #'client-tick-hand-effects-fn
+   :client-tick-level-effects! #'client-tick-level-effects-fn
+   :client-level-effects-active? #'client-level-effects-active-fn
+   :client-build-level-effect-plan #'client-build-level-effect-plan-fn
+   :client-level-effect-fov-offset #'client-level-effect-fov-offset-fn
+   :client-slot-visual-state #'client-slot-visual-state-fn
+   :client-visual-state #'client-visual-state-fn
+   :client-on-slot-key-down! #'client-on-slot-key-down-fn
+   :client-on-slot-key-tick! #'client-on-slot-key-tick-fn
+   :client-on-slot-key-up! #'client-on-slot-key-up-fn
+   :client-on-slot-key-abort! #'client-on-slot-key-abort-fn
+   :client-on-movement-key-down! #'client-on-movement-key-down-fn
+   :client-on-movement-key-tick! #'client-on-movement-key-tick-fn
+   :client-on-movement-key-up! #'client-on-movement-key-up-fn
+   :client-on-slot-wheel! #'client-on-slot-wheel-fn
+   :client-build-overlay-plan #'client-build-overlay-plan-fn
+   :client-poll-particle-effects #'client-poll-particle-effects-fn
+   :client-poll-sound-effects #'client-poll-sound-effects-fn
+   :client-current-hand-transform #'client-current-hand-transform-fn
+   :client-drain-camera-pitch-deltas! #'client-drain-camera-pitch-deltas-fn})
+
+(defn- publish-hot-client-hooks! [hooks]
+  (doseq [[hook target-var] hot-client-hook-vars]
+    (when (contains? hooks hook)
+      (alter-var-root target-var (constantly (get hooks hook)))))
+  nil)
+
 (defn- hooks-core-state-snapshot []
   ;; P3: no write-through cache — would go stale across with-fresh-framework re-injection with no invalidation hook to catch it; get-in here is already a lock-free HAMT lookup.
   (if-let [fw-atom (fw/fw-atom)]
@@ -348,7 +406,9 @@
 (defn register-power-runtime-hooks!
   "Register/replace power runtime hook fns."
   [hooks]
-  (update-hooks-core-state! merge (validate-hooks! hooks))
+  (let [validated (validate-hooks! hooks)]
+    (update-hooks-core-state! merge validated)
+    (publish-hot-client-hooks! validated))
   nil)
 
 (defn register-action!
@@ -627,7 +687,7 @@
 
 (defn client-build-overlay-plan
   [player-uuid screen-width screen-height overlay-state]
-  ((:client-build-overlay-plan (hooks-core-state-snapshot)) player-uuid screen-width screen-height overlay-state))
+  (client-build-overlay-plan-fn player-uuid screen-width screen-height overlay-state))
 
 (defn set-client-overlay-activated!
   "Notify the overlay layer that activation state has changed for a player.
@@ -640,13 +700,13 @@
   ([]
    (client-poll-particle-effects nil))
   ([owner]
-   ((:client-poll-particle-effects (hooks-core-state-snapshot)) owner)))
+   (client-poll-particle-effects-fn owner)))
 
 (defn client-poll-sound-effects
   ([]
    (client-poll-sound-effects nil))
   ([owner]
-   ((:client-poll-sound-effects (hooks-core-state-snapshot)) owner)))
+   (client-poll-sound-effects-fn owner)))
 
 (defn client-tick-start!
   "Per-frame hook fired at the START of the client tick — before vanilla
@@ -654,7 +714,7 @@
   skill-owned keys (flashing's WASD sub-keys) that the END-phase hook cannot
   stop: KeyboardHandler re-reads movement keys from GLFW every tick."
   [get-player-uuid-fn]
-  ((:client-tick-start! (hooks-core-state-snapshot)) get-player-uuid-fn))
+  (client-tick-start-fn get-player-uuid-fn))
 
 (defn client-font-init!
   "Register AC MSDF font keywords. Called by the platform AFTER the client
@@ -665,7 +725,7 @@
 
 (defn client-tick-keys!
   [key-state-fn get-player-uuid-fn]
-  ((:client-tick-keys! (hooks-core-state-snapshot)) key-state-fn get-player-uuid-fn))
+  (client-tick-keys-fn key-state-fn get-player-uuid-fn))
 
 (defn client-active-contexts
   []
@@ -693,62 +753,62 @@
 
 (defn client-build-level-effect-plan
   [camera-pos hand-center-pos tick query-nearby-blocks-fn]
-  ((:client-build-level-effect-plan (hooks-core-state-snapshot))
+  (client-build-level-effect-plan-fn
    camera-pos hand-center-pos tick query-nearby-blocks-fn))
 
 (defn client-level-effects-active?
   []
-  ((:client-level-effects-active? (hooks-core-state-snapshot))))
+  (client-level-effects-active-fn))
 
 (defn client-tick-level-effects!
   []
-  ((:client-tick-level-effects! (hooks-core-state-snapshot))))
+  (client-tick-level-effects-fn))
 
 (defn client-level-effect-fov-offset
   "Per-frame camera FOV offset (degrees) from active level effects, for the
   local player (ComputeFov event handler)."
   [player-uuid]
-  ((:client-level-effect-fov-offset (hooks-core-state-snapshot)) player-uuid))
+  (client-level-effect-fov-offset-fn player-uuid))
 
 (defn client-slot-visual-state
   [player-uuid key-idx]
-  ((:client-slot-visual-state (hooks-core-state-snapshot)) player-uuid key-idx))
+  (client-slot-visual-state-fn player-uuid key-idx))
 
 (defn client-visual-state
   [state-key payload]
-  ((:client-visual-state (hooks-core-state-snapshot)) state-key payload))
+  (client-visual-state-fn state-key payload))
 
 (defn client-on-slot-key-down!
   [player-uuid key-idx]
-  ((:client-on-slot-key-down! (hooks-core-state-snapshot)) player-uuid key-idx))
+  (client-on-slot-key-down-fn player-uuid key-idx))
 
 (defn client-on-slot-key-tick!
   [player-uuid key-idx]
-  ((:client-on-slot-key-tick! (hooks-core-state-snapshot)) player-uuid key-idx))
+  (client-on-slot-key-tick-fn player-uuid key-idx))
 
 (defn client-on-slot-key-up!
   [player-uuid key-idx]
-  ((:client-on-slot-key-up! (hooks-core-state-snapshot)) player-uuid key-idx))
+  (client-on-slot-key-up-fn player-uuid key-idx))
 
 (defn client-on-slot-key-abort!
   [player-uuid key-idx]
-  ((:client-on-slot-key-abort! (hooks-core-state-snapshot)) player-uuid key-idx))
+  (client-on-slot-key-abort-fn player-uuid key-idx))
 
 (defn client-on-movement-key-down!
   [player-uuid movement-key]
-  ((:client-on-movement-key-down! (hooks-core-state-snapshot)) player-uuid movement-key))
+  (client-on-movement-key-down-fn player-uuid movement-key))
 
 (defn client-on-movement-key-tick!
   [player-uuid movement-key]
-  ((:client-on-movement-key-tick! (hooks-core-state-snapshot)) player-uuid movement-key))
+  (client-on-movement-key-tick-fn player-uuid movement-key))
 
 (defn client-on-movement-key-up!
   [player-uuid movement-key]
-  ((:client-on-movement-key-up! (hooks-core-state-snapshot)) player-uuid movement-key))
+  (client-on-movement-key-up-fn player-uuid movement-key))
 
 (defn client-on-slot-wheel!
   [player-uuid key-idx delta]
-  ((:client-on-slot-wheel! (hooks-core-state-snapshot)) player-uuid key-idx delta))
+  (client-on-slot-wheel-fn player-uuid key-idx delta))
 
 (defn client-clear-owner-state!
   [owner]
@@ -760,21 +820,21 @@
 
 (defn client-tick!
   []
-  ((:client-tick! (hooks-core-state-snapshot))))
+  (client-tick-fn))
 
 (defn client-tick-hand-effects!
   []
-  ((:client-tick-hand-effects! (hooks-core-state-snapshot))))
+  (client-tick-hand-effects-fn))
 
 (defn client-drain-camera-pitch-deltas!
   ([]
    (client-drain-camera-pitch-deltas! nil))
   ([owner]
-   ((:client-drain-camera-pitch-deltas! (hooks-core-state-snapshot)) owner)))
+   (client-drain-camera-pitch-deltas-fn owner)))
 
 (defn client-current-hand-transform
   []
-  ((:client-current-hand-transform (hooks-core-state-snapshot))))
+  (client-current-hand-transform-fn))
 
 (defn toggle-debug-overlay-state! []
   ((:toggle-debug-overlay-state! (hooks-core-state-snapshot))))

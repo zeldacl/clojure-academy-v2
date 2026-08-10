@@ -100,6 +100,14 @@ tasks.named("compileClojure").configure {
     classpath.from(configurations.getByName("clientCompileClasspath"))
 }
 
+// Clojurephant runs checkClojure in its own JVM.  It does not inherit the
+// compile task's late classpath mutation, so include the split client artifact
+// explicitly; otherwise checking a valid client namespace fails with
+// ClassNotFoundException before reflection diagnostics can be evaluated.
+tasks.matching { it.name == "checkClojure" }.configureEach {
+    classpath.from(configurations.getByName("clientCompileClasspath"))
+}
+
 // Keep the plain jar as the authoritative artifact.  platform-target.gradle
 // supplies source/resource/AOT inputs and the catalog supplies its name.
 tasks.named("jar", Jar).configure {

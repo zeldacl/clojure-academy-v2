@@ -1,7 +1,7 @@
 (ns cn.li.neoforge262.integration.events.interact
   "Forge right/left click interaction event handlers."
-  (:require [cn.li.mcmod.events.dispatcher :as dispatcher]
-            [cn.li.mcmod.events.interaction-result :as interaction-result]
+  (:require [cn.li.platform.neutral.event-runtime :as dispatcher]
+            [cn.li.platform.neutral.event-runtime :as interaction-result]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc262.integration.event-handlers :as event-handlers]
             [cn.li.neoforge262.integration.events.event-apply :as event-apply]

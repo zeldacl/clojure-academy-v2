@@ -5,14 +5,14 @@
             [cn.li.mc262.client.render.buffer :as buffer-impl]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc262.integration.recipe-query :as recipe-query]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.client.ui.registry :as widget-registry]
+            [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.mcmod.client.render.buffer :as buffer]
-            [cn.li.mcmod.client.render.init :as render-init]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.client-runtime :as pose]
+            [cn.li.platform.neutral.client-runtime :as buffer]
+            [cn.li.platform.neutral.client-runtime :as render-init]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.fabric262.adapter.gui-registry :as gui-registry]
             [cn.li.fabric262.client.overlay-renderer :as overlay-renderer]
             [cn.li.fabric262.client.hand-effect-renderer :as hand-effect-renderer]
@@ -30,7 +30,7 @@
             [cn.li.mc262.vanilla-input-control-core :as vanilla-control]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.fabric262.mod :as mod])
   (:import [cn.li.fabric262.client FabricClientRenderSetup]
            [cn.li.fabric262.shim FabricClientHelper]
@@ -125,10 +125,10 @@
                                 (overlay-state/set-active-overlay-app!
                                   {:client-session-id "" :player-uuid (str player-uuid)}
                                   app-kw))
-     :screen-active? #(some? (.screen (Minecraft/getInstance)))
+      :screen-active? #(some? (.screen (.gui (Minecraft/getInstance))))
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
-     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+      :close-screen! #(.setScreen (.gui (Minecraft/getInstance)) nil)
      ;; Raw cursor position in physical pixels. The terminal integrates
      ;; deltas from this because the Screen's own mouseX/mouseY are
      ;; GUI-scaled ints, which makes its pointer guiScale times slower.
@@ -206,7 +206,7 @@
                           (try
                             (let [^Minecraft mc (Minecraft/getInstance)
                                   ^Window win (.getWindow mc)
-                                  handle (.getWindow win)]
+                                  handle (.handle win)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))
      :has-recipes? (fn [item-id]
@@ -263,7 +263,7 @@
       (log/warn e "Failed to install keyboard input SPI providers")))
 
   (try
-    (lifecycle/run-post-spi-client-init!)
+    ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
       (log/error e "Failed to run post-SPI content keybinding init")))
 

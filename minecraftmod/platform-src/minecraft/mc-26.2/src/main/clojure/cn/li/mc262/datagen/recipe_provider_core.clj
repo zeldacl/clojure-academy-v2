@@ -8,7 +8,7 @@
             [cn.li.mc262.datagen.metadata-resolver :as metadata-resolver]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.mcbase.datagen.recipe-patterns :as recipe-patterns]
-            [cn.li.mcmod.config :as modid])
+            [cn.li.platform.neutral.config :as modid])
   (:import [net.minecraft.advancements.triggers Criterion
             InventoryChangeTrigger$TriggerInstance]
            [net.minecraft.core HolderGetter]

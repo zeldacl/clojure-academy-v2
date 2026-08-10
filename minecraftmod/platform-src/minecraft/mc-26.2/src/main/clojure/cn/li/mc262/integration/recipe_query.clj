@@ -95,8 +95,9 @@
   [^RecipeManager rm ^RecipeType rtype target-id ^Level level]
   (try
     (when (and rm rtype)
-      (let [^RecipeMap rmap (.recipeMap rm)
-            holders (.byType rmap rtype)]
+       (let [holders (filter (fn [^RecipeHolder holder]
+                               (= rtype (.getType ^Recipe (.value holder))))
+                             (.getRecipes rm))]
         (filter (fn [^RecipeHolder holder]
                   (let [^Recipe recipe (.value holder)
                         ^ItemStack out (recipe-output-stack recipe level)]

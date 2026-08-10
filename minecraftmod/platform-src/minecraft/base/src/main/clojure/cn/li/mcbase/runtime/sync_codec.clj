@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.runtime.sync-codec
   "Fixed runtime-v2 frame. The five domain payloads are length-delimited in
   dirty-mask order; generic GUI envelopes and message-id strings are absent."
-  (:require [cn.li.mcmod.network.binary-codec :as domain-codec])
+  (:require [cn.li.platform.neutral.network-runtime :as domain-codec])
   (:import [io.netty.buffer Unpooled]
            [java.nio ByteBuffer]
            [net.minecraft.network FriendlyByteBuf]))

@@ -11,15 +11,15 @@
   - :draw-tape! / :render-embedded-runtime!
   - :apply-image-size! (fn [screen iw ih] ...) optional; Loom setImageSize path"
   (:require [cn.li.mcbase.gui.screen.impl :as screen-impl]
-            [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.layout :as layout]
-            [cn.li.mcmod.ui.events :as events]
+            [cn.li.platform.neutral.ui :as rt]
+            [cn.li.platform.neutral.ui :as layout]
+            [cn.li.platform.neutral.ui :as events]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mcbase.gui.reactive.clock :as clock]
             [cn.li.mcbase.gui.reactive.input :as input]
             [cn.li.mcbase.gui.reactive.modal :as modal]
             [cn.li.mcbase.gui.reactive.embed :as embed]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed-gui])
+            [cn.li.platform.neutral.tabbed-gui :as tabbed-gui])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn- slots-active?

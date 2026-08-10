@@ -258,7 +258,7 @@
                                                                           ^Block block (when-not (.isEmpty stack)
                                                                                          (BlockRegistry/blockByItem (.getItem stack)))]
                                                                       (if (and block (not (BlockRegistry/isAirBlock block (BlockRegistry/getAirBlock))))
-                                                                        (let [level (player-ops/player-level adapter this)
+                                                                        (let [^Level level (player-ops/player-level adapter this)
                                                                               placed? (boolean (.setBlock level (BlockPos. px py pz) (.defaultBlockState block) 3))]
                                                                           (assoc base-result
                                                                                  :placed? placed?

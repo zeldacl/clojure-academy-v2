@@ -2,8 +2,7 @@
   "Fabric 1.20.1 initialization - sets version for multimethod dispatch"
   (:require [cn.li.mcbase.bootstrap.init-common :as init-common]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.content :as content]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.fabric1201.integration.optional-integrations :as optional-integrations]
             [cn.li.fabric1201.integration.achievement-bridge :as achievement-bridge])
   (:import [cn.li.fabric1201.recipe ModRecipeTypes]
@@ -28,5 +27,5 @@
      (ModTriggers/init)
      (achievement-bridge/init!)
      (optional-integrations/init!)
-     (content/register-all-content!)
-     (lifecycle/run-content-init!))))
+     (let [target-model (target/current-target!)]
+       (platform-bootstrap/initialize-common-content! target-model)))))

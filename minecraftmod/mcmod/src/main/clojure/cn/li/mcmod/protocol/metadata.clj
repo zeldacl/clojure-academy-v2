@@ -475,3 +475,40 @@
   ;; DSL systems are initialized when their namespaces are loaded
   ;; This function exists for future initialization needs
   nil)
+
+(defn runtime-provider
+  "Expose the registry queries required by AOT/remapped platform code.
+
+   The provider has no platform dependency. It is resolved from the verified
+   common provider manifest during startup, so platform namespaces receive
+   concrete function values without statically requiring this neutral DSL
+   aggregate."
+  [_]
+  {:get-all-block-ids get-all-block-ids
+   :get-all-creative-tab-entries get-all-creative-tab-entries
+   :get-all-effect-ids get-all-effect-ids
+   :get-all-fluid-ids get-all-fluid-ids
+   :get-all-item-ids get-all-item-ids
+   :get-all-particle-ids get-all-particle-ids
+   :get-all-sound-ids get-all-sound-ids
+   :get-all-tile-ids get-all-tile-ids
+   :get-block-registry-name get-block-registry-name
+   :get-block-spec get-block-spec
+   :get-block-tile-id get-block-tile-id
+   :get-effect-registry-name get-effect-registry-name
+   :get-effect-spec get-effect-spec
+   :get-fluid-id-for-block get-fluid-id-for-block
+   :get-fluid-registry-name get-fluid-registry-name
+   :get-fluid-spec get-fluid-spec
+   :get-item-registry-name get-item-registry-name
+   :get-item-spec get-item-spec
+   :get-loot-injections-for-table get-loot-injections-for-table
+   :get-particle-registry-name get-particle-registry-name
+   :get-particle-spec get-particle-spec
+   :get-sound-registry-name get-sound-registry-name
+   :get-tile-block-ids get-tile-block-ids
+   :get-tile-registry-name get-tile-registry-name
+   :has-block-entity? has-block-entity?
+   :has-block-state-properties? has-block-state-properties?
+   :fluid-block? fluid-block?
+   :should-create-block-item? should-create-block-item?})

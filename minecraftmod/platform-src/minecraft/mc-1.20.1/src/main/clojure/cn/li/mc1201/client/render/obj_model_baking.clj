@@ -11,7 +11,7 @@
   the raw flat tier model and would drop back to a 2D icon in hand. Only a
   custom ItemOverrides can re-wrap that result, and its no-arg super ctor is
   reachable on Forge/NeoForge but private on Fabric."
-  (:require [cn.li.mcmod.config :as modid]
+  (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.mcmod.item.dsl :as item-dsl]
             [cn.li.mcbase.datagen.item-model-patterns :as model-patterns]
             [cn.li.mcmod.util.log :as log])

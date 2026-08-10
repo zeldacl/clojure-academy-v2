@@ -5,7 +5,7 @@
   and dispatches matching condition checks through mcmod platform hooks.
 
   Uses the same NeoForge/EVENT_BUS pattern as item_handler.clj."
-  (:require [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
+  (:require [cn.li.platform.neutral.integration-runtime :as tutorial-hooks]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.event.entity.player PlayerEvent$ItemCraftedEvent

@@ -4,11 +4,12 @@
    Purpose: Forge-specific event handling that abstracts platform differences.
    Routes Forge keyboard events to the universal mcmod protocol."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.protocol.keyboard-input :as kb-proto]
+            [cn.li.platform.neutral.keyboard-input :as kb-proto]
             [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.hooks.core :as power-runtime]
+            [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
+            [cn.li.platform.neutral.client-render :as input-buttons]
             [cn.li.mc1211.client.key-mapping-adapter :as key-mapping-adapter])
   (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.bus.api EventPriority]
@@ -17,8 +18,7 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client KeyMapping]))
 
-(def ^:private v-toggle-state-atom
-  (atom (cn.li.ac.ability.client.input-state-machine/initial-button-state)))
+(def ^:private v-toggle-state-atom nil)
 
 ;; ===== Forge Event Handler Registration =====
 
@@ -124,6 +124,11 @@
   (try
     (install/process-once! ::event-handler-installed
       #(do
+         ;; The client-render provider is installed before listener
+         ;; registration, but not while this namespace is AOT-loaded.  Cache
+         ;; its initial state now so the key-event hot path only uses this atom.
+         (alter-var-root #'v-toggle-state-atom
+                         (constantly (atom (input-buttons/initial-button-state))))
          (.addListener NeoForge/EVENT_BUS
                        EventPriority/NORMAL
                        false

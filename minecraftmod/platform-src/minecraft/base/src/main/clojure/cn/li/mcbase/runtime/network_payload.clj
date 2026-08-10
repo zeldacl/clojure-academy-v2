@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.runtime.network-payload
   "Shared helpers for packaging runtime network payloads across loaders."
   (:require [cn.li.mcbase.runtime.sync-codec :as sync-codec]
-            [cn.li.mcmod.network.binary-codec :as codec]))
+            [cn.li.platform.neutral.network-runtime :as codec]))
 
 (def ^:const runtime-sync-message-id "ability:sync/runtime-v2")
 

@@ -578,6 +578,20 @@ if (target.loader != "none") {
             deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
             if (!rootProject.ext.fullAotEnabled) {
                 deleteNeutralSourceNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile)
+                // `platformClojureSourceClasspath` deliberately supplies the
+                // neutral mcmod/ac source roots.  A previous full-AOT or dev
+                // compile can leave their generated Clojure classes in the
+                // sibling Java output directory, which precedes those roots
+                // on the compiler classpath and masks changed source.  These
+                // are not target packaging inputs: the selected target emits
+                // its actual transitive closure below, then packages every
+                // emitted class while excluding its matching source file.
+                // Clear only that stale sibling representation before require
+                // resolution; never prune the newly emitted target closure.
+                ([mcmodProject] + contentProjects).each { Project neutralProject ->
+                    deleteNeutralSourceNamespaceClasses(
+                        neutralProject.layout.buildDirectory.dir("classes/java/main").get().asFile)
+                }
             }
             def staleManifest = neutralAotClassesManifest.get().asFile
             if (staleManifest.isFile()) {
@@ -625,6 +639,36 @@ if (target.loader != "none") {
         }
     }
 
+    def verifyPlatformAotCoverage = tasks.register("verifyPlatformAotCoverage") {
+        group = "verification"
+        description = "Verify every selected platform Clojure namespace is emitted as class-only AOT output."
+        dependsOn copyClojureClassesToJavaOutput, stageNeutralClojureRuntimeResources
+        doLast {
+            def aotRoot = clojureAotDir.get().asFile
+            def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
+            def resourcesRoot = layout.buildDirectory.dir("resources/main").get().asFile
+            def missing = []
+            def sourceLeaks = []
+            platformRuntimeAotNamespaces().each { String namespaceName ->
+                def base = namespaceName.replace(".", "/").replace("-", "_")
+                if (!new File(aotRoot, "${base}__init.class").isFile() ||
+                    !new File(classesRoot, "${base}__init.class").isFile()) {
+                    missing << namespaceName
+                }
+                if (new File(resourcesRoot, "${base}.clj").isFile() ||
+                    new File(resourcesRoot, "${base}.cljc").isFile()) {
+                    sourceLeaks << namespaceName
+                }
+            }
+            if (!missing.isEmpty() || !sourceLeaks.isEmpty()) {
+                throw new GradleException(
+                    "Platform AOT/class-only coverage failed for ${target.id}: " +
+                    "missing=${missing.sort()}, sourceLeaks=${sourceLeaks.sort()}")
+            }
+            logger.lifecycle("[verifyPlatformAotCoverage] ok ({} platform namespaces)", platformRuntimeAotNamespaces().size())
+        }
+    }
+
     tasks.named("classes").configure {
         dependsOn copyClojureClassesToJavaOutput
     }
@@ -657,7 +701,7 @@ if (target.loader != "none") {
 
     tasks.named("jar", Jar).configure {
         dependsOn copyClojureClassesToJavaOutput
-        dependsOn verifyNeutralClojurePackaging, stageNeutralClojureRuntimeResources
+        dependsOn verifyNeutralClojurePackaging, stageNeutralClojureRuntimeResources, verifyPlatformAotCoverage
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
         archiveBaseName = target.artifact.baseName
         archiveClassifier = target.artifact.classifier

@@ -1,4 +1,4 @@
-(ns cn.li.mcmod.platform.loader-hook-support-test
+(ns cn.li.platform.loader-hook-support-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.platform.loader-hook-support :as hooks]))
 

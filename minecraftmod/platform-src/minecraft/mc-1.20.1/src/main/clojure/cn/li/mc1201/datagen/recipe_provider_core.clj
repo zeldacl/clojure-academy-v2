@@ -4,7 +4,7 @@
             [cn.li.mc1201.datagen.metadata-resolver :as metadata-resolver]
             [cn.li.mcbase.datagen.recipe-core :as recipe-core]
             [cn.li.mcbase.datagen.recipe-patterns :as recipe-patterns]
-            [cn.li.mcmod.config :as modid])
+            [cn.li.platform.neutral.config :as modid])
   (:import [java.util.function Consumer]
            [net.minecraft.advancements CriterionTriggerInstance]
            [net.minecraft.advancements.critereon InventoryChangeTrigger$TriggerInstance]

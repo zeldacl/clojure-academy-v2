@@ -7,8 +7,8 @@
             [cn.li.mcbase.gui.provider.common :as provider-common]
             [cn.li.mc262.gui.registry.common :as registry-common]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.gui.handler :as gui-handler]
-            [cn.li.mcmod.gui.registry :as gui])
+            [cn.li.platform.neutral.gui-runtime :as gui-handler]
+            [cn.li.platform.neutral.gui-runtime :as gui])
   (:import [net.minecraft.server.level ServerPlayer]))
 
 (defn- create-menu-proxy

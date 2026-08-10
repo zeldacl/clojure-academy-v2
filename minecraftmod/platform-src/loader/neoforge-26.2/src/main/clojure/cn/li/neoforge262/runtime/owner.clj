@@ -1,6 +1,6 @@
 (ns cn.li.neoforge262.runtime.owner
   "Canonical runtime owner helpers for Forge event boundaries."
-  (:require [cn.li.mcmod.hooks.core :as runtime-hooks]
+  (:require [cn.li.platform.neutral.hooks :as runtime-hooks]
             [cn.li.mcmod.runtime.owner :as runtime-owner])
   (:import [cn.li.mc262.bridge McAccess] [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity.player Player]))

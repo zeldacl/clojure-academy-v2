@@ -4,7 +4,7 @@
             [cn.li.mcbase.gui.init.checks :as init-checks]
             [cn.li.mcbase.runtime.spi.gui-registry :as registry-api]
             [cn.li.platform.target :as target]
-            [cn.li.mcmod.gui.registry :as gui]
+            [cn.li.platform.neutral.gui-runtime :as gui]
             [cn.li.fabric262.adapter.gui-registry :as registry-impl]
             [cn.li.fabric262.gui.network.server :as network-server]
             [cn.li.mcmod.util.log :as log]))

@@ -1,7 +1,7 @@
 (ns cn.li.fabric1211.integration.events.block
   "Fabric block break/place handlers extracted from monolithic events namespace."
   (:require [cn.li.mcbase.integration.event-support :as event-support]
-            [cn.li.mcmod.events.dispatcher :as dispatcher]
+            [cn.li.platform.neutral.event-runtime :as dispatcher]
             [cn.li.mc1211.integration.event-handlers :as event-handlers])
   (:import [net.minecraft.core BlockPos]
            [net.minecraft.world.entity.player Player]

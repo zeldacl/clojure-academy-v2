@@ -4,7 +4,7 @@
   This bridge is intentionally generic:
   - input: {uuid achievement-id}
   - output: ModCustomTrigger.trigger(ServerPlayer, String)"
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1211.trigger ModTriggers]
@@ -30,4 +30,3 @@
                (log/warn "Failed to dispatch achievement trigger" achievement-id (ex-message e))))))
        (log/info "Forge achievement bridge initialized")))
   nil)
-

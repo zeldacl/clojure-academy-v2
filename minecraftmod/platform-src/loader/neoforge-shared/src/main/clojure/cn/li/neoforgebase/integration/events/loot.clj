@@ -1,7 +1,7 @@
 (ns cn.li.neoforgebase.integration.events.loot
   "Shared loot-table load handlers. Version loaders install LootInjectionHelper bridge."
   (:require [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata])
+            [cn.li.platform.registry.metadata :as registry-metadata])
   (:import [net.neoforged.neoforge.event LootTableLoadEvent]))
 
 (defonce ^:private add-item-injection-atom

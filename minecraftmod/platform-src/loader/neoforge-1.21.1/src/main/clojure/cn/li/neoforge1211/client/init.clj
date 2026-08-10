@@ -4,18 +4,18 @@
   This namespace must be loaded via the side-checked client resolver from the
   platform layer. It contains client-only initialization code including
   renderer registration and texture binding."
-  (:require [cn.li.mcmod.hooks.core :as power-runtime]
-          [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.client.content-actions :as content-actions]
+  (:require [cn.li.platform.neutral.hooks :as power-runtime]
+          [cn.li.platform.neutral.client-runtime :as client-bridge]
+            [cn.li.platform.neutral.client-runtime :as content-actions]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.client.ui.registry :as widget-registry]
+            [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
-            [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.mcmod.util.render :as render]
-            [cn.li.mcmod.hooks.tutorial-events :as tutorial-hooks]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
-            [cn.li.mcmod.client.render.init :as render-init]
-            [cn.li.mcmod.client.render.tesr-api :as tesr-api]
+            [cn.li.platform.neutral.integration-runtime :as tutorial-hooks]
+            [cn.li.platform.registry.metadata :as registry-metadata]
+            [cn.li.platform.neutral.client-runtime :as render-init]
+            [cn.li.platform.neutral.client-runtime :as tesr-api]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
             [cn.li.mc1211.client.effects.particle :as particle]
             [cn.li.mc1211.client.effects.sound :as sound]
@@ -43,8 +43,8 @@
             [cn.li.neoforge1211.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.neoforge1211.client.fov-renderer :as fov-renderer]
             [cn.li.mc1211.client.energy-item-model-properties :as energy-item-model-properties]
-            [cn.li.mcmod.client.render.pose :as pose]
-            [cn.li.mcmod.client.render.buffer :as buffer]
+            [cn.li.platform.neutral.client-runtime :as pose]
+            [cn.li.platform.neutral.client-runtime :as buffer]
             [cn.li.neoforgebase.registry.state :as registry-state]
             [cn.li.mc1211.integration.recipe-query :as recipe-query]
             [cn.li.mcmod.spi.vanilla-input-control :as vanilla-spi])
@@ -380,7 +380,7 @@
       (log/stacktrace "Failed to install keyboard input SPI providers" e)))
 
   (try
-    (lifecycle/run-post-spi-client-init!)
+    ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
       (log/error e "Failed to run post-SPI content keybinding init")
       (log/stacktrace "Failed to run post-SPI content keybinding init" e)))
@@ -424,7 +424,7 @@
   (i18n/install-client-i18n!)
 
   ;; Run content-owned client initialization without naming a concrete suite.
-  (lifecycle/run-client-init!)
+  ((platform-bootstrap/client-init-callback!))
   ;; MSDF font registration needs the full bridge (the content client-init
   ;; hook may have fired earlier, on RegisterRenderers, before the bridge
   ;; ops existed) — retry now that the bridge is complete.

@@ -8,7 +8,7 @@
             [cn.li.fabric1211.registry.creative-tab-event :as creative-tabs]
             [cn.li.fabric1211.commands :as commands]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
+            [cn.li.platform.neutral.event-runtime :as world-lifecycle]
             [cn.li.mcmod.runtime.install :as install])
   (:import [net.fabricmc.fabric.api.command.v2 CommandRegistrationCallback]
            [net.fabricmc.fabric.api.loot.v2 LootTableEvents$Modify]
@@ -40,6 +40,7 @@
   (install/process-once! ::events-registered
     #(do
           (log/info "Registering Fabric event listeners...")
+          (lifecycle-events/install-runtime-callbacks!)
 
       (.register UseBlockCallback/EVENT
                  (reify UseBlockCallback

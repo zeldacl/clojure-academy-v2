@@ -4,7 +4,7 @@
   Wraps a Clojure container map (via mcmod gui.adapter.platform-registry) as a
   vanilla `net.minecraft.world.Container` so Forge and Fabric slot machinery
   can interact with it without platform-specific code."
-  (:require [cn.li.mcmod.gui.adapter.platform-registry :as platform])
+  (:require [cn.li.platform.neutral.gui-runtime :as platform])
   (:import [cn.li.mcbase.shim UniversalContainer]))
 
 (defn create-tile-inventory-adapter

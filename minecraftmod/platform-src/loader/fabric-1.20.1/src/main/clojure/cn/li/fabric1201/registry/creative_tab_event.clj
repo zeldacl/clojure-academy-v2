@@ -5,8 +5,8 @@
   this adapter keeps the same DSL ordering and supports charged/filled item
   variants without leaking the loader API into shared metadata code."
   (:require [cn.li.fabric1201.registry.creative-tab :as tabs]
-            [cn.li.mcmod.config :as modid]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.neutral.config :as modid]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.itemgroup.v1 ItemGroupEvents ItemGroupEvents$ModifyEntries FabricItemGroupEntries]
            [net.minecraft.world.item ItemStack]

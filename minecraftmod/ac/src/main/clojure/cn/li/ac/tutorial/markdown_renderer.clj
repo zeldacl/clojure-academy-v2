@@ -160,7 +160,7 @@
                            ;; Measure with the client font when the bridge is up; off-client
                            ;; (tests, dedicated server) fall back to a char-count estimate.
                            (fn [font-desc text font-size]
-                             (or (platform-bridge/call-adapter :font-text-width font-desc text font-size)
+                             (or (platform-bridge/font-text-width-optional font-desc text font-size)
                                  (* (count text) font-size 0.6))))
          lines (str/split-lines (or raw-content ""))
          segments

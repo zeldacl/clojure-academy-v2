@@ -2,7 +2,7 @@
   "Fabric-specific static function bindings for core platform hooks."
   (:require [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.be :as pbe]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]
+            [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log]
             [cn.li.fabric1201.mod :as fabric-mod])
   (:import [cn.li.fabric1201.block.entity ScriptedBlockEntity]

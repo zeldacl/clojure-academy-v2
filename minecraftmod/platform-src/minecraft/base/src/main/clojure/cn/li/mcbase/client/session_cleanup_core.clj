@@ -5,8 +5,8 @@
   (:require [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mcbase.gui.reactive.overlay-host-core :as overlay-host]
             [cn.li.mcbase.client.session :as client-session]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.network.client :as net-client]
+            [cn.li.platform.neutral.hooks :as runtime-hooks]
+            [cn.li.platform.neutral.client-network :as net-client]
             [cn.li.mcmod.runtime.deferred :as deferred]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver McAccess]
