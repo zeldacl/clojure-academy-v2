@@ -250,6 +250,15 @@
     (when baked
       (let [{:keys [text color font-size font-desc align x-off y-off]} baked
             align-kw (or align :left)
+            ;; font-size / text offsets are authored in local design units (same
+            ;; as w/h). Images/boxes already multiply by cum-scale; text must too
+            ;; or scaled roots (terminal fit-scale, skill-tree camera, the HUD
+            ;; key-hint column at 0.23) draw glyphs that ignore the shrink.
+            ;; Matches mc-1.20.1 / mc-1.21.1 render-text!.
+            s (.getCumScale node)
+            font-size (* (double font-size) s)
+            x-off (* (double x-off) s)
+            y-off (* (double y-off) s)
             node-h (* (.getH node) (.getCumScale node))
             v-off (case (int (.getAlignH node))
                     1 (/ (- node-h (double font-size)) 2.0)

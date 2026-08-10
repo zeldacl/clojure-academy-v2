@@ -182,6 +182,25 @@
                         "guis/key_hint/key_short.png"
                         "guis/key_hint/key_long.png"))))
 
+;; Upstream KeyHintUI: `new FontOption(32, FontAlign.CENTER,
+;; Colors.fromHexColor(0xff194246))` — the key character is a dark teal that
+;; reads against the key-cap plate, never white.
+(def ^:private key-label-color 0xFF194246)
+
+;; While !canUseAbility or the skill is cooling down, upstream binds ShaderMono
+;; (mono.frag: c = (r+g+b)/3) for the key cap + character, and the font's own
+;; Colors.bindToGL(option.color) overrides the 0.7 grey glColor — so the dimmed
+;; character is flat grey (0x19+0x42+0x46)/3 = 0x36, not a lighter teal.
+(def ^:private key-label-color-dim 0xFF363636)
+
+;; Font sizes below are authored in the same local design units as x/y/w/h:
+;; render-text! multiplies :font-size by the node's cum-scale, exactly like the
+;; box/image geometry. Pre-multiplying by skill-slot-scale (as this template
+;; used to) therefore applied 0.23 twice and drew upstream's 32-unit glyphs at
+;; 1.6px — an illegible smear that read as a plain white blob for letter keys,
+;; and an unreadably small cooldown readout.
+(def ^:private key-label-font-size 32.0)
+
 (defn- skill-slot-template []
   ;; Upstream KeyHintUI.drawSingle raw local-unit offsets (auto-scaled via the
   ;; list's :scale 0.23, matching upstream's own pre-scale GL coordinate
@@ -194,11 +213,10 @@
                 :src (modid/asset-path "textures" "guis/key_hint/back.png")})
     (dsl/image {:id :key-cap :x 146 :y 10 :w 70 :h 70
                 :src (key-cap-texture "")})
-    ;; font-size does NOT auto-scale with the node's inherited cum-scale in
-    ;; this engine (only x/y/w/h do) — pre-multiplied here: upstream
-    ;; FontOption(32, CENTER) × 0.23 ≈ 7.
-    (dsl/text {:id :key-label :x 180 :y 20 :text "" :color 0xFFFFFFFF
-               :align :center :font-size 7})
+    ;; Upstream: font.draw(name, wx=180, wy=27, option) — x is the centre
+    ;; anchor (FontAlign.CENTER), y the em-box top.
+    (dsl/text {:id :key-label :x 180 :y 27 :text "" :color key-label-color
+               :align :center :font-size key-label-font-size})
     (dsl/image {:id :icon-back :x 216 :y 5 :w 72 :h 72
                 :src (modid/asset-path "textures" "guis/key_hint/icon_back.png")})
     (dsl/image {:id :icon :x 221 :y 10 :w 62 :h 62 :src ""})
@@ -207,8 +225,13 @@
     (dsl/glow-line {:id :icon-glow :x 221 :y 10 :visible? false})
     ;; Cooldown wipe: upstream colorRect(221, 10+62*(1-prog), 62, 62*prog).
     (dsl/box {:id :cd-mask :x 221 :y 10 :w 62 :h 62 :fill 0x4D999999 :visible? false})
-    (dsl/text {:id :cd-text :x 180 :y 55 :text "" :color 0xFFFFFFFF
-               :align :center :font-size 7 :visible? false})))
+    ;; Remaining-cooldown readout. Upstream draws no number at all (the wipe
+    ;; above is the whole cooldown cue), so this is the port's own addition —
+    ;; centred on the icon box the wipe darkens (221+62/2, vertically centred),
+    ;; where it has the room to be legible. Sharing the key cap with the key
+    ;; character left it only ~21 design units of headroom, i.e. under 5px.
+    (dsl/text {:id :cd-text :x 252 :y 27 :text "" :color 0xFFFFFFFF
+               :align :center :font-size 28 :visible? false})))
 
 ;; Upstream CPBar.drawPresetHint: 4 numbered boxes, 52×52 texture-space units
 ;; @ the bar's 0.2 scale ≈ 10.4×10.4px, step 62×0.2≈12.4px between boxes.
@@ -751,7 +774,7 @@
     (ui/set-node-prop! r key-cap :src (key-cap-texture key-label-raw))
     (ui/set-node-prop! r key-label-node :text key-label)
     (ui/set-node-prop! r key-cap :tint (if dim? [178 178 178 255] [255 255 255 255]))
-    (ui/set-node-prop! r key-label-node :color (if dim? 0xFFB2B2B2 0xFFFFFFFF))
+    (ui/set-node-prop! r key-label-node :color (if dim? key-label-color-dim key-label-color))
     (when-let [icon-src (:skill-icon slot)]
       (ui/set-node-prop! r icon :src icon-src))
     (ui/set-node-prop! r icon :alpha icon-alpha)
@@ -792,7 +815,7 @@
     (ui/set-node-prop! r key-cap :src (key-cap-texture key-label))
     (ui/set-node-prop! r key-label-node :text (str key-label))
     (ui/set-node-prop! r key-cap :tint [255 255 255 255])
-    (ui/set-node-prop! r key-label-node :color 0xFFFFFFFF)
+    (ui/set-node-prop! r key-label-node :color key-label-color)
     (when-let [icon-src skill-icon]
       (ui/set-node-prop! r icon :src icon-src))
     (ui/set-node-prop! r icon :alpha (if active? 1.0 0.55))
