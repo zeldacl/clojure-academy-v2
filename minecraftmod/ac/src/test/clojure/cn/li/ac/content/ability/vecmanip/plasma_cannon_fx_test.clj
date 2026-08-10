@@ -192,6 +192,8 @@
 ;; PlasmaBodyEffect parity: cluster size, alpha curve, death fade, prediction
 ;; ---------------------------------------------------------------------------
 
+(def ^:private rendered-charge-pos @#'pcimpl/rendered-charge-pos)
+
 (defn- with-fx-stubs [f]
   (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "plasma-cannon-test"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)
@@ -207,6 +209,11 @@
 (defn- start! [ctx-id charge-pos]
   (arc-beam/enqueue-for-test! :plasma-cannon ctx-id :plasma-cannon/fx-start
     {:mode :start :charge-pos charge-pos :tornado-base {:x 0.0 :y 0.0 :z 0.0}}))
+
+(defn- charge-x
+  "The authoritative (tick-resolution) position, before render interpolation."
+  [ctx-id]
+  (get-in (pcfx/fx-snapshot) [:effect-state [:ctx ctx-id] :charge-pos :x]))
 
 (defn- plasma-op []
   (first (filter #(= :plasma-body (:kind %))
@@ -282,12 +289,28 @@
          :charge-pos {:x 0.0 :y 64.0 :z 0.0}
          :destination {:x 20.0 :y 64.0 :z 0.0}})
       (tick-fx! 3)
-      (is (< 2.9 (:x (:center (plasma-op))) 3.1) "three ticks, three blocks")
+      (is (= 3.0 (charge-x "ctx-fly")) "three ticks, three blocks")
       ;; A sync is authoritative: it overrides whatever was predicted.
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
         {:mode :update :state :go :charge-pos {:x 5.0 :y 64.0 :z 0.0}})
       (tick-fx! 1)
-      (is (< 5.9 (:x (:center (plasma-op))) 6.1)))))
+      (is (= 6.0 (charge-x "ctx-fly"))))))
+
+(deftest render-position-is-interpolated-across-the-tick-test
+  ;; Vanilla draws an entity at lastTickPos + (pos - lastTickPos) * partialTick.
+  ;; Without that the body teleports a whole block 20 times a second, which
+  ;; reads as a stutter — the level-effect plan only gets whole game ticks, so
+  ;; the elapsed wall clock since the move stands in for the partial tick.
+  (let [prev {:x 0.0 :y 64.0 :z 0.0}
+        cur {:x 1.0 :y 64.0 :z 0.0}
+        at (fn [ms-ago]
+             (:x (rendered-charge-pos {:prev-charge-pos prev :charge-pos cur
+                                       :moved-ms (- (System/currentTimeMillis) ms-ago)})))]
+    (is (< (at 0) 0.1) "a fresh move still draws at the old position")
+    (is (< 0.4 (at 25) 0.7) "halfway through the tick, halfway along")
+    (is (= 1.0 (at 200)) "and never runs past the authoritative position")
+    (is (= cur (rendered-charge-pos {:charge-pos cur}))
+        "nothing to interpolate from before the first move")))
 
 (deftest charged-cue-is-caster-only-test
   ;; l_tick guards the cue with `if (isLocal)`: every nearby client runs the

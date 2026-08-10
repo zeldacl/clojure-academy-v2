@@ -114,6 +114,36 @@
                                             plasma-fade-out-per-tick
                                             plasma-fade-in-per-tick)))))
 
+;; One client tick, in wall-clock milliseconds.
+(def ^:private tick-ms 50.0)
+
+(defn- move-charge-pos
+  "Record a new authoritative position and keep the one it replaced, so the
+  render can interpolate across the tick it happened in."
+  [st pos]
+  (assoc st
+         :prev-charge-pos (:charge-pos st)
+         :charge-pos pos
+         :moved-ms (System/currentTimeMillis)))
+
+(defn- rendered-charge-pos
+  "Vanilla renders an entity at lastTickPos + (pos - lastTickPos) * partialTick,
+  which is the only reason upstream's body glides: it moves a whole block per
+  tick, 20 times a second. The level-effect plan gets whole game ticks, no
+  partial, so interpolate over the 50ms since the move landed instead — same
+  curve, at most one tick behind."
+  [st]
+  (let [prev (:prev-charge-pos st)
+        cur (:charge-pos st)]
+    (if-not (and (map? prev) (map? cur))
+      cur
+      (let [t (Math/max 0.0 (Math/min 1.0 (/ (double (- (System/currentTimeMillis)
+                                                        (long (or (:moved-ms st) 0))))
+                                             tick-ms)))]
+        {:x (+ (double (:x prev)) (* t (- (double (:x cur)) (double (:x prev)))))
+         :y (+ (double (:y prev)) (* t (- (double (:y cur)) (double (:y prev)))))
+         :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))}))))
+
 (defn- advance-flight
   "PlasmaCannonContextC.c_tick: while the shot is flying the client runs the
   same tryMove as the server (1 block/tick toward the destination) instead of
@@ -131,9 +161,9 @@
             len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
         (if (< len 1.0)
           st
-          (assoc st :charge-pos {:x (+ (double (:x charge-pos)) (/ dx len))
-                                 :y (+ (double (:y charge-pos)) (/ dy len))
-                                 :z (+ (double (:z charge-pos)) (/ dz len))}))))))
+          (move-charge-pos st {:x (+ (double (:x charge-pos)) (/ dx len))
+                               :y (+ (double (:y charge-pos)) (/ dy len))
+                               :z (+ (double (:z charge-pos)) (/ dz len))}))))))
 
 (defn- finished?
   "Both halves have played out their death: the body's alpha has reached 0
@@ -222,8 +252,14 @@
 												:tornado-base (or tornado-base (tornado-base-fallback charge-pos))
 												:tornado-dead-ticks 0})))
 			:update
-			(let [updated (assoc-in store* [:effect-state owner-key*]
-												(assoc (merge base-meta (or (get-in store* [:effect-state owner-key*]) {}))
+			(let [prev-st (or (get-in store* [:effect-state owner-key*]) {})
+						;; A position sync is authoritative — it overrides whatever the
+						;; client's own tryMove predicted since the last one. Route it
+						;; through move-charge-pos so the correction is interpolated over
+						;; the next tick instead of snapping.
+						synced (if (map? charge-pos) (move-charge-pos prev-st charge-pos) prev-st)
+						updated (assoc-in store* [:effect-state owner-key*]
+												(assoc (merge base-meta synced)
 													 :owner-key owner-key*
 													 :ctx-id ctx-id
 													 :channel channel
@@ -233,12 +269,9 @@
 													 :charge-ticks (long (or charge-ticks 0))
 													 :flight-ticks (long (or flight-ticks 0))
 													 :state (or state :charging)
-													 ;; A position sync is authoritative — it overrides whatever
-													 ;; the client's own tryMove predicted since the last one.
-													 :charge-pos (or charge-pos (get-in store* [:effect-state owner-key* :charge-pos]))
-													 :destination (or destination (get-in store* [:effect-state owner-key* :destination]))
+													 :destination (or destination (:destination prev-st))
 													 :release-ready? (boolean (or release-ready?
-																												(get-in store* [:effect-state owner-key* :release-ready?])))))]
+																												(:release-ready? prev-st)))))]
 					;; Original plays the charged cue from l_tick under `if (isLocal)`
 					;; — the caster hears it, bystanders do not.
 					(when (and (boolean fully-charged?)
@@ -323,7 +356,7 @@
 	"One PlasmaBodyEffect draw. The renderer's `alpha` uniform is upstream's
 	`math.pow(eff.alpha, 2)`, not the raw fade value."
 	[st]
-	(let [cp (:charge-pos st)
+	(let [cp (rendered-charge-pos st)
 				alpha (double (or (:plasma-alpha st) 0.0))]
 		(when (and (map? cp) (> alpha plasma-dead-alpha))
 			[{:kind :plasma-body
