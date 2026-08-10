@@ -17,6 +17,7 @@
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.plasma-cannon :as plasma-cannon-fx]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.content.ability.teleporter.location-teleport-reactive :as location-teleport-reactive]
             [cn.li.ac.ability.client.screens.preset-editor :as preset-editor-screen]
@@ -1313,6 +1314,12 @@
          (let [{:keys [active? coin-active?]}
                (charge-coin-visual-state (:player-uuid payload) (:now-ms payload))]
            (when active? (if coin-active? :active :charge)))
+         ;; Upstream PlasmaCannonContext implements IStateProvider: CHARGE
+         ;; until the charge completes, ACTIVE after. Nothing else ever puts a
+         ;; context into the :charge input-state, so without this override the
+         ;; slot goes straight to the blue ACTIVE glow on key-down.
+         :ac.delegate-state/plasma-cannon
+         (plasma-cannon-fx/charge-visual-state (:player-uuid payload))
          nil))
 
      :client-trigger-mode-switch!

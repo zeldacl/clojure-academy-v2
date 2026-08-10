@@ -53,6 +53,16 @@ public final class LoopingSoundRegistry {
 
     public static void startFollowingPlayer(
             String key, String soundId, float volume, float pitch, String playerUuid) {
+        startFollowingPlayer(key, soundId, volume, pitch, playerUuid, true);
+    }
+
+    /**
+     * {@code looping = false} plays the clip once and lets it end on its own,
+     * while still being tracked by key so stop() can cut it short -- upstream's
+     * FollowEntitySound without setLoop().
+     */
+    public static void startFollowingPlayer(
+            String key, String soundId, float volume, float pitch, String playerUuid, boolean looping) {
         stop(key);
         Minecraft mc = Minecraft.getInstance();
         if (mc == null || mc.level == null || playerUuid == null || playerUuid.isBlank()) {
@@ -71,7 +81,7 @@ public final class LoopingSoundRegistry {
         if (player != null && event != null) {
             play(key, new PositionalLoopSoundInstance(
                     event, SoundSource.AMBIENT, volume, pitch,
-                    player.getX(), player.getY(), player.getZ(), uuid));
+                    player.getX(), player.getY(), player.getZ(), uuid, looping));
         }
     }
 

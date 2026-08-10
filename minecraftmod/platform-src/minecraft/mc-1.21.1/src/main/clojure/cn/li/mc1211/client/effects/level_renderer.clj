@@ -459,11 +459,12 @@
                 axis-x
                 (V3/normalize right-raw))
         up (V3/normalize (V3/cross to-cam right))
-        ;; Fixed 20-block half-size (upstream's size=22): the quad is the
-        ;; ray-march SAMPLING WINDOW, not the ball itself — the ball renders
-        ;; inside it as a 3D density field. A ball-sized quad reads as a flat
-        ;; square instead of a floating orb.
-        half-size 20.0
+        ;; The quad is the ray-march SAMPLING WINDOW, not the ball itself —
+        ;; the ball renders inside it as a 3D density field, so a ball-sized
+        ;; quad reads as a flat square instead of a floating orb. Upstream
+        ;; draws a unit billboard (createBillboard(-.5,-.5,.5,.5)) scaled by
+        ;; size=22, i.e. 22 blocks across: an 11-block half-size, not 20.
+        half-size 11.0
         side (V3/scale right half-size)
         lift (V3/scale up half-size)
         p0 (V3/add (V3/sub center side) lift)

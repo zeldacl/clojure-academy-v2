@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vecmanip-fx-owner-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -107,12 +108,26 @@
     (dispatch! :plasma-cannon (event "ctx-b" :plasma-cannon/fx-update
                                     {:mode :update :charge-ticks 8 :charge-pos {:x 2.0 :y 64.0 :z 2.0}
                                      :flight-ticks 2 :state :go}))
+    ;; The bodies fade in from alpha 0, so they need to have ticked before they
+    ;; contribute any ops.
+    (dotimes [_ 40]
+      (level-effects/update-effect-state! :plasma-cannon
+        (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
     (let [snapshot (plasma-cannon-fx/fx-snapshot)
           plan (level-effects/build-level-effect-plan nil nil 0 nil)]
       (is (= 24 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= :go (:state (get (:effect-state snapshot) [:ctx "ctx-b"]))))
-      (is (= 2 (count (:ops plan))))
+      (is (= 2 (count (filter #(= :plasma-body (:kind %)) (:ops plan))))
+          "one plasma body per owner")
+      ;; Context termination marks the owner instead of deleting it — upstream's
+      ;; two entities outlive the context while they fade — and it is dropped
+      ;; once that fade finishes. The other owner is untouched throughout.
       (plasma-cannon-fx/clear-fx-owner! [:ctx "ctx-a"])
-      (let [after-clear (plasma-cannon-fx/fx-snapshot)]
-        (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
-        (is (some? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
+      (is (true? (:terminated? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-a"]))))
+      (is (some? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-b"])))
+      (dotimes [_ 40]
+        (level-effects/update-effect-state! :plasma-cannon
+          (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
+      (let [after-fade (plasma-cannon-fx/fx-snapshot)]
+        (is (nil? (get (:effect-state after-fade) [:ctx "ctx-a"])))
+        (is (some? (get (:effect-state after-fade) [:ctx "ctx-b"])))))))

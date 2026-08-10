@@ -226,7 +226,8 @@
                             (sound/start-loop-sound-at-player!
                               (:key payload) (:sound-id payload)
                               (:volume payload) (:pitch payload)
-                              (:owner-uuid payload))
+                              (:owner-uuid payload)
+                              (get payload :loop? true))
 
                             :mcmod/update-loop-sound-position
                             (sound/update-loop-sound-position! (:key payload)

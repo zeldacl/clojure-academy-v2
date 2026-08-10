@@ -133,12 +133,14 @@
         radius (explosion-radius exp)]
     (when (world-effects/available?)
       (doseq [entity
-              (world-effects/find-entities-in-radius
-               world-id
-               tx
-               ty
-               tz
-               (cfg-double :combat.damage-radius))
+              (let [r (cfg-double :combat.damage-radius)]
+                ;; Upstream WorldUtils.getEntities builds the ±r box and then
+                ;; filters it with EntitySelectors.within(x,y,z,r) — a SPHERE.
+                ;; find-entities-in-radius only does the box, which reaches
+                ;; r*sqrt(3) into the corners.
+                (filter (fn [e]
+                          (<= (geom/vdist e {:x tx :y ty :z tz}) r))
+                        (world-effects/find-entities-in-radius world-id tx ty tz r)))
               :let [target-id (:uuid entity)]
               :when target-id]
         (when (entity-damage/available?)
@@ -166,7 +168,7 @@
      "radius:" (int radius)
      "damage:" (int damage))))
 
-(defn- resolve-destination [player-id world-id player-pos]
+(defn- resolve-destination [player-id _world-id player-pos]
   (let [eye-x (double (:x player-pos))
         eye-y (+ (double (:y player-pos))
                  (cfg-double :targeting.eye-height))
@@ -177,16 +179,12 @@
             dx (double (or (:x look) 0.0))
             dy (double (or (:y look) 0.0))
             dz (double (or (:z look) 1.0))
-            hit
-            (raycast/raycast-combined
-             world-id
-             eye-x
-             eye-y
-             eye-z
-             dx
-             dy
-             dz
-             max-distance)]
+            ;; s_perform: Raytrace.getLookingPos(player, 100,
+            ;; EntitySelectors.living) — LIVING entities only, from the
+            ;; player's actual eye position. The generic combined trace also
+            ;; stops on any pickable entity (armour stands, boats, item
+            ;; frames), which would drop the shot short of what was aimed at.
+            hit (raycast/raycast-combined-from-player player-id max-distance true)]
         (if hit
           (let [entity-hit? (= "entity" (:hit-type hit))
                 hit-x (double (or (:hit-x hit) (:x hit) eye-x))

@@ -21,6 +21,13 @@
 (def ^:private charged-sound (modid/namespaced-path "vecmanip.plasma_cannon_t"))
 (defn- loop-sound-key [ctx-id] (str "plasma-cannon/" ctx-id))
 
+(defn- local-player?
+  "Upstream guards the charged cue with `isLocal` — only the caster's own
+  client plays it, even though every nearby client runs the context."
+  [source-player-id]
+  (boolean (when source-player-id
+             (= (str source-player-id) (str (client-bridge/local-player-uuid))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Charge tornado (original PlasmaCannon's private Tornado LocalEntity)
 ;; ---------------------------------------------------------------------------
@@ -34,12 +41,107 @@
 (def ^:private tornado-fade-ticks 20.0)
 (def ^:private tornado-dead-ticks 30)
 
+;; ---------------------------------------------------------------------------
+;; Plasma body (original PlasmaBodyEffect + PlasmaBodyRenderer)
+;; ---------------------------------------------------------------------------
 
+(defn- ranged ^double [^double lower ^double upper]
+  (+ lower (* (rand) (- upper lower))))
 
+(defn- trig-par
+  "PlasmaBodyEffect.nextTrigPar(size): an orbit amplitude scaled by `size`, a
+  slow angular speed in rad/SECOND, and a fixed phase offset."
+  [^double size]
+  {:amp (* (ranged 1.4 2.0) size)
+   :speed (ranged 0.5 0.7)
+   :dphase (ranged 0.0 (* 2.0 Math/PI))})
 
+(defn- new-balls
+  "PlasmaBodyEffect's constructor: 4 core balls (size 1..1.5, centre ±1.5,
+  orbit amplitude 1.4..2) plus rangei(4,6) → 4-5 satellites (size 0.1..0.3,
+  centre ±3, orbit amplitude ×2.5). Fixed per effect instance, like upstream."
+  []
+  (letfn [(ball [^double size-lo ^double size-hi ^double spread ^double amp-scale]
+            {:size (ranged size-lo size-hi)
+             :center [(ranged (- spread) spread)
+                      (ranged (- spread) spread)
+                      (ranged (- spread) spread)]
+             :hmove (trig-par amp-scale)
+             :vmove (trig-par amp-scale)})]
+    (vec (concat (repeatedly 4 #(ball 1.0 1.5 1.5 1.0))
+                 (repeatedly (+ 4 (rand-int 2)) #(ball 0.1 0.3 3.0 2.5))))))
 
+(defn- ball-positions
+  "PlasmaBodyRenderer's per-ball offset: dx/dz trace a circle of radius
+  hmove.amp, dy a sine of amplitude vmove.amp.
 
+  `seconds` is the time since the effect spawned. Upstream passes its
+  `deltaTime` here, but `updateAlpha` resets `initTime` every frame, so what it
+  actually passes is the frame delta — the cluster is frozen at its dphase
+  offsets. Feeding the accumulated time instead is what the trig parameters
+  (speed in rad/s, i.e. a ~10s period) are clearly written for."
+  [{:keys [x y z]} balls ^double seconds]
+  (mapv (fn [{:keys [size center hmove vmove]}]
+          (let [[cx cy cz] center
+                hp (- (* (double (:speed hmove)) seconds) (double (:dphase hmove)))
+                vp (- (* (double (:speed vmove)) seconds) (double (:dphase vmove)))
+                ha (double (:amp hmove))]
+            {:x (+ (double x) (double cx) (* ha (Math/sin hp)))
+             :y (+ (double y) (double cy) (* (double (:amp vmove)) (Math/sin vp)))
+             :z (+ (double z) (double cz) (* ha (Math/cos hp)))
+             :size (double size)}))
+        balls))
 
+;; PlasmaBodyEffect.updateAlpha: moveTowards(alpha, terminated ? 0 : 1,
+;; dt * (terminated ? 1 : 0.3)) — real seconds, so 0.3/s in and 1.0/s out.
+;; One client tick is 0.05s.
+(def ^:private plasma-fade-in-per-tick (* 0.05 0.3))
+(def ^:private plasma-fade-out-per-tick (* 0.05 1.0))
+;; onUpdate: setDead once terminated and |alpha| <= 1e-3.
+(def ^:private plasma-dead-alpha 1.0e-3)
+
+(defn- move-towards ^double [^double from ^double to ^double max-step]
+  (let [delta (- to from)]
+    (+ from (* (Math/min (Math/abs delta) max-step) (Math/signum delta)))))
+
+(defn- tick-plasma-alpha
+  [st]
+  (let [terminated? (boolean (:terminated? st))
+        alpha (double (or (:plasma-alpha st) 0.0))]
+    (assoc st :plasma-alpha (move-towards alpha
+                                          (if terminated? 0.0 1.0)
+                                          (if terminated?
+                                            plasma-fade-out-per-tick
+                                            plasma-fade-in-per-tick)))))
+
+(defn- advance-flight
+  "PlasmaCannonContextC.c_tick: while the shot is flying the client runs the
+  same tryMove as the server (1 block/tick toward the destination) instead of
+  waiting for the 5-tick position sync, which would otherwise leave the body a
+  quarter second behind. A sync overwrites :charge-pos authoritatively."
+  [st]
+  (let [{:keys [charge-pos destination]} st]
+    (if-not (and (= :go (:state st))
+                 (not (:terminated? st))
+                 (map? charge-pos) (map? destination))
+      st
+      (let [dx (- (double (:x destination)) (double (:x charge-pos)))
+            dy (- (double (:y destination)) (double (:y charge-pos)))
+            dz (- (double (:z destination)) (double (:z charge-pos)))
+            len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+        (if (< len 1.0)
+          st
+          (assoc st :charge-pos {:x (+ (double (:x charge-pos)) (/ dx len))
+                                 :y (+ (double (:y charge-pos)) (/ dy len))
+                                 :z (+ (double (:z charge-pos)) (/ dz len))}))))))
+
+(defn- finished?
+  "Both halves have played out their death: the body's alpha has reached 0
+  (upstream setDead) and the tornado has been dropped 30 ticks after dying."
+  [st]
+  (and (:terminated? st)
+       (<= (double (or (:plasma-alpha st) 0.0)) plasma-dead-alpha)
+       (nil? (:tornado st))))
 
 
 (defn- tornado-base-fallback
@@ -67,7 +169,8 @@
 	[st ^long ticks]
 	(if-not (:tornado st)
 		st
-		(let [dead? (boolean (or (:tornado-dead? st) (= :go (:state st))))
+		;; Original: dead = (ctx.state == STATE_GO || ctx.getStatus == TERMINATED).
+		(let [dead? (boolean (or (:tornado-dead? st) (= :go (:state st)) (:terminated? st)))
 					dead-ticks (if dead? (inc (long (or (:tornado-dead-ticks st) 0))) 0)]
 			(if (>= dead-ticks tornado-dead-ticks)
 				(dissoc st :tornado :tornado-rings :tornado-alpha :tornado-base)
@@ -83,8 +186,8 @@
 	[store ctx-id channel owner-key payload]
 	(let [store* (or store {:effect-state {}})
 				owner-key* (or owner-key [:ctx ctx-id])
-				{:keys [mode charge-ticks fully-charged? charge-pos tornado-base flight-ticks
-								state destination pos performed? source-player-id world-id]} (or payload {})
+				{:keys [mode charge-ticks fully-charged? release-ready? charge-pos tornado-base
+								flight-ticks state destination pos performed? source-player-id world-id]} (or payload {})
 				base-meta {:owner-key owner-key*
 									 :queue-owner (client-particles/current-effect-owner)
 									 :ctx-id ctx-id
@@ -94,20 +197,25 @@
 		(case mode
 			:start
 			(do
-				;; Original c_begin: FollowEntitySound charge loop attached to
-				;; the caster until the context ends — not a re-queued one-shot.
+				;; Original c_begin: `new FollowEntitySound(player, ..., AMBIENT)`
+				;; without setLoop() — one playback of the 5.9s charge clip that
+				;; follows the caster and is cut short by stop() on terminate.
 				(client-bridge/run-client-effect!
 				 :mcmod/start-loop-sound-at-player
 				 {:key (loop-sound-key ctx-id)
 				  :sound-id loop-sound
 				  :owner-uuid (str source-player-id)
-				  :volume 0.5
-				  :pitch 1.0})
+				  :volume 1.0
+				  :pitch 1.0
+				  :loop? false})
 				(assoc-in store* [:effect-state owner-key*]
 									(merge base-meta
 												 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
 												:flight-ticks 0 :state :charging :destination nil
-												:performed? false
+												:performed? false :terminated? false
+												;; PlasmaBodyEffect: fixed ball cluster, alpha ramping from 0.
+												:balls (new-balls)
+												:plasma-alpha 0.0
 												;; Original c_begin also spawns the Tornado entity, seated on
 												;; the ground under the charge position and fading in from 0.
 												:tornado (tornado/new-column tornado-params)
@@ -125,14 +233,16 @@
 													 :charge-ticks (long (or charge-ticks 0))
 													 :flight-ticks (long (or flight-ticks 0))
 													 :state (or state :charging)
+													 ;; A position sync is authoritative — it overrides whatever
+													 ;; the client's own tryMove predicted since the last one.
 													 :charge-pos (or charge-pos (get-in store* [:effect-state owner-key* :charge-pos]))
 													 :destination (or destination (get-in store* [:effect-state owner-key* :destination]))
- ;; Server sync landed: keep the previous authoritative position so the
- ;; renderer can interpolate BETWEEN the last two syncs (standard two-sample
- ;; interpolation) — continuous glide, no jump when a new sync arrives.
- :prev-charge-pos (get-in store* [:effect-state owner-key* :charge-pos])
- :sync-ms (System/currentTimeMillis)))]
-					(when (boolean fully-charged?)
+													 :release-ready? (boolean (or release-ready?
+																												(get-in store* [:effect-state owner-key* :release-ready?])))))]
+					;; Original plays the charged cue from l_tick under `if (isLocal)`
+					;; — the caster hears it, bystanders do not.
+					(when (and (boolean fully-charged?)
+										 (local-player? source-player-id))
 						(client-sounds/queue-sound-effect! (:queue-owner base-meta)
 							{:type :sound :sound-id charged-sound :volume 0.5 :pitch 1.0}))
 					updated)
@@ -152,9 +262,9 @@
 								 :z (+ tz (- (* (rand) 10.0) 5.0))
 								 :count 1 :speed (+ 0.1 (* (rand) 0.3))
 								 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
-						(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-							{:type :sound :sound-id "minecraft:entity.generic.explode"
-							 :volume 3.0 :pitch 0.8 :x tx :y ty :z tz})))
+						;; No explosion sound here: the server-side Explosion already
+						;; plays vanilla's, and queuing another only doubled it up.
+						))
 				store*)
 			:end
 			(do
@@ -162,8 +272,14 @@
 				(client-bridge/run-client-effect!
 				 :mcmod/stop-loop-sound
 				 {:key (loop-sound-key ctx-id)})
-				(assoc-in store* [:effect-state owner-key*]
-									(merge base-meta {:active? false :performed? (boolean performed?)})))
+				;; Upstream's two entities outlive the context: the body fades to 0
+				;; and only then setDead, the tornado fades for 20 ticks and is
+				;; removed at 30. Keep the state (and keep it :active? so it goes on
+				;; ticking) and let tick-state! drop it once both have played out.
+				(if-let [st (get-in store* [:effect-state owner-key*])]
+					(assoc-in store* [:effect-state owner-key*]
+										(assoc st :terminated? true :performed? (boolean performed?)))
+					store*))
 			store*)))
 
 (defn- tick-state!
@@ -174,46 +290,21 @@
 				(store-tick/map-active-states
 				 states
 				 (fn [_owner-key st]
-					 (let [ticks (inc (long (or (:ticks st) 0)))]
-						 ;; The charge loop is a continuous FollowEntitySound
-						 ;; started on :start and stopped on :end — no re-queue.
+					 (let [ticks (inc (long (or (:ticks st) 0)))
+								 st (-> (assoc st :ticks ticks)
+												advance-flight
+												tick-plasma-alpha
+												(tick-tornado ticks))]
+						 ;; The charge sound is one FollowEntitySound started on :start
+						 ;; and stopped on :end — no re-queue.
 						 (let [cp (:charge-pos st)]
-							 (when (and cp (= :go (:state st)))
+							 (when (and cp (= :go (:state st)) (not (:terminated? st)))
 								 (client-particles/queue-particle-effect! (:queue-owner st)
 									 {:type :particle :particle-type :flame
 										:x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
 										:count 4 :speed 0.2
 										:offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-						 (tick-tornado (assoc st :ticks ticks) ticks))))))))
-
-(defn- plasma-balls
-	[{:keys [x y z]} ticks state]
-	(let [t (double (or ticks 0))
-				phase (* 0.23 t)
-				state-mul (if (= state :go) 1.25 1.0)
-				base-r (* 0.55 state-mul)
-				h-wave (* 0.08 (Math/sin (* 0.15 t)))]
-		[{:x x :y (+ y h-wave) :z z :size (* 0.95 state-mul)}
-		 {:x (+ x (* base-r (Math/cos (+ phase 0.0))))
-			:y (+ y (* 0.18 (Math/sin (+ phase 0.7))))
-			:z (+ z (* base-r (Math/sin (+ phase 0.0))))
-			:size 0.62}
-		 {:x (+ x (* base-r (Math/cos (+ phase 2.09))))
-			:y (+ y (* 0.18 (Math/sin (+ phase 2.79))))
-			:z (+ z (* base-r (Math/sin (+ phase 2.09))))
-			:size 0.62}
-		 {:x (+ x (* base-r (Math/cos (+ phase 4.18))))
-			:y (+ y (* 0.18 (Math/sin (+ phase 4.91))))
-			:z (+ z (* base-r (Math/sin (+ phase 4.18))))
-			:size 0.62}
-		 {:x (+ x (* 0.35 (Math/cos (* 0.41 t))))
-			:y (+ y (* 0.25 (Math/sin (* 0.47 t))))
-			:z (+ z (* 0.35 (Math/sin (* 0.41 t))))
-			:size 0.45}
-		 {:x (+ x (* 0.3 (Math/cos (+ (* 0.53 t) 1.3))))
-			:y (+ y (* 0.22 (Math/sin (+ (* 0.59 t) 0.4))))
-			:z (+ z (* 0.3 (Math/sin (+ (* 0.53 t) 1.3))))
-			:size 0.4}]))
+						 (when-not (finished? st) st))))))))
 
 (defn- tornado-ops
 	"The charge tornado's ring quads. TornadoEntityRenderer only translates to
@@ -229,51 +320,21 @@
 														 rings))))
 
 (defn- plasma-state-ops
+	"One PlasmaBodyEffect draw. The renderer's `alpha` uniform is upstream's
+	`math.pow(eff.alpha, 2)`, not the raw fade value."
 	[st]
-	(when (and (:active? st) (map? (:charge-pos st)))
-		(let [cp (:charge-pos st)
-					ticks (long (or (:ticks st) 0))
-					state (:state st)
-					charge-ticks (long (or (:charge-ticks st) 0))
-					ramp (min 1.0 (/ charge-ticks 24.0))
-					alpha (double (* (if (= state :go) 1.0 0.85) (+ 0.2 (* 0.8 ramp))))
-					radius (+ 0.95 (* 0.35 ramp) (* 0.08 (Math/sin (* 0.21 ticks))))
-					balls (plasma-balls cp ticks state)]
+	(let [cp (:charge-pos st)
+				alpha (double (or (:plasma-alpha st) 0.0))]
+		(when (and (map? cp) (> alpha plasma-dead-alpha))
 			[{:kind :plasma-body
 				:center {:x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))}
-				:radius (double radius)
-				:alpha (double alpha)
-				:balls balls}])))
-
-(defn- rendered-charge-pos
-	"Standard two-sample interpolation between the last two server syncs
-	(prev-charge-pos -> charge-pos over the 250ms sync interval). The render
-	position always lives BETWEEN two authoritative syncs, so it is continuous
-	when a new sync lands — the earlier wall-clock extrapolation jumped back
-	to the fresh sync position every 5 ticks, reading as a stutter."
-	[st]
-	(let [prev (:prev-charge-pos st)
-				cur (:charge-pos st)
-				sync-ms (long (or (:sync-ms st) 0))
-				now (System/currentTimeMillis)
-				t (max 0.0 (min 1.0 (/ (double (- now sync-ms)) 250.0)))]
-		(if (and prev cur (pos? (- (long now) (long sync-ms))))
-			{:x (+ (double (:x prev)) (* t (- (double (:x cur)) (double (:x prev)))))
-			 :y (+ (double (:y prev)) (* t (- (double (:y cur)) (double (:y prev)))))
-			 :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))}
-			cur)))
+				:alpha (* alpha alpha)
+				:balls (ball-positions cp (:balls st) (* 0.05 (double (or (:ticks st) 0))))}])))
 
 (defn- build-plan
 	[_camera-pos _hand-center-pos _tick]
 	(let [state (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)))
-				;; Render at the interpolated position without writing it back —
-				;; the state stays authoritative (server syncs only).
-				ops (mapcat (fn [st]
-												;; The tornado is seated on the ground at :start and never moves,
-												;; so the flight interpolation applies to the plasma body only.
-												(concat (tornado-ops st)
-																(plasma-state-ops (assoc st :charge-pos (rendered-charge-pos st)))))
-										state)]
+				ops (mapcat (fn [st] (concat (tornado-ops st) (plasma-state-ops st))) state)]
 		(when (seq ops)
 			{:ops (vec ops)})))
 
@@ -289,4 +350,27 @@
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
    {:key (loop-sound-key (second owner-key))})
-  (update store :effect-state dissoc owner-key))
+  ;; Context termination is exactly upstream's TERMINATED signal, not a reason
+  ;; to delete the visuals: both entities outlive it while they fade. Mark and
+  ;; let tick-state! drop the entry once they are done (:end does the same, and
+  ;; whichever arrives first wins).
+  (if-let [st (get-in store [:effect-state owner-key])]
+    (assoc-in store [:effect-state owner-key] (assoc st :terminated? true))
+    store))
+
+;; ---------------------------------------------------------------------------
+;; Slot delegate state (upstream PlasmaCannonContext.getState)
+;; ---------------------------------------------------------------------------
+
+(defn charge-visual-state
+  "CHARGE until the charge completes, ACTIVE from then on (including flight) —
+  upstream's IStateProvider.getState. nil when this player has no plasma cannon
+  context, so the slot falls back to :idle."
+  [player-uuid]
+  (when player-uuid
+    (let [states (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)))]
+      (when-let [st (first (filter (fn [st]
+                                     (and (not (:terminated? st))
+                                          (= (str (:source-player-id st)) (str player-uuid))))
+                                   states))]
+        (if (or (:release-ready? st) (= :go (:state st))) :active :charge)))))

@@ -28,8 +28,20 @@ public final class PositionalLoopSoundInstance extends AbstractTickableSoundInst
 
     public PositionalLoopSoundInstance(SoundEvent event, SoundSource source, float volume, float pitch,
                                         double x, double y, double z, UUID followedPlayerUuid) {
+        this(event, source, volume, pitch, x, y, z, followedPlayerUuid, true);
+    }
+
+    /**
+     * {@code looping = false} still gives a tracked, repositionable,
+     * explicitly stoppable instance -- it just plays its clip once and ends,
+     * matching upstream's FollowEntitySound when setLoop() is never called
+     * (plasma cannon's 6-second charge clip, cut short by stop()).
+     */
+    public PositionalLoopSoundInstance(SoundEvent event, SoundSource source, float volume, float pitch,
+                                        double x, double y, double z, UUID followedPlayerUuid,
+                                        boolean looping) {
         super(event, source, net.minecraft.util.RandomSource.create());
-        this.looping = true;
+        this.looping = looping;
         this.delay = 0;
         this.volume = volume;
         this.pitch = pitch;

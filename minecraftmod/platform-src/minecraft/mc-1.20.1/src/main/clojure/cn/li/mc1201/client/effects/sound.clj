@@ -91,12 +91,16 @@
   nil)
 
 (defn start-loop-sound-at-player!
-  "Start (or restart) a native-looping ambient sound that follows a loaded
-  player by UUID until explicitly stopped."
-  [key sound-id volume pitch player-uuid]
-  (LoopingSoundRegistry/startFollowingPlayer
-   (str key) (str sound-id) (float volume) (float pitch) (str player-uuid))
-  nil)
+  "Start (or restart) an ambient sound that follows a loaded player by UUID
+  until explicitly stopped. `looping?` (default true) off plays the clip once
+  and lets it end on its own, still stoppable by key."
+  ([key sound-id volume pitch player-uuid]
+   (start-loop-sound-at-player! key sound-id volume pitch player-uuid true))
+  ([key sound-id volume pitch player-uuid looping?]
+   (LoopingSoundRegistry/startFollowingPlayer
+    (str key) (str sound-id) (float volume) (float pitch) (str player-uuid)
+    (boolean looping?))
+   nil))
 
 (defn update-loop-sound-position!
   [key x y z]
