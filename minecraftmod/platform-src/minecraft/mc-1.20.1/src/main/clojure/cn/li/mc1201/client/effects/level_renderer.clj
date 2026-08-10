@@ -521,14 +521,18 @@
                 (emit-line! tline-vc mat op))))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
-              (let [depth-ops (remove #(or (:no-depth-test? %) (:no-depth-write? %)) texture-ops)
+              (let [no-fog-ops (filter :no-fog? texture-ops)
+                    depth-ops (remove #(or (:no-depth-test? %) (:no-depth-write? %) (:no-fog? %)) texture-ops)
                     ;; Upstream MarkRender disables depth test + cull for the
                     ;; tp_mark humanoid so it stays visible through walls.
-                    no-depth-ops (filter :no-depth-test? texture-ops)
+                    no-depth-ops (filter #(and (:no-depth-test? %)
+                                               (not (:no-fog? %)))
+                                         texture-ops)
                     ;; Depth-tested but not depth-writing: upstream's
                     ;; SubArcHandler.drawAll batch (glDepthMask(false)).
                     read-only-ops (filter #(and (:no-depth-write? %)
-                                                (not (:no-depth-test? %)))
+                                                (not (:no-depth-test? %))
+                                                (not (:no-fog? %)))
                                           texture-ops)]
                 (when (seq depth-ops)
                   (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
@@ -544,7 +548,14 @@
                 (when (seq no-depth-ops)
                   (let [^VertexConsumer nd-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent loc))]
                     (doseq [op no-depth-ops]
-                      (emit-quad! nd-vc mat op)))))))
+                      (emit-quad! nd-vc mat op))))
+                ;; Fog-free quads (MineDetect ore highlights): upstream
+                ;; HandlerRender disables GL_FOG for the mineview pass so the
+                ;; boxes stay visible through the skill's own blindness fog.
+                (when (seq no-fog-ops)
+                  (let [^VertexConsumer nf-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsNoFog loc))]
+                    (doseq [op no-fog-ops]
+                      (emit-quad! nf-vc mat op)))))))
           (when (seq plasma)
             (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source

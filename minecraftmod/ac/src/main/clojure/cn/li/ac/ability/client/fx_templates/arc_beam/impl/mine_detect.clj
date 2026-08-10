@@ -83,6 +83,17 @@
         scaled-alpha (int (* (double (:a color)) (max 0.0 (min 1.0 alpha-factor))))]
     (ru/with-alpha color scaled-alpha)))
 
+(defn- highlight-quad
+  [texture p0 p1 p2 p3 color]
+  ;; Upstream HandlerRender disables BOTH the depth test and the fog for the
+  ;; ore-highlight pass (glDisable(GL_DEPTH_TEST) + glDisable(GL_FOG)): the
+  ;; ores sit underground so a depth-tested quad would be hidden by the
+  ;; terrain, and the blindness the skill itself applies would fog the boxes
+  ;; out at range. The no-fog render path is no-depth, no-cull as well.
+  (-> (ru/quad-op texture p0 p1 p2 p3 color)
+      (assoc :no-depth-test? true)
+      (assoc :no-fog? true)))
+
 (defn- block-highlight-ops
   [x y z color]
   (let [eps 0.02
@@ -95,12 +106,12 @@
         v3 vec3/v3
         p000 (v3 x0 y0 z0) p100 (v3 x1 y0 z0) p110 (v3 x1 y1 z0) p010 (v3 x0 y1 z0)
         p101 (v3 x1 y0 z1) p001 (v3 x0 y0 z1) p011 (v3 x0 y1 z1) p111 (v3 x1 y1 z1)]
-    [(ru/quad-op mineview-texture p000 p100 p110 p010 color)
-     (ru/quad-op mineview-texture p101 p001 p011 p111 color)
-     (ru/quad-op mineview-texture p001 p000 p010 p011 color)
-     (ru/quad-op mineview-texture p100 p101 p111 p110 color)
-     (ru/quad-op mineview-texture p010 p110 p111 p011 color)
-     (ru/quad-op mineview-texture p001 p101 p100 p000 color)]))
+    [(highlight-quad mineview-texture p000 p100 p110 p010 color)
+     (highlight-quad mineview-texture p101 p001 p011 p111 color)
+     (highlight-quad mineview-texture p001 p000 p010 p011 color)
+     (highlight-quad mineview-texture p100 p101 p111 p110 color)
+     (highlight-quad mineview-texture p010 p110 p111 p011 color)
+     (highlight-quad mineview-texture p001 p101 p100 p000 color)]))
 
 (defn- should-rescan?
   [{:keys [ticks rescan-interval last-rescan-tick]}]
@@ -232,5 +243,10 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mine-detect
   [_effect-id camera-pos hand-center-pos tick & [query-fn]]
   (build-plan camera-pos hand-center-pos tick query-fn))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mine-detect [_ store owner-key]
-  (update store :effect-state dissoc owner-key))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mine-detect [_ store _owner-key]
+  ;; The ore-highlight visual is a one-shot world effect (upstream's
+  ;; HandlerEntity) with its own 100-tick life. The :instant context ends
+  ;; right after perform, so MSG-CTX-TERMINATED reaches clear-effect-owner!
+  ;; on the same tick — clearing the owner here deleted the highlights a
+  ;; frame after they appeared. They expire on their own life-ticks instead.
+  store)

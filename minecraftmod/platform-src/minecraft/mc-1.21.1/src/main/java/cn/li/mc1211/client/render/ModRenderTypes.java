@@ -17,6 +17,11 @@ public final class ModRenderTypes extends RenderType {
     private static volatile ShaderInstance monoShader;
     private static volatile ShaderInstance cpbarOverloadShader;
     private static volatile ShaderInstance alphaDiscardShader;
+    private static volatile ShaderInstance noFogShader;
+
+    public static void setNoFogShader(ShaderInstance shader) {
+        noFogShader = shader;
+    }
 
     private static final ShaderStateShard PLASMA_BODY_SHADER_STATE =
             new ShaderStateShard(ModRenderTypes::getPlasmaBodyShader);
@@ -72,6 +77,37 @@ public final class ModRenderTypes extends RenderType {
 
     public static RenderType academyQuadsTranslucent(ResourceLocation texture) {
         return ACADEMY_QUADS_TRANSLUCENT_BY_TEXTURE.apply(texture);
+    }
+
+    /**
+     * Fog-free translucent textured-QUADS render type for the MineDetect ore
+     * highlights. Upstream HandlerRender disables GL_FOG for the whole
+     * mineview pass, so the boxes stay visible through the blindness fog the
+     * skill itself applies; every vanilla shader includes fog, hence the
+     * custom rendertype_academy_no_fog program. Same state as
+     * academyQuadsTranslucent otherwise (no depth test, no cull, colour
+     * write only).
+     */
+    private static final Function<ResourceLocation, RenderType> ACADEMY_QUADS_NO_FOG_BY_TEXTURE =
+            Util.memoize(texture -> create(
+                    "academy_quads_no_fog",
+                    DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP,
+                    VertexFormat.Mode.QUADS,
+                    256,
+                    false,
+                    true,
+                    CompositeState.builder()
+                            .setShaderState(new ShaderStateShard(() -> noFogShader))
+                            .setTextureState(new TextureStateShard(texture, false, false))
+                            .setTransparencyState(TRANSLUCENT_TRANSPARENCY)
+                            .setCullState(NO_CULL)
+                            .setLightmapState(LIGHTMAP)
+                            .setDepthTestState(NO_DEPTH_TEST)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .createCompositeState(false)));
+
+    public static RenderType academyQuadsNoFog(ResourceLocation texture) {
+        return ACADEMY_QUADS_NO_FOG_BY_TEXTURE.apply(texture);
     }
 
     private ModRenderTypes(String name, VertexFormat format, VertexFormat.Mode mode, int bufferSize,

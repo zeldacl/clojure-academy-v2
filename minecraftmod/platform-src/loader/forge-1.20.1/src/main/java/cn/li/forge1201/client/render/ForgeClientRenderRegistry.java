@@ -129,6 +129,20 @@ public final class ForgeClientRenderRegistry {
                 ModRenderTypes.setPlasmaBodyShader(shader);
             }
         );
+        // Fog-free textured quad shader for MineDetect's ore highlights:
+        // every vanilla 1.20.1 shader applies fog, but the highlights must
+        // stay visible through the blindness fog the skill itself applies
+        // (upstream disables GL_FOG for the whole mineview pass).
+        try {
+            event.registerShader(
+                new ShaderInstance(event.getResourceProvider(),
+                    ResourceLocation.fromNamespaceAndPath(MyMod1201.MODID, "rendertype_academy_no_fog"),
+                    com.mojang.blaze3d.vertex.DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP),
+                ModRenderTypes::setNoFogShader
+            );
+        } catch (IOException e) {
+            LOGGER.error("Failed to register no-fog quad shader", e);
+        }
         try {
             event.registerShader(
                 new ShaderInstance(event.getResourceProvider(),

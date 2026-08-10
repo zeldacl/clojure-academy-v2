@@ -120,6 +120,12 @@
     (let [plan0 (arc-beam/effect-build-plan :mine-detect nil hand-center 0 query-fn)
           colors (set (map #(select-keys (:color %) [:r :g :b]) (:ops plan0)))]
       (is (seq (:ops plan0)))
+      ;; Upstream renders the highlights with GL_DEPTH_TEST and GL_FOG both
+      ;; disabled: no depth test so the boxes show through the terrain (a
+      ;; depth-tested quad would hide underground ores), no fog so they stay
+      ;; visible through the blindness the skill itself applies.
+      (is (every? :no-depth-test? (:ops plan0)))
+      (is (every? :no-fog? (:ops plan0)))
       (is (= 1 @query-count*))
       (is (= #{{:r 161 :g 181 :b 188}
                {:r 87 :g 231 :b 248}
@@ -170,9 +176,27 @@
     {:mode :perform :range 31.0 :advanced? true :life-ticks 20 :rescan-interval 2})
   (is (= 8.0 (:range (owner-state "ctx-a"))))
   (is (= 28.0 (:range (owner-state "ctx-b"))))
+  ;; The highlight is a one-shot world visual (upstream HandlerEntity) with its
+  ;; own life — clearing the owner (context end) must NOT kill it, or the
+  ;; :instant skill's highlights vanish a frame after appearing.
   (mine-detect-fx/clear-fx-owner! [:ctx "ctx-a"])
-  (is (nil? (owner-state "ctx-a")))
+  (is (some? (owner-state "ctx-a")))
   (is (some? (owner-state "ctx-b"))))
+
+(deftest perform-survives-context-clear-and-expires-on-own-life-ticks-test
+  (let [query-fn (fn [_x _y _z _radius _predicate]
+                   [{:x 1 :y 60 :z 1 :block-id "minecraft:coal_ore"}])
+        hand-center {:x 0.0 :y 64.0 :z 0.0}]
+    (invoke-enqueue! "ctx-main" :mine-detect/fx-perform
+      {:mode :perform :range 24.0 :advanced? false :life-ticks 100 :rescan-interval 5})
+    (mine-detect-fx/clear-fx-owner! [:ctx "ctx-main"])
+    (is (some? (owner-state "ctx-main")))
+    (is (seq (:ops (arc-beam/effect-build-plan :mine-detect nil hand-center 0 query-fn)))
+        "still renders after the context ended")
+    (dotimes [_ 100]
+      (invoke-tick!))
+    (is (nil? (owner-state "ctx-main"))
+        "expires on its own life-ticks")))
 
 (deftest fx-snapshot-default-without-registered-state-test
   (is (= {:effect-state {}}

@@ -566,10 +566,24 @@
             ;; bind group (see PlasmaRenderTypes). Until that exists, 26.2 keeps
             ;; writing depth for those quads: overlapping arcs occlude instead
             ;; of blending, which is the pre-existing behaviour, not a new one.
-            (let [depth-ops (remove :no-depth-test? texture-ops)
+            (let [depth-ops (remove #(or (:no-depth-test? %) (:no-fog? %)) texture-ops)
                   ;; Upstream MarkRender disables depth test + cull for the
                   ;; tp_mark humanoid so it stays visible through walls.
-                  no-depth-ops (filter :no-depth-test? texture-ops)]
+                  no-depth-ops (filter #(and (:no-depth-test? %)
+                                             (not (:no-fog? %)))
+                                       texture-ops)
+                  ;; MineDetect ore highlights (upstream HandlerRender
+                  ;; disables GL_FOG for the mineview pass so the boxes stay
+                  ;; visible through the skill's own blindness fog). The
+                  ;; proper 26.2 fix is a custom fog-free RenderPipeline with
+                  ;; a texture bind group (mirroring PlasmaRenderTypes) —
+                  ;; blocked by the missing textured-pipeline infra the
+                  ;; no-depth-write NOTE above documents. Until that exists,
+                  ;; these ride the vanilla see-through path as tp_mark;
+                  ;; whether textSeeThrough is fog-free in 26.2 needs
+                  ;; verification against the 26.2 sources when the target
+                  ;; builds.
+                  no-fog-ops (filter :no-fog? texture-ops)]
               (when (seq depth-ops)
                 (submit-custom-geometry!
                   submit-node-collector pose-stack
@@ -587,6 +601,13 @@
                   (RenderTypes/textSeeThrough identifier)
                   (fn [pose consumer]
                     (doseq [op no-depth-ops]
+                      (emit-quad! consumer pose op)))))
+              (when (seq no-fog-ops)
+                (submit-custom-geometry!
+                  submit-node-collector pose-stack
+                  (RenderTypes/textSeeThrough identifier)
+                  (fn [pose consumer]
+                    (doseq [op no-fog-ops]
                       (emit-quad! consumer pose op))))))))
         (when (seq plasma)
           (submit-custom-geometry!
