@@ -145,10 +145,18 @@
          :y (+ (double (:y prev)) (* t (- (double (:y cur)) (double (:y prev)))))
          :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))})))))
 
-;; Reconciliation budget: how much of the standing prediction error may be
-;; absorbed per tick, and the error beyond which it is not an error but a
-;; desync (missed packets, a re-aimed shot) and the body simply snaps.
-(def ^:private max-correction-per-tick 0.25)
+;; Reconciliation budget: the error below which the prediction is simply
+;; correct, how much of a real error may be absorbed per tick, and the error
+;; beyond which this is not an error but a desync (missed packets, a re-aimed
+;; shot) and the body snaps.
+;;
+;; The deadband matters as much as the rate. Client and server advance the same
+;; block per tick, and the client starts exactly as late as the sync it
+;; receives is stale, so in steady state the two agree to within the ±1 tick of
+;; message timing jitter. Chasing that jitter is what remained of the stutter:
+;; a 25% speed surge every 250ms, periodic, always forward.
+(def ^:private sync-deadband 1.5)
+(def ^:private max-correction-per-tick 0.15)
 (def ^:private desync-snap-distance 8.0)
 
 (defn- vsub [a b]
@@ -174,10 +182,12 @@
   (let [cur (:charge-pos st)]
     (if-not (and (= :go (:state st)) (map? cur))
       (move-charge-pos st pos)
-      (let [error (vsub pos cur)]
-        (if (> (vlen error) desync-snap-distance)
-          (move-charge-pos st pos)
-          (assoc st :sync-error error))))))
+      (let [error (vsub pos cur)
+            len (vlen error)]
+        (cond
+          (> len desync-snap-distance) (move-charge-pos st pos)
+          (<= len sync-deadband) (dissoc st :sync-error)
+          :else (assoc st :sync-error error))))))
 
 (defn- step-toward
   "One tryMove step plus at most `max-correction-per-tick` of the standing sync

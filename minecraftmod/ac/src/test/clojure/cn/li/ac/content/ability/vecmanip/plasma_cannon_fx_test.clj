@@ -322,10 +322,35 @@
       (is (= 3.0 (charge-x "ctx-recon")) "the sync does not move the body itself")
       (let [xs (vec (for [_ (range 8)] (do (tick-fx! 1) (charge-x "ctx-recon"))))
             steps (mapv - xs (cons 3.0 (butlast xs)))]
-        (is (every? (fn [d] (<= 1.0 d 1.25)) steps)
-            (str "each tick is one block plus at most a quarter of correction: " steps))
-        ;; 2 blocks of error at 0.25/tick is gone within 8 ticks.
-        (is (< 12.9 (last xs) 13.1) "and the body has caught up with the server"))))
+        (is (every? (fn [d] (<= 1.0 d 1.1500001)) steps)
+            (str "each tick is one block plus a sliver of correction: " steps))
+        (is (< (last xs) 12.3) "the correction is spread out, never a jump"))))
+
+  (testing "the ±1 tick of message jitter is not an error worth chasing"
+    ;; Client and server advance the same block per tick, and the client starts
+    ;; exactly as late as the sync it receives is stale, so in steady state they
+    ;; agree to within a tick. Correcting that jitter surged the speed 25% every
+    ;; 250ms — periodic, always forward, and the last of the stutter.
+    (with-fx-stubs
+      (fn []
+        (start! "ctx-jitter" {:x 0.0 :y 64.0 :z 0.0})
+        (arc-beam/enqueue-for-test! :plasma-cannon "ctx-jitter" :plasma-cannon/fx-update
+          {:mode :update :state :go
+           :charge-pos {:x 0.0 :y 64.0 :z 0.0}
+           :destination {:x 100.0 :y 64.0 :z 0.0}})
+        (let [xs (atom [])]
+          (doseq [tick (range 12)]
+            (tick-fx! 1)
+            ;; a sync every 5 ticks, one tick's worth of jitter each way
+            (when (zero? (mod (inc tick) 5))
+              (arc-beam/enqueue-for-test! :plasma-cannon "ctx-jitter" :plasma-cannon/fx-update
+                {:mode :update :flight-ticks (inc tick)
+                 :charge-pos {:x (double (+ (inc tick) (if (zero? (mod tick 2)) 1 -1)))
+                              :y 64.0 :z 0.0}}))
+            (swap! xs conj (charge-x "ctx-jitter")))
+          (let [steps (mapv - @xs (cons 0.0 (butlast @xs)))]
+            (is (every? (fn [d] (= 1.0 d)) steps)
+                (str "constant speed, every tick: " steps)))))))
 
   (testing "a real desync snaps rather than crawling"
     (with-fx-stubs
