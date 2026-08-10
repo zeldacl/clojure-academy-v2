@@ -258,6 +258,17 @@
 						;; through move-charge-pos so the correction is interpolated over
 						;; the next tick instead of snapping.
 						synced (if (map? charge-pos) (move-charge-pos prev-st charge-pos) prev-st)
+						;; Only overwrite what this payload actually carries. The 5-tick
+						;; flight sync sends :charge-pos and :flight-ticks alone, so
+						;; defaulting the rest reset :state to :charging — which switched
+						;; off the client's own tryMove and left the body jumping five
+						;; blocks per sync instead of gliding one per tick.
+						synced (cond-> synced
+										 (some? charge-ticks) (assoc :charge-ticks (long charge-ticks))
+										 (some? flight-ticks) (assoc :flight-ticks (long flight-ticks))
+										 (some? state) (assoc :state state)
+										 (some? destination) (assoc :destination destination)
+										 (some? release-ready?) (assoc :release-ready? (boolean release-ready?)))
 						updated (assoc-in store* [:effect-state owner-key*]
 												(assoc (merge base-meta synced)
 													 :owner-key owner-key*
@@ -266,12 +277,7 @@
 													 :source-player-id source-player-id
 													 :world-id world-id
 													 :active? true
-													 :charge-ticks (long (or charge-ticks 0))
-													 :flight-ticks (long (or flight-ticks 0))
-													 :state (or state :charging)
-													 :destination (or destination (:destination prev-st))
-													 :release-ready? (boolean (or release-ready?
-																												(:release-ready? prev-st)))))]
+													 :state (or (:state synced) :charging)))]
 					;; Original plays the charged cue from l_tick under `if (isLocal)`
 					;; — the caster hears it, bystanders do not.
 					(when (and (boolean fully-charged?)

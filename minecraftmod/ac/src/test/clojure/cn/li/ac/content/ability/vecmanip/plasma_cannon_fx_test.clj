@@ -294,7 +294,20 @@
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
         {:mode :update :state :go :charge-pos {:x 5.0 :y 64.0 :z 0.0}})
       (tick-fx! 1)
-      (is (= 6.0 (charge-x "ctx-fly"))))))
+      (is (= 6.0 (charge-x "ctx-fly")))
+      ;; The flight sync carries :charge-pos and :flight-ticks only. Defaulting
+      ;; the fields it omits reset :state to :charging, which switched the
+      ;; prediction off — the body then only moved when a sync landed, five
+      ;; blocks at a time.
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
+        {:mode :update :charge-pos {:x 10.0 :y 64.0 :z 0.0} :flight-ticks 10})
+      (is (= :go (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-fly"] :state]))
+          "a partial sync must not knock the state back to :charging")
+      (is (= {:x 20.0 :y 64.0 :z 0.0}
+             (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-fly"] :destination]))
+          "nor forget where the shot is headed")
+      (tick-fx! 2)
+      (is (= 12.0 (charge-x "ctx-fly")) "prediction keeps running after a sync"))))
 
 (deftest render-position-is-interpolated-across-the-tick-test
   ;; Vanilla draws an entity at lastTickPos + (pos - lastTickPos) * partialTick.
