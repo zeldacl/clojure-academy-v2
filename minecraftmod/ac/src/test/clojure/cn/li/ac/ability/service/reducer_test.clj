@@ -157,7 +157,7 @@
       (is (not= player-state (:state result))))))
 
 (deftest server-tick-noop-false-when-cooldown-present-test
-  (let [player-state (assoc (base-state) :cooldown-data {[:railgun :main] 5})]
+  (let [player-state (assoc (base-state) :cooldown-data {[:railgun :main] {:ticks 5 :max 5}})]
     (is (false? (reducer/server-tick-noop? player-state)))
     (let [result (reducer/apply-command player-state (tick-command "p-cooldown"))]
       (is (not= player-state (:state result))))))

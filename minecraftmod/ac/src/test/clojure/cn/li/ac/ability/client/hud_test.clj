@@ -100,3 +100,32 @@
       (is (= 1 (count slots)))
       (is (= "Railgun" (:skill-name first-slot)))
       (is (= "textures/skills/railgun.png" (:skill-icon first-slot))))))
+
+(deftest cooldown-wipe-divides-by-the-applied-duration-test
+  ;; Upstream KeyHintUI: prog = tickLeft / maxTick. The HUD used to recompute
+  ;; the denominator from the skill spec, so the unavailable-wipe drifted from
+  ;; the countdown whenever the cooldown that was actually applied differed
+  ;; from that estimate.
+  (let [shapes [{:skill-id :railgun :cooldown-total-spec 100}]
+        patched (hud/patch-skill-slot-cooldown
+                 shapes
+                 {[:railgun :main] {:ticks 30 :max 60}}
+                 {:player-id "p1" :skill-exps {}})
+        slot (first patched)]
+    (is (true? (:in-cooldown slot)))
+    (is (= 30 (:cooldown-remaining slot)))
+    (is (= 60 (:cooldown-total slot)) "denominator is the recorded duration, not the 100-tick estimate")
+    (is (= 1.5 (:cooldown-seconds slot)))
+    (is (= 0.5 (/ (double (:cooldown-remaining slot)) (double (:cooldown-total slot))))
+        "wipe progress agrees with the 1.5s of a 3.0s cooldown left on the clock")))
+
+(deftest idle-slot-falls-back-to-the-spec-estimate-test
+  ;; Nothing is on cooldown, so there is no recorded duration to divide by —
+  ;; the spec estimate stands in, and nothing draws the wipe anyway.
+  (let [slot (first (hud/patch-skill-slot-cooldown
+                     [{:skill-id :railgun :cooldown-total-spec 100}]
+                     {}
+                     {:player-id "p1" :skill-exps {}}))]
+    (is (false? (:in-cooldown slot)))
+    (is (= 0 (:cooldown-remaining slot)))
+    (is (= 100 (:cooldown-total slot)))))

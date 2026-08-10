@@ -186,10 +186,19 @@
                 in-cooldown (cd-data/in-cooldown? cooldown-data ctrl-id :main)
                 remaining (when in-cooldown
                             (cd-data/get-remaining cooldown-data ctrl-id :main))
-                total (resolve-cooldown-total (:cooldown-total-spec s)
-                                              {:player-id player-id
-                                               :skill-id ctrl-id
-                                               :exp exp})
+                ;; Upstream KeyHintUI: prog = tickLeft / maxTick — the duration
+                ;; the cooldown was actually started with, carried in the data.
+                ;; The spec estimate below is only a stand-in for slots that
+                ;; aren't on cooldown (no recorded max to read); using it while
+                ;; one is running drifts from the countdown whenever the applied
+                ;; duration differs from the estimate.
+                applied-max (cd-data/get-max cooldown-data ctrl-id :main)
+                total (if (pos? applied-max)
+                        applied-max
+                        (resolve-cooldown-total (:cooldown-total-spec s)
+                                                {:player-id player-id
+                                                 :skill-id ctrl-id
+                                                 :exp exp}))
                 remaining-seconds (when remaining (/ remaining 20.0))]
             (assoc s
                    :cooldown-total total

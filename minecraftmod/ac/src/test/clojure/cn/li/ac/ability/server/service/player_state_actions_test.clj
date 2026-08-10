@@ -127,7 +127,7 @@
                               (assoc :cheats-enabled? true)
                               (assoc-in [:ability-data :category-id] :electromaster)
                               (assoc-in [:ability-data :level] 4)
-                              (assoc :cooldown-data {[:railgun :main] 20})
+                              (assoc :cooldown-data {[:railgun :main] {:ticks 20 :max 20}})
                               (assoc-in [:preset-data :slots] {[0 0] [:electromaster :railgun]})
                               (assoc-in [:resource-data :activated] true)
                               (assoc-in [:develop-data :state] :developing)))

@@ -47,7 +47,8 @@
     (is (= 1 (.get FixtureAbilityProvider/PERFORM_COUNT))
         "the Java ActionHandler ran")
     (let [state (store/get-player-state test-player/test-session-id player-uuid)]
-      (is (= 20 (get-in state [:cooldown-data [:fixture-provider-test-strike :main]]))
+      (is (= {:ticks 20 :max 20}
+             (get-in state [:cooldown-data [:fixture-provider-test-strike :main]]))
           "setMainCooldown reached the reducer through the whitelisted context"))))
 
 (deftest external-skill-reregistration-is-idempotent-after-freeze-test

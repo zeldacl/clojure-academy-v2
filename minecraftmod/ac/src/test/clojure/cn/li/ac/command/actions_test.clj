@@ -25,7 +25,7 @@
                     (assoc-in [:ability-data :category-id] :electromaster)
                     (assoc-in [:resource-data :cur-cp] 1.0)
                     (assoc-in [:resource-data :max-cp] 42.0)
-                    (assoc :cooldown-data {[:railgun :main] 20}))]
+                    (assoc :cooldown-data {[:railgun :main] {:ticks 20 :max 20}}))]
     (store/set-player-state! ps-fix/test-session-id uuid initial)
 
     (is (:success? (command-actions/execute {:action :set-level

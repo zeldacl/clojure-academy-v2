@@ -159,7 +159,7 @@
       (runtime-hooks/with-client-ctx-fn {:session-id test-client-session} (fn [] (let [plan-1 (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1000})
               slot-1 (first (filter #(= :content-slot (:kind %)) (:elements plan-1)))]
           (is (= 0 (:timer-remaining slot-1))))
-        (reset! cooldown {[:railgun :main] 40})
+        (reset! cooldown {[:railgun :main] {:ticks 40 :max 60}})
         (let [plan-2 (client-ui-hooks/build-client-overlay-plan "p1" 320 180 {:now-ms 1050})
               slot-2 (first (filter #(= :content-slot (:kind %)) (:elements plan-2)))]
           (is (= 40 (:timer-remaining slot-2))

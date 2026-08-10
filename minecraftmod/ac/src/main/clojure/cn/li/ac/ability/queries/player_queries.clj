@@ -110,10 +110,10 @@
 (defn get-all-cooldowns
   "Get list of all active cooldowns.
   
-  Returns: [{:ctrl-id :sub-id :ticks} ...]"
+  Returns: [{:ctrl-id :sub-id :ticks :max} ...]"
   [cooldown-data]
-  (mapv (fn [[[ctrl-id sub-id] ticks]]
-          {:ctrl-id ctrl-id :sub-id sub-id :ticks ticks})
+  (mapv (fn [[[ctrl-id sub-id] {:keys [ticks max]}]]
+          {:ctrl-id ctrl-id :sub-id sub-id :ticks ticks :max max})
         cooldown-data))
 
 (defn count-active-cooldowns
@@ -129,12 +129,12 @@
 (defn get-cooldowns-for-skill
   "Get all sub-cooldowns for a specific controller.
   
-  Returns: [{:sub-id :ticks} ...]"
+  Returns: [{:sub-id :ticks :max} ...]"
   [cooldown-data ctrl-id]
   (->> cooldown-data
        (filter (fn [[[c _] _]] (= c ctrl-id)))
-       (mapv (fn [[[_ s] ticks]]
-               {:sub-id s :ticks ticks}))
+       (mapv (fn [[[_ s] {:keys [ticks max]}]]
+               {:sub-id s :ticks ticks :max max}))
        vec))
 
 ;; ============================================================================

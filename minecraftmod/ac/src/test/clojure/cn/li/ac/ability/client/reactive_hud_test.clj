@@ -137,7 +137,7 @@
         ;; cooldown-data is nested inside player-state, so this still counts as
         ;; a "new" player-state object per the coarser contexts/hud-model key —
         ;; but must never touch the narrower preset-data-keyed shape cache.
-        (reset! cooldown {[:railgun :main] 40})
+        (reset! cooldown {[:railgun :main] {:ticks 40 :max 60}})
         (let [snap-2 (reactive-hud/build-snapshot "p1" 320 180 {:now-ms 1050})
               slot-2 (first (:skill-slots snap-2))]
           (is (= true (:in-cooldown slot-2))
