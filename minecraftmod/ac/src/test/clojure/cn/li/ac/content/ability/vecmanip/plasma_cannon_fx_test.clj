@@ -445,3 +445,40 @@
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-state" :plasma-cannon/fx-update
         {:mode :end :performed? true})
       (is (nil? (pcimpl/charge-visual-state "caster-1")) "terminated contexts stop overriding"))))
+
+(deftest flight-survives-the-real-handler-path-test
+  ;; The tests above enqueue payloads straight into the effect, which skips the
+  ;; fx spec's own projection — and that projection was the bug: it rebuilt
+  ;; every field with a default, stamping :state :charging onto the 5-tick
+  ;; flight sync (which carries only :charge-pos/:flight-ticks). The client fell
+  ;; out of :go, stopped predicting, and moved five blocks per sync. Drive the
+  ;; registered handlers here so the projection is part of the test.
+  (let [handlers* (atom {})]
+    (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
+                                                     (swap! handlers* assoc topic handler)
+                                                     nil)]
+      (pcfx/init!))
+    (with-fx-stubs
+      (fn []
+        (let [fire! (get @handlers* :plasma-cannon/fx-update)]
+          ((get @handlers* :plasma-cannon/fx-start) "ctx-real" :plasma-cannon/fx-start
+           {:charge-pos {:x 0.0 :y 64.0 :z 0.0} :tornado-base {:x 0.0 :y 0.0 :z 0.0}
+            :player-id "caster"})
+          ;; key-up: the shot is fired
+          (fire! "ctx-real" :plasma-cannon/fx-update
+                 {:state :go :charge-pos {:x 0.0 :y 64.0 :z 0.0}
+                  :destination {:x 40.0 :y 64.0 :z 0.0} :player-id "caster"})
+          (tick-fx! 3)
+          (is (= :go (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-real"] :state])))
+          (is (= 3.0 (charge-x "ctx-real")) "prediction runs after the fire message")
+          ;; ...and the 5-tick position sync, exactly as tick-flight! sends it
+          (fire! "ctx-real" :plasma-cannon/fx-update
+                 {:charge-pos {:x 5.0 :y 64.0 :z 0.0} :flight-ticks 5 :player-id "caster"})
+          (is (= :go (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-real"] :state]))
+              "a sync must not knock the client out of flight")
+          (is (= {:x 40.0 :y 64.0 :z 0.0}
+                 (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-real"] :destination])))
+          (tick-fx! 2)
+          ;; two ticks of prediction plus the bounded correction for the two
+          ;; blocks the client was behind — not a five-block jump on the sync.
+          (is (< 5.2 (charge-x "ctx-real") 5.4)))))))
