@@ -13,6 +13,7 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.registry.skill :as skill]
             [cn.li.ac.ability.registry.event :as evt]
+            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.ac.ability.service.skill-callback :as skill-cb]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
@@ -114,9 +115,17 @@
    (apply-main-cooldown! nil ctx-map))
   ([owner ctx-map]
    (let [uuid (:player-uuid ctx-map)
-         spec (skill/get-skill (:skill-id ctx-map))
-         ctrl-id (or (:ctrl-id spec) (:skill-id ctx-map))
-         cooldown-ticks (max 1 (int (or (:cooldown-ticks spec) 1)))
+         skill-id (:skill-id ctx-map)
+         spec (skill/get-skill skill-id)
+         ctrl-id (or (:ctrl-id spec) skill-id)
+         ;; Same resolution the pattern path uses (skill-effects/apply-cooldown!):
+         ;; this used to read :cooldown-ticks raw, which ignored
+         ;; :cooldown-policy/:ticks and would have thrown on a fn declaration.
+         exp (some-> (runtime-player-state owner uuid) :ability-data
+                     (adata/get-skill-exp skill-id))
+         cooldown-ticks (int (cd-rules/resolve-ticks spec {:player-id uuid
+                                                           :skill-id skill-id
+                                                           :exp exp}))
          session-id (resolved-session-id owner)]
      (command-rt/run-command-in-session! session-id
                                          uuid

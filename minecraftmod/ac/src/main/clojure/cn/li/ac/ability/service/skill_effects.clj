@@ -11,6 +11,7 @@
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.fx :as fx]
+            [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- resolve-session-id
@@ -203,8 +204,9 @@
     (when (not= :manual mode)
       (let [player-id (:player-id evt)
             ctrl-id (or (:ctrl-id spec) (:id spec))
-            base-ticks (or (get-in spec [:cooldown-policy :ticks]) (:cooldown-ticks spec) 1)
-            ticks (int (max 1 (resolve-val base-ticks evt)))]
+            ticks (int (cd-rules/resolve-ticks spec {:player-id player-id
+                                                     :skill-id (:skill-id evt)
+                                                     :exp (:exp evt)}))]
         (set-main-cooldown! player-id ctrl-id ticks)
         ticks))))
 

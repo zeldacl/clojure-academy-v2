@@ -51,6 +51,41 @@
         (is (= 20 (cd/get-remaining (:cooldown-data (store/get-player-state test-player/test-session-id uuid)) :arc-gen :main)))
         (is (= ctx/STATUS-TERMINATED (:status (ctx/get-context ctx-id))))))))
 
+(defn- cooldown-after-key-up!
+  "Run a default key-up for `spec` with the player's arc-gen exp at `exp`, and
+  return the main cooldown that landed."
+  [uuid ctx-id spec exp]
+  (store/set-player-state! test-player/test-session-id uuid
+                           {:ability-data {:skill-exps {:arc-gen exp}}
+                            :cooldown-data (cd/new-cooldown-data)})
+  (active-context! uuid ctx-id)
+  (with-redefs [skill-reg/get-skill (fn [_] spec)
+                evt/fire-ability-event! (fn [_] nil)]
+    (ctx/with-context-owner (test-context-owner uuid)
+      (rt/handle-key-up! ctx-id {:ctx-id ctx-id :skill-id :arc-gen})
+      (cd/get-remaining (:cooldown-data (store/get-player-state test-player/test-session-id uuid))
+                        :arc-gen :main))))
+
+(deftest key-up-honours-cooldown-policy-ticks-test
+  ;; This path used to read :cooldown-ticks alone, so a skill declaring its
+  ;; duration under :cooldown-policy got a one-tick cooldown while the pattern
+  ;; path (skill-effects/apply-cooldown!) gave it the declared 200.
+  (is (= 200 (cooldown-after-key-up! "cooldown-player-policy" "ctx-cooldown-policy"
+                                     {:id :arc-gen :ctrl-id :arc-gen
+                                      :cooldown {:mode :default}
+                                      :cooldown-policy {:ticks 200}}
+                                     0.0))))
+
+(deftest key-up-resolves-exp-scaled-cooldown-functions-test
+  ;; Most skills declare :cooldown-ticks as a fn of exp; this path used to call
+  ;; (int fn) on it. The exp comes from the player's own skill exp, the same
+  ;; value the pattern path passes through its event.
+  (let [spec {:id :arc-gen :ctrl-id :arc-gen
+              :cooldown {:mode :default}
+              :cooldown-ticks (fn [_player-id _skill-id exp] (* 120 (- 1.0 exp)))}]
+    (is (= 120 (cooldown-after-key-up! "cooldown-player-fn-0" "ctx-cooldown-fn-0" spec 0.0)))
+    (is (= 30 (cooldown-after-key-up! "cooldown-player-fn-75" "ctx-cooldown-fn-75" spec 0.75)))))
+
 (deftest manual-key-up-does-not-apply-automatic-main-cooldown-test
   (let [uuid "cooldown-player-manual"
         ctx-id "ctx-cooldown-manual"]

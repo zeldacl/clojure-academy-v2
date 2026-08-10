@@ -5,6 +5,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.client.combat-notice :as combat-notice]
             [cn.li.ac.ability.model.cooldown :as cd-data]
+            [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.ac.ability.client.delegate-state :as dstate]
             [cn.li.ac.config.gameplay :as gameplay]
             [cn.li.ac.config.modid :as modid]
@@ -160,21 +161,11 @@
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
              :skill-name (or (:name skill-spec) (name skill-id))
-             :cooldown-total-spec (or (get-in skill-spec [:cooldown-policy :ticks])
-                                      (:cooldown-ticks skill-spec)
-                                      100)}))))
+             ;; Stand-in denominator for slots with no live cooldown to read a
+             ;; recorded duration from — same declaration the apply paths use,
+             ;; so the two can no longer disagree.
+             :cooldown-total-spec (cd-rules/ticks-spec skill-spec)}))))
     (:active-slots model))))
-
-(defn- resolve-cooldown-total
-  [cooldown-spec {:keys [player-id skill-id exp]}]
-  (let [raw (if (fn? cooldown-spec)
-              (or (try
-                    (cooldown-spec {:player-id player-id :skill-id skill-id :exp exp})
-                    (catch clojure.lang.ArityException _
-                      (cooldown-spec player-id skill-id exp)))
-                  0)
-              cooldown-spec)]
-    (int (max 1 (Math/round (double raw))))))
 
 (defn patch-skill-slot-cooldown
   "Refresh per-slot cooldown numeric fields from cooldown-data (plain map
@@ -195,10 +186,10 @@
                 applied-max (cd-data/get-max cooldown-data ctrl-id :main)
                 total (if (pos? applied-max)
                         applied-max
-                        (resolve-cooldown-total (:cooldown-total-spec s)
-                                                {:player-id player-id
-                                                 :skill-id ctrl-id
-                                                 :exp exp}))
+                        (cd-rules/resolve-ticks-value (:cooldown-total-spec s)
+                                                      {:player-id player-id
+                                                       :skill-id ctrl-id
+                                                       :exp exp}))
                 remaining-seconds (when remaining (/ remaining 20.0))]
             (assoc s
                    :cooldown-total total

@@ -34,6 +34,47 @@
    (cdata/get-remaining cooldown-data ctrl-id sub-id)))
 
 ;; ============================================================================
+;; Duration resolution (Pure)
+;;
+;; One place decides how long a skill's cooldown is. It used to be three:
+;; skill-effects/apply-cooldown! (:cooldown-policy/:ticks, else :cooldown-ticks,
+;; else 1), context-state/apply-main-cooldown! (:cooldown-ticks only, else 1,
+;; and it would have thrown on the fn-valued specs most skills declare), and the
+;; HUD's own estimate (same order as the first, but defaulting to 100). Any
+;; disagreement showed up as a cooldown wipe that did not match its countdown.
+;; ============================================================================
+
+(defn ticks-spec
+  "The cooldown duration a skill spec declares: :cooldown-policy/:ticks wins
+  over :cooldown-ticks. Either may be a number or a fn; nil when undeclared."
+  [skill-spec]
+  (or (get-in skill-spec [:cooldown-policy :ticks])
+      (:cooldown-ticks skill-spec)))
+
+(defn resolve-ticks-value
+  "Evaluate a `ticks-spec` declaration to whole ticks (>= 1).
+
+  A fn declaration is called with (player-id skill-id exp), falling back to a
+  single {:player-id :skill-id :exp} map — skills author both shapes. An absent
+  or unusable declaration is one tick, i.e. effectively no cooldown."
+  ^long [v {:keys [player-id skill-id exp]}]
+  (let [exp (double (or exp 0.0))
+        raw (cond
+              (number? v) (double v)
+              (fn? v) (double (or (try
+                                    (v player-id skill-id exp)
+                                    (catch clojure.lang.ArityException _
+                                      (v {:player-id player-id :skill-id skill-id :exp exp})))
+                                  0.0))
+              :else 0.0)]
+    (max 1 (Math/round (double raw)))))
+
+(defn resolve-ticks
+  "Whole ticks to apply for `skill-spec`. See ticks-spec / resolve-ticks-value."
+  ^long [skill-spec ctx]
+  (resolve-ticks-value (ticks-spec skill-spec) ctx))
+
+;; ============================================================================
 ;; Cooldown Management (Pure)
 ;; ============================================================================
 
