@@ -26,6 +26,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -38,6 +39,8 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     private static final String HOOK_DISCARD_WHEN_HURT = "discard-when-hurt";
     private static final EntityDataAccessor<Boolean> DATA_ANCHORED =
             SynchedEntityData.defineId(ScriptedProjectileEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Direction> DATA_ANCHOR_FACE =
+            SynchedEntityData.defineId(ScriptedProjectileEntity.class, EntityDataSerializers.DIRECTION);
 
     private boolean anchored = false;
     private BlockPos anchorPos = null;
@@ -51,6 +54,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     protected void defineSynchedData() {
         super.defineSynchedData();
         this.entityData.define(DATA_ANCHORED, false);
+        this.entityData.define(DATA_ANCHOR_FACE, Direction.UP);
     }
 
     private ScriptedProjectileSpec getSpec() {
@@ -94,8 +98,26 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     private void anchorAt(HitResult result) {
         this.anchored = true;
         this.entityData.set(DATA_ANCHORED, true);
-        this.anchorPos = BlockPos.containing(result.getLocation());
-        this.setPos(result.getLocation());
+        BlockHitResult bhr = (BlockHitResult) result;
+        // Upstream stores res.getBlockPos() — the ACTUAL hit block. The raw
+        // hit location lies exactly ON the block face, and
+        // BlockPos.containing() of a face-plane point floors to the block on
+        // the NEAR side of the face — the air in front of the wall — so the
+        // anchored-tick isAir check then immediately dropped the hook as an
+        // item on every side hit (the hook only ever stayed anchored on
+        // top-face hits, where floor() lands on the block itself).
+        this.anchorPos = bhr.getBlockPos();
+        // Upstream EntityMagHook.preRender: the hooked hook sits HALF A BLOCK
+        // OFF the hit face, not at the raw hit point — anchored at the hit
+        // point its 1x1 box embeds into the block (invisible when it bites a
+        // tree trunk), and it rotates to the hit face so the open cross
+        // spreads against the wall instead of keeping the throw angle (which
+        // skewed the cross and hid one arm).
+        Direction face = bhr.getDirection();
+        this.anchorFace = face;
+        this.entityData.set(DATA_ANCHOR_FACE, face);
+        this.setPos(Vec3.atCenterOf(this.anchorPos)
+                .add(Vec3.atLowerCornerOf(face.getNormal()).scale(0.51D)));
         applyAnchoredState();
     }
 
@@ -121,10 +143,45 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
      */
     private void applyAnchoredState() {
         this.anchored = true;
+        // The synced face (server value) — a client that did not run its own
+        // hit detection would otherwise keep the default UP face and flatten
+        // the open cross into a bar (upstream syncs HIT_SIDE the same way).
+        this.anchorFace = this.entityData.get(DATA_ANCHOR_FACE);
         this.setDeltaMovement(Vec3.ZERO);
         this.setNoGravity(true);
         this.noPhysics = true;
         this.refreshDimensions();
+        applyAnchorRotation(this.anchorFace);
+    }
+
+    @Override
+    protected void updateRotation() {
+        if (isAnchored()) {
+            // Zero delta makes ThrowableProjectile lerp the rotation toward
+            // atan2(0, 0) = 0 every tick, fighting applyAnchorRotation's face
+            // orientation (reset each tick) — the anchored cross jittered.
+            return;
+        }
+        super.updateRotation();
+    }
+
+    /**
+     * Face orientation matching upstream EntityMagHook.preRender's switch:
+     * DOWN/UP turn the hook vertical, horizontal faces turn it flat against
+     * the wall, so the open cross always faces away from the anchored block.
+     */
+    private void applyAnchorRotation(Direction face) {
+        switch (face) {
+            case DOWN -> this.setXRot(-90.0F);
+            case UP -> this.setXRot(90.0F);
+            case NORTH -> { this.setYRot(0.0F); this.setXRot(0.0F); }
+            case SOUTH -> { this.setYRot(180.0F); this.setXRot(0.0F); }
+            case WEST -> { this.setYRot(-90.0F); this.setXRot(0.0F); }
+            case EAST -> { this.setYRot(90.0F); this.setXRot(0.0F); }
+            default -> { }
+        }
+        this.yRotO = this.getYRot();
+        this.xRotO = this.getXRot();
     }
 
     @Override
@@ -255,6 +312,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
             if (anchorFace == null) {
                 anchorFace = Direction.UP;
             }
+            this.entityData.set(DATA_ANCHOR_FACE, anchorFace);
         }
         if (anchored) {
             applyAnchoredState();

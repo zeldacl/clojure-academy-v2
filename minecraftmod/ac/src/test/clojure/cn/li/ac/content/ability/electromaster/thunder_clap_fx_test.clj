@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.thunder-clap-fx-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
@@ -146,3 +147,53 @@
     (level-effects/update-effect-state! :thunder-clap
       (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store)))
     (is (seq (:ops (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
+
+(deftest start-creates-surround-arc-batch-test
+  ;; Matches upstream EntitySurroundArc.onFirstUpdate doGenerate: one BOLD
+  ;; batch of 5 SubArcs + 10 templates rides the :start state.
+  (do
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-start
+      {:mode :start :source-player-id "player-a"})
+    (let [{:keys [templates arcs]}
+          (:surround (get-in (thunder-clap-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]]))]
+      (is (= 10 (count templates)))
+      (is (= 5 (count arcs)))
+      (is (every? #(= false (:dead %)) arcs))
+      (is (every? #(and (number? (:rot-x %)) (number? (:rot-y %)) (number? (:rot-z %))) arcs)))))
+
+(deftest charging-renders-surround-arcs-and-ripple-mark-test
+  ;; The charging visual is EntitySurroundArc BOLD electric arcs around the
+  ;; caster + the EntityRippleMark at the aim point — textured quads, not the
+  ;; old flat line circles.
+  (do
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-start
+      {:mode :start :source-player-id "player-a"})
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-update
+      {:mode :update :ticks 10 :charge-ratio 0.5
+       :target {:x 10.0 :y 64.0 :z 10.0}
+       :source-player-id "player-a"})
+    (let [plan (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0}
+                                           {:x 0.0 :y 65.0 :z 0.0 :player-uuid "player-a"} 0)
+          textures (set (keep :texture (:ops plan)))]
+      (is (some #(str/includes? % "ripple") textures)
+          "ripple mark uses the ripple texture")
+      (is (some #(str/includes? % "line_segment") textures)
+          "surround arcs use the arc line_segment texture")
+      (is (some? (:local-walk-speed plan))
+          "charging still slows the caster"))))
+
+(deftest surround-batch-regenerates-when-all-arcs-die-test
+  ;; EntitySurroundArc.onUpdate: if(arcHandler.isEmpty()) doGenerate() — a
+  ;; new 5-arc batch replaces the old one once every arc reaches life 30.
+  (do
+    (arc-beam/enqueue-for-test! :thunder-clap "ctx-a" :thunder-clap/fx-start
+      {:mode :start :source-player-id "player-a"})
+    (let [first-batch (:surround (get-in (thunder-clap-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]]))]
+      ;; 60 ticks is comfortably beyond the ~33 expected ticks to life 30
+      ;; (tick advances with p=0.9), for all 5 arcs.
+      (dotimes [_ 60]
+        (level-effects/update-effect-state! :thunder-clap
+          (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store))))
+      (let [second-batch (:surround (get-in (thunder-clap-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]]))]
+        (is (not= first-batch second-batch))
+        (is (= 5 (count (:arcs second-batch))))))))
