@@ -11,10 +11,15 @@
   (throw (IllegalStateException. (str "GUI runtime provider unavailable: " operation))))
 (doseq [operation operations]
   (intern *ns* (symbol (name operation)) (fn [& _] (unavailable operation))))
+(defn- facade-var [operation]
+  (let [facade-ns (the-ns 'cn.li.platform.neutral.gui-runtime)
+        operation-symbol (symbol (name operation))]
+    (or (ns-resolve facade-ns operation-symbol)
+        (intern facade-ns operation-symbol (fn [& _] (unavailable operation))))))
 (defn install! [provided]
   (let [expected (set operations)]
     (when (or (not= expected (set (keys provided))) (some (complement ifn?) (vals provided)))
       (throw (ex-info "GUI runtime provider contract mismatch" {:actual (sort (keys provided))})))
     (doseq [operation operations]
-      (alter-var-root (ns-resolve *ns* (symbol (name operation))) (constantly (get provided operation)))))
+      (alter-var-root (facade-var operation) (constantly (get provided operation)))))
   nil)

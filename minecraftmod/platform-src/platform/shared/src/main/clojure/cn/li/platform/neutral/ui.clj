@@ -17,6 +17,13 @@
   (intern *ns* (symbol (name operation)) (fn [& _] (unavailable operation))))
 (doseq [operation value-operations]
   (intern *ns* (symbol (name operation)) nil))
+
+(defn- facade-var [operation fallback]
+  (let [facade-ns (the-ns 'cn.li.platform.neutral.ui)
+        operation-symbol (symbol (name operation))]
+    (or (ns-resolve facade-ns operation-symbol)
+        (intern facade-ns operation-symbol fallback))))
+
 (def FLAG-HOVERED nil)
 (def FLAG-FOCUSED nil)
 (def FLAG-RENDER-DIRTY nil)
@@ -31,11 +38,13 @@
     (when (or (not= expected (set (keys operations))) (some (complement ifn?) (vals operations)))
       (throw (ex-info "UI provider contract mismatch" {:actual (sort (keys operations))})))
     (doseq [operation function-operations]
-      (alter-var-root (ns-resolve *ns* (symbol (name operation))) (constantly (get operations operation))))
+      (alter-var-root (facade-var operation (fn [& _] (unavailable operation)))
+                      (constantly (get operations operation))))
     (doseq [operation value-operations]
-      (alter-var-root (ns-resolve *ns* (symbol (name operation)))
+      (alter-var-root (facade-var operation nil)
                       (constantly ((get operations operation))))))
-  (alter-var-root #'FLAG-HOVERED (constantly (var-get (ns-resolve *ns* 'flag-hovered))))
-  (alter-var-root #'FLAG-FOCUSED (constantly (var-get (ns-resolve *ns* 'flag-focused))))
-  (alter-var-root #'FLAG-RENDER-DIRTY (constantly (var-get (ns-resolve *ns* 'flag-render-dirty))))
+  (let [facade-ns (the-ns 'cn.li.platform.neutral.ui)]
+    (alter-var-root #'FLAG-HOVERED (constantly (var-get (ns-resolve facade-ns 'flag-hovered))))
+    (alter-var-root #'FLAG-FOCUSED (constantly (var-get (ns-resolve facade-ns 'flag-focused))))
+    (alter-var-root #'FLAG-RENDER-DIRTY (constantly (var-get (ns-resolve facade-ns 'flag-render-dirty)))))
   nil)

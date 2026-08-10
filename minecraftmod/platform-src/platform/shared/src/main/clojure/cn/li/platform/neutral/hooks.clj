@@ -46,10 +46,26 @@
 (defn- unavailable [operation]
   (throw (IllegalStateException. (str "Hooks provider is unavailable: " operation))))
 
-;; The operation set is static and audited above. `intern` only creates local
-;; facade Vars before bootstrap; it never resolves a namespace from input data.
-(doseq [operation operation-symbols]
-  (intern *ns* operation (fn [& _] (unavailable operation))))
+;; AOT callers must link against real Vars.  A top-level `intern` is evaluated
+;; while compiling but does not reliably create those Vars when the generated
+;; __init class is loaded, so expand explicit `def`s from the audited list.
+(defmacro define-operation-facade-vars []
+  (cons `do
+        (map (fn [operation]
+               `(def ~operation (fn [& _#] (unavailable '~operation))))
+             operation-symbols)))
+
+(define-operation-facade-vars)
+
+(defn- facade-var
+  "Return the local facade Var, recreating its unavailable sentinel when an
+   AOT loader has initialized the namespace without retaining an interned Var.
+   This preserves the static facade boundary; provider installation still
+   replaces every Var with the validated concrete IFn exactly once."
+  [operation]
+  (let [facade-ns (the-ns 'cn.li.platform.neutral.hooks)]
+    (or (ns-resolve facade-ns operation)
+        (intern facade-ns operation (fn [& _] (unavailable operation))))))
 
 (defn install!
   [operations]
@@ -59,7 +75,6 @@
       (throw (ex-info "Hooks provider contract mismatch"
                       {:expected (sort expected) :actual (sort (keys operations))})))
     (doseq [operation operation-symbols]
-      (alter-var-root (or (ns-resolve *ns* operation)
-                          (throw (ex-info "Hooks facade Var is missing" {:operation operation})))
+      (alter-var-root (facade-var operation)
                       (constantly (get operations (keyword (name operation)))))))
   nil)
