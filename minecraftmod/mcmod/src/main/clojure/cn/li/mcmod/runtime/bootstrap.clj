@@ -6,7 +6,19 @@
    static requires here, in the neutral source closure, prevents platform AOT
    from pulling these namespaces into the remapped class set."
   (:require [cn.li.mcmod.content :as content]
+            [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.lifecycle :as lifecycle]))
+
+(defn- providers-installed?
+  "True after the normal mod bootstrap has installed its neutral providers.
+   Datagen can run after that bootstrap in the same JVM, so it must not try to
+   install the immutable provider maps a second time."
+  []
+  (boolean
+    (some-> (fw/fw-atom)
+            deref
+            (get-in [:service :runtime-providers])
+            seq)))
 
 (defn initialize-common-content!
   "Install common providers, then run the registered common content hooks."
@@ -18,7 +30,8 @@
 (defn initialize-datagen-content!
   "Initialize common providers and execute the complete datagen lifecycle."
   [target-model]
-  (initialize-common-content! target-model)
+  (when-not (providers-installed?)
+    (initialize-common-content! target-model))
   (lifecycle/run-runtime-content-activation!)
   (lifecycle/run-datagen-metadata-init!)
   nil)

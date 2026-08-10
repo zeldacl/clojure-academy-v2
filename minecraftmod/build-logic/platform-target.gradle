@@ -921,6 +921,11 @@ if (target.loader != "none") {
                     throw new GradleException(
                         "Datagen hash manifest for ${target.id} contains no client assets")
                 }
+                if (!paths.any { it.startsWith("data/") }) {
+                    throw new GradleException(
+                        "Datagen hash manifest for ${target.id} contains no server data; " +
+                        "ensure GatherDataEvent registers datapack providers")
+                }
             }
         }
     }
