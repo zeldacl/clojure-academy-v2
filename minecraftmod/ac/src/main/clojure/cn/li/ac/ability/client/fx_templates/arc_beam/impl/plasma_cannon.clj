@@ -132,38 +132,92 @@
   tick, 20 times a second. The level-effect plan gets whole game ticks, no
   partial, so interpolate over the 50ms since the move landed instead — same
   curve, at most one tick behind."
-  [st]
+  ([st] (rendered-charge-pos st (System/currentTimeMillis)))
+  ([st now-ms]
   (let [prev (:prev-charge-pos st)
         cur (:charge-pos st)]
     (if-not (and (map? prev) (map? cur))
       cur
-      (let [t (Math/max 0.0 (Math/min 1.0 (/ (double (- (System/currentTimeMillis)
+      (let [t (Math/max 0.0 (Math/min 1.0 (/ (double (- (long now-ms)
                                                         (long (or (:moved-ms st) 0))))
                                              tick-ms)))]
         {:x (+ (double (:x prev)) (* t (- (double (:x cur)) (double (:x prev)))))
          :y (+ (double (:y prev)) (* t (- (double (:y cur)) (double (:y prev)))))
-         :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))}))))
+         :z (+ (double (:z prev)) (* t (- (double (:z cur)) (double (:z prev)))))})))))
+
+;; Reconciliation budget: how much of the standing prediction error may be
+;; absorbed per tick, and the error beyond which it is not an error but a
+;; desync (missed packets, a re-aimed shot) and the body simply snaps.
+(def ^:private max-correction-per-tick 0.25)
+(def ^:private desync-snap-distance 8.0)
+
+(defn- vsub [a b]
+  {:x (- (double (:x a)) (double (:x b)))
+   :y (- (double (:y a)) (double (:y b)))
+   :z (- (double (:z a)) (double (:z b)))})
+
+(defn- vlen ^double [v]
+  (Math/sqrt (+ (* (double (:x v)) (double (:x v)))
+                (* (double (:y v)) (double (:y v)))
+                (* (double (:z v)) (double (:z v))))))
+
+(defn- reconcile-sync
+  "Fold an authoritative position into the client's own prediction.
+
+  Both sides walk the same deterministic straight line at one block per tick,
+  but the client only starts when the fire message lands, so it runs a constant
+  latency behind and every sync used to yank that gap shut — a lurch four times
+  a second, which is what the flight stuttered on. Keep the predicted position
+  and bleed the error off a quarter block per tick instead; the body converges
+  within half a second without ever changing apparent speed by more than 25%."
+  [st pos]
+  (let [cur (:charge-pos st)]
+    (if-not (and (= :go (:state st)) (map? cur))
+      (move-charge-pos st pos)
+      (let [error (vsub pos cur)]
+        (if (> (vlen error) desync-snap-distance)
+          (move-charge-pos st pos)
+          (assoc st :sync-error error))))))
+
+(defn- step-toward
+  "One tryMove step plus at most `max-correction-per-tick` of the standing sync
+  error. Returns [next-pos remaining-error]."
+  [pos destination error]
+  (let [d (vsub destination pos)
+        len (vlen d)
+        step (if (< len 1.0)
+               {:x 0.0 :y 0.0 :z 0.0}
+               {:x (/ (double (:x d)) len)
+                :y (/ (double (:y d)) len)
+                :z (/ (double (:z d)) len)})
+        err-len (vlen error)
+        corr (if (<= err-len max-correction-per-tick)
+               error
+               (let [k (/ max-correction-per-tick err-len)]
+                 {:x (* k (double (:x error)))
+                  :y (* k (double (:y error)))
+                  :z (* k (double (:z error)))}))]
+    [{:x (+ (double (:x pos)) (double (:x step)) (double (:x corr)))
+      :y (+ (double (:y pos)) (double (:y step)) (double (:y corr)))
+      :z (+ (double (:z pos)) (double (:z step)) (double (:z corr)))}
+     (vsub error corr)]))
 
 (defn- advance-flight
   "PlasmaCannonContextC.c_tick: while the shot is flying the client runs the
   same tryMove as the server (1 block/tick toward the destination) instead of
   waiting for the 5-tick position sync, which would otherwise leave the body a
-  quarter second behind. A sync overwrites :charge-pos authoritatively."
+  quarter second behind."
   [st]
-  (let [{:keys [charge-pos destination]} st]
+  (let [{:keys [charge-pos destination]} st
+        error (or (:sync-error st) {:x 0.0 :y 0.0 :z 0.0})]
     (if-not (and (= :go (:state st))
                  (not (:terminated? st))
                  (map? charge-pos) (map? destination))
       st
-      (let [dx (- (double (:x destination)) (double (:x charge-pos)))
-            dy (- (double (:y destination)) (double (:y charge-pos)))
-            dz (- (double (:z destination)) (double (:z charge-pos)))
-            len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
-        (if (< len 1.0)
+      (let [[next-pos remaining] (step-toward charge-pos destination error)]
+        (if (and (= next-pos charge-pos) (zero? (vlen error)))
           st
-          (move-charge-pos st {:x (+ (double (:x charge-pos)) (/ dx len))
-                               :y (+ (double (:y charge-pos)) (/ dy len))
-                               :z (+ (double (:z charge-pos)) (/ dz len))}))))))
+          (assoc (move-charge-pos st next-pos) :sync-error remaining))))))
 
 (defn- finished?
   "Both halves have played out their death: the body's alpha has reached 0
@@ -253,22 +307,21 @@
 												:tornado-dead-ticks 0})))
 			:update
 			(let [prev-st (or (get-in store* [:effect-state owner-key*]) {})
-						;; A position sync is authoritative — it overrides whatever the
-						;; client's own tryMove predicted since the last one. Route it
-						;; through move-charge-pos so the correction is interpolated over
-						;; the next tick instead of snapping.
-						synced (if (map? charge-pos) (move-charge-pos prev-st charge-pos) prev-st)
 						;; Only overwrite what this payload actually carries. The 5-tick
 						;; flight sync sends :charge-pos and :flight-ticks alone, so
 						;; defaulting the rest reset :state to :charging — which switched
 						;; off the client's own tryMove and left the body jumping five
 						;; blocks per sync instead of gliding one per tick.
-						synced (cond-> synced
+						synced (cond-> prev-st
 										 (some? charge-ticks) (assoc :charge-ticks (long charge-ticks))
 										 (some? flight-ticks) (assoc :flight-ticks (long flight-ticks))
 										 (some? state) (assoc :state state)
 										 (some? destination) (assoc :destination destination)
 										 (some? release-ready?) (assoc :release-ready? (boolean release-ready?)))
+						;; Position last, so the fields above (notably :state) already
+						;; describe this update when the sync is reconciled against the
+						;; client's prediction.
+						synced (if (map? charge-pos) (reconcile-sync synced charge-pos) synced)
 						updated (assoc-in store* [:effect-state owner-key*]
 												(assoc (merge base-meta synced)
 													 :owner-key owner-key*

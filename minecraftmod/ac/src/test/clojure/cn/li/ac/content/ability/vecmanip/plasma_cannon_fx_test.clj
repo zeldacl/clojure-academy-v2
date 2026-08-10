@@ -1,5 +1,5 @@
 (ns cn.li.ac.content.ability.vecmanip.plasma-cannon-fx-test
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             ;; arc-beam MUST precede the impl (AOT classes don't self-require)
             ;; so the [:plasma-cannon :level] defmethods are registered before
             ;; the stateful tests enqueue — otherwise effect-initial-state
@@ -287,27 +287,85 @@
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
         {:mode :update :state :go
          :charge-pos {:x 0.0 :y 64.0 :z 0.0}
-         :destination {:x 20.0 :y 64.0 :z 0.0}})
+         :destination {:x 40.0 :y 64.0 :z 0.0}})
       (tick-fx! 3)
       (is (= 3.0 (charge-x "ctx-fly")) "three ticks, three blocks")
-      ;; A sync is authoritative: it overrides whatever was predicted.
-      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
-        {:mode :update :state :go :charge-pos {:x 5.0 :y 64.0 :z 0.0}})
-      (tick-fx! 1)
-      (is (= 6.0 (charge-x "ctx-fly")))
       ;; The flight sync carries :charge-pos and :flight-ticks only. Defaulting
       ;; the fields it omits reset :state to :charging, which switched the
       ;; prediction off — the body then only moved when a sync landed, five
       ;; blocks at a time.
       (arc-beam/enqueue-for-test! :plasma-cannon "ctx-fly" :plasma-cannon/fx-update
-        {:mode :update :charge-pos {:x 10.0 :y 64.0 :z 0.0} :flight-ticks 10})
+        {:mode :update :charge-pos {:x 5.0 :y 64.0 :z 0.0} :flight-ticks 5})
       (is (= :go (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-fly"] :state]))
           "a partial sync must not knock the state back to :charging")
-      (is (= {:x 20.0 :y 64.0 :z 0.0}
+      (is (= {:x 40.0 :y 64.0 :z 0.0}
              (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-fly"] :destination]))
           "nor forget where the shot is headed")
       (tick-fx! 2)
-      (is (= 12.0 (charge-x "ctx-fly")) "prediction keeps running after a sync"))))
+      (is (< 5.0 (charge-x "ctx-fly")) "prediction keeps running after a sync"))))
+
+(deftest a-sync-is-absorbed-gradually-not-snapped-test
+  ;; Both sides walk the same deterministic line, but the client only starts
+  ;; when the fire message lands, so it runs a constant latency behind. Snapping
+  ;; that gap shut on every sync is what the flight stuttered on: forward lurch,
+  ;; then several frames of walking backwards, four times a second.
+  (with-fx-stubs
+    (fn []
+      (start! "ctx-recon" {:x 0.0 :y 64.0 :z 0.0})
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-recon" :plasma-cannon/fx-update
+        {:mode :update :state :go
+         :charge-pos {:x 0.0 :y 64.0 :z 0.0}
+         :destination {:x 40.0 :y 64.0 :z 0.0}})
+      (tick-fx! 3)
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-recon" :plasma-cannon/fx-update
+        {:mode :update :charge-pos {:x 5.0 :y 64.0 :z 0.0} :flight-ticks 5})
+      (is (= 3.0 (charge-x "ctx-recon")) "the sync does not move the body itself")
+      (let [xs (vec (for [_ (range 8)] (do (tick-fx! 1) (charge-x "ctx-recon"))))
+            steps (mapv - xs (cons 3.0 (butlast xs)))]
+        (is (every? (fn [d] (<= 1.0 d 1.25)) steps)
+            (str "each tick is one block plus at most a quarter of correction: " steps))
+        ;; 2 blocks of error at 0.25/tick is gone within 8 ticks.
+        (is (< 12.9 (last xs) 13.1) "and the body has caught up with the server"))))
+
+  (testing "a real desync snaps rather than crawling"
+    (with-fx-stubs
+      (fn []
+        (start! "ctx-desync" {:x 0.0 :y 64.0 :z 0.0})
+        (arc-beam/enqueue-for-test! :plasma-cannon "ctx-desync" :plasma-cannon/fx-update
+          {:mode :update :state :go
+           :charge-pos {:x 0.0 :y 64.0 :z 0.0}
+           :destination {:x 100.0 :y 64.0 :z 0.0}})
+        (tick-fx! 2)
+        (arc-beam/enqueue-for-test! :plasma-cannon "ctx-desync" :plasma-cannon/fx-update
+          {:mode :update :charge-pos {:x 50.0 :y 64.0 :z 0.0} :flight-ticks 50})
+        (is (= 50.0 (charge-x "ctx-desync")))))))
+
+(deftest flight-never-moves-backwards-across-syncs-test
+  ;; End-to-end shape check at render resolution: 15 ticks with a sync every
+  ;; 5th, sampled three times per tick. Before reconciliation this produced
+  ;; -0.64 frame deltas right after each sync.
+  (with-fx-stubs
+    (fn []
+      (start! "ctx-shape" {:x 0.0 :y 64.0 :z 0.0})
+      (arc-beam/enqueue-for-test! :plasma-cannon "ctx-shape" :plasma-cannon/fx-update
+        {:mode :update :state :go
+         :charge-pos {:x 0.0 :y 64.0 :z 0.0}
+         :destination {:x 100.0 :y 64.0 :z 0.0}})
+      (let [samples (atom [])]
+        (doseq [tick (range 15)]
+          (tick-fx! 1)
+          ;; the server is two ticks ahead of what the client predicted
+          (when (zero? (mod (inc tick) 5))
+            (arc-beam/enqueue-for-test! :plasma-cannon "ctx-shape" :plasma-cannon/fx-update
+              {:mode :update :charge-pos {:x (double (+ tick 3)) :y 64.0 :z 0.0}
+               :flight-ticks (inc tick)}))
+          (let [st (get-in (pcfx/fx-snapshot) [:effect-state [:ctx "ctx-shape"]])
+                moved (long (or (:moved-ms st) 0))]
+            (doseq [frame (range 3)]
+              (swap! samples conj (:x (rendered-charge-pos st (+ moved (* 16 frame))))))))
+        (let [deltas (mapv - (rest @samples) @samples)]
+          (is (every? (fn [d] (<= 0.0 d 0.5)) deltas)
+              (str "no backward or oversized frame steps: " (vec deltas))))))))
 
 (deftest render-position-is-interpolated-across-the-tick-test
   ;; Vanilla draws an entity at lastTickPos + (pos - lastTickPos) * partialTick.
