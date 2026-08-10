@@ -47,14 +47,28 @@
     (when (and skill-id cooldown-ticks)
       (skill-effects/set-main-cooldown! player-id skill-id cooldown-ticks))))
 
+(defn- ray-variant
+  [skill-id]
+  (case skill-id
+    :mine-ray-expert :expert
+    :mine-ray-luck :luck
+    :basic))
+
 (defn mining-ray-down!
   "Initialize mining ray context state.
   Matches original's s_onStart: overloadKeep snapshots the actual
-  post-consumption overload stat, not the raw cost delta."
-  [_skill-id ctx-id player-id _callback-skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
+  post-consumption overload stat, not the raw cost delta, and
+  MSG_MADEALIVE spawns the ray + loop sound on the client."
+  [skill-id ctx-id player-id _callback-skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]
   (when cost-ok?
     (let [overload-floor (double (or (skill-effects/player-path player-id [:resource-data :cur-overload] 0.0) 0.0))]
-      (ctx-skill/replace-skill-state! ctx-id (assoc (empty-skill-state) :overload-floor overload-floor)))))
+      (ctx-skill/replace-skill-state! ctx-id (assoc (empty-skill-state) :overload-floor overload-floor))
+      ;; Original c_start (MSG_MADEALIVE) spawns the composite ray entity and
+      ;; the loop sound for everyone nearby — the beam is world geometry, not
+      ;; an isLocal overlay.
+      (fx/send-local-and-nearby! ctx-id {:topic :mine-ray/fx-start :mode :start} nil
+        {:variant (ray-variant skill-id)
+         :source-player-id player-id}))))
 
 (defn mining-ray-tick!
   "Tick handler for mining ray.
@@ -145,12 +159,20 @@
     (catch Exception e
       (log/warn "MiningRay tick! failed:" (ex-message e)))))
 
+(defn- send-ray-end!
+  [ctx-id player-id]
+  ;; Original c_end (MSG_TERMINATED) kills the ray and stops the loop sound
+  ;; on every nearby client — broadcast, like the start.
+  (fx/send-local-and-nearby! ctx-id {:topic :mine-ray/fx-end :mode :end} nil
+    {:source-player-id player-id}))
+
 (defn mining-ray-up!
   "Key-up: reset mining state and apply cooldown.
   Matches original's unified s_terminated (MSG_TERMINATED) — every
   termination path sets the cooldown."
   [cfg ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (apply-mining-cooldown! cfg player-id)
+  (send-ray-end! ctx-id player-id)
   (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
 
 (defn mining-ray-abort!
@@ -158,6 +180,7 @@
   mining-ray-up!)."
   [cfg ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
   (apply-mining-cooldown! cfg player-id)
+  (send-ray-end! ctx-id player-id)
   (ctx-skill/replace-skill-state! ctx-id (empty-skill-state)))
 
 (defn mining-ray-cost-fail!

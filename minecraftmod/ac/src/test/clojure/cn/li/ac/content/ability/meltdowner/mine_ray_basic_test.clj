@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-basic-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.test.skill-callback-test-helpers :as cb]
             [cn.li.ac.content.ability.meltdowner.mine-ray-basic :as basic]
             [cn.li.ac.content.ability.meltdowner.mine-rays-base :as base]
@@ -62,18 +63,27 @@
 (deftest mine-ray-basic-down-snapshots-actual-post-consumption-overload-test
   ;; Matches original's overloadKeep = ctx.cpData.getOverload: snapshot the
   ;; actual resulting overload stat, not the raw cost delta.
-  (let [state-calls* (atom [])]
+  (let [state-calls* (atom [])
+        fx-sends* (atom [])]
     (with-redefs [ctx-skill/replace-skill-state! (fn [ctx-id state]
                                                     (swap! state-calls* conj [ctx-id state])
                                                     nil)
                   skill-effects/player-path (fn [_player-id path _default]
-                                              (when (= path [:resource-data :cur-overload]) 137.0))]
+                                              (when (= path [:resource-data :cur-overload]) 137.0))
+                  fx/send-local-and-nearby! (fn [ctx-id channel _payload-map payload]
+                                              (swap! fx-sends* conj [ctx-id channel payload])
+                                              nil)]
       (cb/apply-invoke basic/mine-ray-basic-down! :player-id "p1" :ctx-id "ctx-3" :cost-ok? true))
     (is (= [["ctx-3" {:target-x nil :target-y nil :target-z nil
                        :hardness-left (double Float/MAX_VALUE)
                        :starting-hardness (double Float/MAX_VALUE)
                        :overload-floor 137.0}]]
-           @state-calls*))))
+           @state-calls*))
+    ;; Original c_start (MSG_MADEALIVE) spawns the ray + loop sound — the
+    ;; down handler must broadcast the fx-start with the variant.
+    (is (= [["ctx-3" {:topic :mine-ray/fx-start :mode :start}
+             {:variant :basic :source-player-id "p1"}]]
+           @fx-sends*))))
 
 (deftest mine-ray-basic-cost-fail-on-tick-terminates-and-applies-cooldown-test
   (let [cooldown-calls* (atom [])

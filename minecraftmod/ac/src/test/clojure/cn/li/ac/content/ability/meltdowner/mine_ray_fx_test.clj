@@ -5,6 +5,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mr-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -17,6 +18,12 @@
             (level-effects/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
+
+;; The loop-sound bridge needs the platform client bridge, which tests do not
+;; install — stub it so :start/:end can enqueue in the unit environment.
+(defn- with-bridge-stub [f]
+  (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
+    (f)))
 
 ;; MineRay has no arc-beam impl — it owns its enqueue/tick fns and registers
 ;; them through fx-spec, so tests drive those directly.
@@ -50,6 +57,7 @@
              @registered-topics*)))))
 
 (deftest start-progress-tick-end-manage-state-test
+  (with-bridge-stub (fn []
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/tick-state!)
         build-plan (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/build-plan)
@@ -76,8 +84,10 @@
       (enqueue! enqueue-state! "ctx-mr" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-mr"]])))
       (is (seq @sounds*)))))
+))
 
 (deftest mine-ray-start-sound-varies-by-variant-test
+  (with-bridge-stub (fn []
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
         sounds* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "mine-ray-fx-test"})
@@ -92,8 +102,10 @@
         (enqueue! enqueue-state! ctx-id :mine-ray/fx-start {:mode :start :variant variant :source-player-id "player-a"})
         (is (= expected-sound-id
                (:sound-id (second (last @sounds*)))))))))
+))
 
 (deftest mine-ray-particle-cadence-test
+  (with-bridge-stub (fn []
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/tick-state!)
         particles* (atom [])]
@@ -112,8 +124,9 @@
         (tick! tick-state!))
 
       (is (= 16 (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])))
-      (is (= 2 (count @particles*))
-          "mine-ray should emit target particles every 8 ticks while active")
+      (is (= 16 (count @particles*))
+          "mine-ray should emit target particles EVERY same-target tick (upstream c_spawnParticles)")
 
       (enqueue! enqueue-state! "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
+))
