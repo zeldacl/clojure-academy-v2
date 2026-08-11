@@ -13,7 +13,7 @@
     </box>
   </template>
   <image id="main" pos="94.0,104.0" size="144.0,203.0" scale="0.50" align="left,top" src="academy:textures/guis/window_ui_resize.png">
-    <text id="header" pos="0.0,8.0" size="128.0,28.0" align="center,top" text="" font-size="18.0" color="#BBFFFFFF"/>
+    <text id="header" pos="0.0,8.0" size="128.0,28.0" align="center,center" text="" font-size="18.0" color="#BBFFFFFF"/>
     <group id="body" pos="0.0,36.0" size="128.0,160.0" align="center,top">
       <list id="hud-list" pos="0.0,0.0" size="128.0,160.0" template="t_hud_row" spacing="0.0"/>
     </group>

@@ -612,7 +612,9 @@
         skill-icon (skill-query/get-skill-icon-path skill-id)
         skill-description (when-let [dk (:description-key skill-spec)] (i18n/translate dk))
         cx 200.0 cy 93.5
-        btn-x (- cx 16.0) btn-y (+ cy 80.0)
+        ;; Upstream LEARN button top = cy+72 (textArea top cy+20, then
+        ;; (10-32*0.5)*0.5-… centering), matching skill_tree_view's button.
+        btn-x (- cx 16.0) btn-y (+ cy 72.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-updated (atom nil)
@@ -636,7 +638,7 @@
           n (count conds)
           step 16.0 isz 14.0
           left (- cx (/ (* step (double n)) 2.0))
-          top (+ cy 50.0)]
+          top (+ cy 45.0)]
       (rt/put-user-signal! rt :on-pointer-move
         (fn [mx my]
           (when prev-move (prev-move mx my))
@@ -715,7 +717,9 @@
         ;; Upstream LearningHelper.getEstimatedConsumption: CPS * stimulations.
         est-consumption (long (* (:cps dev-spec 700.0) (progression/level-up-stims current-level)))
         cx 200.0 cy 93.5
-        btn-x (- cx 16.0) btn-y (+ cy 65.0)
+        ;; Upstream LEARN button top = cy+57 (textArea top cy+20, then
+        ;; (10-32*0.5)*0.5-… centering), matching skill_tree_view's button.
+        btn-x (- cx 16.0) btn-y (+ cy 57.0)
         state-a (atom {:is-developing? false :progress 0.0 :result nil :error nil})
         prev-dev-a (atom false)
         last-state (atom nil)
