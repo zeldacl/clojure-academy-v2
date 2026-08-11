@@ -68,7 +68,11 @@
                (modid/namespaced-path "textures/effects/arc_burst/")
                :frame-count 40
                :frame-ms 40.0
-               :half-size 0.5
+               ;; Third-person RailgunHandEffect draws the billboard
+               ;; createBillboard(-1,-1,1,1) with no scale at all — 2x2 units,
+               ;; i.e. half-size 1.0. (Only the first-person branch scales it,
+               ;; by 0.4, and that path is the hand quad in impl/railgun_shot.)
+               :half-size 1.0
                :offset-y 0.8
                :offset-z -1.0}}
 

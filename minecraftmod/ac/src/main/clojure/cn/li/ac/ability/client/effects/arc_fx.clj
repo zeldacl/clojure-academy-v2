@@ -160,16 +160,21 @@
 (def ^:private template-cache (object-array 1))
 
 (defn- ensure-templates
-  "Generate arc templates on first call, cache and return."
+  "Generate arc templates on first call, cache and return.
+
+  Each entry keeps its generated length: SubArcHandler.drawAll centres a
+  template on its placement point (`glTranslated(-length/2, 0, 0)` after the
+  0.3 scale), so callers need the length to reproduce that offset."
   []
   (or (aget ^objects template-cache 0)
       (let [templates
             (vec
              (for [_ (range default-num-templates)
                    :let [length (+ 2.0 (rand))]]
-               (generate-arc-segments length
-                 default-arc-width default-max-offset
-                 default-passes default-branch-factor default-width-shrink)))]
+               {:length length
+                :arcs (generate-arc-segments length
+                        default-arc-width default-max-offset
+                        default-passes default-branch-factor default-width-shrink)}))]
         (aset ^objects template-cache 0 templates)
         templates)))
 
@@ -388,17 +393,37 @@
 ;; Public API: arc ops for railgun beam
 ;; ---------------------------------------------------------------------------
 
+;; SubArcHandler.drawAll: every sub-arc is drawn at `glScaled(0.3, 0.3, 0.3)`,
+;; so a 2-3 unit template covers 0.6-0.9 blocks, not 2-3.
+(def ^:private sub-arc-scale 0.3)
+
+(defn- rotate-zyx
+  "SubArcHandler.drawAll's `glRotated(rotZ,z) glRotated(rotY,y) glRotated(rotX,x)`
+  applied to a template point: each sub-arc sits at a random orientation in
+  world axes rather than aligned with whatever spawned it."
+  [^cn.li.mcmod.math.V3 p sin-x cos-x sin-y cos-y sin-z cos-z]
+  (let [x (.-x p) y (.-y p) z (.-z p)
+        ;; Rx
+        y1 (- (* y cos-x) (* z sin-x))
+        z1 (+ (* y sin-x) (* z cos-x))
+        ;; Ry
+        x2 (+ (* x cos-y) (* z1 sin-y))
+        z2 (- (* z1 cos-y) (* x sin-y))
+        ;; Rz
+        x3 (- (* x2 cos-z) (* y1 sin-z))
+        y3 (+ (* x2 sin-z) (* y1 cos-z))]
+    (vec3/v3 x3 y3 z2)))
+
 (defn railgun-arc-ops
   "Build arc render ops placed along a railgun beam.
-  camera-pos: camera position for billboarding
-  beam: {:keys [start end ttl max-ttl]} — start/end are V3
-  style: {:keys [yaw pitch]} (from beam context)"
-  [camera-pos beam style]
+
+  beam: {:keys [start end ttl max-ttl arc-placements]} — start/end are V3.
+  Each placement carries the sub-arc state SubArc owns upstream: which
+  template it currently shows, whether it is visible this frame, and its fixed
+  random orientation."
+  [_camera-pos beam _style]
   (let [templates (ensure-templates)
-        {:keys [start end ttl max-ttl]} beam
-        ;; Upstream EntityRailgunFX clears its arc templates at age 30 ticks —
-        ;; the port keeps them for the beam's full life so the lightning
-        ;; follows the ray instead of vanishing while the beam continues.
+        {:keys [start end ttl]} beam
         alive? (pos? (long (or ttl 0)))
         num-templates (count templates)
         beam-length (v-length (v- end start))]
@@ -411,27 +436,38 @@
             up (v-normalize (v-cross direction right))
             placements (or (:arc-placements beam)
                            [{:distance 1.0 :theta 0.0 :radius 0.1}])]
-        (mapcat (fn [idx {:keys [distance theta radius]}]
-                  (let [radial (v+ (v* right (* radius (Math/sin theta)))
-                                   (v* up (* radius (Math/cos theta))))
-                        world-pos (v+ start
-                                     (v+ (v* direction distance) radial))
-                        ;; template is a list of segment-lists (main trunk +
-                        ;; branches, per generate-arc-segments) — flatten to
-                        ;; the flat segment list segment->quads expects.
-                        template (nth templates (mod idx num-templates))]
-                    (map (fn [quad]
-                           (let [to-world
-                                 (fn [^cn.li.mcmod.math.V3 p]
-                                   (v+ world-pos
-                                       (v+ (v* direction (.-x p))
-                                           (v+ (v* right (.-y p))
-                                               (v* up (.-z p))))))]
+        (mapcat (fn [idx {:keys [distance theta radius tex-id draw? rot-x rot-y rot-z]}]
+                  ;; SubArc starts invisible and flickers on; a placement with
+                  ;; no sub-arc state at all (older payload) simply draws.
+                  (when-not (false? draw?)
+                    (let [radial (v+ (v* right (* radius (Math/sin theta)))
+                                     (v* up (* radius (Math/cos theta))))
+                          world-pos (v+ start
+                                       (v+ (v* direction distance) radial))
+                          {:keys [length arcs]} (nth templates (mod (long (or tex-id idx))
+                                                                    num-templates))
+                          ;; glTranslated(-length/2) runs after the scale, so the
+                          ;; centring offset is in scaled units too.
+                          half (* 0.5 (double length))
+                          sin-x (Math/sin (double (or rot-x 0.0)))
+                          cos-x (Math/cos (double (or rot-x 0.0)))
+                          sin-y (Math/sin (double (or rot-y 0.0)))
+                          cos-y (Math/cos (double (or rot-y 0.0)))
+                          sin-z (Math/sin (double (or rot-z 0.0)))
+                          cos-z (Math/cos (double (or rot-z 0.0)))
+                          to-world
+                          (fn [^cn.li.mcmod.math.V3 p]
+                            (let [local (vec3/v3 (* sub-arc-scale (- (.-x p) half))
+                                                 (* sub-arc-scale (.-y p))
+                                                 (* sub-arc-scale (.-z p)))
+                                  r (rotate-zyx local sin-x cos-x sin-y cos-y sin-z cos-z)]
+                              (v+ world-pos r)))]
+                      (map (fn [quad]
                              (-> quad
                                  (assoc :p0 (to-world (:p0 quad)))
                                  (assoc :p1 (to-world (:p1 quad)))
                                  (assoc :p2 (to-world (:p2 quad)))
-                                 (assoc :p3 (to-world (:p3 quad))))))
-                         (segment->quads (apply concat template)))))
+                                 (assoc :p3 (to-world (:p3 quad)))))
+                           (segment->quads (apply concat arcs))))))
                 (range)
                 placements)))))

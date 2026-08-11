@@ -158,6 +158,13 @@ dependencies {
 }
 
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
+// test-support's runtime-facades installs the neutral provider facades
+// (cn.li.platform.neutral.*, self-contained namespaces with no requires of
+// their own), so they have to be on the test source path with it. Without
+// this, compileTestClojure and the full-suite runner both fail to resolve
+// them; it only ever worked off compiled output left behind by an earlier
+// build, and any clean rebuild breaks.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
 
 tasks.matching { it.name == 'checkClojure' }.configureEach {
     dependsOn tasks.named('compileClojure')

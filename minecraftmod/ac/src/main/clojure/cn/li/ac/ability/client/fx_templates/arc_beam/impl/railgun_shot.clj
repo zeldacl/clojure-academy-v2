@@ -23,14 +23,17 @@
     (+ shrink wiggle)))
 
 (def ^:private railgun-beam-style
-  ;; Flat billboard widths are apparent width (viewed at an angle), so they
-  ;; read thinner than upstream's cylinders — beefed up to stay visible.
-  {:width       (fn [beam life] (* 0.45 (width-factor beam life)))
-   :core-width  (fn [beam life] (* 0.28 (width-factor beam life)))
+  ;; RendererRayComposite: cylinderOut radius 0.13 @ (236,170,93,60),
+  ;; cylinderIn radius 0.09 @ (241,240,222,200). A camera-facing billboard of
+  ;; half-width w has the same silhouette as a cylinder of radius w, so these
+  ;; are the radii verbatim — the port had them at 0.45/0.28, three times the
+  ;; original bore.
+  {:width       (fn [beam life] (* 0.13 (width-factor beam life)))
+   :core-width  (fn [beam life] (* 0.09 (width-factor beam life)))
    :outer-rgb   {:r 236 :g 170 :b 93}
-   :outer-alpha (fn [_ life] (* 90.0 (fade-out-factor life)))
+   :outer-alpha (fn [_ life] (* 60.0 (fade-out-factor life)))
    :inner-rgb   {:r 241 :g 240 :b 222}
-   :inner-alpha (fn [_ life] (* 230.0 (fade-out-factor life)))
+   :inner-alpha (fn [_ life] (* 200.0 (fade-out-factor life)))
    ;; Retain the port's enhanced cyan center highlight in addition to the
    ;; original inner/outer cylinders.
    :line-rgb    {:r 165 :g 230 :b 255}
@@ -57,6 +60,35 @@
     (or store {:beam-effects {} :charging {}})
     {:beam-effects {} :charging {}}))
 
+;; SubArc: 30 ticks of life, a fixed random orientation, and a template that
+;; is re-rolled about every other tick. `draw` starts false — an arc flickers
+;; on before it is ever seen.
+(def ^:private sub-arc-life 30)
+(def ^:private arc-template-count 15)
+
+(defn- new-sub-arc [distance]
+  {:distance distance
+   :theta (* 2.0 Math/PI (rand))
+   :radius (+ 0.1 (* 0.15 (rand)))
+   :tex-id (rand-int arc-template-count)
+   :draw? false
+   :age 0
+   :rot-x (* 2.0 Math/PI (rand))
+   :rot-y (* 2.0 Math/PI (rand))
+   :rot-z (* 2.0 Math/PI (rand))})
+
+(defn- tick-sub-arc
+  "SubArc.tick(): re-roll the template half the time, age on 9 ticks out of 10,
+  die at 30, and toggle visibility (40% off when shown, 30% on when hidden)."
+  [arc]
+  (let [arc (cond-> arc
+              (< (rand) 0.5) (assoc :tex-id (rand-int arc-template-count))
+              (< (rand) 0.9) (update :age (fnil inc 0)))]
+    (when (< (long (:age arc 0)) sub-arc-life)
+      (if (:draw? arc)
+        (cond-> arc (< (rand) 0.4) (assoc :draw? false))
+        (cond-> arc (< (rand) 0.3) (assoc :draw? true))))))
+
 (defn- arc-placements [^V3 start ^V3 end]
   (let [length (vec3/vlen (vec3/v- end start))]
     (loop [cursor 1.0
@@ -64,10 +96,7 @@
       (if (> cursor length)
         placements
         (recur (+ cursor 1.0 (rand))
-               (conj placements
-                     {:distance cursor
-                      :theta (* 2.0 Math/PI (rand))
-                      :radius (+ 0.1 (* 0.15 (rand)))}))))))
+               (conj placements (new-sub-arc cursor)))))))
 
 (defn- enqueue-state!
   "Charge events keep a self-contained one-shot arc-burst state. A live
@@ -109,12 +138,28 @@
                            :wiggle-seed (* 2.0 Math/PI (rand))}))  ;; random phase [0, 2π)
         store*))))
 
+;; EntityRailgunFX.onUpdate: arcHandler.clear() at ticksExisted == 30 — the
+;; lightning is gone for the beam's last 20 ticks while the ray itself fades.
+(def ^:private arc-clear-age 30)
+
+(defn- tick-beam-arcs
+  [beam]
+  (let [age (- (double (:max-ttl beam)) (double (:ttl beam)))]
+    (if (>= age arc-clear-age)
+      (assoc beam :arc-placements [])
+      (update beam :arc-placements #(vec (keep tick-sub-arc %))))))
+
 (defn- tick-state!
   [store]
   (let [store* (ensure-store store)]
     (-> store*
         (update :beam-effects
-          store-tick/tick-ttl-items-by-owner)
+          (fn [by-owner]
+            (store-tick/tick-ttl-items-by-owner
+              (reduce-kv (fn [acc owner beams]
+                           (assoc acc owner (mapv tick-beam-arcs beams)))
+                         {}
+                         (or by-owner {})))))
         (update :charging store-tick/tick-ttl-states-by-owner))))
 
 (defn- visible-beam [beam]
@@ -141,7 +186,9 @@
         seed (double (or (:wiggle-seed beam) 0.0))
         glow-wiggle (+ 0.9 (* 0.1
                               (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
-        half-width (* 1.5 (width-factor beam life) glow-wiggle)
+        ;; RendererRayGlow width 1.1, and drawBoard halves it — 0.55 either
+        ;; side of the axis, not the 1.5 the port had.
+        half-width (* 0.55 (width-factor beam life) glow-wiggle)
         right (vec3/v* (ru/beam-right-axis start end cam-pos) half-width)
         gs (vec3/v+ start (vec3/v* dir -0.3))
         ge (vec3/v+ end (vec3/v* dir 0.3))
@@ -184,7 +231,26 @@
                                         (vec3/v* up (* radius (Math/sin t1)))))]]
         (ru/line-op p0 p1 color)))))
 
-(defn- charge-hand-ops [^V3 hand-center charge-state]
+(defn- view-forward
+  "Look direction from the hand-runtime's yaw/pitch (Minecraft convention)."
+  [{:keys [player-yaw-rad player-pitch-rad]}]
+  (let [yaw (double (or player-yaw-rad 0.0))
+        pitch (double (or player-pitch-rad 0.0))
+        cos-p (Math/cos pitch)]
+    (vec3/v3 (* (- (Math/sin yaw)) cos-p)
+             (- (Math/sin pitch))
+             (* (Math/cos yaw) cos-p))))
+
+(defn- charge-hand-ops
+  "RailgunHandEffect's first-person branch: the 2x2 billboard scaled by 0.4 and
+  offset (.26, -.15, -.24).
+
+  Those offsets are applied inside renderHand, i.e. in VIEW space — right, up
+  and forward of where the player is looking. The port had been adding them to
+  world x/y/z, so the burst drifted off the hand as soon as the player turned,
+  and the quad itself was axis-aligned in world space rather than facing the
+  camera, so it vanished edge-on at the wrong angles."
+  [^V3 hand-center ^V3 look-dir charge-state]
   (let [elapsed-ms (* 50.0 (- (double (:max-ttl charge-state))
                               (double (:ttl charge-state))))
         ;; 40 frames at 40ms each = 1.6s total animation
@@ -192,15 +258,19 @@
         texture-path (modid/asset-path
                        "textures"
                        (str "effects/arc_burst/" frame ".png"))
-        ;; Original uses scale 0.4 with offset (0.26, -0.15, -0.24)
         half-size 0.4
-        cx (+ (.-x hand-center) 0.26)
-        cy (+ (.-y hand-center) -0.15)
-        cz (+ (.-z hand-center) -0.24)
-        p0 (vec3/v3 (- cx half-size) (- cy half-size) cz)
-        p1 (vec3/v3 (+ cx half-size) (- cy half-size) cz)
-        p2 (vec3/v3 (+ cx half-size) (+ cy half-size) cz)
-        p3 (vec3/v3 (- cx half-size) (+ cy half-size) cz)]
+        forward (vec3/vnorm look-dir)
+        [right up] (vec3/orthonormal-basis forward)
+        center (vec3/v+ hand-center
+                        (vec3/v+ (vec3/v* right 0.26)
+                                 (vec3/v+ (vec3/v* up -0.15)
+                                          (vec3/v* forward -0.24))))
+        rx (vec3/v* right half-size)
+        uy (vec3/v* up half-size)
+        p0 (vec3/v- (vec3/v- center rx) uy)
+        p1 (vec3/v- (vec3/v+ center rx) uy)
+        p2 (vec3/v+ (vec3/v+ center rx) uy)
+        p3 (vec3/v+ (vec3/v- center rx) uy)]
     [{:kind :quad
       :texture texture-path
       :p0 p0 :p1 p1 :p2 p2 :p3 p3
@@ -233,9 +303,18 @@
                               (impact-ring-ops
                                 cam-v (:end visible) (:ttl beam) (:max-ttl beam)))))
                           beams)
-        charge-plan (if (and hand-center-pos charge-state)
+        ;; RailgunHandEffect is ONE effect with two branches: the hand quad in
+        ;; first person, the 2x2 billboard on the player model otherwise. The
+        ;; world-anchored railgun_charge entity covers the second branch for
+        ;; every viewer including the caster, so drawing the hand quad outside
+        ;; first person played both animations at once.
+        charge-plan (if (and hand-center-pos charge-state
+                             (:first-person? hand-center-pos))
                       (charge-hand-ops
-                        (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
+                        (vec3/v3 (double (:x hand-center-pos))
+                                 (double (:y hand-center-pos))
+                                 (double (:z hand-center-pos)))
+                        (view-forward hand-center-pos)
                         charge-state)
                       [])]
     (when (or (seq beam-plan) (seq charge-plan))
