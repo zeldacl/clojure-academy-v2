@@ -17,7 +17,6 @@
                         [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
                         [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -200,11 +199,9 @@
                    (<= (long (or (:invulnerable-time entity) 0)) 0)
                    (consume-touch! player-id exp))
           (when (entity-damage/available?)
-            (md-damage/mark-target! player-id (:uuid entity)
-                                    {:ctx-id ctx-id
-                                     :target-pos {:x (:x entity)
-                                                  :y (:y entity)
-                                                  :z (:z entity)}})
+            ;; No rad-intensify mark here — upstream's touch attack is a plain
+            ;; MDDamageHelper.attack; the mark-target! call painted the rad
+            ;; skill's orange spark lines on every touched mob.
             (entity-damage/apply-direct-damage!
              world-id (:uuid entity)
              (cfg-lerp :combat.touch-damage exp)

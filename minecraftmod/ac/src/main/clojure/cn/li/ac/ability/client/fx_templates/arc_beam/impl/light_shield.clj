@@ -36,8 +36,8 @@
             (if-not (:active? st)
               acc
               (let [ticks (inc (long (or (:ticks st) 0)))]
-                ;; MdParticleFactory particles (matching original c_update:
-                ;; 30% per tick near the player).
+                ;; Upstream c_update: 30%/tick md particles near the player
+                ;; (MdParticleFactory — soft dots, not spark lines).
                 (when (< (rand) 0.3)
                   (let [s 0.5]
                     (client-particles/queue-particle-effect! (:queue-owner st)
