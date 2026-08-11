@@ -115,6 +115,9 @@
       (assoc-in store* [:charging owner-key*]
                 {:ttl charge-ttl
                  :max-ttl charge-ttl
+                 ;; Wall clock, so the hand quad picks frames off the same
+                 ;; timebase the entity billboard does — see charge-hand-ops.
+                 :started-ms (System/currentTimeMillis)
                  :source-player-id source-player-id})
 
       ;; RailgunHandEffect is a self-contained 1.6-second animation. Charging
@@ -365,10 +368,16 @@
   quarter block IN FRONT of the eye. Reading it as -0.24 along the look vector
   put the burst behind the near plane and nothing was visible at all."
   [^V3 hand-center ^V3 look-dir charge-state]
-  (let [elapsed-ms (* 50.0 (- (double (:max-ttl charge-state))
-                              (double (:ttl charge-state))))
+  (let [;; PER_FRAME is 40ms but a tick is 50, so counting frames off the tick
+        ;; counter paced the animation unevenly and drifted from the entity
+        ;; billboard (which reads age + partialTick). Both now run off elapsed
+        ;; milliseconds, so switching camera mid-burst does not jump a frame.
+        elapsed-ms (if-let [started (:started-ms charge-state)]
+                     (- (System/currentTimeMillis) (long started))
+                     (* 50.0 (- (double (:max-ttl charge-state))
+                                (double (:ttl charge-state)))))
         ;; 40 frames at 40ms each = 1.6s total animation
-        frame (min 39 (int (/ elapsed-ms 40.0)))
+        frame (max 0 (min 39 (int (/ (double elapsed-ms) 40.0))))
         texture-path (modid/asset-path
                        "textures"
                        (str "effects/arc_burst/" frame ".png"))

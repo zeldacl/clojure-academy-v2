@@ -467,3 +467,31 @@
     (is (seq body))
     (is (>= (count angles) 6)
         (str "the surface wraps the axis, buckets hit: " (sort angles)))))
+
+(deftest stranded-glow-bookkeeping-is-pruned-by-age-test
+  ;; on-charge-end! normally drops the entry, but that message does not always
+  ;; arrive — a caster who disconnects mid-charge never sends one. The entity
+  ;; disposes itself either way (life-ticks 32); this is about the map not
+  ;; growing for a whole session.
+  (let [handlers* (atom {})
+        clock (atom 1000000)]
+    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+                  fx-registry/register-fx-channel! (fn [topic handler]
+                                                     (swap! handlers* assoc topic handler)
+                                                     nil)
+                  client-bridge/run-client-effect! (fn [op _]
+                                                     (when (= op :mcmod/spawn-scripted-effect-at-player)
+                                                       (str "entity-" @clock)))
+                  ;; drive the prune clock
+                  railgun-fx/now-ms (fn [] @clock)]
+      (railgun-fx/init!)
+      (let [start! (get @handlers* :railgun/fx-charge-start)]
+        (start! "ctx-abandoned" :railgun/fx-charge-start
+                {:mode :charge-start :source-player-id "caster"})
+        (is (= 1 (count (railgun-fx/active-charge-glows))))
+        ;; a second charge well after the first one's entity has expired
+        (reset! clock (+ 1000000 5000))
+        (start! "ctx-fresh" :railgun/fx-charge-start
+                {:mode :charge-start :source-player-id "caster"})
+        (is (= ["ctx-fresh"] (keys (railgun-fx/active-charge-glows)))
+            "the stranded entry is gone, the live one is kept")))))

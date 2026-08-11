@@ -12,10 +12,35 @@
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
 ;; one-shot, matching the original RailgunHandEffect.
+;;
+;; Entries are keyed by ctx-id and normally dropped by on-charge-end!, but that
+;; message does not always arrive — a caster who disconnects mid-charge never
+;; sends one. The entity itself is fine either way (life-ticks 32 disposes it),
+;; so a stranded entry is only bookkeeping; prune it by age so the map cannot
+;; grow for a whole session.
 (defonce ^:private active-glows* (atom {}))
+
+;; The effect's own life (railgun_charge, entities/all.clj) plus a tick of slack.
+(def ^:private glow-life-ms 1650)
 
 (defn reset-charge-glows-for-test! []
   (reset! active-glows* {}))
+
+(defn active-charge-glows
+  "Live glow bookkeeping, for tests."
+  []
+  @active-glows*)
+
+(defn now-ms
+  "Wall clock for glow bookkeeping; a var so tests can drive it."
+  []
+  (System/currentTimeMillis))
+
+(defn- prune-stale [glows now-ms]
+  (into {}
+        (remove (fn [[_ {:keys [spawned-ms]}]]
+                  (>= (- (long now-ms) (long (or spawned-ms 0))) glow-life-ms)))
+        glows))
 
 (defn- on-charge-start! [ctx-id _channel payload]
   (when-let [owner-uuid (:source-player-id payload)]
@@ -23,10 +48,14 @@
                              :mcmod/spawn-scripted-effect-at-player
                              {:effect-id charge-glow-effect-id
                               :owner-uuid (str owner-uuid)})]
-      (swap! active-glows* assoc ctx-id entity-uuid))))
+      (let [now (now-ms)]
+        (swap! active-glows*
+               (fn [glows]
+                 (assoc (prune-stale glows now)
+                        ctx-id {:entity-uuid entity-uuid :spawned-ms now})))))))
 
 (defn- on-charge-end! [ctx-id _channel _payload]
-  (when-let [entity-uuid (get @active-glows* ctx-id)]
+  (when-let [entity-uuid (:entity-uuid (get @active-glows* ctx-id))]
     (client-bridge/run-client-effect!
       :mcmod/remove-local-scripted-effect
       {:entity-uuid entity-uuid})
