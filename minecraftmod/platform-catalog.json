@@ -257,7 +257,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-forge",
         "classifier": "forge-1.20.1"
       }
     },
@@ -344,7 +343,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-fabric",
         "classifier": "fabric-1.20.1",
         "finalTask": "remapJar",
         "runtimeLibraryPackaging": "shadow-remap"
@@ -433,7 +431,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-fabric",
         "classifier": "fabric-1.21.1",
         "finalTask": "remapJar",
         "runtimeLibraryPackaging": "shadow-remap"
@@ -513,7 +510,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-neoforge",
         "classifier": "neoforge-1.21.1"
       }
     },
@@ -590,7 +586,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-neoforge",
         "classifier": "neoforge-26.2",
         "finalTask": "jar"
       }
@@ -678,7 +673,6 @@
         "function": "init-platform!"
       },
       "artifact": {
-        "baseName": "academy-fabric",
         "classifier": "fabric-26.2",
         "finalTask": "jar",
         "runtimeLibraryPackaging": "loom-include"

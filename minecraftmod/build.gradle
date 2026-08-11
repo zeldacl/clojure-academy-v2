@@ -17,6 +17,21 @@ plugins {
 }
 
 ext {
+    def baseModVersion = findProperty("mod_version") ?: "0.0.0"
+    def artifactBaseName = findProperty("mod_artifact_base_name")?.toString()?.trim()
+    if (artifactBaseName == null || artifactBaseName.isEmpty()) {
+        throw new GradleException("mod_artifact_base_name must not be empty")
+    }
+    def releaseSuffix = findProperty("mod_release_suffix")?.toString()?.trim()
+    if (releaseSuffix != null && !releaseSuffix.isEmpty() &&
+        !(releaseSuffix ==~ /(?i)(alpha|beta|rc)[0-9]+/)) {
+        throw new GradleException(
+            "-Pmod_release_suffix must match alpha1, beta2, rc1, etc.; got '${releaseSuffix}'")
+    }
+    modVersion = releaseSuffix == null || releaseSuffix.isEmpty()
+        ? baseModVersion
+        : "${baseModVersion}-${releaseSuffix}"
+    modArtifactBaseName = artifactBaseName
     clojureVersions = [
         clojure: findProperty("clojure_version") ?: "1.13.0-alpha6",
         testCheck: findProperty("clojure_test_check_version") ?: "1.1.1",
@@ -41,7 +56,7 @@ ext {
 
 allprojects {
     group = rootProject.findProperty("mod_group")
-    version = rootProject.findProperty("mod_version")
+    version = rootProject.ext.modVersion
 
     repositories {
         mavenCentral()
