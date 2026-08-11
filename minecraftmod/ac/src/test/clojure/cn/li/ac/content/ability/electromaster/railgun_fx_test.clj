@@ -289,6 +289,14 @@
                   (Math/pow (- (.-y a) (.-y b)) 2)
                   (Math/pow (- (.-z a) (.-z b)) 2)))))
 
+(defn- axis-radius
+  "Distance from a vertex to the beam axis. Test beams run along +x at
+  y = 64, z = 0, so this is the tube's radius at that vertex."
+  [op key]
+  (let [^cn.li.mcmod.math.V3 p (get op key)]
+    (Math/sqrt (+ (Math/pow (- (.-y p) 64.0) 2)
+                  (Math/pow (.-z p) 2)))))
+
 (defn- quad-extent
   "Largest distance between any two quad corners in the op list."
   [ops]
@@ -362,14 +370,13 @@
   (tick-fx! 4)
   (let [plan (arc-beam/effect-build-plan
                :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0)
-        ;; the strip quads carry their width on the p0-p1 edge
-        widths (keep (fn [op] (when (re-find #"effects/arc\.png" (str (:texture op)))
-                                (edge-width op)))
-                     (:ops plan))]
-    (is (seq widths))
+        radii (keep (fn [op] (when (re-find #"effects/arc\.png" (str (:texture op)))
+                               (axis-radius op :p0)))
+                    (:ops plan))]
+    (is (seq radii))
     ;; getWidth() adds a [0, 0.3] wiggle on top of the shrink factor, so the
-    ;; bore peaks at 1.3x nominal — 2 * 0.13 * 1.3.
-    (is (< (apply max widths) 0.35)
+    ;; bore peaks at 1.3x nominal.
+    (is (< (apply max radii) 0.17)
         "the outer cylinder is 0.13 in radius, not the 0.45 the port had")))
 
 (deftest glow-is-three-boards-with-soft-caps-test
@@ -421,18 +428,42 @@
         beam (filter #(and (= :quad (:kind %))
                            (re-find #"effects/arc\.png" (str (:texture %))))
                      ops)
-        half-width (fn [op] (* 0.5 (edge-width op)))
         xs (fn [op] (.-x ^cn.li.mcmod.math.V3 (:p0 op)))
-        widths (sort-by first (map (juxt xs half-width) beam))]
-    (is (>= (count beam) 10) "two layers, each a multi-segment strip")
-    (is (< (second (first widths)) 0.01)
-        "the strip starts at zero width — the nose tip")
-    (is (< 0.12 (apply max (map second widths)) 0.18)
+        radii (sort-by first (map (juxt xs #(axis-radius % :p0)) beam))]
+    (is (>= (count beam) 100) "two tubes, each a multi-segment surface")
+    (is (< (second (first radii)) 0.01)
+        "the tube starts at zero radius — the nose tip")
+    (is (< 0.12 (apply max (map second radii)) 0.18)
         "and reaches the 0.13 outer radius in the body (plus the width wiggle)")
-    ;; the sqrt profile: at a quarter of the nose length it is already half
-    ;; the final radius, which a linear taper would not be
-    ;; both layers taper, so take the widest sample a quarter into the nose
-    (let [nose (filter (fn [[x _]] (< 0.0 x 0.13)) widths)]
+    ;; the sqrt profile: a quarter into the nose it is already half the final
+    ;; radius, which a straight cone would not be. Both layers taper, so take
+    ;; the widest sample in that band.
+    (let [nose (filter (fn [[x _]] (< 0.0 x 0.13)) radii)]
       (is (seq nose))
       (is (> (apply max (map second nose)) (* 0.4 0.13))
           "sqrt profile — already ~half the radius a quarter in, not a cone"))))
+
+(deftest ray-is-a-tube-not-a-flat-strip-test
+  ;; RendererRayCylinder is a DIV=12 surface of revolution. A flat strip keeps
+  ;; its width only from the one angle it is turned to and thins out from any
+  ;; other, which is what made the ray read as a flat sliver.
+  (fire-beam! "ctx-tube" 20.0)
+  (tick-fx! 4)
+  (let [ops (:ops (arc-beam/effect-build-plan
+                    :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0))
+        beam (filter #(and (= :quad (:kind %))
+                           (re-find #"effects/arc\.png" (str (:texture %))))
+                     ops)
+        ;; sample the full-bore vertices and look at where the surface sits
+        ;; around the axis: a tube covers every angle, a strip only two
+        body (filter (fn [op] (> (axis-radius op :p0) 0.1)) beam)
+        angles (into #{}
+                     (map (fn [op]
+                            (let [^cn.li.mcmod.math.V3 p (:p0 op)]
+                              ;; quantise to 45-degree buckets
+                              (int (Math/floor (/ (+ Math/PI (Math/atan2 (.-z p) (- (.-y p) 64.0)))
+                                                  (/ Math/PI 4.0)))))))
+                     body)]
+    (is (seq body))
+    (is (>= (count angles) 6)
+        (str "the surface wraps the axis, buckets hit: " (sort angles)))))

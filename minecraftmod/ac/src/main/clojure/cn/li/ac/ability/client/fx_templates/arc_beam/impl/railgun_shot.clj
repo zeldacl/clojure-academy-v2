@@ -251,33 +251,53 @@
       (concat nose-pts tail-pts)
       (concat nose-pts [[length radius]] tail-pts))))
 
-(defn- tapered-ray-ops
-  "Emit a camera-facing strip whose half-width follows `ray-profile`."
+;; RendererRayCylinder's DIV.
+(def ^:private tube-segments 12)
+
+(defn- tapered-tube-ops
+  "The cylinder as a surface of revolution following `ray-profile`: a real tube
+  with a paraboloid nose at each end, which is what RendererRayCylinder draws.
+
+  A flat strip has the same silhouette only from the one angle it is turned to;
+  from anywhere else it thins out, which is why the ray read as a flat sliver."
   ;; No primitive hints: Clojure only allows them on fns of four args or fewer.
-  [texture ^V3 cam-pos ^V3 start ^V3 end radius head-fix color]
+  [texture ^V3 start ^V3 end radius head-fix color]
   (let [delta (vec3/v- end start)
         length (vec3/vlen delta)
         radius (double radius)]
     (when (and (> length 1.0e-5) (> radius 1.0e-5))
       (let [dir (vec3/vnorm delta)
-            right (ru/beam-right-axis start end cam-pos)
-            at (fn [d w]
-                 (let [c (vec3/v+ start (vec3/v* dir (double d)))
-                       o (vec3/v* right (double w))]
-                   [(vec3/v+ c o) (vec3/v- c o)]))
+            candidate (if (< (Math/abs (.-y ^V3 dir)) 0.9) vec3/unit-y vec3/unit-x)
+            right (vec3/vnorm (vec3/vcross candidate dir))
+            up (vec3/vnorm (vec3/vcross dir right))
+            dtheta (/ (* 2.0 Math/PI) (double tube-segments))
+            ring (vec (for [i (range (inc tube-segments))
+                            :let [a (* (double i) dtheta)]]
+                        (vec3/v+ (vec3/v* right (Math/cos a))
+                                 (vec3/v* up (Math/sin a)))))
+            at (fn [d w u]
+                 (vec3/v+ (vec3/v+ start (vec3/v* dir (double d)))
+                          (vec3/v* u (double w))))
             pts (vec (ray-profile length radius (double head-fix)))]
         (vec
           (for [[[d0 w0] [d1 w1]] (partition 2 1 pts)
-                :let [[a0 b0] (at d0 w0)
-                      [a1 b1] (at d1 w1)]]
-            (ru/quad-op texture a0 b0 b1 a1 color)))))))
+                i (range tube-segments)
+                :let [ua (nth ring i)
+                      ub (nth ring (inc i))]]
+            (ru/quad-op texture
+                        (at d0 w0 ua) (at d0 w0 ub)
+                        (at d1 w1 ub) (at d1 w1 ua)
+                        color)))))))
 
 (defn- railgun-beam-ops
-  "The two cylinders of RendererRayComposite, drawn as camera-facing strips —
-  a tube around the axis reads as a transparent hollow pipe from the caster's
-  own view, a strip reads solid. Both now taper into the paraboloid nose the
-  cylinder mesh has at each end instead of stopping at a square edge."
-  [^V3 cam-pos beam]
+  "The two cylinders of RendererRayComposite: an outer 0.13 tube and an inner
+  0.09 core, each with the paraboloid nose at both ends.
+
+  These are tubes, not billboards. The port went flat because a tube seen from
+  the caster's own eye — which sits exactly on the axis of an eye-spawned ray —
+  reads as a hollow pipe; that is what hand-muzzle-pos already solves, by
+  starting the ray off to the side of the camera."
+  [^V3 _cam-pos beam]
   (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
         w (width-factor beam life)
         fade (fade-out-factor life)
@@ -289,10 +309,10 @@
         line-color (ru/with-alpha (:line-rgb railgun-beam-style)
                                   (int (+ 40.0 (* 120.0 fade))))]
     (concat
-      (tapered-ray-ops texture cam-pos (:start beam) (:end beam)
-                       (* 0.13 w) 1.0 outer-color)
-      (tapered-ray-ops texture cam-pos (:start beam) (:end beam)
-                       (* 0.09 w) inner-head-fix inner-color)
+      (tapered-tube-ops texture (:start beam) (:end beam)
+                        (* 0.13 w) 1.0 outer-color)
+      (tapered-tube-ops texture (:start beam) (:end beam)
+                        (* 0.09 w) inner-head-fix inner-color)
       ;; Port enhancement kept: a bright cyan core line down the axis.
       [(ru/line-op (:start beam) (:end beam) line-color)])))
 
@@ -339,7 +359,11 @@
   and forward of where the player is looking. The port had been adding them to
   world x/y/z, so the burst drifted off the hand as soon as the player turned,
   and the quad itself was axis-aligned in world space rather than facing the
-  camera, so it vanished edge-on at the wrong angles."
+  camera, so it vanished edge-on at the wrong angles.
+
+  Note the Z sign: OpenGL's camera looks down -Z, so upstream's -.24 is a
+  quarter block IN FRONT of the eye. Reading it as -0.24 along the look vector
+  put the burst behind the near plane and nothing was visible at all."
   [^V3 hand-center ^V3 look-dir charge-state]
   (let [elapsed-ms (* 50.0 (- (double (:max-ttl charge-state))
                               (double (:ttl charge-state))))
@@ -354,7 +378,7 @@
         center (vec3/v+ hand-center
                         (vec3/v+ (vec3/v* right 0.26)
                                  (vec3/v+ (vec3/v* up -0.15)
-                                          (vec3/v* forward -0.24))))
+                                          (vec3/v* forward 0.24))))
         rx (vec3/v* right half-size)
         uy (vec3/v* up half-size)
         p0 (vec3/v- (vec3/v- center rx) uy)

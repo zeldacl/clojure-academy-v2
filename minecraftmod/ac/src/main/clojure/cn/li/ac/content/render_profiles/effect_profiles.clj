@@ -74,7 +74,13 @@
                ;; by 0.4, and that path is the hand quad in impl/railgun_shot.)
                :half-size 1.0
                :offset-y 0.8
-               :offset-z -1.0}}
+               ;; Upstream's glTranslated(0, 1.8, -1) is in the player MODEL
+               ;; space, which RenderLivingBase has already spun by
+               ;; 180 - renderYawOffset — so -1 on Z there is one block IN
+               ;; FRONT. This renderer's offset frame is the owner's own yaw
+               ;; (+Z is where they are looking), so it needs +1: with -1 the
+               ;; burst hung behind the caster's head.
+               :offset-z 1.0}}
 
      ;; EntityCoinThrowing/RendererCoinThrowing: two-sided coin, player-relative
      ;; offset, 0.3 scale and a 300 ms full rotation around a per-entity axis.
