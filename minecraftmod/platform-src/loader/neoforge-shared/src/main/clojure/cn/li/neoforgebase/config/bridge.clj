@@ -1,6 +1,7 @@
 (ns cn.li.neoforgebase.config.bridge
   (:require [clojure.string :as str]
             [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.platform.neutral.config :as neutral-config]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.util.log :as log])
@@ -33,7 +34,7 @@
   [domain extension]
   (let [ns-part (namespace domain)
         name-part (name domain)]
-    (str ns-part "-" name-part extension)))
+    (neutral-config/config-file-path (str ns-part "-" name-part extension))))
 
 (defn- section-segments
   [descriptor]

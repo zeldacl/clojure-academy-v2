@@ -9,6 +9,7 @@
   {:mod-id (constantly config/mod-id)
    :asset-path config/asset-path
    :namespaced-path config/namespaced-path
+   :config-file-path config/config-file-path
    :get-all-config-domains registry/get-all-config-domains
    :get-config-descriptors registry/get-config-descriptors
    :get-config-values registry/get-config-values

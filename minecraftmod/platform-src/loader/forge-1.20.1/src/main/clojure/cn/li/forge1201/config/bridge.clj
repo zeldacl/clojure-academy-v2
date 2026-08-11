@@ -32,7 +32,7 @@
   [domain extension]
   (let [ns-part (namespace domain)
         name-part (name domain)]
-    (str ns-part "-" name-part extension)))
+    (config-reg/config-file-path (str ns-part "-" name-part extension))))
 
 (defn- section-segments
   [descriptor]

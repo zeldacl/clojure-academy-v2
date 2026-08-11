@@ -36,6 +36,11 @@
   ([modid path]
    (str modid ":" path)))
 
+(defn config-file-path
+  "Place a configuration file below the current mod-id directory."
+  [file-name]
+  (str mod-id "/" file-name))
+
 (defn asset-path
   "Create an asset resource path string: 'modid:category/filename'."
   ([category filename]

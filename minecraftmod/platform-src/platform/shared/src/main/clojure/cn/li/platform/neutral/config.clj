@@ -7,6 +7,7 @@
 (def mod-id nil)
 (defn asset-path [& _] (unavailable :asset-path))
 (defn namespaced-path [& _] (unavailable :namespaced-path))
+(defn config-file-path [& _] (unavailable :config-file-path))
 (defn get-all-config-domains [& _] (unavailable :get-all-config-domains))
 (defn get-config-descriptors [& _] (unavailable :get-config-descriptors))
 (defn get-config-values [& _] (unavailable :get-config-values))
@@ -20,6 +21,7 @@
   {:mod-id #'mod-id
    :asset-path #'asset-path
    :namespaced-path #'namespaced-path
+   :config-file-path #'config-file-path
    :get-all-config-domains #'get-all-config-domains
    :get-config-descriptors #'get-config-descriptors
    :get-config-values #'get-config-values
