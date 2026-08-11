@@ -132,10 +132,9 @@
       (fn [this key-code scan-code modifiers]
         (if-let [m (modal/active-modal rt)]
           (do (modal/modal-key! m key-code scan-code modifiers) true)
-          (let [handled (input/handle-key-pressed rt key-code scan-code modifiers)]
-            (when (and handled (= (long key-code) 256))
-              (close-screen! this))
-            handled)))
+          (if (= (long key-code) 256)
+            (do (close-screen! this) true)
+            (input/handle-key-pressed rt key-code scan-code modifiers))))
       (fn [_this code-point modifiers]
         (if-let [m (modal/active-modal rt)]
           (do (modal/modal-char! m code-point) true)
