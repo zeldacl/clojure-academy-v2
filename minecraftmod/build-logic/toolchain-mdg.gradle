@@ -19,6 +19,52 @@ if (!neoForgeVer) {
     throw new GradleException("MDG target '${targetId}' must declare dependencies.neoForgeVersion")
 }
 
+// ModDevGradle uses NeoForge's official Jar-in-Jar configuration. Keep the
+// exact versions aligned with the shared runtime classpath and pin each one
+// so the published mod is self-contained and reproducible.
+//
+// MDG reads the source manifest while creating Jar-in-Jar metadata. The
+// published malli artifact has no manifest, so normalize all four runtime
+// jars into task outputs with a minimal manifest before handing them to MDG.
+def preparedJarJarLibraries = clojureRuntimeLibraries.collect { dependencyNotation ->
+    def coordinates = dependencyNotation.toString().split(":", 3)
+    def group = coordinates[0]
+    def name = coordinates[1]
+    def dependencyVersion = coordinates[2]
+    tasks.register("prepare${name.replaceAll(/[^A-Za-z0-9]/, '')}JarJar", Jar) {
+        archiveBaseName.set(name)
+        archiveVersion.set(dependencyVersion)
+        // Keep inputs outside MDG's own generated/jarJar output directory;
+        // the jarJar task clears that directory before writing metadata.
+        destinationDirectory.set(layout.buildDirectory.dir("tmp/jarJarInputs"))
+        from {
+            def expectedName = "${name}-${dependencyVersion}.jar"
+            def source = configurations.runtimeClasspath.files.find { it.name == expectedName }
+            if (source == null) {
+                throw new GradleException("Missing resolved Clojure runtime library ${dependencyNotation}")
+            }
+            zipTree(source)
+        }
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        manifest {
+            attributes(
+                "Manifest-Version": "1.0",
+                "Automatic-Module-Name": "${group}.${name}"
+            )
+        }
+    }
+}
+
+dependencies {
+    preparedJarJarLibraries.each { preparedJar ->
+        jarJar(files(preparedJar))
+    }
+}
+
+tasks.named("jarJar").configure {
+    dependsOn preparedJarJarLibraries
+}
+
 neoForge {
     version = neoForgeVer
     mods {

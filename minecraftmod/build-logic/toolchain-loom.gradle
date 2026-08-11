@@ -92,6 +92,16 @@ dependencies {
     } else {
         throw new GradleException("Unsupported loader '${target.loader}' for target '${target.id}'")
     }
+
+    // Architectury Loom's include configuration is the Jar-in-Jar mechanism
+    // for Forge, NeoForge, and Fabric. It creates nested dependency jars in
+    // the final remapped archive instead of relying on users to install
+    // ordinary library jars in the mods directory.
+    if (runtimeLibraryPackaging == "loom-include") {
+        clojureRuntimeLibraries.each { dependencyNotation ->
+            include(dependencyNotation)
+        }
+    }
 }
 
 def stripPlatformOutputLvt = tasks.register("stripPlatformOutputLvt") {
@@ -140,7 +150,7 @@ tasks.matching { it.name == "shadowJar" }.configureEach {
 
 def remapInputArchive = tasks.named("jar", Jar).flatMap { it.archiveFile }
 def remapInputTask = tasks.named("jar")
-if (target.loader == "fabric") {
+if (target.loader == "fabric" && runtimeLibraryPackaging == "shadow-remap") {
     def shadowArchive = tasks.named("shadowJar", Jar).flatMap { it.archiveFile }
     def strippedShadowArchive = layout.buildDirectory.file("libs/${target.artifact.baseName}-${project.version}-${target.artifact.classifier}-shadow-stripped.jar")
     def stripShadowJarLvt = tasks.register("stripShadowJarLvt") {
