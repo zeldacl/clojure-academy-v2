@@ -22,7 +22,6 @@
          (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
          (try
            (let [screen (screen-creator menu player-inventory title)]
-             (log/info "[SCREEN-FACTORY] Screen instance returned:" (class screen))
              screen)
            (catch Throwable e
              (log/error "[SCREEN-FACTORY] Screen creation failed:" (.getMessage e))

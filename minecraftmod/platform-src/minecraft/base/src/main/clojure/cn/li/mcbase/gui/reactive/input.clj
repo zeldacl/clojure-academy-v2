@@ -41,8 +41,7 @@
 (defn handle-mouse-dragged [^UiRt rt left top mouse-x mouse-y button _drag-x _drag-y]
   (let [mx (- (double mouse-x) (double left))
         my (- (double mouse-y) (double top))]
-    (events/dispatch-mouse-drag! rt mx my button)
-    true))
+    (boolean (events/dispatch-mouse-drag! rt mx my button))))
 
 (defn handle-mouse-moved
   "Track hovered node: update hovered-idx + FLAG-HOVERED on nodes so

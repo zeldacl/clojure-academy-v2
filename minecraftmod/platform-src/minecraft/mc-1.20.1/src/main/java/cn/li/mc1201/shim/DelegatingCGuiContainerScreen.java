@@ -1,13 +1,11 @@
 package cn.li.mc1201.shim;
 
 import cn.li.mc1201.gui.CGuiContainerScreen;
-import com.mojang.logging.LogUtils;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import clojure.lang.IFn;
-import org.slf4j.Logger;
 
 /** Universal CGuiContainerScreen skeleton — replaces all proxy sites
  *  extending CGuiContainerScreen.  Each IFn callback receives the
@@ -26,24 +24,9 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     private IFn keyPressedFn;
     private IFn charTypedFn;
     private IFn removedFn;
-    private boolean initLogged;
-    private boolean renderLogged;
-    private boolean removedLogged;
-
-    private static final Logger LOG = LogUtils.getLogger();
 
     public DelegatingCGuiContainerScreen(T menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
-    }
-
-    @Override
-    protected void init() {
-        super.init();
-        if (!initLogged) {
-            initLogged = true;
-            LOG.info("[academy] [CONTAINER-SCREEN] init class={} size={}x{} image={}x{} left={} top={}",
-                    getClass().getName(), width, height, imageWidth, imageHeight, leftPos, topPos);
-        }
     }
 
     // -- with* setters --
@@ -63,11 +46,6 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     // -- Delegated methods --
 
     @Override public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        if (!renderLogged) {
-            renderLogged = true;
-            LOG.info("[academy] [CONTAINER-SCREEN] render entered class={} size={}x{}",
-                    getClass().getName(), width, height);
-        }
         if (renderFn != null) {
             renderFn.invoke(this, gg, mouseX, mouseY, partialTick);
         } else {
@@ -147,10 +125,6 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     }
 
     @Override public void removed() {
-        if (!removedLogged) {
-            removedLogged = true;
-            LOG.info("[academy] [CONTAINER-SCREEN] removed class={}", getClass().getName());
-        }
         if (removedFn != null) {
             removedFn.invoke(this);
         } else {

@@ -17,7 +17,8 @@
     (try
       (f rt node evt)
       (catch Throwable e
-        (log/stacktrace (str "UI event handler threw (" event-key ")") e)))))
+        (log/stacktrace (str "UI event handler threw (" event-key ")") e))))
+  true)
 
 (defn on! [^UiRt rt id event-key f]
   (if-let [^INode node (rt/node-by-id rt id)]
@@ -148,14 +149,25 @@
 
 (defn dispatch-mouse-press! [^UiRt rt mx my button]
   (let [^INode hit (layout/hit-test rt (double mx) (double my))
-        hit-idx (if hit (.getIdx hit) -1)]
-    (rt/set-drag-node-idx! rt hit-idx)
-    (rt/set-drag-start-mx! rt (double mx))
-    (rt/set-drag-start-my! rt (double my))
-    (rt/set-drag-start-ms! rt (System/currentTimeMillis))
-    (rt/set-dragging?! rt false)
-    (gain-focus! rt hit-idx)
-    (dispatch-click! rt mx my button :left-click)))
+        hit-idx (if hit (.getIdx hit) -1)
+        handled? (boolean (dispatch-click! rt mx my button :left-click))]
+    (if handled?
+      (do
+        (rt/set-drag-node-idx! rt hit-idx)
+        (rt/set-drag-start-mx! rt (double mx))
+        (rt/set-drag-start-my! rt (double my))
+        (rt/set-drag-start-ms! rt (System/currentTimeMillis))
+        (rt/set-dragging?! rt false)
+        (gain-focus! rt hit-idx)
+        true)
+      (do
+        ;; Visual-only nodes (for example background images) must not claim
+        ;; the click. Clear UI state so the vanilla container can process the
+        ;; same mouse press for an inventory slot.
+        (rt/set-drag-node-idx! rt -1)
+        (rt/set-dragging?! rt false)
+        (gain-focus! rt -1)
+        false))))
 
 (defn dispatch-mouse-release! [^UiRt rt mx my button]
   (let [was-dragging? (rt/dragging? rt)]
@@ -170,24 +182,29 @@
 
 (defn dispatch-mouse-drag! [^UiRt rt mx my button]
   (let [node-idx (rt/drag-node-idx rt)]
-    (when (>= node-idx 0)
-      (if (rt/dragging? rt)
-        (when-let [handlers (rt/get-event-handlers rt node-idx :drag)]
-          (when-let [^INode node (rt/node-by-idx rt node-idx)]
-            (let [evt {:x mx :y my :button button :node-idx node-idx
-                       :dx (- (double mx) (rt/drag-start-mx rt))
-                       :dy (- (double my) (rt/drag-start-my rt))
-                       :start-mx (rt/drag-start-mx rt) :start-my (rt/drag-start-my rt)}]
-              (invoke-handlers! :drag handlers rt node evt))))
-        (let [dx (Math/abs (- (double mx) (rt/drag-start-mx rt)))
-              dy (Math/abs (- (double my) (rt/drag-start-my rt)))]
-          (when (or (> dx 4.0) (> dy 4.0))
-            (rt/set-dragging?! rt true)
-            (when-let [handlers (rt/get-event-handlers rt node-idx :drag-start)]
-              (when-let [^INode node (rt/node-by-idx rt node-idx)]
-                (let [evt {:x mx :y my :button button :node-idx node-idx
-                           :start-mx (rt/drag-start-mx rt) :start-my (rt/drag-start-my rt)}]
-                  (invoke-handlers! :drag-start handlers rt node evt))))))))))
+    (if (>= node-idx 0)
+      (do
+        (if (rt/dragging? rt)
+          (when-let [handlers (rt/get-event-handlers rt node-idx :drag)]
+            (when-let [^INode node (rt/node-by-idx rt node-idx)]
+              (let [evt {:x mx :y my :button button :node-idx node-idx
+                         :dx (- (double mx) (rt/drag-start-mx rt))
+                         :dy (- (double my) (rt/drag-start-my rt))
+                         :start-mx (rt/drag-start-mx rt)
+                         :start-my (rt/drag-start-my rt)}]
+                (invoke-handlers! :drag handlers rt node evt))))
+          (let [dx (Math/abs (- (double mx) (rt/drag-start-mx rt)))
+                dy (Math/abs (- (double my) (rt/drag-start-my rt)))]
+            (when (or (> dx 4.0) (> dy 4.0))
+              (rt/set-dragging?! rt true)
+              (when-let [handlers (rt/get-event-handlers rt node-idx :drag-start)]
+                (when-let [^INode node (rt/node-by-idx rt node-idx)]
+                  (let [evt {:x mx :y my :button button :node-idx node-idx
+                             :start-mx (rt/drag-start-mx rt)
+                             :start-my (rt/drag-start-my rt)}]
+                    (invoke-handlers! :drag-start handlers rt node evt)))))))
+        true)
+      false)))
 
 (defn unbind-subtree! [^UiRt rt ^INode node]
   (rt/unbind-subtree! rt node))

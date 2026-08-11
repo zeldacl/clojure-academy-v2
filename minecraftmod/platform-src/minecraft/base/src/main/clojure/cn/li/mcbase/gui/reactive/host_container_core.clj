@@ -20,8 +20,7 @@
             [cn.li.mcbase.gui.reactive.modal :as modal]
             [cn.li.mcbase.gui.reactive.embed :as embed]
             [cn.li.platform.neutral.tabbed-gui :as tabbed-gui])
-  (:import [cn.li.mcmod.uipojo.runtime UiRt]
-           [cn.li.mcmod.ui.node INode]))
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]))
 
 (defn- slots-active?
   [screen-data]
@@ -40,19 +39,15 @@
     [(- (double mx) (double left))
      (- (double my) (double top))]))
 
-(defn- hit-ui?
-  [^UiRt rt gui-offsets screen mx my]
-  (let [[lx ly] (local-mouse gui-offsets screen mx my)]
-    (boolean (layout/hit-test rt lx ly))))
-
 (defn- handle-container-click!
   [^UiRt rt gui-offsets screen mx my button slots-active? super-click!]
   (let [[lx ly] (local-mouse gui-offsets screen mx my)
-        hit (layout/hit-test rt lx ly)]
-    (when hit (events/dispatch-mouse-press! rt lx ly button))
+        hit (layout/hit-test rt lx ly)
+        ui-handled? (and hit (events/dispatch-mouse-press! rt lx ly button))]
     (cond
-      hit true
+      ui-handled? true
       (and slots-active? super-click!) (super-click!)
+      hit true
       :else false)))
 
 (defn create-reactive-container-screen*
@@ -81,24 +76,6 @@
           (rt/flush! rt)
           (layout/ensure-layout! rt)
           (layout/ensure-tape! rt)
-          ;; Container screens use a different Minecraft render lifecycle from
-          ;; ordinary Screen instances.  Keep one compact breadcrumb for the
-          ;; first frame so a screen that is created successfully but never
-          ;; becomes visible can be diagnosed without flooding the log.
-          (when-not (rt/user-signal rt :container-render-diagnosed?)
-            (let [[left top] (gui-offset gui-offsets this)
-                  ^objects tape (rt/get-tape-arr rt)
-                  ^INode root (rt/node-by-idx rt 0)]
-              (log/info "[CONTAINER-RENDER] entered"
-                        "screen=" (class this)
-                        "screen-size=" (screen-dimensions this)
-                        "gui-offset=" [left top]
-                        "tape-size=" (alength tape)
-                        "root=" (when root
-                                  {:visible? (.isVisible root)
-                                   :size [(.getW root) (.getH root)]
-                                   :abs [(.getAbsX root) (.getAbsY root)]}))
-              (rt/put-user-signal! rt :container-render-diagnosed? true)))
           (if (slots-active?*)
             (super-render! this gg mx my pt)
             (let [[left top] (gui-offset gui-offsets this)]
@@ -139,11 +116,11 @@
             (modal/modal-mouse-drag! m lx ly button)
             true)
           (do
-            (let [[left top] (gui-offset gui-offsets this)]
-              (input/handle-mouse-dragged rt left top mx my button dx dy))
-            (if (and (slots-active?*) (not (hit-ui? rt gui-offsets this mx my)))
-              (super-mouse-dragged! this mx my button dx dy)
-              true))))
+            (let [[left top] (gui-offset gui-offsets this)
+                  ui-handled? (input/handle-mouse-dragged rt left top mx my button dx dy)]
+              (if (and (slots-active?*) (not ui-handled?))
+                (super-mouse-dragged! this mx my button dx dy)
+                true)))))
       (fn [this mx my]
         (when-not (modal/active-modal rt)
           (let [[left top] (gui-offset gui-offsets this)]

@@ -202,20 +202,10 @@
                                            quick-move-error-prefix "Error in quickMoveStack:"}}]
   (let [owner (owner-for-player player)
         clj-container (enrich-container-owner clj-container owner)
-        validation-logged? (atom false)
         ^DelegatingCMenuBridgeBase menu
         (doto (new-menu-bridge menu-type (int window-id))
                (.withStillValid (fn [_this player]
-                 (let [valid? (boolean (platform/safe-validate clj-container player))]
-                   (when-not @validation-logged?
-                     (reset! validation-logged? true)
-                     (log/info "[MENU-VALID] first stillValid check:" valid?
-                               "container-type=" (:container-type clj-container)
-                               "gui-id=" (:gui-id clj-container)
-                               "same-player?=" (= player (:player clj-container))
-                               "check-player=" (str player)
-                               "container-player=" (str (:player clj-container))))
-                   valid?)))
+                 (boolean (platform/safe-validate clj-container player))))
 
                (.withRemoved (fn [this player]
                  (remove-menu!
