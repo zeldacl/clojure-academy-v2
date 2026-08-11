@@ -3,6 +3,7 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :as test]
+            [cn.li.test-support.runtime-facades :as runtime-facades]
             [cn.li.mcmod.framework :as fw]))
 
 (defn- test-file?
@@ -129,9 +130,10 @@
   [thunk]
   (let [prev fw/framework]
     (try
-      (when-let [fw-inst (fw/create-framework)]
-        (alter-var-root #'fw/framework (constantly fw-inst)))
-      (thunk)
+       (when-let [fw-inst (fw/create-framework)]
+         (alter-var-root #'fw/framework (constantly fw-inst)))
+       (runtime-facades/install!)
+       (thunk)
       (finally
         (alter-var-root #'fw/framework (constantly prev))))))
 

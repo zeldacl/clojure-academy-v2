@@ -3,18 +3,18 @@
   (:require [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.world.level Level]))
 
-(defonce ^:private *open-gui-fn*
+(defonce ^:private open-gui-fn*
   (atom nil))
 
 (defn install-open-gui!
   "Install (fn [player gui-id tile-entity] ...) used by open-gui-for-result."
   [f]
-  (reset! *open-gui-fn* f)
+  (reset! open-gui-fn* f)
   f)
 
 (defn open-gui-for-result
   [gui-id player world _pos tile-entity]
   (when (and tile-entity (not (.isClientSide ^Level world)))
     (log/info "[RIGHT-CLICK] Opening GUI on server side...")
-    (when-let [f @*open-gui-fn*]
+    (when-let [f @open-gui-fn*]
       (f player gui-id tile-entity))))

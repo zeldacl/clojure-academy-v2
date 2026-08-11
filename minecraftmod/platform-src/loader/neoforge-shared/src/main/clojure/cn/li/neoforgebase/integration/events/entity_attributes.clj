@@ -5,19 +5,19 @@
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.registries DeferredHolder]))
 
-(defonce ^:private *register-mob-attrs*
+(defonce ^:private register-mob-attrs*
   (atom nil))
 
 (defn install-register-mob-attrs!
   "Install (fn [event entity-type] ...) → ModEntities/registerMobDefaultAttributes."
   [f]
-  (reset! *register-mob-attrs* f)
+  (reset! register-mob-attrs* f)
   f)
 
 (defn handle-entity-attribute-creation
   "Register PathfinderMob default attributes for every :scripted-mob entity type."
   [^net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent event]
-  (let [register! @*register-mob-attrs*]
+  (let [register! @register-mob-attrs*]
     (when (nil? register!)
       (throw (IllegalStateException. "entity-attributes register-mob-attrs not installed")))
     (doseq [entity-id (edsl/list-entities)]

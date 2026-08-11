@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.mcbase.client.render.script-render-compiler :as compiler]
             [cn.li.mcbase.client.render.script-render-runtime :as runtime]
-            [cn.li.mcmod.client.render.script-render-registry :as registry]
-            [cn.li.mcmod.config.script-render :as render-config]))
+            [cn.li.platform.neutral.client-render :as registry]
+            [cn.li.platform.neutral.config :as render-config]))
 
 (def ^:private renderer-a "renderer.a")
 (def ^:private renderer-b "renderer.b")

@@ -1,7 +1,7 @@
 (ns cn.li.neoforge1211.platform.bindings-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.neoforge1211.platform.bindings :as bindings]
-            [cn.li.mcmod.protocol.metadata :as registry-metadata]))
+            [cn.li.platform.registry.metadata :as registry-metadata]))
 
 (deftest block-id-candidates-test
   (testing "keeps the DSL id and appends the registry name when available"

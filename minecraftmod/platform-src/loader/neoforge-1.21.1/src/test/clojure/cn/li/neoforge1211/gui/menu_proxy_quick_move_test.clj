@@ -1,7 +1,7 @@
 (ns cn.li.neoforge1211.gui.menu-proxy-quick-move-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcbase.gui.menu.proxy :as menu-proxy]
-            [cn.li.mcmod.gui.tabbed-gui :as tabbed]))
+            [cn.li.platform.neutral.tabbed-gui :as tabbed]))
 
 (deftest quick-move-allowed-policy-test
   (testing "non-tabbed containers always allow quick-move"
