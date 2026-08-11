@@ -5,6 +5,7 @@ import clojure.lang.IFn;
 import cn.li.neoforge1211.MyMod1211;
 import cn.li.neoforge1211.entity.ModEntities;
 import cn.li.mcbase.clj.ClojureInterop;
+import cn.li.mc1211.client.effects.particle.MdParticle;
 import cn.li.mc1211.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1211.client.render.EffectRendererDispatcher;
 import org.apache.logging.log4j.LogManager;
@@ -22,6 +23,9 @@ import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
 import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
 import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.core.particles.ParticleType;
+import net.minecraft.core.particles.SimpleParticleType;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EntityType;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
@@ -115,8 +119,21 @@ public final class ForgeClientRenderRegistry {
         // Content-specific item decorators are registered by descriptor-driven client hooks.
     }
 
-    public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
-        // Content modules register their own particle providers during client init.
+        public static void registerParticleProviders(RegisterParticleProvidersEvent event) {
+        // Meltdowner md particles (md_particle / md_particle_luck sprites from
+        // the mod's particles.json atlas) — upstream MdParticleFactory.
+        registerMdParticleProvider(event, "md_particle");
+        registerMdParticleProvider(event, "md_particle_luck");
+    }
+
+    private static void registerMdParticleProvider(RegisterParticleProvidersEvent event, String id) {
+        ResourceLocation key = ResourceLocation.fromNamespaceAndPath(MyMod1211.MODID, id);
+        ParticleType<?> type = BuiltInRegistries.PARTICLE_TYPE.get(key);
+        if (type instanceof SimpleParticleType simple) {
+            event.registerSpriteSet(simple, MdParticle.Provider::new);
+        } else {
+            LOGGER.error("md particle type not registered: {}", key);
+        }
     }
 
     public static void registerShaders(RegisterShadersEvent event) throws IOException {

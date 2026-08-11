@@ -1,0 +1,8 @@
+{
+  "academy:md_particle": {
+    "textures": ["academy:effects/md_particle"]
+  },
+  "academy:md_particle_luck": {
+    "textures": ["academy:effects/md_particle_luck"]
+  }
+}
