@@ -47,7 +47,7 @@
 
 (defn- icon-display
   [item-id]
-  {(AdvancementJson/iconKey) item-id})
+  {"icon" {(AdvancementJson/iconKey) item-id}})
 
 (defn root-json
   [{:keys [id background]}]
