@@ -1,21 +1,13 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str])
+            [cn.li.ac.ability.client.effects.rv3 :as vec3])
   (:import [cn.li.mcmod.math V3]))
 
 (defn- update-meltdowner-fx-state!
@@ -126,23 +118,6 @@
 ;; Tick
 ;; ---------------------------------------------------------------------------
 
-(defn- charge-ring-segments-local
-  "Ring segment endpoints relative to center — depends only on ticks (charge
-  animation phase) and charge-ratio (pulse radius), both tick-rate state, so
-  precomputed once per tick here rather than every frame in build-plan."
-  [ticks charge-ratio]
-  (let [base-radius (+ 0.72 (* 0.28 (double charge-ratio)))
-        pulse (+ base-radius (* 0.08 (Math/sin (* 0.23 (double ticks)))))
-        y-base 0.18
-        ring-segments 18]
-    (vec
-      (for [idx (range ring-segments)
-            :let [a0 (/ (* 2.0 Math/PI idx) ring-segments)
-                  a1 (/ (* 2.0 Math/PI (inc idx)) ring-segments)
-                  h (+ y-base (* 0.22 (Math/sin (+ (* 0.17 ticks) idx))))]]
-        {:p0 {:x (* pulse (Math/cos a0)) :y h :z (* pulse (Math/sin a0))}
-         :p1 {:x (* pulse (Math/cos a1)) :y h :z (* pulse (Math/sin a1))}}))))
-
 (defn- tick-state!
   [store]
   (let [store* (or store {:effect-state {} :rays {}})
@@ -167,10 +142,7 @@
                                   :motion-x (- (rand 0.06) 0.03)
                                   :motion-y (+ 0.01 (rand 0.04))
                                   :motion-z (- (rand 0.06) 0.03)})))
-                           (assoc st
-                             :ticks ticks
-                             :charge-ring-segments-local
-                             (charge-ring-segments-local ticks (double (or (:charge-ratio st) 0.0)))))))
+                           (assoc st :ticks ticks))))
         rays* (store-tick/tick-ttl-items-by-owner (:rays store*))]
     (assoc store* :effect-state effect-state* :rays rays*)))
 
@@ -186,22 +158,6 @@
 ;; ---------------------------------------------------------------------------
 ;; Render ops
 ;; ---------------------------------------------------------------------------
-
-(defn- charge-ops
-  "segments-local: precomputed by charge-ring-segments-local (per tick); this
-  fn only translates by the live hand-center each frame."
-  [^V3 center segments-local]
-  (let [cx (.-x center) cy (.-y center) cz (.-z center)
-        ray-color {:r 170 :g 255 :b 190 :a 170}
-        link-color {:r 140 :g 240 :b 170 :a 120}]
-    (vec
-      (mapcat
-        (fn [{:keys [p0 p1]}]
-          (let [p0' (vec3/v3 (+ cx (:x p0)) (+ cy (:y p0)) (+ cz (:z p0)))
-                p1' (vec3/v3 (+ cx (:x p1)) (+ cy (:y p1)) (+ cz (:z p1)))]
-            [(ru/line-op p0' p1' ray-color)
-             (ru/line-op center p0' link-color)]))
-        segments-local))))
 
 (defn- local-walk-speed [ticks]
   (float (max 0.001 (- 0.1 (* 0.001 (double ticks))))))
@@ -261,10 +217,6 @@
         ;; in first person.
         fixed-rays (arc-beam/view-fix-rays hand-center-pos current-rays)
         ^V3 cam-v (vec3/map->v3 camera-pos)
-        charge-plan (if (and hand-center-pos md (:active? md) (seq (:charge-ring-segments-local md)))
-                      (charge-ops (vec3/map->v3 (dissoc hand-center-pos :player-uuid))
-                                  (:charge-ring-segments-local md))
-                      [])
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
         ;; Tube (RendererRayCylinder-style) rays, from the hand-fixed start —
@@ -279,8 +231,8 @@
                             cam-v % meltdowner-ray-style
                             {:first-person? (boolean (:first-person? hand-center-pos))})
                           fixed-rays)]
-    (when (or (seq charge-plan) (seq ray-plan) (seq glow-plan) ws)
-      {:ops (vec (concat charge-plan ray-plan glow-plan))
+    (when (or (seq ray-plan) (seq glow-plan) ws)
+      {:ops (vec (concat ray-plan glow-plan))
        :local-walk-speed ws})))
 
 ;; ---------------------------------------------------------------------------

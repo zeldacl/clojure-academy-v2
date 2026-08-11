@@ -100,6 +100,29 @@
     (is (nil? (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0)))
     (is (empty? (:beam-queue (rb-fx/fx-snapshot))))))
 
+(deftest rays-survive-context-clear-and-expire-on-their-own-ttl-test
+  ;; :instant context ends on the same tick as perform — clear-effect-owner!
+  ;; must NOT kill the beams (upstream rays carry their own lives).
+  (rb-fx/init!)
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+    (arc-beam/enqueue-for-test! :ray-barrage "ctx-a" :ray-barrage/fx-preray
+             {:mode :preray :start {:x 1.0 :y 64.0 :z 2.0}
+              :end {:x 4.0 :y 64.0 :z 6.0}
+              :hit? false
+              :source-player-id "player-a"
+              :world-id "world-a"})
+    (rb-fx/clear-fx-owner! [:ctx "ctx-a"])
+    (is (seq (get-in (rb-fx/fx-snapshot) [:beam-queue [:ctx "ctx-a"]]))
+        "the ray survives the context ending")
+    (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0}
+                                               {:player-uuid "player-a"} 0)))
+        "and still renders")
+    (dotimes [_ 31]
+      (level-effects/update-effect-state! :ray-barrage
+        (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))))
+    (is (empty? (:beam-queue (rb-fx/fx-snapshot)))
+        "expires on its own ttl")))
+
 (deftest preray-hit-extends-life-and-barrage-scatters-many-sub-rays-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)]
     (arc-beam/enqueue-for-test! :ray-barrage "ctx-hit" :ray-barrage/fx-preray
