@@ -209,7 +209,13 @@ if (target.loader != "none") {
             mod_name: rootProject.findProperty("mod_name"),
             mod_version: rootProject.ext.modVersion,
             mod_authors: rootProject.findProperty("mod_authors"),
-            mod_description: rootProject.findProperty("mod_description")
+            mod_description: rootProject.findProperty("mod_description"),
+            mod_homepage: rootProject.findProperty("mod_homepage"),
+            mod_sources: rootProject.findProperty("mod_sources"),
+            mod_issue_tracker: rootProject.findProperty("mod_issue_tracker"),
+            mod_license: rootProject.findProperty("mod_license"),
+            mod_credits: rootProject.findProperty("mod_credits"),
+            mod_logo_file: rootProject.findProperty("mod_logo_file")
         ]
         inputs.properties replaceProperties
         filesMatching(["META-INF/mods.toml", "META-INF/neoforge.mods.toml", "fabric.mod.json"]) {
@@ -1008,6 +1014,23 @@ if (target.loader != "none") {
         apply from: rootProject.file("build-logic/toolchain-fabric-modern.gradle")
     } else {
         apply from: rootProject.file("build-logic/toolchain-loom.gradle")
+    }
+
+    // Datagen output is target-local and must be present in the distributable
+    // archive. Make the normal build run the loader-specific datagen task and
+    // add its output directly to the jar. The direct jar input is intentional:
+    // processResources may be scheduled before datagen in the same task graph,
+    // while the datagen directory itself is guaranteed to be populated first.
+    def datagenTaskName = target.loader == "fabric" ? "runDatagen" : "runData"
+    def datagenTask = tasks.findByName(datagenTaskName)
+    if (datagenTask != null) {
+        tasks.named("jar", Jar).configure {
+            dependsOn datagenTask
+            dependsOn generateDatagenHashManifest
+            from(generatedDatagenResources) {
+                exclude "META-INF/MANIFEST.MF"
+            }
+        }
     }
 }
 

@@ -2,15 +2,16 @@
   "schemaVersion": 1,
   "id": "${mod_id}",
   "version": "${mod_version}",
-  "name": "${mod_name} (Fabric)",
-  "description": "A multi-loader Minecraft mod written in Clojure",
+  "name": "${mod_name}",
+  "description": "${mod_description}",
   "authors": ["${mod_authors}"],
   "contact": {
-    "homepage": "https://example.com/",
-    "sources": "https://github.com/example/${mod_id}"
+    "homepage": "${mod_homepage}",
+    "sources": "${mod_sources}",
+    "issues": "${mod_issue_tracker}"
   },
-  "license": "MIT",
-  "icon": "assets/${mod_id}/icon.png",
+  "license": "${mod_license}",
+  "icon": "${mod_logo_file}",
   "environment": "*",
   "entrypoints": {
     "main": [
