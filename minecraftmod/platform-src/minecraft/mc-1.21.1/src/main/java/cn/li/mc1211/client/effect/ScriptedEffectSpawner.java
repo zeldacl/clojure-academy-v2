@@ -117,7 +117,12 @@ public final class ScriptedEffectSpawner {
                 // fall through to local-player fallback below
             }
         }
-        if (owner == null) {
+        // Only fall back to the viewer when no owner was named at all. This
+        // API exists to anchor an effect to a SPECIFIC player for every nearby
+        // client; if that player is not loaded here, drawing the effect on
+        // whoever happens to be looking is worse than drawing nothing -- a
+        // bystander would see the caster's charge burst on themselves.
+        if (owner == null && (ownerUuid == null || ownerUuid.isBlank())) {
             owner = mc.player;
         }
         if (owner == null) {

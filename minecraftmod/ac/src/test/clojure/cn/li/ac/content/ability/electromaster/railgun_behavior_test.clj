@@ -188,3 +188,50 @@
     (let [status (#'railgun/read-coin-qte-status "p1")]
       (is (false? (:has-window? status)))
       (is (false? (:perform? status))))))
+
+;; ---------------------------------------------------------------------------
+;; Charge burst delivery (RailgunHandEffect's two spawn paths)
+;; ---------------------------------------------------------------------------
+
+(def ^:private send-coin-charge-start! #'railgun/send-coin-charge-start!)
+(def ^:private send-charge-start! #'railgun/send-charge-start!)
+
+(deftest coin-charge-burst-reaches-bystanders-anchored-to-the-caster-test
+  ;; Railgun.onThrowCoin sends MSG_CHARGE_EFFECT to everyone within 30 blocks,
+  ;; and each client attaches the hook to the CASTER's render data — so the
+  ;; burst has to carry who cast it, not just reach the caster's own screen.
+  ;; (The client spawns railgun_charge anchored to that uuid; a payload without
+  ;; it would fall back to whoever is looking.)
+  (let [broadcast* (atom [])
+        local* (atom [])]
+    (with-redefs [fx/send-local-and-nearby! (fn [ctx-id entry evt payload]
+                                              (swap! broadcast* conj [ctx-id entry payload])
+                                              nil)
+                  fx/send! (fn [ctx-id entry evt payload]
+                             (swap! local* conj [ctx-id entry payload])
+                             nil)]
+      (send-coin-charge-start! "ctx-1" "caster-uuid")
+      (is (= 1 (count @broadcast*)) "coin path is broadcast")
+      (is (empty? @local*))
+      (let [[_ entry payload] (first @broadcast*)]
+        (is (= :railgun/fx-charge-start (:topic entry)))
+        (is (= "caster-uuid" (:source-player-id payload))
+            "so every recipient anchors the burst to the caster")))))
+
+(deftest item-charge-burst-stays-on-the-casters-own-client-test
+  ;; The iron-ingot path calls Railgun.spawnClientEffect(getPlayer) directly on
+  ;; the caster's client and never sends a packet, so bystanders see nothing.
+  (let [broadcast* (atom [])
+        local* (atom [])]
+    (with-redefs [fx/send-local-and-nearby! (fn [ctx-id entry evt payload]
+                                              (swap! broadcast* conj [ctx-id entry payload])
+                                              nil)
+                  fx/send! (fn [ctx-id entry evt payload]
+                             (swap! local* conj [ctx-id entry payload])
+                             nil)]
+      (send-charge-start! "ctx-2" "caster-uuid")
+      (is (empty? @broadcast*))
+      (is (= 1 (count @local*)))
+      (let [[_ entry payload] (first @local*)]
+        (is (= :client (:to entry)) "owning client only")
+        (is (= "caster-uuid" (:source-player-id payload)))))))
