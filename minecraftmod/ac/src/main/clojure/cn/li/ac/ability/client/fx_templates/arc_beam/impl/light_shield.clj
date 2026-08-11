@@ -41,7 +41,7 @@
                 (when (< (rand) 0.3)
                   (let [s 0.5]
                     (client-particles/queue-particle-effect! (:queue-owner st)
-                      {:type :particle :particle-type :electric-spark
+                      {:type :particle :particle-type (modid/namespaced-path "md_particle")
                        :x (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
                        :y (+ 1.0 (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
                        :z (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))

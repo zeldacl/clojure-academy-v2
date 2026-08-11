@@ -133,7 +133,7 @@
                                    theta (rand (* 2 Math/PI))
                                    h (+ -1.2 (rand 1.2))]
                                (client-particles/queue-particle-effect! (:queue-owner st)
-                                 {:type :particle :particle-type :electric-spark
+                                 {:type :particle :particle-type (modid/namespaced-path "md_particle")
                                   :x (* r (Math/sin theta))
                                   :y h
                                   :z (* r (Math/cos theta))
