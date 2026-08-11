@@ -25,6 +25,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -32,6 +33,8 @@ import net.minecraft.world.phys.Vec3;
 public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     private static final EntityDataAccessor<Boolean> DATA_ANCHORED =
             SynchedEntityData.defineId(ScriptedProjectileEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Direction> DATA_ANCHOR_FACE =
+            SynchedEntityData.defineId(ScriptedProjectileEntity.class, EntityDataSerializers.DIRECTION);
     private boolean anchored;
     private BlockPos anchorPos;
     private Direction anchorFace = Direction.UP;
@@ -44,6 +47,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
         builder.define(DATA_ANCHORED, false);
+        builder.define(DATA_ANCHOR_FACE, Direction.UP);
     }
 
     protected ScriptedProjectileSpec getSpec() {
@@ -83,11 +87,35 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
 
     private void applyAnchoredState() {
         anchored = true;
+        // The synced face (server value) — a client that did not run its own
+        // hit detection would otherwise keep the default UP face and flatten
+        // the open cross into a bar (upstream syncs HIT_SIDE the same way).
+        anchorFace = entityData.get(DATA_ANCHOR_FACE);
         entityData.set(DATA_ANCHORED, true);
         setDeltaMovement(Vec3.ZERO);
         setNoGravity(true);
         noPhysics = true;
         refreshDimensions();
+        applyAnchorRotation(anchorFace);
+    }
+
+    /**
+     * Face orientation matching upstream EntityMagHook.preRender's switch:
+     * DOWN/UP turn the hook vertical, horizontal faces turn it flat against
+     * the wall, so the open cross always faces away from the anchored block.
+     */
+    private void applyAnchorRotation(Direction face) {
+        switch (face) {
+            case DOWN -> setXRot(-90.0F);
+            case UP -> setXRot(90.0F);
+            case NORTH -> { setYRot(0.0F); setXRot(0.0F); }
+            case SOUTH -> { setYRot(180.0F); setXRot(0.0F); }
+            case WEST -> { setYRot(-90.0F); setXRot(0.0F); }
+            case EAST -> { setYRot(90.0F); setXRot(0.0F); }
+            default -> { }
+        }
+        yRotO = getYRot();
+        xRotO = getXRot();
     }
 
     private void dropConfiguredItemAndDiscard() {
@@ -126,8 +154,21 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         if (result.getType() == HitResult.Type.BLOCK
                 && !isAnchored()
                 && "anchor".equals(hook(spec == null ? null : spec.getOnHitBlockHook()))) {
-            anchorPos = BlockPos.containing(result.getLocation());
-            setPos(result.getLocation());
+            BlockHitResult bhr = (BlockHitResult) result;
+            // Upstream stores res.getBlockPos() — the ACTUAL hit block. The
+            // raw hit location lies exactly ON the block face, and
+            // BlockPos.containing() of a face-plane point floors to the block
+            // on the NEAR side of the face — the air in front of the wall —
+            // so the anchored-tick isAir check then immediately dropped the
+            // hook as an item on every side hit. The hook also sits HALF A
+            // BLOCK OFF the face (upstream preRender) so it does not embed
+            // into the block it bit.
+            anchorPos = bhr.getBlockPos();
+            Direction face = bhr.getDirection();
+            anchorFace = face;
+            entityData.set(DATA_ANCHOR_FACE, face);
+            setPos(Vec3.atCenterOf(anchorPos)
+                    .add(Vec3.atLowerCornerOf(face.getUnitVec3i()).scale(0.51D)));
             applyAnchoredState();
             return;
         }
@@ -209,6 +250,7 @@ public class ScriptedProjectileEntity extends ThrowableItemProjectile {
         input.getLong("AnchorPos").ifPresent(value -> anchorPos = BlockPos.of(value));
         Direction loadedFace = Direction.byName(input.getStringOr("AnchorFace", "up"));
         anchorFace = loadedFace == null ? Direction.UP : loadedFace;
+        entityData.set(DATA_ANCHOR_FACE, anchorFace);
         if (anchored) {
             applyAnchoredState();
         }
