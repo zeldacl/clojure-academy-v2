@@ -20,7 +20,8 @@
             [cn.li.mcbase.gui.reactive.modal :as modal]
             [cn.li.mcbase.gui.reactive.embed :as embed]
             [cn.li.platform.neutral.tabbed-gui :as tabbed-gui])
-  (:import [cn.li.mcmod.uipojo.runtime UiRt]))
+  (:import [cn.li.mcmod.uipojo.runtime UiRt]
+           [cn.li.mcmod.ui.node INode]))
 
 (defn- slots-active?
   [screen-data]
@@ -80,13 +81,31 @@
           (rt/flush! rt)
           (layout/ensure-layout! rt)
           (layout/ensure-tape! rt)
+          ;; Container screens use a different Minecraft render lifecycle from
+          ;; ordinary Screen instances.  Keep one compact breadcrumb for the
+          ;; first frame so a screen that is created successfully but never
+          ;; becomes visible can be diagnosed without flooding the log.
+          (when-not (rt/user-signal rt :container-render-diagnosed?)
+            (let [[left top] (gui-offset gui-offsets this)
+                  ^objects tape (rt/get-tape-arr rt)
+                  ^INode root (rt/node-by-idx rt 0)]
+              (log/info "[CONTAINER-RENDER] entered"
+                        "screen=" (class this)
+                        "screen-size=" (screen-dimensions this)
+                        "gui-offset=" [left top]
+                        "tape-size=" (alength tape)
+                        "root=" (when root
+                                  {:visible? (.isVisible root)
+                                   :size [(.getW root) (.getH root)]
+                                   :abs [(.getAbsX root) (.getAbsY root)]}))
+              (rt/put-user-signal! rt :container-render-diagnosed? true)))
           (if (slots-active?*)
             (super-render! this gg mx my pt)
             (let [[left top] (gui-offset gui-offsets this)]
               (render-background! this gg mx my pt)
               (draw-tape! gg rt left top)
               (draw-embeds! gg left top pt)))
-          (catch Exception e
+          (catch Throwable e
             (let [sig [(class e) (.getMessage e)]]
               (when (not= sig (rt/user-signal rt :last-render-error))
                 (rt/put-user-signal! rt :last-render-error sig)

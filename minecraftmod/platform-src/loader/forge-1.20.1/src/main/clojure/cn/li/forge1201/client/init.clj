@@ -26,6 +26,7 @@
             [cn.li.mc1201.client.i18n :as i18n]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mcbase.client.session :as mc-session]
+            [cn.li.mc1201.gui.reactive.host-container :as reactive-host-container]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
@@ -421,6 +422,9 @@
   ;; Bind client-side rendering implementations first
   (init-render-bindings!)
   (init-content-client-bridge!)
+  ;; The shared screen factory needs the MC 1.20.1 container-screen seams
+  ;; installed before Forge invokes MenuScreens factories.
+  (reactive-host-container/install!)
   (gui-screen-impl/init-client!)
   (i18n/install-client-i18n!)
 

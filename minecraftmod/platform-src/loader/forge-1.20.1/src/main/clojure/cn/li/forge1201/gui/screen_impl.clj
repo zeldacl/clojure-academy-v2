@@ -4,6 +4,7 @@
   Uses MenuScreens/register directly (matching Fabric approach) to avoid
   the extra ForgeClientHelper$ScreenFactory wrapper."
   (:require [cn.li.mcbase.gui.screen.registry :as screen-registry]
+            [cn.li.mc1201.gui.reactive.host-container]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen MenuScreens MenuScreens$ScreenConstructor]
@@ -19,8 +20,15 @@
      (reify MenuScreens$ScreenConstructor
        (create [_ menu player-inventory title]
          (log/info "[SCREEN-FACTORY] Creating screen for GUI ID" gui-id "factory-fn-kw:" factory-fn-kw)
-         (screen-creator menu player-inventory title)))))
-  (log/info "Registered screen for GUI ID" gui-id))
+         (try
+           (let [screen (screen-creator menu player-inventory title)]
+             (log/info "[SCREEN-FACTORY] Screen instance returned:" (class screen))
+             screen)
+           (catch Throwable e
+             (log/error "[SCREEN-FACTORY] Screen creation failed:" (.getMessage e))
+             (log/stacktrace "[SCREEN-FACTORY] Exception:" e)
+             (throw e))))))
+  (log/info "Registered screen for GUI ID" gui-id)))
 
 (defn register-screens!
   "Register screen factories with Forge."

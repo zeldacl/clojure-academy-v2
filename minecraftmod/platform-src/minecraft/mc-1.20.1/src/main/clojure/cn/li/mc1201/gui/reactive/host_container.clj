@@ -73,4 +73,9 @@
 (def create-tech-ui-container-screen
   (partial core/create-tech-ui-container-screen* seams))
 
-(core/install! seams)
+(defn install!
+  "Install the MC 1.20.1 container-screen seams into the shared screen factory."
+  []
+  (core/install! seams))
+
+(install!)
