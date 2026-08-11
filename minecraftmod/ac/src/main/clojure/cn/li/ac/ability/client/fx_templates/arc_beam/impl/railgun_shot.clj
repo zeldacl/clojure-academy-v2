@@ -170,14 +170,29 @@
     (assoc beam :end
       (vec3/v+ start (vec3/v* (vec3/v- (:end beam) start) blend-in)))))
 
-(def ^:private glow-halo-texture
-  (modid/asset-path "textures" "effects/glow_circle.png"))
+;; Resources.getRayTextures("railgun"): the glow is three boards, not one
+;; stretched sprite — a soft cap at each end and a body between them.
+(def ^:private glow-blend-in-texture
+  (modid/asset-path "textures" "effects/railgun/blend_in.png"))
+(def ^:private glow-tile-texture
+  (modid/asset-path "textures" "effects/railgun/tile.png"))
+(def ^:private glow-blend-out-texture
+  (modid/asset-path "textures" "effects/railgun/blend_out.png"))
 
-(defn- railgun-glow-ops [^V3 cam-pos beam]
-  ;; Wide flat halo (upstream glow width 1.1). The beam starts at the caster's
-  ;; hand (hand-muzzle-pos in railgun.clj), so the camera is off the beam axis
-  ;; and the billboard is visible in first person too — an eye-start beam sat
-  ;; exactly on the axis (edge-on billboard / camera-inside-tube).
+;; RendererRayComposite: glow.width 1.1, startFix -0.3, endFix +0.3.
+(def ^:private glow-width 1.1)
+(def ^:private glow-start-fix -0.3)
+(def ^:private glow-end-fix 0.3)
+
+(defn- railgun-glow-ops
+  "RendererRayGlow.draw: extend the ray by startFix/endFix, then lay three
+  boards along it — blend_in over the first `width` units, tile over the
+  middle, blend_out over the last `width`. Each board is `width` across
+  (drawBoard halves it) and carries the same tint.
+
+  The port had a single glow_circle.png stretched over the whole ray, so the
+  beam had hard square ends and none of the original's cap falloff."
+  [^V3 cam-pos beam]
   (let [start (:start beam)
         end (:end beam)
         dir (vec3/vnorm (vec3/v- end start))
@@ -186,25 +201,100 @@
         seed (double (or (:wiggle-seed beam) 0.0))
         glow-wiggle (+ 0.9 (* 0.1
                               (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
-        ;; RendererRayGlow width 1.1, and drawBoard halves it — 0.55 either
-        ;; side of the axis, not the 1.5 the port had.
-        half-width (* 0.55 (width-factor beam life) glow-wiggle)
-        right (vec3/v* (ru/beam-right-axis start end cam-pos) half-width)
-        gs (vec3/v+ start (vec3/v* dir -0.3))
-        ge (vec3/v+ end (vec3/v* dir 0.3))
+        ;; `width` is both the board's full width and the length of each cap.
+        width (* glow-width (width-factor beam life) glow-wiggle)
+        right (vec3/v* (ru/beam-right-axis start end cam-pos) (* 0.5 width))
+        gs (vec3/v+ start (vec3/v* dir glow-start-fix))
+        ge (vec3/v+ end (vec3/v* dir glow-end-fix))
+        ;; A ray shorter than the two caps has no body left; clamp so the caps
+        ;; meet in the middle instead of crossing over each other.
+        span (vec3/vlen (vec3/v- ge gs))
+        cap (min width (* 0.5 span))
+        mid1 (vec3/v+ gs (vec3/v* dir cap))
+        mid2 (vec3/v- ge (vec3/v* dir cap))
         alpha (int (* 170.0 fade fade glow-wiggle))
-        color {:r 255 :g 255 :b 255 :a alpha}]
-    [(ru/quad-op glow-halo-texture
-                 (vec3/v- gs right) (vec3/v- ge right)
-                 (vec3/v+ ge right) (vec3/v+ gs right)
-                 color)]))
+        color {:r 255 :g 255 :b 255 :a alpha}
+        board (fn [texture ^V3 a ^V3 b]
+                (ru/quad-op texture
+                            (vec3/v- a right) (vec3/v- b right)
+                            (vec3/v+ b right) (vec3/v+ a right)
+                            color))]
+    [(board glow-blend-in-texture gs mid1)
+     (board glow-tile-texture mid1 mid2)
+     (board glow-blend-out-texture mid2 ge)]))
 
-(defn- railgun-beam-ops [^V3 cam-pos beam]
-  ;; Flat billboard ray (billboard-beam-ops). The beam starts at the caster's
-  ;; hand (hand-muzzle-pos in railgun.clj), so the camera is off the beam axis
-  ;; and the billboard faces it — a tube around the axis read as a transparent
-  ;; hollow pipe in first person, a flat beam reads solid.
-  (fx-beam/fading-beam-ops cam-pos beam railgun-beam-style))
+;; RendererRayCylinder's head mesh: y = sqrt(x) over x in [0,1], revolved,
+;; built in D=4 steps. cylinderIn carries headFix 0.98, cylinderOut 1.0.
+(def ^:private head-segments 4)
+(def ^:private inner-head-fix 0.98)
+
+;; The cylinders are drawn with ShaderNotex upstream (untextured solid colour);
+;; this port keeps the shared beam sprite, which reads the same at these radii.
+(def ^:private beam-texture
+  (modid/asset-path "textures" "effects/arc.png"))
+
+(defn- ray-profile
+  "Radius samples [distance-along-ray half-width] for a cylinder of `radius`
+  over a ray of `length`: a paraboloid nose over the first `radius * head-fix`
+  units, the straight body, and a mirrored nose past the end. Flattened to a
+  billboard strip, this is the same silhouette."
+  [^double length ^double radius ^double head-fix]
+  (let [nose (* radius head-fix)
+        nose-pts (for [i (range (inc head-segments))
+                       :let [u (/ (double i) head-segments)]]
+                   [(* nose u) (* radius (Math/sqrt u))])
+        tail-pts (for [i (range 1 (inc head-segments))
+                       :let [u (/ (double i) head-segments)]]
+                   [(+ length (* nose u)) (* radius (Math/sqrt (- 1.0 u)))])]
+    (if (<= length nose)
+      ;; Too short for a body — nose straight into tail.
+      (concat nose-pts tail-pts)
+      (concat nose-pts [[length radius]] tail-pts))))
+
+(defn- tapered-ray-ops
+  "Emit a camera-facing strip whose half-width follows `ray-profile`."
+  ;; No primitive hints: Clojure only allows them on fns of four args or fewer.
+  [texture ^V3 cam-pos ^V3 start ^V3 end radius head-fix color]
+  (let [delta (vec3/v- end start)
+        length (vec3/vlen delta)
+        radius (double radius)]
+    (when (and (> length 1.0e-5) (> radius 1.0e-5))
+      (let [dir (vec3/vnorm delta)
+            right (ru/beam-right-axis start end cam-pos)
+            at (fn [d w]
+                 (let [c (vec3/v+ start (vec3/v* dir (double d)))
+                       o (vec3/v* right (double w))]
+                   [(vec3/v+ c o) (vec3/v- c o)]))
+            pts (vec (ray-profile length radius (double head-fix)))]
+        (vec
+          (for [[[d0 w0] [d1 w1]] (partition 2 1 pts)
+                :let [[a0 b0] (at d0 w0)
+                      [a1 b1] (at d1 w1)]]
+            (ru/quad-op texture a0 b0 b1 a1 color)))))))
+
+(defn- railgun-beam-ops
+  "The two cylinders of RendererRayComposite, drawn as camera-facing strips —
+  a tube around the axis reads as a transparent hollow pipe from the caster's
+  own view, a strip reads solid. Both now taper into the paraboloid nose the
+  cylinder mesh has at each end instead of stopping at a square edge."
+  [^V3 cam-pos beam]
+  (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
+        w (width-factor beam life)
+        fade (fade-out-factor life)
+        texture beam-texture
+        outer-color (ru/with-alpha (:outer-rgb railgun-beam-style)
+                                   (int (* 60.0 fade)))
+        inner-color (ru/with-alpha (:inner-rgb railgun-beam-style)
+                                   (int (* 200.0 fade)))
+        line-color (ru/with-alpha (:line-rgb railgun-beam-style)
+                                  (int (+ 40.0 (* 120.0 fade))))]
+    (concat
+      (tapered-ray-ops texture cam-pos (:start beam) (:end beam)
+                       (* 0.13 w) 1.0 outer-color)
+      (tapered-ray-ops texture cam-pos (:start beam) (:end beam)
+                       (* 0.09 w) inner-head-fix inner-color)
+      ;; Port enhancement kept: a bright cyan core line down the axis.
+      [(ru/line-op (:start beam) (:end beam) line-color)])))
 
 (defn- impact-ring-ops [^V3 cam-pos ^V3 end ttl max-ttl]
   ;; Enhanced port effect: expanding cyan ring at the shot endpoint, oriented

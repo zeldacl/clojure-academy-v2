@@ -279,6 +279,16 @@
 (defn- beam-state [ctx-id]
   (first (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx ctx-id])))
 
+(defn- edge-width
+  "Distance between a quad's two leading corners — the strip's full width at
+  that point, whatever axis the camera-facing basis put it on."
+  [op]
+  (let [^cn.li.mcmod.math.V3 a (:p0 op)
+        ^cn.li.mcmod.math.V3 b (:p1 op)]
+    (Math/sqrt (+ (Math/pow (- (.-x a) (.-x b)) 2)
+                  (Math/pow (- (.-y a) (.-y b)) 2)
+                  (Math/pow (- (.-z a) (.-z b)) 2)))))
+
 (defn- quad-extent
   "Largest distance between any two quad corners in the op list."
   [ops]
@@ -349,18 +359,80 @@
   ;; cylinderOut radius 0.13, cylinderIn 0.09, glow width 1.1 (halved by
   ;; drawBoard). The port had 0.45/0.28/1.5 — three times the original.
   (fire-beam! "ctx-bore" 10.0)
-  (tick-fx! 1)
+  (tick-fx! 4)
   (let [plan (arc-beam/effect-build-plan
                :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0)
-        ;; widest quad across the beam axis (the beam runs along +x at y=64)
-        spread (fn [ops]
-                 (apply max 0.0
-                        (for [op ops
-                              :let [^cn.li.mcmod.math.V3 a (:p0 op)
-                                    ^cn.li.mcmod.math.V3 b (:p1 op)]
-                              :when (and a b)]
-                          (Math/abs (- (.-y a) (.-y b))))))]
-    (is (seq (:ops plan)))
-    ;; the glow board is the widest piece at 2 * 0.55
-    (is (< (spread (:ops plan)) 1.2)
-        "nothing in the beam is wider than upstream's 1.1 glow board")))
+        ;; the strip quads carry their width on the p0-p1 edge
+        widths (keep (fn [op] (when (re-find #"effects/arc\.png" (str (:texture op)))
+                                (edge-width op)))
+                     (:ops plan))]
+    (is (seq widths))
+    ;; getWidth() adds a [0, 0.3] wiggle on top of the shrink factor, so the
+    ;; bore peaks at 1.3x nominal — 2 * 0.13 * 1.3.
+    (is (< (apply max widths) 0.35)
+        "the outer cylinder is 0.13 in radius, not the 0.45 the port had")))
+
+(deftest glow-is-three-boards-with-soft-caps-test
+  ;; RendererRayGlow.draw lays blend_in over the first `width` units, tile over
+  ;; the middle and blend_out over the last `width`, after extending the ray by
+  ;; startFix -0.3 / endFix +0.3. The port had a single glow_circle.png
+  ;; stretched over the whole ray, so the beam ended in a hard square edge.
+  (fire-beam! "ctx-glow" 20.0)
+  ;; blendInTime is 150ms, so the ray reaches full length on the 3rd tick
+  (tick-fx! 4)
+  (let [ops (:ops (arc-beam/effect-build-plan
+                    :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0))
+        glow (filter #(re-find #"effects/railgun/" (str (:texture %))) ops)
+        by-tex (group-by :texture glow)
+        tex-of (fn [suffix]
+                 (some (fn [[t _]] (when (re-find (re-pattern suffix) (str t)) t))
+                       by-tex))
+        x-of (fn [op key] (.-x ^cn.li.mcmod.math.V3 (get op key)))]
+    (is (= 3 (count glow)) "one board per section")
+    (is (every? some? [(tex-of "blend_in") (tex-of "tile") (tex-of "blend_out")]))
+    (let [in-board (first (get by-tex (tex-of "blend_in")))
+          tile-board (first (get by-tex (tex-of "tile")))
+          out-board (first (get by-tex (tex-of "blend_out")))]
+      ;; startFix pulls the ray back behind its origin, endFix past its end
+      (is (< (x-of in-board :p0) 0.0) "blend_in starts behind the muzzle (startFix -0.3)")
+      (is (> (x-of out-board :p1) 20.0) "blend_out runs past the endpoint (endFix +0.3)")
+      ;; the caps are as long as the board is wide, the body covers the rest
+      ;; each cap is as long as the board is wide: 1.1, up to 1.3x with wiggle
+      (is (< 0.0 (- (x-of in-board :p1) (x-of in-board :p0)) 1.5))
+      (is (> (- (x-of tile-board :p1) (x-of tile-board :p0)) 15.0))
+      ;; glow.width 1.1, and drawBoard halves it either side of the axis
+      (let [cross (fn [op]
+                    (let [^cn.li.mcmod.math.V3 a (:p0 op)
+                          ^cn.li.mcmod.math.V3 d (:p3 op)]
+                      (Math/sqrt (+ (Math/pow (- (.-x a) (.-x d)) 2)
+                                    (Math/pow (- (.-y a) (.-y d)) 2)
+                                    (Math/pow (- (.-z a) (.-z d)) 2)))))]
+        (is (< (cross tile-board) 1.5))))))
+
+(deftest ray-tapers-into-a-paraboloid-nose-test
+  ;; RendererRayCylinder draws a y = sqrt(x) head at each end of the tube
+  ;; (D = 4 segments, headFix 0.98 on the inner one). Flattened to a billboard
+  ;; that is a taper: the strip must narrow to nothing at both tips instead of
+  ;; stopping at full width.
+  (fire-beam! "ctx-nose" 20.0)
+  (tick-fx! 4)
+  (let [ops (:ops (arc-beam/effect-build-plan
+                    :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0))
+        beam (filter #(and (= :quad (:kind %))
+                           (re-find #"effects/arc\.png" (str (:texture %))))
+                     ops)
+        half-width (fn [op] (* 0.5 (edge-width op)))
+        xs (fn [op] (.-x ^cn.li.mcmod.math.V3 (:p0 op)))
+        widths (sort-by first (map (juxt xs half-width) beam))]
+    (is (>= (count beam) 10) "two layers, each a multi-segment strip")
+    (is (< (second (first widths)) 0.01)
+        "the strip starts at zero width — the nose tip")
+    (is (< 0.12 (apply max (map second widths)) 0.18)
+        "and reaches the 0.13 outer radius in the body (plus the width wiggle)")
+    ;; the sqrt profile: at a quarter of the nose length it is already half
+    ;; the final radius, which a linear taper would not be
+    ;; both layers taper, so take the widest sample a quarter into the nose
+    (let [nose (filter (fn [[x _]] (< 0.0 x 0.13)) widths)]
+      (is (seq nose))
+      (is (> (apply max (map second nose)) (* 0.4 0.13))
+          "sqrt profile — already ~half the radius a quarter in, not a cone"))))
