@@ -11,11 +11,19 @@ public final class ResourceLocations {
     }
 
     public static ResourceLocation of(String namespace, String path) {
-        return ResourceLocation.fromNamespaceAndPath(namespace, path);
+        ResourceLocation location = ResourceLocation.tryBuild(namespace, path);
+        if (location == null) {
+            throw new IllegalArgumentException("Invalid resource location: " + namespace + ":" + path);
+        }
+        return location;
     }
 
     public static ResourceLocation parse(String id) {
-        return ResourceLocation.parse(id);
+        ResourceLocation location = ResourceLocation.tryParse(id);
+        if (location == null) {
+            throw new IllegalArgumentException("Invalid resource location: " + id);
+        }
+        return location;
     }
     /** Native id class ({@link ResourceLocation}) for type checks. */
     public static Class<?> idClass() {
