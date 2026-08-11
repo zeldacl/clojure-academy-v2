@@ -1,7 +1,8 @@
 (ns cn.li.forge1201.gui.screen-impl-test
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcbase.gui.screen.impl :as screen-impl]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.platform.neutral.gui-runtime :as gui-runtime]))
 
 (deftest resolve-image-size-test
   (testing "nil when no size override"
@@ -22,7 +23,8 @@
                             :client-session-id :session-a
                             :player-uuid "player-a"}}
         captured (atom nil)]
-    (with-redefs [cn.li.mcmod.gui.container-state/get-container-for-menu (fn [_] container)]
+    (with-redefs [gui-runtime/get-container-for-menu (fn [_] container)
+                  gui-runtime/owner-from-container :owner]
       (screen-impl/with-screen-client-owner menu
         #(reset! captured {:client-session-id (runtime-hooks/client-session-id)
                            :owner (runtime-hooks/player-state-owner)})))
@@ -31,10 +33,11 @@
 
 (deftest owner-for-screen-menu-requires-client-owner-test
   (let [menu (Object.)]
-    (with-redefs [cn.li.mcmod.gui.container-state/get-container-for-menu
+    (with-redefs [gui-runtime/get-container-for-menu
                   (fn [_] {:owner {:server-session-id [:server 1]
                                    :player-uuid "player-a"
-                                   :logical-side :server}})]
+                                   :logical-side :server}})
+                  gui-runtime/owner-from-container :owner]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
                             #"client-owner contract violation"
                             (screen-impl/owner-for-screen-menu menu))))))

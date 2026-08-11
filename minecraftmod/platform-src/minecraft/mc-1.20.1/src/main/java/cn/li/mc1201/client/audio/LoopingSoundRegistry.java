@@ -1,6 +1,7 @@
 package cn.li.mc1201.client.audio;
 
 import cn.li.mcbase.client.audio.PositionalLoopSoundInstance;
+import cn.li.mcver.ResourceLocations;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.sounds.SoundManager;
@@ -28,8 +29,8 @@ public final class LoopingSoundRegistry {
     private static SoundEvent resolveSoundEvent(String soundId) {
         int sep = soundId.indexOf(':');
         ResourceLocation loc = sep < 0
-            ? new ResourceLocation("minecraft", soundId)
-            : new ResourceLocation(soundId.substring(0, sep), soundId.substring(sep + 1));
+            ? ResourceLocations.of("minecraft", soundId)
+            : ResourceLocations.of(soundId.substring(0, sep), soundId.substring(sep + 1));
         return BuiltInRegistries.SOUND_EVENT.get(loc);
     }
 
