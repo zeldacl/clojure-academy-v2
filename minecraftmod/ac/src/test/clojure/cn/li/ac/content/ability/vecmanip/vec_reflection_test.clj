@@ -5,13 +5,13 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.test.support.player-state :as ps-fix]
             [cn.li.ac.ability.service.skill-effects]
-            [cn.li.ac.ability.util.toggle]
+            [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.content.ability.vecmanip.vec-reflection :as vr]
             [cn.li.ac.content.ability.vecmanip.arbitration]
             [cn.li.ac.ability.effects.damage]
-            [cn.li.ac.ability.effects.motion]
-            [cn.li.mcmod.platform.raycast]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.ac.ability.effects.world]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]))
@@ -48,6 +48,27 @@
        {:x 1.0 :y 2.0 :z 3.0 :height 1.8}))
     (is (= true (:reflected? @payload*)))
     (is (= :reflect-entity @mode*))))
+
+(deftest notify-beam-reflected-puts-a-wave-in-front-of-the-defender-test
+  ;; onReflect(ReflectEvent) fires on the DEFENDER's context when a reflectible
+  ;; beam is cancelled by their VecReflection, and spawns a wave at
+  ;;   player.pos + (0, ranged(0.4, 1.3), 0) + normalize(attacker - self) * 0.5
+  ;; -- a separate wave from the one handleAttack puts on the attacker.
+  (let [payload* (atom nil)
+        mode* (atom nil)]
+    (with-redefs [fx/send! (fn [_ctx-id entry _evt payload]
+                             (reset! payload* payload)
+                             (reset! mode* (:mode entry)))
+                  ctx/get-all-contexts (fn [] {"k" {:id "ctx-def" :player-uuid "defender"}})
+                  toggle/is-toggle-active? (fn [_ _] true)
+                  motion-effects/player-position (fn [_] {:x 10.0 :y 64.0 :z 10.0})
+                  raycast/available? (constantly false)]
+      (vr/notify-beam-reflected! "defender" {:x 14.0 :y 64.0 :z 10.0}))
+    (is (= :play @mode*))
+    ;; attacker is 4 blocks +x away, so the wave sits half a block that way
+    (is (= 10.5 (:x @payload*)))
+    (is (= 10.0 (:z @payload*)))
+    (is (<= (+ 64.0 0.4) (:y @payload*) (+ 64.0 1.3)))))
 
 (deftest init-registers-precheck-side-effect-test
   (let [reflect-calls (atom [])]

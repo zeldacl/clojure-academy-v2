@@ -293,6 +293,7 @@
             damage   (cfg-lerp :beam.damage exp)
             reflection (vec-reflect/build-reflection-callbacks
                          {:ctx-id ctx-id
+                          :attacker-pos-fn (fn [] eye)
                           :reflect-shot-fn perform-reflection-shot!})
                 result   (beam/execute-beam!
                     (merge {:player-id       player-id

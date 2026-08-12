@@ -147,6 +147,7 @@
       {:performed? false}
       (let [reflection (vec-reflect/build-reflection-callbacks
                          {:ctx-id ctx-id
+                          :attacker-pos-fn (fn [] (geom/eye-pos player-id))
                           :reflect-shot-fn (fn [ctx-id* reflector-uuid]
                                              (perform-reflection-shot! ctx-id* reflector-uuid exp))})
             result (beam/execute-beam!

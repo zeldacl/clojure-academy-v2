@@ -279,6 +279,44 @@
                :z (double (or (:z pos) 0.0))}
               (caster-rotation player-id))))
 
+(defn notify-beam-reflected!
+  "Upstream onReflect(ReflectEvent): when someone's reflectible attack is
+  cancelled by this player's VecReflection, the DEFENDER's context spawns a
+  wave just in front of itself —
+
+    player.pos + (0, ranged(0.4, 1.3), 0) + normalize(attackerHead - selfHead) * 0.5
+
+  — not at the attacker. That is a second, separate wave from the one
+  handleAttack puts on the attacker, and the port had no counterpart for it:
+  a beam bounced off you produced the reflected beam and nothing on you.
+
+  Called by the beam skills through vec-reflection-interaction, since the wave
+  belongs to the reflector's own context, not the caster's."
+  [reflector-player-id attacker-pos]
+  (try
+    (when-let [ctx-id (some (fn [[_ ctx-data]]
+                              (when (and (= (:player-uuid ctx-data) reflector-player-id)
+                                         (toggle/is-toggle-active? ctx-data :vec-reflection))
+                                (:id ctx-data)))
+                            (ctx/get-all-contexts))]
+      (when-let [self (get-player-position reflector-player-id)]
+        (let [sx (double (:x self)) sy (double (:y self)) sz (double (:z self))
+              ;; entityHeadPos on both sides cancels out into the horizontal
+              ;; direction from us to them, so eye height does not matter here.
+              dx (- (double (or (:x attacker-pos) sx)) sx)
+              dy (- (double (or (:y attacker-pos) sy)) sy)
+              dz (- (double (or (:z attacker-pos) sz)) sz)
+              len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+              [nx ny nz] (if (> len 1.0e-6)
+                           [(/ dx len) (/ dy len) (/ dz len)]
+                           [0.0 0.0 0.0])]
+          (send-fx-play! ctx-id reflector-player-id
+                         {:x (+ sx (* nx 0.5))
+                          :y (+ sy (+ 0.4 (rand 0.9)) (* ny 0.5))
+                          :z (+ sz (* nz 0.5))}))))
+    (catch Exception e
+      (log/warn "VecReflection: beam-reflect wave failed:" (ex-message e)))))
+
 (defn- try-find-attacker-pos [player-id attacker-id]
   (or (when-let [st (fx-common/get-player-state attacker-id)]
         (get st :position))
