@@ -139,11 +139,11 @@
                      :width (* ray-glow-width w)
                      :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}})
                   (ray-composite/tube-ops start end
-                    (* ray-outer-radius w) ray-composite/outer-head-fix
-                    {:r 106 :g 242 :b 106 :a (alpha 50.0)})
-                  (ray-composite/tube-ops start end
                     (* ray-inner-radius w) ray-composite/inner-head-fix
-                    {:r 216 :g 248 :b 216 :a (alpha 230.0)})))))
+                    {:r 216 :g 248 :b 216 :a (alpha 230.0)})
+                  (ray-composite/tube-ops start end
+                    (* ray-outer-radius w) ray-composite/outer-head-fix
+                    {:r 106 :g 242 :b 106 :a (alpha 50.0)})))))
           beams))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]

@@ -210,9 +210,9 @@
                                   (int (+ 40.0 (* 120.0 fade))))]
     (concat
       (ray-composite/tube-ops (:start beam) (:end beam)
-                              (* 0.13 w) ray-composite/outer-head-fix outer-color)
-      (ray-composite/tube-ops (:start beam) (:end beam)
                               (* 0.09 w) ray-composite/inner-head-fix inner-color)
+      (ray-composite/tube-ops (:start beam) (:end beam)
+                              (* 0.13 w) ray-composite/outer-head-fix outer-color)
       ;; Port enhancement kept: a bright cyan core line down the axis.
       [(ru/line-op (:start beam) (:end beam) line-color)])))
 

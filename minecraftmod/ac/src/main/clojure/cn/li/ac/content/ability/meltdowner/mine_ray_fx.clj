@@ -71,11 +71,11 @@
          :width glow-width
          :color {:r 255 :g 255 :b 255 :a (int glow-alpha)}})
       (ray-composite/tube-ops (:start beam) (:end beam)
-        outer-radius ray-composite/outer-head-fix
-        (assoc outer-rgb :a (int outer-alpha)))
-      (ray-composite/tube-ops (:start beam) (:end beam)
         inner-radius ray-composite/inner-head-fix
-        (assoc inner-rgb :a (int inner-alpha))))))
+        (assoc inner-rgb :a (int inner-alpha)))
+      (ray-composite/tube-ops (:start beam) (:end beam)
+        outer-radius ray-composite/outer-head-fix
+        (assoc outer-rgb :a (int outer-alpha))))))
 
 (def ^:private mine-ray-length 15.0)
 (def ^:private loop-sound-id (modid/namespaced-path "md.mine_loop"))

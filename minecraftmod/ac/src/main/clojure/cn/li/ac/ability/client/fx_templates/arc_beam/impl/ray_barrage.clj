@@ -68,11 +68,11 @@
          :width glow-width
          :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}})
       (ray-composite/tube-ops (:start beam) (:end beam)
-        outer-radius ray-composite/outer-head-fix
-        (assoc outer-rgb :a (int (ray-alpha beam 50.0))))
-      (ray-composite/tube-ops (:start beam) (:end beam)
         inner-radius ray-composite/inner-head-fix
-        (assoc inner-rgb :a (int (ray-alpha beam 230.0)))))))
+        (assoc inner-rgb :a (int (ray-alpha beam 230.0))))
+      (ray-composite/tube-ops (:start beam) (:end beam)
+        outer-radius ray-composite/outer-head-fix
+        (assoc outer-rgb :a (int (ray-alpha beam 50.0)))))))
 
 (defn- all-rays
   []

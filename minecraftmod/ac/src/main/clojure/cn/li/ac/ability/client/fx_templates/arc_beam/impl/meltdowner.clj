@@ -297,11 +297,11 @@
                            (let [w (ray-width-factor ray)]
                              (concat
                                (ray-composite/tube-ops (:start ray) (:end ray)
-                                 (* ray-outer-radius w) ray-composite/outer-head-fix
-                                 {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))})
-                               (ray-composite/tube-ops (:start ray) (:end ray)
                                  (* ray-inner-radius w) ray-composite/inner-head-fix
-                                 {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))}))))
+                                 {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))})
+                               (ray-composite/tube-ops (:start ray) (:end ray)
+                                 (* ray-outer-radius w) ray-composite/outer-head-fix
+                                 {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))}))))
                          fixed-rays)
         glow-plan (mapcat (fn [ray]
                             (ray-composite/glow-ops cam-v (:start ray) (:end ray)

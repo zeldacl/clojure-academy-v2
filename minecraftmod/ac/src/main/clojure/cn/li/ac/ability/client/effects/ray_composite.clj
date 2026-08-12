@@ -16,7 +16,22 @@
                          -- notex.frag, pure vertex colour, NO texture.
 
   Callers supply the radii, colours and textures; the geometry is identical
-  across skills, which is exactly why upstream has one class for it."
+  across skills, which is exactly why upstream has one class for it.
+
+  ORDER MATTERS, in the order listed above. RendererRayComposite appends glow,
+  then cylinderIn, then cylinderOut, and RendererList draws in append order.
+  Every layer here is translucent AND writes depth, so whichever one lands
+  first wins the depth test wherever they overlap:
+
+    glow before the tubes  -- else the wide flat board occludes the tubes and
+                              the ray reads as a sheet from every angle.
+    inner before outer     -- the outer shell is only alpha 50; if it draws
+                              first it stamps depth over the alpha-230 core
+                              nested inside it, and that core is what makes a
+                              ray look solid. Getting this backwards left the
+                              beam patchily solid and hollow as the angle
+                              changed, since the two only overlap where the
+                              shell's near wall is between you and the core."
   (:require [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid])
