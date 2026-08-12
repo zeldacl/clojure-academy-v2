@@ -16,6 +16,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-templates.arc-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
+            [cn.li.ac.content.ability.teleporter.penetrate-dest :as pdest]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.config.modid :as modid]))
 
@@ -43,6 +44,7 @@
                                :z (double (or (:z payload) 0.0))}
                       :available? (boolean (:available? payload))
                       :distance (double (or (:distance payload) 0.0))
+                      :march-distance (double (or (:march-distance payload) 0.0))
                       :ambient-particles []}]
     (case (:mode payload)
       :start
@@ -57,7 +59,8 @@
                 (merge base-meta (or st target-state)
                        {:target (:target target-state)
                         :available? (boolean (:available? payload))
-                        :distance (double (or (:distance payload) 0.0))})))
+                        :distance (double (or (:distance payload) 0.0))
+                        :march-distance (double (or (:march-distance payload) 0.0))})))
       :perform
       (do
         ;; Upstream l_onKeyUp: ACSounds.playClient(player, "tp.tp", ...) —
@@ -83,14 +86,55 @@
                          {}
                          states)))))
 
+(defn- look-vec
+  "Entity.getLookAngle from yaw/pitch, both radians."
+  [yaw-rad pitch-rad]
+  (when (and yaw-rad pitch-rad)
+    (let [yaw (double yaw-rad)
+          pitch (double pitch-rad)
+          cp (Math/cos pitch)]
+      {:x (* -1.0 (Math/sin yaw) cp)
+       :y (* -1.0 (Math/sin pitch))
+       :z (* (Math/cos yaw) cp)})))
+
+(defn- live-state
+  "l_updateMark re-marches getDest against the client's own world every tick,
+  setting both the mark's position and its `available` flag -- the flag is what
+  paints it red, so a stale one means the marker lies about whether the blink
+  will land. The march length comes from the server (getDest clamps it by CP);
+  the wall probing is redone here through the same namespace s_execute calls."
+  [st hand-center-pos]
+  (let [collidable? (:block-collidable-at? hand-center-pos)
+        dist (double (or (:march-distance st) 0.0))
+        look (look-vec (:player-yaw-rad hand-center-pos)
+                       (:player-pitch-rad hand-center-pos))]
+    (or (when (and collidable? look (pos? dist))
+          (when-let [dest (pdest/destination
+                            {:x (:player-x hand-center-pos)
+                             :y (:player-y hand-center-pos)
+                             :z (:player-z hand-center-pos)
+                             :look-vec look
+                             :distance dist
+                             :collidable? collidable?})]
+            {:target {:x (:x dest)
+                      ;; l_updateMark: dest.pos.y + player.eyeHeight
+                      :y (+ (double (:y dest))
+                            (- (double (or (:player-eye-y hand-center-pos)
+                                           (+ (double (:player-y hand-center-pos)) eye-height)))
+                               (double (:player-y hand-center-pos))))
+                      :z (:z dest)}
+             :available? (boolean (:available? dest))}))
+        {:target (:target st) :available? (:available? st)})))
+
 (defn- build-plan [camera-pos hand-center-pos _tick]
   (let [store (level-effects/effect-state-snapshot :penetrate-teleport)
         cam (rv3/map->v3 camera-pos)
         yaw-rad (:player-yaw-rad hand-center-pos)
         ops (vec (mapcat (fn [st]
                            (when (:active? st)
-                             (let [color (if (:available? st) color-available color-unavailable)]
-                               (into (tp-mark/humanoid-ops yaw-rad (:target st) (:ticks st) color)
+                             (let [live (live-state st hand-center-pos)
+                                   color (if (:available? live) color-available color-unavailable)]
+                               (into (tp-mark/humanoid-ops yaw-rad (:target live) (:ticks st) color)
                                      (bp/particle-ops cam (:ambient-particles st))))))
                          (vals (:fx-state store))))]
     (when (seq ops)

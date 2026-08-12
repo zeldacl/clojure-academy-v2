@@ -175,6 +175,17 @@
        (let [level (.level player)
              state (.getBlockState level (BlockPos. (int x) (int y) (int z)))]
          (not (.isAir state)))
+       (catch Exception _ false)))
+   ;; PenetrateTeleport's hasPlace asks canCollideCheck, not isAir -- grass and
+   ;; torches are not air but you can stand in them. Mirrors the server-side
+   ;; block-collidable?.
+   :block-collidable-at?
+   (fn [x y z]
+     (try
+       (let [level (.level player)
+             pos (BlockPos. (int x) (int y) (int z))
+             state (.getBlockState level pos)]
+         (not (.isEmpty (.getCollisionShape state level pos))))
        (catch Exception _ false)))})
 
 (defn hand-center-pos

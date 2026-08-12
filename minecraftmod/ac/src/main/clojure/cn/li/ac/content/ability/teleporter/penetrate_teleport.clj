@@ -32,6 +32,7 @@
 
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
+            [cn.li.ac.content.ability.teleporter.penetrate-dest :as pdest]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]
             [cn.li.mcmod.platform.block-manipulation :as bm]
             [cn.li.mcmod.platform.entity :as entity]
@@ -54,14 +55,8 @@
 
 (def ^:private min-distance 0.5)
 
-(def ^:private stage2-clearance-steps 4)
 
 (def ^:private distance-channel :penetrate-tp/set-distance)
-
-
-
-(defn- trunc-int [x]
-  (int (double x)))
 
 
 
@@ -79,13 +74,13 @@
 
 (defn- cp-per-block [exp]
 
-  (cfg-lerp :cost.up.cp-per-block exp))
+  (pdest/cp-per-block exp))
 
 
 
 (defn- max-distance [exp]
 
-  (cfg-lerp :targeting.max-distance exp))
+  (pdest/max-distance exp))
 
 
 
@@ -107,12 +102,6 @@
 
 
 
-(defn- scan-step []
-
-  (cfg-double :targeting.scan-step))
-
-
-
 (defn- solid? [world-id bx by bz]
 
   (when (bm/available?)
@@ -120,141 +109,21 @@
 
 
 
-(defn- has-place?
-
-  "Original AC semantics: two non-solid blocks for feet/head."
-
-  [world-id x y z]
-
-  (let [ix (trunc-int x)
-        iy (trunc-int y)
-        iz (trunc-int z)]
-
-    (and (not (solid? world-id ix iy iz))
-
-         (not (solid? world-id ix (inc iy) iz)))))
-
-
-
 (defn- clamp-distance-by-cp
-
   [desired-distance current-cp exp]
-
-  (let [per-block (max 1.0e-6 (cp-per-block exp))
-
-        cp-limit (/ (double current-cp) per-block)
-
-        max-dist (max-distance exp)]
-    (min (double desired-distance) max-dist cp-limit)))
-
-
+  (pdest/clamp-distance-by-cp desired-distance current-cp exp))
 
 (defn- resolve-destination
-
   [player-id look-vec distance]
-
   (when (and look-vec (bm/available?))
-
     (let [world-id (geom/world-id-of player-id)
-
           player-pos (helper/player-position player-id)]
-
       (when (and world-id player-pos)
-
-        (let [step (scan-step)
-
-              px (double (:x player-pos))
-
-              py (double (:y player-pos))
-
-              pz (double (:z player-pos))
-
-              dx (double (:x look-vec))
-
-              dy (double (:y look-vec))
-
-              dz (double (:z look-vec))]
-
-          (loop [stage 0
-
-                 clear-steps 0
-
-                 x px
-
-                 y py
-
-                 z pz
-
-                 traveled 0.0]
-
-            (if (> traveled (double distance))
-
-              {:x x :y y :z z :distance traveled :available? (not= stage 1)}
-
-              (let [place? (has-place? world-id x y z)]
-
-                (cond
-
-                  (and (= stage 0) (not place?))
-
-                  (recur 1 clear-steps
-
-                         (+ x (* step dx))
-
-                         (+ y (* step dy))
-
-                         (+ z (* step dz))
-
-                         (+ traveled step))
-
-
-
-                  (and (= stage 1) place?)
-
-                  (recur 2 0
-
-                         (+ x (* step dx))
-
-                         (+ y (* step dy))
-
-                         (+ z (* step dz))
-
-                         (+ traveled step))
-
-
-
-                  (= stage 2)
-
-                  (if (or (not place?)
-                          (>= clear-steps stage2-clearance-steps))
-
-                    {:x x :y y :z z :distance traveled :available? true}
-
-                    (recur 2 (inc clear-steps)
-
-                           (+ x (* step dx))
-
-                           (+ y (* step dy))
-
-                           (+ z (* step dz))
-
-                           (+ traveled step)))
-
-
-
-                  :else
-
-                  (recur stage clear-steps
-
-                         (+ x (* step dx))
-
-                         (+ y (* step dy))
-
-                         (+ z (* step dz))
-
-                         (+ traveled step)))))))))))
-
-
+        (pdest/destination
+          {:x (:x player-pos) :y (:y player-pos) :z (:z player-pos)
+           :look-vec look-vec
+           :distance distance
+           :collidable? (fn [bx by bz] (solid? world-id bx by bz))})))))
 
 (defn- resolve-preview
 
@@ -337,6 +206,12 @@
         dest (:dest preview)]
 
     {:distance (double (or (:distance preview) 0.0))
+
+     ;; The CP-clamped march length for this tick. getDest reads CP, which the
+     ;; server owns; sending it lets the client re-march the wall itself every
+     ;; frame the way l_updateMark does, without a second copy of the resource
+     ;; rules.
+     :march-distance (double (or (:distance preview) 0.0))
 
      :available? (boolean (:available? preview))
 
@@ -531,8 +406,11 @@
 
                  :to-z (:z dest)})
 
-      ;; Upstream s_execute terminates without cost/exp/cooldown when the
-      ;; destination is unavailable (still inside a wall).
+      ;; Upstream s_execute calls terminate() when the destination is
+      ;; unavailable but has no `return` after it, and LambdaLib's terminate()
+      ;; only marks the context dead -- so it goes on to consume, teleport,
+      ;; grant exp and set the cooldown anyway, dropping the player inside the
+      ;; wall. That is a missing return, not a design, and is not reproduced.
       (if (and cost-ok?
                (:available? resolved)
 

@@ -37,6 +37,9 @@
                :penetrate-teleport/fx-end}
              @registered-topics*)))))
 
+(def ^:private color-available {:r 255 :g 255 :b 255 :a 255})
+(def ^:private color-unavailable {:r 255 :g 51 :b 51 :a 255})
+
 (defn- humanoid-quads [ops]
   (filter #(re-find #"^academy:textures/effects/tp_mark/\d+\.png$"
                     (str (:texture %)))
@@ -76,6 +79,47 @@
       (is (some #(<= (Math/abs (- % (+ 65.62 0.5))) 0.001) ys)
           "head top 0.5 above the mark")
       (is (every? #(<= (- 65.62 1.5) % (+ 65.62 0.53125)) ys)))))
+
+(deftest marker-re-marches-against-the-client-world-test
+  ;; l_updateMark re-runs getDest client-side every tick, setting the mark's
+  ;; position AND its available flag -- the flag paints it red, so a stale one
+  ;; lies about whether the blink lands. The march length still comes from the
+  ;; server, since getDest clamps it by CP.
+  (with-redefs [client-sounds/current-effect-owner owner
+                clojure.core/rand (fn [& _] 0.0)]
+    (pfx/init!)
+    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-live" :penetrate-teleport/fx-start
+                                         {:mode :start
+                                          ;; a deliberately stale server answer
+                                          :available? true :distance 12.0 :march-distance 12.0
+                                          :x 1.0 :y 64.0 :z 3.0}
+                                         :owner-key [:ctx "ctx-live"])
+    (let [view (fn [extra]
+                 (merge {:player-uuid "viewer"
+                         :player-x 0.0 :player-y 64.0 :player-z 0.0 :player-eye-y 65.62
+                         :player-yaw-rad 0.0 :player-pitch-rad 0.0}
+                        extra))
+          plan (fn [v] (:ops (arc-beam/effect-build-plan
+                              :penetrate-teleport {:x 0.0 :y 65.0 :z 0.0} v 0 nil)))
+          span (fn [ops]
+                 (let [ys (mapcat (fn [op]
+                                    (map (fn [k] (.y ^cn.li.mcmod.math.V3 (get op k))) [:p0 :p1 :p2 :p3]))
+                                  (humanoid-quads ops))]
+                   [(apply min ys) (apply max ys)]))]
+      ;; a solid slab at z in [4, 6] with clear air past it: the march stops
+      ;; beyond the wall, so the mark stands there and is available (white).
+      (let [ops (plan (view {:block-collidable-at?
+                             (fn [_x _y z] (<= 4 z 6))}))
+            anchor (+ 64.0 (- 65.62 64.0))]
+        (is (= [(- anchor 1.5) (+ anchor 0.53125)] (span ops))
+            "anchored at the marched point plus the caster's eye height")
+        (is (every? #(= color-available (:color %)) (humanoid-quads ops))))
+      ;; wall all the way: the march never comes out, so available? is false
+      ;; and the figure must be red even though the server said otherwise.
+      (let [ops (plan (view {:block-collidable-at? (fn [& _] true)}))]
+        (is (every? #(= color-unavailable (:color %)) (humanoid-quads ops))))
+      ;; no world access -> the server's answer stands
+      (is (seq (plan (view {})))))))
 
 (deftest unavailable-marker-is-red-tinted-and-silent-test
   ;; Upstream MarkRender tints the model glColor4d(1, 0.2, 0.2, 1) when
