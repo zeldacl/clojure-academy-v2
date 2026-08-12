@@ -129,7 +129,30 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     // oscillate ~41% (45-degree corners), reading as "suddenly smaller then
     // restored".
     private static final float SHIELD_DEFAULT_SPIN_DEG_PER_TICK = 0.1F;
+    // ...and it ramps: lerpf(0.8, 2, min(ticksExisted / 30, 1)). The spin is
+    // accumulated per frame upstream, so the angle here is that ramp's
+    // integral -- 0.4x the terminal speed at spawn, terminal from tick 30 on.
+    private static final float SHIELD_SPIN_RAMP_TICKS = 30.0F;
+    private static final float SHIELD_SPIN_INITIAL_FACTOR = 0.4F;
 
+
+    /**
+     * Accumulated spin angle for the shield renderers, matching
+     * RenderMdShield's `rotation += lerpf(0.8, 2, min(ticksExisted/30, 1)) * dt`
+     * integrated over `age` ticks.
+     */
+    private static float shieldSpinDegrees(float age, float terminalDegPerTick) {
+        float s1 = terminalDegPerTick;
+        float s0 = s1 * SHIELD_SPIN_INITIAL_FACTOR;
+        float r = SHIELD_SPIN_RAMP_TICKS;
+        float degrees;
+        if (age <= r) {
+            degrees = s0 * age + (s1 - s0) * age * age / (2.0F * r);
+        } else {
+            degrees = s0 * r + (s1 - s0) * r / 2.0F + s1 * (age - r);
+        }
+        return degrees % 360.0F;
+    }
     /**
      * LightShield / JetEngine shield (matching original RenderMdShield):
      * one translucent quad, oriented to the owner's yaw/pitch, spinning
@@ -156,15 +179,15 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", SHIELD_DEFAULT_SCALE))
                 * (0.2F + 0.8F * growth);
         float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
-        float rotation = (age * drawPlanParamFloat(rendererId, "spin-deg-per-tick", SHIELD_DEFAULT_SPIN_DEG_PER_TICK))
-                % 360.0F;
+        float rotation = shieldSpinDegrees(age,
+                drawPlanParamFloat(rendererId, "spin-deg-per-tick", SHIELD_DEFAULT_SPIN_DEG_PER_TICK));
 
-        float yaw = owner.yBodyRot;
+        // EntityMdShield/EntityDiamondShield orient to player.rotationYawHead,
+        // never the body yaw: with yBodyRot the shield stuck to the torso in
+        // third person (and on every other player), so turning your head left
+        // it behind.
+        float yaw = owner.getYHeadRot();
         float pitch = owner.getXRot();
-        if (owner == Minecraft.getInstance().player
-                && Minecraft.getInstance().options.getCameraType().isFirstPerson()) {
-            yaw = owner.getYRot();
-        }
 
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));
@@ -223,12 +246,12 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
                 * (0.2F + 0.8F * growth);
         float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
 
-        float yaw = owner.yBodyRot;
+        // EntityMdShield/EntityDiamondShield orient to player.rotationYawHead,
+        // never the body yaw: with yBodyRot the shield stuck to the torso in
+        // third person (and on every other player), so turning your head left
+        // it behind.
+        float yaw = owner.getYHeadRot();
         float pitch = owner.getXRot();
-        if (owner == Minecraft.getInstance().player
-                && Minecraft.getInstance().options.getCameraType().isFirstPerson()) {
-            yaw = owner.getYRot();
-        }
 
         poseStack.pushPose();
         poseStack.mulPose(Axis.YP.rotationDegrees(-yaw));

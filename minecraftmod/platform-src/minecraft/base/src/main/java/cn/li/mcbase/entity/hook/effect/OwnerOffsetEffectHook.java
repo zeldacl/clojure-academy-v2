@@ -38,7 +38,14 @@ public final class OwnerOffsetEffectHook implements ScriptedEffectHook {
         double vertical = spec == null ? DEFAULT_VERTICAL : spec.getDoubleParam("vertical", DEFAULT_VERTICAL);
         Vec3 look = owner.getLookAngle().normalize().scale(forward);
         Entity e = (Entity) entity;
-        e.setPos(owner.getX() + look.x, owner.getY() + vertical, owner.getZ() + look.z);
+        // EntityMdShield/EntityDiamondShield both sit at
+        // player.getPositionVector() + lookVec * 1 + (0, 1.1, 0) -- the look
+        // vector is three-dimensional there, so the shield rides up and down
+        // with the aim. Dropping look.y pinned it to a fixed height and the
+        // shield stopped tracking pitch entirely.
+        e.setPos(owner.getX() + look.x,
+                 owner.getY() + vertical + look.y,
+                 owner.getZ() + look.z);
         e.setYRot(owner.getYRot());
         e.setXRot(owner.getXRot());
     }

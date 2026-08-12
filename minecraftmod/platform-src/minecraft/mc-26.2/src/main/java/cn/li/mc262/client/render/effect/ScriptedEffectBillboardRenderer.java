@@ -226,6 +226,20 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         stack.popPose();
     }
 
+
+    // RenderMdShield accumulates `rotation += lerpf(0.8, 2, min(ticks/30, 1)) * dt`
+    // with dt in SECONDS, i.e. 0.04 -> 0.1 degrees per tick over the first 30
+    // ticks and 0.1 from then on. This is that ramp's integral.
+    private static float shieldSpinDegrees(float age) {
+        float s1 = 0.1F;
+        float s0 = s1 * 0.4F;
+        float r = 30.0F;
+        float degrees = age <= r
+                ? s0 * age + (s1 - s0) * age * age / (2.0F * r)
+                : s0 * r + (s1 - s0) * r / 2.0F + s1 * (age - r);
+        return degrees % 360.0F;
+    }
+
     private static void submitShield(ScriptedEntityRenderState<?> state, PoseStack stack,
                                      SubmitNodeCollector collector, boolean pyramid) {
         Identifier texture = parseTexture(planParamString(state.rendererId, "texture", ""));
@@ -239,7 +253,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         stack.mulPose(Axis.XP.rotationDegrees(state.xRot));
         stack.scale(scale, scale, scale);
         if (!pyramid) {
-            stack.mulPose(Axis.ZP.rotationDegrees(age * 0.1F));
+            stack.mulPose(Axis.ZP.rotationDegrees(shieldSpinDegrees(age)));
             submitQuad(stack, collector, texture, 0.5F, 0.5F, alpha);
         } else {
             collector.submitCustomGeometry(stack, RenderTypes.entityTranslucent(texture), (pose, vc) -> {
