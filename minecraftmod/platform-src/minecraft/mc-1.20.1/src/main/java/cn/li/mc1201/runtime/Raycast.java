@@ -10,11 +10,11 @@ import java.util.Set;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -26,7 +26,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastBlocks(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -69,7 +69,7 @@ public final class Raycast {
      * non-collidable blocks and fluids are transparent to the trace.
      */
     public static Map<String, Object> raycastCollidableBlocksOrWater(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -108,7 +108,7 @@ public final class Raycast {
     }
 
     private static Map<String, Object> buildBlockHit(
-            ServerLevel level,
+            Level level,
             Vec3 start,
             BlockHitResult result) {
         BlockPos pos = result.getBlockPos();
@@ -133,7 +133,7 @@ public final class Raycast {
      * selector used by AcademyCraft's MagManip acquisition trace.
      */
     public static Map<String, Object> raycastBlocksMatching(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -196,7 +196,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastEntities(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -258,7 +258,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastCombined(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -294,7 +294,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastCombinedExcluding(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -331,7 +331,7 @@ public final class Raycast {
     }
 
     private static Map<String, Object> raycastEntitiesExcluding(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -388,7 +388,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastAllEntities(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -447,7 +447,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastCombinedAll(
-            ServerLevel level,
+            Level level,
             double startX,
             double startY,
             double startZ,
@@ -483,7 +483,7 @@ public final class Raycast {
     }
 
     public static Map<String, Object> raycastCombinedFromPlayer(
-            ServerPlayer player,
+            Player player,
             double maxDistance,
             boolean livingOnly) {
         if (player == null) {
@@ -492,7 +492,7 @@ public final class Raycast {
         Vec3 eyePos = player.getEyePosition();
         Vec3 lookVec = player.getLookAngle();
         Map<String, Object> blockHit = raycastBlocks(
-                player.serverLevel(),
+                player.level(),
                 eyePos.x, eyePos.y, eyePos.z,
                 lookVec.x, lookVec.y, lookVec.z,
                 maxDistance);
@@ -517,7 +517,7 @@ public final class Raycast {
         return entityHit;
     }
 
-    public static Map<String, Object> getPlayerLookVector(ServerPlayer player) {
+    public static Map<String, Object> getPlayerLookVector(Player player) {
         if (player == null) {
             return null;
         }
@@ -530,7 +530,7 @@ public final class Raycast {
         return result;
     }
 
-    public static Map<String, Object> getPlayerPosition(ServerPlayer player) {
+    public static Map<String, Object> getPlayerPosition(Player player) {
         if (player == null) {
             return null;
         }
@@ -544,7 +544,7 @@ public final class Raycast {
         return result;
     }
 
-    public static Map<String, Object> raycastFromPlayer(ServerPlayer player, double maxDistance, boolean livingOnly) {
+    public static Map<String, Object> raycastFromPlayer(Player player, double maxDistance, boolean livingOnly) {
         if (player == null) {
             return null;
         }
@@ -558,7 +558,7 @@ public final class Raycast {
         double nearestDistance = Double.MAX_VALUE;
 
         if (livingOnly) {
-            for (LivingEntity entity : player.serverLevel().getEntitiesOfClass(LivingEntity.class, searchBox)) {
+            for (LivingEntity entity : player.level().getEntitiesOfClass(LivingEntity.class, searchBox)) {
                 double candidateDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
                 if (candidateDistance < nearestDistance) {
                     nearestDistance = candidateDistance;
@@ -566,7 +566,7 @@ public final class Raycast {
                 }
             }
         } else {
-            for (Entity entity : player.serverLevel().getEntitiesOfClass(Entity.class, searchBox)) {
+            for (Entity entity : player.level().getEntitiesOfClass(Entity.class, searchBox)) {
                 double candidateDistance = updateNearestPlayerHit(player, eyePos, end, entity, nearestDistance);
                 if (candidateDistance < nearestDistance) {
                     nearestDistance = candidateDistance;
@@ -598,7 +598,7 @@ public final class Raycast {
                 Math.max(startZ, endZ));
     }
 
-    private static double updateNearestPlayerHit(ServerPlayer player, Vec3 start, Vec3 end, Entity entity, double currentNearest) {
+    private static double updateNearestPlayerHit(Player player, Vec3 start, Vec3 end, Entity entity, double currentNearest) {
         if (entity == player || !entity.isPickable()) {
             return currentNearest;
         }
