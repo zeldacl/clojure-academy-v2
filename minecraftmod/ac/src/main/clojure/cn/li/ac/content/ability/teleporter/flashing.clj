@@ -131,11 +131,16 @@
 
       :back [(- fx) (- fy) (- fz)]
 
-      ;; strafe uses world-up cross for stable left/right movement vectors.
+      ;; Upstream rotates the unit vector (0, 0, -/+1) by rotateAroundZ(pitch)
+      ;; -- which leaves a pure-z vector untouched, so strafing is horizontal --
+      ;; and then by the yaw, keeping it UNIT length. Taking the horizontal
+      ;; perpendicular of the look vector gives the same direction but a length
+      ;; of cos(pitch): strafing while looking 45 degrees up only blinked 0.71
+      ;; of the distance, and looking straight up barely moved at all.
 
-      :left [fz 0.0 (- fx)]
+      :left (normalize-3d fz 0.0 (- fx))
 
-      :right [(- fz) 0.0 fx]
+      :right (normalize-3d (- fz) 0.0 fx)
 
       [fx fy fz])))
 
@@ -255,20 +260,13 @@
 
                        (resolve-hit-destination world-id hit {:x end-x :y end-y :z end-z})
 
-                       ;; No collision along the look ray: the marker would
-                       ;; float at eye level. Drop it onto the ground beneath
-                       ;; the endpoint (vertical probe) so the marking stays
-                       ;; grounded like the hit case.
-                       (let [ground (when (raycast/available?)
-                                      (raycast/raycast-blocks world-id
-                                                              end-x end-y end-z
-                                                              0.0 -1.0 0.0
-                                                              128.0))]
-                         {:to-x end-x
-                          :to-y (if ground
-                                  (+ 1.0 (double (or (:hit-y ground) (:y ground) end-y)))
-                                  end-y)
-                          :to-z end-z}))]
+                       ;; getDest's MISS branch is just dst -- eye + dir * dist.
+                       ;; Blinking into open air leaves you hanging there;
+                       ;; that is the skill (a GravityCancellor catches the
+                       ;; fall). The port used to drop a 128-block probe and
+                       ;; land you on the ground under the endpoint, which
+                       ;; moved the actual teleport, not only the marker.
+                       {:to-x end-x :to-y end-y :to-z end-z})]
 
         {:direction direction
 
