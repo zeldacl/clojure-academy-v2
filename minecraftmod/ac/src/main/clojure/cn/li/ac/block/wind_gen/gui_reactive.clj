@@ -61,7 +61,10 @@
 (defn- base-container? [c] (= (:container-type c) :wind-gen-base))
 
 (defn- completeness-alpha [completeness status]
-  (case completeness "complete" (if (= status "COMPLETE") [1.0 1.0 1.0] [0.6 1.0 1.0]) "no_top" [0.2 1.0 1.0] [0.2 0.2 1.0]))
+  ;; Tile :completeness values are (name kw) strings: "complete" / "no-top" /
+  ;; "base-only" — "no_top" (underscore) never matched, so a tower missing only
+  ;; its top kept the main+middle icons dark.
+  (case completeness "complete" (if (= status "COMPLETE") [1.0 1.0 1.0] [0.6 1.0 1.0]) "no-top" [0.2 1.0 1.0] [0.2 0.2 1.0]))
 
 (defn- attach-structure-bind! [r container _menu _player _signals]
   (let [clock (rt/clock-ms-sig r)

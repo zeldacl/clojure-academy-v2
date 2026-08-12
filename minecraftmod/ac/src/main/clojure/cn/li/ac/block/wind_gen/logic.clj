@@ -105,7 +105,11 @@
         :else nil))))
 
 (defn- find-main-above-from-base [level base-pos]
-  (loop [y (+ (pos/pos-y base-pos) 2) pillars 0]
+  ;; Scan from base+1: the first pillar sits directly on the base, and upstream
+  ;; (TileWindGenMain.isCompleteStructure) counts every pillar between base and
+  ;; main — starting at base+2 skipped it, so an 8-pillar tower (upstream's
+  ;; standard) was judged "no-top" and never completed.
+  (loop [y (+ (pos/pos-y base-pos) 1) pillars 0]
     (let [check-pos (pos/create-block-pos (pos/pos-x base-pos) y (pos/pos-z base-pos))
           be (world/get-tile-entity level check-pos)
           bid (when be (platform-be/get-block-id be))]
