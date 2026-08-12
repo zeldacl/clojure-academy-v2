@@ -214,10 +214,6 @@
                     :h (int size)
                     :alpha alpha}))))))
 
-(defn- ease-in-out [t]
-  (let [t (max 0.0 (min 1.0 (double t)))]
-  (* t t (- 3.0 (* 2.0 t)))))
-
 (defn- railgun-coin-active-threshold []
   (skill-config/tunable-double :railgun :qte.coin-active-threshold))
 
@@ -283,20 +279,25 @@
                              {:r 255 :g 215 :b 0 :a 255}
                              {:r 230 :g 190 :b 70 :a 230})}}))))
 
+;; WaveEffectUI(maxAlpha = 0.4, avgSize = 110, intensity = 1.6): ripples appear
+;; ANYWHERE on the screen, 88-132 px across, growing 20 px a second, living
+;; 1.5-2.5 seconds. The port had them clustered in a 50 px ring around the
+;; crosshair at a third of the size and a third of the life.
+(def ^:private vm-wave-max-alpha 0.4)
+(def ^:private vm-wave-avg-size 110.0)
+(def ^:private vm-wave-intensity 1.6)
+(def ^:private vm-wave-growth-px-per-second 20.0)
+
 (defn- spawn-vm-wave-circle [screen-w screen-h now-ms]
-  (let [cx (/ (double screen-w) 2.0)
-        cy (/ (double screen-h) 2.0)
-        offset-r (+ 8.0 (* (rand) 42.0))
-        angle (* (rand) 2.0 Math/PI)
-        life-ms (+ 520 (rand-int 260))
-        start-size (+ 8.0 (* (rand) 6.0))
-        end-size (+ 36.0 (* (rand) 32.0))]
-    {:x (+ cx (* offset-r (Math/cos angle)))
-     :y (+ cy (* offset-r (Math/sin angle)))
+  (let [size (* (+ 0.8 (* (rand) 0.4)) vm-wave-avg-size)
+        life-ms (long (* 1000.0 (+ 1.5 (* (rand) 1.0))))]
+    {:x (* (rand) (double screen-w))
+     :y (* (rand) (double screen-h))
      :born-ms now-ms
      :life-ms life-ms
-     :start-size start-size
-     :end-size end-size
+     :start-size size
+     ;; realSize = size + timeAlive * 20
+     :end-size (+ size (* vm-wave-growth-px-per-second (/ (double life-ms) 1000.0)))
      :seed (rand)}))
 
 (defn tick-vm-wave!
@@ -315,9 +316,14 @@
             (when (>= (- now-ms (long born-ms)) (long life-ms))
               (.remove circles (int i))))
           (recur (dec i))))
-      (let [last-spawn-ms (long (or (.get vm-wave-spawn-by-owner ok) 0))]
-        (when (and active? (>= (- now-ms last-spawn-ms) 90))
-          (.add circles (spawn-vm-wave-circle screen-w screen-h now-ms))
+      ;; update(): `if (RandUtils.nextFloat < deltaTime * intensity)` -- a
+      ;; Poisson-ish roll averaging `intensity` ripples a second, not a fixed
+      ;; cadence. The port fired one every 90 ms, about seven times too many.
+      (let [last-ms (long (or (.get vm-wave-spawn-by-owner ok) now-ms))
+            delta-s (/ (double (max 0 (- now-ms last-ms))) 1000.0)]
+        (when active?
+          (when (< (rand) (* delta-s vm-wave-intensity))
+            (.add circles (spawn-vm-wave-circle screen-w screen-h now-ms)))
           (.put vm-wave-spawn-by-owner ok (long now-ms))))
       (when (.isEmpty circles)
         (.remove vm-waves-by-owner ok))))
@@ -348,10 +354,13 @@
                       life (double (max 1 life-ms))
                       t (min 1.0 (/ elapsed life))
                       s (+ start-size (* (- end-size start-size) t))
-                      fade-in (min 1.0 (/ t 0.2))
-                      fade-out (if (> t 0.6) (/ (- 1.0 t) 0.4) 1.0)
-                      pulse (+ 0.85 (* 0.15 (Math/sin (+ (* t 12.0) (* seed Math/PI)))))
-                      alpha (* 0.72 (ease-in-out t) fade-in fade-out pulse)
+                      ;; Ripple.alpha: up over the first fifth, held to the
+                      ;; half, then straight down. Times maxAlpha.
+                      alpha (* vm-wave-max-alpha
+                               (cond
+                                 (< t 0.2) (/ t 0.2)
+                                 (< t 0.5) 1.0
+                                 :else (- 1.0 (/ (- t 0.5) 0.5))))
                       hs (/ s 2.0)]
                   {:src vm-wave-glow
                    :tint tint
