@@ -170,7 +170,13 @@
         ;; same mouse press for an inventory slot.
         (rt/set-drag-node-idx! rt -1)
         (rt/set-dragging?! rt false)
-        (gain-focus! rt -1)
+        (if (and hit (text-editable? hit))
+          ;; ...but an editable text field still needs focus to receive
+          ;; typing. Clicking one focuses it (regression from 5d94832ce,
+          ;; which made unhandled clicks clear focus — field clicks have no
+          ;; handler, so the info-area name/password fields died).
+          (gain-focus! rt hit-idx)
+          (gain-focus! rt -1))
         false))))
 
 (defn dispatch-mouse-release! [^UiRt rt mx my button]
