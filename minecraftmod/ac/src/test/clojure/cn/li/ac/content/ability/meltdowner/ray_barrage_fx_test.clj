@@ -143,3 +143,69 @@
                               1.0e-6)
                            (and (= sx 1.0) (= sz 0.0)))))
                   sub-rays)))))
+
+;; ---------------------------------------------------------------------------
+;; Composite parity: the pre-ray and the fan are different renderers upstream
+;; ---------------------------------------------------------------------------
+
+(defn- tick-fx! [n]
+  (dotimes [_ n]
+    (level-effects/update-effect-state! :ray-barrage
+      (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store)))))
+
+(defn- ops-for [ctx-id]
+  (:ops (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 70.0 :z 0.0}
+                                    {:player-uuid "other" :x 0.0 :y 64.0 :z 0.0} 0)))
+
+(defn- tube-radii
+  "Radius of each tube quad, from the chord between its two leading corners:
+  a 12-segment ring of radius r has chord 2r*sin(pi/12). Direction-independent,
+  which matters for the fan (every sub-ray points somewhere else)."
+  [ops]
+  (let [chord->r (/ 1.0 (* 2.0 (Math/sin (/ Math/PI 12.0))))]
+    (->> ops
+         (remove #(re-find #"effects/mdray" (str (:texture %))))
+         (map (fn [op]
+                (let [^cn.li.mcmod.math.V3 a (:p0 op)
+                      ^cn.li.mcmod.math.V3 b (:p1 op)]
+                  (* chord->r
+                     (Math/sqrt (+ (Math/pow (- (.-x a) (.-x b)) 2)
+                                   (Math/pow (- (.-y a) (.-y b)) 2)
+                                   (Math/pow (- (.-z a) (.-z b)) 2))))))))))
+
+(deftest preray-uses-the-barrage-pre-widths-test
+  ;; EntityBarrageRayPre: inner 0.045, outer 0.052, glow 0.4. The port drew
+  ;; every ray at these widths but left the glow board at its 1.5 default.
+  (arc-beam/enqueue-for-test! :ray-barrage "ctx-pre" :ray-barrage/fx-preray
+    {:mode :preray :hit? true
+     :start {:x 0.0 :y 64.0 :z 0.0}
+     :end {:x 15.0 :y 64.0 :z 0.0}})
+  (tick-fx! 5)
+  (let [ops (ops-for "ctx-pre")
+        glow (filter #(re-find #"effects/mdray_small/" (str (:texture %))) ops)
+        radii (tube-radii ops)]
+    (is (= 3 (count glow)))
+    (is (< 0.05 (apply max radii) 0.055) "outer 0.052")
+    (is (some (fn [r] (< 0.04 r 0.05)) radii) "inner 0.045")
+    ;; glow board width 0.4 — measured across the board
+    (let [board (first glow)
+          ^cn.li.mcmod.math.V3 a (:p0 board)
+          ^cn.li.mcmod.math.V3 d (:p3 board)
+          w (Math/sqrt (+ (Math/pow (- (.-x a) (.-x d)) 2)
+                          (Math/pow (- (.-y a) (.-y d)) 2)
+                          (Math/pow (- (.-z a) (.-z d)) 2)))]
+      (is (< 0.35 w 0.45) (str "glow board is 0.4 across, was 1.5: " w)))))
+
+(deftest barrage-fan-uses-the-small-ray-widths-test
+  ;; EntityMdRayBarrage extends SmallMdRayRender: inner 0.03, outer 0.045,
+  ;; glow 0.3 — narrower than the pre-ray, which the port did not distinguish.
+  (arc-beam/enqueue-for-test! :ray-barrage "ctx-fan" :ray-barrage/fx-barrage
+    {:mode :barrage
+     :silbarn {:x 0.0 :y 64.0 :z 0.0}
+     :yaw 0.0 :pitch 0.0})
+  (tick-fx! 5)
+  (let [ops (ops-for "ctx-fan")
+        radii (tube-radii ops)]
+    (is (seq radii))
+    (is (< (apply max radii) 0.05) "outer 0.045, not the pre-ray's 0.052")
+    (is (some (fn [r] (< 0.025 r 0.035)) radii) "inner 0.03")))

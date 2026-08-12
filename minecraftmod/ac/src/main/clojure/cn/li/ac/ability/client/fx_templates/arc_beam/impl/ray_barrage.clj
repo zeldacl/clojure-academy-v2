@@ -16,19 +16,64 @@
   ViewOptimize hand fix like the original; the barrage does not
   (EntityMdRayBarrage.needsViewOptimize() == false)."
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.mcmod.util.log :as log]))
 
-(def ^:private ray-style
-  {:width 0.052
-   :core-ratio 0.86
-   :outer-rgb {:r 106 :g 242 :b 106}
-   :outer-alpha (fn [_ life] (int (* 60 (+ 0.2 (* 0.8 life)))))
-   :inner-rgb {:r 216 :g 248 :b 216}
-   :inner-alpha (fn [_ life] (int (* 230 (+ 0.15 (* 0.85 life)))))})
+;; Two different renderers upstream, and the port used one for both:
+;;
+;;   EntityBarrageRayPre        inner 0.045, outer 0.052, glow 0.4 @0.5
+;;   EntityMdRayBarrage         extends SmallMdRayRender, so the mdray_small
+;;                              numbers: inner 0.03, outer 0.045, glow 0.3 @0.5
+;;
+;; The port drew both at the pre-ray's widths with the glow board left at its
+;; 1.5 default — nearly four times the pre-ray's board and five times the
+;; fan's.
+(def ^:private preray-style
+  {:textures "mdray_small"
+   :outer-radius 0.052 :inner-radius 0.045
+   :glow-width 0.4 :glow-alpha 127.0})
+
+(def ^:private barrage-style
+  {:textures "mdray_small"
+   :outer-radius 0.045 :inner-radius 0.03
+   :glow-width 0.3 :glow-alpha 127.0})
+
+(def ^:private outer-rgb {:r 106 :g 242 :b 106})
+(def ^:private inner-rgb {:r 216 :g 248 :b 216})
+(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
+
+;; EntityRayBase: blendIn 200ms (4 ticks), blendOut 400ms (8 ticks).
+(def ^:private blend-in-ticks 4.0)
+(def ^:private blend-out-ticks 8.0)
+
+(defn- ray-alpha
+  ^double [beam ^double base]
+  (let [max-ttl (double (max 1 (or (:max-ttl beam) 1)))
+        ttl (double (or (:ttl beam) 0))
+        age (- max-ttl ttl)]
+    (* base
+       (min 1.0 (/ age blend-in-ticks))
+       (min 1.0 (/ ttl blend-out-ticks)))))
+
+(defn- ray-ops
+  [camera-pos beam]
+  (let [{:keys [textures outer-radius inner-radius glow-width glow-alpha]}
+        (if (:barrage? beam) barrage-style preray-style)]
+    (concat
+      (ray-composite/glow-ops camera-pos (:start beam) (:end beam)
+        {:textures (ray-composite/glow-textures textures)
+         :width glow-width
+         :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}})
+      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+        outer-radius ray-composite/outer-head-fix
+        (assoc outer-rgb :a (int (ray-alpha beam 50.0))))
+      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+        inner-radius ray-composite/inner-head-fix
+        (assoc inner-rgb :a (int (ray-alpha beam 230.0)))))))
 
 (defn- all-rays
   []
@@ -106,7 +151,7 @@
 
 (defn- expanding-barrage-beam
   "Barrage sub rays grow OUT of the silbarn: the endpoint starts at the
-  silbarn and extends to full length over the first 10 ticks (upstream's
+  silbarn and extends to full length over the first 4 ticks (upstream's
   200ms blend-in), so the burst reads as rays SHOOTING from the silbarn
   instead of a full-length fan popping in instantly."
   [beam]
@@ -114,7 +159,7 @@
     beam
     (let [ttl (long (:ttl beam))
           max-ttl (long (:max-ttl beam))
-          scale (max 0.0 (min 1.0 (/ (double (- max-ttl ttl)) 10.0)))
+          scale (max 0.0 (min 1.0 (/ (double (- max-ttl ttl)) blend-in-ticks)))
           start (:start beam)
           end (:end beam)]
       (if (>= scale 1.0)
@@ -124,7 +169,7 @@
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
   (when-let [rays (seq (all-rays))]
-    (let [first-person? (boolean (:first-person? hand-center-pos))
+    (let [cam-v (vec3/map->v3 camera-pos)
           ;; Preray follows the original's needsViewOptimize: hand-fix the
           ;; START only, keeping the END anchored on the aim point ("Don't
           ;; fix end to get accurate pointing direction"); barrage rays are
@@ -135,15 +180,7 @@
                                                {:fix-end? false})
           barrage (map expanding-barrage-beam (filterv :barrage? rays))
           fixed (into preray-fixed barrage)]
-      {:ops (vec
-             (mapcat
-              (fn [beam]
-                (concat
-                 (fx-beam/fading-tube-beam-ops beam ray-style)
-                 (fx-beam/fading-glow-board-ops
-                  camera-pos beam ray-style
-                  {:first-person? (and first-person? (not (:barrage? beam)))})))
-              fixed))})))
+      {:ops (vec (mapcat #(ray-ops cam-v %) fixed))})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {:beam-queue {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]

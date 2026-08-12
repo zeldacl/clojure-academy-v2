@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.meltdowner.mine-ray-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [cn.li.ac.ability.client.effects.rv3]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
@@ -130,3 +131,52 @@
       (enqueue! enqueue-state! "ctx-cadence" :mine-ray/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (mr-fx/mine-ray-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
 ))
+
+;; ---------------------------------------------------------------------------
+;; Composite parity per variant
+;; ---------------------------------------------------------------------------
+
+(def ^:private mine-ray-ops* (var-get #'cn.li.ac.content.ability.meltdowner.mine-ray-fx/mine-ray-ops))
+
+(defn- variant-radii [variant]
+  (let [beam {:start (cn.li.ac.ability.client.effects.rv3/v3 0.0 64.0 0.0)
+              :end (cn.li.ac.ability.client.effects.rv3/v3 15.0 64.0 0.0)
+              :ttl 1 :max-ttl 1}
+        ops (mine-ray-ops* {:x 0.0 :y 70.0 :z 0.0} beam variant)
+        chord->r (/ 1.0 (* 2.0 (Math/sin (/ Math/PI 12.0))))]
+    {:glow (filter #(re-find #"effects/mdray" (str (:texture %))) ops)
+     :radii (->> ops
+                 (remove #(re-find #"effects/mdray" (str (:texture %))))
+                 (map (fn [op]
+                        (let [^cn.li.mcmod.math.V3 a (:p0 op)
+                              ^cn.li.mcmod.math.V3 b (:p1 op)]
+                          (* chord->r
+                             (Math/sqrt (+ (Math/pow (- (.-x a) (.-x b)) 2)
+                                           (Math/pow (- (.-y a) (.-y b)) 2)
+                                           (Math/pow (- (.-z a) (.-z b)) 2))))))))
+     :ops ops}))
+
+(deftest mine-ray-widths-match-each-variants-renderer-test
+  ;; basic  mdray_small  inner 0.03  outer 0.045
+  ;; expert mdray_expert inner 0.045 outer 0.056, inner alpha 180 (doRender)
+  ;; luck   mdray_luck   inner 0.04  outer 0.05, purple
+  ;; The port derived the inner radius from the outer by a 0.86 ratio and ran
+  ;; the outer 15-40% wide — about 1.5x the original bore on the inner.
+  (let [{:keys [radii glow ops]} (variant-radii :basic)]
+    (is (= 3 (count glow)))
+    (is (< 0.04 (apply max radii) 0.05) "basic outer 0.045")
+    (is (some (fn [r] (< 0.025 r 0.035)) radii) "basic inner 0.03")
+    (is (every? #(re-find #"mdray_small" (str (:texture %))) glow)))
+  (let [{:keys [radii glow ops]} (variant-radii :expert)]
+    (is (< 0.05 (apply max radii) 0.06) "expert outer 0.056")
+    (is (some (fn [r] (< 0.04 r 0.05)) radii) "expert inner 0.045")
+    (is (every? #(re-find #"mdray_expert" (str (:texture %))) glow))
+    (is (some #(= 180 (:a (:color %)))
+              (remove #(re-find #"effects/mdray" (str (:texture %))) ops))
+        "expert re-sets the inner colour to alpha 180 every frame"))
+  (let [{:keys [radii glow ops]} (variant-radii :luck)]
+    (is (< 0.045 (apply max radii) 0.055) "luck outer 0.05")
+    (is (some (fn [r] (< 0.035 r 0.045)) radii) "luck inner 0.04")
+    (is (every? #(re-find #"mdray_luck" (str (:texture %))) glow))
+    (is (some #(= {:r 205 :g 166 :b 232 :a 50} (:color %)) ops)
+        "luck outer is purple, not green")))

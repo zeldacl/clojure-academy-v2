@@ -2,7 +2,7 @@
   "Client FX for all mine-ray variants: composite beam glow (mdray_small
   style, matching upstream EntityMineRayBasic's RendererRayComposite) + loop
   sound + block progress indicator."
-  (:require [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+  (:require [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.ac.config.modid :as modid]
@@ -31,31 +31,52 @@
 ;;    0.05, glow 0.45 @0.6
 ;; (the glow-board default 1.5 is the barrage fan's wide glow — a single
 ;; mining ray keeps the original's tight widths).
-(def ^:private mine-ray-styles
-  {:basic  {:width 0.052
-            :core-ratio 0.86
-            :glow-width 0.3
-            :outer-rgb {:r 106 :g 242 :b 106}
-            :outer-alpha (fn [_ life] (int (* 60 (+ 0.2 (* 0.8 life)))))
-            :inner-rgb {:r 216 :g 248 :b 216}
-            :inner-alpha (fn [_ life] (int (* 230 (+ 0.15 (* 0.85 life)))))}
-   :expert {:width 0.08
-            :core-ratio 0.86
-            :glow-width 0.5
-            :outer-rgb {:r 106 :g 242 :b 106}
-            :outer-alpha (fn [_ life] (int (* 60 (+ 0.2 (* 0.8 life)))))
-            :inner-rgb {:r 216 :g 248 :b 216}
-            :inner-alpha (fn [_ life] (int (* 230 (+ 0.15 (* 0.85 life)))))}
-   :luck   {:width 0.07
-            :core-ratio 0.86
-            :glow-width 0.45
-            :outer-rgb {:r 205 :g 166 :b 232}
-            :outer-alpha (fn [_ life] (int (* 60 (+ 0.2 (* 0.8 life)))))
-            :inner-rgb {:r 241 :g 229 :b 247}
-            :inner-alpha (fn [_ life] (int (* 230 (+ 0.15 (* 0.85 life)))))}})
+;; The cylinders are ShaderNotex (untextured solid colour) upstream; the
+;; shared beam sprite reads the same at these radii.
+(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
 
-(defn- ray-style [variant]
-  (get mine-ray-styles (or variant :basic) (:basic mine-ray-styles)))
+(def ^:private mine-ray-styles
+  {:basic  {:glow-textures "mdray_small"
+            :outer-radius 0.045 :outer-rgb {:r 106 :g 242 :b 106} :outer-alpha 50.0
+            :inner-radius 0.03  :inner-rgb {:r 216 :g 248 :b 216} :inner-alpha 230.0
+            :glow-width 0.3     :glow-alpha 127.0}
+   :expert {:glow-textures "mdray_expert"
+            :outer-radius 0.056 :outer-rgb {:r 106 :g 242 :b 106} :outer-alpha 50.0
+            ;; EntityMineRayExpert re-sets the inner colour every frame in
+            ;; doRender, at alpha 180 rather than the constructor's 230 (and
+            ;; the glow at 0.5, not the constructor's 0.7).
+            :inner-radius 0.045 :inner-rgb {:r 216 :g 248 :b 216} :inner-alpha 180.0
+            :glow-width 0.5     :glow-alpha 127.0}
+   :luck   {:glow-textures "mdray_luck"
+            :outer-radius 0.05  :outer-rgb {:r 205 :g 166 :b 232} :outer-alpha 50.0
+            :inner-radius 0.04  :inner-rgb {:r 241 :g 229 :b 247} :inner-alpha 230.0
+            :glow-width 0.45    :glow-alpha 153.0}})
+
+;; EntityRayBase: blendIn 200ms, blendOut 400ms. A mining ray's life is
+;; effectively unbounded (233333) so only the blend-in ever runs; the ray is
+;; re-queued per tick here, so hold it at full strength.
+(defn- mine-ray-ops
+  "RendererRayComposite for a mining ray: the two cylinders plus the three
+  glow boards, at the variant's own radii and colours.
+
+  The port had a single tube pair with the outer radius 15-40% wide and the
+  inner one derived from it by a 0.86 ratio — roughly 1.5x the original bore —
+  and tinted the glow board with the outer cylinder's colour."
+  [camera-pos beam variant]
+  (let [{:keys [glow-textures outer-radius outer-rgb outer-alpha
+                inner-radius inner-rgb inner-alpha glow-width glow-alpha]}
+        (get mine-ray-styles (or variant :basic) (:basic mine-ray-styles))]
+    (concat
+      (ray-composite/glow-ops (vec3/map->v3 camera-pos) (:start beam) (:end beam)
+        {:textures (ray-composite/glow-textures glow-textures)
+         :width glow-width
+         :color {:r 255 :g 255 :b 255 :a (int glow-alpha)}})
+      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+        outer-radius ray-composite/outer-head-fix
+        (assoc outer-rgb :a (int outer-alpha)))
+      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+        inner-radius ray-composite/inner-head-fix
+        (assoc inner-rgb :a (int inner-alpha))))))
 
 (def ^:private mine-ray-length 15.0)
 (def ^:private loop-sound-id (modid/namespaced-path "md.mine_loop"))
@@ -241,17 +262,10 @@
         ;; luck purple).
         beam-ops (when (and (seq states) (map? hand-center-pos))
                    (when-let [beam (mine-ray-beam hand-center-pos)]
-                     (let [first-person? (boolean (:first-person? hand-center-pos))
-                           style (ray-style (or (:variant (first states)) :basic))
+                     (let [variant (or (:variant (first states)) :basic)
                            fixed (arc-beam/view-fix-rays hand-center-pos [beam]
                                                          {:fix-end? false})]
-                       (vec (mapcat (fn [b]
-                                      (concat
-                                       (fx-beam/fading-tube-beam-ops b style)
-                                       (fx-beam/fading-glow-board-ops
-                                         camera-pos b style
-                                         {:first-person? first-person?})))
-                                    fixed)))))
+                       (vec (mapcat #(mine-ray-ops camera-pos % variant) fixed)))))
         box-ops (mapcat (fn [st]
                           (when (and (:active? st) (:target st))
                             (progress-box-ops (:target st)
