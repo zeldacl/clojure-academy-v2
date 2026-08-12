@@ -33,7 +33,7 @@
   [owner disconnect-msg routing-payload rebuild!]
   (fn [_linked]
     (net-client/send-to-server
-      owner disconnect-msg routing-payload
+      owner (disconnect-msg) routing-payload
       (fn [r] (handle-mutation-response! rebuild! r)))))
 
 (defn- connect-handler
@@ -41,7 +41,7 @@
   (fn [target pass]
     (net-client/send-to-server
       owner
-      connect-msg
+      (connect-msg)
       (connect-payload-fn routing-payload target pass)
       (fn [r] (handle-mutation-response! rebuild! r)))))
 

@@ -86,6 +86,14 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity implements
         if (level != null && !level.isClientSide()) {
             BlockState blockState = getBlockState();
             level.sendBlockUpdated(worldPosition, blockState, blockState, 3);
+            // sendBlockUpdated does not deliver the BE data packet; push the
+            // update tag so client TESRs reading custom state see changes.
+            Packet<?> pkt = getUpdatePacket();
+            if (pkt != null && level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                serverLevel.getChunkSource().chunkMap
+                        .getPlayers(new net.minecraft.world.level.ChunkPos(worldPosition), false)
+                        .forEach(p -> p.connection.send(pkt));
+            }
         }
     }
 

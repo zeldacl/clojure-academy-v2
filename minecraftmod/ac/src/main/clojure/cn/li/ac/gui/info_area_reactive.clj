@@ -11,7 +11,12 @@
            [cn.li.mcmod.ui.node INode]))
 
 (def ^:private row-h 10.0)
-(def ^:private label-w 42.0)
+;; Upstream TechUI numbers (expectWidth 100): rows are (100-10)=90 wide at
+;; x=6, keyLength=40 labels, valueArea size(40,8) at x=40 — the editable
+;; value's visible window is exactly 40px (5 chars @ font 8) before scrolling.
+(def ^:private label-w 40.0)
+(def ^:private row-w 90.0)
+(def ^:private value-w 40.0)
 (def ^:private idle-color 0xFFFFFFFF)
 (def ^:private edit-color 0xFF2180D8)
 
@@ -54,8 +59,9 @@
   (let [^UiRt rt (:rt ctx)
         y @(:y ctx)
         id (next-id! ctx)
+        ;; Upstream sepline: (expectWidth-3, 8) at pos(3,0).
         spec {:kind :text
-              :props {:id id :x 6.0 :y y :w 98.0 :h 8.0
+              :props {:id id :x 3.0 :y y :w (- 100.0 3.0) :h 8.0
                       :text (str "-- " label " --")
                       :font-size 6.0 :color 0x99FFFFFF}}]
     (rt/build-child! rt spec (area-node rt))
@@ -104,18 +110,20 @@
         value-id (keyword (str (name row-id) "-value"))
         value-color (if editable? edit-color idle-color)
         ;; AcademyCraft-style [ ] brackets flanking the editable value
-        ;; (upstream: box("[").pos(-4,0), box("]").pos(valueArea.width + 2, 0))
+        ;; (upstream: box("[").pos(-4,0), box("]").pos(valueArea.width + 2, 0)
+        ;; — children of the 40px valueArea at x=40, so [ lands at 36 and
+        ;; ] at 82 row-local; both stay inside the 90-wide row).
         brackets (when editable?
                    [{:kind :text
                      :props {:id (keyword (str (name row-id) "-lb"))
-                             :x (- label-w 6.0) :y 0.0 :w 10.0 :h row-h
+                             :x (- label-w 4.0) :y 0.0 :w 10.0 :h row-h
                              :text "[" :font-size 8.0 :color idle-color}}
                     {:kind :text
                      :props {:id (keyword (str (name row-id) "-rb"))
-                             :x (+ label-w (- 98.0 label-w) 2.0) :y 0.0 :w 10.0 :h row-h
+                             :x (+ label-w value-w 2.0) :y 0.0 :w 10.0 :h row-h
                              :text "]" :font-size 8.0 :color idle-color}}])
         row-spec {:kind :group
-                  :props {:id row-id :x 6.0 :y y :w 98.0 :h row-h}
+                  :props {:id row-id :x 6.0 :y y :w row-w :h row-h}
                   :children (vec
                               (concat
                                 [{:kind :text
@@ -123,7 +131,7 @@
                                           :text (str label) :font-size 8.0 :color 0xFFAAAAAA}}
                                  {:kind :text
                                   :props (cond-> {:id value-id
-                                                  :x label-w :y 0.0 :w (- 98.0 label-w) :h row-h
+                                                  :x label-w :y 0.0 :w value-w :h row-h
                                                   :text (if (fn? value) (value) (str value))
                                                   :font-size 8.0 :color value-color
                                                   :editable? (boolean editable?)}

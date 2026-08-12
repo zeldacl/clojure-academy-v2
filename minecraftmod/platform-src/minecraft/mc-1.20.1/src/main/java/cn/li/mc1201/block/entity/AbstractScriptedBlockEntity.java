@@ -10,7 +10,9 @@ import cn.li.mcver.BlockEntityIo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.Connection;
+import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -69,7 +71,20 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity implements
     public void syncCustomStateToClient() {
         if (level != null && !level.isClientSide) {
             BlockState blockState = getBlockState();
+            // Re-render + neighbor updates.
             level.sendBlockUpdated(worldPosition, blockState, blockState, 3);
+            // sendBlockUpdated does NOT deliver the BE data packet (no
+            // ClientboundBlockEntityDataPacket in its 1.20.1 path), so the
+            // client's custom state stays at its chunk-load snapshot — TESRs
+            // that read it (wind generator fan, phase-gen liquid, cat engine
+            // rotor) never see updates. Push the update tag to the players
+            // tracking this chunk only (not every player in the dimension).
+            Packet<?> pkt = getUpdatePacket();
+            if (pkt != null && level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                serverLevel.getChunkSource().chunkMap
+                        .getPlayers(new ChunkPos(worldPosition), false)
+                        .forEach(p -> p.connection.send(pkt));
+            }
         }
     }
 

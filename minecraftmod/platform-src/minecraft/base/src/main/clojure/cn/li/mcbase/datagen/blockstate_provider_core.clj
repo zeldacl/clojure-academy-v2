@@ -65,13 +65,18 @@
      :textures cube-config
      :particle (:north cube-config)}
     (if-let [texture-config (blockstate-def/get-model-texture-config model-name)]
+      ;; particle must be explicit: the vanilla cube parent's own particle is
+      ;; "#particle", which no child texture ever fills, so without it the
+      ;; breaking overlay and break particles render the purple-black missing
+      ;; texture (wireless-node blocks).
       {:kind :cube
        :textures {:down (:vert texture-config)
                   :up (:vert texture-config)
                   :north (:side texture-config)
                   :south (:side texture-config)
                   :east (:side texture-config)
-                  :west (:side texture-config)}}
+                  :west (:side texture-config)}
+       :particle (:side texture-config)}
       (let [registry-name (model-id->registry-name model-name)
             block-spec (registry-name->block-spec registry-name)
             parent (block-parent-from-spec registry-name)
@@ -80,7 +85,13 @@
         (if (or explicit-texture (not= parent "minecraft:block/cube_all"))
           {:kind :parent
            :parent parent
-           :textures (when explicit-texture {:all explicit-texture})}
+           ;; cube_all's own "particle": "#all" resolves through the child's
+           ;; "all" texture; other parents (block/block) declare no particle,
+           ;; so without an explicit one the breaking overlay and break
+           ;; particles render the purple-black missing sprite.
+           :textures (cond-> (when explicit-texture {:all explicit-texture})
+                       (and explicit-texture (not= parent "minecraft:block/cube_all"))
+                       (assoc :particle explicit-texture))}
           {:kind :cube-all
            :texture (block-texture-from-spec registry-name)})))))
 

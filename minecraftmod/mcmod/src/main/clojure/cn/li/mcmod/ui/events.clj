@@ -4,6 +4,7 @@
             [cn.li.mcmod.ui.layout :as layout]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.slot-write :as slot-write]
+            [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
@@ -52,6 +53,28 @@
     (let [evt {:value (text-value n) :node-idx (.getIdx n)}]
       (invoke-handlers! event-key handlers rt n evt))))
 
+(defn- display-text [^INode n]
+  (let [s (text-value n)]
+    (if (boolean (get (.getStaticProps n) :masked?))
+      (apply str (repeat (count s) "*"))
+      s)))
+
+(defn- scroll-editable-into-view!
+  "Match upstream TextBox.checkCaretRegion: text wider than the field scrolls
+   left so the typing end (tail) stays visible — it never overflows the box.
+   The renderer already offsets text by the node's x-offset dslot (idx 1), so
+   writing a negative offset scrolls without touching the text nodes. Measured
+   on the displayed text (masked fields measure the \"*\" echo, like upstream's
+   processedContent)."
+  [^INode n]
+  (let [w (double (.getW n))
+        fs (double (or (.getDSlot n 0) 14.0))
+        tw (double (or (bridge/font-text-width-optional nil (display-text n) fs) 0.0))
+        off (if (and (pos? w) (> tw w)) (- (- tw w)) 0.0)]
+    (when-not (== off (double (.getDSlot n 1)))
+      (.setDSlot n 1 off)
+      (.setFlag n node/FLAG-RENDER-DIRTY))))
+
 (defn dispatch-editable-key!
   "Handle backspace / enter / char for focused editable :text nodes.
    Returns true when the key was consumed."
@@ -68,6 +91,7 @@
               (let [curr (text-value n)]
                 (when (pos? (count curr))
                   (set-text-value! n (subs curr 0 (dec (count curr))))
+                  (scroll-editable-into-view! n)
                   (emit-text-event! rt n :change-content))
                 true)
 
@@ -76,6 +100,7 @@
 
               has-char?
               (do (set-text-value! n (str (text-value n) typed-char))
+                  (scroll-editable-into-view! n)
                   (emit-text-event! rt n :change-content)
                   true)
 
@@ -141,7 +166,12 @@
     (when (>= node-idx 0)
       (when-let [^INode node (rt/node-by-idx rt node-idx)]
         (.setFlag node node/FLAG-FOCUSED)
-        (.setFlag node node/FLAG-RENDER-DIRTY))
+        (.setFlag node node/FLAG-RENDER-DIRTY)
+        ;; Recompute the scroll offset on focus: a programmatic text set (connect
+        ;; clears the password, teleport clears the name) leaves the previous
+        ;; scroll in the x-offset dslot; the field must show its tail fresh.
+        (when (text-editable? node)
+          (scroll-editable-into-view! node)))
       (when-let [handlers (rt/get-event-handlers rt node-idx :gain-focus)]
         (when-let [^INode node (rt/node-by-idx rt node-idx)]
           (let [evt {:node-idx node-idx}]
@@ -170,7 +200,13 @@
         ;; same mouse press for an inventory slot.
         (rt/set-drag-node-idx! rt -1)
         (rt/set-dragging?! rt false)
-        (gain-focus! rt -1)
+        (if (and hit (text-editable? hit))
+          ;; ...but an editable text field still needs focus to receive
+          ;; typing. Clicking one focuses it (regression from 5d94832ce,
+          ;; which made unhandled clicks clear focus — field clicks have no
+          ;; handler, so the info-area name/password fields died).
+          (gain-focus! rt hit-idx)
+          (gain-focus! rt -1))
         false))))
 
 (defn dispatch-mouse-release! [^UiRt rt mx my button]
