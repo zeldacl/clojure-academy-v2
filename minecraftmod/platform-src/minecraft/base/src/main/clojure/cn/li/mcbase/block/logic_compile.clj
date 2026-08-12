@@ -19,7 +19,7 @@
 (defn- container-key [c primary alt]
   (or (get c primary) (get c alt)))
 
-(defn- compile-container ^ITileContainerLogic [c]
+(defn- ^ITileContainerLogic compile-container [c]
   (when c
     (let [get-size              (or (container-key c :get-size nil)
                                     (constantly 0))
@@ -59,7 +59,7 @@
         (canPlaceItemThroughFace [_ be s st sd] (boolean (can-place be s st sd)))
         (canTakeItemThroughFace [_ be s st sd] (boolean (can-take be s st sd)))))))
 
-(defn- compile-capability ^ITileCapabilityLogic [capability-keys]
+(defn- ^ITileCapabilityLogic compile-capability [capability-keys]
   (when (seq capability-keys)
     (let [keys (set capability-keys)]
       (reify ITileCapabilityLogic
@@ -69,7 +69,7 @@
               (when-let [factory (cap-registry/get-handler-factory k)]
                 (factory be side)))))))))
 
-(defn compile-tile-logic ^TileLogicBundle
+(defn ^TileLogicBundle compile-tile-logic
   "Compile merged tile cfg (post tile-kind merge) into a single TileLogicBundle."
   [cfg]
   (let [tick-fn      (:tick-fn cfg)

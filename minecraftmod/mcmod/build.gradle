@@ -201,6 +201,9 @@ dependencies {
 }
 
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')
+// The test support installs neutral runtime facades shared with platform AOT
+// code; keep those namespaces on mcmod's test source path for clean builds.
+sourceSets.test.clojure.srcDir rootProject.file('platform-src/platform/shared/src/main/clojure')
 
 def mcmodTestOnlyNamespaces = (System.getProperty('mcmod.test.only') ?: '')
     .split(',')
