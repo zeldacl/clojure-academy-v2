@@ -32,13 +32,15 @@
    ;; RenderDiamondShield): a 3D DIAMOND PYRAMID — four triangle faces from
    ;; the apex (0,0,1) to the rim of the diamond base, oriented to the
    ;; owner's yaw/pitch — NOT the flat spinning quad the light-shield uses.
+   ;; RenderDiamondShield's scale is a flat glScalef(1.5); the 1.8 that was
+   ;; here is EntityDiamondShield.SIZE, which only sizes the bounding box.
    {:id "diamond-shield"
     :kind :diamond-pyramid
     :state {:layer :translucent
             :blend :alpha
             :cull :off}
     :params {:texture (modid/namespaced-path "textures/effects/diamond_shield.png")
-             :scale 1.8}}
+             :scale 1.5}}
 
    {:id "marker-billboard"
     :kind :billboard-cross

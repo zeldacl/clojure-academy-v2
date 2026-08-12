@@ -4,6 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import cn.li.mcbase.clj.ClojureInterop;
+import cn.li.mc1211.client.render.ModRenderTypes;
 import cn.li.mc1211.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import net.minecraft.client.Minecraft;
@@ -123,6 +124,8 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
     private static final int BILLBOARD_CROSS_DEFAULT_B = 255;
 
     private static final float SHIELD_DEFAULT_SCALE = 1.8F;
+    // RenderDiamondShield's flat glScalef(1.5) - not EntityDiamondShield.SIZE.
+    private static final float DIAMOND_DEFAULT_SCALE = 1.5F;
     // Original RenderMdShield spins at lerpf(0.8, 2, ...) degrees PER SECOND
     // (GameTimer seconds) - a full turn takes minutes, so the shield is
     // visually static. A fast spin makes the diamond's bounding width
@@ -222,9 +225,16 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
      * RenderDiamondShield): a 3D DIAMOND PYRAMID - four triangle faces from
      * the apex (0,0,1) to the four rim vertices of the diamond base
      * (-1,0,0)(0,-1,0)(1,0,0)(0,1,0), oriented to the owner's yaw/pitch.
-     * SIZE grows from 0.2x over 15 ticks and alpha fades in over 6 ticks
-     * (same growth as the light-shield). Each face is emitted as a
-     * degenerate QUAD (apex repeated) since entityTranslucent is QUADS.
+     * Each face is emitted as a degenerate QUAD (apex repeated) since the
+     * render type is QUADS.
+     *
+     * Unlike the light shield this one does NOT grow or fade: RenderDiamondShield
+     * never reads ticksExisted, it draws at a flat glScalef(1.5) with the
+     * material's own opaque colour, depth test and alpha test both off.
+     * EntityDiamondShield.SIZE = 1.8 is the bounding box, not the render scale;
+     * borrowing the light shield's 1.8 + 0.2x-over-15-ticks growth meant the
+     * diamond spent the entire 15-tick dash still growing and still fading in,
+     * so it never once looked like the original.
      */
     private void renderDiamondPyramid(T entity,
                                       String rendererId,
@@ -240,11 +250,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         if (owner == null) {
             return;
         }
-        float age = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
-        float growth = Mth.clamp(age / 15.0F, 0.0F, 1.0F);
-        float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", 1.8F))
-                * (0.2F + 0.8F * growth);
-        float alpha = Mth.clamp(age / 6.0F, 0.0F, 1.0F);
+        float size = Math.max(0.01F, drawPlanParamFloat(rendererId, "scale", DIAMOND_DEFAULT_SCALE));
 
         // EntityMdShield/EntityDiamondShield orient to player.rotationYawHead,
         // never the body yaw: with yBodyRot the shield stuck to the torso in
@@ -260,8 +266,11 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
 
         PoseStack.Pose pose = poseStack.last();
         Matrix4f mat = pose.pose();
-        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
-        int a = (int) (255.0F * alpha);
+        // RenderDiamondShield draws with GL_DEPTH_TEST and GL_ALPHA_TEST off and
+        // GL_CULL_FACE off - the gem shows through terrain and never culls its
+        // back faces. academyQuadsTranslucent is exactly that state.
+        VertexConsumer vc = bufferSource.getBuffer(ModRenderTypes.academyQuadsTranslucent(texture));
+        int a = 255;
         int fullBright = 0x00F000F0;
 
         // Upstream mesh UVs: {0,0}{1,1}{0,0}{1,1} for the four rim vertices,
@@ -278,8 +287,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
             float[][] faceUvs = {rimUvs[f], rimUvs[(f + 1) % 4], apexUv, apexUv};
             for (int i = 0; i < 4; i++) {
                 vc.addVertex(mat, face[i][0], face[i][1], face[i][2]).setColor(255, 255, 255, a)
-                        .setUv(faceUvs[i][0], faceUvs[i][1]).setOverlay(OverlayTexture.NO_OVERLAY).setLight(fullBright)
-                        .setNormal(pose, 0.0F, 0.0F, 1.0F);
+                        .setUv(faceUvs[i][0], faceUvs[i][1]).setLight(fullBright);
             }
         }
 

@@ -245,9 +245,21 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         Identifier texture = parseTexture(planParamString(state.rendererId, "texture", ""));
         if (texture == null) return;
         float age = state.ageTicks + state.partialTick;
-        float scale = Math.max(0.01F, planFloat(state.rendererId, "scale", 1.8F))
-                * (0.2F + 0.8F * Mth.clamp(age / 15.0F, 0, 1));
-        int alpha = (int) (255.0F * Mth.clamp(age / 6.0F, 0, 1));
+        float scale;
+        int alpha;
+        if (pyramid) {
+            // RenderDiamondShield never reads ticksExisted: flat glScalef(1.5),
+            // opaque, no growth and no fade-in. (EntityDiamondShield.SIZE = 1.8
+            // is its bounding box, not its render scale.) It also draws with
+            // depth test off, which this platform cannot express without a
+            // custom pipeline -- left depth-tested for now.
+            scale = Math.max(0.01F, planFloat(state.rendererId, "scale", 1.5F));
+            alpha = 255;
+        } else {
+            scale = Math.max(0.01F, planFloat(state.rendererId, "scale", 1.8F))
+                    * (0.2F + 0.8F * Mth.clamp(age / 15.0F, 0, 1));
+            alpha = (int) (255.0F * Mth.clamp(age / 6.0F, 0, 1));
+        }
         stack.pushPose();
         stack.mulPose(Axis.YP.rotationDegrees(-state.yRot));
         stack.mulPose(Axis.XP.rotationDegrees(state.xRot));
@@ -258,12 +270,17 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         } else {
             collector.submitCustomGeometry(stack, RenderTypes.entityTranslucent(texture), (pose, vc) -> {
                 Matrix4f m = pose.pose();
+                // Upstream mesh UVs: {0,0}{1,1}{0,0}{1,1} on the rim and {0,1}
+                // on the shared apex, so the texture runs continuously across
+                // the faces and the pyramid reads as one gem.
                 float[][] rim = {{-1,0,0},{0,-1,0},{1,0,0},{0,1,0}};
+                float[][] rimUv = {{0,0},{1,1},{0,0},{1,1}};
                 for (int i = 0; i < 4; i++) {
-                    vertex(vc, pose, m, rim[i][0], rim[i][1], 0, 0, 1, alpha);
-                    vertex(vc, pose, m, rim[(i + 1) % 4][0], rim[(i + 1) % 4][1], 0, 1, 1, alpha);
-                    vertex(vc, pose, m, 0, 0, 1, 0.5F, 0, alpha);
-                    vertex(vc, pose, m, 0, 0, 1, 0.5F, 0, alpha);
+                    int j = (i + 1) % 4;
+                    vertex(vc, pose, m, rim[i][0], rim[i][1], 0, rimUv[i][0], rimUv[i][1], alpha);
+                    vertex(vc, pose, m, rim[j][0], rim[j][1], 0, rimUv[j][0], rimUv[j][1], alpha);
+                    vertex(vc, pose, m, 0, 0, 1, 0, 1, alpha);
+                    vertex(vc, pose, m, 0, 0, 1, 0, 1, alpha);
                 }
             });
         }
