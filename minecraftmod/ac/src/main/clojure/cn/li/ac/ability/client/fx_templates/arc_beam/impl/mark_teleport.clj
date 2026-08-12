@@ -3,11 +3,9 @@
 
   The aim marker is a humanoid at the destination: SimpleModelBiped textured
   with the tp_mark 7-frame effect sequence (frame = ticksExisted / 2.5 % 7),
-  feet on the mark, facing the caster. The mark entity copies the player's
-  rotation every tick, so its front always faces the local player — an
-  upright camera-facing quad reproduces that view. Each tick the mark emits
-  a green TPParticleFactory particle 40% of the time (upstream
-  rand.nextDouble() < 0.4) around the mark.
+  hanging from the mark and facing back at the caster. Each tick the mark
+  emits a green TPParticleFactory particle 40% of the time (upstream
+  rand.nextDouble() < 0.4) around it.
 
   Marker geometry/particles live in tp-mark (shared with penetrate-teleport,
   which uses the same EntityTPMarking)."
@@ -75,13 +73,14 @@
                          {}
                          states)))))
 
-(defn- build-plan [camera-pos _hand-center-pos _tick]
+(defn- build-plan [camera-pos hand-center-pos _tick]
   (let [store (level-effects/effect-state-snapshot :mark-teleport)
         cam (rv3/map->v3 camera-pos)
+        yaw-rad (:player-yaw-rad hand-center-pos)
         ops (vec (mapcat (fn [mk]
                            (when (and (:active? mk) (map? (:target mk)))
                              (let [target (:target mk)]
-                               (into (tp-mark/humanoid-ops cam target (:ticks mk) mark-color)
+                               (into (tp-mark/humanoid-ops yaw-rad target (:ticks mk) mark-color)
                                      (bp/particle-ops cam (:ambient-particles mk))))))
                          (vals (:effect-state store))))]
     (when (seq ops)

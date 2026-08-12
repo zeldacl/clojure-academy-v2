@@ -83,13 +83,14 @@
                          {}
                          states)))))
 
-(defn- build-plan [camera-pos _hand-center-pos _tick]
+(defn- build-plan [camera-pos hand-center-pos _tick]
   (let [store (level-effects/effect-state-snapshot :penetrate-teleport)
         cam (rv3/map->v3 camera-pos)
+        yaw-rad (:player-yaw-rad hand-center-pos)
         ops (vec (mapcat (fn [st]
                            (when (:active? st)
                              (let [color (if (:available? st) color-available color-unavailable)]
-                               (into (tp-mark/humanoid-ops cam (:target st) (:ticks st) color)
+                               (into (tp-mark/humanoid-ops yaw-rad (:target st) (:ticks st) color)
                                      (bp/particle-ops cam (:ambient-particles st))))))
                          (vals (:fx-state store))))]
     (when (seq ops)

@@ -63,7 +63,8 @@
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :mark-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
-      ;; 6 ModelBiped parts x 6 faces + 2 ambient particles (2 ticks, rand 0).
+      ;; 7 ModelBiped parts (incl. the headwear layer) x 6 faces + 2 ambient
+      ;; particles (2 ticks, rand 0).
       (is (<= 38 (count ops)))
       (is (every? #(= :quad (:kind %)) ops))
       ;; The humanoid is built from tp_mark frame quads (upstream MarkRender
@@ -79,12 +80,13 @@
                                ^cn.li.mcmod.math.V3 p3 (:p3 op)]
                            [(.y p1) (.y p2) (.y p3)]))
                        humanoid)]
-        (is (= 36 (count humanoid)))
+        (is (= 42 (count humanoid)))
         (is (some #(<= (Math/abs (- % 62.5)) 0.001) ys)
             "feet 1.5 below the mark")
         (is (some #(<= (Math/abs (- % 64.5)) 0.001) ys)
             "head top 0.5 above the mark")
-        (is (every? #(<= 62.5 % 64.5) ys)))
+        ;; the headwear layer is inflated 0.5 model units a side
+        (is (every? #(<= 62.5 % 64.53125) ys)))
       ;; Ambient green TPParticle particles at the mark. Their offsets are
       ;; measured from the mark too (+0.2..1.6 then -1.6), so relative to the
       ;; figure they wrap it from just above the feet to the head -- they must
@@ -97,6 +99,54 @@
         (doseq [op motes]
           (let [^cn.li.mcmod.math.V3 p1 (:p1 op)]
             (is (<= 62.5 (.y p1) 64.5))))))))
+
+(defn- head-front-quads
+  "The head box's front face, picked out by its skin UV region."
+  [ops]
+  (filter #(and (re-find #"^academy:textures/effects/tp_mark/\d+\.png$" (str (:texture %)))
+                (= [0.125 0.25 0.25 0.5] [(:u0 %) (:u1 %) (:v0 %) (:v1 %)]))
+          ops))
+
+(deftest humanoid-faces-the-caster-and-ignores-the-camera-test
+  ;; MarkRender rotates by -rotationYaw where a normal entity renderer uses
+  ;; 180 - rotationYaw, and the mark copies the caster's yaw, so the figure
+  ;; faces back along their look. Deriving that from the camera->marker
+  ;; direction (as the port did) made it turn with the view instead: the
+  ;; caster only ever saw one side of it.
+  (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+                client-sounds/queue-sound-effect! (fn [& _] nil)
+                clojure.core/rand (fn [& _] 0.0)]
+    (mfx/init!)
+    (level-effects/enqueue-level-effect! :mark-teleport "ctx-face" :mark-teleport/fx-start
+                                         {:mode :start :target {:x 0.0 :y 64.0 :z 10.0} :distance 10.0}
+                                         :owner-key [:ctx "ctx-face"])
+    (let [plan (fn [cam yaw]
+                 (:ops (arc-beam/effect-build-plan
+                        :mark-teleport cam {:player-uuid "viewer" :player-yaw-rad yaw} 0 nil)))
+          ;; yaw 0: the caster looks toward +Z, so the figure faces -Z and its
+          ;; head-front face sits on the low-z side of the head box.
+          front (head-front-quads (plan {:x 0.0 :y 65.6 :z 0.0} 0.0))]
+      (is (seq front))
+      (doseq [op front]
+        (doseq [k [:p0 :p1 :p2 :p3]]
+          (let [^cn.li.mcmod.math.V3 v (get op k)]
+            (is (<= (Math/abs (- (.z v) (- 10.0 0.25))) 0.001)
+                "head front face on the -Z side, i.e. looking back at the caster")))))
+    (let [geom (fn [cam yaw]
+                 (mapv (fn [op] [(:u0 op) (.x ^cn.li.mcmod.math.V3 (:p0 op))
+                                 (.y ^cn.li.mcmod.math.V3 (:p0 op))
+                                 (.z ^cn.li.mcmod.math.V3 (:p0 op))])
+                       (filter #(re-find #"^academy:textures/effects/tp_mark/\d+\.png$"
+                                         (str (:texture %)))
+                               (:ops (arc-beam/effect-build-plan
+                                      :mark-teleport cam
+                                      {:player-uuid "viewer" :player-yaw-rad yaw} 0 nil)))))]
+      (is (= (geom {:x 0.0 :y 65.6 :z 0.0} 0.0)
+             (geom {:x 40.0 :y 90.0 :z -70.0} 0.0))
+          "moving the camera must not turn the figure")
+      (is (not= (geom {:x 0.0 :y 65.6 :z 0.0} 0.0)
+                (geom {:x 0.0 :y 65.6 :z 0.0} (/ Math/PI 2.0)))
+          "turning the caster must"))))
 
 (deftest perform-clears-mark-state-test
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})

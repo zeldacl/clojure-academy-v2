@@ -84,12 +84,12 @@
 ;; humanoid (white tint — upstream MarkRender's default).
 (def ^:private color-marking {:r 255 :g 255 :b 255 :a 255})
 
-(defn- build-plan [camera-pos _hand-center-pos tick]
-  (let [cam (rv3/map->v3 camera-pos)
+(defn- build-plan [_camera-pos hand-center-pos tick]
+  (let [yaw-rad (:player-yaw-rad hand-center-pos)
         ops (vec
              (mapcat (fn [st]
                        (when-let [preview (:preview st)]
-                         (tp-mark/humanoid-ops cam preview (long tick) color-marking)))
+                         (tp-mark/humanoid-ops yaw-rad preview (long tick) color-marking)))
                      (vals (:fx-state (level-effects/effect-state-snapshot :flashing)))))]
     (when (seq ops)
       {:ops ops})))

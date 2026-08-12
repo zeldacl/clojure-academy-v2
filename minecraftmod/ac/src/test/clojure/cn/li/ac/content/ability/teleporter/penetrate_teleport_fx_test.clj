@@ -67,7 +67,7 @@
                              ^cn.li.mcmod.math.V3 p3 (:p3 op)]
                          [(.y p1) (.y p2) (.y p3)]))
                      humanoid)]
-      (is (= 36 (count humanoid)))
+      (is (= 42 (count humanoid)))
       ;; l_updateMark puts the mark at dest.y + eyeHeight (1.62), and
       ;; MarkRender hangs the figure from there rather than standing it on it
       ;; -- so its feet land 1.5 below the mark, just above the destination.
@@ -75,7 +75,7 @@
           "humanoid feet just above the destination")
       (is (some #(<= (Math/abs (- % (+ 65.62 0.5))) 0.001) ys)
           "head top 0.5 above the mark")
-      (is (every? #(<= (- 65.62 1.5) % (+ 65.62 0.5)) ys)))))
+      (is (every? #(<= (- 65.62 1.5) % (+ 65.62 0.53125)) ys)))))
 
 (deftest unavailable-marker-is-red-tinted-and-silent-test
   ;; Upstream MarkRender tints the model glColor4d(1, 0.2, 0.2, 1) when
@@ -91,7 +91,7 @@
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
-      (is (= 36 (count (humanoid-quads ops))))
+      (is (= 42 (count (humanoid-quads ops))))
       (is (every? #(= {:r 255 :g 51 :b 51 :a 255} (:color %)) (humanoid-quads ops)))
       (is (empty? (ambient-quads ops))
           "no TPParticleFactory particles while unavailable"))))
@@ -113,7 +113,7 @@
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
-      (is (= 36 (count (humanoid-quads ops))))
+      (is (= 42 (count (humanoid-quads ops))))
       (is (seq (ambient-quads ops))
           "green TPParticle particles spawn while available"))))
 
