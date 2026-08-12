@@ -198,6 +198,13 @@
                                 (java.util.UUID/fromString (:entity-uuid payload)))
                               (catch Exception _ nil))
 
+                            :mcmod/set-client-entity-motion
+                            (try
+                              (McAccess/setClientEntityMotion
+                                (java.util.UUID/fromString (:entity-uuid payload))
+                                (double (:vx payload)) (double (:vy payload)) (double (:vz payload)))
+                              (catch Exception _ false))
+
                             :mcmod/start-loop-sound
                             (sound/start-loop-sound! (:key payload) (:sound-id payload)
                               (:volume payload) (:pitch payload)

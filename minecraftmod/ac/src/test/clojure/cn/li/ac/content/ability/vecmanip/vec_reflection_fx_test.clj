@@ -1,6 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.vecmanip.vec-reflection-fx :as vrfx]))
@@ -82,6 +83,30 @@
     (is (= 2 (count (get (:wave-effects (vrfx/vec-reflection-fx-snapshot))
                          [:ctx "ctx-main"]))))))
 
+(deftest reflect-entity-redirects-the-projectile-on-the-client-test
+  ;; c_reflectEntity re-runs the reflection locally so a bounced arrow turns as
+  ;; soon as the message lands, instead of holding its old course until the
+  ;; server's next velocity sync. The velocity comes down with the message, so
+  ;; the client never has to solve the aim itself and cannot disagree.
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.vecmanip.vec-reflection-fx/enqueue-state!)
+        bridge* (atom [])]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                  client-bridge/run-client-effect! (fn [k payload]
+                                                     (swap! bridge* conj [k payload])
+                                                     true)]
+      (enqueue-state! nil "ctx-1" :vec-reflection/fx-reflect-entity [:ctx "ctx-1"]
+                      {:mode :reflect-entity :reflected? true
+                       :x 1.0 :y 2.0 :z 3.0
+                       :entity-uuid "arrow-1" :vx 0.1 :vy -0.2 :vz 0.3})
+      (is (= [[:mcmod/set-client-entity-motion
+               {:entity-uuid "arrow-1" :vx 0.1 :vy -0.2 :vz 0.3}]]
+             @bridge*))
+      ;; a reflect the server could not attribute to an entity redirects nothing
+      (reset! bridge* [])
+      (enqueue-state! nil "ctx-1" :vec-reflection/fx-reflect-entity [:ctx "ctx-1"]
+                      {:mode :reflect-entity :reflected? true :x 1.0 :y 2.0 :z 3.0})
+      (is (empty? @bridge*)))))
+
 (deftest init-registers-reflected-flag-through-fx-channel-handler-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
@@ -95,18 +120,21 @@
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vrfx/init!)
       ((get @handlers* :vec-reflection/fx-reflect-entity) "ctx-1" :vec-reflection/fx-reflect-entity
-       {:x 1.0 :y 2.0 :z 3.0 :reflected? true :yaw-rad 0.5 :pitch-rad -0.25})
+       {:x 1.0 :y 2.0 :z 3.0 :reflected? true :yaw-rad 0.5 :pitch-rad -0.25
+        :entity-uuid "arrow-1" :vx 0.1 :vy 0.2 :vz 0.3})
       ((get @handlers* :vec-reflection/fx-reflect-entity) "ctx-1" :vec-reflection/fx-reflect-entity
        {:x 4.0 :y 5.0 :z 6.0 :reflected? false :yaw-rad 0.5 :pitch-rad -0.25})
       (is (= [[:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
                 {:mode :reflect-entity
                  :x 1.0 :y 2.0 :z 3.0 :reflected? true
-                 :yaw-rad 0.5 :pitch-rad -0.25}
+                 :yaw-rad 0.5 :pitch-rad -0.25
+                 :entity-uuid "arrow-1" :vx 0.1 :vy 0.2 :vz 0.3}
                 '(:owner-key [:ctx "ctx-1"])]
               [:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
                 {:mode :reflect-entity
                  :x 4.0 :y 5.0 :z 6.0 :reflected? false
-                 :yaw-rad 0.5 :pitch-rad -0.25}
+                 :yaw-rad 0.5 :pitch-rad -0.25
+                 :entity-uuid nil :vx nil :vy nil :vz nil}
                 '(:owner-key [:ctx "ctx-1"])]]
              @enqueued*)))))
 

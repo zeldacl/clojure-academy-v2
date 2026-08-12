@@ -115,4 +115,29 @@ public final class McAccess {
         result.put("height", entity.getBbHeight());
         return result;
     }
+
+    /**
+     * Client-side motion override for a loaded entity. VecReflection's
+     * c_reflectEntity re-runs the reflection on the client so a bounced arrow
+     * turns the instant the message lands, instead of holding its old course
+     * until the next velocity sync. The server sends the velocity it already
+     * computed, so the two sides cannot disagree about the new direction.
+     *
+     * No-op when the entity is not loaded here.
+     */
+    public static boolean setClientEntityMotion(java.util.UUID uuid, double vx, double vy, double vz) {
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
+        net.minecraft.client.multiplayer.ClientLevel level = mc.level;
+        if (level == null || uuid == null) {
+            return false;
+        }
+        for (net.minecraft.world.entity.Entity candidate : level.entitiesForRendering()) {
+            if (uuid.equals(candidate.getUUID())) {
+                candidate.setDeltaMovement(vx, vy, vz);
+                candidate.hasImpulse = true;
+                return true;
+            }
+        }
+        return false;
+    }
 }

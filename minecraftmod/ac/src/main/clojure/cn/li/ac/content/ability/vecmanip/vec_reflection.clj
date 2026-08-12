@@ -259,17 +259,30 @@
 ;; Original's MSG_REFLECT_ENTITY/MSG_EFFECT are both sendToClient, and their
 ;; c_reflectEntity/reflectEffect client handlers (WaveEffect spawn + world
 ;; sound) have no isLocal gate — bystanders see/hear the reflection too.
-(defn- send-fx-reflect-entity! [ctx-id player-id entity]
-  (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
-            (merge
-              {:x (double (or (:x entity) 0.0))
-               :y (double (+ (double (or (:y entity) 0.0))
-                             (double (or (:eye-height entity)
-                                         (:height entity)
-                                         0.0))))
-               :z (double (or (:z entity) 0.0))
-               :reflected? true}
-              (caster-rotation player-id))))
+(defn- send-fx-reflect-entity!
+  "c_reflectEntity re-runs reflect(ent, player) on the client so the projectile
+  turns the instant the message lands rather than holding its old course until
+  the next velocity sync. Rather than have the client redo the aim solve --
+  which would need its own raycast and could disagree with the server's -- the
+  velocity the server just applied travels with the message."
+  ([ctx-id player-id entity] (send-fx-reflect-entity! ctx-id player-id entity nil))
+  ([ctx-id player-id entity velocity]
+   (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
+             (merge
+               {:x (double (or (:x entity) 0.0))
+                :y (double (+ (double (or (:y entity) 0.0))
+                              (double (or (:eye-height entity)
+                                          (:height entity)
+                                          0.0))))
+                :z (double (or (:z entity) 0.0))
+                :reflected? true}
+               (when-let [uuid (:uuid entity)]
+                 {:entity-uuid (str uuid)})
+               (when velocity
+                 {:vx (double (:x velocity))
+                  :vy (double (:y velocity))
+                  :vz (double (:z velocity))})
+               (caster-rotation player-id)))))
 
 (defn- send-fx-play! [ctx-id player-id pos]
   (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-play :mode :play} nil
@@ -518,7 +531,10 @@
                                    world-id
                                    entity-id vel-x vel-y vel-z)))
                               (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
-                              (send-fx-reflect-entity! ctx-id player-id entity)
+                              ;; A replaced fireball is a NEW entity, so the
+                              ;; client has nothing of ours to redirect; only
+                              ;; the in-place reflects carry a velocity.
+                              (send-fx-reflect-entity! ctx-id player-id entity reflected-vel)
                               (log/debug "VecReflection: Reflected entity" entity-id))))))))
                 (let [visited'
                       (persistent!

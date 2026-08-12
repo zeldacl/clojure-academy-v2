@@ -8,6 +8,7 @@
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.cubic-curve :as curve]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.render-util :as ru]))
 
 (def ^:private vec-reflection-effect-id :vec-reflection)
@@ -100,7 +101,8 @@
   [store ctx-id channel owner-key payload]
   (let [store* (or store (default-vec-reflection-fx-runtime-state))
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode x y z reflected? yaw-rad pitch-rad source-player-id world-id]} (or payload {})
+        {:keys [mode x y z reflected? entity-uuid vx vy vz yaw-rad pitch-rad
+                source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
@@ -116,6 +118,14 @@
       :reflect-entity
       (if reflected?
         (do
+          ;; c_reflectEntity turns the projectile locally before doing anything
+          ;; visual, so it never carries on straight for the tick or three
+          ;; before the server's velocity update lands.
+          (when (and entity-uuid vx vy vz)
+            (client-bridge/run-client-effect!
+              :mcmod/set-client-entity-motion
+              {:entity-uuid (str entity-uuid)
+               :vx (double vx) :vy (double vy) :vz (double vz)}))
           (queue-reflection-sound! x y z)
           (enqueue-wave store* owner-key* base-meta x y z yaw-rad pitch-rad))
         store*)
@@ -205,6 +215,8 @@
                                                    :y (double (or (:y p) 0.0))
                                                    :z (double (or (:z p) 0.0))
                                                    :reflected? (boolean (:reflected? p))
+                                                   :entity-uuid (:entity-uuid p)
+                                                   :vx (:vx p) :vy (:vy p) :vz (:vz p)
                                                    :yaw-rad (:yaw-rad p)
                                                    :pitch-rad (:pitch-rad p)})}
                 :play {:topic :vec-reflection/fx-play :mode :play
