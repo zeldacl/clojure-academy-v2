@@ -247,11 +247,14 @@
                :x (+ (double (:x pos)) (- (rand 0.6) 0.3))
                :y (+ (double (:y pos)) (- (rand 0.6) 0.3))
                :z (+ (double (:z pos)) (- (rand 0.6) 0.3))
-               :count 1 :speed 0.1
-               :offset-x 0.02 :offset-y 0.02 :offset-z 0.02
-               :motion-x (- (rand 0.04) 0.02)
-               :motion-y (- (rand 0.04) 0.02)
-               :motion-z (- (rand 0.04) 0.02)})))))
+               ;; A single particle takes offset-* * speed as its velocity
+               ;; verbatim (see the mcbase particle bridge); :motion-* is not
+               ;; read, so every mote drifted the same fixed 0.002 diagonal
+               ;; instead of the original's ranged(-.02, .02) per axis.
+               :count 1 :speed 1.0
+               :offset-x (- (rand 0.04) 0.02)
+               :offset-y (- (rand 0.04) 0.02)
+               :offset-z (- (rand 0.04) 0.02)})))))
     (update store* :fx-state
       (fn [states]
         (into {}

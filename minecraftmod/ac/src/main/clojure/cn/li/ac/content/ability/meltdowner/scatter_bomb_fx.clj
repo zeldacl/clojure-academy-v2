@@ -137,11 +137,13 @@
          :x (.-x ^cn.li.mcmod.math.V3 p)
          :y (.-y ^cn.li.mcmod.math.V3 p)
          :z (.-z ^cn.li.mcmod.math.V3 p)
-         :count 1 :speed 0.0
-         :offset-x 0.0 :offset-y 0.0 :offset-z 0.0
-         :motion-x (- (rand 0.03) 0.015)
-         :motion-y (- (rand 0.03) 0.015)
-         :motion-z (- (rand 0.03) 0.015)}))))
+         ;; A single particle takes offset-* * speed as its velocity verbatim
+         ;; (see the mcbase particle bridge); :motion-* is not read at all, so
+         ;; with speed 0 these motes hung dead still instead of drifting.
+         :count 1 :speed 1.0
+         :offset-x (- (rand 0.03) 0.015)
+         :offset-y (- (rand 0.03) 0.015)
+         :offset-z (- (rand 0.03) 0.015)}))))
 
 (defn- tick-state!
   [store]

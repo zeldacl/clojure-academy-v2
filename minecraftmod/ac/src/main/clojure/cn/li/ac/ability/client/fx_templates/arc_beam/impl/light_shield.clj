@@ -45,11 +45,15 @@
                        :x (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
                        :y (+ 1.0 (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
                        :z (+ (- (rand s) (/ s 2)) (- (rand 0.04) 0.02))
-                       :count 1 :speed 0.08
-                       :offset-x 0.02 :offset-y 0.02 :offset-z 0.02
-                       :motion-x (- (rand 0.04) 0.02)
-                       :motion-y (- (rand 0.04) 0.02)
-                       :motion-z (- (rand 0.04) 0.02)})))
+                       ;; A single particle takes offset-* * speed as its
+                       ;; velocity verbatim (see the mcbase particle bridge);
+                       ;; :motion-* is not read, so these drifted a fixed
+                       ;; 0.0016 diagonal instead of the original's
+                       ;; ranged(-.02,.02) / ranged(-.01,.05) / ranged(-.02,.02).
+                       :count 1 :speed 1.0
+                       :offset-x (- (rand 0.04) 0.02)
+                       :offset-y (- (rand 0.06) 0.01)
+                       :offset-z (- (rand 0.04) 0.02)})))
                 (assoc acc owner-key (assoc st :ticks ticks)))))
           {}
           states)))))
