@@ -44,6 +44,7 @@
                              (reset! mode* (:mode entry)))]
       (@#'cn.li.ac.content.ability.vecmanip.vec-reflection/send-fx-reflect-entity!
        "ctx-1"
+       "p1"
        {:x 1.0 :y 2.0 :z 3.0 :height 1.8}))
     (is (= true (:reflected? @payload*)))
     (is (= :reflect-entity @mode*))))

@@ -78,6 +78,19 @@
 (defn- get-player-position [player-id]
   (motion-effects/player-position player-id))
 
+(defn- caster-rotation
+  "WaveEffect freezes eff.rotationYaw/Pitch to the CASTER's at spawn, and the
+  effect is spawned on every client that gets the message — so the angles have
+  to travel with it rather than be read off whoever is watching. Recovered from
+  the look vector: look = (-sin y cos p, -sin p, cos y cos p)."
+  [player-id]
+  (when-let [look (and (raycast/available?) (raycast/player-look-vector player-id))]
+    (let [lx (double (or (:x look) 0.0))
+          ly (double (or (:y look) 0.0))
+          lz (double (or (:z look) 0.0))]
+      {:yaw-rad (Math/atan2 (- lx) lz)
+       :pitch-rad (Math/asin (max -1.0 (min 1.0 (- ly))))})))
+
 (defn- entity-registry-id [entity]
   (or (:entity-id entity) (:type entity) ""))
 
@@ -246,21 +259,25 @@
 ;; Original's MSG_REFLECT_ENTITY/MSG_EFFECT are both sendToClient, and their
 ;; c_reflectEntity/reflectEffect client handlers (WaveEffect spawn + world
 ;; sound) have no isLocal gate — bystanders see/hear the reflection too.
-(defn- send-fx-reflect-entity! [ctx-id entity]
+(defn- send-fx-reflect-entity! [ctx-id player-id entity]
   (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-reflect-entity :mode :reflect-entity} nil
-            {:x (double (or (:x entity) 0.0))
-             :y (double (+ (double (or (:y entity) 0.0))
-                           (double (or (:eye-height entity)
-                                       (:height entity)
-                                       0.0))))
-             :z (double (or (:z entity) 0.0))
-             :reflected? true}))
+            (merge
+              {:x (double (or (:x entity) 0.0))
+               :y (double (+ (double (or (:y entity) 0.0))
+                             (double (or (:eye-height entity)
+                                         (:height entity)
+                                         0.0))))
+               :z (double (or (:z entity) 0.0))
+               :reflected? true}
+              (caster-rotation player-id))))
 
-(defn- send-fx-play! [ctx-id pos]
+(defn- send-fx-play! [ctx-id player-id pos]
   (fx/send-local-and-nearby! ctx-id {:topic :vec-reflection/fx-play :mode :play} nil
-            {:x (double (or (:x pos) 0.0))
-             :y (double (or (:y pos) 0.0))
-             :z (double (or (:z pos) 0.0))}))
+            (merge
+              {:x (double (or (:x pos) 0.0))
+               :y (double (or (:y pos) 0.0))
+               :z (double (or (:z pos) 0.0))}
+              (caster-rotation player-id))))
 
 (defn- try-find-attacker-pos [player-id attacker-id]
   (or (when-let [st (fx-common/get-player-state attacker-id)]
@@ -463,7 +480,7 @@
                                    world-id
                                    entity-id vel-x vel-y vel-z)))
                               (add-exp! player-id (* difficulty (cfg-double :progression.exp-reflect-entity-scale)))
-                              (send-fx-reflect-entity! ctx-id entity)
+                              (send-fx-reflect-entity! ctx-id player-id entity)
                               (log/debug "VecReflection: Reflected entity" entity-id))))))))
                 (let [visited'
                       (persistent!
@@ -544,7 +561,7 @@
                       (add-exp! player-id (* original-damage (cfg-double :progression.exp-damage-scale)))
                       (when ctx-id
                         (when-let [attacker-pos (and attacker-id (try-find-attacker-pos player-id attacker-id))]
-                          (send-fx-play! ctx-id attacker-pos)))
+                          (send-fx-play! ctx-id player-id attacker-pos)))
                       [true (max 0.0 (- original-damage reflected-damage))])
                     [false original-damage]))
                 [false original-damage])

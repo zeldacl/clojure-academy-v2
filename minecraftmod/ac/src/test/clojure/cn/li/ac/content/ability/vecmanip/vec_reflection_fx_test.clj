@@ -95,16 +95,18 @@
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vrfx/init!)
       ((get @handlers* :vec-reflection/fx-reflect-entity) "ctx-1" :vec-reflection/fx-reflect-entity
-       {:x 1.0 :y 2.0 :z 3.0 :reflected? true})
+       {:x 1.0 :y 2.0 :z 3.0 :reflected? true :yaw-rad 0.5 :pitch-rad -0.25})
       ((get @handlers* :vec-reflection/fx-reflect-entity) "ctx-1" :vec-reflection/fx-reflect-entity
-       {:x 4.0 :y 5.0 :z 6.0 :reflected? false})
+       {:x 4.0 :y 5.0 :z 6.0 :reflected? false :yaw-rad 0.5 :pitch-rad -0.25})
       (is (= [[:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
                 {:mode :reflect-entity
-                 :x 1.0 :y 2.0 :z 3.0 :reflected? true}
+                 :x 1.0 :y 2.0 :z 3.0 :reflected? true
+                 :yaw-rad 0.5 :pitch-rad -0.25}
                 '(:owner-key [:ctx "ctx-1"])]
               [:vec-reflection "ctx-1" :vec-reflection/fx-reflect-entity
                 {:mode :reflect-entity
-                 :x 4.0 :y 5.0 :z 6.0 :reflected? false}
+                 :x 4.0 :y 5.0 :z 6.0 :reflected? false
+                 :yaw-rad 0.5 :pitch-rad -0.25}
                 '(:owner-key [:ctx "ctx-1"])]]
              @enqueued*)))))
 
