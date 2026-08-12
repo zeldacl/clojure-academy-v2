@@ -68,11 +68,14 @@
                          [(.y p1) (.y p2) (.y p3)]))
                      humanoid)]
       (is (= 36 (count humanoid)))
-      ;; Feet at dest.y + eyeHeight (1.62): y = 64 + 1.62.
-      (is (some #(<= (Math/abs (- % 65.62)) 0.001) ys)
-          "humanoid feet float at dest + eye height")
-      (is (some #(>= % 67.42) ys)
-          "head reaches the model top above the eye-level feet"))))
+      ;; l_updateMark puts the mark at dest.y + eyeHeight (1.62), and
+      ;; MarkRender hangs the figure from there rather than standing it on it
+      ;; -- so its feet land 1.5 below the mark, just above the destination.
+      (is (some #(<= (Math/abs (- % (- 65.62 1.5))) 0.001) ys)
+          "humanoid feet just above the destination")
+      (is (some #(<= (Math/abs (- % (+ 65.62 0.5))) 0.001) ys)
+          "head top 0.5 above the mark")
+      (is (every? #(<= (- 65.62 1.5) % (+ 65.62 0.5)) ys)))))
 
 (deftest unavailable-marker-is-red-tinted-and-silent-test
   ;; Upstream MarkRender tints the model glColor4d(1, 0.2, 0.2, 1) when

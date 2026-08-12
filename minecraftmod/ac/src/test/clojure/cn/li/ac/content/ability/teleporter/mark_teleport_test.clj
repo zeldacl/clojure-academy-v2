@@ -150,15 +150,17 @@
                                                :distance 7.0})]
       (cb/apply-invoke mark/mark-teleport-on-key-down :player-id "p1" :ctx-id "ctx-e" :player-ref :player))
     (let [payload (get-in (first @calls*) [3])]
-      ;; The teleport dest (feet + eye height, upstream) floats; the MARKER
-      ;; stands at the entity's feet — the landing spot.
-      (is (= {:x 8.0 :y 62.0 :z 3.0} (:target payload))
-          "marker = entity feet (landing spot), not the floating dest"))))
+      ;; dest = entity feet + eye height, and the mark goes there: MarkRender
+      ;; hangs the humanoid 1.5 below it, landing its feet just above the
+      ;; entity's own.
+      (is (= {:x 8.0 :y 63.62 :z 3.0} (:target payload))
+          "the fx payload carries the dest itself"))))
 
-(deftest mark-teleport-block-up-hit-marker-stands-on-surface-test
-  ;; Up-face ground hit: the teleport dest floats 1.8 above the top face
-  ;; (upstream case UP => y += 1.8 — the player drops onto the block), but
-  ;; the humanoid marker stands ON the surface at the aim point.
+(deftest mark-teleport-block-up-hit-dest-floats-above-the-surface-test
+  ;; Up-face ground hit: dest is 1.8 above the top face (upstream case
+  ;; UP => y += 1.8 — the player drops onto the block). The mark goes to that
+  ;; same point and the humanoid hangs 1.5 below it, so it reads as standing
+  ;; 0.3 above the surface.
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {}})
         {:keys [ctx* get-context update-skill-state-root! assoc-skill-state! clear-skill-state!]}
         mocks
@@ -196,11 +198,9 @@
       (cb/apply-invoke mark/mark-teleport-on-key-down :player-id "p1" :ctx-id "ctx-b" :player-ref :player))
     (let [payload (get-in (first @calls*) [3])
           st (:skill-state @ctx*)]
-      ;; The teleport dest floats 1.8 above the top face (upstream), the
-      ;; marker stands ON the surface at y=64.
       (is (= 65.8 (get-in st [:target-y])))
-      (is (= {:x 8.0 :y 64.0 :z 6.0} (:target payload))
-          "marker = the hit surface, not the floating dest"))))
+      (is (= {:x 8.0 :y 65.8 :z 6.0} (:target payload))
+          "the fx payload carries the dest itself"))))
 
 (deftest mark-teleport-on-key-up-short-tap-success-sends-perform-and-applies-effects-test
   (let [mocks (skill-ctx/content-ctx-mocks {:skill-state {:hold-ticks 0 :has-target false}})

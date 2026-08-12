@@ -67,8 +67,9 @@
       (is (<= 38 (count ops)))
       (is (every? #(= :quad (:kind %)) ops))
       ;; The humanoid is built from tp_mark frame quads (upstream MarkRender
-      ;; effect sequence); its silhouette spans feet y=64 (destination) to
-      ;; head top ~65.9 (ModelBiped 1.8 tall standing on the mark).
+      ;; effect sequence). MarkRender never applies RenderLivingBase's
+      ;; translate(0, -1.5, 0), so the figure HANGS from the mark: head top
+      ;; 0.5 above it and feet 1.5 below.
       (let [humanoid (filter #(re-find #"^academy:textures/effects/tp_mark/\d+\.png$"
                                        (str (:texture %)))
                              ops)
@@ -79,14 +80,23 @@
                            [(.y p1) (.y p2) (.y p3)]))
                        humanoid)]
         (is (= 36 (count humanoid)))
-        (is (some #(<= (Math/abs (- % 64.0)) 0.001) ys)
-            "feet on the destination")
-        (is (some #(>= % 65.8) ys)
-            "head reaches the model top"))
-      ;; Ambient green TPParticle particles at the mark.
-      (is (some #(re-find #"^academy:textures/effects/tp_particle\.png$"
-                          (str (:texture %)))
-                ops)))))
+        (is (some #(<= (Math/abs (- % 62.5)) 0.001) ys)
+            "feet 1.5 below the mark")
+        (is (some #(<= (Math/abs (- % 64.5)) 0.001) ys)
+            "head top 0.5 above the mark")
+        (is (every? #(<= 62.5 % 64.5) ys)))
+      ;; Ambient green TPParticle particles at the mark. Their offsets are
+      ;; measured from the mark too (+0.2..1.6 then -1.6), so relative to the
+      ;; figure they wrap it from just above the feet to the head -- they must
+      ;; never end up under its feet, which is where they went while the
+      ;; humanoid stood on the mark instead of hanging from it.
+      (let [motes (filter #(re-find #"^academy:textures/effects/tp_particle\.png$"
+                                    (str (:texture %)))
+                          ops)]
+        (is (seq motes))
+        (doseq [op motes]
+          (let [^cn.li.mcmod.math.V3 p1 (:p1 op)]
+            (is (<= 62.5 (.y p1) 64.5))))))))
 
 (deftest perform-clears-mark-state-test
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
