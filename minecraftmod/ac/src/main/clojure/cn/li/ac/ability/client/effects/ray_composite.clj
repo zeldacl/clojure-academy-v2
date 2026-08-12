@@ -1,0 +1,121 @@
+(ns cn.li.ac.ability.client.effects.ray-composite
+  "Port of RendererRayComposite — the shared shape every AC ray entity is drawn
+  with (railgun, mdray_small, meltdowner's rays...).
+
+  Upstream stacks three things along the ray:
+
+    RendererRayGlow      three boards: blend_in over the first `width` units,
+                         tile over the middle, blend_out over the last `width`,
+                         each `width` across (drawBoard halves it), with the
+                         ray extended by startFix / endFix.
+    RendererRayCylinder  an outer tube of radius `width`, and
+    RendererRayCylinder  an inner tube, both DIV=12 surfaces of revolution with
+                         a y = sqrt(x) paraboloid head at each end (headFix
+                         0.98 on the inner one).
+
+  Callers supply the radii, colours and textures; the geometry is identical
+  across skills, which is exactly why upstream has one class for it."
+  (:require [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.config.modid :as modid])
+  (:import [cn.li.mcmod.math V3]))
+
+;; RendererRayCylinder: DIV, and the head mesh's D subdivision.
+(def ^:private tube-segments 12)
+(def ^:private head-segments 4)
+
+;; RendererRayComposite sets cylinderIn.headFix = 0.98; the outer keeps 1.0.
+(def inner-head-fix 0.98)
+(def outer-head-fix 1.0)
+
+;; RendererRayGlow's startFix / endFix as the composite configures them.
+(def default-start-fix -0.3)
+(def default-end-fix 0.3)
+
+(defn glow-textures
+  "Resources.getRayTextures(name): effects/<name>/{blend_in,tile,blend_out}."
+  [name]
+  {:blend-in (modid/asset-path "textures" (str "effects/" name "/blend_in.png"))
+   :tile (modid/asset-path "textures" (str "effects/" name "/tile.png"))
+   :blend-out (modid/asset-path "textures" (str "effects/" name "/blend_out.png"))})
+
+(defn ray-profile
+  "Radius samples [distance-along-ray radius] for a cylinder of `radius` over a
+  ray of `length`: a paraboloid nose over the first `radius * head-fix` units,
+  the straight body, and a mirrored nose past the end."
+  [^double length ^double radius ^double head-fix]
+  (let [nose (* radius head-fix)
+        nose-pts (for [i (range (inc head-segments))
+                       :let [u (/ (double i) head-segments)]]
+                   [(* nose u) (* radius (Math/sqrt u))])
+        tail-pts (for [i (range 1 (inc head-segments))
+                       :let [u (/ (double i) head-segments)]]
+                   [(+ length (* nose u)) (* radius (Math/sqrt (- 1.0 u)))])]
+    (if (<= length nose)
+      ;; Too short for a body — nose straight into tail.
+      (concat nose-pts tail-pts)
+      (concat nose-pts [[length radius]] tail-pts))))
+
+(defn tube-ops
+  "One RendererRayCylinder: a surface of revolution following `ray-profile`.
+
+  A flat strip has the same silhouette only from the one angle it is turned
+  to; from anywhere else it thins out, which is why rays drawn that way read
+  as flat slivers."
+  ;; No primitive hints: Clojure only allows them on fns of four args or fewer.
+  [texture ^V3 start ^V3 end radius head-fix color]
+  (let [delta (vec3/v- end start)
+        length (vec3/vlen delta)
+        radius (double radius)]
+    (when (and (> length 1.0e-5) (> radius 1.0e-5))
+      (let [dir (vec3/vnorm delta)
+            candidate (if (< (Math/abs (.-y ^V3 dir)) 0.9) vec3/unit-y vec3/unit-x)
+            right (vec3/vnorm (vec3/vcross candidate dir))
+            up (vec3/vnorm (vec3/vcross dir right))
+            dtheta (/ (* 2.0 Math/PI) (double tube-segments))
+            ring (vec (for [i (range (inc tube-segments))
+                            :let [a (* (double i) dtheta)]]
+                        (vec3/v+ (vec3/v* right (Math/cos a))
+                                 (vec3/v* up (Math/sin a)))))
+            at (fn [d w u]
+                 (vec3/v+ (vec3/v+ start (vec3/v* dir (double d)))
+                          (vec3/v* u (double w))))
+            pts (vec (ray-profile length radius (double head-fix)))]
+        (vec
+          (for [[[d0 w0] [d1 w1]] (partition 2 1 pts)
+                i (range tube-segments)
+                :let [ua (nth ring i)
+                      ub (nth ring (inc i))]]
+            (ru/quad-op texture
+                        (at d0 w0 ua) (at d0 w0 ub)
+                        (at d1 w1 ub) (at d1 w1 ua)
+                        color)))))))
+
+(defn glow-ops
+  "RendererRayGlow.draw: extend the ray by start-fix / end-fix, then lay the
+  three boards along it. `width` is the full board width — drawBoard halves it
+  — and doubles as the length of each cap."
+  [^V3 cam-pos ^V3 start ^V3 end
+   {:keys [textures width color start-fix end-fix]
+    :or {start-fix default-start-fix end-fix default-end-fix}}]
+  (let [delta (vec3/v- end start)]
+    (when (> (vec3/vlen delta) 1.0e-5)
+      (let [dir (vec3/vnorm delta)
+            width (double width)
+            right (vec3/v* (ru/beam-right-axis start end cam-pos) (* 0.5 width))
+            gs (vec3/v+ start (vec3/v* dir (double start-fix)))
+            ge (vec3/v+ end (vec3/v* dir (double end-fix)))
+            ;; A ray shorter than the two caps has no body left; clamp so the
+            ;; caps meet in the middle instead of crossing over each other.
+            span (vec3/vlen (vec3/v- ge gs))
+            cap (min width (* 0.5 span))
+            mid1 (vec3/v+ gs (vec3/v* dir cap))
+            mid2 (vec3/v- ge (vec3/v* dir cap))
+            board (fn [texture ^V3 a ^V3 b]
+                    (ru/quad-op texture
+                                (vec3/v- a right) (vec3/v- b right)
+                                (vec3/v+ b right) (vec3/v+ a right)
+                                color))]
+        [(board (:blend-in textures) gs mid1)
+         (board (:tile textures) mid1 mid2)
+         (board (:blend-out textures) mid2 ge)]))))

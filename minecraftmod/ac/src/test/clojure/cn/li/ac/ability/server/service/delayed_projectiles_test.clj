@@ -188,7 +188,11 @@
   (let [calls (atom [])]
     (with-redefs [raycast/available? (constantly true)
                   entity-damage/available? (constantly true)
-                  raycast/raycast-entities (fn [& _] {:uuid "target-1"})
+                  ;; The scatter ray traces blocks as well as entities
+                  ;; (Raytrace.perform with EntitySelectors.everything),
+                  ;; so the stub answers the combined trace and says
+                  ;; what it hit.
+                  raycast/raycast-combined-all (fn [& _] {:hit-type "entity" :uuid "target-1"})
                   entity-damage/apply-direct-damage! (fn [world-id target-id damage source-type opts]
                                                         (swap! calls conj [:damage world-id target-id damage source-type opts])
                                                         true)
@@ -251,11 +255,11 @@
 (deftest scatter-bomb-settlement-uses-task-origin-and-dest-test
   (let [run-op-inputs* (atom [])]
     (with-redefs [raycast/available? (constantly true)
-                  raycast/raycast-entities (fn [world-id sx sy sz dx dy dz max-dist]
-                                             (swap! run-op-inputs* conj {:origin {:x sx :y sy :z sz}
-                                                                         :dir {:x dx :y dy :z dz}
-                                                                         :max-dist max-dist})
-                                             nil)
+                  raycast/raycast-combined-all (fn [world-id sx sy sz dx dy dz max-dist]
+                                                 (swap! run-op-inputs* conj {:origin {:x sx :y sy :z sz}
+                                                                             :dir {:x dx :y dy :z dz}
+                                                                             :max-dist max-dist})
+                                                 nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]
@@ -283,9 +287,9 @@
 (deftest clear-player-tasks-prevents-later-execution-test
   (let [run-count* (atom 0)]
     (with-redefs [raycast/available? (constantly true)
-                  raycast/raycast-entities (fn [& _]
-                                             (swap! run-count* inc)
-                                             nil)
+                  raycast/raycast-combined-all (fn [& _]
+                                                 (swap! run-count* inc)
+                                                 nil)
                   ctx-mgr/push-channel-to-player! (fn [& _] true)
                   ctx-mgr/push-channel-to-nearby-players! (fn [& _] true)
                   md-damage/mark-target! (fn [& _] true)]

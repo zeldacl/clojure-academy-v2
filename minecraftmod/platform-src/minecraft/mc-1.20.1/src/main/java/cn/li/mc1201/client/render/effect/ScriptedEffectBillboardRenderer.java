@@ -107,6 +107,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
             case "polyline-arc" -> renderPolylineArc(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "billboard-cross" -> renderBillboardCross(entity, spec, rendererId, partialTick, poseStack, bufferSource);
             case "animated-billboard" -> renderAnimatedBillboard(entity, rendererId, partialTick, poseStack, bufferSource);
+            case "md-ball" -> renderMdBall(entity, rendererId, partialTick, poseStack, bufferSource);
             case "spinning-double-sided" -> renderSpinningDoubleSided(
                     entity, rendererId, partialTick, poseStack, bufferSource, packedLight);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.render(entity, spec, rendererId, partialTick, poseStack, bufferSource);
@@ -360,6 +361,111 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         vc.vertex(mat, x, y, z).color(255, 255, 255, 255)
                 .uv(u, v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(packedLight)
                 .normal(normal, 0.0F, 0.0F, normalZ).endVertex();
+    }
+
+    /**
+     * EntityMdBall.R: two camera-facing quads per ball -- a soft glow behind a
+     * brighter core -- with the alpha model from EntityMdBall.getAlpha and the
+     * random texture/alpha flicker from updateRenderTick.
+     *
+     * The generic animated-billboard kind draws one opaque quad on a fixed
+     * frame cycle, which is neither of those; the params for this have been
+     * sitting in the entity spec unread (render-glow-size-factor 0.35 is
+     * upstream's glow size 0.7, render-core-size-factor 0.25 its core 0.5).
+     */
+    private void renderMdBall(T entity,
+                              String rendererId,
+                              float partialTick,
+                              PoseStack poseStack,
+                              MultiBufferSource bufferSource) {
+        String prefix = drawPlanParamString(rendererId, "texture-prefix", "");
+        String glowTextureId = drawPlanParamString(rendererId, "glow-texture", "");
+        int frameCount = Math.max(1, drawPlanParamInt(rendererId, "frame-count", 1));
+        float glowSize = drawPlanParamFloat(rendererId, "glow-size-factor", 0.35F);
+        float coreSize = drawPlanParamFloat(rendererId, "core-size-factor", 0.25F);
+        float holdAlpha = drawPlanParamFloat(rendererId, "alpha-hold", 0.6F);
+        float attackSeconds = Math.max(0.01F, drawPlanParamFloat(rendererId, "alpha-attack-seconds", 0.3F));
+
+        float ageTicks = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
+        float ageSeconds = ageTicks * 0.05F;
+
+        // getAlpha(): 0 -> 0.6 over the first 0.3s, then held. A scatter-bomb
+        // ball's life is effectively unbounded upstream, so the burst and
+        // fade-out branches never run for it.
+        float alpha = ageSeconds < attackSeconds
+                ? holdAlpha * (ageSeconds / attackSeconds)
+                : holdAlpha;
+
+        // updateRenderTick(): the texture is re-rolled on roughly a quarter of
+        // frames and alphaWiggle random-walks in [0, 1]. Both are driven off a
+        // per-entity hash here so the renderer stays stateless while still
+        // flickering rather than cycling.
+        int entityId = entity.getId();
+        long flickerStep = (long) (ageTicks * 3.0F);
+        int frame = Math.floorMod(hashNoise(entityId, flickerStep), frameCount);
+        float wiggle = (Math.floorMod(hashNoise(entityId * 31, flickerStep + 7L), 1000)) / 1000.0F;
+
+        ResourceLocation coreTexture = ResourceLocation.tryParse(prefix + frame + ".png");
+        ResourceLocation glowTexture = glowTextureId.isEmpty()
+                ? null
+                : ResourceLocation.tryParse(glowTextureId);
+        if (coreTexture == null) {
+            return;
+        }
+
+        poseStack.pushPose();
+        poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
+        PoseStack.Pose pose = poseStack.last();
+
+        if (glowTexture != null) {
+            // glow alpha: alpha * (0.3 + wiggle * 0.7)
+            emitMdBallQuad(pose, bufferSource, glowTexture, glowSize,
+                    alpha * (0.3F + wiggle * 0.7F));
+        }
+        // core alpha: alpha * (0.8 + 0.2 * wiggle)
+        emitMdBallQuad(pose, bufferSource, coreTexture, coreSize,
+                alpha * (0.8F + 0.2F * wiggle));
+
+        poseStack.popPose();
+    }
+
+    private static int hashNoise(int a, long b) {
+        long h = a * 0x9E3779B97F4A7C15L ^ (b + 0x165667B19E3779F9L);
+        h ^= (h >>> 27);
+        h *= 0x94D049BB133111EBL;
+        h ^= (h >>> 31);
+        return (int) h;
+    }
+
+    private void emitMdBallQuad(PoseStack.Pose pose,
+                                MultiBufferSource bufferSource,
+                                ResourceLocation texture,
+                                float halfSize,
+                                float alpha) {
+        int a = Mth.clamp((int) (alpha * 255.0F), 0, 255);
+        if (a <= 0) {
+            return;
+        }
+        Matrix4f mat = pose.pose();
+        Matrix3f normal = pose.normal();
+        VertexConsumer vc = bufferSource.getBuffer(RenderType.entityTranslucent(texture));
+        int fullBright = 0x00F000F0;
+        // RenderIcon's quad spans y in [-0.25, +0.75] of its size, i.e. it sits
+        // a quarter of its height above the entity position.
+        float bottom = -halfSize * 0.5F;
+        float top = halfSize * 1.5F;
+        vc.vertex(mat, -halfSize, bottom, 0.0F).color(255, 255, 255, a)
+                .uv(0.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, halfSize, bottom, 0.0F).color(255, 255, 255, a)
+                .uv(1.0F, 1.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, halfSize, top, 0.0F).color(255, 255, 255, a)
+                .uv(1.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
+        vc.vertex(mat, -halfSize, top, 0.0F).color(255, 255, 255, a)
+                .uv(0.0F, 0.0F).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(fullBright)
+                .normal(normal, 0.0F, 0.0F, 1.0F).endVertex();
     }
 
     private void renderAnimatedBillboard(T entity,

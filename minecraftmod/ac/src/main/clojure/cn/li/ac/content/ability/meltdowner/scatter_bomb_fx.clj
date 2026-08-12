@@ -11,7 +11,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]))
 
 (def ^:private scatter-bomb-effect-id :scatter-bomb)
@@ -41,6 +41,23 @@
           (update :effect-state dissoc owner-key)
           (update :beams dissoc owner-key))))
   nil)
+
+;; SmallMdRayRender (RendererRayComposite "mdray_small"):
+;;   glow        width 0.3, white at alpha 0.5
+;;   cylinderOut radius 0.045, rgba(106, 242, 106, 50)
+;;   cylinderIn  radius 0.03,  rgba(216, 248, 216, 230)
+(def ^:private ray-glow-textures (ray-composite/glow-textures "mdray_small"))
+(def ^:private ray-glow-width 0.3)
+(def ^:private ray-outer-radius 0.045)
+(def ^:private ray-inner-radius 0.03)
+(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
+
+;; EntityMdRaySmall: life 14 ticks, blendIn 200ms, blendOut 400ms, and
+;; getWidth() ramps 1 -> 0 over the last 500ms.
+(def ^:private ray-life-ticks 14)
+(def ^:private ray-blend-in-ticks 4.0)
+(def ^:private ray-blend-out-ticks 8.0)
+(def ^:private ray-width-shrink-ticks 10.0)
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -83,19 +100,20 @@
                                 {:start (vec3/map->v3 start)
                                  :end (vec3/map->v3 end)
                                  ;; Original EntityMdRaySmall: life 14 ticks.
-                                 :ttl 14
-                                 :max-ttl 14})
+                                 :ttl ray-life-ticks
+                                 :max-ttl ray-life-ticks})
                      store*)]
         (when (and start end)
-          (client-particles/queue-current-particle-effect!
-            {:type :particle :particle-type :electric-spark
-             :x (double (or (:x end) 0.0))
-             :y (double (or (:y end) 0.0))
-             :z (double (or (:z end) 0.0))
-             :count 4 :speed 0.15
-             :offset-x 0.4 :offset-y 0.4 :offset-z 0.4}))
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id (modid/namespaced-path "md.eb_explode") :volume 0.4 :pitch 1.2})
+          ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, at the ray.
+          ;; The port played md.eb_explode (the electron bomb's detonation,
+          ;; mapped to meltdowner.ogg) at 0.4/1.2, and with no coordinates —
+          ;; so it came from the listener rather than from the shot.
+          (client-sounds/queue-current-sound-effect!
+            {:type :sound :sound-id (modid/namespaced-path "md.ray_small")
+             :volume 0.8 :pitch 1.0
+             :x (double (or (:x start) 0.0))
+             :y (double (or (:y start) 0.0))
+             :z (double (or (:z start) 0.0))}))
         store*)
       :end
       (-> store*
@@ -103,9 +121,34 @@
           (update :beams dissoc owner-key*))
       store*)))
 
+(defn- emit-ray-trail!
+  "EntityMdRaySmall.onUpdate spawns ONE MdParticle per tick at a random point
+  0-10 blocks along the ray, with a slow random drift — the ray leaves a line
+  of green motes behind it. The port only puffed four sparks at the endpoint
+  when the ray appeared."
+  [{:keys [start end]}]
+  (when (and start end)
+    (let [t (/ (double (rand 10.0))
+               (Math/max 1.0e-5 (vec3/vlen (vec3/v- end start))))
+          t (Math/min 1.0 t)
+          p (vec3/v+ start (vec3/v* (vec3/v- end start) t))]
+      (client-particles/queue-current-particle-effect!
+        {:type :particle :particle-type (modid/namespaced-path "md_particle")
+         :x (.-x ^cn.li.mcmod.math.V3 p)
+         :y (.-y ^cn.li.mcmod.math.V3 p)
+         :z (.-z ^cn.li.mcmod.math.V3 p)
+         :count 1 :speed 0.0
+         :offset-x 0.0 :offset-y 0.0 :offset-z 0.0
+         :motion-x (- (rand 0.03) 0.015)
+         :motion-y (- (rand 0.03) 0.015)
+         :motion-z (- (rand 0.03) 0.015)}))))
+
 (defn- tick-state!
   [store]
   (let [store* (or store (default-scatter-bomb-fx-runtime-state))]
+    (doseq [[_owner beams] (:beams store*)
+            beam beams]
+      (emit-ray-trail! beam))
     (-> store*
         (update :effect-state
           (fn [states]
@@ -118,23 +161,38 @@
           store-tick/tick-ttl-items-by-owner))))
 
 (defn- beam-flash-ops
-  "Green ray quads from ball position to dest, matching original
-  EntityMdRaySmall colors (inner 0.03 rgba(216,248,216,230), outer 0.045
-  rgba(106,242,106,50)) with a fade-in/out over the 14-tick life."
+  "One EntityMdRaySmall: the glow boards plus the two cylinders.
+
+  The port had these as three flat billboards with the layers shuffled — a
+  0.3 HALF-width outer quad (twice the glow board, wearing the outer
+  cylinder's colour), the outer radius carrying a made-up alpha, and the inner
+  cylinder reduced to a one-pixel line."
   [camera-pos beams]
   (mapcat (fn [{:keys [start end ttl max-ttl]}]
-            (let [life-ratio (if (pos? (or max-ttl 1)) (/ (or ttl 1.0) (double max-ttl)) 1.0)
-                  blend-in  (min 1.0 (/ (max 0 (- 1.0 life-ratio)) 0.28))
-                  blend-out (min 1.0 (/ life-ratio 0.57))
+            (let [max-ttl (double (max 1 (or max-ttl ray-life-ticks)))
+                  ttl (double (or ttl 0))
+                  age (- max-ttl ttl)
+                  blend-in (min 1.0 (/ age ray-blend-in-ticks))
+                  blend-out (min 1.0 (/ ttl ray-blend-out-ticks))
                   am (* blend-in blend-out)
-                  shrink (if (< life-ratio 0.3) 0.0 1.0)]
-              (ru/billboard-beam-ops camera-pos start end
-                {:width 0.3
-                 :core-width 0.045
-                 :core-ratio 0.667
-                 :outer-color {:r 106 :g 242 :b 106 :a (int (* 50 am shrink))}
-                 :inner-color {:r 106 :g 242 :b 106 :a (int (* 128 am shrink))}
-                 :line-color  {:r 216 :g 248 :b 216 :a (int (* 230 am shrink))}})))
+                  ;; getWidth(): full width until the last 500ms, then linear
+                  ;; to zero — not the port's hard cut with 210ms left.
+                  w (if (> ttl ray-width-shrink-ticks)
+                      1.0
+                      (max 0.0 (/ ttl ray-width-shrink-ticks)))
+                  alpha (fn [^double base] (int (* base am)))]
+              (when (pos? w)
+                (concat
+                  (ray-composite/glow-ops camera-pos start end
+                    {:textures ray-glow-textures
+                     :width (* ray-glow-width w)
+                     :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}})
+                  (ray-composite/tube-ops ray-texture start end
+                    (* ray-outer-radius w) ray-composite/outer-head-fix
+                    {:r 106 :g 242 :b 106 :a (alpha 50.0)})
+                  (ray-composite/tube-ops ray-texture start end
+                    (* ray-inner-radius w) ray-composite/inner-head-fix
+                    {:r 216 :g 248 :b 216 :a (alpha 230.0)})))))
           beams))
 
 (defn- build-plan

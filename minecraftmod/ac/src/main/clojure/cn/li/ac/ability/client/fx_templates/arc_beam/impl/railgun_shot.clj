@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.railgun-shot
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -173,124 +173,27 @@
     (assoc beam :end
       (vec3/v+ start (vec3/v* (vec3/v- (:end beam) start) blend-in)))))
 
-;; Resources.getRayTextures("railgun"): the glow is three boards, not one
-;; stretched sprite — a soft cap at each end and a body between them.
-(def ^:private glow-blend-in-texture
-  (modid/asset-path "textures" "effects/railgun/blend_in.png"))
-(def ^:private glow-tile-texture
-  (modid/asset-path "textures" "effects/railgun/tile.png"))
-(def ^:private glow-blend-out-texture
-  (modid/asset-path "textures" "effects/railgun/blend_out.png"))
-
-;; RendererRayComposite: glow.width 1.1, startFix -0.3, endFix +0.3.
+;; RendererRayComposite for "railgun": the glow is the three
+;; blend_in/tile/blend_out boards at width 1.1, startFix -0.3, endFix +0.3.
+(def ^:private glow-textures (ray-composite/glow-textures "railgun"))
 (def ^:private glow-width 1.1)
-(def ^:private glow-start-fix -0.3)
-(def ^:private glow-end-fix 0.3)
 
-(defn- railgun-glow-ops
-  "RendererRayGlow.draw: extend the ray by startFix/endFix, then lay three
-  boards along it — blend_in over the first `width` units, tile over the
-  middle, blend_out over the last `width`. Each board is `width` across
-  (drawBoard halves it) and carries the same tint.
-
-  The port had a single glow_circle.png stretched over the whole ray, so the
-  beam had hard square ends and none of the original's cap falloff."
-  [^V3 cam-pos beam]
-  (let [start (:start beam)
-        end (:end beam)
-        dir (vec3/vnorm (vec3/v- end start))
-        life (/ (double (:ttl beam)) (double (:max-ttl beam)))
+(defn- railgun-glow-ops [^V3 cam-pos beam]
+  (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
         fade (fade-out-factor life)
         seed (double (or (:wiggle-seed beam) 0.0))
         glow-wiggle (+ 0.9 (* 0.1
                               (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
-        ;; `width` is both the board's full width and the length of each cap.
-        width (* glow-width (width-factor beam life) glow-wiggle)
-        right (vec3/v* (ru/beam-right-axis start end cam-pos) (* 0.5 width))
-        gs (vec3/v+ start (vec3/v* dir glow-start-fix))
-        ge (vec3/v+ end (vec3/v* dir glow-end-fix))
-        ;; A ray shorter than the two caps has no body left; clamp so the caps
-        ;; meet in the middle instead of crossing over each other.
-        span (vec3/vlen (vec3/v- ge gs))
-        cap (min width (* 0.5 span))
-        mid1 (vec3/v+ gs (vec3/v* dir cap))
-        mid2 (vec3/v- ge (vec3/v* dir cap))
-        alpha (int (* 170.0 fade fade glow-wiggle))
-        color {:r 255 :g 255 :b 255 :a alpha}
-        board (fn [texture ^V3 a ^V3 b]
-                (ru/quad-op texture
-                            (vec3/v- a right) (vec3/v- b right)
-                            (vec3/v+ b right) (vec3/v+ a right)
-                            color))]
-    [(board glow-blend-in-texture gs mid1)
-     (board glow-tile-texture mid1 mid2)
-     (board glow-blend-out-texture mid2 ge)]))
-
-;; RendererRayCylinder's head mesh: y = sqrt(x) over x in [0,1], revolved,
-;; built in D=4 steps. cylinderIn carries headFix 0.98, cylinderOut 1.0.
-(def ^:private head-segments 4)
-(def ^:private inner-head-fix 0.98)
+        alpha (int (* 170.0 fade fade glow-wiggle))]
+    (ray-composite/glow-ops cam-pos (:start beam) (:end beam)
+      {:textures glow-textures
+       :width (* glow-width (width-factor beam life) glow-wiggle)
+       :color {:r 255 :g 255 :b 255 :a alpha}})))
 
 ;; The cylinders are drawn with ShaderNotex upstream (untextured solid colour);
 ;; this port keeps the shared beam sprite, which reads the same at these radii.
 (def ^:private beam-texture
   (modid/asset-path "textures" "effects/arc.png"))
-
-(defn- ray-profile
-  "Radius samples [distance-along-ray half-width] for a cylinder of `radius`
-  over a ray of `length`: a paraboloid nose over the first `radius * head-fix`
-  units, the straight body, and a mirrored nose past the end. Flattened to a
-  billboard strip, this is the same silhouette."
-  [^double length ^double radius ^double head-fix]
-  (let [nose (* radius head-fix)
-        nose-pts (for [i (range (inc head-segments))
-                       :let [u (/ (double i) head-segments)]]
-                   [(* nose u) (* radius (Math/sqrt u))])
-        tail-pts (for [i (range 1 (inc head-segments))
-                       :let [u (/ (double i) head-segments)]]
-                   [(+ length (* nose u)) (* radius (Math/sqrt (- 1.0 u)))])]
-    (if (<= length nose)
-      ;; Too short for a body — nose straight into tail.
-      (concat nose-pts tail-pts)
-      (concat nose-pts [[length radius]] tail-pts))))
-
-;; RendererRayCylinder's DIV.
-(def ^:private tube-segments 12)
-
-(defn- tapered-tube-ops
-  "The cylinder as a surface of revolution following `ray-profile`: a real tube
-  with a paraboloid nose at each end, which is what RendererRayCylinder draws.
-
-  A flat strip has the same silhouette only from the one angle it is turned to;
-  from anywhere else it thins out, which is why the ray read as a flat sliver."
-  ;; No primitive hints: Clojure only allows them on fns of four args or fewer.
-  [texture ^V3 start ^V3 end radius head-fix color]
-  (let [delta (vec3/v- end start)
-        length (vec3/vlen delta)
-        radius (double radius)]
-    (when (and (> length 1.0e-5) (> radius 1.0e-5))
-      (let [dir (vec3/vnorm delta)
-            candidate (if (< (Math/abs (.-y ^V3 dir)) 0.9) vec3/unit-y vec3/unit-x)
-            right (vec3/vnorm (vec3/vcross candidate dir))
-            up (vec3/vnorm (vec3/vcross dir right))
-            dtheta (/ (* 2.0 Math/PI) (double tube-segments))
-            ring (vec (for [i (range (inc tube-segments))
-                            :let [a (* (double i) dtheta)]]
-                        (vec3/v+ (vec3/v* right (Math/cos a))
-                                 (vec3/v* up (Math/sin a)))))
-            at (fn [d w u]
-                 (vec3/v+ (vec3/v+ start (vec3/v* dir (double d)))
-                          (vec3/v* u (double w))))
-            pts (vec (ray-profile length radius (double head-fix)))]
-        (vec
-          (for [[[d0 w0] [d1 w1]] (partition 2 1 pts)
-                i (range tube-segments)
-                :let [ua (nth ring i)
-                      ub (nth ring (inc i))]]
-            (ru/quad-op texture
-                        (at d0 w0 ua) (at d0 w0 ub)
-                        (at d1 w1 ub) (at d1 w1 ua)
-                        color)))))))
 
 (defn- railgun-beam-ops
   "The two cylinders of RendererRayComposite: an outer 0.13 tube and an inner
@@ -312,10 +215,10 @@
         line-color (ru/with-alpha (:line-rgb railgun-beam-style)
                                   (int (+ 40.0 (* 120.0 fade))))]
     (concat
-      (tapered-tube-ops texture (:start beam) (:end beam)
-                        (* 0.13 w) 1.0 outer-color)
-      (tapered-tube-ops texture (:start beam) (:end beam)
-                        (* 0.09 w) inner-head-fix inner-color)
+      (ray-composite/tube-ops texture (:start beam) (:end beam)
+                              (* 0.13 w) ray-composite/outer-head-fix outer-color)
+      (ray-composite/tube-ops texture (:start beam) (:end beam)
+                              (* 0.09 w) ray-composite/inner-head-fix inner-color)
       ;; Port enhancement kept: a bright cyan core line down the axis.
       [(ru/line-op (:start beam) (:end beam) line-color)])))
 

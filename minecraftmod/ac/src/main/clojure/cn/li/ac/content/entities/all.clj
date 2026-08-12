@@ -293,8 +293,14 @@
                                :hook :md-ball
                                :hook-params {:range-from 0.8
                                              :range-to 1.3
-                                             :y-from 0.2
-                                             :y-to 1.6
+                                             ;; Upstream subY is rangef(-1.2, 0.2)
+                                             ;; from the FEET, and the renderer
+                                             ;; then adds a hard-coded +1.6 —
+                                             ;; the balls read at 0.4..1.8. Bake
+                                             ;; that in so the entity is where it
+                                             ;; looks (the rays start there too).
+                                             :y-from 0.4
+                                             :y-to 1.8
                                              :wobble-xz 0.03
                                              :wobble-y 0.04
                                              :phase-step 0.18

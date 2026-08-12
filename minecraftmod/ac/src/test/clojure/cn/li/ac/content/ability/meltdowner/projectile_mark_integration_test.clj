@@ -245,8 +245,10 @@
                   ;; each ball resolves as a single origin->dest raycast, not a
                   ;; radius beam sweep
                   raycast/available? (constantly true)
-                  raycast/raycast-entities (fn [& _]
-                                             {:uuid victim :x 0.0 :y 64.0 :z 5.0 :distance 5.0})
+                  ;; blocks as well as entities, matching Raytrace.perform
+                  raycast/raycast-combined-all (fn [& _]
+                                                 {:hit-type "entity" :uuid victim
+                                                  :x 0.0 :y 64.0 :z 5.0 :distance 5.0})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)
                   ctx-mgr/push-channel-to-player! (fn [& _] nil)

@@ -197,11 +197,16 @@
             dir  (if (pos? dist)
                    {:x (/ dx dist) :y (/ dy dist) :z (/ dz dist)}
                    {:x 0.0 :y 0.0 :z 1.0})
-            hit  (raycast/raycast-entities
+            ;; Raytrace.perform(world, ballEyes, dest, everything.and(
+            ;; exclude(player))) traces BLOCKS as well as entities, so a wall
+            ;; between the ball and its scatter point stops the shot. Tracing
+            ;; entities alone let every ball hit through terrain.
+            hit  (raycast/raycast-combined-all
                    world-id ox oy oz
                    (:x dir) (:y dir) (:z dir)
                    (max 0.1 dist))
-            target-uuid (:uuid hit)]
+            target-uuid (when (= "entity" (:hit-type hit))
+                          (or (:uuid hit) (:entity-id hit)))]
         (when (and target-uuid (entity-damage/available?))
           (entity-damage/apply-direct-damage!
             world-id target-uuid (double (or damage 0.0)) :magic

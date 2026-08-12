@@ -61,7 +61,12 @@
         (level-effects/update-effect-state! :light-shield
           (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
       (is (seq @particles*))
-      (is (map? (arc-beam/effect-build-plan :light-shield {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
+      ;; The shield itself is the spawned entity_md_shield (spinning-shield
+      ;; profile), so this effect contributes no level-plan ops at all — see
+      ;; impl/light_shield's build-plan. Asserting a map here only passed while
+      ;; that namespace happened not to be loaded and the arc-beam default
+      ;; answered instead.
+      (is (nil? (arc-beam/effect-build-plan :light-shield {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
       (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       (is (seq @sounds*)))))

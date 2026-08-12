@@ -112,20 +112,23 @@
          :start-color 0xD8F8D8
          :end-color 0x6AF26A}}
 
-     ;; MdBall (electron-bomb/electron-missile/scatter-bomb entity): pulsing
-     ;; glow ball. Replaces the pre-refactor MdBallRenderer — 5 core frames,
-     ;; fullbright translucent billboard. The old renderer's separate glow
-     ;; pass + alpha/size ramps are approximated by the texture's own alpha.
+     ;; MdBall (electron-bomb/electron-missile/scatter-bomb entity).
+     ;; EntityMdBall.R: a soft glow quad (upstream size 0.7) behind a brighter
+     ;; core quad (size 0.5), both flickering — see the md-ball renderer. The
+     ;; generic animated-billboard kind draws one opaque quad on a fixed frame
+     ;; cycle, which is neither.
      {:id "md-ball"
-      :kind :animated-billboard
+      :kind :md-ball
       :state {:layer :translucent
               :blend :alpha}
       :params {:texture-prefix (modid/namespaced-path "textures/effects/mdball/")
+               :glow-texture (modid/namespaced-path "textures/effects/mdball/glow.png")
                :frame-count 5
-               :frame-ms 100.0
-               :half-size 0.25
-               :offset-y 0.0
-               :offset-z 0.0}}
+               :glow-size-factor 0.35
+               :core-size-factor 0.25
+               ;; getAlpha(): 0 -> 0.6 over 0.3s, then held for the ball's life.
+               :alpha-hold 0.6
+               :alpha-attack-seconds 0.3}}
 
      ;; EntityBloodSplash (flesh-ripping hit splash): 10-frame splash,
      ;; matching the pre-refactor BloodSplashRenderer.
@@ -141,7 +144,7 @@
                :offset-z 0.0}}])
 
 (def ^:private ac-effect-kinds
-  #{:intensify-arcs :spinning-shield :diamond-pyramid})
+  #{:intensify-arcs :spinning-shield :diamond-pyramid :md-ball})
 
 (defn init-render-profiles!
   []
@@ -154,4 +157,5 @@
     (script-abi/register-kind-renderer-key! :intensify-arcs :tiered-zigzag)
     (script-abi/register-kind-renderer-key! :spinning-shield :spinning-shield)
     (script-abi/register-kind-renderer-key! :diamond-pyramid :diamond-pyramid)
+    (script-abi/register-kind-renderer-key! :md-ball :md-ball)
     (script-registry/register-profiles! v1-effect-profiles))))

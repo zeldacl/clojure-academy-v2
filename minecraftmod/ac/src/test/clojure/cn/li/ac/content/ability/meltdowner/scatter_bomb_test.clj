@@ -120,8 +120,10 @@
          (cb/apply-invoke scatter/scatter-bomb-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"})))
     (is (= [["p1" 120.0]] @floor-calls*))
     (is (empty? @damage-calls*))
-    ;; Tracked spawn with a life override covering the whole hold window.
-    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0 120]] @spawn-calls*))
+    ;; Tracked spawn with a life override that reaches the anti-AFK settle —
+    ;; upstream's balls are effectively immortal and only end at setDead, so
+    ;; anything shorter drops the early ones out of a long hold's volley.
+    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0 240]] @spawn-calls*))
     (is (= 20 (get-in @ctx* [:skill-state :hold-ticks])))
     (is (= 1 (get-in @ctx* [:skill-state :balls])))
     (is (= ["ball-uuid-1"] (get-in @ctx* [:skill-state :ball-uuids])))

@@ -106,3 +106,96 @@
 
       (enqueue! enqueue-state! "ctx-cadence" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))))))
+
+;; ---------------------------------------------------------------------------
+;; EntityMdRaySmall parity
+;; ---------------------------------------------------------------------------
+
+(def ^:private enqueue-state!* (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/enqueue-state!))
+(def ^:private tick-state!* (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/tick-state!))
+(def ^:private build-plan* (var-get #'cn.li.ac.content.ability.meltdowner.scatter-bomb-fx/build-plan))
+
+(defn- fire-ray! [ctx-id]
+  (enqueue! enqueue-state!* ctx-id :scatter-bomb/fx-beam
+            {:mode :beam
+             :start {:x 0.0 :y 64.0 :z 0.0}
+             :end {:x 10.0 :y 64.0 :z 0.0}
+             :source-player-id "player-a"}))
+
+(defn- axis-radius [op key]
+  (let [^cn.li.mcmod.math.V3 p (get op key)]
+    (Math/sqrt (+ (Math/pow (- (.-y p) 64.0) 2) (Math/pow (.-z p) 2)))))
+
+(deftest ray-uses-the-mdray-small-composite-test
+  ;; SmallMdRayRender: glow width 0.3 (halved by drawBoard), cylinderOut radius
+  ;; 0.045 rgba(106,242,106,50), cylinderIn radius 0.03 rgba(216,248,216,230).
+  ;; The port had a 0.3 HALF-width outer quad wearing the outer cylinder's
+  ;; colour, the outer radius carrying a made-up alpha, and the inner cylinder
+  ;; reduced to a one-pixel line.
+  (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
+                client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+    (fire-ray! "ctx-ray")
+    (let [ops (:ops (build-plan* {:x 0.0 :y 70.0 :z 0.0} nil 0))
+          glow (filter #(re-find #"effects/mdray_small/" (str (:texture %))) ops)
+          tubes (remove #(re-find #"effects/mdray_small/" (str (:texture %))) ops)
+          radii (map #(axis-radius % :p0) tubes)]
+      (is (= 3 (count glow)) "blend_in / tile / blend_out")
+      (is (seq tubes))
+      ;; both tubes are present, and neither is anywhere near the old 0.3
+      (is (< 0.04 (apply max radii) 0.05) "the outer cylinder is 0.045 in radius")
+      (is (< (apply min (remove zero? radii)) 0.031)
+          "and the inner one is still a tube at 0.03, not a line")
+      (is (empty? (filter #(= :line (:kind %)) ops))))))
+
+(deftest ray-shrinks-over-the-last-500ms-test
+  ;; getWidth() ramps 1 -> 0 across the final 500ms (10 of the 14 ticks); the
+  ;; port cut the ray off outright with 210ms left.
+  (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
+                client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+    (fire-ray! "ctx-shrink")
+    (let [radius-now (fn []
+                       (let [ops (:ops (build-plan* {:x 0.0 :y 70.0 :z 0.0} nil 0))
+                             tubes (remove #(re-find #"effects/mdray_small/" (str (:texture %))) ops)]
+                         (when (seq tubes) (apply max (map #(axis-radius % :p0) tubes)))))]
+      (dotimes [_ 4] (tick! tick-state!*))          ;; ttl 10 — shrink starts here
+      (let [full (radius-now)]
+        (dotimes [_ 5] (tick! tick-state!*))        ;; ttl 5 — halfway down
+        (let [half (radius-now)]
+          (is (some? full))
+          (is (some? half))
+          (is (< 0.4 (/ half full) 0.6) "half the width with half the shrink window left")))
+      (dotimes [_ 5] (tick! tick-state!*))
+      (is (nil? (radius-now)) "and gone once the ray expires"))))
+
+(deftest ray-plays-its-own-sound-at-the-shot-test
+  ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, positioned at the ray.
+  ;; The port played md.eb_explode (the electron bomb's detonation) at 0.4/1.2
+  ;; with no coordinates, so it came from the listener.
+  (let [sounds* (atom [])]
+    (with-redefs [client-particles/queue-current-particle-effect! (fn [& _] nil)
+                  client-sounds/queue-current-sound-effect! (fn [& args]
+                                                              (swap! sounds* conj (first args))
+                                                              nil)]
+      (fire-ray! "ctx-sound")
+      (let [snd (first (filter #(re-find #"ray_small" (str (:sound-id %))) @sounds*))]
+        (is (some? snd) (str "expected md.ray_small, got " (mapv :sound-id @sounds*)))
+        (is (= 0.8 (:volume snd)))
+        (is (= 1.0 (:pitch snd)))
+        (is (= [0.0 64.0 0.0] [(:x snd) (:y snd) (:z snd)]))))))
+
+(deftest ray-leaves-a-particle-trail-test
+  ;; EntityMdRaySmall.onUpdate spawns one MdParticle per tick at a random point
+  ;; 0-10 blocks along the ray; the port only puffed sparks at the endpoint.
+  (let [particles* (atom [])]
+    (with-redefs [client-particles/queue-current-particle-effect! (fn [& args]
+                                                                    (swap! particles* conj (first args))
+                                                                    nil)
+                  client-sounds/queue-current-sound-effect! (fn [& _] nil)]
+      (fire-ray! "ctx-trail")
+      (reset! particles* [])
+      (dotimes [_ 5] (tick! tick-state!*))
+      (let [motes (filter #(re-find #"md_particle" (str (:particle-type %))) @particles*)]
+        (is (= 5 (count motes)) "one per tick while the ray lives")
+        (is (every? (fn [p] (<= 0.0 (:x p) 10.0)) motes)
+            "spread along the ray, not piled on the endpoint")
+        (is (> (count (distinct (map :x motes))) 1))))))

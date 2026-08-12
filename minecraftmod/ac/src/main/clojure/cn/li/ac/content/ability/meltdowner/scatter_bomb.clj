@@ -181,14 +181,20 @@
                                 (conj offsets (*ball-offset-sampler* look-vec))))
             ;; Tracked spawn keeps the ball uuid so settle-scatter-bomb! can
             ;; remove the balls (original ball.setDead() on release) — the
-            ;; spec life alone (50) would let early balls die mid-hold. Life
-            ;; override covers the whole hold window.
+            ;; spec life alone (50) would let early balls die mid-hold.
+            ;;
+            ;; Upstream's balls are effectively immortal (life 2333333) and only
+            ;; ever end at setDead. The context itself is bounded by the
+            ;; anti-AFK settle, so that plus a margin is the equivalent here:
+            ;; max-hold-ticks + 40 expired the first balls at tick 140, sixty
+            ;; ticks before a held cast is forced to fire, and they were simply
+            ;; missing from the volley.
             (when player-ref
               (when-let [ball-uuid (entity/player-spawn-tracked-entity-by-id!
                                      player-ref
                                      mdball-entity-id
                                      0.0
-                                     (+ (cfg-int :projectile.max-hold-ticks) 40))]
+                                     (+ (cfg-int :effect.anti-afk-tick) 40))]
                 (set-skill-state! ctx-id [:ball-uuids]
                                   (conj (vec (or (get-in (ctx-skill/get-context ctx-id)
                                                           [:skill-state :ball-uuids])
