@@ -5,6 +5,7 @@
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
             [cn.li.ac.block.wireless-matrix.stats :as matrix-stats]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.block.dsl :as bdsl])
   (:import [cn.li.acapi.wireless IWirelessMatrix]))
 
@@ -28,8 +29,13 @@
                           :on-place (matrix-logic/handle-matrix-place)
                           :on-break (matrix-logic/handle-matrix-break)}}
     :part {:registry-name "matrix_part"
-          :rendering {:model-parent "minecraft:block/block"
-            :render-shape :invisible}
+           :rendering {:model-parent "minecraft:block/block"
+                       :render-shape :invisible
+                       ;; Explicit texture: block/block declares no particle,
+                       ;; and the datagen adds the particle from this texture —
+                       ;; without it the break effect is the purple-black
+                       ;; missing sprite (the model itself draws nothing).
+                       :textures {:all (modid/asset-path "block" "matrix")}}
            :events {:on-right-click matrix-logic/handle-matrix-right-click}}))
 
 (defn init-wireless-matrix! []
