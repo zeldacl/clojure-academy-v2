@@ -148,6 +148,49 @@
                 (geom {:x 0.0 :y 65.6 :z 0.0} (/ Math/PI 2.0)))
           "turning the caster must"))))
 
+(defn- humanoid-y-span [ops]
+  (let [ys (mapcat (fn [op]
+                     (map (fn [k] (.y ^cn.li.mcmod.math.V3 (get op k))) [:p0 :p1 :p2 :p3]))
+                   (filter #(re-find #"^academy:textures/effects/tp_mark/\d+\.png$" (str (:texture %)))
+                           ops))]
+    (when (seq ys) [(apply min ys) (apply max ys)])))
+
+(deftest marker-re-solves-the-aim-from-the-live-view-test
+  ;; MTContextC.l_update re-runs getDest client-side every tick, so the mark
+  ;; tracks the crosshair instead of trailing the server by a tick plus the
+  ;; round trip. The range comes from the server (getMaxDist reads CP/exp);
+  ;; the trace and the six-face table are re-solved here.
+  (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
+                client-sounds/queue-sound-effect! (fn [& _] nil)
+                clojure.core/rand (fn [& _] 0.0)]
+    (mfx/init!)
+    (level-effects/enqueue-level-effect! :mark-teleport "ctx-live" :mark-teleport/fx-start
+                                         {:mode :start
+                                          ;; a deliberately stale server answer
+                                          :target {:x 0.0 :y 64.0 :z 10.0}
+                                          :dist 20.0 :distance 10.0}
+                                         :owner-key [:ctx "ctx-live"])
+    (let [view (fn [extra]
+                 (merge {:player-uuid "viewer"
+                         :player-x 0.0 :player-z 0.0 :player-eye-y 65.62
+                         :player-yaw-rad 0.0 :player-pitch-rad 0.0}
+                        extra))
+          span (fn [v] (humanoid-y-span
+                        (:ops (arc-beam/effect-build-plan
+                               :mark-teleport {:x 0.0 :y 65.6 :z 0.0} v 0 nil))))]
+      ;; up-face block hit at y=70 -> dest 71.8, and the figure hangs from it
+      (is (= [(- 71.8 1.5) (+ 71.8 0.53125)]
+             (span (view {:raycast-from-view
+                          (fn [_ _] {:hit-type :block :face :up
+                                     :x 0.0 :y 69.0 :z 12.0
+                                     :hit-x 0.0 :hit-y 70.0 :hit-z 12.0})}))))
+      ;; nothing hit -> eye + look * dist, i.e. z = 20 at eye height
+      (is (= [(- 65.62 1.5) (+ 65.62 0.53125)]
+             (span (view {:raycast-from-view (fn [_ _] nil)}))))
+      ;; no world access in the view context -> the server's target stands
+      (is (= [(- 64.0 1.5) (+ 64.0 0.53125)]
+             (span (view {})))))))
+
 (deftest perform-clears-mark-state-test
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)]

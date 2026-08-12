@@ -5,6 +5,7 @@
    SubmitNodeCollector, with all GPU state owned by RenderType."
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.platform.neutral.hooks :as power-runtime]
+            [cn.li.mcbase.runtime.raycast-normalize :as rn]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
            [cn.li.mc262.client.effects LevelEffectGeometry]
@@ -12,6 +13,7 @@
            [cn.li.mcmod.math V3]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
+           [cn.li.mc262.runtime Raycast]
            [net.minecraft.client.renderer SubmitNodeCollector SubmitNodeCollector$CustomGeometryRenderer]
            [net.minecraft.client.renderer.rendertype RenderType RenderTypes]
            [net.minecraft.core BlockPos]
@@ -127,6 +129,27 @@
     (.isFirstPerson (.getCameraType (.-options mc)))
     true))
 
+(defn- client-world-fns
+  "The client's own view of the world, for effects whose ORIGINAL computes
+  itself client-side each tick (MarkTeleport's aim marker: MTContextC.l_update
+  calls getDest against the client world and CPData). Raycast's helpers take a
+  Level, so the client level answers them with the same code the server uses --
+  nothing here reimplements a trace."
+  [^LocalPlayer player]
+  {:raycast-from-view
+   (fn [max-distance living-only?]
+     (try
+       (rn/normalize-bridge-map
+         (Raycast/raycastCombinedFromPlayer player (double max-distance) (boolean living-only?)))
+       (catch Exception _ nil)))
+   :block-solid-at?
+   (fn [x y z]
+     (try
+       (let [level (.level player)
+             state (.getBlockState level (BlockPos. (int x) (int y) (int z)))]
+         (not (.isAir state)))
+       (catch Exception _ false)))})
+
 (defn hand-center-pos
   [^LocalPlayer player]
   (let [^Vec3 look (.getLookAngle player)
@@ -141,6 +164,7 @@
      :player-x base-x
      :player-y (.getY player)
      :player-z base-z
+     :player-eye-y base-y
      :player-width (.getBbWidth player)
      :player-height (.getBbHeight player)
      :player-yaw-rad yaw-rad
@@ -525,7 +549,7 @@
         plan (when (power-runtime/client-level-effects-active?)
                (power-runtime/client-build-level-effect-plan
                  camera-pos
-                 (hand-center-pos player)
+                 (merge (hand-center-pos player) (client-world-fns player))
                  tick
                  (make-nearby-block-query-fn player)))]
     (when owner

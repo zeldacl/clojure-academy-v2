@@ -9,7 +9,11 @@
   each growing its own copy of the six-face table.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [def-skill-config-ops]]))
+  ;; skill-config and skill-effects back the cfg-*/skill-exp fns
+  ;; def-skill-config-ops emits fully qualified.
+  (:require [cn.li.ac.ability.dsl :refer [def-skill-config-ops]]
+            [cn.li.ac.ability.skill-config]
+            [cn.li.ac.ability.service.skill-effects]))
 
 (def-skill-config-ops :mark-teleport)
 

@@ -119,6 +119,12 @@
 
               :z (double (:target-z target))}
 
+     ;; getMaxDist for this tick. Upstream's client recomputes it from its own
+     ;; CPData; sending it keeps the client from needing a second copy of the
+     ;; resource rules while still letting it re-solve the AIM every frame,
+     ;; which is the part that has to track the crosshair.
+     :dist (double (or (:dist target) 0.0))
+
      :distance (double (:distance target))}))
 
 
@@ -190,6 +196,8 @@
 
                {:world-id world-id
 
+                :dist dist
+
                 :distance distance
 
                 :hold-ticks (long hold-ticks)
@@ -210,7 +218,7 @@
 
       (or (when (get-in ctx-data [:skill-state :has-target])
             (select-keys (:skill-state ctx-data)
-                         [:world-id :target-x :target-y :target-z :distance :exp]))
+                         [:world-id :target-x :target-y :target-z :dist :distance :exp]))
           (resolve-destination player-id player hold-ticks)))))
 
 
@@ -365,7 +373,7 @@
 
           target (or (when (get-in ctx [:skill-state :has-target])
                        (select-keys (:skill-state ctx)
-                                    [:world-id :target-x :target-y :target-z :distance :exp]))
+                                    [:world-id :target-x :target-y :target-z :dist :distance :exp]))
                      (resolve-destination player-id player-ref hold-ticks))]
 
       (if target
