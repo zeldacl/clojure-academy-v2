@@ -6,6 +6,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.light-shield-fx :as ls-fx]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
@@ -46,11 +47,15 @@
 (deftest start-end-update-state-and-build-plan-test
   (let [
         particles* (atom [])
-        sounds* (atom [])]
+        sounds* (atom [])
+        bridge* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "light-shield-fx-test"})
                   client-particles/queue-particle-effect! (fn [& args]
                                                              (swap! particles* conj args)
                                                              nil)
+                  client-bridge/run-client-effect! (fn [effect-key payload]
+                                                     (swap! bridge* conj [effect-key payload])
+                                                     nil)
                   client-sounds/queue-sound-effect! (fn [& args]
                                                         (swap! sounds* conj args)
                                                         nil)
@@ -81,9 +86,26 @@
       ;; that namespace happened not to be loaded and the arc-beam default
       ;; answered instead.
       (is (nil? (arc-beam/effect-build-plan :light-shield {:x 0.0 :y 64.0 :z 0.0} {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0} 12)))
+      ;; c_spawn: md.shield_startup at 0.5 plus a FollowEntitySound loop of
+      ;; md.shield_loop that runs until c_end stops it. The port used to play a
+      ;; made-up md.shield_on, no loop at all, and then fired md.shield_loop
+      ;; once as a shutdown cue the original does not have.
+      (is (= [{:type :sound :sound-id "academy:md.shield_startup" :volume 0.5 :pitch 1.0}]
+             (mapv last @sounds*)))
+      (is (= [:mcmod/start-loop-sound-at-player] (mapv first @bridge*)))
+      (is (= {:key "light-shield/ctx-ls"
+              :sound-id "academy:md.shield_loop"
+              :owner-uuid "player-a"
+              :volume 1.0
+              :pitch 1.0}
+             (second (first @bridge*))))
       (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
-      (is (seq @sounds*)))))
+      (is (= [:mcmod/start-loop-sound-at-player :mcmod/stop-loop-sound]
+             (mapv first @bridge*)))
+      (is (= {:key "light-shield/ctx-ls"} (second (second @bridge*))))
+      ;; ...and nothing else joined the one-shot sounds on the way out.
+      (is (= 1 (count @sounds*))))))
 
 ;; Upstream rolls the spark emitter at 30% per tick rather than on a fixed
 ;; cadence, so the gate is pinned by driving `rand` from both sides.
@@ -94,6 +116,7 @@
                   client-particles/queue-particle-effect! (fn [& args]
                                                             (swap! particles* conj args)
                                                             nil)
+                  client-bridge/run-client-effect! (fn [& _] nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)
                   rand (fn ([] roll) ([n] (* roll n)))]
       (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-start {:mode :start :source-player-id "player-a"})

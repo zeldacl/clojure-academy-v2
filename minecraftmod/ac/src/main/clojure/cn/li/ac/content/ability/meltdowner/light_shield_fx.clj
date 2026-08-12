@@ -1,12 +1,10 @@
 (ns cn.li.ac.content.ability.meltdowner.light-shield-fx
-  (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.ability.client.fx-spec :as fx-spec]
+  (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
 
-(defn- shield-end-sound! [_ctx-id _channel _payload]
-  (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id (modid/namespaced-path "md.shield_loop") :volume 0.35 :pitch 0.95}))
+;; c_end only kills the shield entity and stops the loop sample — the original
+;; plays nothing on shutdown. The port fired md.shield_loop as a one-shot here,
+;; which both invented an end cue and spent the loop sample on it.
 
 (def ^:private spec
   (arc-beam/build-spec
@@ -18,8 +16,6 @@
                 ;; to get it from.
                 :tick {:topic :light-shield/fx-tick :mode :tick
                        :level-payload (fn [_ _ p] {:pos (:pos p)})}
-                :end {:topic :light-shield/fx-end :mode :end
-                      :targets [:level :immediate]
-                      :immediate-fn shield-end-sound!}}}))
+                :end {:topic :light-shield/fx-end :mode :end}}}))
 
 (arc-beam/def-arc-beam-fx :light-shield)

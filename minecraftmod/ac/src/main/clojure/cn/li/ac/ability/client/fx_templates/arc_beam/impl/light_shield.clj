@@ -2,7 +2,32 @@
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
+
+(def ^:private loop-sound-id (modid/namespaced-path "md.shield_loop"))
+
+(defn- loop-sound-key [ctx-id] (str "light-shield/" ctx-id))
+
+(defn- start-loop-sound!
+  "c_spawn: FollowEntitySound(player, \"md.shield_loop\").setLoop() — a loop
+  sample riding the caster for as long as the shield is up, at MovingSound's
+  default volume (LightShield never calls setVolume)."
+  [ctx-id source-player-id]
+  (client-bridge/run-client-effect!
+    :mcmod/start-loop-sound-at-player
+    {:key (loop-sound-key ctx-id)
+     :sound-id loop-sound-id
+     :owner-uuid (str source-player-id)
+     :volume 1.0
+     :pitch 1.0}))
+
+(defn- stop-loop-sound!
+  "c_end: loopSound.stop()."
+  [ctx-id]
+  (client-bridge/run-client-effect!
+    :mcmod/stop-loop-sound
+    {:key (loop-sound-key ctx-id)}))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -18,8 +43,11 @@
     (case mode
       :start
       (do
+        ;; c_spawn: md.shield_startup at 0.5. md.shield_on/md.shield_off are
+        ;; port-invented ids the original has no counterpart for.
         (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id (modid/namespaced-path "md.shield_on") :volume 0.7 :pitch 1.0})
+          {:type :sound :sound-id (modid/namespaced-path "md.shield_startup") :volume 0.5 :pitch 1.0})
+        (start-loop-sound! ctx-id source-player-id)
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :phase :startup})))
       :tick
@@ -29,7 +57,9 @@
         (assoc-in store* [:effect-state owner-key* :pos] pos)
         store*)
       :end
-      (update store* :effect-state dissoc owner-key*)
+      (do
+        (stop-loop-sound! ctx-id)
+        (update store* :effect-state dissoc owner-key*))
       store*)))
 
 (defn- tick-state!
@@ -78,10 +108,6 @@
   ;; the head that read as a useless overhead ray. Particles above.
   nil)
 
-(defn- shield-end-sound! [_ctx-id _channel _payload]
-  (client-sounds/queue-current-sound-effect!
-    {:type :sound :sound-id (modid/namespaced-path "md.shield_loop") :volume 0.35 :pitch 0.95}))
-
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:light-shield :level] [_ _] {:effect-state {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:light-shield :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
@@ -90,4 +116,8 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :light-shield [_ store owner-key]
+  ;; A context torn down without its :end channel (world unload, disconnect)
+  ;; would otherwise leave the loop sample playing forever.
+  (when-let [ctx-id (get-in store [:effect-state owner-key :ctx-id])]
+    (stop-loop-sound! ctx-id))
   (update store :effect-state dissoc owner-key))
