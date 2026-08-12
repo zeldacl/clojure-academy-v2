@@ -3,13 +3,12 @@
   WaveEffect) at the affected entities."
   (:require
             [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.effects.cubic-curve :as curve]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.ac.ability.client.render-util :as ru]))
+            [cn.li.ac.ability.client.effects.wave-effect :as wave]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private vec-reflection-effect-id :vec-reflection)
 (def ^:private sound-id (modid/namespaced-path "vecmanip.vec_reflection"))
@@ -49,35 +48,9 @@
      :y (double (or y 0.0))
      :z (double (or z 0.0))}))
 
-;; WaveEffect(world, rings = 2, size = 1.1), life 15 ticks. Each ring gets its
-;; own life, a depth offset along the caster's view normal, a size jitter and a
-;; start delay, exactly as the entity's constructor rolls them.
-(def ^:private wave-life-ticks 15)
+;; VecReflection spawns WaveEffect(world, rings = 2, size = 1.1).
 (def ^:private wave-rings 2)
 (def ^:private wave-size 1.1)
-
-;; WaveEffectRenderer's two curves.
-(def ^:private alpha-curve
-  (curve/curve [[0.0 0.0] [0.2 1.0] [0.5 1.0] [0.8 1.0] [1.0 0.0]]))
-(def ^:private size-curve
-  (curve/curve [[0.0 0.4] [0.2 0.8] [2.5 1.5]]))
-
-(defn- ranged
-  ^double [^double from ^double to]
-  (+ from (rand (- to from))))
-
-(defn- rangei
-  [from to]
-  (+ (long from) (rand-int (- (long to) (long from)))))
-
-(defn- build-rings
-  []
-  (mapv (fn [idx]
-          {:life (rangei 8 12)
-           :offset (+ (* idx 1.5) (ranged -0.3 0.3))
-           :size (* wave-size (ranged 0.8 1.2))
-           :time-offset (+ (* idx 2) (rangei -1 1))})
-        (range wave-rings)))
 
 (defn- enqueue-wave
   [store owner-key base-meta x y z yaw-rad pitch-rad]
@@ -93,9 +66,9 @@
             ;; happens to be watching.
             :yaw-rad (double (or yaw-rad 0.0))
             :pitch-rad (double (or pitch-rad 0.0))
-            :rings (build-rings)
-            :ttl wave-life-ticks
-            :max-ttl wave-life-ticks})))
+            :rings (wave/build-rings wave-rings wave-size)
+            :ttl wave/life-ticks
+            :max-ttl wave/life-ticks})))
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -142,60 +115,10 @@
            :effect-state (store-tick/keep-active-inc-ticks (:effect-state state*))
            :wave-effects (store-tick/tick-ttl-items-by-owner (:wave-effects state*)))))
 
-(defn- view-basis
-  "The effect frame: glRotated(-yaw) then glRotated(pitch) sends local +z along
-  the caster's look, which is what the rings stack and drift along."
-  [^double yaw ^double pitch]
-  (let [sy (Math/sin yaw) cy (Math/cos yaw)
-        sp (Math/sin pitch) cp (Math/cos pitch)]
-    {:right (vec3/v3 cy 0.0 sy)
-     :up (vec3/v3 (* (- sp) sy) cp (* sp cy))
-     :fwd (vec3/v3 (* (- cp) sy) (- sp) (* cp cy))}))
-
-(defn- wave-ops
-  "WaveEffectRenderer: one quad per ring, all in the caster's view plane,
-  spaced along its normal by the ring's offset and pushed forward by
-  ticksExisted/40 as a group. Each ring fades on the shared alpha curve -- its
-  own progress capped by the whole effect's -- and scales on the size curve.
-  Depth test and cull off, white, at 0.7 of the curve's alpha."
-  [{:keys [x y z ttl max-ttl rings yaw-rad pitch-rad]}]
-  (let [max-ttl (double (max 1 (or max-ttl wave-life-ticks)))
-        age (- max-ttl (double (or ttl 0)))
-        max-alpha (max 0.0 (min 1.0 (curve/value-at alpha-curve (/ age max-ttl))))
-        {:keys [right up fwd]} (view-basis (double (or yaw-rad 0.0))
-                                           (double (or pitch-rad 0.0)))
-        origin (vec3/v3 (double x) (double y) (double z))
-        drift (vec3/v+ origin (vec3/v* fwd (/ age 40.0)))
-        size-scale (curve/value-at size-curve (max 0.0 (min 1.62 (/ age 20.0))))]
-    (keep (fn [{:keys [life offset size time-offset]}]
-            (let [ring-alpha (max 0.0 (min 1.0 (curve/value-at
-                                                 alpha-curve
-                                                 (/ (- age (double time-offset))
-                                                    (double (max 1 life))))))
-                  real-alpha (min max-alpha ring-alpha)]
-              (when (pos? real-alpha)
-                (let [center (vec3/v+ drift (vec3/v* fwd (double offset)))
-                      ;; createBillboard(-.5, -.5, 1, 1) is a 1x1 quad, so the
-                      ;; half-extent is 0.5 before the ring's own scale.
-                      half (* 0.5 (double size) size-scale)
-                      side (vec3/v* right half)
-                      lift (vec3/v* up half)
-                      p0 (vec3/v+ (vec3/v- center side) lift)
-                      p1 (vec3/v+ (vec3/v+ center side) lift)
-                      p2 (vec3/v- (vec3/v+ center side) lift)
-                      p3 (vec3/v- (vec3/v- center side) lift)]
-                  (assoc
-                    (ru/quad-op (modid/asset-path "textures" "effects/glow_circle.png")
-                                p0 p1 p2 p3
-                                {:r 255 :g 255 :b 255
-                                 :a (int (max 0 (min 255 (* 255.0 real-alpha 0.7))))})
-                    :no-depth-test? true)))))
-          rings)))
-
 (defn- build-plan
   [_camera-pos _hand-center-pos _tick _query-fn]
   (let [{:keys [wave-effects]} (vec-reflection-fx-snapshot)
-        wave-plan (mapcat wave-ops (mapcat val wave-effects))]
+        wave-plan (mapcat wave/ops (mapcat val wave-effects))]
     (when (seq wave-plan)
       {:ops (vec wave-plan)})))
 

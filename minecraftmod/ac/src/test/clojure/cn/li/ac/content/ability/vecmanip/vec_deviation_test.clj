@@ -91,7 +91,7 @@
                    cn.li.ac.content.ability.vecmanip.vec-deviation/add-exp!
                    (fn [_a# _b#] nil)
                    cn.li.ac.content.ability.vecmanip.vec-deviation/send-fx-stop-entity!
-                   (fn [_a# _b# _c#] nil)
+                   (fn [& _#] nil)
                    ;; ctx-skill/get-context routes through the 2-arity form
                    ctx/get-context
                    (fn [& _#] ctx-data#)

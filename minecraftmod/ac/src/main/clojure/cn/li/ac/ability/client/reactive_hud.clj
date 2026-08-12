@@ -279,17 +279,24 @@
                              {:r 255 :g 215 :b 0 :a 255}
                              {:r 230 :g 190 :b 70 :a 230})}}))))
 
-;; WaveEffectUI(maxAlpha = 0.4, avgSize = 110, intensity = 1.6): ripples appear
-;; ANYWHERE on the screen, 88-132 px across, growing 20 px a second, living
-;; 1.5-2.5 seconds. The port had them clustered in a 50 px ring around the
-;; crosshair at a third of the size and a third of the life.
-(def ^:private vm-wave-max-alpha 0.4)
-(def ^:private vm-wave-avg-size 110.0)
-(def ^:private vm-wave-intensity 1.6)
+;; WaveEffectUI: ripples appear ANYWHERE on the screen, avgSize * 0.8-1.2 px
+;; across, growing 20 px a second, living 1.5-2.5 seconds, arriving on a
+;; `nextFloat < deltaTime * intensity` roll. The two skills build their own with
+;; DIFFERENT settings, so the parameters travel with the ripple rather than
+;; being one shared constant.
+(def ^:private vm-wave-params
+  {:vec-reflection {:max-alpha 0.4 :avg-size 110.0 :intensity 1.6}
+   :vec-deviation {:max-alpha 0.2 :avg-size 100.0 :intensity 1.4}})
+
 (def ^:private vm-wave-growth-px-per-second 20.0)
 
-(defn- spawn-vm-wave-circle [screen-w screen-h now-ms]
-  (let [size (* (+ 0.8 (* (rand) 0.4)) vm-wave-avg-size)
+(defn- vm-wave-param
+  [skills k]
+  (let [vs (keep #(get-in vm-wave-params [% k]) skills)]
+    (if (seq vs) (apply max vs) (get-in vm-wave-params [:vec-reflection k]))))
+
+(defn- spawn-vm-wave-circle [skills screen-w screen-h now-ms]
+  (let [size (* (+ 0.8 (* (rand) 0.4)) (vm-wave-param skills :avg-size))
         life-ms (long (* 1000.0 (+ 1.5 (* (rand) 1.0))))]
     {:x (* (rand) (double screen-w))
      :y (* (rand) (double screen-h))
@@ -298,12 +305,15 @@
      :start-size size
      ;; realSize = size + timeAlive * 20
      :end-size (+ size (* vm-wave-growth-px-per-second (/ (double life-ms) 1000.0)))
+     :max-alpha (vm-wave-param skills :max-alpha)
      :seed (rand)}))
 
 (defn tick-vm-wave!
-  "Advance VM wave circle lifecycle (client tick hook)."
-  [player-uuid active? screen-w screen-h now-ms]
+  "Advance VM wave circle lifecycle (client tick hook). `skills` is the set of
+  VM skills currently drawing one."
+  [player-uuid skills screen-w screen-h now-ms]
   (let [ok (owner-key player-uuid)
+        active? (boolean (seq skills))
         ^ArrayList circles (or (.get vm-waves-by-owner ok)
                                (when active?
                                  (let [created (ArrayList.)]
@@ -322,8 +332,8 @@
       (let [last-ms (long (or (.get vm-wave-spawn-by-owner ok) now-ms))
             delta-s (/ (double (max 0 (- now-ms last-ms))) 1000.0)]
         (when active?
-          (when (< (rand) (* delta-s vm-wave-intensity))
-            (.add circles (spawn-vm-wave-circle screen-w screen-h now-ms)))
+          (when (< (rand) (* delta-s (vm-wave-param skills :intensity)))
+            (.add circles (spawn-vm-wave-circle skills screen-w screen-h now-ms)))
           (.put vm-wave-spawn-by-owner ok (long now-ms))))
       (when (.isEmpty circles)
         (.remove vm-waves-by-owner ok))))
@@ -349,14 +359,14 @@
   [player-uuid now-ms tint]
   (when tint
     (->> (or (.get vm-waves-by-owner (owner-key player-uuid)) [])
-         (map (fn [{:keys [x y born-ms life-ms start-size end-size seed]}]
+         (map (fn [{:keys [x y born-ms life-ms start-size end-size max-alpha]}]
                 (let [elapsed (double (max 0 (- now-ms (long born-ms))))
                       life (double (max 1 life-ms))
                       t (min 1.0 (/ elapsed life))
                       s (+ start-size (* (- end-size start-size) t))
                       ;; Ripple.alpha: up over the first fifth, held to the
                       ;; half, then straight down. Times maxAlpha.
-                      alpha (* vm-wave-max-alpha
+                      alpha (* (double (or max-alpha 0.4))
                                (cond
                                  (< t 0.2) (/ t 0.2)
                                  (< t 0.5) 1.0

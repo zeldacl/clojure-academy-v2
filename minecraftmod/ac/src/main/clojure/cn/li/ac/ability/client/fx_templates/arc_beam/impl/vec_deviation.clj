@@ -1,13 +1,24 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation
+  "Client FX for VecDeviation: the same WaveEffect VecReflection spawns, with
+  one ring instead of two and 0.6 instead of 1.1."
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.ac.ability.client.effects.wave-effect :as wave]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [cn.li.ac.ability.client.fx-templates.arc-beam])
-  (:import [cn.li.mcmod.math V3]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]
+            [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private sound-id (modid/namespaced-path "vecmanip.vec_deviation"))
+
+;; VecDeviation spawns WaveEffect(world, rings = 1, size = 0.6).
+(def ^:private wave-rings 1)
+(def ^:private wave-size 0.6)
+
+(defn- queue-deviation-sound!
+  [x y z]
+  (client-sounds/queue-current-sound-effect!
+    {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
+     :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))}))
 
 
 
@@ -21,7 +32,8 @@
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:effect-state {} :wave-effects {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode x y z marked? source-player-id world-id]} (or payload {})
+        {:keys [mode x y z marked? entity-uuid yaw-rad pitch-rad
+                source-player-id world-id]} (or payload {})
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
@@ -35,22 +47,33 @@
       (assoc-in store* [:effect-state owner-key*]
                 (merge base-meta {:active? false :ticks 0}))
       :stop-entity
-      (if marked?
-        (let [life (+ 10 (rand-int 6))]
-          (update-in store* [:wave-effects owner-key*]
-            (fnil conj [])
-            (merge base-meta
-                   {:x (double (or x 0.0))
-                    :y (double (or y 0.0))
-                    :z (double (or z 0.0))
-                    :ttl life
-                    :max-ttl life})))
-        store*)
+      (do
+        ;; c_stopEntity zeroes the entity's motion OUTSIDE the isMarked branch:
+        ;; the projectile stops locally the instant the message lands, marked
+        ;; or not, instead of coasting until the next velocity sync.
+        (when entity-uuid
+          (client-bridge/run-client-effect!
+            :mcmod/set-client-entity-motion
+            {:entity-uuid (str entity-uuid) :vx 0.0 :vy 0.0 :vz 0.0}))
+        (if marked?
+          (do
+            ;; ...and the wave and its sound only when it is.
+            (queue-deviation-sound! x y z)
+            (update-in store* [:wave-effects owner-key*]
+              (fnil conj [])
+              (merge base-meta
+                     {:x (double (or x 0.0))
+                      :y (double (or y 0.0))
+                      :z (double (or z 0.0))
+                      :yaw-rad (double (or yaw-rad 0.0))
+                      :pitch-rad (double (or pitch-rad 0.0))
+                      :rings (wave/build-rings wave-rings wave-size)
+                      :ttl wave/life-ticks
+                      :max-ttl wave/life-ticks})))
+          store*))
       :play
       (do
-        (client-sounds/queue-current-sound-effect!
-          {:type :sound :sound-id sound-id :volume 0.5 :pitch 1.0
-           :x (double (or x 0.0)) :y (double (or y 0.0)) :z (double (or z 0.0))})
+        (queue-deviation-sound! x y z)
         store*)
       store*)))
 
@@ -61,43 +84,10 @@
            :effect-state (store-tick/keep-active-inc-ticks (:effect-state state*))
            :wave-effects (store-tick/tick-ttl-items-by-owner (:wave-effects state*)))))
 
-(defn- matching-active-state
-  [effect-state hand-center-pos]
-  (some (fn [st]
-          (when (and (:active? st)
-                     (or (nil? (:source-player-id st))
-                         (nil? (:player-uuid hand-center-pos))
-                         (= (str (:source-player-id st))
-                            (str (:player-uuid hand-center-pos)))))
-            st))
-        (vals effect-state)))
-
-(defn- wave-ops
-  "`cam-pos` crosses in as a map (shared level-effect-plan context)."
-  [cam-pos {:keys [x y z ttl max-ttl]}]
-  (let [life (/ (double ttl) (double (max 1 max-ttl)))
-        alpha (int (max 0 (min 255 (* 170.0 life))))
-        ^V3 cam (vec3/map->v3 cam-pos)
-        center (vec3/v3 (double x) (+ (double y) 0.6) (double z))
-        right (ru/camera-facing-right-axis center cam)
-        up (ru/billboard-up-axis center cam right)
-        half-size (+ 0.35 (* 0.65 (- 1.0 life)))
-        side (vec3/v* right half-size)
-        lift (vec3/v* up half-size)
-        p0 (vec3/v+ (vec3/v- center side) lift)
-        p1 (vec3/v+ (vec3/v+ center side) lift)
-        p2 (vec3/v- (vec3/v+ center side) lift)
-        p3 (vec3/v- (vec3/v- center side) lift)]
-    [(ru/quad-op (modid/namespaced-path "textures/effects/glow_circle.png")
-                 p0 p1 p2 p3
-                 {:r 190 :g 225 :b 255 :a alpha})]))
-
 (defn- build-plan
-  [camera-pos hand-center-pos _tick]
-  (let [{:keys [effect-state wave-effects]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-deviation)
-        vd (matching-active-state effect-state hand-center-pos)
-        current-waves (mapcat val wave-effects)
-        wave-plan (mapcat #(wave-ops camera-pos %) current-waves)]
+  [_camera-pos _hand-center-pos _tick]
+  (let [{:keys [wave-effects]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-deviation)
+        wave-plan (mapcat wave/ops (mapcat val wave-effects))]
     (when (seq wave-plan)
       {:ops (vec wave-plan)})))
 

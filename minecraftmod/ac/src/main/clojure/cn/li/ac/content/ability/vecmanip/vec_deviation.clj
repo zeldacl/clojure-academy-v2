@@ -14,6 +14,7 @@
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.util.toggle :as toggle]
             [cn.li.ac.content.ability.vecmanip.arbitration :as arbitration]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.util.log :as log]))
 
@@ -98,18 +99,40 @@
 (defn- add-exp! [player-id amount]
   (skill-effects/add-skill-exp! player-id :vec-deviation amount))
 
-(defn- send-fx-stop-entity! [ctx-id entity marked?]
+(defn- caster-rotation
+  "WaveEffect freezes eff.rotationYaw/Pitch to the CASTER's at spawn and the
+  effect plays on every client that gets the message, so the angles travel with
+  it. Recovered from the look vector: look = (-sin y cos p, -sin p, cos y cos p)."
+  [player-id]
+  ;; Purely cosmetic: an angle lookup must never be able to interrupt the
+  ;; skill's resource accounting further down the tick.
+  (try
+    (when-let [look (and (raycast/available?) (raycast/player-look-vector player-id))]
+      (let [lx (double (or (:x look) 0.0))
+            ly (double (or (:y look) 0.0))
+            lz (double (or (:z look) 0.0))]
+        {:yaw-rad (Math/atan2 (- lx) lz)
+         :pitch-rad (Math/asin (max -1.0 (min 1.0 (- ly))))}))
+    (catch Exception _ nil)))
+
+(defn- send-fx-stop-entity! [ctx-id player-id entity marked?]
   (fx/send-local-and-nearby!
    ctx-id
    {:topic :vec-deviation/fx-stop-entity :mode :stop-entity}
    nil
-   {:x (double (or (:x entity) 0.0))
-    :y (+ (double (or (:y entity) 0.0))
-          (if marked?
-            (double (or (:eye-height entity) (:height entity) 0.0))
-            0.0))
-    :z (double (or (:z entity) 0.0))
-    :marked? (boolean marked?)}))
+   (merge
+     {:x (double (or (:x entity) 0.0))
+      :y (+ (double (or (:y entity) 0.0))
+            (if marked?
+              (double (or (:eye-height entity) (:height entity) 0.0))
+              0.0))
+      :z (double (or (:z entity) 0.0))
+      :marked? (boolean marked?)}
+     ;; c_stopEntity stops the projectile locally whether or not it is marked,
+     ;; so the uuid rides along even for the fireball cases.
+     (when-let [uuid (:uuid entity)]
+       {:entity-uuid (str uuid)})
+     (caster-rotation player-id))))
 
 (defn- send-fx-play! [ctx-id pos]
   (fx/send-local-and-nearby!
@@ -238,7 +261,7 @@
                       :vec-deviation-marked
                       (fnil conj #{})
                       entity-uuid)))
-          (send-fx-stop-entity! ctx-id entity generic-mark?))
+          (send-fx-stop-entity! ctx-id player-id entity generic-mark?))
         (log/debug
          "VecDeviation: Deflected entity" entity-uuid "difficulty" difficulty)))))
 

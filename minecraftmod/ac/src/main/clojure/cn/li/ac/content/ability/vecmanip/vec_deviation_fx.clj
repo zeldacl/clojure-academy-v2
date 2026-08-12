@@ -13,7 +13,10 @@
                                                {:x (double (or (:x p) 0.0))
                                                 :y (double (or (:y p) 0.0))
                                                 :z (double (or (:z p) 0.0))
-                                                :marked? (boolean (:marked? p))})}
+                                                :marked? (boolean (:marked? p))
+                                                :entity-uuid (:entity-uuid p)
+                                                :yaw-rad (:yaw-rad p)
+                                                :pitch-rad (:pitch-rad p)})}
                 :play {:topic :vec-deviation/fx-play :mode :play
                        :level-payload (fn [_ _ p]
                                         {:x (double (or (:x p) 0.0))

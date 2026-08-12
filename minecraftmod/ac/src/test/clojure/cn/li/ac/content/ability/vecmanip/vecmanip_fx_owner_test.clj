@@ -39,6 +39,8 @@
   (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest vec-deviation-keeps-state-and-waves-per-owner-test
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                client-bridge/run-client-effect! (fn [& _] nil)]
   (dispatch! :vec-deviation (event "ctx-a" :vec-deviation/fx-start {:mode :start}))
   (dispatch! :vec-deviation (event "ctx-b" :vec-deviation/fx-start {:mode :start}))
   (dispatch! :vec-deviation (event "ctx-a" :vec-deviation/fx-stop-entity
@@ -54,7 +56,7 @@
       (let [after-clear (vec-deviation-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-clear) [:ctx "ctx-a"])))
         (is (nil? (get (:wave-effects after-clear) [:ctx "ctx-a"])))
-        (is (:active? (get (:effect-state after-clear) [:ctx "ctx-b"]))))))
+        (is (:active? (get (:effect-state after-clear) [:ctx "ctx-b"])))))))
 
 (deftest vec-accel-keeps-preview-state-per-owner-test
   (dispatch! :vec-accel (event "ctx-a" :vec-accel/fx-start {:mode :start}))

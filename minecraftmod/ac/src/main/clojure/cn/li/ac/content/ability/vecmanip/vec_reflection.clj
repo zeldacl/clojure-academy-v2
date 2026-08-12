@@ -84,12 +84,16 @@
   to travel with it rather than be read off whoever is watching. Recovered from
   the look vector: look = (-sin y cos p, -sin p, cos y cos p)."
   [player-id]
-  (when-let [look (and (raycast/available?) (raycast/player-look-vector player-id))]
-    (let [lx (double (or (:x look) 0.0))
-          ly (double (or (:y look) 0.0))
-          lz (double (or (:z look) 0.0))]
-      {:yaw-rad (Math/atan2 (- lx) lz)
-       :pitch-rad (Math/asin (max -1.0 (min 1.0 (- ly))))})))
+  ;; Purely cosmetic: an angle lookup must never be able to interrupt the
+  ;; skill's resource accounting further down the tick.
+  (try
+    (when-let [look (and (raycast/available?) (raycast/player-look-vector player-id))]
+      (let [lx (double (or (:x look) 0.0))
+            ly (double (or (:y look) 0.0))
+            lz (double (or (:z look) 0.0))]
+        {:yaw-rad (Math/atan2 (- lx) lz)
+         :pitch-rad (Math/asin (max -1.0 (min 1.0 (- ly))))}))
+    (catch Exception _ nil)))
 
 (defn- entity-registry-id [entity]
   (or (:entity-id entity) (:type entity) ""))

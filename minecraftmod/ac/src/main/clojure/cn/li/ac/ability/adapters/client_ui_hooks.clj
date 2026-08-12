@@ -1136,7 +1136,10 @@
                 now-ms (client-bridge/game-time-ms)
                 [screen-w screen-h] (client-bridge/get-window-size)
                 {:keys [reflection-active? deviation-active?]} (scan-vm-contexts player-uuid)]
-            (reactive-hud/tick-vm-wave! player-uuid (or reflection-active? deviation-active?)
+            (reactive-hud/tick-vm-wave! player-uuid
+                                        (cond-> #{}
+                                          reflection-active? (conj :vec-reflection)
+                                          deviation-active? (conj :vec-deviation))
                                         (int screen-w) (int screen-h) now-ms)))))
     (content-actions/register-client-tick-hook!
       (fn tick-charging-arc-particles []

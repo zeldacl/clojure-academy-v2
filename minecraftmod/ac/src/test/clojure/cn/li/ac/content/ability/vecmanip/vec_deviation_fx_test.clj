@@ -4,7 +4,9 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vdfx]))
+            [cn.li.ac.content.ability.vecmanip.vec-deviation-fx :as vdfx]
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
   (try
@@ -43,7 +45,8 @@
              @registered-topics*)))))
 
 (deftest enqueue-stop-entity-requires-marked-flag-test
-  (do
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (is (= {:effect-state {} :wave-effects {}}
            (vdfx/fx-snapshot)))
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-main" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? false})
@@ -52,6 +55,41 @@
     (let [waves (get (:wave-effects (vdfx/fx-snapshot)) [:ctx "ctx-main"])]
       (is (= 1 (count waves)))
       (is (= 3.0 (:z (first waves)))))))
+
+(deftest stop-entity-halts-the-projectile-locally-and-only-marks-make-a-wave-test
+  ;; c_stopEntity zeroes the entity's motion OUTSIDE the isMarked branch, so a
+  ;; deflected projectile stops the instant the message lands rather than
+  ;; coasting to the next velocity sync; the wave and its sound come only when
+  ;; the entity was marked.
+  (let [enqueue-state! (var-get #'cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation/enqueue-state!)
+        bridge* (atom [])
+        sounds* (atom [])]
+    (with-redefs [client-sounds/queue-current-sound-effect! (fn [c] (swap! sounds* conj c) nil)
+                  client-bridge/run-client-effect! (fn [k p] (swap! bridge* conj [k p]) true)]
+      ;; unmarked (a fireball): stopped locally, no wave, no sound
+      (let [store (enqueue-state! nil "ctx-1" :vec-deviation/fx-stop-entity [:ctx "ctx-1"]
+                                  {:mode :stop-entity :marked? false :entity-uuid "fb-1"
+                                   :x 1.0 :y 2.0 :z 3.0})]
+        (is (= [[:mcmod/set-client-entity-motion
+                 {:entity-uuid "fb-1" :vx 0.0 :vy 0.0 :vz 0.0}]]
+               @bridge*))
+        (is (empty? @sounds*))
+        (is (empty? (:wave-effects store))))
+      (reset! bridge* [])
+      ;; marked (an arrow): stopped locally AND a wave with its sound
+      (let [store (enqueue-state! nil "ctx-1" :vec-deviation/fx-stop-entity [:ctx "ctx-1"]
+                                  {:mode :stop-entity :marked? true :entity-uuid "arrow-1"
+                                   :x 1.0 :y 2.0 :z 3.0 :yaw-rad 0.0 :pitch-rad 0.0})
+            wave (first (get (:wave-effects store) [:ctx "ctx-1"]))]
+        (is (= [[:mcmod/set-client-entity-motion
+                 {:entity-uuid "arrow-1" :vx 0.0 :vy 0.0 :vz 0.0}]]
+               @bridge*))
+        (is (= 1 (count @sounds*)))
+        (is (= "academy:vecmanip.vec_deviation" (:sound-id (first @sounds*))))
+        ;; WaveEffect(world, 1, 0.6): one ring, and the entity's 15-tick life
+        (is (= 1 (count (:rings wave))))
+        (is (= 15 (:ttl wave)))
+        (is (<= (* 0.6 0.8) (:size (first (:rings wave))) (* 0.6 1.2)))))))
 
 (deftest init-registers-marked-flag-through-fx-channel-handler-test
   (let [handlers* (atom {})
@@ -66,19 +104,24 @@
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (vdfx/init!)
       ((get @handlers* :vec-deviation/fx-stop-entity) "ctx-1" :vec-deviation/fx-stop-entity
-       {:x 1.0 :y 2.0 :z 3.0 :marked? true})
+       {:x 1.0 :y 2.0 :z 3.0 :marked? true
+        :entity-uuid "arrow-1" :yaw-rad 0.5 :pitch-rad -0.25})
       ((get @handlers* :vec-deviation/fx-stop-entity) "ctx-1" :vec-deviation/fx-stop-entity
-       {:x 4.0 :y 5.0 :z 6.0 :marked? false})
+       {:x 4.0 :y 5.0 :z 6.0 :marked? false
+        :entity-uuid "fireball-1" :yaw-rad 0.5 :pitch-rad -0.25})
       (is (= [[:vec-deviation "ctx-1" :vec-deviation/fx-stop-entity
-               {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true}
-               [:owner-key [:ctx "ctx-1"]]]
+               {:mode :stop-entity :x 1.0 :y 2.0 :z 3.0 :marked? true
+                :entity-uuid "arrow-1" :yaw-rad 0.5 :pitch-rad -0.25}
+               '(:owner-key [:ctx "ctx-1"])]
               [:vec-deviation "ctx-1" :vec-deviation/fx-stop-entity
-               {:mode :stop-entity :x 4.0 :y 5.0 :z 6.0 :marked? false}
-               [:owner-key [:ctx "ctx-1"]]]]
+               {:mode :stop-entity :x 4.0 :y 5.0 :z 6.0 :marked? false
+                :entity-uuid "fireball-1" :yaw-rad 0.5 :pitch-rad -0.25}
+               '(:owner-key [:ctx "ctx-1"])]]
              @enqueued*)))))
 
 (deftest two-owners-keep-vec-deviation-state-and-waves-independent-test
-  (do
+  (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
+                client-bridge/run-client-effect! (fn [& _] nil)]
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-a" :vec-deviation/fx-stop-entity {:mode :start :source-player-id "player-a"})
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-b" :vec-deviation/fx-stop-entity {:mode :start :source-player-id "player-b"})
     (arc-beam/enqueue-for-test! :vec-deviation "ctx-a" :vec-deviation/fx-stop-entity {:mode :stop-entity :x 1.0 :y 64.0 :z 1.0 :marked? true :source-player-id "player-a"})
