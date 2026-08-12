@@ -399,13 +399,21 @@
 
 (defn- sort-ops
   "Single pass over `ops`, bucketing into {:lines [...] :translucent-lines [...]
-  :quads {texture [...]} :plasma [...]} with transients / HashMap — avoids
-  per-op persistent conj/update."
+  :quads {texture [...]} :plasma [...]} with transients / LinkedHashMap —
+  avoids per-op persistent conj/update.
+
+  The map has to keep INSERTION order. Quads are batched per texture, and
+  translucent geometry writes depth, so whichever texture is drawn first wins
+  the depth test where they overlap. A plain HashMap made that order arbitrary:
+  a ray's glow boards and its cylinders are different textures, and when the
+  boards happened to go last the wide flat glow sat on top of the round tube
+  and the whole beam read as a sheet. Insertion order is the order the effect
+  emitted its ops, which is the order upstream draws them in."
   [ops]
   (let [lines (transient [])
         tlines (transient [])
         plasma (transient [])
-        ^java.util.HashMap quads-t (java.util.HashMap.)]
+        ^java.util.LinkedHashMap quads-t (java.util.LinkedHashMap.)]
     (doseq [op ops]
       (case (:kind op)
         :line (if (:translucent? op)
@@ -421,11 +429,12 @@
         nil))
     {:lines (persistent! lines)
      :translucent-lines (persistent! tlines)
-     :quads (persistent!
-             (reduce (fn [m ^java.util.Map$Entry e]
-                       (assoc! m (.getKey e) (persistent! (.getValue e))))
-                     (transient {})
-                     (.entrySet quads-t)))
+     ;; array-map preserves insertion order for the small number of textures a
+     ;; frame's effects use; into {} would rehash and lose it again.
+     :quads (reduce (fn [m ^java.util.Map$Entry e]
+                      (assoc m (.getKey e) (persistent! (.getValue e))))
+                    (array-map)
+                    (.entrySet quads-t))
      :plasma (persistent! plasma)}))
 
 ;; ---------------------------------------------------------------------------

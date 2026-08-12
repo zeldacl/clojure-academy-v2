@@ -311,7 +311,11 @@
                                        :a (int (ray-alpha ray 204.0))}}))
                           fixed-rays)]
     (when (or (seq ray-plan) (seq glow-plan) ws)
-      {:ops (vec (concat ray-plan glow-plan))
+      ;; RendererRayComposite appends glow, then cylinderIn, then cylinderOut,
+      ;; and RendererList draws in that order — the glow goes down FIRST and
+      ;; the cylinders over it. Emitting the tubes first put a wide flat board
+      ;; on top of the round beam.
+      {:ops (vec (concat glow-plan ray-plan))
        :local-walk-speed ws})))
 
 ;; ---------------------------------------------------------------------------

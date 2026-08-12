@@ -350,7 +350,7 @@
   [ops]
   (let [lines (transient [])
         plasma (transient [])
-        ^java.util.HashMap quads-t (java.util.HashMap.)]
+        ^java.util.LinkedHashMap quads-t (java.util.LinkedHashMap.)]
     (doseq [op ops]
       (case (:kind op)
         :line (conj! lines op)
@@ -363,12 +363,14 @@
         :plasma-body (conj! plasma op)
         nil))
     {:lines (persistent! lines)
-     :quads (persistent!
-              (reduce (fn [result ^java.util.Map$Entry entry]
-                        (assoc! result (.getKey entry)
-                                (persistent! (.getValue entry))))
-                      (transient {})
-                      (.entrySet quads-t)))
+
+     ;; array-map preserves insertion order for the small number of textures a
+     ;; frame's effects use; into {} would rehash and lose it again.
+     :quads (reduce (fn [result ^java.util.Map$Entry entry]
+                      (assoc result (.getKey entry)
+                             (persistent! (.getValue entry))))
+                    (array-map)
+                    (.entrySet quads-t))
      :plasma (persistent! plasma)}))
 
 (defn- map->v3
