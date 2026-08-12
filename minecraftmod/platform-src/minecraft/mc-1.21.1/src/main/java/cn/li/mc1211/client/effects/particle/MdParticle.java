@@ -11,9 +11,11 @@ import net.minecraft.core.particles.SimpleParticleType;
 /**
  * Meltdowner md particle — port of upstream MdParticleFactory's template:
  * life 25-55 ticks with a 20-tick fade-out, alpha 76-152, size 0.05-0.07,
- * slight gravity (the mine-ray block particles add a 0.01 rigidbody gravity
- * upstream). Rendered with the md_particle / md_particle_luck sprites from
- * the mod's particles.json atlas entries.
+ * no gravity -- MdParticleFactory's template leaves Particle.gravity at 0 and
+ * nothing re-sets it, so these motes drift on their given velocity alone. (The
+ * 0.01 upstream is MineRaysBase's RIGIDBODY gravity on falling block debris, a
+ * different thing entirely.) Rendered with the md_particle / md_particle_luck
+ * sprites from the mod's particles.json atlas entries.
  */
 public class MdParticle extends TextureSheetParticle {
 
@@ -28,7 +30,7 @@ public class MdParticle extends TextureSheetParticle {
         this.fadeStart = this.lifetime - 20;
         this.baseAlpha = (76 + this.random.nextInt(77)) / 255.0F;
         this.quadSize = 0.05F + this.random.nextFloat() * 0.02F;
-        this.gravity = 0.01F;
+        this.gravity = 0.0F;
         this.setAlpha(this.baseAlpha);
     }
 
