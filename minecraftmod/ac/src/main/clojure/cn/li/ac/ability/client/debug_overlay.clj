@@ -80,7 +80,7 @@
 
 (defn- interfering?
   [{:keys [interferences]}]
-  (not (empty? interferences)))
+  (boolean (seq interferences)))
 
 ;; ============================================================================
 ;; State builders

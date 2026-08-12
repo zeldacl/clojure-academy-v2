@@ -60,7 +60,7 @@
   (into [:enum] (sort allowed-categories)))
 
 (defn- ^:private non-empty-descriptor-id? [s]
-  (not (empty? s)))
+  (seq s))
 
 (def ^:private descriptor-id-schema
   [:or keyword? [:and string? [:fn non-empty-descriptor-id?]]])

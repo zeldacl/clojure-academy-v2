@@ -91,7 +91,7 @@
     (if-let [f (get (current-ops) :sd-get-all-keys)]
       (doseq [k (f structured)] (.put result k (get-entry structured k)))
       ;; Without :sd-get-all-keys installed, can't enumerate keys from pure relay layer
-      )
+      nil)
     (into {} result)))
 (defn factory-initialized? []
   (boolean (and (get (current-ops) :create-structured) (get (current-ops) :create-list))))

@@ -120,7 +120,7 @@
 (defn set-renderer-enabled!
   [renderer-id enabled?]
   (ensure-config-initialized!)
-  (when (and (string? renderer-id) (not (empty? renderer-id)))
+  (when (and (string? renderer-id) (seq renderer-id))
     (update-script-render-runtime! update :renderer-overrides assoc renderer-id (boolean enabled?)))
   nil)
 
@@ -154,7 +154,7 @@
   [renderer-id]
   (when (and (scripted-render-enabled?)
              (string? renderer-id)
-             (not (empty? renderer-id)))
+             (seq renderer-id))
     (or (get-in (script-render-runtime-state-snapshot) [:draw-plan-cache renderer-id])
         (when-let [profile (registry/get-profile renderer-id)]
           (let [plan (compiler/compile-profile profile)]

@@ -9,6 +9,18 @@
 
 (defn- unavailable [operation]
   (throw (IllegalStateException. (str "Block runtime provider unavailable: " operation))))
+(def get-block-spec (fn [& _] (unavailable :get-block-spec)))
+(def list-all-blocks (fn [& _] (unavailable :list-all-blocks)))
+(def identify-block-from-full-name (fn [& _] (unavailable :identify-block-from-full-name)))
+(def is-part-block? (fn [& _] (unavailable :is-part-block?)))
+(def has-block-event-handler? (fn [& _] (unavailable :has-block-event-handler?)))
+(def snapshot-tiles-by-id (fn [& _] (unavailable :snapshot-tiles-by-id)))
+(def register-tile-capability-keys! (fn [& _] (unavailable :register-tile-capability-keys!)))
+(def merge-tile-kind-defaults (fn [& _] (unavailable :merge-tile-kind-defaults)))
+(def create-property-registry (fn [& _] (unavailable :create-property-registry)))
+(def register-block-properties! (fn [& _] (unavailable :register-block-properties!)))
+(def get-property (fn [& _] (unavailable :get-property)))
+(def get-all-properties (fn [& _] (unavailable :get-all-properties)))
 (doseq [operation operations]
   (intern *ns* (symbol (name operation)) (fn [& _] (unavailable operation))))
 

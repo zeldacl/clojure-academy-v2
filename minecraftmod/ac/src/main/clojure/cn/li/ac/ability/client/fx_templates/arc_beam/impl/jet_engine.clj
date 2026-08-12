@@ -250,6 +250,7 @@
                            ;; Keep parity with upstream JetEngine: spawn diamond-shield once on trigger phase entry.
                            (spawn-diamond-shield!))]
         (when entering-trigger?
+          nil
           ;; TODO(sound): original JetEngine plays no skill sound — restore
           ;; once a fitting sound is found.
           #_(client-sounds/queue-current-sound-effect!

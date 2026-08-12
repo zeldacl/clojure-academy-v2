@@ -266,7 +266,7 @@
   (let [cmd (:exec-cmd state)
         base (fn [phase]
                (-> state
-                   (update :lines conj (str prompt-str))
+                   (update :lines conj prompt-str)
                    (update :lines clamp-lines)
                    (assoc :phase phase :exec-cmd nil)))]
     (if-let [handler (get @command-registry cmd)]
@@ -289,7 +289,7 @@
     (fn []
       (register-command! "help"
         (fn [state]
-          [(-> (update state :lines conj (str prompt-str))
+          [(-> (update state :lines conj prompt-str)
                (update :lines conj (cmd-help (:mode state)))
                (update :lines clamp-lines)
                (assoc :phase :idle :exec-cmd nil))
@@ -305,7 +305,7 @@
             (do
               ((:on-start-development state))
               [(-> state
-                   (update :lines conj (str prompt-str))
+                   (update :lines conj prompt-str)
                    (update :lines conj (msg :dev-begin))
                    (update :lines conj (loc :progress "00"))
                    (update :lines clamp-lines)
@@ -313,7 +313,7 @@
                :developing])
             ;; No developer device / wrong mode — upstream never registers the
             ;; command in those states, so it falls through to "Invalid command."
-            [(-> (update state :lines conj (str prompt-str))
+            [(-> (update state :lines conj prompt-str)
                  (update :lines conj (msg :invalid-cmd))
                  (update :lines clamp-lines)
                  (assoc :phase :idle :exec-cmd nil))
@@ -326,7 +326,7 @@
             ;; initReset: refused resets print a specific error and never enter
             ;; the progress loop. Server-side validation stays authoritative.
             (if-let [fail-key (some-> (:reset-precheck state) (#(%)))]
-              [(-> (update state :lines conj (str prompt-str))
+              [(-> (update state :lines conj prompt-str)
                    (update :lines conj (loc fail-key))
                    (update :lines clamp-lines)
                    (assoc :phase :idle :exec-cmd nil))
@@ -334,13 +334,13 @@
               (do
                 ((:on-start-development state))
                 [(-> state
-                     (update :lines conj (str prompt-str))
+                     (update :lines conj prompt-str)
                      (update :lines conj (msg :reset-begin))
                      (update :lines conj (loc :progress "00"))
                      (update :lines clamp-lines)
                      (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
                  :developing]))
-            [(-> (update state :lines conj (str prompt-str))
+            [(-> (update state :lines conj prompt-str)
                  (update :lines conj (msg :invalid-cmd))
                  (update :lines clamp-lines)
                  (assoc :phase :idle :exec-cmd nil))

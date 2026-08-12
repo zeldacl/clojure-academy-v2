@@ -50,7 +50,7 @@
 	           (:part-block-id mb) (not (:multi-block? mb)))
 	    (if-let [ctrl-spec (some-> (:controller-block-id mb) bdsl/get-block-spec)]
 	      (let [ctrl-mb (:multi-block ctrl-spec)
-	            positions (or (:multi-block-positions ctrl-mb))
+            positions (:multi-block-positions ctrl-mb)
 	            px (pos/pos-x (pos/block-pos tile))
 	            py (pos/pos-y (pos/block-pos tile))
 	            pz (pos/pos-z (pos/block-pos tile))

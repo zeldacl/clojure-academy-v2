@@ -76,13 +76,13 @@
   (when linked
     (let [{:keys [ssid password]} (wireless-api/network-snapshot linked)]
       {:ssid ssid
-       :is-encrypted? (not (empty? (str password)))})))
+       :is-encrypted? (boolean (seq (str password)))})))
 
 (defn available-net->dto
   [net matrix-cap {:keys [matrix-capacity matrix-bandwidth matrix-range]}]
   (let [{:keys [ssid password load]} (wireless-api/network-snapshot net)]
     {:ssid ssid
-     :is-encrypted? (not (empty? (str password)))
+     :is-encrypted? (boolean (seq (str password)))
      :load load
      :capacity (matrix-capacity matrix-cap)
      :bandwidth (matrix-bandwidth matrix-cap)

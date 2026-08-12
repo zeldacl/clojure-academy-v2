@@ -21,7 +21,7 @@
   (when-not (keyword? message-key)
     (throw (ex-info "Message key must be a keyword"
                     {:message-key message-key})))
-  (when-not (and (string? message-id) (not (empty? message-id)))
+  (when-not (and (string? message-id) (seq message-id))
     (throw (ex-info "Message id must be a non-empty string"
                     {:message-key message-key :message-id message-id})))
   (when-let [fw-atom (fw/fw-atom)]

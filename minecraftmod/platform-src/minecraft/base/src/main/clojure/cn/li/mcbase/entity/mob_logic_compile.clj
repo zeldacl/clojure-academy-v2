@@ -3,7 +3,7 @@
   (:import [cn.li.mcbase.entity.logic MobLogicBundle]
            [cn.li.mcbase.shim FnMobTickLogic FnMobHurtLogic FnMobDeathLogic FnMobLootLogic]))
 
-(defn ^MobLogicBundle compile-mob-logic
+(defn compile-mob-logic ^MobLogicBundle
   "Compile :properties.mob map (or merged cfg) into a MobLogicBundle singleton."
   [mob-props]
   (let [props (or mob-props {})

@@ -5,6 +5,12 @@
                           :get-all-command-ids :get-command-spec :init-commands!])
 (defn- unavailable [operation]
   (throw (IllegalStateException. (str "Command runtime provider unavailable: " operation))))
+(def create-context (fn [& _] (unavailable :create-context)))
+(def execute (fn [& _] (unavailable :execute)))
+(def execute-action-impl (fn [& _] (unavailable :execute-action-impl)))
+(def get-all-command-ids (fn [& _] (unavailable :get-all-command-ids)))
+(def get-command-spec (fn [& _] (unavailable :get-command-spec)))
+(def init-commands! (fn [& _] (unavailable :init-commands!)))
 (doseq [operation operations]
   (intern *ns* (symbol (name operation)) (fn [& _] (unavailable operation))))
 (defn- facade-var [operation]

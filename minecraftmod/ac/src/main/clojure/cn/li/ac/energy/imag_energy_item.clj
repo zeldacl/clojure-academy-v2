@@ -35,9 +35,10 @@
 ;; Type check
 ;; ============================================================================
 
-(defn imag-energy-item? [obj]
+(defn imag-energy-item?
   "Check if object satisfies ImagEnergyItem contract
   (has the required keys with callable values)."
+  [obj]
   (and (map? obj)
        (fn? (:get-max-energy obj))
        (fn? (:get-bandwidth obj))))

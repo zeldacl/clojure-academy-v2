@@ -16,7 +16,7 @@
        :pos-x (when p (pos/pos-x p))
        :pos-y (when p (pos/pos-y p))
        :pos-z (when p (pos/pos-z p))
-       :is-encrypted? (not (empty? pw))})))
+       :is-encrypted? (boolean (seq pw))})))
 
 (defn node-block-pos
   "Return the block position for a node capability, or nil."

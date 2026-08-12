@@ -75,8 +75,9 @@
               (<= min-y y max-y)
               (<= min-z z max-z)))))
 
-(defn- find-players-in-range [level pos range]
+(defn- find-players-in-range
   "Find players within a cubic AABB centered on the block (matching original AcademyCraft behavior)."
+  [level pos range]
   (let [cx (+ 0.5 (double (pos/pos-x pos)))
         cy (+ 0.5 (double (pos/pos-y pos)))
         cz (+ 0.5 (double (pos/pos-z pos)))

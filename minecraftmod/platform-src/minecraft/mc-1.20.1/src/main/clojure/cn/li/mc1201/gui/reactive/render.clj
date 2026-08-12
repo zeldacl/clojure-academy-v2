@@ -9,7 +9,6 @@
             [cn.li.platform.neutral.ui :as node]
             [cn.li.platform.neutral.ui :as ui-layout]
             [clojure.string :as str]
-            [cn.li.platform.neutral.ui]
             [cn.li.mcmod.util.log])
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
@@ -1306,7 +1305,8 @@
                   ;; missing flush was the actual reason the block never
                   ;; appeared at all.
                   (.flush gg)
-                  (RenderSystem/disableDepthTest)))))
+                  (RenderSystem/disableDepthTest))
+                  nil)))
           ;; :item — GuiGraphics.renderItem bakes translate(0,0,150) + scale(16,-16,16)
           ;; into gg's own pose, sized and offset for vanilla's ortho GUI. Under
           ;; this perspective camera the 150 lands the model far behind the eye

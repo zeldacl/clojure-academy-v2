@@ -88,8 +88,9 @@
         translated (i18n/translate k)]
     (if (= translated k) key translated)))
 
-(defn- now-sec []
+(defn- now-sec
   "Current time in fractional seconds."
+  []
   (/ (double (System/currentTimeMillis)) 1000.0))
 
 (defn- lerp-d [a b t]
@@ -271,8 +272,9 @@
         (set-image-alpha! icon alpha)
         (set-text-alpha! r text alpha)))))
 
-(defn- update-page-slot! [^UiRt r page-idx slot-idx slot-info]
+(defn- update-page-slot!
   "Update one slot's icon and text from slot-info map or nil."
+  [^UiRt r page-idx slot-idx slot-info]
   (let [icon-node-id (keyword (str "preset-" page-idx "-" slot-idx "-icon"))
         text-node-id (keyword (str "preset-" page-idx "-" slot-idx "-text"))
         skill-id (:skill-id slot-info)
@@ -433,8 +435,9 @@
 ;; Page refresh — react to preset data changes
 ;; ============================================================================
 
-(defn- page-x-from-active [page-idx active-idx]
+(defn- page-x-from-active
   "Upstream getXFor(i, active): STEP * (i - active). Active at center (0)."
+  [page-idx active-idx]
   (* step (- page-idx active-idx)))
 
 (defn- refresh-carousel! [^UiRt r owner]
@@ -470,9 +473,10 @@
         (set-node-visible! r pn true))
       (apply-page-alpha! r page page-idx (double alpha)))))
 
-(defn- update-hover-highlights! [^UiRt r active transiting?]
+(defn- update-hover-highlights!
   "Upstream HintHandler FrameEvent: slot highlight (selected.png) enabled only
    when its page is active AND the mouse hovers the row."
+  [^UiRt r active transiting?]
   (let [pages (page-nodes r)
         hovered (long (rt/hovered-idx r))]
     (doseq [page-idx (range 4)]
