@@ -10,13 +10,23 @@
    the click has no handler — 5d94832ce made unhandled clicks clear focus
    (so visual-only nodes no longer swallow vanilla inventory-slot clicks),
    which also killed typing in handler-less editable fields (wireless-node
-   info-area name/password, wireless-tab password boxes)."
+   info-area name/password, wireless-tab password boxes).
+
+   Editable text scrolls horizontally when wider than the field (upstream
+   TextBox.checkCaretRegion): the x-offset dslot goes negative so the tail
+   stays visible instead of overflowing the box."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.layout :as layout]
-            [cn.li.mcmod.ui.events :as events])
+            [cn.li.mcmod.ui.events :as events]
+            [cn.li.mcmod.client.platform-bridge :as bridge])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcmod.ui.node INode]))
+
+;; Stub the (private) font-width bridge: 8px per char, like a monospace
+;; fallback — the loader installs the real one at runtime.
+(alter-var-root (ns-resolve 'cn.li.mcmod.client.platform-bridge 'font-text-width-fn)
+  (constantly (fn [_ text _] (* 8.0 (count (str text))))))
 
 (defn- char-runtime
   "Minimal runtime with a single focusable group node."
@@ -28,16 +38,20 @@
     r))
 
 (defn- field-runtime
-  "Runtime with one editable text field and one visual-only box."
+  "Runtime with one 40px editable text field, one 40px masked editable field
+   and one visual-only box."
   ^UiRt []
   (let [r (rt/create-runtime)]
     (rt/build! r {:kind :group
                   :props {:id :root :x 0.0 :y 0.0 :w 300.0 :h 100.0}
                   :children [{:kind :text
-                              :props {:id :field :x 10.0 :y 10.0 :w 80.0 :h 10.0
+                              :props {:id :field :x 10.0 :y 10.0 :w 40.0 :h 10.0
                                       :text "" :font-size 8.0 :editable? true}}
+                             {:kind :text
+                              :props {:id :pwd :x 10.0 :y 30.0 :w 40.0 :h 10.0
+                                      :text "" :font-size 8.0 :editable? true :masked? true}}
                              {:kind :box
-                              :props {:id :deco :x 10.0 :y 30.0 :w 80.0 :h 10.0
+                              :props {:id :deco :x 10.0 :y 50.0 :w 80.0 :h 10.0
                                       :fill 0xFFFFFFFF}}]})
     (rt/resize! r 300.0 100.0)
     r))
@@ -96,7 +110,7 @@
     (is (= (.getIdx (rt/node-by-id rt :field)) (rt/focus-idx rt)))
     ;; Click on a handler-less visual box — focus must clear (vanilla
     ;; inventory-slot click-through), NOT stick to the box.
-    (events/dispatch-mouse-press! rt 15.0 35.0 0)
+    (events/dispatch-mouse-press! rt 15.0 55.0 0)
     (is (= -1 (rt/focus-idx rt)))))
 
 (deftest reclick-editable-restores-typing-test
@@ -106,8 +120,37 @@
     (events/dispatch-mouse-press! rt 15.0 15.0 0)
     (events/dispatch-editable-key! rt 0 (char \a))
     ;; Focus lost (click elsewhere), then re-click the field — typing resumes.
-    (events/dispatch-mouse-press! rt 15.0 35.0 0)
+    (events/dispatch-mouse-press! rt 15.0 55.0 0)
     (is (= -1 (rt/focus-idx rt)))
     (events/dispatch-mouse-press! rt 15.0 15.0 0)
     (events/dispatch-editable-key! rt 0 (char \b))
     (is (= "ab" (text-value (rt/node-by-id rt :field))))))
+
+(defn- x-offset [rt id]
+  (.getDSlot ^INode (rt/node-by-id rt id) 1))
+
+(deftest editable-text-scrolls-when-overflowing-test
+  (let [rt (field-runtime)]
+    (events/gain-focus! rt (.getIdx (rt/node-by-id rt :field)))
+    ;; 5 chars × 8px = 40px = field width — no scroll.
+    (doseq [c "abcde"] (events/dispatch-editable-key! rt 0 c))
+    (is (== 0.0 (x-offset rt :field)))
+    ;; 6th char overflows to 48px — scroll left so the tail stays visible.
+    (events/dispatch-editable-key! rt 0 \f)
+    (is (== -8.0 (x-offset rt :field)))
+    ;; Backspace back to fitting width — offset resets.
+    (events/dispatch-editable-key! rt 259 (char 0))
+    (is (== 0.0 (x-offset rt :field)))))
+
+(deftest masked-field-scrolls-on-echo-width-test
+  (let [rt (field-runtime)]
+    (events/gain-focus! rt (.getIdx (rt/node-by-id rt :pwd)))
+    ;; 8 typed chars display as 8 stars = 64px > 40px — scroll -24.
+    (doseq [c "12345678"] (events/dispatch-editable-key! rt 0 c))
+    (is (== -24.0 (x-offset rt :pwd)))
+    ;; Programmatic clear + refocus resets the stale scroll.
+    (.setOSlot ^INode (rt/node-by-id rt :pwd) 0 "")
+    (.setFlag ^INode (rt/node-by-id rt :pwd) 2)
+    (events/gain-focus! rt -1)
+    (events/gain-focus! rt (.getIdx (rt/node-by-id rt :pwd)))
+    (is (== 0.0 (x-offset rt :pwd)))))
