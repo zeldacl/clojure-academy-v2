@@ -123,8 +123,8 @@
     (dispatch! :scatter-bomb (event "ctx-b" :scatter-bomb/fx-ball
                                   {:mode :ball :x 2.0 :y 64.0 :z 2.0 :count 5}))
 
-    (is (= 1.0 (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"] :x])))
-    (is (= 2.0 (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"] :x])))
+    (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
+    (is (:active? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"]])))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]]))))
     (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-b"]]))))
     (is (= :triggering (get-in (jet-engine-fx/fx-snapshot) [:fx-state [:ctx "ctx-a"] :phase])))

@@ -1,152 +1,159 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.electron-bomb
+  "Client FX for ElectronBomb.
+
+  Upstream has exactly two visible pieces: the EntityMdBall the skill spawns
+  (which renders itself) and, when its callback fires, one EntityMdRaySmall
+  from the ball to the aim point. That ray is the same entity ScatterBomb and
+  ElectronMissile fire, so it goes through the shared ray-composite with
+  SmallMdRayRender's numbers."
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
+            [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
-            [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
+;; SmallMdRayRender (RendererRayComposite "mdray_small"):
+;;   glow        width 0.3, white at alpha 0.5
+;;   cylinderOut radius 0.045, rgba(106, 242, 106, 50)
+;;   cylinderIn  radius 0.03,  rgba(216, 248, 216, 230)
+(def ^:private ray-glow-textures (ray-composite/glow-textures "mdray_small"))
+(def ^:private ray-glow-width 0.3)
+(def ^:private ray-outer-radius 0.045)
+(def ^:private ray-inner-radius 0.03)
+(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
+
+;; EntityMdRaySmall: life 14 ticks, blendIn 200ms, blendOut 400ms, and
+;; getWidth() ramps 1 -> 0 over the last 500ms.
+(def ^:private ray-life-ticks 14)
+(def ^:private ray-blend-in-ticks 4.0)
+(def ^:private ray-blend-out-ticks 8.0)
+(def ^:private ray-width-shrink-ticks 10.0)
+
+(defn- ranged
+  ^double [^double from ^double to]
+  (+ from (rand (- to from))))
+
 (defn- enqueue-state!
-	[store ctx-id channel owner-key payload]
-	(let [store* (or store {:effect-state {} :beams {}})
-				owner-key* (or owner-key [:ctx ctx-id])
-				{:keys [mode x y z dx dy dz start end source-player-id world-id]} (or payload {})
-				base-meta {:owner-key owner-key*
-									 :queue-owner (client-particles/current-effect-owner)
-									 :ctx-id ctx-id
-									 :channel channel
-									 :source-player-id source-player-id
-									 :world-id world-id}]
-		(case mode
-			:spawn
-			(do
-				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-					{:type :sound :sound-id (modid/namespaced-path "md.eb_spawn") :volume 0.6 :pitch 1.2})
-				(assoc-in store* [:effect-state owner-key*]
-									(merge base-meta
-												 {:active? true
-													:ticks 0
-													:x (double (or x 0.0))
-													:y (double (or y 0.0))
-													:z (double (or z 0.0))
-													:dx (double (or dx 0.0))
-													:dy (double (or dy 0.0))
-													:dz (double (or dz 0.0))})))
+  [store ctx-id channel owner-key payload]
+  (let [store* (or store {:effect-state {} :beams {}})
+        owner-key* (or owner-key [:ctx ctx-id])
+        {:keys [mode start end source-player-id world-id]} (or payload {})
+        base-meta {:owner-key owner-key*
+                   :queue-owner (client-particles/current-effect-owner)
+                   :ctx-id ctx-id
+                   :channel channel
+                   :source-player-id source-player-id
+                   :world-id world-id}]
+    (case mode
+      :spawn
+      ;; The ball itself is the EntityMdBall the skill spawned — this used to
+      ;; also draw a spinning line and a spark every third tick at the caster's
+      ;; EYE, a second ball's worth of visuals in the wrong place. Only the
+      ;; port's cast cue survives; upstream is silent here.
+      (do
+        (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+          {:type :sound :sound-id (modid/namespaced-path "md.eb_spawn") :volume 0.6 :pitch 1.2})
+        (assoc-in store* [:effect-state owner-key*]
+                  (merge base-meta {:active? true})))
 
-			:beam
-			(let [store* (if (and start end)
-											(update-in store* [:beams owner-key*] (fnil conj [])
-																 (merge base-meta
-																				{:start (vec3/map->v3 start)
-																				 :end (vec3/map->v3 end)
-																				 ;; Original EntityMdRaySmall: life 14 ticks (700ms),
-																				 ;; 200ms blend-in / 400ms blend-out — beam-flash-ops
-																				 ;; fade fractions (0.28/0.57) are tuned for this.
-																				 :ttl 14
-																				 :max-ttl 14
-																				 :performed? (boolean (:performed? payload))
-																				 :target-uuid (:target-uuid payload)}))
-											store*)]
-				(when (and start end)
-					(client-particles/queue-particle-effect! (:queue-owner base-meta)
-						{:type :particle :particle-type :electric-spark
-						 :x (double (or (:x end) 0.0))
-						 :y (double (or (:y end) 0.0))
-						 :z (double (or (:z end) 0.0))
-						 :count 8 :speed 0.2
-						 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5}))
-				(client-sounds/queue-sound-effect! (:queue-owner base-meta)
-					{:type :sound :sound-id (modid/namespaced-path "md.eb_explode") :volume 0.8 :pitch 1.0})
-				(update store* :effect-state dissoc owner-key*))
+      :beam
+      (let [store* (if (and start end)
+                     (update-in store* [:beams owner-key*] (fnil conj [])
+                                (merge base-meta
+                                       {:start (vec3/map->v3 start)
+                                        :end (vec3/map->v3 end)
+                                        :ttl ray-life-ticks
+                                        :max-ttl ray-life-ticks}))
+                     store*)]
+        (when (and start end)
+          ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, at the ray.
+          ;; The port played md.eb_explode — a made-up detonation cue — with no
+          ;; coordinates, so it came from the listener rather than the shot.
+          (client-sounds/queue-sound-effect! (:queue-owner base-meta)
+            {:type :sound :sound-id (modid/namespaced-path "md.ray_small")
+             :volume 0.8 :pitch 1.0
+             :x (double (or (:x start) 0.0))
+             :y (double (or (:y start) 0.0))
+             :z (double (or (:z start) 0.0))}))
+        (update store* :effect-state dissoc owner-key*))
 
-			:end
-			(-> store*
-					(update :effect-state dissoc owner-key*)
-					(update :beams dissoc owner-key*))
+      :end
+      (-> store*
+          (update :effect-state dissoc owner-key*)
+          (update :beams dissoc owner-key*))
 
-			store*)))
+      store*)))
+
+(defn- emit-ray-trail!
+  "EntityMdRaySmall.onUpdate spawns ONE MdParticle per tick at a random point
+  0-10 blocks along the ray, with a slow random drift. The port puffed eight
+  vanilla sparks at the endpoint the moment the ray appeared and nothing after."
+  [{:keys [queue-owner start end]}]
+  (when (and start end)
+    (let [span (vec3/v- end start)
+          t (min 1.0 (/ (rand 10.0) (Math/max 1.0e-5 (vec3/vlen span))))
+          p (vec3/v+ start (vec3/v* span t))]
+      (client-particles/queue-particle-effect! queue-owner
+        {:type :particle :particle-type (modid/namespaced-path "md_particle")
+         :x (.-x ^cn.li.mcmod.math.V3 p)
+         :y (.-y ^cn.li.mcmod.math.V3 p)
+         :z (.-z ^cn.li.mcmod.math.V3 p)
+         ;; A single particle takes offset-* * speed as its velocity verbatim.
+         :count 1 :speed 1.0
+         :offset-x (ranged -0.015 0.015)
+         :offset-y (ranged -0.015 0.015)
+         :offset-z (ranged -0.015 0.015)}))))
 
 (defn- tick-state!
-	[store]
-	(let [store* (or store {:effect-state {} :beams {}})]
-		(-> store*
-				(update :effect-state
-					(fn [states]
-						(into {}
-									(keep (fn [[owner-key st]]
-													(when (:active? st)
-														(let [ticks (inc (long (or (:ticks st) 0)))]
-															(when (zero? (mod ticks 3))
-																(let [angle (* 0.4 (double ticks))
-																			ox (* 0.9 (Math/cos angle))
-																			oz (* 0.9 (Math/sin angle))]
-																	(client-particles/queue-particle-effect! (:queue-owner st)
-																		{:type :particle :particle-type :electric-spark
-																		 :x (+ (:x st) ox)
-																		 :y (:y st)
-																		 :z (+ (:z st) oz)
-																		 :count 1 :speed 0.05
-																		 :offset-x 0.1 :offset-y 0.1 :offset-z 0.1})))
-															(when-not (> ticks 40)
-																[owner-key (assoc st :ticks ticks)])))))
-												states)))
-				(update :beams
-					store-tick/tick-ttl-items-by-owner))))
+  [store]
+  (let [store* (or store {:effect-state {} :beams {}})]
+    (doseq [[_owner beams] (:beams store*)
+            beam beams]
+      (emit-ray-trail! beam))
+    (update store* :beams store-tick/tick-ttl-items-by-owner)))
 
-(defn- active-state-ops [st]
-	(let [ticks (long (or (:ticks st) 0))
-				angle (* 0.4 (double ticks))
-				ox (* 0.9 (Math/cos angle))
-				oz (* 0.9 (Math/sin angle))
-				cx (double (or (:x st) 0.0))
-				cy (double (or (:y st) 0.0))
-				cz (double (or (:z st) 0.0))
-				center (vec3/v3 cx cy cz)
-				pulse-end (vec3/v3 (+ cx ox) (+ cy 0.2) (+ cz oz))]
-		[(ru/line-op center pulse-end {:r 160 :g 255 :b 190 :a 200})]))
-
-(defn- beam-flash-ops [camera-pos beams]
-  "Render with exact EntityMdRaySmall colors:
-   inner=0.03 rgba(216,248,216,230), outer=0.045 rgba(106,242,106,50), glow=0.3 a=128.
-   start/end are precomputed to V3 at enqueue time (see :beam mode above)."
+(defn- beam-ops
+  "One EntityMdRaySmall: the glow boards plus the two cylinders. The port drew
+  three flat billboards whose layers had been shuffled — the glow board's white
+  alpha wearing the outer cylinder's colour, and the inner cylinder's colour
+  demoted to a one-pixel line."
+  [camera-pos beams]
   (mapcat (fn [{:keys [start end ttl max-ttl]}]
-            (let [life-ratio (if (pos? (or max-ttl 1)) (/ (or ttl 1.0) (double max-ttl)) 1.0)
-                  blend-in  (min 1.0 (/ (max 0 (- 1.0 life-ratio)) 0.28))
-                  blend-out (min 1.0 (/ life-ratio 0.57))
+            (let [max-ttl (double (max 1 (or max-ttl ray-life-ticks)))
+                  ttl (double (or ttl 0))
+                  age (- max-ttl ttl)
+                  blend-in (min 1.0 (/ age ray-blend-in-ticks))
+                  blend-out (min 1.0 (/ ttl ray-blend-out-ticks))
                   am (* blend-in blend-out)
-                  shrink (if (< life-ratio 0.3) 0.0 1.0)]
-              (ru/billboard-beam-ops camera-pos start end
-                {:width 0.3
-                 :core-width 0.045
-                 :core-ratio 0.667
-                 :outer-color {:r 106 :g 242 :b 106 :a (int (* 50 am shrink))}
-                 :inner-color {:r 106 :g 242 :b 106 :a (int (* 128 am shrink))}
-                 :line-color  {:r 216 :g 248 :b 216 :a (int (* 230 am shrink))}})))
+                  ;; getWidth(): full width until the last 500ms, then linear
+                  ;; to zero — not the port's hard cut with 210ms left.
+                  w (if (> ttl ray-width-shrink-ticks)
+                      1.0
+                      (max 0.0 (/ ttl ray-width-shrink-ticks)))
+                  alpha (fn [^double base] (int (* base am)))]
+              (when (pos? w)
+                (concat
+                  (ray-composite/glow-ops camera-pos start end
+                    {:textures ray-glow-textures
+                     :width (* ray-glow-width w)
+                     :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}})
+                  (ray-composite/tube-ops ray-texture start end
+                    (* ray-outer-radius w) ray-composite/outer-head-fix
+                    {:r 106 :g 242 :b 106 :a (alpha 50.0)})
+                  (ray-composite/tube-ops ray-texture start end
+                    (* ray-inner-radius w) ray-composite/inner-head-fix
+                    {:r 216 :g 248 :b 216 :a (alpha 230.0)})))))
           beams))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-	(let [{:keys [effect-state beams]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :electron-bomb)
-				cam-v (vec3/map->v3 camera-pos)
-				active-ops (mapcat (fn [[_owner-key st]]
-														 (when (:active? st)
-															 (active-state-ops st)))
-													 effect-state)
-				beam-ops (mapcat (fn [[_owner-key xs]]
-													 (beam-flash-ops cam-v xs))
-												 beams)
-				ops (vec (concat active-ops beam-ops))]
-		(when (seq ops)
-			{:ops ops})))
+  (let [{:keys [beams]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :electron-bomb)]
+    (when (seq beams)
+      (let [cam-v (vec3/map->v3 camera-pos)
+            ops (vec (mapcat (fn [[_owner-key xs]] (beam-ops cam-v xs)) beams))]
+        (when (seq ops)
+          {:ops ops})))))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:electron-bomb :level] [_ _] {:effect-state {} :beams {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:electron-bomb :level]
@@ -156,7 +163,7 @@
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
-  ;; The ball/marker state is context-bound; the settlement beam is upstream's
+  ;; The ball state is context-bound; the settlement beam is upstream's
   ;; EntityMdRaySmall — a world entity with its own 14-tick life. This skill is
   ;; :instant, so the context is usually gone before the delayed beam even
   ;; arrives. See railgun_shot.clj's clear-owner.

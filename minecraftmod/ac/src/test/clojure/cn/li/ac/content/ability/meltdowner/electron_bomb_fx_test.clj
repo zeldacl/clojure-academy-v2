@@ -90,8 +90,11 @@
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-spawn
                {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
       (is (some? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))
-      (let [spawn-plan (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)]
-        (is (seq (:ops spawn-plan))))
+      ;; The ball is the spawned EntityMdBall and renders itself; casting
+      ;; contributes no level-plan geometry of its own. The port used to draw a
+      ;; spinning line at the caster's EYE here, a second ball in the wrong
+      ;; place.
+      (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-a" :electron-bomb/fx-beam
                {:mode :beam
                 :start {:x 1.0 :y 64.0 :z 2.0}
@@ -111,27 +114,22 @@
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
-(deftest electron-bomb-active-and-beam-cadence-test
-  (let [
-        particles* (atom [])]
+(deftest electron-bomb-beam-trail-and-ttl-test
+  (let [particles* (atom [])]
     (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "electron-bomb-fx-test"})
-                  client-particles/queue-particle-effect! (fn [& args]
-                                                            (swap! particles* conj args)
+                  client-particles/queue-particle-effect! (fn [_owner cmd]
+                                                            (swap! particles* conj cmd)
                                                             nil)
                   client-sounds/queue-sound-effect! (fn [& _] nil)]
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-cadence" :electron-bomb/fx-spawn
                {:mode :spawn :x 1.0 :y 64.0 :z 2.0 :dx 0.0 :dy 0.0 :dz 1.0})
 
-      (dotimes [_ 41]
+      ;; Casting emits no particles of its own — the ball entity is the visual.
+      (dotimes [_ 20]
         (level-effects/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
+      (is (empty? @particles*))
 
-      (is (nil? (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-cadence"]]))
-          "active electron-bomb state should auto-expire after tick > 40")
-      (is (= 13 (count @particles*))
-          "orbit particles should be emitted on ticks 3,6,...,39")
-
-      (reset! particles* [])
       (arc-beam/enqueue-for-test! :electron-bomb "ctx-cadence" :electron-bomb/fx-beam
                {:mode :beam
                 :start {:x 1.0 :y 64.0 :z 2.0}
@@ -141,7 +139,15 @@
         (level-effects/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
-          "beam flash plan should disappear when ttl decays to zero"))))
+          "beam flash plan should disappear when ttl decays to zero")
+
+      ;; onUpdate: one md_particle per tick per live ray, on the ray itself.
+      (is (= 14 (count @particles*)))
+      (is (every? #(= "academy:md_particle" (:particle-type %)) @particles*))
+      (doseq [{:keys [x y z]} @particles*]
+        (is (= 1.0 (double x)))
+        (is (= 64.0 (double y)))
+        (is (<= 2.0 (double z) 12.0) "0-10 blocks along the ray")))))
 
 (deftest settlement-beam-outlives-its-context-test
   ;; Upstream's EntityMdRaySmall is a spawned world entity with its own 14-tick
