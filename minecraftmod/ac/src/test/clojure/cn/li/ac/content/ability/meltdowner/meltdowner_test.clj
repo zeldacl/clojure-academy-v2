@@ -118,8 +118,14 @@
                                                0))]
       (cb/apply-invoke #'cn.li.ac.content.ability.meltdowner.meltdowner/meltdowner-on-tick! :player-id "p1" :ctx-id "ctx-3")
       (is (= [["p1" 123.0]] @overload-calls*))
-      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-update :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"}}
-              {:ctx-id "ctx-3" :topic :meltdowner/fx-update :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"}}
+      ;; :caster-* rides along so the client can ring the charge motes around
+      ;; the caster; unresolvable here (no bound session), which is fine.
+      (is (= [{:ctx-id "ctx-3" :topic :meltdowner/fx-update
+               :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"
+                         :caster-x nil :caster-y nil :caster-z nil}}
+              {:ctx-id "ctx-3" :topic :meltdowner/fx-update
+               :payload {:ticks 101 :charge-ratio 1.0 :player-id "p1"
+                         :caster-x nil :caster-y nil :caster-z nil}}
               {:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}
               {:ctx-id "ctx-3" :topic :meltdowner/fx-end :payload {:performed? false}}]
              @messages*) "charge update + fanned-out end")

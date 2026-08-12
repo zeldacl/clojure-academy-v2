@@ -14,7 +14,11 @@
                 :update {:topic :meltdowner/fx-update :mode :update
                          :level-payload (fn [_ _ p]
                                           {:ticks (long (or (:ticks p) 0))
-                                           :charge-ratio (double (or (:charge-ratio p) 0.0))})}
+                                           :charge-ratio (double (or (:charge-ratio p) 0.0))
+                                           ;; The charge particles ring the caster.
+                                           :caster-x (:caster-x p)
+                                           :caster-y (:caster-y p)
+                                           :caster-z (:caster-z p)})}
                 :end {:topic :meltdowner/fx-end :mode :end
                       :level-payload (fn [_ _ p]
                                        {:performed? (boolean (:performed? p))})}

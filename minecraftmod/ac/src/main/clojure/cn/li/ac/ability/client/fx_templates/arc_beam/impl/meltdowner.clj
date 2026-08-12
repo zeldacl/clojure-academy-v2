@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
+            [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
@@ -16,18 +16,46 @@
 (def ^:private charge-loop-sound (modid/namespaced-path "md.md_charge"))
 (def ^:private fire-sound (modid/namespaced-path "md.meltdowner"))
 (defn- loop-sound-key [ctx-id] (str "meltdowner/" ctx-id))
-(def ^:private meltdowner-ray-style
-  {:width (fn [{:keys [is-reflect?]} life]
-            (if is-reflect?
-              (* 0.05 (+ 0.45 (* 0.55 life)))
-              (* 0.09 (+ 0.6 (* 0.4 life)))))
-   :core-ratio 0.42
-   :outer-rgb {:r 161 :g 255 :b 142}
-   :outer-alpha (fn [_ life] (int (+ 35 (* 170 life))))
-   :inner-rgb {:r 244 :g 255 :b 236}
-   :inner-alpha (fn [_ life] (int (+ 70 (* 170 life))))
-   :line-rgb {:r 192 :g 255 :b 188}
-   :line-alpha (fn [_ life] (int (+ 55 (* 150 life))))})
+;; MDRayRender (RendererRayComposite "mdray"):
+;;   cylinderIn  radius 0.17,  rgba(216, 248, 216, 230)
+;;   cylinderOut radius 0.22,  rgba(106, 242, 106, 50)
+;;   glow        width 1.5, white at alpha 0.8
+;; The port had 0.09 for the outer and 0.09*0.42 for the inner — a quarter of
+;; the original bore — in colours of its own.
+(def ^:private ray-glow-textures (ray-composite/glow-textures "mdray"))
+(def ^:private ray-glow-width 1.5)
+(def ^:private ray-outer-radius 0.22)
+(def ^:private ray-inner-radius 0.17)
+(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
+
+;; EntityMDRay: life 50 ticks, blendIn 200ms, blendOut 700ms. EntityRayBase's
+;; width holds at 1 (plus a [0, 0.1] wiggle) until the last widthShrinkTime,
+;; which MDRay leaves at the 300ms default.
+(def ^:private ray-life-ticks 50)
+(def ^:private ray-blend-in-ticks 4.0)
+(def ^:private ray-blend-out-ticks 14.0)
+(def ^:private ray-width-shrink-ticks 6.0)
+
+(defn- ray-alpha
+  "EntityRayBase.getAlpha × the layer's own alpha."
+  ^double [beam ^double base]
+  (let [max-ttl (double (max 1 (or (:max-ttl beam) ray-life-ticks)))
+        ttl (double (or (:ttl beam) 0))
+        age (- max-ttl ttl)]
+    (* base
+       (min 1.0 (/ age ray-blend-in-ticks))
+       (min 1.0 (/ ttl ray-blend-out-ticks)))))
+
+(defn- ray-width-factor
+  ^double [beam]
+  (let [ttl (double (or (:ttl beam) 0))
+        seed (double (or (:wiggle-seed beam) 0.0))
+        ;; widthWiggle random-walks in [0, 0.1]; a deterministic sine reads the
+        ;; same and keeps the renderer stateless.
+        wiggle (* 0.05 (+ 1.0 (Math/sin (+ seed (* ttl 0.9)))))]
+    (+ wiggle (if (> ttl ray-width-shrink-ticks)
+                1.0
+                (max 0.0 (/ ttl ray-width-shrink-ticks))))))
 
 (defn- all-rays []
   (mapcat val (:rays (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :meltdowner))))
@@ -39,7 +67,8 @@
 (defn- enqueue! [store ctx-id channel owner-key payload]
   (let [store* (or store {:effect-state {} :rays {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length source-player-id player-id world-id]} (or payload {})
+        {:keys [mode ticks charge-ratio performed? start end charge-ticks beam-length
+                source-player-id player-id world-id caster-x caster-y caster-z]} (or payload {})
         ;; The content sends :player-id (the caster) on every charge event —
         ;; attribute the state to the caster so per-frame queries (walk-speed,
         ;; FOV zoom) can match their OWN charge instead of any nearby charge.
@@ -61,7 +90,10 @@
           :sound-id charge-loop-sound
           :owner-uuid (str source-player-id*)
           :volume 1.0
-          :pitch 1.0})
+          :pitch 1.0
+          ;; setVolume(1.0) but never setLoop() — one playback that follows the
+          ;; caster and is cut short by stop() on terminate.
+          :loop? false})
         (assoc-in store* [:effect-state owner-key*]
                   (merge base-meta {:active? true :ticks 0 :charge-ratio 0.0 :performed? false})))
       :update
@@ -76,6 +108,10 @@
                         :active? true
                         :ticks (long (or ticks 0))
                         :charge-ratio (double (or charge-ratio 0.0))
+                        :caster-pos (when (and caster-x caster-y caster-z)
+                                      {:x (double caster-x)
+                                       :y (double caster-y)
+                                       :z (double caster-z)})
                         :performed? false}))
       :end
       (do
@@ -90,33 +126,60 @@
                           :ticks 0 :charge-ratio 0.0})))
       :perform
       (let [store* (if (and start end)
-                      (let [life (+ 16 (rand-int 8))]
-                        (update-in store* [:rays owner-key*] (fnil conj [])
-                                   (merge base-meta
-                                          {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
-                                           :ttl life :max-ttl life
-                                           :beam-length (double (or beam-length 30.0))
-                                           :charge-ticks (int (or charge-ticks 20))
-                                           :is-reflect? false})))
+                      ;; EntityMDRay.life is a flat 50 ticks — the port rolled
+                      ;; 16-23, so the beam vanished in a third of the time and
+                      ;; never twice the same.
+                      (update-in store* [:rays owner-key*] (fnil conj [])
+                                 (merge base-meta
+                                        {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
+                                         :ttl ray-life-ticks :max-ttl ray-life-ticks
+                                         :beam-length (double (or beam-length 30.0))
+                                         :charge-ticks (int (or charge-ticks 20))
+                                         :wiggle-seed (* 2.0 Math/PI (rand))
+                                         :is-reflect? false}))
                       store*)]
+        ;; ACSounds.playClient(player, "md.meltdowner", PLAYERS, 0.5f) — at the
+        ;; caster, not wherever the listener happens to be standing.
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0})
+          (cond-> {:type :sound :sound-id fire-sound :volume 0.5 :pitch 1.0
+                   :source :players}
+            (map? start) (assoc :x (double (:x start))
+                                :y (double (:y start))
+                                :z (double (:z start)))))
         store*)
       :reflect
       (if (and start end)
-        (let [life (+ 10 (rand-int 6))]
-          (update-in store* [:rays owner-key*] (fnil conj [])
-                     (merge base-meta
-                            {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
-                             :ttl life :max-ttl life
-                             :beam-length 10.0 :charge-ticks 20
-                             :is-reflect? true})))
+        ;; c_reflected spawns the same EntityMDRay, so the same 50-tick life.
+        (update-in store* [:rays owner-key*] (fnil conj [])
+                   (merge base-meta
+                          {:start (vec3/map->v3 start) :end (vec3/map->v3 end)
+                           :ttl ray-life-ticks :max-ttl ray-life-ticks
+                           :beam-length 10.0 :charge-ticks 20
+                           :wiggle-seed (* 2.0 Math/PI (rand))
+                           :is-reflect? true}))
         store*)
       store*)))
 
 ;; ---------------------------------------------------------------------------
 ;; Tick
 ;; ---------------------------------------------------------------------------
+
+(defn- emit-ray-trail!
+  "EntityMDRay.onUpdate: on 80% of ticks, one MdParticle at a random point
+  0-10 blocks along the ray with a small random drift. The port drew the ray
+  with no trail at all."
+  [{:keys [start end] :as ray}]
+  (when (and start end (< (rand) 0.8))
+    (let [len (Math/max 1.0e-5 (vec3/vlen (vec3/v- end start)))
+          t (Math/min 1.0 (/ (double (rand 10.0)) len))
+          p (vec3/v+ start (vec3/v* (vec3/v- end start) t))]
+      (client-particles/queue-particle-effect! (:queue-owner ray)
+        {:type :particle :particle-type (modid/namespaced-path "md_particle")
+         :x (.-x ^cn.li.mcmod.math.V3 p)
+         :y (.-y ^cn.li.mcmod.math.V3 p)
+         :z (.-z ^cn.li.mcmod.math.V3 p)
+         :count 1 :speed 0.03
+         :offset-x 1.0 :offset-y 1.0 :offset-z 1.0}))))
 
 (defn- tick-state!
   [store]
@@ -127,22 +190,32 @@
                          (let [ticks (inc (long (or (:ticks st) 0)))]
                            ;; The charge loop is a continuous FollowEntitySound
                            ;; started on :start and stopped on :end — no re-queue.
-                           ;; MdParticleFactory particles (matching original: 2-3 per tick)
-                           (dotimes [_ (+ 2 (rand-int 2))]
-                             (let [r (+ 0.7 (rand 0.3))
-                                   theta (rand (* 2 Math/PI))
-                                   h (+ -1.2 (rand 1.2))]
-                               (client-particles/queue-particle-effect! (:queue-owner st)
-                                 {:type :particle :particle-type (modid/namespaced-path "md_particle")
-                                  :x (* r (Math/sin theta))
-                                  :y h
-                                  :z (* r (Math/cos theta))
-                                  :count 1 :speed 0.08
-                                  :offset-x 0.03 :offset-y 0.03 :offset-z 0.03
-                                  :motion-x (- (rand 0.06) 0.03)
-                                  :motion-y (+ 0.01 (rand 0.04))
-                                  :motion-z (- (rand 0.06) 0.03)})))
+                           ;; MdParticleFactory motes ringing the caster.
+                           ;;
+                           ;; The particle queue takes ABSOLUTE world
+                           ;; coordinates, and this was handing it the raw
+                           ;; (r*sin, h, r*cos) offsets — every mote spawned
+                           ;; within a block of world origin, so the charge had
+                           ;; no visible particles at all. (Upstream's own loop
+                           ;; is `for (count <- rangei(2,3) to 0)`, an empty
+                           ;; Scala range, so it spawns none either; this is the
+                           ;; effect it was written to produce.)
+                           (when-let [pos (:caster-pos st)]
+                             (dotimes [_ (+ 2 (rand-int 2))]
+                               (let [r (+ 0.7 (rand 0.3))
+                                     theta (rand (* 2 Math/PI))
+                                     h (+ 0.4 (rand 1.2))]
+                                 (client-particles/queue-particle-effect! (:queue-owner st)
+                                   {:type :particle :particle-type (modid/namespaced-path "md_particle")
+                                    :x (+ (double (:x pos)) (* r (Math/sin theta)))
+                                    :y (+ (double (:y pos)) h)
+                                    :z (+ (double (:z pos)) (* r (Math/cos theta)))
+                                    :count 1 :speed 0.04
+                                    :offset-x 0.5 :offset-y 0.8 :offset-z 0.5}))))
                            (assoc st :ticks ticks))))
+        _ (doseq [[_owner rays] (:rays store*)
+                  ray rays]
+            (emit-ray-trail! ray))
         rays* (store-tick/tick-ttl-items-by-owner (:rays store*))]
     (assoc store* :effect-state effect-state* :rays rays*)))
 
@@ -219,17 +292,24 @@
         ^V3 cam-v (vec3/map->v3 camera-pos)
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
-        ;; Tube (RendererRayCylinder-style) rays, from the hand-fixed start —
-        ;; the near tube walls are then off the caster's view axis and stay
-        ;; visible in first person.
-        ray-plan (mapcat #(fx-beam/fading-tube-beam-ops % meltdowner-ray-style) fixed-rays)
-        ;; Original RendererRayGlow board: the wide soft quad that carries the
-        ;; first-person look (fixed up-and-back axis (0,1,-0.5) + hand-fixed
-        ;; start keep it off the view ray; third person uses the
-        ;; view-perpendicular axis).
-        glow-plan (mapcat #(fx-beam/fading-glow-board-ops
-                            cam-v % meltdowner-ray-style
-                            {:first-person? (boolean (:first-person? hand-center-pos))})
+        ;; RendererRayComposite: the two cylinders as real tubes (upstream
+        ;; radii, upstream colours) plus the three glow boards.
+        ray-plan (mapcat (fn [ray]
+                           (let [w (ray-width-factor ray)]
+                             (concat
+                               (ray-composite/tube-ops ray-texture (:start ray) (:end ray)
+                                 (* ray-outer-radius w) ray-composite/outer-head-fix
+                                 {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))})
+                               (ray-composite/tube-ops ray-texture (:start ray) (:end ray)
+                                 (* ray-inner-radius w) ray-composite/inner-head-fix
+                                 {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))}))))
+                         fixed-rays)
+        glow-plan (mapcat (fn [ray]
+                            (ray-composite/glow-ops cam-v (:start ray) (:end ray)
+                              {:textures ray-glow-textures
+                               :width (* ray-glow-width (ray-width-factor ray))
+                               :color {:r 255 :g 255 :b 255
+                                       :a (int (ray-alpha ray 204.0))}}))
                           fixed-rays)]
     (when (or (seq ray-plan) (seq glow-plan) ws)
       {:ops (vec (concat ray-plan glow-plan))

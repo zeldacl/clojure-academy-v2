@@ -90,8 +90,28 @@
         ;; Original's s_perform's reflection callback calls sendToClient(MSG_REFLECTED,...)
         ;; — every reflected shot spawns a world-space EntityMDRay visible to
         ;; owner + nearby, not just the caster.
-        (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil {:start start-pos
-                                  :end   end})
+        ;;
+        ;; c_reflected builds the visual from the CASTER: it spawns the ray
+        ;; along the caster's own look direction, moved out to the point on
+        ;; that line level with the reflector. Only the damage trace
+        ;; (s_reflected) uses the reflector's aim, which is what the raycast
+        ;; below still does. Drawing the visual from the reflector's eye along
+        ;; the reflector's aim made the reflected beam point somewhere the
+        ;; original never draws it.
+        (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-reflect :mode :reflect} nil
+          (let [ctx-data (try (ctx-skill/get-context ctx-id) (catch Exception _ nil))
+                caster-id (:player-uuid ctx-data)
+                caster-eye (when caster-id
+                             (try (geom/eye-pos caster-id) (catch Exception _ nil)))
+                caster-look (when (and caster-id (raycast/available?))
+                              (raycast/player-look-vector caster-id))]
+            (if (and caster-eye caster-look)
+              (let [cdir (geom/vnorm (normalize-look-dir caster-look))
+                    dist (geom/vdist caster-eye start-pos)
+                    spawn (geom/v+ caster-eye (geom/v* cdir dist))]
+                {:start spawn
+                 :end (geom/v+ spawn (geom/v* cdir (cfg-double :reflection.shot-distance)))})
+              {:start start-pos :end end})))
         (let [hit (when (raycast/available?)
                     (raycast/raycast-entities
                   world-id
@@ -179,9 +199,24 @@
     ;; Charge visual update (original c_tick: charge ring pulse, particles,
     ;; walk-speed slow-down all scale with the charge ticks).
     (fx/send-local-and-nearby! ctx-id {:topic :meltdowner/fx-update} nil
-              {:ticks ticks
-               :charge-ratio (max 0.0 (min 1.0 (/ (double ticks) (double (ticks-max)))))
-               :player-id player-id})
+              ;; Best-effort: a caster position we cannot resolve just means no
+              ;; charge motes this tick, never a failed tick.
+              (let [pos (try
+                          (or (when (motion-effects/teleportation-available?)
+                                (motion-effects/player-position player-id))
+                              (geom/eye-pos player-id))
+                          (catch Exception _ nil))]
+                {:ticks ticks
+                 :charge-ratio (max 0.0 (min 1.0 (/ (double ticks) (double (ticks-max)))))
+                 :player-id player-id
+                 ;; The charge particles ring the CASTER, so the client needs
+                 ;; their position: it was building offsets like (r*sin, h,
+                 ;; r*cos) and handing them to the particle queue, which takes
+                 ;; absolute world coordinates — every mote spawned within a
+                 ;; block of world origin.
+                 :caster-x (some-> pos :x double)
+                 :caster-y (some-> pos :y double)
+                 :caster-z (some-> pos :z double)}))
     (when-let [floor (get-in ctx-data [:skill-state :overload-floor])]
       (enforce-overload-floor! player-id floor))
     (when (> ticks (ticks-tolerant))

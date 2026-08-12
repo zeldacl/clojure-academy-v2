@@ -113,4 +113,4 @@
    {:skill-id :scatter-bomb :id :progression.exp-per-ball :path "progression.exp-per-ball" :section-suffix "progression" :type :double :min 0.0 :default 0.001 :comment "ScatterBomb exp gained per fired ball."}])
 
 (def internal-tunable-definitions
-  [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 45.0 :comment "Internal FX beam visual distance."}])
+  [{:skill-id :meltdowner :id :beam.visual-distance :path "beam.visual-distance" :section-suffix "beam" :type :double :min 0.0 :default 30.0 :comment "Internal FX beam visual distance (original MDContext.s_perform: length = 30, shortened only by a reflector)."}])
