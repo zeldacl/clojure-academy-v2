@@ -15,7 +15,8 @@
             [cn.li.mcmod.util.log :as log]
             [clojure.string :as str]
             [cn.li.ac.ability.client.fx-templates.arc-beam]
-            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]))
+            [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
+            [cn.li.ac.content.ability.teleporter.flashing-dest :as fdest]))
 
 (defn- enqueue-state! [state ctx-id channel owner-key payload]
   (let [state* (or state {:fx-state {}})
@@ -34,11 +35,15 @@
       (update state* :fx-state update owner-key*
               (fn [st]
                 (assoc (merge base-meta (or st {:burst []}))
+                       :direction (:direction payload)
+                       :dist (double (or (:distance payload) 0.0))
                        :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})))
       :preview-update
       (update state* :fx-state update owner-key*
               (fn [st]
                 (assoc (merge base-meta (or st {:burst []}))
+                       :direction (:direction payload)
+                       :dist (double (or (:distance payload) 0.0))
                        :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})))
       :preview-end
       (update state* :fx-state update owner-key* (fn [st] (assoc (merge base-meta (or st {:burst []})) :preview nil)))
@@ -84,12 +89,53 @@
 ;; humanoid (white tint — upstream MarkRender's default).
 (def ^:private color-marking {:r 255 :g 255 :b 255 :a 255})
 
+(defn- look-vec
+  "Entity.getLookAngle from yaw/pitch, both radians."
+  [yaw-rad pitch-rad]
+  (when (and yaw-rad pitch-rad)
+    (let [yaw (double yaw-rad)
+          pitch (double pitch-rad)
+          cp (Math/cos pitch)]
+      {:x (* -1.0 (Math/sin yaw) cp)
+       :y (* -1.0 (Math/sin pitch))
+       :z (* (Math/cos yaw) cp)})))
+
+(defn- live-preview
+  "localTick re-runs getDest(performingKey) against the client's own world
+  every tick, so the marking follows the view with no round trip. The blink
+  distance comes from the server (it is lerped off skill exp); the direction
+  key, the trace and the six-face table are re-solved here through the same
+  namespace serverPerform calls."
+  [st hand-center-pos]
+  (let [raycast (:raycast-combined-excluding-from hand-center-pos)
+        solid? (:block-solid-at? hand-center-pos)
+        dist (double (or (:dist st) 0.0))
+        eye-y (:player-eye-y hand-center-pos)
+        look (look-vec (:player-yaw-rad hand-center-pos)
+                       (:player-pitch-rad hand-center-pos))]
+    (or (when (and raycast look eye-y (:direction st) (pos? dist))
+          (let [resolved (fdest/destination
+                           {:x (:player-x hand-center-pos)
+                            :y (:player-y hand-center-pos)
+                            :z (:player-z hand-center-pos)
+                            :eye-y eye-y
+                            :look-vec look
+                            :direction (:direction st)
+                            :dist dist
+                            :raycast raycast
+                            :head-blocked? (when solid?
+                                             (fn [x y z]
+                                               (solid? (int x) (int (+ (double y) 1.0)) (int z))))})]
+            {:x (:to-x resolved) :y (:to-y resolved) :z (:to-z resolved)}))
+        (:preview st))))
+
 (defn- build-plan [_camera-pos hand-center-pos tick]
   (let [yaw-rad (:player-yaw-rad hand-center-pos)
         ops (vec
              (mapcat (fn [st]
-                       (when-let [preview (:preview st)]
-                         (tp-mark/humanoid-ops yaw-rad preview (long tick) color-marking)))
+                       (when (:preview st)
+                         (when-let [preview (live-preview st hand-center-pos)]
+                           (tp-mark/humanoid-ops yaw-rad preview (long tick) color-marking))))
                      (vals (:fx-state (level-effects/effect-state-snapshot :flashing)))))]
     (when (seq ops)
       {:ops ops})))

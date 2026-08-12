@@ -37,6 +37,7 @@
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
+            [cn.li.ac.content.ability.teleporter.flashing-dest :as fdest]
 
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.block-manipulation :as bm]
@@ -59,7 +60,6 @@
 
 
 
-(def ^:private block-side-faces #{:north :south :west :east})
 
 
 
@@ -101,51 +101,6 @@
 
 
 
-(defn- normalize-3d
-
-  [x y z]
-
-  (let [len (Math/sqrt (+ (* x x) (* y y) (* z z)))]
-
-    (if (< len 1.0e-6)
-
-      [0.0 0.0 1.0]
-
-      [(/ x len) (/ y len) (/ z len)])))
-
-
-
-(defn- direction-vector
-
-  [look-vec direction]
-
-  (let [[fx fy fz] (normalize-3d (double (:x look-vec))
-
-                                 (double (:y look-vec))
-
-                                 (double (:z look-vec)))]
-
-    (case direction
-
-      :forward [fx fy fz]
-
-      :back [(- fx) (- fy) (- fz)]
-
-      ;; Upstream rotates the unit vector (0, 0, -/+1) by rotateAroundZ(pitch)
-      ;; -- which leaves a pure-z vector untouched, so strafing is horizontal --
-      ;; and then by the yaw, keeping it UNIT length. Taking the horizontal
-      ;; perpendicular of the look vector gives the same direction but a length
-      ;; of cos(pitch): strafing while looking 45 degrees up only blinked 0.71
-      ;; of the distance, and looking straight up barely moved at all.
-
-      :left (normalize-3d fz 0.0 (- fx))
-
-      :right (normalize-3d (- fz) 0.0 fx)
-
-      [fx fy fz])))
-
-
-
 (defn- destination-head-blocked?
 
   [world-id x y z]
@@ -158,65 +113,11 @@
 
 
 
-(defn- resolve-hit-destination
-
-  [world-id hit fallback-end]
-
-  (let [hit-x (double (or (:hit-x hit) (:x hit) (:x fallback-end) 0.0))
-
-        hit-y (double (or (:hit-y hit) (:y hit) (:y fallback-end) 0.0))
-
-        hit-z (double (or (:hit-z hit) (:z hit) (:z fallback-end) 0.0))]
-
-    (if (= (:hit-type hit) :entity)
-
-      {:to-x hit-x
-
-       :to-y (+ hit-y (double (or (:eye-height hit) 1.6)))
-
-       :to-z hit-z}
-
-      (let [face (:face hit)
-
-            resolved (case face
-
-                       :down {:to-x hit-x :to-y (- hit-y 1.0) :to-z hit-z}
-
-                       :up {:to-x hit-x :to-y (+ hit-y 1.8) :to-z hit-z}
-
-                       :north {:to-x hit-x :to-y (+ hit-y 1.7) :to-z (- hit-z 0.6)}
-
-                       :south {:to-x hit-x :to-y (+ hit-y 1.7) :to-z (+ hit-z 0.6)}
-
-                       :west {:to-x (- hit-x 0.6) :to-y (+ hit-y 1.7) :to-z hit-z}
-
-                       :east {:to-x (+ hit-x 0.6) :to-y (+ hit-y 1.7) :to-z hit-z}
-
-                       {:to-x hit-x :to-y hit-y :to-z hit-z})]
-
-        (if (and (contains? block-side-faces face)
-
-                 (destination-head-blocked? world-id
-
-                                            (:to-x resolved)
-
-                                            (:to-y resolved)
-
-                                            (:to-z resolved)))
-
-          (update resolved :to-y - 1.25)
-
-          resolved)))))
-
-
-
 (defn- resolve-preview
 
   [player-id direction exp]
 
-  (let [exp (double exp)
-
-        dist (cfg-lerp :movement.blink-distance exp)
+  (let [dist (fdest/blink-distance exp)
 
         pos (or (when (raycast/available?)
                   (raycast/player-position player-id))
@@ -228,45 +129,17 @@
 
       (let [world-id (:world-id pos)
 
-            start-x (double (:x pos))
-
-            start-y (double (:y pos))
-
-            start-z (double (:z pos))
-
-            [dx dy dz] (direction-vector look direction)
-
-            eye-y (double (or (:eye-y pos) (+ start-y 1.62)))
-            end-x (+ start-x (* (double dist) dx))
-
-            end-y (+ eye-y (* (double dist) dy))
-
-            end-z (+ start-z (* (double dist) dz))
-            ray-dx (- end-x start-x)
-            ray-dy (- end-y start-y)
-            ray-dz (- end-z start-z)
-            ray-distance (Math/sqrt (+ (* ray-dx ray-dx)
-                                       (* ray-dy ray-dy)
-                                       (* ray-dz ray-dz)))
-            [ndx ndy ndz] (normalize-3d ray-dx ray-dy ray-dz)
-            hit (raycast/raycast-combined-excluding
-                  world-id
-                  start-x start-y start-z
-                  ndx ndy ndz
-                  ray-distance
-                  player-id)
-
-            resolved (if hit
-
-                       (resolve-hit-destination world-id hit {:x end-x :y end-y :z end-z})
-
-                       ;; getDest's MISS branch is just dst -- eye + dir * dist.
-                       ;; Blinking into open air leaves you hanging there;
-                       ;; that is the skill (a GravityCancellor catches the
-                       ;; fall). The port used to drop a 128-block probe and
-                       ;; land you on the ground under the endpoint, which
-                       ;; moved the actual teleport, not only the marker.
-                       {:to-x end-x :to-y end-y :to-z end-z})]
+            resolved (fdest/destination
+                       {:x (:x pos) :y (:y pos) :z (:z pos)
+                        :eye-y (or (:eye-y pos) (+ (double (:y pos)) 1.62))
+                        :look-vec look
+                        :direction direction
+                        :dist dist
+                        :raycast (when (raycast/available?)
+                                   (fn [sx sy sz dx dy dz max-dist]
+                                     (raycast/raycast-combined-excluding
+                                       world-id sx sy sz dx dy dz max-dist player-id)))
+                        :head-blocked? (partial destination-head-blocked? world-id)})]
 
         {:direction direction
 
@@ -274,11 +147,11 @@
 
          :world-id world-id
 
-         :from-x start-x
+         :from-x (:from-x resolved)
 
-         :from-y start-y
+         :from-y (:from-y resolved)
 
-         :from-z start-z
+         :from-z (:from-z resolved)
 
          :to-x (double (:to-x resolved))
 

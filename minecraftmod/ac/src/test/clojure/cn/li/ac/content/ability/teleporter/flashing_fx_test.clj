@@ -49,16 +49,20 @@
                                                         nil)]
       (ffx/init!)
       ((get @handlers* :flashing/fx-state-start) "ctx-1" :flashing/fx-state-start nil)
-      ((get @handlers* :flashing/fx-preview-start) "ctx-1" :flashing/fx-preview-start {:to-x 1.0 :to-y 64.0 :to-z 2.0})
-      ((get @handlers* :flashing/fx-preview-update) "ctx-1" :flashing/fx-preview-update {:to-x 2.0 :to-y 64.0 :to-z 3.0})
+      ((get @handlers* :flashing/fx-preview-start) "ctx-1" :flashing/fx-preview-start
+       {:to-x 1.0 :to-y 64.0 :to-z 2.0 :direction :forward :distance 12.0})
+      ((get @handlers* :flashing/fx-preview-update) "ctx-1" :flashing/fx-preview-update
+       {:to-x 2.0 :to-y 64.0 :to-z 3.0 :direction :forward :distance 12.0})
       ((get @handlers* :flashing/fx-perform) "ctx-1" :flashing/fx-perform {:from-x 0.0 :from-y 64.0 :from-z 0.0
-                                                :to-x 2.0 :to-y 64.0 :to-z 3.0})
+                                                :to-x 2.0 :to-y 64.0 :to-z 3.0
+                                                :direction :forward :distance 12.0})
       ((get @handlers* :flashing/fx-preview-end) "ctx-1" :flashing/fx-preview-end nil)
       ((get @handlers* :flashing/fx-state-end) "ctx-1" :flashing/fx-state-end nil)
       (is (= [[:flashing "ctx-1" :flashing/fx-state-start {:mode :state-start} :owner-key [:ctx "ctx-1"]]
-              [:flashing "ctx-1" :flashing/fx-preview-start {:mode :preview-start :to-x 1.0 :to-y 64.0 :to-z 2.0} :owner-key [:ctx "ctx-1"]]
-              [:flashing "ctx-1" :flashing/fx-preview-update {:mode :preview-update :to-x 2.0 :to-y 64.0 :to-z 3.0} :owner-key [:ctx "ctx-1"]]
-              [:flashing "ctx-1" :flashing/fx-perform {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 2.0 :to-y 64.0 :to-z 3.0} :owner-key [:ctx "ctx-1"]]
+              [:flashing "ctx-1" :flashing/fx-preview-start {:mode :preview-start :to-x 1.0 :to-y 64.0 :to-z 2.0 :direction :forward :distance 12.0} :owner-key [:ctx "ctx-1"]]
+              [:flashing "ctx-1" :flashing/fx-preview-update {:mode :preview-update :to-x 2.0 :to-y 64.0 :to-z 3.0 :direction :forward :distance 12.0} :owner-key [:ctx "ctx-1"]]
+              [:flashing "ctx-1" :flashing/fx-perform {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 2.0 :to-y 64.0 :to-z 3.0
+                :direction :forward :distance 12.0} :owner-key [:ctx "ctx-1"]]
               [:flashing "ctx-1" :flashing/fx-preview-end {:mode :preview-end} :owner-key [:ctx "ctx-1"]]
               [:flashing "ctx-1" :flashing/fx-state-end {:mode :state-end} :owner-key [:ctx "ctx-1"]]]
              @enqueued*)))))

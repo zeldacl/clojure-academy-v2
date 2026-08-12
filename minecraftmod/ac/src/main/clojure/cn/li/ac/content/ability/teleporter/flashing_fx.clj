@@ -3,7 +3,12 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
 
 (defn- preview-to-payload [_ctx-id _channel p]
-  {:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)})
+  ;; :direction and :distance let the client re-solve getDest itself each
+  ;; frame (upstream localTick does exactly that); :to-* is the server's own
+  ;; answer, kept as the fallback.
+  {:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)
+   :direction (:direction p)
+   :distance (double (or (:distance p) 0.0))})
 
 (def ^:private spec
   (arc-beam/build-spec

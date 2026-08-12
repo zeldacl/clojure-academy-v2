@@ -158,6 +158,17 @@
        (rn/normalize-bridge-map
          (Raycast/raycastCombinedFromPlayer player (double max-distance) (boolean living-only?)))
        (catch Exception _ nil)))
+   :raycast-combined-excluding-from
+   (fn [sx sy sz dx dy dz max-distance]
+     (try
+       (rn/normalize-bridge-map
+         (Raycast/raycastCombinedExcluding
+           (.level player)
+           (double sx) (double sy) (double sz)
+           (double dx) (double dy) (double dz)
+           (double max-distance)
+           (str (.getUUID player))))
+       (catch Exception _ nil)))
    :block-solid-at?
    (fn [x y z]
      (try
