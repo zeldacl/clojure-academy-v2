@@ -73,9 +73,13 @@
                                     {:mode :spawn :x 2.0 :y 64.0 :z 2.0}))
 
     (dispatch! :electron-missile (event "ctx-a" :electron-missile/fx-fire
-                                       {:mode :fire :target-x 1.0 :target-y 64.0 :target-z 1.0}))
+                                       {:mode :fire
+                                        :start {:x 0.0 :y 64.0 :z 0.0}
+                                        :end {:x 1.0 :y 65.6 :z 1.0}}))
     (dispatch! :electron-missile (event "ctx-b" :electron-missile/fx-fire
-                                       {:mode :fire :target-x 2.0 :target-y 64.0 :target-z 2.0}))
+                                       {:mode :fire
+                                        :start {:x 0.0 :y 64.0 :z 0.0}
+                                        :end {:x 2.0 :y 65.6 :z 2.0}}))
 
     (dispatch! :jet-engine (event "ctx-a" :jet-engine/fx-start {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0}}))
     (dispatch! :jet-engine (event "ctx-b" :jet-engine/fx-start {:mode :mark-start :target {:x 2.0 :y 64.0 :z 2.0}}))
@@ -121,8 +125,8 @@
 
     (is (= 1.0 (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"] :x])))
     (is (= 2.0 (get-in (electron-bomb-fx/fx-snapshot) [:effect-state [:ctx "ctx-b"] :x])))
-    (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-a"]]))))
-    (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:impacts [:ctx "ctx-b"]]))))
+    (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-a"]]))))
+    (is (= 1 (count (get-in (electron-missile-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-b"]]))))
     (is (= :triggering (get-in (jet-engine-fx/fx-snapshot) [:fx-state [:ctx "ctx-a"] :phase])))
     (is (= :triggering (get-in (jet-engine-fx/fx-snapshot) [:fx-state [:ctx "ctx-b"] :phase])))
     (is (:active? (get-in (light-shield-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]])))

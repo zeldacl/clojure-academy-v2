@@ -31,6 +31,15 @@
 
 (def-skill-config-ops :electron-missile)
 (def ^:private mdball-entity-id (modid/namespaced-path "entity_md_ball"))
+
+;; Original: new EntityMdBall(player) -> life 2333333 ticks, i.e. the balls
+;; never expire by themselves — they die when fired or when the channel ends,
+;; and their renderer therefore never plays the burst-and-shrink death curve.
+;; Left on the entity spec's 50-tick default they popped after 2.5s and left
+;; dead ids behind in :ball-ids. Any life past the longest possible channel
+;; (max-hold is at most 200 ticks) is equivalent; a finite one still keeps a
+;; ball from outliving a context that died without settling.
+(def ^:private mdball-life-ticks 400)
 (def ^:private electron-missile-skill-id :electron-missile)
 
 (defn- missile-filter-self
@@ -77,17 +86,21 @@
 (defn- send-start-fx! [ctx-id]
   (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-start} nil {}))
 
-(defn- send-update-fx! [ctx-id ticks active-balls]
-  (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-update} nil
-                               {:ticks ticks
-                                :balls active-balls}))
+(defn- send-update-fx! [ctx-id player-id ticks active-balls]
+  ;; The caster's feet ride along: EMContextC puffs its orbit particles around
+  ;; the player, and the client only ever sees world-space particle commands.
+  (let [pos (geom/body-pos player-id)]
+    (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-update} nil
+                                 {:ticks ticks
+                                  :balls active-balls
+                                  :x (:x pos)
+                                  :y (:y pos)
+                                  :z (:z pos)})))
 
 (defn- send-fire-fx! [ctx-id start-pos target]
+  ;; MSG_EFFECT_SPAWN(ball.pos, target.pos + eyeHeight).
   (fx/send-local-and-nearby! ctx-id {:topic :electron-missile/fx-fire} nil
-                               {:target-x (:x target)
-                                :target-y (:y target)
-                                :target-z (:z target)
-                                :start start-pos
+                               {:start start-pos
                                 :end {:x (:x target)
                                       :y (+ (double (:y target)) (double (or (:eye-height target) 0.0)))
                                       :z (:z target)}}))
@@ -150,14 +163,14 @@
         (if (> ticks max-hold)
           (do
             ;; Original still sends its update message on the timeout tick.
-            (send-update-fx! ctx-id ticks (count ball-ids))
+            (send-update-fx! ctx-id player-id ticks (count ball-ids))
             (settle! ctx-id player-id)
             (ctx/terminate-context! ctx-id nil))
           (let [spawned-id (when (and player-ref
                                       (zero? (mod ticks spawn-interval))
                                       (< (count ball-ids) max-balls))
                              (entity/player-spawn-tracked-entity-by-id!
-                               player-ref mdball-entity-id 0.0))
+                               player-ref mdball-entity-id 0.0 mdball-life-ticks))
                 ball-ids-after-spawn (cond-> ball-ids
                                        spawned-id (conj (str spawned-id)))
                 should-fire? (and (pos? ticks)
@@ -179,7 +192,11 @@
                         (if-not ball-pos
                           (do
                             (log/warn "ElectronMissile: ball entity missing, skipping shot" ball-id)
-                            ball-ids-after-spawn)
+                            ;; Drop the dead id rather than keeping it: left in
+                            ;; place it is picked again on every later fire tick
+                            ;; and still counts against max-hold-balls, so five
+                            ;; of them silently end the channel's ball supply.
+                            (remove-vector-index ball-ids-after-spawn ball-index))
                           (do
                             (when (and (entity-damage/available?) (:uuid target))
                               (entity-damage/apply-direct-damage!
@@ -201,7 +218,7 @@
                               (motion-effects/discard-entity! world-id ball-id))
                             (remove-vector-index ball-ids-after-spawn ball-index))))
                       ball-ids-after-spawn)))]
-            (send-update-fx! ctx-id ticks (count ball-ids-after-fire))
+            (send-update-fx! ctx-id player-id ticks (count ball-ids-after-fire))
             (ctx-skill/replace-skill-state! ctx-id
                                    {:ticks (inc ticks)
                                     :active-balls (count ball-ids-after-fire)

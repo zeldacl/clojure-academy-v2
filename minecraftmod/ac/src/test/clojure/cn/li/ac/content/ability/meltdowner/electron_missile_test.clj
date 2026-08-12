@@ -98,19 +98,24 @@
                   ctx-skill/update-skill-state-root! update-skill-state-root!
                   fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 1.0 :y 63.4 :z 2.0})
                   geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})
                   entity/player-spawn-tracked-entity-by-id! (fn [& args]
                                                               (swap! spawn-calls* conj args)
                                                               "ball-1")]
       (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-2" :player-ref {:id "player-obj"}))
 
-    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0]] @spawn-calls*))
+    ;; Original's EntityMdBall(player) lives 2333333 ticks — it never expires on
+    ;; its own, so the port must not fall back to the entity spec's 50.
+    (is (= [[{:id "player-obj"} "academy:entity_md_ball" 0.0 400]] @spawn-calls*))
     (is (= ["p1" 220.0] (first @floor-calls*)))
     (is (= {:ticks 1 :active-balls 1 :ball-ids ["ball-1"]
             :active? true :overload-floor 220.0}
            (:skill-state @ctx*)))
     (is (= :electron-missile/fx-update (second (first @local-fx*))))
-    (is (= {:ticks 0 :balls 1} (nth (first @local-fx*) 2)))
+    ;; The caster's feet ride along so the client can place the orbit particles
+    ;; around the player instead of at the world origin.
+    (is (= {:ticks 0 :balls 1 :x 1.0 :y 63.4 :z 2.0} (nth (first @local-fx*) 2)))
     (is (= @local-fx* @nearby-fx*))))
 
 (deftest electron-missile-tick-fires-immediate-hit-when-target-and-cost-ok-test
@@ -176,6 +181,52 @@
            (mapv second @local-fx*)))
     (is (= @local-fx* @nearby-fx*))))
 
+(deftest electron-missile-tick-drops-ball-id-whose-entity-is-gone-test
+  ;; A ball whose entity has vanished cannot fire, but leaving its id in the
+  ;; list makes it a candidate again on every later fire tick AND keeps it
+  ;; counting against max-hold-balls — five of those and the channel silently
+  ;; stops producing balls for good.
+  (let [{:keys [ctx* get-context update-skill-state-root!]}
+        (make-context-mocks {:skill-state {:ticks 8 :active-balls 2 :ball-ids ["ball-1"]
+                                           :active? true :overload-floor 200.0}})
+        local-fx* (atom [])
+        nearby-fx* (atom [])
+        damage-calls* (atom [])]
+    (with-redefs [skill-effects/skill-exp (fn [& _] 0.5)
+                  skill-config/lerp-double stub-lerp-double
+                  skill-config/lerp-int stub-lerp-int
+                  skill-config/tunable-int stub-tunable-int
+                  skill-config/tunable-double stub-tunable-double
+                  skill-effects/enforce-overload-floor! (fn [& _] nil)
+                  skill-effects/perform-resource! (fn [& _] {:success? true})
+                  skill-effects/add-skill-exp! (fn [& _] nil)
+                  ctx/get-context get-context
+                  ctx-skill/update-skill-state-root! update-skill-state-root!
+                  fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
+                  geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
+                  geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                  motion-effects/entity-motion-available? (constantly true)
+                  motion-effects/entity-position (fn [& _] nil)
+                  motion-effects/discard-entity! (fn [& _] true)
+                  world-effects/available? (constantly true)
+                  world-effects/find-entities-in-radius (fn [& _]
+                                                          [{:uuid "t-1"
+                                                            :x 3.0 :y 64.0 :z 0.0
+                                                            :eye-height 1.6
+                                                            :living? true}])
+                  entity-damage/available? (constantly true)
+                  entity-damage/apply-direct-damage! (fn [& args]
+                                                       (swap! damage-calls* conj args)
+                                                       true)
+                  md-damage/mark-target! (fn [& _] nil)]
+      (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-6" :player-ref {:id "player-obj"}))
+
+    (is (empty? @damage-calls*) "no ball, no shot")
+    (is (= [] (:ball-ids (:skill-state @ctx*))))
+    (is (= 0 (:active-balls (:skill-state @ctx*))))
+    (is (= [:electron-missile/fx-update] (mapv second @local-fx*)))))
+
 (deftest electron-missile-up-and-abort-send-end-and-reset-state-test
   (let [{:keys [ctx* get-context update-skill-state-root!]}
         (make-context-mocks {:skill-state {:ticks 22 :active-balls 3
@@ -230,6 +281,7 @@
                                            nil)
                   fx/send! (capture-local-and-nearby-fx! local-fx* nearby-fx*)
                   geom/world-id-of (fn [_] "w")
+                  geom/body-pos (fn [_] {:x 1.0 :y 63.4 :z 2.0})
                   geom/eye-pos (fn [_] {:x 1.0 :y 65.0 :z 2.0})
                   motion-effects/entity-motion-available? (constantly false)]
       (cb/apply-invoke missile/electron-missile-tick! :player-id "p1" :ctx-id "ctx-5" :player-ref {:id "player-obj"}))
