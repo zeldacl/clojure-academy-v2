@@ -399,9 +399,9 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
      * random texture/alpha flicker from updateRenderTick.
      *
      * The generic animated-billboard kind draws one opaque quad on a fixed
-     * frame cycle, which is neither of those; the params for this have been
-     * sitting in the entity spec unread (render-glow-size-factor 0.35 is
-     * upstream's glow size 0.7, render-core-size-factor 0.25 its core 0.5).
+     * frame cycle, which is neither of those. Sizes come from the render
+     * profile: glow-size-factor 0.35 is upstream's glow size 0.7 and
+     * core-size-factor 0.25 its core 0.5, both being half-extents here.
      */
     private void renderMdBall(T entity,
                               String rendererId,
