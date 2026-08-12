@@ -626,22 +626,122 @@ if (target.loader != "none") {
         duplicatesStrategy = DuplicatesStrategy.INCLUDE
         include "**/*.class"
         doFirst {
-            deleteAotNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile, platformRuntimeAotNamespaces())
-            if (!rootProject.ext.fullAotEnabled) {
-                deleteNeutralSourceNamespaceClasses(layout.buildDirectory.dir("classes/java/main").get().asFile)
-            }
-            def staleManifest = neutralAotClassesManifest.get().asFile
-            if (staleManifest.isFile()) {
-                def outputRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
-                staleManifest.readLines().findAll { !it.trim().isEmpty() }.each { String rel ->
-                    def staleClass = new File(outputRoot, rel.trim())
-                    if (staleClass.isFile()) {
-                        staleClass.delete()
+            // Intentionally no deletion before the copy: mcmod/ac are
+            // pass-through AOT — keep any existing class and let the copy
+            // overwrite/add the fresh series; stale leftovers are removed in
+            // doLast. Deleting first (as the old code did for neutral classes
+            // and the stale manifest) opened a window where a consumer saw a
+            // torn class graph (e.g. new ItemSpec.class without its reify
+            // siblings) and threw NoClassDefFoundError.
+        }
+        doLast {
+            // Remove stale AOT classes (old reify series, removed namespaces)
+            // that the fresh copy did not restore. This deliberately runs
+            // AFTER the copy: deleting-then-copying left a window where
+            // e.g. ItemSpec.class was the new record series while its reify
+            // sibling classes were gone, and a jar packaged in that window
+            // threw NoClassDefFoundError at runtime. Copy-first means any
+            // consumer only ever sees a self-consistent superset (old and new
+            // series together), converging to the fresh series here.
+            def aotRoot = clojureAotDir.get().asFile
+            def classesRoot = layout.buildDirectory.dir("classes/java/main").get().asFile
+            if (aotRoot.isDirectory() && classesRoot.isDirectory()) {
+                def keep = new HashSet<String>()
+                aotRoot.eachFileRecurse { f ->
+                    if (f.isFile() && f.name.endsWith(".class")) {
+                        keep.add(aotRoot.toPath().relativize(f.toPath()).toString().replace("\\", "/"))
+                    }
+                }
+                platformRuntimeAotNamespaces().each { namespaceName ->
+                    def rel = namespaceName.replace(".", "/").replace("-", "_")
+                    def classBaseName = rel.substring(rel.lastIndexOf("/") + 1)
+                    // Classes live in the FULL namespace directory (the
+                    // namespace's file dir), not the package dir above it.
+                    def packageDir = new File(classesRoot, rel)
+                    if (packageDir.isDirectory()) {
+                        packageDir.listFiles(new FilenameFilter() {
+                            boolean accept(File dir, String fileName) {
+                                fileName.endsWith(".class")
+                            }
+                        })?.each { File staleClass ->
+                            // NOTE: no early `return` inside this closure —
+                            // Groovy's closure `return` is a non-local return
+                            // that would abort the whole cleanup loop.
+                            def relPath = classesRoot.toPath().relativize(staleClass.toPath()).toString().replace("\\", "/")
+                            def stale = false
+                            if (!keep.contains(relPath)) {
+                                def name = staleClass.name
+                                if (name.contains("\$")) {
+                                    // Synthetic sibling (record reify thunks, fn
+                                    // closures): stale when its OUTER top-level
+                                    // class is current AOT output but this exact
+                                    // class is not. Java inner/anonymous classes
+                                    // have java outers, which are never in
+                                    // `keep`, so they are never touched.
+                                    def outer = name.substring(0, name.indexOf("\$")) + ".class"
+                                    // keep holds paths relative to aotRoot —
+                                    // build the outer's path the same way.
+                                    def fileRel = classesRoot.toPath().relativize(staleClass.toPath()).toString().replace("\\", "/")
+                                    def outerRel = fileRel.substring(0, fileRel.lastIndexOf("/") + 1) + outer
+                                    stale = keep.contains(outerRel)
+                                } else {
+                                    stale = (name == "${classBaseName}.class" || name == "${classBaseName}__init.class")
+                                }
+                            }
+                            if (stale) {
+                                staleClass.delete()
+                            }
+                        }
+                    }
+                }
+                // Neutral (pass-through AOT) namespaces: same safe rule as
+                // the platform sweep. Do NOT delete every class missing from
+                // the AOT output — the namespace dirs also hold JAVA classes
+                // (e.g. cn/li/mcmod/ui/node/INode.java shares the package with
+                // node.clj) whose outers are never in `keep`.
+                neutralClojureSourceRoots.each { File sourceRoot ->
+                    if (sourceRoot.isDirectory()) {
+                        fileTree(sourceRoot) {
+                            include "**/*.clj"
+                            include "**/*.cljc"
+                        }.files.each { File sourceFile ->
+                            def rel = sourceRoot.toPath().relativize(sourceFile.toPath()).toString().replace("\\", "/")
+                            def classPath = rel.replaceFirst(/\.(clj|cljc)$/, "").replace("-", "_")
+                            def classBaseName = classPath.substring(classPath.lastIndexOf("/") + 1)
+                            def nsDir = new File(classesRoot, classPath)
+                            if (nsDir.isDirectory()) {
+                                nsDir.listFiles(new FilenameFilter() {
+                                    boolean accept(File dir, String fileName) {
+                                        fileName.endsWith(".class")
+                                    }
+                                })?.each { File staleClass ->
+                                    def relPath = classesRoot.toPath().relativize(staleClass.toPath()).toString().replace("\\", "/")
+                                    def stale = false
+                                    if (!keep.contains(relPath)) {
+                                        def name = staleClass.name
+                                        if (name.contains("\$")) {
+                                            // Synthetic sibling: stale when its
+                                            // outer top-level class is current
+                                            // AOT output but this class is not.
+                                            // Java inner classes have java
+                                            // outers, never in `keep`.
+                                            def outer = name.substring(0, name.indexOf("\$")) + ".class"
+                                            def fileRel = classesRoot.toPath().relativize(staleClass.toPath()).toString().replace("\\", "/")
+                                            def outerRel = fileRel.substring(0, fileRel.lastIndexOf("/") + 1) + outer
+                                            stale = keep.contains(outerRel)
+                                        } else {
+                                            stale = (name == "${classBaseName}.class" || name == "${classBaseName}__init.class")
+                                        }
+                                    }
+                                    if (stale) {
+                                        staleClass.delete()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-        doLast {
             def missingEntrypoints = runtimeEntrypointNamespaces.collect { namespaceName ->
                 new File(clojureAotDir.get().asFile, namespaceName.replace(".", "/").replace("-", "_") + "__init.class")
             }.findAll { !it.isFile() }
