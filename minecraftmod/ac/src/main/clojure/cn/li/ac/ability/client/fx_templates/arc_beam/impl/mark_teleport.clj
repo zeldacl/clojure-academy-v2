@@ -45,10 +45,17 @@
 
       :perform
       (do
-        ;; Upstream s_execute -> MSG_SOUND -> c_sound: tp.tp at 0.5. No burst
-        ;; particles — the green ambient particles already surround the mark.
+        ;; Upstream s_execute -> MSG_SOUND -> c_sound:
+        ;; ACSounds.playClient(player, "tp.tp", AMBIENT, 0.5) — attached to the
+        ;; teleporting player, who is at the destination by then. This channel
+        ;; reaches nearby players too, and without coordinates the bang came
+        ;; out of their own heads rather than from where someone vanished.
+        ;; No burst particles — the mark's ambient ones are the whole effect.
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
-          {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0})
+          (cond-> {:type :sound :sound-id (modid/namespaced-path "tp.tp") :volume 0.5 :pitch 1.0}
+            (map? target) (assoc :x (double (:x target))
+                                 :y (double (:y target))
+                                 :z (double (:z target)))))
         ;; Upstream l_end kills EntityTPMarking on MSG_TERMINATED.
         (update state* :effect-state dissoc owner-key*))
 
