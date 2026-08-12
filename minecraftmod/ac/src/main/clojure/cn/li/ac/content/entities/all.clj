@@ -139,6 +139,131 @@
     ;; stays — it is platform facility, and the loaders fall back to the
     ;; "ray-composite" profile when no content spec claims it.
 
+    ;; Marker/UI family.
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_tp_marking"
+        {:entity-kind :scripted-marker
+         :category :misc
+         :width 0.5
+         :height 0.5
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:marker {:life-ticks 120
+                               :follow-target? true
+                               :ignore-depth? false
+                               :available? true
+                               :renderer-id "tp-marking"
+                               :hook :tp-marking}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_marker"
+        {:entity-kind :scripted-marker
+         :category :misc
+         :width 0.5
+         :height 0.5
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:marker {:life-ticks 120
+                               :follow-target? true
+                               :ignore-depth? true
+                               :available? true
+                               :renderer-id "wire-marker"
+                               :hook :marker}}}))
+
+    ;; Shield / arc visuals (effect family).
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_diamond_shield"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 1.8
+         :height 1.8
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 120
+                               :follow-owner? false
+                               :renderer-id "diamond-shield"
+                               :hook :diamond-shield
+                               :hook-params {:forward 1.0
+                                             :vertical 1.1}}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_md_shield"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 1.8
+         :height 1.8
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 120
+                               :follow-owner? false
+                               :renderer-id "md-shield"
+                               :hook :md-shield
+                               :hook-params {:forward 1.0
+                                             :vertical 1.1}}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_blood_splash"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 1.0
+         :height 1.0
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 10
+                               :follow-owner? false
+                               :renderer-id "blood-splash"
+                               :hook :blood-splash}}}))
+
+    (edsl/register-entity!
+      (edsl/create-entity-spec
+        "entity_md_ball"
+        {:entity-kind :scripted-effect
+         :category :misc
+         :width 0.6
+         :height 0.6
+         :client-tracking-range 64
+         :update-interval 1
+         :properties {:effect {:life-ticks 50
+                               :follow-owner? true
+                               :renderer-id "md-ball"
+                               :hook :md-ball
+                               :hook-params {:range-from 0.8
+                                             :range-to 1.3
+                                             ;; Upstream subY is rangef(-1.2, 0.2)
+                                             ;; from the FEET, and the renderer
+                                             ;; then adds a hard-coded +1.6 —
+                                             ;; the balls read at 0.4..1.8. Bake
+                                             ;; that in so the entity is where it
+                                             ;; looks (the rays start there too).
+                                             :y-from 0.4
+                                             :y-to 1.8
+                                             :wobble-xz 0.03
+                                             :wobble-y 0.04
+                                             :phase-step 0.18
+                                             :wobble-y-freq 1.4
+                                             :wobble-y-phase-shift 0.8975979010256552
+                                             :theta-spread-factor 0.45
+                                             ;; Hybrid renderer (V2): curve knobs (defaults keep current visuals).
+                                             :render-phase-speed 0.35
+                                             :render-phase-id-scale 0.61
+                                             :render-alpha-wiggle-freq 2.1
+                                             :render-alpha-wiggle-base 0.65
+                                             :render-alpha-wiggle-amp 0.35
+                                             :render-alpha-attack-ratio 0.12
+                                             :render-alpha-hold-end-ratio 0.8
+                                             :render-alpha-peak-end-ratio 0.97
+                                             :render-alpha-hold 0.6
+                                             :render-size-expand-start-ratio 0.88
+                                             :render-size-expand-end-ratio 0.97
+                                             :render-size-expanded-scale 1.5
+                                             :render-glow-size-factor 0.35
+                                             :render-core-size-factor 0.25}}}}))
+
     ;; Block-body family.
     (edsl/register-entity!
       (edsl/create-entity-spec
