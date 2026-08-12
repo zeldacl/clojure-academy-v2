@@ -41,6 +41,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
             case "polyline-arc" -> submitPolyline(state, poseStack, collector);
             case "billboard-cross" -> submitCross(state, poseStack, collector, camera);
             case "animated-billboard" -> submitAnimatedBillboard(state, poseStack, collector, camera);
+            case "md-ball" -> submitMdBall(state, poseStack, collector, camera);
             case "spinning-double-sided" -> submitSpinningCoin(state, poseStack, collector);
             case "tiered-zigzag" -> TieredZigzagArcRenderer.submit(state, poseStack, collector);
             case "spinning-shield" -> submitShield(state, poseStack, collector, false);
@@ -133,6 +134,75 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         stack.mulPose(camera.orientation);
         submitQuad(stack, collector, texture, half, half, 255);
         stack.popPose();
+    }
+
+    /**
+     * EntityMdBall.R: a soft glow quad behind a brighter core quad, with the
+     * alpha model from EntityMdBall.getAlpha and the random texture/alpha
+     * flicker from updateRenderTick. The generic animated-billboard kind draws
+     * one opaque quad on a fixed frame cycle, which is neither.
+     */
+    private static void submitMdBall(ScriptedEntityRenderState<?> state, PoseStack stack,
+                                     SubmitNodeCollector collector, CameraRenderState camera) {
+        String prefix = planParamString(state.rendererId, "texture-prefix", "");
+        String glowId = planParamString(state.rendererId, "glow-texture", "");
+        int frames = Math.max(1, planInt(state.rendererId, "frame-count", 1));
+        float glowSize = planFloat(state.rendererId, "glow-size-factor", 0.35F);
+        float coreSize = planFloat(state.rendererId, "core-size-factor", 0.25F);
+        float holdAlpha = planFloat(state.rendererId, "alpha-hold", 0.6F);
+        float attackSeconds = Math.max(0.01F, planFloat(state.rendererId, "alpha-attack-seconds", 0.3F));
+
+        float ageTicks = state.ageTicks + state.partialTick;
+        float ageSeconds = ageTicks * 0.05F;
+        // getAlpha(): 0 -> 0.6 over the first 0.3s, then held. A scatter-bomb
+        // ball's life is effectively unbounded upstream, so the burst and
+        // fade-out branches never run for it.
+        float alpha = ageSeconds < attackSeconds ? holdAlpha * (ageSeconds / attackSeconds) : holdAlpha;
+
+        // updateRenderTick(): the texture is re-rolled on roughly a quarter of
+        // frames and alphaWiggle random-walks in [0, 1]. Both are driven off a
+        // per-entity hash so the renderer stays stateless while still
+        // flickering rather than cycling.
+        long flickerStep = (long) (ageTicks * 3.0F);
+        int frame = Math.floorMod(hashNoise(state.entityId, flickerStep), frames);
+        float wiggle = Math.floorMod(hashNoise(state.entityId * 31, flickerStep + 7L), 1000) / 1000.0F;
+
+        Identifier core = parseTexture(prefix + frame + ".png");
+        Identifier glow = parseTexture(glowId);
+        if (core == null) return;
+
+        stack.pushPose();
+        stack.mulPose(camera.orientation);
+        if (glow != null) {
+            submitMdBallQuad(stack, collector, glow, glowSize, alpha * (0.3F + wiggle * 0.7F));
+        }
+        submitMdBallQuad(stack, collector, core, coreSize, alpha * (0.8F + 0.2F * wiggle));
+        stack.popPose();
+    }
+
+    private static int hashNoise(int a, long b) {
+        long h = a * 0x9E3779B97F4A7C15L ^ (b + 0x165667B19E3779F9L);
+        h ^= (h >>> 27);
+        h *= 0x94D049BB133111EBL;
+        h ^= (h >>> 31);
+        return (int) h;
+    }
+
+    private static void submitMdBallQuad(PoseStack stack, SubmitNodeCollector collector,
+                                         Identifier texture, float halfSize, float alpha) {
+        int a = Mth.clamp((int) (alpha * 255.0F), 0, 255);
+        if (a <= 0) return;
+        // RenderIcon's quad spans y in [-0.25, +0.75] of its size, i.e. it sits
+        // a quarter of its height above the entity position.
+        float bottom = -halfSize * 0.5F;
+        float top = halfSize * 1.5F;
+        collector.submitCustomGeometry(stack, RenderTypes.entityTranslucent(texture), (pose, vc) -> {
+            Matrix4f m = pose.pose();
+            vertex(vc, pose, m, -halfSize, bottom, 0, 0, 1, a);
+            vertex(vc, pose, m, halfSize, bottom, 0, 1, 1, a);
+            vertex(vc, pose, m, halfSize, top, 0, 1, 0, a);
+            vertex(vc, pose, m, -halfSize, top, 0, 0, 0, a);
+        });
     }
 
     private static void submitSpinningCoin(ScriptedEntityRenderState<?> state, PoseStack stack,
