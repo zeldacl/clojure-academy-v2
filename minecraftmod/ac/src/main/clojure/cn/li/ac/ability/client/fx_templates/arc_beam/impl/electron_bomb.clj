@@ -22,7 +22,6 @@
 (def ^:private ray-glow-width 0.3)
 (def ^:private ray-outer-radius 0.045)
 (def ^:private ray-inner-radius 0.03)
-(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
 
 ;; EntityMdRaySmall: life 14 ticks, blendIn 200ms, blendOut 400ms, and
 ;; getWidth() ramps 1 -> 0 over the last 500ms.
@@ -139,10 +138,10 @@
                     {:textures ray-glow-textures
                      :width (* ray-glow-width w)
                      :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}})
-                  (ray-composite/tube-ops ray-texture start end
+                  (ray-composite/tube-ops start end
                     (* ray-outer-radius w) ray-composite/outer-head-fix
                     {:r 106 :g 242 :b 106 :a (alpha 50.0)})
-                  (ray-composite/tube-ops ray-texture start end
+                  (ray-composite/tube-ops start end
                     (* ray-inner-radius w) ray-composite/inner-head-fix
                     {:r 216 :g 248 :b 216 :a (alpha 230.0)})))))
           beams))

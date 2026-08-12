@@ -7,11 +7,13 @@
     RendererRayGlow      three boards: blend_in over the first `width` units,
                          tile over the middle, blend_out over the last `width`,
                          each `width` across (drawBoard halves it), with the
-                         ray extended by startFix / endFix.
+                         ray extended by startFix / endFix. These are the only
+                         TEXTURED part -- they draw through ShaderSimple.
     RendererRayCylinder  an outer tube of radius `width`, and
     RendererRayCylinder  an inner tube, both DIV=12 surfaces of revolution with
                          a y = sqrt(x) paraboloid head at each end (headFix
-                         0.98 on the inner one).
+                         0.98 on the inner one). Both draw through ShaderNotex
+                         -- notex.frag, pure vertex colour, NO texture.
 
   Callers supply the radii, colours and textures; the geometry is identical
   across skills, which is exactly why upstream has one class for it."
@@ -56,14 +58,25 @@
       (concat nose-pts tail-pts)
       (concat nose-pts [[length radius]] tail-pts))))
 
+(def solid-texture
+  "The cylinders have NO texture upstream (ShaderNotex = notex.frag, pure
+  vertex colour). This plan renderer samples a texture per quad, so they get a
+  4x4 fully opaque white one, which multiplies to the same thing.
+
+  Handing them a real sprite is not a cosmetic choice: effects/arc.png is 79%
+  fully transparent and averages alpha 13/255, so texturing the tubes with it
+  scaled them down to a few percent opacity and left only the three flat glow
+  boards visible -- every ray in the game read as a flat sheet."
+  (modid/asset-path "textures" "effects/solid.png"))
+
 (defn tube-ops
-  "One RendererRayCylinder: a surface of revolution following `ray-profile`.
+  "One RendererRayCylinder: a surface of revolution following `ray-profile`,
+  drawn untextured in `color`.
 
   A flat strip has the same silhouette only from the one angle it is turned
   to; from anywhere else it thins out, which is why rays drawn that way read
   as flat slivers."
-  ;; No primitive hints: Clojure only allows them on fns of four args or fewer.
-  [texture ^V3 start ^V3 end radius head-fix color]
+  [^V3 start ^V3 end radius head-fix color]
   (let [delta (vec3/v- end start)
         length (vec3/vlen delta)
         radius (double radius)]
@@ -86,7 +99,7 @@
                 i (range tube-segments)
                 :let [ua (nth ring i)
                       ub (nth ring (inc i))]]
-            (ru/quad-op texture
+            (ru/quad-op solid-texture
                         (at d0 w0 ua) (at d0 w0 ub)
                         (at d1 w1 ub) (at d1 w1 ua)
                         color)))))))

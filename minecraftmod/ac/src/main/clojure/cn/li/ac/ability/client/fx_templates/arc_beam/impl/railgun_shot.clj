@@ -190,11 +190,6 @@
        :width (* glow-width (width-factor beam life) glow-wiggle)
        :color {:r 255 :g 255 :b 255 :a alpha}})))
 
-;; The cylinders are drawn with ShaderNotex upstream (untextured solid colour);
-;; this port keeps the shared beam sprite, which reads the same at these radii.
-(def ^:private beam-texture
-  (modid/asset-path "textures" "effects/arc.png"))
-
 (defn- railgun-beam-ops
   "The two cylinders of RendererRayComposite: an outer 0.13 tube and an inner
   0.09 core, each with the paraboloid nose at both ends.
@@ -207,7 +202,6 @@
   (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
         w (width-factor beam life)
         fade (fade-out-factor life)
-        texture beam-texture
         outer-color (ru/with-alpha (:outer-rgb railgun-beam-style)
                                    (int (* 60.0 fade)))
         inner-color (ru/with-alpha (:inner-rgb railgun-beam-style)
@@ -215,9 +209,9 @@
         line-color (ru/with-alpha (:line-rgb railgun-beam-style)
                                   (int (+ 40.0 (* 120.0 fade))))]
     (concat
-      (ray-composite/tube-ops texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
                               (* 0.13 w) ray-composite/outer-head-fix outer-color)
-      (ray-composite/tube-ops texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
                               (* 0.09 w) ray-composite/inner-head-fix inner-color)
       ;; Port enhancement kept: a bright cyan core line down the axis.
       [(ru/line-op (:start beam) (:end beam) line-color)])))

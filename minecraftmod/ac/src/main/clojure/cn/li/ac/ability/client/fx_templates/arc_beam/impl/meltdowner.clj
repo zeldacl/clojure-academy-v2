@@ -26,7 +26,6 @@
 (def ^:private ray-glow-width 1.5)
 (def ^:private ray-outer-radius 0.22)
 (def ^:private ray-inner-radius 0.17)
-(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
 
 ;; EntityMDRay: life 50 ticks, blendIn 200ms, blendOut 700ms. EntityRayBase's
 ;; width holds at 1 (plus a [0, 0.1] wiggle) until the last widthShrinkTime,
@@ -297,10 +296,10 @@
         ray-plan (mapcat (fn [ray]
                            (let [w (ray-width-factor ray)]
                              (concat
-                               (ray-composite/tube-ops ray-texture (:start ray) (:end ray)
+                               (ray-composite/tube-ops (:start ray) (:end ray)
                                  (* ray-outer-radius w) ray-composite/outer-head-fix
                                  {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))})
-                               (ray-composite/tube-ops ray-texture (:start ray) (:end ray)
+                               (ray-composite/tube-ops (:start ray) (:end ray)
                                  (* ray-inner-radius w) ray-composite/inner-head-fix
                                  {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))}))))
                          fixed-rays)

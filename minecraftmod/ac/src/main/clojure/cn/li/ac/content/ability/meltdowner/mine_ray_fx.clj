@@ -33,7 +33,6 @@
 ;; mining ray keeps the original's tight widths).
 ;; The cylinders are ShaderNotex (untextured solid colour) upstream; the
 ;; shared beam sprite reads the same at these radii.
-(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
 
 (def ^:private mine-ray-styles
   {:basic  {:glow-textures "mdray_small"
@@ -71,10 +70,10 @@
         {:textures (ray-composite/glow-textures glow-textures)
          :width glow-width
          :color {:r 255 :g 255 :b 255 :a (int glow-alpha)}})
-      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
         outer-radius ray-composite/outer-head-fix
         (assoc outer-rgb :a (int outer-alpha)))
-      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
         inner-radius ray-composite/inner-head-fix
         (assoc inner-rgb :a (int inner-alpha))))))
 

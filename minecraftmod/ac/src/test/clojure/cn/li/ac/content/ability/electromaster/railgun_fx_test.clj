@@ -370,7 +370,7 @@
   (tick-fx! 4)
   (let [plan (arc-beam/effect-build-plan
                :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0)
-        radii (keep (fn [op] (when (re-find #"effects/arc\.png" (str (:texture op)))
+        radii (keep (fn [op] (when (re-find #"effects/solid\.png" (str (:texture op)))
                                (axis-radius op :p0)))
                     (:ops plan))]
     (is (seq radii))
@@ -426,7 +426,7 @@
   (let [ops (:ops (arc-beam/effect-build-plan
                     :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0))
         beam (filter #(and (= :quad (:kind %))
-                           (re-find #"effects/arc\.png" (str (:texture %))))
+                           (re-find #"effects/solid\.png" (str (:texture %))))
                      ops)
         xs (fn [op] (.-x ^cn.li.mcmod.math.V3 (:p0 op)))
         radii (sort-by first (map (juxt xs #(axis-radius % :p0)) beam))]
@@ -452,7 +452,7 @@
   (let [ops (:ops (arc-beam/effect-build-plan
                     :railgun-shot {:x 0.0 :y 70.0 :z 0.0} nil 0))
         beam (filter #(and (= :quad (:kind %))
-                           (re-find #"effects/arc\.png" (str (:texture %))))
+                           (re-find #"effects/solid\.png" (str (:texture %))))
                      ops)
         ;; sample the full-bore vertices and look at where the surface sits
         ;; around the axis: a tube covers every angle, a strip only two

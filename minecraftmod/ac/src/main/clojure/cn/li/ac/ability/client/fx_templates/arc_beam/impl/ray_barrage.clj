@@ -44,7 +44,6 @@
 
 (def ^:private outer-rgb {:r 106 :g 242 :b 106})
 (def ^:private inner-rgb {:r 216 :g 248 :b 216})
-(def ^:private ray-texture (modid/asset-path "textures" "effects/arc.png"))
 
 ;; EntityRayBase: blendIn 200ms (4 ticks), blendOut 400ms (8 ticks).
 (def ^:private blend-in-ticks 4.0)
@@ -68,10 +67,10 @@
         {:textures (ray-composite/glow-textures textures)
          :width glow-width
          :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}})
-      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
         outer-radius ray-composite/outer-head-fix
         (assoc outer-rgb :a (int (ray-alpha beam 50.0))))
-      (ray-composite/tube-ops ray-texture (:start beam) (:end beam)
+      (ray-composite/tube-ops (:start beam) (:end beam)
         inner-radius ray-composite/inner-head-fix
         (assoc inner-rgb :a (int (ray-alpha beam 230.0)))))))
 
