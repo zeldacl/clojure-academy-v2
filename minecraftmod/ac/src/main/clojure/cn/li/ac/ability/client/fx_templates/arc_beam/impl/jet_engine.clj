@@ -156,7 +156,7 @@
   [store ctx-id channel owner-key payload]
   (let [store* (or store {:fx-state {}})
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start target pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})
+        {:keys [mode start target pos owner-pos hold-ticks trigger-ticks shield-entity-uuid]} (or payload {})
         ;; Capture the effect owner at enqueue time (fx events run with the
         ;; client session bound) so the per-tick particle queueing in
         ;; tick-state! can resolve its session partition — the ClientTick
@@ -220,6 +220,7 @@
                 (merge (get-in store* [:fx-state owner-key*])
                        {:phase :triggering
                         :pos pos
+                        :owner-pos owner-pos
                         :trigger-ticks (long (or trigger-ticks 0))
                         :shield-entity-uuid (or shield-entity-uuid
                                                 (get-in store* [:fx-state owner-key* :shield-entity-uuid]))
@@ -236,14 +237,14 @@
 (defn- tick-state!
   [store]
   (let [store* (or store {:fx-state {}})]
-    ;; MdParticleFactory particles during trigger (matching original: 10-11 per tick)
+    ;; c_tUpdateEffect: `for (i <- 0 to 10)` is 11 MdParticles per tick — soft
+    ;; md_particle dots at player.pos +/- 0.3, not vanilla spark lines.
     (doseq [[_ st] (:fx-state store*)]
       (when (= :triggering (:phase st))
-        (let [trigger-ticks (long (or (:trigger-ticks st) 0))
-              pos (:pos st)]
-          (dotimes [_ (+ 10 (rand-int 2))]
+        (let [pos (or (:owner-pos st) (:pos st))]
+          (dotimes [_ 11]
             (client-particles/queue-particle-effect! (:queue-owner st)
-              {:type :particle :particle-type :electric-spark
+              {:type :particle :particle-type (modid/namespaced-path "md_particle")
                :x (+ (double (:x pos)) (- (rand 0.6) 0.3))
                :y (+ (double (:y pos)) (- (rand 0.6) 0.3))
                :z (+ (double (:z pos)) (- (rand 0.6) 0.3))

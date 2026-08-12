@@ -12,6 +12,7 @@
   No Minecraft imports."
   (:require
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.service.context-skill-state :as ctx-skill]
                         [cn.li.ac.ability.util.toggle :as toggle]
@@ -101,6 +102,20 @@
 
 (defn- get-player-position [player-id]
   (motion-effects/player-position player-id))
+
+(defn- send-tick-fx!
+  "Original c_update reads the local player every client tick; the port's FX
+  runs off broadcast channels, so the caster's lookingPos(player, 1) — eye
+  position plus one block of look vector — has to travel with the tick."
+  [ctx-id player-id look-vec]
+  (when-let [eye (geom/eye-pos player-id)]
+    (let [dir (if look-vec
+                (geom/vnorm {:x (double (or (:x look-vec) 0.0))
+                             :y (double (or (:y look-vec) 0.0))
+                             :z (double (or (:z look-vec) 0.0))})
+                {:x 0.0 :y 0.0 :z 0.0})]
+      (fx/send-local-and-nearby! ctx-id {:topic :light-shield/fx-tick} nil
+                                 {:pos (geom/v+ eye dir)}))))
 
 (defn- horizontal-yaw-degrees
   [x z]
@@ -223,6 +238,7 @@
             look-vec (get-player-look-vector player-id)]
         (set-shield-state-path! ctx-id [:ticks] next-ticks)
         (enforce-overload-floor! player-id ctx-data)
+        (send-tick-fx! ctx-id player-id look-vec)
         ;; Original continues the rest of s_tick after requesting termination:
         ;; per-tick exp and contact damage still happen on the timeout/failing
         ;; tick before the unified end callback settles cooldown/slowness.

@@ -137,6 +137,7 @@
                                                         (swap! velocity-calls* conj [(nth args 1) (nth args 2) (nth args 3)])
                                                         true)
                   raycast/available? (constantly true)
+                  raycast/player-position (fn [& _] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/raycast-entities (fn [& _] {:uuid "target-1"})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& args]

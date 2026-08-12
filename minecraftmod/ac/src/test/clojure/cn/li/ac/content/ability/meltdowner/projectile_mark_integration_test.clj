@@ -294,6 +294,7 @@
                   motion-effects/dismount-riding! (fn [& _] true)
                   motion-effects/set-player-velocity! (fn [& _] true)
                   raycast/available? (constantly true)
+                  raycast/player-position (fn [& _] {:x 0.0 :y 64.0 :z 0.0})
                   raycast/raycast-entities (fn [& _] {:uuid victim})
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)

@@ -118,8 +118,13 @@
                             :target target
                             :velocity velocity}))
 
-(defn- send-trigger-update! [ctx-id pos trigger-ticks]
+(defn- send-trigger-update! [ctx-id player-id pos trigger-ticks]
+  ;; :pos is the ideal lerp point at EYE height, which is what the trail
+  ;; geometry is drawn along. c_tUpdateEffect's burst is anchored on
+  ;; player.posX/Y/Z instead — the caster's actual feet — so it travels with
+  ;; them rather than sitting a head above the projected path.
   (fx/send-local-and-nearby! ctx-id {:topic :jet-engine/fx-trigger-update :mode :trigger-update} nil {:pos pos
+                            :owner-pos (geom/body-pos player-id)
                             :trigger-ticks trigger-ticks}))
 
 (defn- send-trigger-end! [ctx-id]
@@ -187,7 +192,7 @@
           (update-skill-state-root! ctx-id merge
                                     {:trigger-ticks next-tick
                                      :last-pos next-pos})
-          (send-trigger-update! ctx-id next-pos next-tick))))))
+          (send-trigger-update! ctx-id player-id next-pos next-tick))))))
 
 (defn jet-engine-down!
   [ctx-id player-id _skill-id _exp cost-ok? _hold-ticks _cost-stage _player-ref]

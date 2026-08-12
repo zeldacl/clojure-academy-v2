@@ -39,6 +39,7 @@
       (is (= :light-shield (first @registered-level*)))
       (is (fn? (:enqueue-state-fn (second @registered-level*))))
       (is (= #{:light-shield/fx-start
+               :light-shield/fx-tick
                :light-shield/fx-end}
              @registered-topics*)))))
 
@@ -57,10 +58,23 @@
                   rand (fn ([] 0.0) ([n] (* 0.0 n)))]
       (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-start {:mode :start :source-player-id "player-a"})
       (is (some? (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
+      ;; No lookingPos, no particles: they are world-space and the caster's
+      ;; position only arrives on the per-tick channel.
+      (level-effects/update-effect-state! :light-shield
+        (fn [store] (arc-beam/effect-tick-state! :level :light-shield store)))
+      (is (empty? @particles*))
+      (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-tick
+                                  {:mode :tick :pos {:x 20.0 :y 65.6 :z -8.0}
+                                   :source-player-id "player-a"})
       (dotimes [_ 5]
         (level-effects/update-effect-state! :light-shield
           (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
       (is (seq @particles*))
+      ;; lookingPos(player, 1) +/- 0.5 on each axis — never the world origin.
+      (doseq [[_owner {:keys [x y z]}] @particles*]
+        (is (<= 19.5 (double x) 20.5))
+        (is (<= 65.1 (double y) 66.1))
+        (is (<= -8.5 (double z) -7.5)))
       ;; The shield itself is the spawned entity_md_shield (spinning-shield
       ;; profile), so this effect contributes no level-plan ops at all — see
       ;; impl/light_shield's build-plan. Asserting a map here only passed while
@@ -83,6 +97,9 @@
                   client-sounds/queue-sound-effect! (fn [& _] nil)
                   rand (fn ([] roll) ([n] (* roll n)))]
       (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-start {:mode :start :source-player-id "player-a"})
+      (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-tick
+                                  {:mode :tick :pos {:x 0.0 :y 65.6 :z 0.0}
+                                   :source-player-id "player-a"})
       (dotimes [_ 10]
         (level-effects/update-effect-state! :light-shield
           (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
