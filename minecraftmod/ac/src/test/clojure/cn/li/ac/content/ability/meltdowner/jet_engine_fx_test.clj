@@ -6,7 +6,8 @@
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as je-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]))
+            [cn.li.mcmod.hooks.core :as runtime-hooks])
+  (:import [cn.li.mcmod.math V3]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
@@ -78,6 +79,36 @@
             (is (= [[:mcmod/spawn-local-scripted-effect {:effect-id "entity_diamond_shield"}]
               [:mcmod/remove-local-scripted-effect {:entity-uuid "shield-uuid-1"}]]
               @local-effects*)))))
+
+(deftest mark-draws-three-ripples-not-a-line-ring-test
+  ;; EntityRippleMark + RippleMarkRender: three quads on the aim point's XZ
+  ;; plane, staggered {0, -1.2, -2.4} across a 3.6s cycle, each rising
+  ;; mod * 0.3 while shrinking lerp(1.9, 1.4) and fading in/out over 1.6s.
+  ;; The port drew one pulsing line ring at a constant alpha instead.
+  (je-fx/init!)
+  (dispatch! "ctx-ripple" :jet-engine/fx-start
+             {:mode :mark-start :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 0})
+  ;; 40 ticks = 2.0s in, so all three ripples are mid-cycle and visible.
+  (dispatch! "ctx-ripple" :jet-engine/fx-update
+             {:mode :mark-update :target {:x 1.0 :y 64.0 :z 1.0} :hold-ticks 40})
+  (let [ops (:ops (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 0))]
+    (is (= 3 (count ops)))
+    (is (every? #(= :quad (:kind %)) ops))
+    (is (every? #(= "academy:textures/effects/ripple.png" (:texture %)) ops))
+    ;; glDisable(GL_DEPTH_TEST) + glDepthMask(false).
+    (is (every? :no-depth-test? ops))
+    (is (every? #(= {:r 51 :g 255 :b 51} (dissoc (:color %) :a)) ops))
+    (let [halves (mapv (fn [op] (- (.-x ^V3 (:p1 op)) 1.0)) ops)
+          heights (mapv (fn [op] (- (.-y ^V3 (:p0 op)) 64.0)) ops)]
+      ;; sizes stay inside lerp(1.9, 1.4) -> half-extents 0.95 down to 0.70
+      (is (every? #(<= 0.70 % 0.95) halves))
+      ;; each ripple sits at its own point in the cycle, so no two coincide
+      (is (= 3 (count (set halves))))
+      (is (every? #(<= 0.0 % (* 3.6 0.3)) heights))
+      (is (= 3 (count (set heights)))))
+    ;; ...and 2.0s in, one of the three has just wrapped and is fading back in
+    (is (some #(< (:a (:color %)) 255) ops)))
+  (dispatch! "ctx-ripple" :jet-engine/fx-end {:mode :mark-end}))
 
 (deftest trigger-start-spawns-diamond-shield-once-per-phase-entry-test
   (let [local-effects* (atom [])]

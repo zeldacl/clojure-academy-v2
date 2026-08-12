@@ -127,6 +127,57 @@
 
 
 
+;; RippleMarkRender: three flat quads on the aim point's XZ plane, staggered
+;; across one 3.6-second cycle, each rising while it shrinks and fading in and
+;; out over 1.6 seconds at either end. Drawn with depth test and depth write
+;; off so the mark reads on top of the surface it lands on.
+(def ^:private ripple-texture (modid/namespaced-path "textures/effects/ripple.png"))
+(def ^:private ripple-cycle-seconds 3.6)
+(def ^:private ripple-time-offsets [0.0 -1.2 -2.4])
+(def ^:private ripple-blend-seconds 1.6)
+(def ^:private ripple-size-from 1.9)
+(def ^:private ripple-size-to 1.4)
+(def ^:private ripple-rise-per-second 0.3)
+
+(defn- ripple-alpha
+  ^double [^double m]
+  (cond
+    (< m ripple-blend-seconds)
+    (/ m ripple-blend-seconds)
+
+    (> m (- ripple-cycle-seconds ripple-blend-seconds))
+    (- 1.0 (/ (- m (- ripple-cycle-seconds ripple-blend-seconds)) ripple-blend-seconds))
+
+    :else 1.0))
+
+(defn- ripple-ops
+  "One EntityRippleMark: its three staggered ripples at `seconds` since the
+  mark appeared. getAlpha's curve REPLACES the mark colour's own alpha
+  upstream (material.color.setAlpha), so 51/255/51's 179 never reaches the
+  screen — the ripples run 0..255 on the fade curve."
+  [^V3 target ^double seconds rgb]
+  (vec
+    (keep
+      (fn [^double offset]
+        (let [m (mod (- seconds offset) ripple-cycle-seconds)
+              size (+ ripple-size-from
+                      (* (- ripple-size-to ripple-size-from) (/ m ripple-cycle-seconds)))
+              half (* 0.5 size)
+              x (.-x target)
+              y (+ (.-y target) (* m ripple-rise-per-second))
+              z (.-z target)
+              a (int (* 255.0 (clamp01 (ripple-alpha m))))]
+          (when (pos? a)
+            (assoc
+              (ru/quad-op ripple-texture
+                          (vec3/v3 (- x half) y (- z half))
+                          (vec3/v3 (+ x half) y (- z half))
+                          (vec3/v3 (+ x half) y (+ z half))
+                          (vec3/v3 (- x half) y (+ z half))
+                          (assoc rgb :a a))
+              :no-depth-test? true))))
+      ripple-time-offsets)))
+
 (defn- ring-ops [^V3 target radius color]
   (let [segments 24
         tx (.-x target) tz (.-z target)
@@ -277,10 +328,13 @@
         mark-ops (vec
                    (mapcat (fn [st]
                              (when-let [target (:target st)]
-                               ;; Green, matching original EntityRippleMark's (51,255,51,179).
-                               (ring-ops (vec3/map->v3 target)
-                                         (+ 0.55 (* 0.2 (Math/sin (* 0.15 (double (:hold-ticks st))))))
-                                         {:r 51 :g 255 :b 51 :a 179})))
+                               ;; Green, matching JetEngine's mark.color.set(51, 255, 51, 179).
+                               ;; The port drew a single pulsing line ring here; the original is
+                               ;; EntityRippleMark, three textured ripples expanding out of the
+                               ;; aim point on a 3.6s loop.
+                               (ripple-ops (vec3/map->v3 target)
+                                           (/ (double (or (:hold-ticks st) 0)) 20.0)
+                                           {:r 51 :g 255 :b 51})))
                            marking-states))
         trigger-ops (vec
                       (mapcat (fn [st]
