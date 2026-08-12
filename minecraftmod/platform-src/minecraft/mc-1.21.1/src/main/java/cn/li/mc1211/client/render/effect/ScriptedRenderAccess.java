@@ -33,6 +33,10 @@ final class ScriptedRenderAccess {
         return invokeInt(entity, "getAgeTicks", 0);
     }
 
+    static int getEffectiveLifeTicks(Entity entity, int defaultValue) {
+        return invokeInt(entity, "getEffectiveLifeTicks", defaultValue);
+    }
+
     static String getSyncedBlockId(Entity entity) {
         return invokeString(entity, "getSyncedBlockId", "minecraft:stone");
     }

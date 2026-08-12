@@ -1,5 +1,6 @@
 package cn.li.mc262.client.render.effect;
 
+import cn.li.mc262.entity.ScriptedEffectEntity;
 import cn.li.mcbase.entity.spec.ScriptedEffectSpec;
 import cn.li.mcver.ResourceLocations;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -28,7 +29,13 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
     public void extractRenderState(T entity, ScriptedEntityRenderState<T> state, float partialTick) {
         super.extractRenderState(entity, state, partialTick);
         ScriptedEffectSpec spec = ScriptedRenderAccess.getEffectSpec(entity);
-        state.lifeTicks = spec == null ? 15 : spec.getLifeTicks();
+        // The spec's life is not the life this instance dies at: spawn-time
+        // overrides (ElectronBomb's 20/5-tick ball, ScatterBomb's 240) are
+        // synced on the entity, and curves expressed as a fraction of life
+        // read wrong without them.
+        state.lifeTicks = entity instanceof ScriptedEffectEntity effect
+                ? effect.getEffectiveLifeTicks()
+                : (spec == null ? 15 : spec.getLifeTicks());
         state.activeArcs = ScriptedRenderAccess.getActiveArcs(entity);
     }
 
@@ -151,13 +158,14 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         float coreSize = planFloat(state.rendererId, "core-size-factor", 0.25F);
         float holdAlpha = planFloat(state.rendererId, "alpha-hold", 0.6F);
         float attackSeconds = Math.max(0.01F, planFloat(state.rendererId, "alpha-attack-seconds", 0.3F));
+        float burstSeconds = planFloat(state.rendererId, "alpha-burst-seconds", 0.4F);
+        float blendSeconds = Math.max(0.01F, planFloat(state.rendererId, "alpha-blend-seconds", 0.15F));
 
         float ageTicks = state.ageTicks + state.partialTick;
         float ageSeconds = ageTicks * 0.05F;
-        // getAlpha(): 0 -> 0.6 over the first 0.3s, then held. A scatter-bomb
-        // ball's life is effectively unbounded upstream, so the burst and
-        // fade-out branches never run for it.
-        float alpha = ageSeconds < attackSeconds ? holdAlpha * (ageSeconds / attackSeconds) : holdAlpha;
+        float lifeSeconds = state.lifeTicks * 0.05F;
+        float alpha = mdBallAlpha(ageSeconds, lifeSeconds, holdAlpha, attackSeconds,
+                burstSeconds, blendSeconds);
 
         // updateRenderTick(): the texture is re-rolled on roughly a quarter of
         // frames and alphaWiggle random-walks in [0, 1]. Both are driven off a
@@ -178,6 +186,34 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         }
         submitMdBallQuad(stack, collector, core, coreSize, alpha * (0.8F + 0.2F * wiggle));
         stack.popPose();
+    }
+
+
+    /**
+     * EntityMdBall.getAlpha(), all four branches. The port only had the attack
+     * ramp and the hold, which is all a long-lived ball ever shows -- but
+     * ElectronBomb's ball lives 20 ticks (1.0s) and its improved form 5 ticks
+     * (0.25s), where the rest of the curve is the whole point: the ball flares
+     * from 0.6 to full over the 0.25s before it dies and then drops to nothing
+     * in the last 0.15s.
+     *
+     * The branch order is upstream's and matters. Nothing clamps the burst
+     * ramp, so a ball whose life is shorter than burstTime never reaches the
+     * attack branch at all -- the 5-tick one opens at 0.84 and climbs.
+     */
+    private static float mdBallAlpha(float ageSeconds, float lifeSeconds, float hold,
+                                     float attackSeconds, float burstSeconds, float blendSeconds) {
+        if (ageSeconds > lifeSeconds - blendSeconds) {
+            return Math.max(0.0F, 1.0F - (ageSeconds - (lifeSeconds - blendSeconds)) / blendSeconds);
+        }
+        if (ageSeconds > lifeSeconds - burstSeconds) {
+            float t = (ageSeconds - (lifeSeconds - burstSeconds)) / (burstSeconds - blendSeconds);
+            return hold + (1.0F - hold) * t;
+        }
+        if (ageSeconds < attackSeconds) {
+            return hold * (ageSeconds / attackSeconds);
+        }
+        return hold;
     }
 
     private static int hashNoise(int a, long b) {

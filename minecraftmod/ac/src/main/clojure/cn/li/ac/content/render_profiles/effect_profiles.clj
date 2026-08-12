@@ -128,9 +128,14 @@
                :frame-count 5
                :glow-size-factor 0.35
                :core-size-factor 0.25
-               ;; getAlpha(): 0 -> 0.6 over 0.3s, then held for the ball's life.
+               ;; getAlpha(): 0 -> 0.6 over 0.3s, held, then a flare to full
+               ;; over the 0.25s before death and a drop to nothing in the last
+               ;; 0.15s. Only ElectronBomb's ball (20 ticks, or 5 once trained)
+               ;; lives short enough to show the last two.
                :alpha-hold 0.6
-               :alpha-attack-seconds 0.3}}
+               :alpha-attack-seconds 0.3
+               :alpha-burst-seconds 0.4
+               :alpha-blend-seconds 0.15}}
 
      ;; EntityBloodSplash (flesh-ripping hit splash): 10-frame splash,
      ;; matching the pre-refactor BloodSplashRenderer.

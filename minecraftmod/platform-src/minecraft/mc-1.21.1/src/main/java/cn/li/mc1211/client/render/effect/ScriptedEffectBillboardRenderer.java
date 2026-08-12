@@ -412,16 +412,14 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
         float coreSize = drawPlanParamFloat(rendererId, "core-size-factor", 0.25F);
         float holdAlpha = drawPlanParamFloat(rendererId, "alpha-hold", 0.6F);
         float attackSeconds = Math.max(0.01F, drawPlanParamFloat(rendererId, "alpha-attack-seconds", 0.3F));
+        float burstSeconds = drawPlanParamFloat(rendererId, "alpha-burst-seconds", 0.4F);
+        float blendSeconds = Math.max(0.01F, drawPlanParamFloat(rendererId, "alpha-blend-seconds", 0.15F));
 
         float ageTicks = ScriptedRenderAccess.getAgeTicks(entity) + partialTick;
         float ageSeconds = ageTicks * 0.05F;
-
-        // getAlpha(): 0 -> 0.6 over the first 0.3s, then held. A scatter-bomb
-        // ball's life is effectively unbounded upstream, so the burst and
-        // fade-out branches never run for it.
-        float alpha = ageSeconds < attackSeconds
-                ? holdAlpha * (ageSeconds / attackSeconds)
-                : holdAlpha;
+        float lifeSeconds = ScriptedRenderAccess.getEffectiveLifeTicks(entity, 50) * 0.05F;
+        float alpha = mdBallAlpha(ageSeconds, lifeSeconds, holdAlpha, attackSeconds,
+                burstSeconds, blendSeconds);
 
         // updateRenderTick(): the texture is re-rolled on roughly a quarter of
         // frames and alphaWiggle random-walks in [0, 1]. Both are driven off a
@@ -454,6 +452,35 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity> extends Ent
                 alpha * (0.8F + 0.2F * wiggle));
 
         poseStack.popPose();
+    }
+
+
+    /**
+     * EntityMdBall.getAlpha(), all four branches. The port only had the attack
+     * ramp and the hold, which is all a long-lived ball ever shows -- but
+     * ElectronBomb's ball lives 20 ticks (1.0s) and its improved form 5 ticks
+     * (0.25s), where the rest of the curve is the whole point: the ball flares
+     * from 0.6 to full over the 0.25s before it dies and then drops to nothing
+     * in the last 0.15s.
+     *
+     * The branch order is upstream's and matters. Nothing clamps the burst
+     * ramp, so a ball whose life is shorter than burstTime never reaches the
+     * attack branch at all -- the 5-tick one opens at 0.84 and climbs from
+     * there, which is exactly what makes it read as an instant pop.
+     */
+    private static float mdBallAlpha(float ageSeconds, float lifeSeconds, float hold,
+                                     float attackSeconds, float burstSeconds, float blendSeconds) {
+        if (ageSeconds > lifeSeconds - blendSeconds) {
+            return Math.max(0.0F, 1.0F - (ageSeconds - (lifeSeconds - blendSeconds)) / blendSeconds);
+        }
+        if (ageSeconds > lifeSeconds - burstSeconds) {
+            float t = (ageSeconds - (lifeSeconds - burstSeconds)) / (burstSeconds - blendSeconds);
+            return hold + (1.0F - hold) * t;
+        }
+        if (ageSeconds < attackSeconds) {
+            return hold * (ageSeconds / attackSeconds);
+        }
+        return hold;
     }
 
     private static int hashNoise(int a, long b) {

@@ -288,6 +288,22 @@ public class ScriptedEffectEntity extends Entity implements IScriptedEffectEntit
         return age;
     }
 
+    /**
+     * The life this instance will actually die at: the synced spawn-time
+     * override when one was set, otherwise the spec's. Renderers whose curves
+     * are expressed as a fraction of life (EntityMdBall.getAlpha) need this,
+     * and reading the spec alone would give them the wrong answer for every
+     * entity spawned with an override.
+     */
+    public int getEffectiveLifeTicks() {
+        int syncedOverride = this.entityData.get(DATA_LIFE_TICKS_OVERRIDE);
+        if (syncedOverride > 0) {
+            return syncedOverride;
+        }
+        ScriptedEffectSpec spec = getEffectSpec();
+        return spec == null ? 15 : spec.getLifeTicks();
+    }
+
     public List<ArcData> getActiveArcs() {
         return Collections.unmodifiableList(activeArcs);
     }
