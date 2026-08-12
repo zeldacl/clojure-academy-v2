@@ -40,8 +40,6 @@
 
                         [cn.li.ac.ability.service.skill-effects :as skill-effects]
 
-            [cn.li.ac.util.math.vec3 :as vec3]
-
                         [cn.li.mcmod.platform.entity :as entity]
 
             [cn.li.mcmod.platform.position :as pos]
@@ -55,6 +53,7 @@
             [cn.li.mcmod.util.log :as log]
 
             [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]
+            [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as dest]
             [cn.li.ac.content.ability.teleporter.release-cast-base :as release-cast]))
 
 
@@ -75,7 +74,7 @@
 
 (defn- cp-per-block [exp]
 
-  (cfg-lerp :cost.up.cp-per-block exp))
+  (dest/cp-per-block exp))
 
 
 
@@ -93,17 +92,7 @@
 
 (defn- max-distance [exp cp ticks]
 
-  (let [max-range (cfg-lerp :targeting.range exp)
-
-        cp-limit (if (pos? (cp-per-block exp))
-                   (/ (double cp) (cp-per-block exp))
-                   max-range)]
-
-    (min (* (cfg-double :targeting.range-per-hold-tick)
-
-            (inc (long ticks)))
-
-         (min max-range cp-limit))))
+  (dest/max-distance exp cp ticks))
 
 
 
@@ -156,60 +145,7 @@
 
   [player hit]
 
-  (let [hit-x (double (or (:hit-x hit) (:x hit) 0.0))
-
-        hit-y (double (or (:hit-y hit) (:y hit) 0.0))
-
-        hit-z (double (or (:hit-z hit) (:z hit) 0.0))
-
-        block-y (double (or (:y hit) 0.0))]
-
-    (if (= (:hit-type hit) :entity)
-
-      ;; Upstream getDest: LambdaLib's entity raycast builds the result via
-      ;; new RayTraceResult(entity) — hitVec is the entity's FEET position,
-      ;; not the intersection — so dest = entity pos + eye height.
-      {:target-x (double (or (:x hit) hit-x))
-
-       :target-y (+ (double (or (:y hit) hit-y))
-
-                    (double (or (:eye-height hit) 1.6)))
-
-       :target-z (double (or (:z hit) hit-z))}
-
-      (let [face (:face hit)
-
-            resolved (case face
-
-                       :down {:target-x hit-x :target-y (- hit-y 1.0) :target-z hit-z}
-
-                       :up {:target-x hit-x :target-y (+ hit-y 1.8) :target-z hit-z}
-
-                       :north {:target-x hit-x :target-y (+ block-y 1.7) :target-z (- hit-z 0.6)}
-
-                       :south {:target-x hit-x :target-y (+ block-y 1.7) :target-z (+ hit-z 0.6)}
-
-                       :west {:target-x (- hit-x 0.6) :target-y (+ block-y 1.7) :target-z hit-z}
-
-                       :east {:target-x (+ hit-x 0.6) :target-y (+ block-y 1.7) :target-z hit-z}
-
-                       {:target-x hit-x :target-y hit-y :target-z hit-z})
-
-            resolved (if (and (#{:north :south :west :east} face)
-
-                              (destination-head-blocked? player
-
-                                                         (:target-x resolved)
-
-                                                         (:target-y resolved)
-
-                                                         (:target-z resolved)))
-
-                       (update resolved :target-y - 1.25)
-
-                       resolved)]
-
-        resolved))))
+  (dest/hit-destination hit (partial destination-head-blocked? player)))
 
 
 
@@ -242,21 +178,15 @@
             hit (when (raycast/available?)
                   (raycast/raycast-combined-from-player player-id dist true))
 
-            dest (if hit
+            resolved (if hit
 
-                   (resolve-hit-destination player hit)
+                       (resolve-hit-destination player hit)
 
-                   {:target-x (+ (double x) (* (double (:x look-vec)) dist))
+                       (dest/miss-destination x start-y z look-vec dist))
 
-                    :target-y (+ start-y (* (double (:y look-vec)) dist))
+            distance (dest/distance-from x y z resolved)]
 
-                    :target-z (+ (double z) (* (double (:z look-vec)) dist))})
-
-            distance (vec3/euclidean-distance (double x) (double y) (double z)
-
-                                              (:target-x dest) (:target-y dest) (:target-z dest))]
-
-        (merge dest
+        (merge resolved
 
                {:world-id world-id
 
