@@ -125,6 +125,29 @@
               world-id (- ex r) (- ey r) (- ez r)
               (+ ex r) (+ ey r) (+ ez r))))))
 
+(defn- looking-pos
+  "Raytrace.getLookingPos(player, dist), which is what ElectronBomb's getDest
+  is. Three things the port had wrong by projecting a flat 15 blocks from the
+  eye: the trace STOPS at whatever it hits, an entity hit is raised by
+  0.6 * its eye height, and the nothing-hit fallback starts at the player's
+  FEET rather than their eye."
+  [world-id player-id dir dist]
+  (let [eye (geom/eye-pos player-id)
+        hit (raycast/raycast-combined-excluding
+              world-id
+              (double (:x eye)) (double (:y eye)) (double (:z eye))
+              (double (:x dir)) (double (:y dir)) (double (:z dir))
+              (double dist)
+              (str player-id))]
+    (if (:hit-type hit)
+      {:x (double (:hit-x hit))
+       :y (+ (double (:hit-y hit))
+             (if (= "entity" (:hit-type hit))
+               (* 0.6 (double (or (:eye-height hit) 0.0)))
+               0.0))
+       :z (double (:hit-z hit))}
+      (geom/v+ (geom/body-pos player-id) (geom/v* dir dist)))))
+
 (defn- run-electron-bomb-beam!
   "Matches original's callback: getDest(player)/eye are re-evaluated fresh at
   settle time (not the values captured when the skill was cast), so the
@@ -142,10 +165,17 @@
             (let [dir (geom/vnorm {:x (double (or (:x look-vec) 0.0))
                                  :y (double (or (:y look-vec) 0.0))
                                  :z (double (or (:z look-vec) 0.0))})
-                dest (geom/v+ eye (geom/v* dir electron-bomb-ray-distance))
+                dest (looking-pos world-id player-id dir electron-bomb-ray-distance)
                 shot-dir (geom/vnorm (geom/v- dest origin))
                 shot-dist (geom/vdist origin dest)
-                hit (raycast/raycast-entities
+                ;; Raytrace.perform(world, ballEyes, dest,
+                ;; exclude(player).and(not MdBall)) traces BLOCKS as well, so a
+                ;; wall between the ball and the aim point stops the shot.
+                ;; Tracing entities alone let it hit clean through terrain, and
+                ;; without the exclusion it could also pick the caster off the
+                ;; ball's own orbit. (Effect entities are not pickable, which
+                ;; covers the "not MdBall" half.)
+                hit (raycast/raycast-combined-excluding
                                               world-id
                                               (double (:x origin))
                                               (double (:y origin))
@@ -153,9 +183,10 @@
                                               (double (:x shot-dir))
                                               (double (:y shot-dir))
                                               (double (:z shot-dir))
-                                              shot-dist)
+                                              shot-dist
+                                              (str player-id))
                 end-pos dest
-                target-uuid (:uuid hit)
+                target-uuid (when (= "entity" (:hit-type hit)) (:uuid hit))
                 damage-amt (double (or damage 0.0))
                 payload {:mode :perform
                          :start origin

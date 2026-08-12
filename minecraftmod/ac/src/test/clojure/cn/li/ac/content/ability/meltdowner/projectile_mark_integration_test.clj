@@ -136,13 +136,21 @@
                   ;; settle time re-reads world-id/eye live, per upstream
                   geom/world-id-of (fn [_] "w")
                   geom/eye-pos (fn [_] {:x 0.0 :y 64.0 :z 0.0})
+                  geom/body-pos (fn [_] {:x 0.0 :y 62.38 :z 0.0})
                   raycast/available? (constantly true)
                   raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
-                  raycast/raycast-entities (fn [& _]
-                                              {:uuid victim :x 0.0 :y 64.0 :z 8.0 :distance 8.0})
+                  raycast/raycast-combined-excluding
+                  (fn [_world sx sy sz & _]
+                    (when-not (= [sx sy sz] [0.0 64.0 0.0])
+                      {:hit-type "entity" :uuid victim
+                       :x 0.0 :y 64.0 :z 8.0
+                       :hit-x 0.0 :hit-y 64.0 :hit-z 8.0
+                       :distance 8.0}))
                   world-effects/available? (constantly true)
                   world-effects/find-entities-in-aabb
-                  (fn [& _] [{:uuid "ball-eb" :x 0.0 :y 64.0 :z 0.0}])
+                  ;; The ball orbits the caster, so its position is its own --
+                  ;; which is also what tells the two traces apart here.
+                  (fn [& _] [{:uuid "ball-eb" :x 0.9 :y 63.0 :z 0.3}])
                   entity-damage/available? (constantly true)
                   entity-damage/apply-direct-damage! (fn [& _] true)
                   entity-damage/apply-aoe-damage! (fn [& _] [])

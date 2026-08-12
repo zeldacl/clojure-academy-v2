@@ -39,15 +39,25 @@
                     world-effects/available? (constantly true)
                     geom/world-id-of (fn [_] "w")
                     geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                    geom/body-pos (fn [_] {:x 1.0 :y 62.38 :z 2.0})
                     raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                     world-effects/find-entities-in-aabb
                     (fn [& _] [{:uuid "ball-9" :x 1.5 :y 63.0 :z 2.2}])
-                    raycast/raycast-entities (fn [& _]
-                                               {:uuid "target-1"
-                                                :x 4.0
-                                                :y 65.0
-                                                :z 6.0
-                                                :distance 9.0})
+                    ;; Two traces now: getDest's from the eye (misses here, so
+                    ;; the destination falls back to the FEET plus look * 15),
+                    ;; then the damage trace from the ball.
+                    raycast/raycast-combined-excluding
+                    (fn [_world sx sy sz & _]
+                      (when-not (= [sx sy sz] [1.0 64.0 2.0])
+                        {:hit-type "entity"
+                         :uuid "target-1"
+                         :x 4.0
+                         :y 65.0
+                         :z 6.0
+                         :hit-x 4.0
+                         :hit-y 65.0
+                         :hit-z 6.0
+                         :distance 9.0}))
                     entity-damage/apply-direct-damage! (fn [& args]
                                                         (swap! calls conj [:damage (vec args)])
                                                         true)
@@ -80,7 +90,7 @@
                       :electron-bomb/fx-beam
                       {:mode :perform
                        :start {:x 1.5 :y 63.0 :z 2.2}
-                       :end {:x 1.0 :y 64.0 :z 17.0}
+                       :end {:x 1.0 :y 62.38 :z 17.0}
                        :hit-distance 15.0
                        :performed? true
                      :target-uuid "target-1"}]]
@@ -89,7 +99,7 @@
                        :electron-bomb/fx-beam
                        {:mode :perform
                         :start {:x 1.5 :y 63.0 :z 2.2}
-                        :end {:x 1.0 :y 64.0 :z 17.0}
+                        :end {:x 1.0 :y 62.38 :z 17.0}
                         :hit-distance 15.0
                         :performed? true
                         :target-uuid "target-1"}]]]
@@ -105,13 +115,17 @@
                     world-effects/available? (constantly true)
                     geom/world-id-of (fn [_] "w")
                     geom/eye-pos (fn [_] {:x 1.0 :y 64.0 :z 2.0})
+                    geom/body-pos (fn [_] {:x 1.0 :y 62.38 :z 2.0})
                     raycast/player-look-vector (fn [_] {:x 0.0 :y 0.0 :z 1.0})
                     world-effects/find-entities-in-aabb
                     (fn [& _] [{:uuid "ball-9" :x 1.5 :y 63.0 :z 2.2}])
-                    raycast/raycast-entities
+                    raycast/raycast-combined-excluding
                     (fn [& args]
-                      (reset! raycast-args* args)
-                      {:uuid "target-1" :x 4.0 :y 65.0 :z 6.0})
+                      (when-not (= (vec (take 4 args)) ["w" 1.0 64.0 2.0])
+                        (reset! raycast-args* args)
+                        {:hit-type "entity" :uuid "target-1"
+                         :x 4.0 :y 65.0 :z 6.0
+                         :hit-x 4.0 :hit-y 65.0 :hit-z 6.0}))
                     entity-damage/apply-direct-damage! (fn [& args]
                                                          (swap! calls conj [:damage (vec args)])
                                                          true)
@@ -139,7 +153,7 @@
                       :electron-bomb/fx-beam
                       {:mode :perform
                        :start {:x 1.5 :y 63.0 :z 2.2}
-                       :end {:x 1.0 :y 64.0 :z 17.0}
+                       :end {:x 1.0 :y 62.38 :z 17.0}
                        :hit-distance 15.0
                        :performed? true
                        :target-uuid "target-1"}]]
@@ -148,7 +162,7 @@
                              :electron-bomb/fx-beam
                              {:mode :perform
                               :start {:x 1.5 :y 63.0 :z 2.2}
-                              :end {:x 1.0 :y 64.0 :z 17.0}
+                              :end {:x 1.0 :y 62.38 :z 17.0}
                               :hit-distance 15.0
                               :performed? true
                               :target-uuid "target-1"}]]]
