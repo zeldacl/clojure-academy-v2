@@ -12,4 +12,6 @@
 		(pdsl/defparticle {:id "teleport_ripple"})
 		(pdsl/defparticle {:id "melt_glow"})
 		(pdsl/defparticle {:id "silbarn_frag"})
+		(pdsl/defparticle {:id "md_particle"})
+		(pdsl/defparticle {:id "md_particle_luck"})
 		(log/info "Particle content initialized"))))

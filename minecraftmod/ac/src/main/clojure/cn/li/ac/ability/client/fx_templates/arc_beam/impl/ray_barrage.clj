@@ -152,5 +152,10 @@
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :ray-barrage
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store owner-key]
-  (update store :beam-queue dissoc owner-key))
+(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store _owner-key]
+  ;; The rays are one-shot world visuals (upstream EntityBarrageRayPre /
+  ;; EntityMdRayBarrage carry their own lives). The :instant context ends on
+  ;; the same tick as perform, so MSG-CTX-TERMINATED reaches
+  ;; clear-effect-owner! immediately — clearing the queue here deleted every
+  ;; ray a frame after it appeared. They expire on their own ttl instead.
+  store)

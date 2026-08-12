@@ -1,5 +1,6 @@
 (ns cn.li.ac.content.ability.vecmanip.vec-reflection-fx
-  "Client FX for VecReflection: double ring + reflection wave billboards."
+  "Client FX for VecReflection: reflection wave billboards (upstream
+  WaveEffect) at the affected entities."
   (:require
             [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -106,36 +107,6 @@
             st))
         (vals effect-state)))
 
-(defn- double-ring-ops
-  "`center` crosses in as a map (dissoc'd hand-center-pos) — convert once."
-  [center ticks]
-  (let [^V3 c (vec3/map->v3 center)
-        cx (.-x c) cz (.-z c)
-        base-angle (* 0.15 (double ticks))
-        outer-r (+ 0.9 (* 0.06 (Math/sin (* 0.2 (double ticks)))))
-        inner-r (* outer-r 0.55)
-        y-outer (+ (.-y c) 0.2)
-        y-inner (+ (.-y c) 0.35)
-        segments 28
-        outer-color {:r 255 :g 210 :b 180 :a 160}
-        inner-color {:r 255 :g 180 :b 140 :a 130}]
-    (vec
-      (concat
-        (for [i (range segments)
-              :let [a0 (+ base-angle (/ (* 2.0 Math/PI i) segments))
-                    a1 (+ base-angle (/ (* 2.0 Math/PI (inc i)) segments))]]
-          (ru/line-op
-            (vec3/v3 (+ cx (* outer-r (Math/cos a0))) y-outer (+ cz (* outer-r (Math/sin a0))))
-            (vec3/v3 (+ cx (* outer-r (Math/cos a1))) y-outer (+ cz (* outer-r (Math/sin a1))))
-            outer-color))
-        (for [i (range segments)
-              :let [a0 (- (- base-angle) (/ (* 2.0 Math/PI i) segments))
-                    a1 (- (- base-angle) (/ (* 2.0 Math/PI (inc i)) segments))]]
-          (ru/line-op
-            (vec3/v3 (+ cx (* inner-r (Math/cos a0))) y-inner (+ cz (* inner-r (Math/sin a0))))
-            (vec3/v3 (+ cx (* inner-r (Math/cos a1))) y-inner (+ cz (* inner-r (Math/sin a1))))
-            inner-color))))))
-
 (defn- wave-ops
   "`cam-pos` crosses in as a map (from the shared level-effect-plan context);
   x/y/z here are raw doubles stored in the in-memory wave-effects record —
@@ -163,13 +134,9 @@
   (let [{:keys [effect-state wave-effects]} (vec-reflection-fx-snapshot)
         vr (matching-active-state effect-state hand-center-pos)
         current-waves (mapcat val wave-effects)
-        ring-plan (if (and hand-center-pos vr (:active? vr))
-                    (double-ring-ops (dissoc hand-center-pos :player-uuid)
-                                     (long (or (:ticks vr) 0)))
-                    [])
         wave-plan (mapcat #(wave-ops camera-pos %) current-waves)]
-    (when (or (seq ring-plan) (seq wave-plan))
-      {:ops (vec (concat ring-plan wave-plan))})))
+    (when (seq wave-plan)
+      {:ops (vec wave-plan)})))
 
 (defn init!
   []

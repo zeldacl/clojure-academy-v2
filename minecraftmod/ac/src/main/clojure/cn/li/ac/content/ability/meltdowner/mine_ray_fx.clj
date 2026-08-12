@@ -173,6 +173,14 @@
         (update store* :effect-state dissoc owner-key*))
       store*)))
 
+(defn- md-particle-type
+  "Upstream MdParticleFactory sprite: the luck variant uses the golden
+  md_particle_luck texture, basic/expert the standard md_particle."
+  [variant]
+  (if (= :luck (or variant :basic))
+    (modid/namespaced-path "md_particle_luck")
+    (modid/namespaced-path "md_particle")))
+
 (defn- tick-state!
   [store]
   (let [store* (or store (default-mine-ray-fx-runtime-state))]
@@ -186,7 +194,8 @@
                           ;; tick (2-3 particles per tick at the block).
                           (when-let [target (:target st)]
                             (client-particles/queue-particle-effect! (:queue-owner st)
-                              {:type :particle :particle-type :electric-spark
+                              {:type :particle
+                               :particle-type (md-particle-type (:variant st))
                                :x (+ (double (:x target)) 0.5)
                                :y (+ (double (:y target)) 0.5)
                                :z (+ (double (:z target)) 0.5)

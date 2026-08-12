@@ -240,17 +240,20 @@
                                                                             :skill-view-outline))
                                                       :texture-1 (tex-src :skill-mask)}}} layer)))
       ;; Title: learned → name; unlearned → "name (LV n)".
-      (ctext (+ cy 28.0) 260 12.0 0xFFFFFFFF
+      ;; Upstream anchors all popup text in a 10px-tall textArea centred at
+      ;; pos(0,25): its top lands at cy+20 (=(187-10)/2+25), so draw y values
+      ;; land at cy+23/35/44/45/47/48/60 and the LEARN button top at cy+72.
+      (ctext (+ cy 23.0) 260 12.0 0xFFFFFFFF
              (if learned (str skill-name) (str skill-name " (LV " skill-level ")")))
       (if learned
         (do
-          (ctext (+ cy 40.0) 220 8.0 0xFFa1e1ff
+          (ctext (+ cy 35.0) 220 8.0 0xFFa1e1ff
                  (str (i18n/translate (st-key "skill_exp")) " " (int (* 100.0 (or exp 0.0))) "%"))
           (when skill-description
             (doseq [[i line] (map-indexed vector (wrap-text skill-description 200.0 9.0 42))]
-              (ctext (+ cy 49.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
+              (ctext (+ cy 44.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))
         (do
-          (ctext (+ cy 40.0) 240 10.0 0xFFff5555 (i18n/translate (st-key "skill_not_learned")))
+          (ctext (+ cy 35.0) 240 10.0 0xFFff5555 (i18n/translate (st-key "skill_not_learned")))
           ;; Requirement icons (upstream: "Req." label + condition icons, greyed
           ;; when not accepted). Centred row of 14px icons stepped by 16px.
           (let [conds (:conditions node)
@@ -258,13 +261,13 @@
                 step 16.0 isz 14.0
                 left (- cx (/ (* step (double n)) 2.0))]
             (when (pos? n)
-              (rt/build-child! rt {:kind :text :props {:x (- left 42.0) :y (+ cy 53.0) :w 40.0 :h 12.0
+              (rt/build-child! rt {:kind :text :props {:x (- left 42.0) :y (+ cy 48.0) :w 40.0 :h 12.0
                                                        :text (i18n/translate (st-key "req"))
                                                        :font-size 9.0 :color 0xFFAAAAAA :align "right"}} layer)
               (doseq [[i c] (map-indexed vector conds)]
                 (when-let [info (condition-icons/condition-display-info c)]
                   (rt/build-child! rt {:kind :image
-                                       :props {:x (+ left (* step (double i))) :y (+ cy 50.0) :w isz :h isz
+                                       :props {:x (+ left (* step (double i))) :y (+ cy 45.0) :w isz :h isz
                                                :src (icon-src (:icon-path info))
                                                :tint (if (:accepted c) 0xFFFFFFFF 0xFF555555)}} layer)))
               ;; Hovered condition's hint, upstream:
@@ -275,7 +278,7 @@
                   (when-let [info (condition-icons/condition-display-info c)]
                     (rt/build-child! rt
                       {:kind :text
-                       :props {:x (+ left (* step (double n)) 3.0) :y (+ cy 52.0)
+                       :props {:x (+ left (* step (double n)) 3.0) :y (+ cy 47.0)
                                :w 150.0 :h 12.0
                                :text (str "(" (:hint-text info) ")")
                                :font-size 9.0 :align "left"
@@ -284,9 +287,9 @@
           ;; Viewer (SkillTreeAppUI, developer == null): conditions still show,
           ;; but there is no device to learn with — no prompt, no LEARN button.
           (when (and message (not (:viewer? node)))
-            (ctext (+ cy 65.0) 280 10.0 0xFFCCCCCC message))
+            (ctext (+ cy 60.0) 280 10.0 0xFFCCCCCC message))
           (when-not (or developing? (:viewer? node))
-            (let [btn-x (- cx 16.0) btn-y (+ cy 80.0)]
+            (let [btn-x (- cx 16.0) btn-y (+ cy 72.0)]
               (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                         :src (tex-src :tex-button)}} layer)
               (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))))
@@ -328,16 +331,16 @@
                                                                         :skill-view-outline-glow
                                                                         :skill-view-outline))
                                                   :texture-1 (tex-src :skill-mask)}}} layer)
-      (ctext (+ cy 28.0) 220 12.0 0xFFFFFFFF
+      (ctext (+ cy 23.0) 220 12.0 0xFFFFFFFF
              (i18n/translate (st-key "uplevel") (str "Lv." target-level)))
       ;; Upstream: Font.draw(local.get("req") + " %.0f".format(estmCons), 0, 16)
       ;; -- the energy this level-up will cost. It was missing entirely.
       (when est-consumption
-        (ctext (+ cy 41.0) 260 9.0 0xFFAAAAAA
+        (ctext (+ cy 36.0) 260 9.0 0xFFAAAAAA
                (str (i18n/translate (st-key "req")) " " (long est-consumption))))
-      (when hint (ctext (+ cy 51.0) 260 9.0 0xFFAAAAAA hint))
+      (when hint (ctext (+ cy 46.0) 260 9.0 0xFFAAAAAA hint))
       (when (and (not developing?) (nil? result))
-        (let [btn-x (- cx 16.0) btn-y (+ cy 65.0)]
+        (let [btn-x (- cx 16.0) btn-y (+ cy 57.0)]
           (rt/build-child! rt {:kind :image :props {:x btn-x :y btn-y :w 32.0 :h 16.0
                                                     :src (tex-src :tex-button)}} layer)
           (ctext (+ btn-y 4.0) 32 9.0 0xFF101010 "LEARN"))))))

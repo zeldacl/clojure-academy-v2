@@ -491,6 +491,20 @@
                      (let [dt (max 0.001 (/ (- (double ms) (aget last-ms 0)) 1000.0))]
                        (aset last-ms 0 (double ms))
                        (let [st (swap! state-a tick-console-state dt)]
+                         ;; Upstream Console re-grabs focus every frame
+                         ;; (SkillTree.scala FrameEvent → widget.gainFocus()) —
+                         ;; a click on any handler-less node clears focus
+                         ;; (dispatch-mouse-press! → gain-focus! -1), and with
+                         ;; focus gone dispatch-key!/dispatch-char! route nowhere,
+                         ;; so typing dies. Restore it here. But only while no
+                         ;; cover overlay is open — the popup's ESC handling
+                         ;; lives on :dev-cover's focus (popup-click-region!),
+                         ;; and :cover-alpha-target is set by begin-cover! and
+                         ;; cleared when the cover fully closes (upstream's
+                         ;; equivalent: `link_page == null`).
+                         (when (and (nil? (rt/user-signal rt :cover-alpha-target))
+                                    (not= (.getIdx root) (rt/focus-idx rt)))
+                           (events/gain-focus! rt (.getIdx root)))
                          (render-console! rt line-nodes st)))
                      nil))]
     ;; ComputedO stored bare via put-user-signal! is never pulled (lazy-pull,

@@ -1,19 +1,9 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.vec-deviation
   (:require [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
-            [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
-            [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.runtime :as client-runtime]
-            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [clojure.string :as str]
             [cn.li.ac.ability.client.fx-templates.arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
@@ -82,30 +72,6 @@
             st))
         (vals effect-state)))
 
-(defn- ring-ops
-  "`center` crosses in as a map (dissoc'd hand-center-pos) — convert once."
-  [center ticks]
-  (let [^V3 c (vec3/map->v3 center)
-        cx (.-x c) cz (.-z c)
-        radius (+ 0.7 (* 0.08 (Math/sin (* 0.19 (double ticks)))))
-        y (+ (.-y c) 0.25)
-        segments 28
-        color {:r 210 :g 240 :b 255 :a 170}
-        spoke-color {:r 170 :g 210 :b 245 :a 120}
-        spoke-step (/ segments 4)]
-    (vec
-      (mapcat
-        (fn [idx]
-          (let [a0 (/ (* 2.0 Math/PI idx) segments)
-                a1 (/ (* 2.0 Math/PI (inc idx)) segments)
-                p0 (vec3/v3 (+ cx (* radius (Math/cos a0))) y (+ cz (* radius (Math/sin a0))))
-                p1 (vec3/v3 (+ cx (* radius (Math/cos a1))) y (+ cz (* radius (Math/sin a1))))
-                ring-op (ru/line-op p0 p1 color)
-                spoke-op (when (zero? (mod idx spoke-step))
-                           (ru/line-op c p0 spoke-color))]
-            (if spoke-op [ring-op spoke-op] [ring-op])))
-        (range segments)))))
-
 (defn- wave-ops
   "`cam-pos` crosses in as a map (shared level-effect-plan context)."
   [cam-pos {:keys [x y z ttl max-ttl]}]
@@ -131,13 +97,9 @@
   (let [{:keys [effect-state wave-effects]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-deviation)
         vd (matching-active-state effect-state hand-center-pos)
         current-waves (mapcat val wave-effects)
-        ring-plan (if (and hand-center-pos vd (:active? vd))
-                    (ring-ops (dissoc hand-center-pos :player-uuid)
-                              (long (or (:ticks vd) 0)))
-                    [])
         wave-plan (mapcat #(wave-ops camera-pos %) current-waves)]
-    (when (or (seq ring-plan) (seq wave-plan))
-      {:ops (vec (concat ring-plan wave-plan))})))
+    (when (seq wave-plan)
+      {:ops (vec wave-plan)})))
 
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:vec-deviation :level] [_ _] {:effect-state {} :wave-effects {}})
 (defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:vec-deviation :level]

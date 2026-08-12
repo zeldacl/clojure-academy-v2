@@ -119,7 +119,11 @@
     (when (>= focus-idx 0)
       (when-let [handlers (rt/get-event-handlers rt focus-idx :change-content)]
         (when-let [^INode node (rt/node-by-idx rt focus-idx)]
-          (let [evt {:char (.toString (Character/toChars (int code-point)))
+          ;; char[] does not override toString — calling it yields the
+          ;; identity string ("[C@<hash>"), so every codepoint arrived as
+          ;; (first ...) = \[ in consumers. Build a real String instead.
+          (let [^"[C" chars (Character/toChars (int code-point))
+                evt {:char (String. chars)
                      :code-point (int code-point) :node-idx focus-idx}]
             (invoke-handlers! :change-content handlers rt node evt)))))))
 
