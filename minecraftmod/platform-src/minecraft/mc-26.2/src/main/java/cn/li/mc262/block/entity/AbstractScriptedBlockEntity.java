@@ -91,7 +91,8 @@ public abstract class AbstractScriptedBlockEntity extends BlockEntity implements
             Packet<?> pkt = getUpdatePacket();
             if (pkt != null && level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
                 serverLevel.getChunkSource().chunkMap
-                        .getPlayers(new net.minecraft.world.level.ChunkPos(worldPosition), false)
+                        .getPlayers(new net.minecraft.world.level.ChunkPos(
+                                worldPosition.getX() >> 4, worldPosition.getZ() >> 4), false)
                         .forEach(p -> p.connection.send(pkt));
             }
         }
