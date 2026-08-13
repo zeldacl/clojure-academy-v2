@@ -147,9 +147,10 @@
           "without a coercion the codec is nil and the field never syncs")
       (is (seq (:gui-data-slot-status-codes completeness))
           "completeness needs a string-status codec to ride the DataSlot")
-      (is (contains? (set (:gui-data-slot-status-codes completeness))
-                     "COMPLETE")
-          "the codes must cover logic.clj's completeness->status outputs")
+      (is (= (set ["base-only" "no-top" "complete" "complete-not-working"])
+             (set (:gui-data-slot-status-codes completeness)))
+          "codes must be the lower-case hyphenated values base-tick-state
+          stores ((name comp)), and cover every scan outcome")
       (is (not (contains? completeness :gui-data-slot?))
           "an explicit :gui-data-slot? false permanently excludes the field")
       (is (= str (:gui-coerce status)))

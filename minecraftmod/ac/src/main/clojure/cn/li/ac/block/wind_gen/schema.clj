@@ -119,10 +119,11 @@
     :gui-sync? true
     ;; The base GUI structure icons read this field: it must ride the vanilla
     ;; DataSlot path (gui-data-slot? false + no codec left the client at the
-    ;; default "BASE_ONLY" forever). Codes must cover every completeness->status
-    ;; output of logic.clj.
+    ;; default "BASE_ONLY" forever). Codes must match the values base-tick-state
+    ;; actually stores — (name completeness-kw), lower-case with hyphens
+    ;; ("complete"/"no-top"/"base-only") — not the upper-case status strings.
     :gui-coerce str
-    :gui-data-slot-status-codes ["BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"]}
+    :gui-data-slot-status-codes ["base-only" "no-top" "complete" "complete-not-working"]}
 
    {:key :status
     :nbt-key "Status"
