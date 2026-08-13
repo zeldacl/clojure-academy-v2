@@ -83,7 +83,11 @@
         (is (seq (:ops plan))))
       (enqueue! enqueue-state! "ctx-sb" :scatter-bomb/fx-end {:mode :end :source-player-id "player-a"})
       (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-sb"]])))
-      (is (nil? (get-in (sb-fx/scatter-bomb-fx-snapshot) [:beams [:ctx "ctx-sb"]])))
+      ;; The release beams arrive AFTER :end (the server schedules them one
+      ;; tick out of the delayed-projectiles queue), so :end must not wipe
+      ;; them — wiping raced their arrival and deleted every ray the moment
+      ;; it appeared.
+      (is (= 1 (count (get-in (sb-fx/scatter-bomb-fx-snapshot) [:beams [:ctx "ctx-sb"]]))))
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
@@ -186,10 +190,15 @@
 (deftest ray-leaves-a-particle-trail-test
   ;; EntityMdRaySmall.onUpdate spawns one MdParticle per tick at a random point
   ;; 0-10 blocks along the ray; the port only puffed sparks at the endpoint.
-  (let [particles* (atom [])]
-    (with-redefs [client-particles/queue-current-particle-effect! (fn [& args]
-                                                                    (swap! particles* conj (first args))
-                                                                    nil)
+  ;; The trail queues via the owner captured at :beam enqueue (the tick path
+  ;; has no owner binding), so it lands in queue-particle-effect!, not the
+  ;; current-owner queue.
+  (let [particles* (atom [])
+        owners* (atom [])]
+    (with-redefs [client-particles/queue-particle-effect! (fn [owner particle-cmd]
+                                                            (swap! particles* conj particle-cmd)
+                                                            (swap! owners* conj owner)
+                                                            nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]
       (fire-ray! "ctx-trail")
       (reset! particles* [])
@@ -198,4 +207,6 @@
         (is (= 5 (count motes)) "one per tick while the ray lives")
         (is (every? (fn [p] (<= 0.0 (:x p) 10.0)) motes)
             "spread along the ray, not piled on the endpoint")
-        (is (> (count (distinct (map :x motes))) 1))))))
+        (is (> (count (distinct (map :x motes))) 1))
+        (is (every? #(some? (:client-session-id %)) @owners*)
+            "queued under the owner captured at enqueue, not the unbound tick path")))))

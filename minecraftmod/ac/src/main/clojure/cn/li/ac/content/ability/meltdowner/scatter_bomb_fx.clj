@@ -101,7 +101,13 @@
                                  ;; Original EntityMdRaySmall: life 14 ticks.
                                  :ttl ray-life-ticks
                                  :max-ttl ray-life-ticks
-                                 :wiggle-seed (* 2.0 Math/PI (rand))})
+                                 :wiggle-seed (* 2.0 Math/PI (rand))
+                                 ;; The tick path (emit-ray-trail!) runs
+                                 ;; without an effect-owner binding, so the
+                                 ;; trail cannot use the current-owner queue —
+                                 ;; capture the owner here, where the channel
+                                 ;; push binding exists.
+                                 :queue-owner (client-particles/current-effect-owner)})
                      store*)]
         (when (and start end)
           ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, at the ray.
@@ -116,23 +122,32 @@
              :z (double (or (:z start) 0.0))}))
         store*)
       :end
-      (-> store*
-          (update :effect-state dissoc owner-key*)
-          (update :beams dissoc owner-key*))
+      ;; The release beams arrive AFTER this :end — the server schedules them
+      ;; one tick out of the delayed-projectiles queue, so wiping :beams here
+      ;; raced their arrival and deleted every ray the moment it appeared.
+      ;; Beams own their ttl and tick out on their own; only the hold state
+      ;; dies with the context.
+      (update store* :effect-state dissoc owner-key*)
       store*)))
 
 (defn- emit-ray-trail!
   "EntityMdRaySmall.onUpdate spawns ONE MdParticle per tick at a random point
   0-10 blocks along the ray, with a slow random drift — the ray leaves a line
   of green motes behind it. The port only puffed four sparks at the endpoint
-  when the ray appeared."
-  [{:keys [start end]}]
-  (when (and start end)
+  when the ray appeared.
+
+  Runs from tick-state!, which has NO effect-owner binding, so it queues via
+  the owner captured at :beam enqueue (see enqueue-state!) rather than the
+  current-owner queue — that path throws outside a binding and the whole
+  scatter-bomb tick died every frame, freezing every beam's ttl."
+  [{:keys [start end queue-owner]}]
+  (when (and start end queue-owner)
     (let [t (/ (double (rand 10.0))
                (Math/max 1.0e-5 (vec3/vlen (vec3/v- end start))))
           t (Math/min 1.0 t)
           p (vec3/v+ start (vec3/v* (vec3/v- end start) t))]
-      (client-particles/queue-current-particle-effect!
+      (client-particles/queue-particle-effect!
+        queue-owner
         {:type :particle :particle-type (modid/namespaced-path "md_particle")
          :x (.-x ^cn.li.mcmod.math.V3 p)
          :y (.-y ^cn.li.mcmod.math.V3 p)
