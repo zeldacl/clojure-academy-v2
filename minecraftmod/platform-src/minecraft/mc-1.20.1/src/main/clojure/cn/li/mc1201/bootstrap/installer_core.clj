@@ -92,6 +92,9 @@
                     ;; rejects Long (its possible-values set holds Integer), so
                     ;; cast by property kind before setting.
                     :block-state-set-property         (fn [^BlockState this ^Property prop value]
+                                                        (when (instance? java.util.Optional value)
+                                                          (log/warn "[block-state] Optional value for property" (.getName prop)
+                                                                    "value=" (str value)))
                                                         (.setValue this prop
                                                                    (cond
                                                                      (instance? IntegerProperty prop) (int value)
