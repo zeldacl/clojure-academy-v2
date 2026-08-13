@@ -113,8 +113,11 @@
           (cond
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (let [removed? (world/remove-block! level hit-block-pos)]
+              (let [bs-at (try (world/get-block-state level hit-block-pos) (catch Exception _ nil))
+                    removed? (world/remove-block! level hit-block-pos)]
                 (log/info "[matter-unit] collect removed=" removed?
+                          "hit-pos=" [(:x hit-pos) (:y hit-pos) (:z hit-pos)]
+                          "block-at=" (some-> bs-at str)
                           "kind-after=" (get-matter-kind item-stack)
                           "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
                           "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
