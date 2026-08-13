@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.ability-interferer.schema
-  "Ability Interferer state schema")
+  "Ability Interferer state schema"
+  (:require [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (defonce ability-interferer-schema
   [{:key :energy
@@ -70,10 +71,12 @@
 
    {:key :inventory
     :nbt-key "Inventory"
-    :type :item-list
+    :type :inventory
     :default [nil]
     :persist? true
-    :size 1}
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
 
      {:key :affected-player-uuids
     :type :string-list

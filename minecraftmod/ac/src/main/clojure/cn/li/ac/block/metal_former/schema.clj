@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.metal-former.schema
-  "Metal Former state schema")
+  "Metal Former state schema"
+  (:require [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (def metal-former-schema
   "Schema for metal former block"
@@ -53,10 +54,12 @@
 
    {:key :inventory
     :nbt-key "Inventory"
-    :type :item-list
-    :default []
+    :type :inventory
+    :default [nil nil nil]
     :persist? true
-    :size 3}
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
 
    {:key :facing
     :nbt-key "Facing"
