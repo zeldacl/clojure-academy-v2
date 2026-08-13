@@ -98,7 +98,13 @@
                                                                    (cond
                                                                      (instance? IntegerProperty prop) (int value)
                                                                      (instance? BooleanProperty prop) (boolean value)
-                                                                     (instance? EnumProperty prop) (.getValue prop (name value))
+                                                                     (instance? EnumProperty prop)
+                                                                     (let [v (.getValue prop (name value))]
+                                                                       ;; 1.20.1 Property.getValue returns Optional<T>, not T — unwrap
+                                                                       ;; before setValue (its Comparable cast rejects the Optional).
+                                                                       (if (instance? java.util.Optional v)
+                                                                         (.orElse ^java.util.Optional v nil)
+                                                                         v))
                                                                      :else value)))}]
         (world/install-block-state-ops! bs-ops "mc1211 block-state"))
       (log/info "mc1211 block-state ops initialized"))))
