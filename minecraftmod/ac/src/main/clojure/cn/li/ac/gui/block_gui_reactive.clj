@@ -31,8 +31,13 @@
 ;; Config API (replaces tech-ui-common constructors)
 ;; ============================================================================
 
-(defn hist-buffer [value-fn max-fn]
-  {:type :buffer :value-fn value-fn :max-fn max-fn :color 0xFFCC8844})
+(defn hist-buffer
+  "Generic value bar. Optional :label/:color/:desc-fn override the defaults
+   (upstream TechUI.histBuffer defaults)."
+  ([value-fn max-fn] (hist-buffer value-fn max-fn {}))
+  ([value-fn max-fn {:keys [label color desc-fn]}]
+   {:type :buffer :value-fn value-fn :max-fn max-fn
+    :color (or color 0xFFCC8844) :label label :desc-fn desc-fn}))
 
 (defn hist-energy [color]
   {:type :energy :color (or color 0xFF4488CC)})
@@ -114,13 +119,14 @@
 
 (defn- attach-histogram! [ctx container h]
   (case (:type h)
-    :buffer (info-area/add-histogram!
-              ctx
-              [{:label "Energy"
-                :color 0xFF25C4FF
-                :value-fn (:value-fn h)
-                :max ((:max-fn h))
-                :desc-fn (fn [] (format "%.0f IF" (double ((:value-fn h)))))}])
+    :buffer (let [default-desc (fn [] (format "%.0f" (double ((:value-fn h)))))]
+              (info-area/add-histogram!
+                ctx
+                [{:label (or (:label h) "Value")
+                  :color (or (:color h) 0xFF25C4FF)
+                  :value-fn (:value-fn h)
+                  :max ((:max-fn h))
+                  :desc-fn (or (:desc-fn h) default-desc)}]))
     :energy (let [value-fn (fn [] (double (or @(:energy container) 0.0)))
                   max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))]
               (info-area/add-histogram!

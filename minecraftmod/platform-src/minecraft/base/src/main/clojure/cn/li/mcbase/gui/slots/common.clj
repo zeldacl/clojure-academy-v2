@@ -47,7 +47,10 @@
 (defn create-output-slot
   [inventory slot-index x y]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] false)))
+      ;; FnPredicate.test invokes the fn with a single ItemStack arg — a
+      ;; two-arg predicate throws ArityException on the first click onto the
+      ;; slot (DynamicSlot.mayPlace -> FnPredicate.test).
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] false)))
       (.withMayPickup (FnSupplier/of (fn [] true)))))
 
 (defn create-standard-slot
@@ -57,7 +60,7 @@
 (defn create-conditional-slot
   [inventory slot-index x y active?-fn]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (boolean (active?-fn)))))
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] (boolean (active?-fn)))))
       (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn create-conditional-energy-slot
@@ -99,7 +102,7 @@
 (defn create-conditional-output-slot
   [inventory slot-index x y active?-fn]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (and (active?-fn) false))))
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] (and (active?-fn) false))))
       (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn- slot-by-type-conditional

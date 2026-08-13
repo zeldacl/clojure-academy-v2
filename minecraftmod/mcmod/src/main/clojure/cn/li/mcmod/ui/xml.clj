@@ -86,7 +86,8 @@
    :image {:pos parse-pos :size parse-size :src str :alpha (fn [s] (parse-double s 1.0))
            :scale (fn [s] (or (parse-double s nil) 1.0))
            :tint parse-color :z (fn [s] (parse-double s 0.0))}
-   :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))}
+   :progress {:pos parse-pos :size parse-size :z (fn [s] (parse-double s 0.0))
+              :fg-src str :bg-src str :icon-src str}
    :list   {:pos parse-pos :size parse-size :spacing (fn [s] (parse-double s 4.0))
             :template str :z (fn [s] (parse-double s 0.0))}})
 
