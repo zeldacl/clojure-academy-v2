@@ -30,7 +30,7 @@
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
-           [net.minecraft.world.level.block.state.properties Property]
+           [net.minecraft.world.level.block.state.properties BooleanProperty IntegerProperty Property]
            [net.minecraft.world.phys Vec3]))
 
 (declare install-item-protocols!)
@@ -91,8 +91,15 @@
                     :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
                     :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]
                                                         (.getProperty state-def (str prop-name)))
+                    ;; Clojure integers arrive as Long; IntegerProperty.setValue
+                    ;; rejects Long (its possible-values set holds Integer), so
+                    ;; cast by property kind before setting.
                     :block-state-set-property         (fn [^BlockState this ^Property prop value]
-                                                        (.setValue this prop value))}]
+                                                        (.setValue this prop
+                                                                   (cond
+                                                                     (instance? IntegerProperty prop) (int value)
+                                                                     (instance? BooleanProperty prop) (boolean value)
+                                                                     :else value)))}]
         (world/install-block-state-ops! bs-ops "mc262 block-state"))
       (log/info "mc262 block-state ops initialized"))))
 
