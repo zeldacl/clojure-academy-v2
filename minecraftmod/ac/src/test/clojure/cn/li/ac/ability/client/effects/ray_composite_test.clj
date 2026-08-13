@@ -123,7 +123,11 @@
         tubes (rc/tube-ops start end 0.22 rc/outer-head-fix
                            {:r 106 :g 242 :b 106 :a 50})]
     (is (every? :no-depth-write? glow))
-    (is (not-any? :no-depth-write? tubes))))
+    (is (not-any? :no-depth-write? tubes))
+    ;; A halo is light, not smoke: additive (ONE/ONE) blending, never the
+    ;; plain translucent blend the tubes use.
+    (is (every? :additive? glow))
+    (is (not-any? :additive? tubes))))
 
 (deftest skills-route-all-layers-through-composite-ops-test
   ;; composite-ops is the only entry point: skills pass style parameters and

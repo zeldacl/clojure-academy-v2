@@ -581,9 +581,13 @@
                     ;; Depth-tested but not depth-writing: upstream's
                     ;; SubArcHandler.drawAll batch (glDepthMask(false)).
                     read-only-ops (filter #(and (:no-depth-write? %)
+                                                (not (:additive? %))
                                                 (not (:no-depth-test? %))
                                                 (not (:no-fog? %)))
-                                          texture-ops)]
+                                          texture-ops)
+                    ;; The ray glow boards: also depth-tested and
+                    ;; non-writing, but ADDITIVE — a halo is light, not smoke.
+                    additive-ops (filter :additive? texture-ops)]
                 (when (seq depth-ops)
                   (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                     (doseq [op depth-ops]
@@ -595,6 +599,10 @@
                   (let [^VertexConsumer ro-vc (.getBuffer buffer-source (RenderType/entityNoOutline loc))]
                     (doseq [op read-only-ops]
                       (emit-quad! ro-vc pose-stack op))))
+                (when (seq additive-ops)
+                  (let [^VertexConsumer ad-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsAdditive loc))]
+                    (doseq [op additive-ops]
+                      (emit-quad! ad-vc pose-stack op))))
                 (when (seq no-depth-ops)
                   (let [^VertexConsumer nd-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent loc))]
                     (doseq [op no-depth-ops]

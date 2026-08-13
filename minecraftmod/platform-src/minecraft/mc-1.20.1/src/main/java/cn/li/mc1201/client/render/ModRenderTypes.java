@@ -80,6 +80,35 @@ public final class ModRenderTypes extends RenderType {
     }
 
     /**
+     * Additive textured-QUADS render type for ray glow boards. The glow is
+     * light, not smoke: it ADDS to whatever is behind it (SRC_ALPHA / ONE —
+     * vanilla's lightning blend) instead of alpha-blending over it. Depth is
+     * tested but never written: a halo must not occlude anything, and the
+     * tubes drawn after it always land on top.
+     */
+    private static final Function<ResourceLocation, RenderType> ACADEMY_QUADS_ADDITIVE_BY_TEXTURE =
+            Util.memoize(texture -> create(
+                    "academy_quads_additive",
+                    DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP,
+                    VertexFormat.Mode.QUADS,
+                    256,
+                    false,
+                    false,
+                    CompositeState.builder()
+                            .setShaderState(RENDERTYPE_TEXT_SHADER)
+                            .setTextureState(new TextureStateShard(texture, false, false))
+                            .setTransparencyState(LIGHTNING_TRANSPARENCY)
+                            .setCullState(NO_CULL)
+                            .setLightmapState(LIGHTMAP)
+                            .setDepthTestState(LEQUAL_DEPTH_TEST)
+                            .setWriteMaskState(COLOR_WRITE)
+                            .createCompositeState(false)));
+
+    public static RenderType academyQuadsAdditive(ResourceLocation texture) {
+        return ACADEMY_QUADS_ADDITIVE_BY_TEXTURE.apply(texture);
+    }
+
+    /**
      * Fog-free translucent textured-QUADS render type for the MineDetect ore
      * highlights. Upstream HandlerRender disables GL_FOG for the whole
      * mineview pass, so the boxes stay visible through the blindness fog the

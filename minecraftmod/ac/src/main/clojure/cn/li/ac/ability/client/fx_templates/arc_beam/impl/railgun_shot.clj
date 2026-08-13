@@ -192,8 +192,11 @@
         w (width-factor beam life)
         fade (fade-out-factor life)
         seed (double (or (:wiggle-seed beam) 0.0))
-        ;; RendererRayGlow keeps the default white (255) for railgun — the
-        ;; port had it at 170, two thirds of the original glow.
+        ;; Upstream never sets the railgun glow colour, so RendererRayGlow's
+        ;; default white (alpha 255) applies. With 255 the 1.1-wide board --
+        ;; whose tile texture is a hard-edged full-width streak -- reads as a
+        ;; solid white bar four to eight times the beam's bright core. The
+        ;; port's 170 is the visual match for that number in this engine.
         glow-wiggle (ray-composite/glow-wiggle-factor seed life)
         outer-color (ru/with-alpha (:outer-rgb railgun-beam-style)
                                    (int (* 60.0 fade)))
@@ -206,7 +209,7 @@
         {:glow {:textures glow-textures
                 :width (* glow-width w glow-wiggle)
                 :color {:r 255 :g 255 :b 255
-                        :a (int (ray-composite/glow-alpha 255.0 fade seed life))}}
+                        :a (int (ray-composite/glow-alpha 170.0 fade seed life))}}
          :inner {:radius (* 0.09 w) :color inner-color}
          :outer {:radius (* 0.13 w) :color outer-color}})
       ;; Port enhancement kept: a bright cyan core line down the axis.

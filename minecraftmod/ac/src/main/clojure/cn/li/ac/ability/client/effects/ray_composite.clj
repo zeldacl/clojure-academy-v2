@@ -57,13 +57,20 @@
 
 (defn glow-wiggle-factor
   "EntityRayBase.getGlowAlpha's (1 - glowWiggleRadius + glowWiggle): upstream
-  glowWiggle random-walks in [0, glowWiggleRadius]; the port models random
-  walks as a deterministic sine of a per-ray seed (see ray-width-factor in
-  the skills), reading the same range."
+  glowWiggle random-walks in [0, glowWiggleRadius] at maxGlowWiggleSpeed
+  0.4/s — a slow drift. The port models random walks as a deterministic sine
+  of a per-ray seed (see ray-width-factor in the skills), reading the same
+  range.
+
+  The sine travels HALF a cycle over the ray's life, not more: an earlier
+  version ran 15 rad per life (~2.4 full pulses) and the glow visibly
+  flickered — with the steep squared fade-out, a pulse peak landing just
+  before the beam died read as the glow flashing at the moment the ray
+  ended."
   ^double [^double seed ^double life]
   (+ (- 1.0 glow-wiggle-radius)
      (* glow-wiggle-radius
-        (+ 0.5 (* 0.5 (Math/sin (+ seed (* 15.0 life))))))))
+        (+ 0.5 (* 0.5 (Math/sin (+ seed (* Math/PI life))))))))
 
 (defn glow-alpha
   "RendererRayGlow.doRender: alpha = preA * getAlpha() * getGlowAlpha(), and
@@ -180,7 +187,12 @@
                            ;; A halo has no business occluding anything, so it
                            ;; tests depth but does not write it, and the tubes
                            ;; drawn after it always land on top.
-                           :no-depth-write? true))]
+                           :no-depth-write? true
+                           ;; And a halo is light, not smoke: it ADDS to what
+                           ;; is behind it (blend ONE/ONE, source-weighted)
+                           ;; instead of alpha-blending over it. The level
+                           ;; renderer routes this to the additive render type.
+                           :additive? true))]
         [(board (:blend-in textures) gs mid1)
          (board (:tile textures) mid1 mid2)
          (board (:blend-out textures) mid2 ge)]))))
