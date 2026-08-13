@@ -123,6 +123,24 @@
       (is (seq @particles*))
       (is (seq @sounds*)))))
 
+(deftest end-keeps-in-flight-beams-test
+  ;; Upstream's rays are world entities with their own lives; MSG_TERMINATED
+  ;; kills only the orbiting balls. The port's :end wiped :beams, cutting
+  ;; every beam fired in the last 0.7s of the hold short at key-up.
+  (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)]
+    (with-redefs [client-particles/current-effect-owner (fn [] {:client-session-id "test-session" :player-uuid "test-player"})
+                  client-sounds/queue-sound-effect! (fn [& _] nil)]
+      (enqueue! enqueue-state! "ctx-keep" :electron-missile/fx-fire
+                {:mode :fire
+                 :start {:x 0.0 :y 64.0 :z 0.0}
+                 :end {:x 1.0 :y 65.5 :z 2.0}
+                 :source-player-id "player-a"})
+      (enqueue! enqueue-state! "ctx-keep" :electron-missile/fx-end
+                {:mode :end
+                 :source-player-id "player-a"})
+      (is (seq (get-in (em-fx/electron-missile-fx-snapshot) [:beams [:ctx "ctx-keep"]]))
+          "in-flight beams must survive the release"))))
+
 (deftest beam-ttl-matches-md-ray-small-life-test
   (let [enqueue-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/enqueue-state!)
         tick-state! (var-get #'cn.li.ac.content.ability.meltdowner.electron-missile-fx/tick-state!)

@@ -123,9 +123,11 @@
              :z (double (or (:z start) 0.0))}))
         store*)
       :end
-      (-> store*
-          (update :charge-state dissoc owner-key*)
-          (update :beams dissoc owner-key*))
+      ;; In-flight shot beams must survive the release: upstream's rays are
+      ;; world entities with their own lives and MSG_TERMINATED only kills
+      ;; the orbiting balls. Wiping :beams here cut every beam fired in the
+      ;; last 0.7s of the hold short the moment the key came up.
+      (update store* :charge-state dissoc owner-key*)
       store*)))
 
 (defn- emit-charge-particles!
