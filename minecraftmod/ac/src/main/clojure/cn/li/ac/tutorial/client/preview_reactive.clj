@@ -12,7 +12,76 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.terminal.catalog :as terminal-catalog]
             [cn.li.mcmod.client.platform-bridge :as platform-bridge]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.util.log :as log]))
+
+;; ============================================================================
+;; Localized display text — upstream GuiTutorial ViewGroup.getDisplayText
+;; resolves via LocalHelper (ac.tutorial.crafting + stack display name) and
+;; item names; the port uses the same tutorial.* keys through the platform
+;; i18n layer, falling back to the previous English literals when a lang
+;; entry is missing (tests run without a translate fn).
+;; ============================================================================
+
+(defn- translate-or-fallback
+  "Translate k; nil when the platform echoes the key back (no lang entry)."
+  [k]
+  (let [v (i18n/translate k)]
+    (when (and (string? v) (not= v k) (not (str/blank? v)))
+      v)))
+
+(defn- registry-path
+  "Strip the namespace from an id string ('academy:wafer' -> 'wafer')."
+  [item-id]
+  (let [s (str item-id)
+        i (str/index-of s ":")]
+    (if i (subs s (inc i)) s)))
+
+(defn- localized-name
+  "Localized display name for an item/block id via the standard
+   item/block.<MOD-ID>.<path> lang keys (upstream stack.getDisplayName), or
+   nil when neither entry exists."
+  [item-id]
+  (let [path (registry-path item-id)]
+    (some translate-or-fallback
+          [(str "item." modid/MOD-ID "." path)
+           (str "block." modid/MOD-ID "." path)])))
+
+(defn- craft-text
+  "Localized 'Crafting: %s' for a display name — upstream localCraft() uses
+   the ac.tutorial.crafting key formatted with the stack display name.
+   Returns nil for a nil name (callers fall back to an English literal)."
+  [display-name]
+  (let [k (str "tutorial." modid/MOD-ID ".crafting")]
+    (cond
+      (nil? display-name) nil
+      (translate-or-fallback k) (i18n/translate k display-name)
+      :else (str "Crafting: " display-name))))
+
+(defn- craft-display-text
+  "Localized craft tooltip for an item/block id, falling back to the
+   previous English literal when no item/block lang entry exists."
+  [item-id fallback]
+  (or (craft-text (localized-name item-id))
+      (craft-text fallback)))
+
+(defn- view-text
+  "Localized tag tooltip for a :view group — tutorial.<MOD-ID>.view.<slug>.
+   Falls back to the English literal when the lang entry is missing (e.g.
+   stale generated lang files) instead of echoing the raw key."
+  [slug fallback]
+  (or (translate-or-fallback (str "tutorial." modid/MOD-ID ".view." (name slug)))
+      fallback))
+
+(defn- app-display-name
+  "Localized app name. Upstream AppRegistry lang entries use the bare
+   app.<MOD-ID>.<id> key; freq_transmitter's sits at a .name suffix."
+  [app]
+  (let [base (str "app." modid/MOD-ID "."
+                  (str/replace (name (:id app)) "-" "_"))]
+    (or (translate-or-fallback base)
+        (translate-or-fallback (str base ".name"))
+        (:name app))))
 
 ;; ============================================================================
 ;; ViewGroup data — reused verbatim from preview.clj
@@ -101,65 +170,69 @@
   [tut-id]
   (let [raw (case tut-id
     :ores
-    [{:tag :view :display-text "Constraint Metal Ore"
+    [{:tag :view :display-text (view-text :constrained_ore "Constraint Metal Ore")
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "constrained_ore")}]}
-     {:tag :view :display-text "Imag Silicon Ore"
+     {:tag :view :display-text (view-text :imaginary_ore "Imag Silicon Ore")
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "imaginary_ore")}]}
-     {:tag :view :display-text "Crystal Ore"
+     {:tag :view :display-text (view-text :crystal_ore "Crystal Ore")
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "crystal_ore")}]}
-     {:tag :view :display-text "Resonant Crystal Ore"
+     {:tag :view :display-text (view-text :reso_ore "Resonant Crystal Ore")
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "reso_ore")}]}
-     {:tag :view :display-text "Phase Liquid"
+     {:tag :view :display-text (view-text :phase_liquid "Phase Liquid")
       :sub-views [{:type :icon
                    :texture (modid/asset-path "textures/item" "phase_liquid_mat.png")
                    :tag :view}]}
-     {:tag :craft :display-text "Crafting: Constraint Plate"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "constraint_plate") "Constraint Plate")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "constraint_plate")}]}
-     {:tag :craft :display-text "Crafting: Imag Silicon Ingot"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "imag_silicon_ingot") "Imag Silicon Ingot")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "imag_silicon_ingot")}]}
-     {:tag :craft :display-text "Crafting: Wafer"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "wafer") "Wafer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "wafer")}]}
-     {:tag :craft :display-text "Crafting: Imag Silicon Piece"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "imag_silicon_piece") "Imag Silicon Piece")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "imag_silicon_piece")}]}]
 
     :phase_generator
-    [{:tag :craft :display-text "Crafting: Phase Generator"
+    [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "phase_gen") "Phase Generator")
       :sub-views [(if (query-recipes? (modid/namespaced-path "phase_gen"))
                     {:type :recipe :recipe-kind "ImagFusor" :item-id (modid/namespaced-path "phase_gen")}
                     {:type :item-3d :item-id (modid/namespaced-path "phase_gen")})]}]
 
     :solar_generator
-    [{:tag :craft :display-text "Crafting: Solar Generator"
+    [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "solar_gen") "Solar Generator")
       :sub-views [(if (query-recipes? (modid/namespaced-path "solar_gen"))
                     {:type :recipe :recipe-kind "Smelting" :item-id (modid/namespaced-path "solar_gen")}
                     {:type :item-3d :item-id (modid/namespaced-path "solar_gen")})]}]
 
     :wind_generator
-    (vec (for [[item-id display-name]
-               [[(modid/namespaced-path "wind_gen_base") "Crafting: Windgen Base"]
-                [(modid/namespaced-path "wind_gen_pillar") "Crafting: Windgen Pillar"]
-                [(modid/namespaced-path "wind_gen_main") "Crafting: Windgen Main"]
-                [(modid/namespaced-path "windgen_fan") "Crafting: Windgen Fan"]]]
-           {:tag :craft :display-text display-name
+    ;; Display names come from the blocks' own lang keys
+    ;; (block.<MOD-ID>.wind_gen_*), which the datagen supplies from the
+    ;; corresponding block registrations; the literals below are only the
+    ;; English fallback when a lang entry is missing.
+    (vec (for [[item-id fallback]
+               [[(modid/namespaced-path "wind_gen_base") "Wind Generator Pillar Base"]
+                [(modid/namespaced-path "wind_gen_pillar") "Wind Generator Pillar"]
+                [(modid/namespaced-path "wind_gen_main") "Wind Generator"]
+                [(modid/namespaced-path "windgen_fan") "Wind Generator Fan"]]]
+           {:tag :craft :display-text (craft-display-text item-id fallback)
             :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                         :item-id item-id}]}))
 
     :imag_fusor
-    [{:tag :craft :display-text "Crafting: Imag Fusor"
+    [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "imag_fusor") "Imag Fusor")
       :sub-views [{:type :recipe :recipe-kind "ImagFusor"
                   :item-id (modid/namespaced-path "imag_fusor")}]}]
 
     :metal_former
-    [{:tag :craft :display-text "Crafting: Metal Former"
+    [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "metal_former") "Metal Former")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "metal_former")}]}]
 
     :terminal
-    (let [base [{:tag :craft :display-text "Crafting: Terminal Installer"
+    (let [base [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "terminal_installer") "Terminal Installer")
                  :sub-views [{:type :recipe :recipe-kind "Smelting"
                              :item-id (modid/namespaced-path "terminal_installer")}]}]
           apps (try (terminal-catalog/ordered-apps)
@@ -169,9 +242,10 @@
           app-groups (mapv (fn [app]
                             (let [app-installer-id (modid/namespaced-path (str "app_"
                                                        (str/replace (name (:id app)) "-" "_")))
-                                  has-recipe? (query-recipes? app-installer-id)]
+                                  has-recipe? (query-recipes? app-installer-id)
+                                  name (app-display-name app)]
                               {:tag (if has-recipe? :craft :view)
-                               :display-text (str "App: " (:name app))
+                               :display-text (if has-recipe? (craft-text name) name)
                                :sub-views [(if has-recipe?
                                              {:type :recipe
                                               :recipe-kind "Crafting"
@@ -183,13 +257,13 @@
       (into base app-groups))
 
     :ability_developer
-    [{:tag :craft :display-text "Crafting: Portable Developer"
+    [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_portable") "Portable Developer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "developer_portable")}]}
-     {:tag :craft :display-text "Crafting: Normal Developer"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_normal") "Normal Developer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "developer_normal")}]}
-     {:tag :craft :display-text "Crafting: Advanced Developer"
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_advanced") "Advanced Developer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "developer_advanced")}]}]
 

@@ -1,7 +1,8 @@
 (ns cn.li.mcbase.client.i18n
   "CLIENT-ONLY shared i18n implementation."
   (:require [cn.li.mcmod.i18n :as i18n])
-  (:import [net.minecraft.client.resources.language I18n]
+  (:import [net.minecraft.client Minecraft]
+           [net.minecraft.client.resources.language I18n]
            [net.minecraft.locale Language]))
 
 (defn translate
@@ -20,4 +21,9 @@
 (defn install-client-i18n!
   []
   (alter-var-root #'i18n/*translate-fn* (constantly translate))
+  (alter-var-root #'i18n/*current-lang-fn*
+                  (constantly (fn []
+                                (try
+                                  (some-> (Minecraft/getInstance) (.options) (.languageCode))
+                                  (catch Throwable _ nil)))))
   nil)

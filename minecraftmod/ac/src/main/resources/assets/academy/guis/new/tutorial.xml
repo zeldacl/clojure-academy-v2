@@ -15,8 +15,15 @@
       <image id="logo3" pos="0.0,-36.0" size="149.0,149.0" scale="0.25" align="center,center" src="academy:textures/guis/tutorial/logo3.png"/>
       <!-- Glow anchor (matches logo1 pos + scale) -->
       <group id="logo1-anchor" pos="0.0,59.0" size="0.0,0.0" scale="0.25" align="center,center"/>
-      <!-- Center markdown content area — hidden until first entry click -->
-      <group id="center-panel" pos="0.0,0.0" size="172.0,220.5" align="left,center" visible="false"/>
+      <!-- Center markdown content area — hidden until first entry click.
+           Matches upstream centerPart's text widget (160×210.5 at 2,0, LEFT/CENTER)
+           and clips the scrolled content to that box like upstream's stencil.
+           center-panel is the FIXED clip window; the segment children live in
+           center-content and scroll INSIDE it (moving the clip window itself
+           would look like the display region scrolling, not the content). -->
+      <group id="center-panel" pos="2.0,0.0" size="160.0,210.5" align="left,center" visible="false" clip="true">
+        <group id="center-content" pos="0.0,0.0" size="160.0,210.5" align="left,top"/>
+      </group>
       <!-- Scrollbar container — 172px matches center content width so right-aligned
            thumb sits near the content edge, not the screen edge -->
       <group id="scroll-container" pos="0.0,0.0" size="172.0,220.5" align="left,center" visible="false">
@@ -35,8 +42,14 @@
            Split into title + brief but kept within the same logical area. -->
       <group id="right-window" pos="0.0,0.0" size="158.5,82.0" align="right,bottom" visible="false">
         <image id="right-window-bg" pos="0.0,0.0" size="158.5,82.0" align="left,top" src="academy:textures/guis/window_tutorial_left.png"/>
-        <text id="title-text" pos="0.0,6.25" size="146.0,12.0" align="center,top" text="" font-size="10.0" color="#FFFFFFFF"/>
-        <group id="brief-content" pos="0.0,18.25" size="146.0,50.0" align="center,top"/>
+        <!-- Title/brief x=3 inside the centered 146px area — upstream draws at
+             (3,3)/(3,15) within the text widget; without the 3px inset the text
+             presses against the window frame's left border. -->
+        <text id="title-text" pos="3.0,6.25" size="146.0,12.0" align="center,top" text="" font-size="10.0" color="#FFFFFFFF"/>
+        <!-- Brief markdown: clipped to its 146×50 box so long briefs cannot
+             spill past the window border (upstream renders unclipped; ours
+             must stay inside the 158.5×82 window). -->
+        <group id="brief-content" pos="3.0,18.25" size="146.0,50.0" align="center,top" clip="true"/>
       </group>
     </group>
     <!-- Tag tooltip (rendered above everything) -->

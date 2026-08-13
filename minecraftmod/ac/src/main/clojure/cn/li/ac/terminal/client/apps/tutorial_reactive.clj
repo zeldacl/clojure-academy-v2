@@ -26,6 +26,7 @@
             [cn.li.ac.tutorial.messages :as tut-msg]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.network.client :as net-client]
             [cn.li.mcmod.ui.runtime :as rt]
             [cn.li.mcmod.ui.core :as ui]
@@ -145,6 +146,8 @@
         (recur (unchecked-inc-int i))))))
 
 (defn- reposition-content! [^INode ctr scroll-y]
+  ;; Move the CONTENT inside the fixed clip window (center-panel). Moving the
+  ;; clip window itself makes the visible region travel instead of the text.
   (.setY ctr (- (double scroll-y)))
   (dirty-subtree! ctr))
 
@@ -171,6 +174,11 @@
    DragBar range: lower=2, upper=165."
   (let [{:keys [scroll-y max-scroll]} ui-state
         drag-state (atom {:drag-start-y 0.0 :drag-start-scroll 0.0})]
+    ;; dispatch-mouse-press! only arms the drag chain (sets drag-node-idx)
+    ;; when the press bubbles to a :left-click handler — without this no-op
+    ;; the thumb's :drag/:drag-start handlers are unreachable and the bar
+    ;; cannot be dragged.
+    (events/on! rt :scroll-thumb :left-click (fn [_ _ _] nil))
     (events/on! rt :scroll-thumb :drag
       (fn [_ ^INode _node evt]
         (let [{:keys [dy]} evt
@@ -181,7 +189,7 @@
               progress (thumb-y->progress clamped-y)
               new-scroll (* progress (double @max-scroll))]
           (reset! scroll-y new-scroll)
-          (when-let [^INode ctr (rt/node-by-id rt :center-panel)]
+          (when-let [^INode ctr (rt/node-by-id rt :center-content)]
             (reposition-content! ctr new-scroll))
           (sync-thumb! rt new-scroll @max-scroll))))
     (events/on! rt :scroll-thumb :drag-start
@@ -484,9 +492,9 @@
           (when active?
             (let [{:keys [segs total-h]} (render-content-segs (:id tut) lang (:content cd)
                                                                (client-state/get-misaka-id player-uuid))]
-              (rebuild-segments! rt :center-panel segs cow)
+              (rebuild-segments! rt :center-content segs cow)
               (reset! max-scroll (max 0.0 (+ (- total-h coh) 10.0)))))
-          (reposition-content! (rt/node-by-id rt :center-panel) 0.0)
+          (reposition-content! (rt/node-by-id rt :center-content) 0.0)
           (sync-thumb! rt 0.0 @max-scroll)
           (reset! pvs (preview/create-preview-state (:id tut)))
           (refresh-preview! rt ui-state))))))
@@ -496,14 +504,19 @@
 ;; ============================================================================
 
 (defn- attach-scroll! [^UiRt rt ui-state]
-  (let [{:keys [scroll-y max-scroll]} ui-state]
-    (events/on! rt :center-panel :mouse-scroll
-      (fn [_ _ evt]
-        (when (pos? @max-scroll)
-          (let [new-y (max 0.0 (min @max-scroll (+ @scroll-y (* (- (double (:delta evt 0.0))) 12.0))))]
-            (reset! scroll-y new-y)
-            (reposition-content! (rt/node-by-id rt :center-panel) new-y)
-            (sync-thumb! rt new-y @max-scroll)))))
+  (let [{:keys [scroll-y max-scroll]} ui-state
+        scroll-handler (fn [_ _ evt]
+                         (when (pos? @max-scroll)
+                           (let [new-y (max 0.0 (min @max-scroll (+ @scroll-y (* (- (double (:delta evt 0.0))) 12.0))))]
+                             (reset! scroll-y new-y)
+                             (reposition-content! (rt/node-by-id rt :center-content) new-y)
+                             (sync-thumb! rt new-y @max-scroll))))]
+    ;; The scroll container overlaps the center panel and wins hit-test (it
+    ;; comes later in paint order), so the wheel must be heard on BOTH: a
+    ;; handler on :center-panel alone never fires because the hit bubbles up
+    ;; through :scroll-container, which has no handler.
+    (events/on! rt :center-panel :mouse-scroll scroll-handler)
+    (events/on! rt :scroll-container :mouse-scroll scroll-handler)
     (events/on! rt :list :mouse-scroll
       (fn [_ _ evt]
         (let [^INode list-n (rt/node-by-id rt :list)
@@ -572,4 +585,5 @@
     r))
 
 (defn open! [player]
-  (bridge/open-reactive-screen! (create-runtime player) "MisakaCloud Terminal"))
+  (bridge/open-reactive-screen! (create-runtime player)
+                                (i18n/translate (str "app." modid/MOD-ID ".tutorial"))))

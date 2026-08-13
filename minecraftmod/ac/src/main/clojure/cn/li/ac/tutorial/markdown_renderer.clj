@@ -48,6 +48,18 @@
     (when (and (string? v) (not= v k) (not (str/blank? v)))
       v)))
 
+(defn- misaka-name
+  "Localized 'Misaka No.<id>' via the tutorial.<MOD-ID>.misaka key, formatted
+   with the misaka id like upstream ac.tutorial.misaka. Falls back to the
+   English literal when no lang entry is available (tests run without a
+   translate fn)."
+  [misaka-id]
+  (let [k (str "tutorial." modid/MOD-ID ".misaka")
+        v (i18n/translate k)]
+    (if (and (string? v) (not= v k) (not (str/blank? v)))
+      (i18n/translate k misaka-id)
+      (str "Misaka No." misaka-id))))
+
 (defn- resolve-inline-tags
   [line misaka-id]
   (-> line
@@ -57,7 +69,7 @@
                          (str "[" key-id "]"))))
       (str/replace misaka-tag-re
                    (if misaka-id
-                     (str "__Misaka No." misaka-id "__")
+                     (str "__" (misaka-name misaka-id) "__")
                      "__Misaka No.????__"))))
 
 ;; --- Segment helpers ---
