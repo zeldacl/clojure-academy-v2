@@ -23,7 +23,11 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    ;; render.clj draws the fan from the CLIENT custom-state — without
+    ;; :client-sync? the tick never calls sync-to-client, so the client BE
+    ;; keeps its default false and the fan never renders.
+    :client-sync? true}
 
    {:key :no-obstacle
     :nbt-key "NoObstacle"
@@ -31,7 +35,8 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    :client-sync? true}
 
    {:key :fan-installed
     :nbt-key "FanInstalled"
@@ -39,7 +44,8 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    :client-sync? true}
 
    {:key :status
     :nbt-key "Status"
