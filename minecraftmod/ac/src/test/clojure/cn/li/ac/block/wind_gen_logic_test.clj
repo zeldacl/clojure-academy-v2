@@ -134,3 +134,25 @@
       (is (every? sync-fields [:complete :no-obstacle :fan-installed])
           "render.clj reads these from client custom-state; without the flag
           the client BE never updates and the fan never draws"))))
+
+(deftest base-schema-structure-fields-ride-the-data-slot-path
+  (testing "the base GUI reads :completeness/:status from client container atoms,
+            which only update through vanilla DataSlots - the fields must be
+            encodable (gui-coerce + status codes) and not explicitly excluded"
+    (let [fields (into {} (map (fn [s] [(:key s) s]))
+                       wind-schema/wind-gen-base-schema)
+          completeness (:completeness fields)
+          status (:status fields)]
+      (is (= str (:gui-coerce completeness))
+          "without a coercion the codec is nil and the field never syncs")
+      (is (seq (:gui-data-slot-status-codes completeness))
+          "completeness needs a string-status codec to ride the DataSlot")
+      (is (contains? (set (:gui-data-slot-status-codes completeness))
+                     "COMPLETE")
+          "the codes must cover logic.clj's completeness->status outputs")
+      (is (not (contains? completeness :gui-data-slot?))
+          "an explicit :gui-data-slot? false permanently excludes the field")
+      (is (= str (:gui-coerce status)))
+      (is (every? (set (:gui-data-slot-status-codes status))
+                  ["IDLE" "BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"])
+          "status codes must cover every value base-tick-state can produce"))))

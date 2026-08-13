@@ -117,7 +117,12 @@
     :default "BASE_ONLY"
     :persist? true
     :gui-sync? true
-    :gui-data-slot? false}
+    ;; The base GUI structure icons read this field: it must ride the vanilla
+    ;; DataSlot path (gui-data-slot? false + no codec left the client at the
+    ;; default "BASE_ONLY" forever). Codes must cover every completeness->status
+    ;; output of logic.clj.
+    :gui-coerce str
+    :gui-data-slot-status-codes ["BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"]}
 
    {:key :status
     :nbt-key "Status"
@@ -125,7 +130,10 @@
     :default "IDLE"
     :persist? true
     :gui-sync? true
-    :gui-data-slot? false}
+    ;; Same DataSlot fix: the previous codes ("STOPPED"/"WEAK"/"STRONG") never
+    ;; matched the actual status values, so any encoded status fell back to 0.
+    :gui-coerce str
+    :gui-data-slot-status-codes ["IDLE" "BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"]}
 
    {:key :structure-valid
     :type :boolean
