@@ -400,17 +400,23 @@
     (let [in-board (first (get by-tex (tex-of "blend_in")))
           tile-board (first (get by-tex (tex-of "tile")))
           out-board (first (get by-tex (tex-of "blend_out")))]
+      ;; Corners run [start-left, start-right, end-right, end-left] so u runs
+      ;; along the beam and v across the width — upstream drawBoard's layout
+      ;; (the tile texture tapers across v, which is what softens the board's
+      ;; long edges; the axes the other way round left hard edges at the
+      ;; sides).
       ;; startFix pulls the ray back behind its origin, endFix past its end
       (is (< (x-of in-board :p0) 0.0) "blend_in starts behind the muzzle (startFix -0.3)")
-      (is (> (x-of out-board :p1) 20.0) "blend_out runs past the endpoint (endFix +0.3)")
+      (is (> (x-of out-board :p2) 20.0) "blend_out runs past the endpoint (endFix +0.3)")
       ;; the caps are as long as the board is wide, the body covers the rest
       ;; each cap is as long as the board is wide: 1.1, up to 1.3x with wiggle
-      (is (< 0.0 (- (x-of in-board :p1) (x-of in-board :p0)) 1.5))
-      (is (> (- (x-of tile-board :p1) (x-of tile-board :p0)) 15.0))
-      ;; glow.width 1.1, and drawBoard halves it either side of the axis
+      (is (< 0.0 (- (x-of in-board :p2) (x-of in-board :p0)) 1.5))
+      (is (> (- (x-of tile-board :p2) (x-of tile-board :p0)) 15.0))
+      ;; glow.width 1.1, and drawBoard halves it either side of the axis;
+      ;; p0/p1 are the two sides at the board's near end
       (let [cross (fn [op]
                     (let [^cn.li.mcmod.math.V3 a (:p0 op)
-                          ^cn.li.mcmod.math.V3 d (:p3 op)]
+                          ^cn.li.mcmod.math.V3 d (:p1 op)]
                       (Math/sqrt (+ (Math/pow (- (.-x a) (.-x d)) 2)
                                     (Math/pow (- (.-y a) (.-y d)) 2)
                                     (Math/pow (- (.-z a) (.-z d)) 2)))))]

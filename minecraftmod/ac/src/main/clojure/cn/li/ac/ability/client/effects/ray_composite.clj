@@ -171,10 +171,21 @@
             cap (min width (* 0.5 span))
             mid1 (vec3/v+ gs (vec3/v* dir cap))
             mid2 (vec3/v- ge (vec3/v* dir cap))
+            ;; The corner order encodes the UV orientation: emit-quad!
+            ;; assigns p0=(u0,v0), p1=(u0,v1), p2=(u1,v1), p3=(u1,v0).
+            ;; Passing [a-right, a+right, b+right, b-right] makes u run
+            ;; ALONG the beam and v ACROSS the board's width — exactly
+            ;; upstream's drawBoard (v1..v4). The tile texture tapers
+            ;; across its own V axis, so v-across-the-width is what
+            ;; softens the board's long edges. With the axes the other
+            ;; way round the taper ran along the beam and the sides were
+            ;; the texture's hard edges: every glow read as a hard-edged
+            ;; rectangle with the cap textures' lens shapes smeared
+            ;; sideways.
             board (fn [texture ^V3 a ^V3 b]
                     (assoc (ru/quad-op texture
-                                       (vec3/v- a right) (vec3/v- b right)
-                                       (vec3/v+ b right) (vec3/v+ a right)
+                                       (vec3/v- a right) (vec3/v+ a right)
+                                       (vec3/v+ b right) (vec3/v- b right)
                                        color)
                            ;; The glow is a flat plane THROUGH the axis, and
                            ;; the cylinder's near wall sits only `radius` in
