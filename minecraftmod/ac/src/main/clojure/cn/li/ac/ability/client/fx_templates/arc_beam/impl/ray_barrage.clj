@@ -11,7 +11,7 @@
 
   Both render with the same mdray_small composite (inner 216,248,216 /
   outer 106,242,106 / soft glow); the port renders them as tube + glow
-  board ops (see beam-ops) so they are visible from any camera, including
+  board ops (see ray-ops) so they are visible from any camera, including
   the caster's own on-axis first-person view. The preray applies the
   ViewOptimize hand fix like the original; the barrage does not
   (EntityMdRayBarrage.needsViewOptimize() == false)."
@@ -21,7 +21,8 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mcmod.math V3]))
 
 ;; Two different renderers upstream, and the port used one for both:
 ;;
@@ -59,20 +60,15 @@
        (min 1.0 (/ ttl blend-out-ticks)))))
 
 (defn- ray-ops
-  [camera-pos beam]
+  [^V3 cam-v beam]
   (let [{:keys [textures outer-radius inner-radius glow-width glow-alpha]}
         (if (:barrage? beam) barrage-style preray-style)]
-    (concat
-      (ray-composite/glow-ops camera-pos (:start beam) (:end beam)
-        {:textures (ray-composite/glow-textures textures)
-         :width glow-width
-         :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}})
-      (ray-composite/tube-ops (:start beam) (:end beam)
-        inner-radius ray-composite/inner-head-fix
-        (assoc inner-rgb :a (int (ray-alpha beam 230.0))))
-      (ray-composite/tube-ops (:start beam) (:end beam)
-        outer-radius ray-composite/outer-head-fix
-        (assoc outer-rgb :a (int (ray-alpha beam 50.0)))))))
+    (ray-composite/composite-ops cam-v (:start beam) (:end beam)
+      {:glow {:textures (ray-composite/glow-textures textures)
+              :width glow-width
+              :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}}
+       :inner {:radius inner-radius :color (assoc inner-rgb :a (int (ray-alpha beam 230.0)))}
+       :outer {:radius outer-radius :color (assoc outer-rgb :a (int (ray-alpha beam 50.0)))}})))
 
 (defn- all-rays
   []

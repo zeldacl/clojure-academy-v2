@@ -292,30 +292,22 @@
         ws (when (and md (:active? md))
              (local-walk-speed (:ticks md)))
         ;; RendererRayComposite: the two cylinders as real tubes (upstream
-        ;; radii, upstream colours) plus the three glow boards.
+        ;; radii, upstream colours) plus the three glow boards, emitted in the
+        ;; composite's own order (glow first, then the inner tube).
         ray-plan (mapcat (fn [ray]
                            (let [w (ray-width-factor ray)]
-                             (concat
-                               (ray-composite/tube-ops (:start ray) (:end ray)
-                                 (* ray-inner-radius w) ray-composite/inner-head-fix
-                                 {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))})
-                               (ray-composite/tube-ops (:start ray) (:end ray)
-                                 (* ray-outer-radius w) ray-composite/outer-head-fix
-                                 {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))}))))
-                         fixed-rays)
-        glow-plan (mapcat (fn [ray]
-                            (ray-composite/glow-ops cam-v (:start ray) (:end ray)
-                              {:textures ray-glow-textures
-                               :width (* ray-glow-width (ray-width-factor ray))
-                               :color {:r 255 :g 255 :b 255
-                                       :a (int (ray-alpha ray 204.0))}}))
-                          fixed-rays)]
-    (when (or (seq ray-plan) (seq glow-plan) ws)
-      ;; RendererRayComposite appends glow, then cylinderIn, then cylinderOut,
-      ;; and RendererList draws in that order — the glow goes down FIRST and
-      ;; the cylinders over it. Emitting the tubes first put a wide flat board
-      ;; on top of the round beam.
-      {:ops (vec (concat glow-plan ray-plan))
+                             (ray-composite/composite-ops cam-v (:start ray) (:end ray)
+                               {:glow {:textures ray-glow-textures
+                                       :width (* ray-glow-width w)
+                                       :color {:r 255 :g 255 :b 255
+                                               :a (int (ray-alpha ray 204.0))}}
+                                :inner {:radius (* ray-inner-radius w)
+                                        :color {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))}}
+                                :outer {:radius (* ray-outer-radius w)
+                                        :color {:r 106 :g 242 :b 106 :a (int (ray-alpha ray 50.0))}}})))
+                         fixed-rays)]
+    (when (or (seq ray-plan) ws)
+      {:ops (vec ray-plan)
        :local-walk-speed ws})))
 
 ;; ---------------------------------------------------------------------------

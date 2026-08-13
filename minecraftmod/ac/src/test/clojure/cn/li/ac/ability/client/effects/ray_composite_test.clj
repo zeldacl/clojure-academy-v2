@@ -65,14 +65,24 @@
        (filter #(str/ends-with? (.getName ^File %) ".clj"))
        (keep (fn [^File f]
                (let [s (slurp f)]
-                 (when (re-find #"ray-composite/tube-ops" s)
+                 (when (re-find #"ray-composite/composite-ops" s)
                    [(.getName f) s]))))))
 
-(deftest composite-layers-are-emitted-in-upstream-order-test
+(defn- direct-layer-call-sites
+  "Files calling glow-ops / tube-ops directly instead of through
+  composite-ops."
+  []
+  (->> (file-seq (source-root))
+       (filter #(str/ends-with? (.getName ^File %) ".clj"))
+       (filter (fn [^File f]
+                 (re-find #"ray-composite/(glow|tube)-ops" (slurp f))))
+       (map #(.getName ^File %))))
+
+(deftest composite-emits-glow-then-inner-then-outer-test
   ;; RendererRayComposite appends glow, cylinderIn, cylinderOut, and
-  ;; RendererList draws in append order. Every layer is translucent and writes
-  ;; depth, so emitting them out of order silently deletes whichever layer
-  ;; loses the depth test:
+  ;; RendererList draws in append order. Every layer is translucent, so
+  ;; emitting them out of order silently deletes whichever layer loses the
+  ;; depth test:
   ;;
   ;;   tubes before glow  -> the 1.5-wide flat board covers the 0.44 tube and
   ;;                         the ray reads as a sheet from every angle.
@@ -80,25 +90,51 @@
   ;;                         core nested inside it, and the beam goes patchily
   ;;                         solid/hollow as the viewing angle changes.
   ;;
-  ;; Both have shipped as bugs. The order lives at the call sites, not in
-  ;; ray-composite, so this checks the call sites.
+  ;; Both have shipped as bugs when the order lived at seven call sites. It
+  ;; now lives in ONE function, so the test sits next to the implementation.
+  (let [tex (rc/glow-textures "mdray")
+        start (v/v3 0.0 64.0 0.0)
+        end (v/v3 0.0 64.0 15.0)
+        ops (rc/composite-ops (v/v3 0.0 70.0 -8.0) start end
+              {:glow {:textures tex :width 1.5 :color {:r 255 :g 255 :b 255 :a 204}}
+               :inner {:radius 0.1 :color {:r 216 :g 248 :b 216 :a 230}}
+               :outer {:radius 0.2 :color {:r 106 :g 242 :b 106 :a 50}}})]
+    ;; three glow boards, then 108 inner + 108 outer cylinder quads
+    (is (= 219 (count ops)))
+    (is (= [(:blend-in tex) (:tile tex) (:blend-out tex)]
+           (mapv :texture (take 3 ops))))
+    (is (every? #(= rc/solid-texture (:texture %)) (drop 3 ops)))
+    ;; the bright core lands before the faint shell
+    (is (= 230 (:a (:color (first (drop 3 ops))))))
+    (is (= 50 (:a (:color (first (drop 111 ops))))))))
+
+(deftest glow-never-writes-depth-test
+  ;; The glow is a flat plane THROUGH the axis and the cylinder's near wall
+  ;; sits only `radius` (0.045 for the small rays) in front of it. Depth
+  ;; precision falls off with distance, so a depth-writing glow won the depth
+  ;; fight far out and rays went hollow away from the camera. A halo has no
+  ;; business occluding anything: it tests depth, never writes it, and the
+  ;; tubes drawn after it always land on top.
+  (let [tex (rc/glow-textures "mdray")
+        start (v/v3 0.0 64.0 0.0)
+        end (v/v3 0.0 64.0 15.0)
+        glow (rc/glow-ops (v/v3 0.0 70.0 -8.0) start end
+              {:textures tex :width 1.5 :color {:r 255 :g 255 :b 255 :a 204}})
+        tubes (rc/tube-ops start end 0.22 rc/outer-head-fix
+                           {:r 106 :g 242 :b 106 :a 50})]
+    (is (every? :no-depth-write? glow))
+    (is (not-any? :no-depth-write? tubes))))
+
+(deftest skills-route-all-layers-through-composite-ops-test
+  ;; composite-ops is the only entry point: skills pass style parameters and
+  ;; never call glow-ops / tube-ops themselves. The layering used to live at
+  ;; seven call sites, and sites drifted out of order — both wrong orders
+  ;; shipped as visible bugs. A direct call to the layer fns is the exact
+  ;; shape of that regression.
   (let [sites (ray-composite-call-sites)]
     (is (<= 7 (count sites)) "expected to find the ray call sites on the classpath")
-    (doseq [[name s] sites]
-      (let [inner (str/index-of s "ray-composite/inner-head-fix")
-            outer (str/index-of s "ray-composite/outer-head-fix")
-            glow (str/index-of s "ray-composite/glow-ops")]
-        (when (and inner outer)
-          (is (< inner outer) (str name ": cylinderIn must be emitted before cylinderOut")))
-        ;; Most sites concat the glow and the tubes inline, so source order is
-        ;; emission order. meltdowner builds the two as separate plans and
-        ;; concats them at the end, so there the concat is what to check.
-        (if (str/includes? s "glow-plan")
-          (is (str/includes? s "(concat glow-plan ray-plan)")
-              (str name ": the glow plan must be concatenated before the ray plan"))
-          (when (and glow inner)
-            (is (< glow inner)
-                (str name ": the glow boards must be emitted before the cylinders"))))))))
+    (is (empty? (direct-layer-call-sites))
+        "every layer must be emitted by composite-ops, not assembled at a call site")))
 
 (deftest glow-boards-stay-textured-test
   ;; The glow is the one textured layer, and it keeps its three sprites.

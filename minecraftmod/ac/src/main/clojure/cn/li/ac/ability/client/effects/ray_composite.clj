@@ -161,3 +161,24 @@
         [(board (:blend-in textures) gs mid1)
          (board (:tile textures) mid1 mid2)
          (board (:blend-out textures) mid2 ge)]))))
+
+(defn composite-ops
+  "The WHOLE of RendererRayComposite for one ray: glow boards, cylinderIn,
+  cylinderOut, in that order.
+
+  This is the only thing skills should call. The layering is a property of the
+  composite, not of any one skill, and every time it lived at the call sites
+  instead some of the seven drifted out of order and rays across the whole mod
+  rendered wrong.
+
+    {:glow  {:textures ... :width ... :color ... :start-fix ... :end-fix ...}
+     :inner {:radius ... :color ...}
+     :outer {:radius ... :color ...}}
+
+  Any of the three may be omitted. `head-fix` is not a caller's choice -- the
+  inner cylinder gets 0.98 and the outer 1.0, as the composite sets them."
+  [^V3 cam-pos ^V3 start ^V3 end {:keys [glow inner outer]}]
+  (concat
+    (when glow (glow-ops cam-pos start end glow))
+    (when inner (tube-ops start end (:radius inner) inner-head-fix (:color inner)))
+    (when outer (tube-ops start end (:radius outer) outer-head-fix (:color outer)))))

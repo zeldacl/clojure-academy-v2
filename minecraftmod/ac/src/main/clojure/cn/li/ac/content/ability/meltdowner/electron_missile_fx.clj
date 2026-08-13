@@ -205,17 +205,14 @@
                       (max 0.0 (/ ttl ray-width-shrink-ticks)))
                   alpha (fn [^double base] (int (* base am)))]
               (when (pos? w)
-                (concat
-                  (ray-composite/glow-ops camera-pos start end
-                    {:textures ray-glow-textures
-                     :width (* ray-glow-width w)
-                     :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}})
-                  (ray-composite/tube-ops start end
-                    (* ray-inner-radius w) ray-composite/inner-head-fix
-                    {:r 216 :g 248 :b 216 :a (alpha 230.0)})
-                  (ray-composite/tube-ops start end
-                    (* ray-outer-radius w) ray-composite/outer-head-fix
-                    {:r 106 :g 242 :b 106 :a (alpha 50.0)})))))
+                (ray-composite/composite-ops camera-pos start end
+                  {:glow {:textures ray-glow-textures
+                          :width (* ray-glow-width w)
+                          :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}}
+                   :inner {:radius (* ray-inner-radius w)
+                           :color {:r 216 :g 248 :b 216 :a (alpha 230.0)}}
+                   :outer {:radius (* ray-outer-radius w)
+                           :color {:r 106 :g 242 :b 106 :a (alpha 50.0)}}}))))
           beams))
 
 (defn- build-plan

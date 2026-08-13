@@ -178,30 +178,22 @@
 (def ^:private glow-textures (ray-composite/glow-textures "railgun"))
 (def ^:private glow-width 1.1)
 
-(defn- railgun-glow-ops [^V3 cam-pos beam]
-  (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
-        fade (fade-out-factor life)
-        seed (double (or (:wiggle-seed beam) 0.0))
-        glow-wiggle (+ 0.9 (* 0.1
-                              (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
-        alpha (int (* 170.0 fade fade glow-wiggle))]
-    (ray-composite/glow-ops cam-pos (:start beam) (:end beam)
-      {:textures glow-textures
-       :width (* glow-width (width-factor beam life) glow-wiggle)
-       :color {:r 255 :g 255 :b 255 :a alpha}})))
-
 (defn- railgun-beam-ops
-  "The two cylinders of RendererRayComposite: an outer 0.13 tube and an inner
-  0.09 core, each with the paraboloid nose at both ends.
+  "The whole RendererRayComposite for a railgun shot: the three glow boards,
+  an outer 0.13 tube and an inner 0.09 core, each with the paraboloid nose at
+  both ends — plus the port's bright cyan core line down the axis.
 
   These are tubes, not billboards. The port went flat because a tube seen from
   the caster's own eye — which sits exactly on the axis of an eye-spawned ray —
   reads as a hollow pipe; that is what hand-muzzle-pos already solves, by
   starting the ray off to the side of the camera."
-  [^V3 _cam-pos beam]
+  [^V3 cam-v beam]
   (let [life (/ (double (:ttl beam)) (double (:max-ttl beam)))
         w (width-factor beam life)
         fade (fade-out-factor life)
+        seed (double (or (:wiggle-seed beam) 0.0))
+        glow-wiggle (+ 0.9 (* 0.1
+                              (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
         outer-color (ru/with-alpha (:outer-rgb railgun-beam-style)
                                    (int (* 60.0 fade)))
         inner-color (ru/with-alpha (:inner-rgb railgun-beam-style)
@@ -209,10 +201,12 @@
         line-color (ru/with-alpha (:line-rgb railgun-beam-style)
                                   (int (+ 40.0 (* 120.0 fade))))]
     (concat
-      (ray-composite/tube-ops (:start beam) (:end beam)
-                              (* 0.09 w) ray-composite/inner-head-fix inner-color)
-      (ray-composite/tube-ops (:start beam) (:end beam)
-                              (* 0.13 w) ray-composite/outer-head-fix outer-color)
+      (ray-composite/composite-ops cam-v (:start beam) (:end beam)
+        {:glow {:textures glow-textures
+                :width (* glow-width w glow-wiggle)
+                :color {:r 255 :g 255 :b 255 :a (int (* 170.0 fade fade glow-wiggle))}}
+         :inner {:radius (* 0.09 w) :color inner-color}
+         :outer {:radius (* 0.13 w) :color outer-color}})
       ;; Port enhancement kept: a bright cyan core line down the axis.
       [(ru/line-op (:start beam) (:end beam) line-color)])))
 
@@ -317,8 +311,7 @@
                               (concat
                               ;; Arc/lightning branches
                               (arc-fx/railgun-arc-ops cam-v beam {})
-                              ;; Wide halo + flat solid ray
-                              (railgun-glow-ops cam-v visible)
+                              ;; Glow boards, the two cylinders, the core line
                               (railgun-beam-ops cam-v visible)
                               (impact-ring-ops
                                 cam-v (:end visible) (:ttl beam) (:max-ttl beam)))))
