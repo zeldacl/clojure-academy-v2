@@ -30,7 +30,7 @@
            [net.minecraft.world.level.block Block]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
-           [net.minecraft.world.level.block.state.properties BooleanProperty IntegerProperty Property]
+           [net.minecraft.world.level.block.state.properties BooleanProperty EnumProperty IntegerProperty Property]
            [net.minecraft.world.phys Vec3]))
 
 (declare install-item-protocols!)
@@ -99,6 +99,7 @@
                                                                    (cond
                                                                      (instance? IntegerProperty prop) (int value)
                                                                      (instance? BooleanProperty prop) (boolean value)
+                                                                     (instance? EnumProperty prop) (.getValue prop (name value))
                                                                      :else value)))}]
         (world/install-block-state-ops! bs-ops "mc262 block-state"))
       (log/info "mc262 block-state ops initialized"))))
