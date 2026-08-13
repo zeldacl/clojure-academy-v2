@@ -166,6 +166,7 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         float lifeSeconds = state.lifeTicks * 0.05F;
         float alpha = mdBallAlpha(ageSeconds, lifeSeconds, holdAlpha, attackSeconds,
                 burstSeconds, blendSeconds);
+        float size = mdBallSize(ageSeconds, lifeSeconds);
 
         // updateRenderTick(): the texture is re-rolled on roughly a quarter of
         // frames and alphaWiggle random-walks in [0, 1]. Both are driven off a
@@ -182,9 +183,9 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
         stack.pushPose();
         stack.mulPose(camera.orientation);
         if (glow != null) {
-            submitMdBallQuad(stack, collector, glow, glowSize, alpha * (0.3F + wiggle * 0.7F));
+            submitMdBallQuad(stack, collector, glow, glowSize * size, alpha * (0.3F + wiggle * 0.7F));
         }
-        submitMdBallQuad(stack, collector, core, coreSize, alpha * (0.8F + 0.2F * wiggle));
+        submitMdBallQuad(stack, collector, core, coreSize * size, alpha * (0.8F + 0.2F * wiggle));
         stack.popPose();
     }
 
@@ -214,6 +215,25 @@ public final class ScriptedEffectBillboardRenderer<T extends Entity>
             return hold * (ageSeconds / attackSeconds);
         }
         return hold;
+    }
+
+    /**
+     * EntityMdBall.getSize(), all three branches: the ball holds at 1.0 for
+     * most of its life, swells to 1.5 over the 200 ms before its last 100 ms,
+     * and collapses to nothing over those final 100 ms. The port kept the
+     * size constant and faded only the alpha, so a dying ball read as being
+     * wiped out of existence at full size instead of collapsing in on itself.
+     */
+    private static float mdBallSize(float ageSeconds, float lifeSeconds) {
+        if (ageSeconds > lifeSeconds - 0.1F) {
+            float t = (ageSeconds - (lifeSeconds - 0.1F)) / 0.1F;
+            return Math.max(0.0F, 1.5F * (1.0F - t));
+        }
+        if (ageSeconds > lifeSeconds - 0.3F) {
+            float t = (ageSeconds - (lifeSeconds - 0.3F)) / 0.2F;
+            return 1.0F + 0.5F * t;
+        }
+        return 1.0F;
     }
 
     private static int hashNoise(int a, long b) {

@@ -130,7 +130,9 @@
                :core-size-factor 0.25
                ;; getAlpha(): 0 -> 0.6 over 0.3s, held, then a flare to full
                ;; over the 0.25s before death and a drop to nothing in the last
-               ;; 0.15s. Only ElectronBomb's ball (20 ticks, or 5 once trained)
+               ;; 0.15s. getSize(): holds at 1.0, swells to 1.5 over the 200ms
+               ;; before the last 100ms, then collapses to 0 in those 100ms.
+               ;; Only ElectronBomb's ball (20 ticks, or 5 once trained)
                ;; lives short enough to show the last two.
                :alpha-hold 0.6
                :alpha-attack-seconds 0.3
