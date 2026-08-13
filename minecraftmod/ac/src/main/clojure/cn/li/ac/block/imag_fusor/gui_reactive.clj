@@ -80,6 +80,9 @@
     ;; Slot positions match upstream ContainerImagFusor (vanilla container
     ;; coords on the ui_imagfusor texture): crystal in (13,49), crystal out
     ;; (143,49), liquid in (13,10), energy (42,80), empty unit out (143,10).
-    (slot-schema/register-slot-schema! {:schema-id fusor-slot-schema-id :slots [{:id :crystal-input :type :input :x 13 :y 49} {:id :crystal-output :type :output :x 143 :y 49} {:id :imag-input :type :input :x 13 :y 10} {:id :energy :type :energy :x 42 :y 80} {:id :imag-output :type :output :x 143 :y 10}]})
+    ;; :can-place restricts mayPlace at the slot level (upstream SlotCrystal /
+    ;; SlotMatterUnit) — without it a crystal could enter the liquid slot,
+    ;; where the machine logic then consumed it.
+    (slot-schema/register-slot-schema! {:schema-id fusor-slot-schema-id :slots [{:id :crystal-input :type :input :x 13 :y 49 :can-place crystal-input?} {:id :crystal-output :type :output :x 143 :y 49} {:id :imag-input :type :input :x 13 :y 10 :can-place phase-liquid-unit?} {:id :energy :type :energy :x 42 :y 80} {:id :imag-output :type :output :x 143 :y 10}]})
     (gui-reg/register-block-gui! (gui-manifest/gui-name :imag-fusor) (merge (gui-manifest/gui-registration :imag-fusor) {:container-predicate fusor-container? :container-fn create-container :screen-fn create-screen :server-menu-sync-fn server-menu-sync! :validate-fn still-valid? :close-fn on-close :button-click-fn handle-button-click! :slot-count-fn get-slot-count :slot-get-fn get-slot-item :slot-set-fn set-slot-item! :slot-can-place-fn can-place-item? :slot-changed-fn (fn [_ _] nil) :quick-move-fn quick-move-stack}))
     (log/info "Imag Fusor GUI initialized (reactive)"))))
