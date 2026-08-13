@@ -10,28 +10,34 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.feature.Feature;
 import net.minecraft.world.level.levelgen.feature.FeaturePlaceContext;
 import net.minecraft.world.level.levelgen.feature.configurations.NoneFeatureConfiguration;
+import java.util.function.Supplier;
 
 /**
  * Shared implementation for a small configurable underground pool feature.
  */
 public class ConfigurablePoolFeature extends Feature<NoneFeatureConfiguration> {
 
-    private final BlockState fillBlock;
+    private final Supplier<BlockState> fillBlockSupplier;
 
     public ConfigurablePoolFeature(Codec<NoneFeatureConfiguration> codec) {
         this(codec, null);
     }
 
-    public ConfigurablePoolFeature(Codec<NoneFeatureConfiguration> codec, BlockState fillBlock) {
+    public ConfigurablePoolFeature(Codec<NoneFeatureConfiguration> codec, Supplier<BlockState> fillBlockSupplier) {
         super(codec);
-        this.fillBlock = fillBlock;
+        this.fillBlockSupplier = fillBlockSupplier;
     }
 
     @Override
     public boolean place(FeaturePlaceContext<NoneFeatureConfiguration> context) {
-        if (fillBlock == null) {
+        if (fillBlockSupplier == null) {
             return false;
         }
+        // Resolve lazily: the fill block must be looked up at placement time,
+        // after all registries are frozen — resolving it at feature
+        // registration fell back to water when the block was not yet in the
+        // registry (DeferredRegister ordering).
+        BlockState fillBlock = fillBlockSupplier.get();
 
         WorldGenLevel level = context.level();
         BlockPos pos = context.origin();
