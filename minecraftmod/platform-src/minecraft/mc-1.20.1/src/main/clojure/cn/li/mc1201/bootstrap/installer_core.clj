@@ -45,14 +45,15 @@
    :world-get-block-state (fn [^Level level p] (.getBlockState level p))
    :world-set-block (fn [^Level level p s flags] (.setBlock level p s (int flags)))
    :world-remove-block (fn [^Level level p]
-                                       (let [^BlockState bs (.getBlockState level p)]
-                                         ;; destroyBlock returns false for fluid
-                                         ;; blocks in some paths; setBlock(air)
-                                         ;; is the reliable fluid removal.
-                                         (if (.isEmpty (.getFluidState bs))
-                                           (.destroyBlock level p false)
-                                           (let [^Block air-block Blocks/AIR]
-                                             (.setBlock level p (.defaultBlockState air-block) 3)))))
+                                       (let [^BlockState bs (.getBlockState level p)
+                                             fluid-empty? (.isEmpty (.getFluidState bs))
+                                             result (if fluid-empty?
+                                                      (.destroyBlock level p false)
+                                                      (let [^Block air-block Blocks/AIR]
+                                                        (.setBlock level p (.defaultBlockState air-block) 3)))]
+                                         (log/info "[remove-block]" p "block=" (.getBlock bs)
+                                                   "fluid-empty=" fluid-empty? "result=" result)
+                                         result))
    :world-break-block (fn [^Level level p drop?] (.destroyBlock level p (boolean drop?)))
    :world-place-block-by-id (fn [^Level level block-id p flags]
                               (world-block-ops/world-place-block-by-id adapter level block-id p flags))
