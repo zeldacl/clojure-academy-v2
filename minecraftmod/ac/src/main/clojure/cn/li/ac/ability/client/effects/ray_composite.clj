@@ -20,11 +20,13 @@
 
   ORDER MATTERS, in the order listed above. RendererRayComposite appends glow,
   then cylinderIn, then cylinderOut, and RendererList draws in append order.
-  Every layer here is translucent AND writes depth, so whichever one lands
-  first wins the depth test wherever they overlap:
+  The tubes are translucent AND write depth, so whichever tube lands first
+  wins the depth test wherever they overlap:
 
-    glow before the tubes  -- else the wide flat board occludes the tubes and
-                              the ray reads as a sheet from every angle.
+    glow before the tubes  -- the glow is a halo: it tests depth but never
+                              writes it (see glow-ops), so wherever a tube sits
+                              in front of it the glow's fragments drop out and
+                              the ray reads as a round beam, not a sheet.
     inner before outer     -- the outer shell is only alpha 50; if it draws
                               first it stamps depth over the alpha-230 core
                               nested inside it, and that core is what makes a
@@ -140,10 +142,22 @@
             mid1 (vec3/v+ gs (vec3/v* dir cap))
             mid2 (vec3/v- ge (vec3/v* dir cap))
             board (fn [texture ^V3 a ^V3 b]
-                    (ru/quad-op texture
-                                (vec3/v- a right) (vec3/v- b right)
-                                (vec3/v+ b right) (vec3/v+ a right)
-                                color))]
+                    (assoc (ru/quad-op texture
+                                       (vec3/v- a right) (vec3/v- b right)
+                                       (vec3/v+ b right) (vec3/v+ a right)
+                                       color)
+                           ;; The glow is a flat plane THROUGH the axis, and
+                           ;; the cylinder's near wall sits only `radius` in
+                           ;; front of it -- 0.045 for the small rays. Depth
+                           ;; precision falls off with distance, so with the
+                           ;; glow writing depth the near stretch of a ray won
+                           ;; the fight and the far stretch lost to the glow
+                           ;; sheet: solid close up, hollow further out.
+                           ;;
+                           ;; A halo has no business occluding anything, so it
+                           ;; tests depth but does not write it, and the tubes
+                           ;; drawn after it always land on top.
+                           :no-depth-write? true))]
         [(board (:blend-in textures) gs mid1)
          (board (:tile textures) mid1 mid2)
          (board (:blend-out textures) mid2 ge)]))))
