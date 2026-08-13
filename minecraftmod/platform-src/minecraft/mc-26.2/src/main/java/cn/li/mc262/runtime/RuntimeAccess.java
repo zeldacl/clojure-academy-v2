@@ -127,7 +127,11 @@ public final class RuntimeAccess {
         }
         Vec3 eye = player.getEyePosition();
         Vec3 end = eye.add(player.getViewVector(1.0F).scale(reach));
-        ClipContext.Fluid fluid = sourceOnly ? ClipContext.Fluid.SOURCE_ONLY : ClipContext.Fluid.NONE;
+        // `sourceOnly` is really a "detect fluid" switch: upstream
+        // ItemMatterUnit rayTrace(useLiquids=true) hits ANY fluid state, not
+        // just sources — a non-source imag-phase pool would never be
+        // collectable under SOURCE_ONLY.
+        ClipContext.Fluid fluid = sourceOnly ? ClipContext.Fluid.ANY : ClipContext.Fluid.NONE;
         HitResult hit = player.level().clip(new ClipContext(eye, end, ClipContext.Block.OUTLINE, fluid, player));
         if (hit.getType() != HitResult.Type.BLOCK) {
             return null;
