@@ -62,11 +62,15 @@
 (defn- ray-ops
   [^V3 cam-v beam]
   (let [{:keys [textures outer-radius inner-radius glow-width glow-alpha]}
-        (if (:barrage? beam) barrage-style preray-style)]
+        (if (:barrage? beam) barrage-style preray-style)
+        ga (ray-alpha beam 1.0)
+        seed (double (or (:wiggle-seed beam) 0.0))
+        life (/ (double (:ttl beam)) (double (:max-ttl beam)))]
     (ray-composite/composite-ops cam-v (:start beam) (:end beam)
       {:glow {:textures (ray-composite/glow-textures textures)
               :width glow-width
-              :color {:r 255 :g 255 :b 255 :a (int (ray-alpha beam glow-alpha))}}
+              :color {:r 255 :g 255 :b 255
+                      :a (int (ray-composite/glow-alpha glow-alpha ga seed life))}}
        :inner {:radius inner-radius :color (assoc inner-rgb :a (int (ray-alpha beam 230.0)))}
        :outer {:radius outer-radius :color (assoc outer-rgb :a (int (ray-alpha beam 50.0)))}})))
 
@@ -104,6 +108,7 @@
                                        (* length (:dy dir))
                                        (* length (:dz dir))))
            :ttl 50 :max-ttl 50
+           :wiggle-seed (* 2.0 Math/PI (rand))
            :barrage? true})))))
 
 (defn- enqueue-state!
@@ -125,7 +130,8 @@
                    [(merge base-meta
                            {:start (vec3/map->v3 (:start payload))
                             :end (vec3/map->v3 (:end payload))
-                            :ttl life :max-ttl life})]))
+                            :ttl life :max-ttl life
+                            :wiggle-seed (* 2.0 Math/PI (rand))})]))
                ;; Original c_spawnBarrage: sub rays from the silbarn position
                ;; around the caster's aim, no view optimization.
                :barrage

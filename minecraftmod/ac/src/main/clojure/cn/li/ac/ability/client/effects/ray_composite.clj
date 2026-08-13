@@ -51,6 +51,29 @@
 (def default-start-fix -0.3)
 (def default-end-fix 0.3)
 
+;; EntityRayBase.glowWiggleRadius = 0.1: getGlowAlpha() multiplies getAlpha()
+;; by a factor in [1 - radius, 1] as glowWiggle random-walks upstream.
+(def ^:private glow-wiggle-radius 0.1)
+
+(defn glow-wiggle-factor
+  "EntityRayBase.getGlowAlpha's (1 - glowWiggleRadius + glowWiggle): upstream
+  glowWiggle random-walks in [0, glowWiggleRadius]; the port models random
+  walks as a deterministic sine of a per-ray seed (see ray-width-factor in
+  the skills), reading the same range."
+  ^double [^double seed ^double life]
+  (+ (- 1.0 glow-wiggle-radius)
+     (* glow-wiggle-radius
+        (+ 0.5 (* 0.5 (Math/sin (+ seed (* 15.0 life))))))))
+
+(defn glow-alpha
+  "RendererRayGlow.doRender: alpha = preA * getAlpha() * getGlowAlpha(), and
+  EntityRayBase.getGlowAlpha() = glow-wiggle-factor * getAlpha() — so the glow
+  multiplies the base alpha by the ray's getAlpha() TWICE, while the
+  cylinders multiply once. The port squared this off and every glow stayed
+  too bright through the fades."
+  ^double [^double pre-a ^double get-alpha ^double seed ^double life]
+  (* pre-a get-alpha get-alpha (glow-wiggle-factor seed life)))
+
 (defn glow-textures
   "Resources.getRayTextures(name): effects/<name>/{blend_in,tile,blend_out}."
   [name]

@@ -110,7 +110,8 @@
                                        {:start (rv3/map->v3 start)
                                         :end (rv3/map->v3 end)
                                         :ttl ray-life-ticks
-                                        :max-ttl ray-life-ticks}))
+                                        :max-ttl ray-life-ticks
+                                        :wiggle-seed (* 2.0 Math/PI (rand))}))
                      store*)]
         (when (and start end)
           ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, at the ray.
@@ -191,7 +192,7 @@
 (defn- beam-ops
   "One EntityMdRaySmall: the glow boards plus the two cylinders."
   [camera-pos beams]
-  (mapcat (fn [{:keys [start end ttl max-ttl]}]
+  (mapcat (fn [{:keys [start end ttl max-ttl wiggle-seed]}]
             (let [max-ttl (double (max 1 (or max-ttl ray-life-ticks)))
                   ttl (double (or ttl 0))
                   age (- max-ttl ttl)
@@ -208,7 +209,10 @@
                 (ray-composite/composite-ops camera-pos start end
                   {:glow {:textures ray-glow-textures
                           :width (* ray-glow-width w)
-                          :color {:r 255 :g 255 :b 255 :a (alpha 127.0)}}
+                          :color {:r 255 :g 255 :b 255
+                                  :a (int (ray-composite/glow-alpha 127.0 am
+                                                                    (double (or wiggle-seed 0.0))
+                                                                    (/ ttl max-ttl)))}}
                    :inner {:radius (* ray-inner-radius w)
                            :color {:r 216 :g 248 :b 216 :a (alpha 230.0)}}
                    :outer {:radius (* ray-outer-radius w)

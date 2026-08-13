@@ -295,12 +295,15 @@
         ;; radii, upstream colours) plus the three glow boards, emitted in the
         ;; composite's own order (glow first, then the inner tube).
         ray-plan (mapcat (fn [ray]
-                           (let [w (ray-width-factor ray)]
+                           (let [w (ray-width-factor ray)
+                                 ga (ray-alpha ray 1.0)
+                                 seed (double (or (:wiggle-seed ray) 0.0))
+                                 life (/ (double (:ttl ray)) (double (:max-ttl ray)))]
                              (ray-composite/composite-ops cam-v (:start ray) (:end ray)
                                {:glow {:textures ray-glow-textures
                                        :width (* ray-glow-width w)
                                        :color {:r 255 :g 255 :b 255
-                                               :a (int (ray-alpha ray 204.0))}}
+                                               :a (int (ray-composite/glow-alpha 204.0 ga seed life))}}
                                 :inner {:radius (* ray-inner-radius w)
                                         :color {:r 216 :g 248 :b 216 :a (int (ray-alpha ray 230.0))}}
                                 :outer {:radius (* ray-outer-radius w)

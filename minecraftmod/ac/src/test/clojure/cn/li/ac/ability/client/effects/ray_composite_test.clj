@@ -136,6 +136,20 @@
     (is (empty? (direct-layer-call-sites))
         "every layer must be emitted by composite-ops, not assembled at a call site")))
 
+(deftest glow-alpha-doubles-get-alpha-test
+  ;; RendererRayGlow.doRender: alpha = preA * getAlpha() * getGlowAlpha(), and
+  ;; EntityRayBase.getGlowAlpha() = (1 - glowWiggleRadius + glowWiggle) *
+  ;; getAlpha() — the glow multiplies getAlpha TWICE, the cylinders once. The
+  ;; port multiplied once and every glow stayed too bright through the fades.
+  ;; glowWiggleRadius is 0.1, so the wiggle keeps the factor in [0.9, 1.0].
+  (let [sample (fn [s l] (rc/glow-alpha 127.0 0.5 s l))]
+    ;; 127 * 0.25 * [0.9, 1.0] — a single getAlpha would give up to 63.5
+    (is (every? #(<= 28.575 % 31.75)
+                (for [s (range 40) l (range 20)]
+                  (sample (* s 0.13) (* l 0.05)))))
+    (is (<= 0.9 (rc/glow-wiggle-factor 0.0 0.0) 1.0))
+    (is (<= 0.9 (rc/glow-wiggle-factor 5.0 0.7) 1.0))))
+
 (deftest glow-boards-stay-textured-test
   ;; The glow is the one textured layer, and it keeps its three sprites.
   (let [tex (rc/glow-textures "mdray")

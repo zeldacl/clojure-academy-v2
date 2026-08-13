@@ -192,8 +192,9 @@
         w (width-factor beam life)
         fade (fade-out-factor life)
         seed (double (or (:wiggle-seed beam) 0.0))
-        glow-wiggle (+ 0.9 (* 0.1
-                              (+ 0.5 (* 0.5 (Math/sin (+ seed (* life 15.0)))))))
+        ;; RendererRayGlow keeps the default white (255) for railgun — the
+        ;; port had it at 170, two thirds of the original glow.
+        glow-wiggle (ray-composite/glow-wiggle-factor seed life)
         outer-color (ru/with-alpha (:outer-rgb railgun-beam-style)
                                    (int (* 60.0 fade)))
         inner-color (ru/with-alpha (:inner-rgb railgun-beam-style)
@@ -204,7 +205,8 @@
       (ray-composite/composite-ops cam-v (:start beam) (:end beam)
         {:glow {:textures glow-textures
                 :width (* glow-width w glow-wiggle)
-                :color {:r 255 :g 255 :b 255 :a (int (* 170.0 fade fade glow-wiggle))}}
+                :color {:r 255 :g 255 :b 255
+                        :a (int (ray-composite/glow-alpha 255.0 fade seed life))}}
          :inner {:radius (* 0.09 w) :color inner-color}
          :outer {:radius (* 0.13 w) :color outer-color}})
       ;; Port enhancement kept: a bright cyan core line down the axis.

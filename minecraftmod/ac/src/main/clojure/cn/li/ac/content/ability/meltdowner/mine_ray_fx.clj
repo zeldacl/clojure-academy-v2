@@ -60,7 +60,13 @@
 
   The port had a single tube pair with the outer radius 15-40% wide and the
   inner one derived from it by a 0.86 ratio — roughly 1.5x the original bore —
-  and tinted the glow board with the outer cylinder's colour."
+  and tinted the glow board with the outer cylinder's colour.
+
+  The glow alpha stays a flat per-variant value rather than going through
+  glow-alpha: upstream's getAlpha() is pinned at 1.0 by the ray's effectively
+  unbounded life, so the double multiply is a no-op, and the ±10% glow wiggle
+  is skipped along with the other random walks this re-queued ray has no
+  state to carry."
   [camera-pos beam variant]
   (let [{:keys [glow-textures outer-radius outer-rgb outer-alpha
                 inner-radius inner-rgb inner-alpha glow-width glow-alpha]}
