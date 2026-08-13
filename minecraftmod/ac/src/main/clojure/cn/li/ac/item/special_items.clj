@@ -113,8 +113,15 @@
           (cond
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (when (world/remove-block! level hit-block-pos)
-                (mutate-or-convert-main-hand! player item-stack :phase-liquid))
+              (let [removed? (world/remove-block! level hit-block-pos)]
+                (log/info "[matter-unit] collect removed=" removed?
+                          "kind-after=" (get-matter-kind item-stack)
+                          "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
+                          "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
+                (when removed?
+                  (mutate-or-convert-main-hand! player item-stack :phase-liquid)
+                  (log/info "[matter-unit] after-mutate kind=" (get-matter-kind item-stack)
+                            "damage=" (try (pitem/damage item-stack) (catch Exception _ -1)))))
               {:consume? true})
 
             (= kind :phase-liquid)
