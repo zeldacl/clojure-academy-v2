@@ -103,6 +103,8 @@
     (let [kind (get-matter-kind item-stack)
           hit (entity/player-raytrace-block player 5.0 (= kind :none))
           level (entity/player-get-level player)]
+      (log/info "[matter-unit] use kind=" kind "hit=" (boolean hit)
+                "hit-block-id=" (:block-id hit) "expected=" imag-phase-block-id)
       (if-not hit
         {:consume? false}
         (let [{:keys [hit-pos place-pos block-id]} hit
