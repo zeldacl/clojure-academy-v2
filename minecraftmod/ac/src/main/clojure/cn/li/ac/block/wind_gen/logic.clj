@@ -34,10 +34,14 @@
 (def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part" "windgen_main" "windgen_main_part"})
 (def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part" "windgen_base" "windgen_base_part"})
 (def ^:private wind-pillar-ids #{"wind-gen-pillar" "wind_gen_pillar" "windgen_pillar"})
-(def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main"})
-(def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part"})
-(def ^:private wind-base-controller-ids #{"wind-gen-base" "wind_gen_base"})
-(def ^:private wind-base-part-ids #{"wind-gen-base-part" "wind_gen_base_part"})
+;; controller/part sets must include the upstream-aligned registry names
+;; (windgen_main/windgen_base) — the other id sets gained them, these two were
+;; missed, so main-controller-pos-at/base-controller-pos-at resolved nil and
+;; valid-pillar-support? rejected every pillar placement.
+(def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main" "windgen_main"})
+(def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part" "windgen_main_part"})
+(def ^:private wind-base-controller-ids #{"wind-gen-base" "wind_gen_base" "windgen_base"})
+(def ^:private wind-base-part-ids #{"wind-gen-base-part" "wind_gen_base_part" "windgen_base_part"})
 
 (defn- id-path
   [x]
