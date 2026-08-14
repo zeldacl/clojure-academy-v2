@@ -20,10 +20,16 @@
          (catch Exception _ nil))))
 
 (defn rebuild-stack
+  "Rebuild a stack at a new count while PRESERVING NBT/damage (copy +
+   setCount). stack-by-id recreated the item from scratch, dropping e.g. the
+   matter unit's matterKind/damage — a stacked input of 5 phase-liquid units
+   came back as 5 empty units after one conversion (upstream shrinks the
+   stack in place)."
   [stack new-count]
   (when (and stack (pos? (int new-count)))
-    (when-let [item-id (stack-id stack)]
-      (pitem/stack-by-id item-id (int new-count)))))
+    (let [copy (pitem/copy-stack stack)]
+      (pitem/set-count! copy (int new-count))
+      copy)))
 
 (defn consume-stack
   [stack amount]

@@ -186,6 +186,8 @@
                                     ;; name-key is a translation key, not
                                     ;; literal text — keeps variants localized.
                                     (.setHoverName this (Component/translatable (str name-key))))
+        :item-copy-stack          (fn [^ItemStack this] (.copy this))
+        :item-set-count!          (fn [^ItemStack this n] (.setCount this (int n)))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))
         :item-get-item             (fn [^ItemStack this] (.getItem this))
         :item-get-custom-data      (fn [^ItemStack this]
