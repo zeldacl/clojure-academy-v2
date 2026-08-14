@@ -4,7 +4,7 @@
 
 (defn runtime-provider
   [_]
-  {:tabbed-container? tabbed-gui/tabbed-container?
-   :slots-active? tabbed-gui/slots-active?
-   :slots-active-for-menu? tabbed-gui/slots-active-for-menu?
-   :detach-tab-sync! tabbed-gui/detach-tab-sync!})
+  {:tabbed-container? #'tabbed-gui/tabbed-container?
+   :slots-active? #'tabbed-gui/slots-active?
+   :slots-active-for-menu? #'tabbed-gui/slots-active-for-menu?
+   :detach-tab-sync! #'tabbed-gui/detach-tab-sync!})

@@ -44,7 +44,7 @@ public class ModFeatures {
     public static final RegistryObject<Feature<NoneFeatureConfiguration>> CONFIGURABLE_POOL =
         FEATURES.register("configurable_pool", () ->
             new ConfigurablePoolFeature(NoneFeatureConfiguration.CODEC,
-                POOL_FILL_SUPPLIER.get().defaultBlockState()));
+                () -> POOL_FILL_SUPPLIER.get().defaultBlockState()));
 
     public static void register(IEventBus modEventBus) {
         FEATURES.register(modEventBus);

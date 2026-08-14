@@ -14,7 +14,9 @@
             [cn.li.ac.client.font-init :as font-init]
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
             [cn.li.ac.registry.hooks :as hooks]
-            [cn.li.ac.testing.smoke-manifest :as smoke-manifest]))
+            [cn.li.ac.testing.smoke-manifest :as smoke-manifest]
+            [cn.li.ac.tutorial.content :as tut-content]
+            [cn.li.mcmod.i18n :as i18n]))
 
 ;; Lifecycle hooks guard — Framework [:service :ac-lifecycle-hooks]
 
@@ -79,6 +81,10 @@
   (install-effect-reactive/install-push-handler!)
   (platform-hooks/install-client-content-actions!)
   (font-init/init-fonts!)
+  ;; Tutorial content (title/brief/body markdown) must follow the client's
+  ;; language, not default to en_US: the platform exposes the current language
+  ;; code through the neutral i18n layer.
+  (tut-content/install-current-lang-fn! #(i18n/current-language-code))
   (hooks/load-all-client-renderers!)
   (media-external-scan/rescan!))
 

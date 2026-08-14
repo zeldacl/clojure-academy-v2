@@ -31,8 +31,8 @@
 (def pillar-scripted-save-fn (:save-fn pillar-rt))
 
 ;; Block identification
-(def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part"})
-(def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part"})
+(def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part" "windgen_main" "windgen_main_part"})
+(def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part" "windgen_base" "windgen_base_part"})
 (def ^:private wind-pillar-ids #{"wind-gen-pillar" "wind_gen_pillar" "windgen_pillar"})
 (def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main"})
 (def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part"})
@@ -105,11 +105,12 @@
         :else nil))))
 
 (defn- find-main-above-from-base [level base-pos]
-  ;; Scan from base+1: the first pillar sits directly on the base, and upstream
-  ;; (TileWindGenMain.isCompleteStructure) counts every pillar between base and
-  ;; main — starting at base+2 skipped it, so an 8-pillar tower (upstream's
-  ;; standard) was judged "no-top" and never completed.
-  (loop [y (+ (pos/pos-y base-pos) 1) pillars 0]
+  ;; Scan from base+2: the base multiblock occupies two vertical blocks
+  ;; (controller + part at y+1), and upstream TileWindGenBase.updateMainTile
+  ;; starts its loop at getPos().getY() + 2 — starting at base+1 lands on the
+  ;; base part itself, which matches neither pillar nor main and judged every
+  ;; tower BASE_ONLY (the base GUI's structure icons stayed dark).
+  (loop [y (+ (pos/pos-y base-pos) 2) pillars 0]
     (let [check-pos (pos/create-block-pos (pos/pos-x base-pos) y (pos/pos-z base-pos))
           be (world/get-tile-entity level check-pos)
           bid (when be (platform-be/get-block-id be))]

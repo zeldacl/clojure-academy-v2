@@ -47,17 +47,30 @@
 (defn create-output-slot
   [inventory slot-index x y]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] false)))
+      ;; FnPredicate.test invokes the fn with a single ItemStack arg — a
+      ;; two-arg predicate throws ArityException on the first click onto the
+      ;; slot (DynamicSlot.mayPlace -> FnPredicate.test).
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] false)))
       (.withMayPickup (FnSupplier/of (fn [] true)))))
 
 (defn create-standard-slot
   [inventory slot-index x y]
   (Slot. inventory (int slot-index) (int x) (int y)))
 
+(defn create-validated-slot
+  "DynamicSlot whose mayPlace requires `can-place-fn` (item predicate).
+   The slot-level mayPlace overrides the container's canPlaceItem, so a plain
+   standard slot accepts any item even when the GUI registered a
+   :slot-can-place-fn — validated slots carry the restriction themselves."
+  [inventory slot-index x y can-place-fn]
+  (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack stack] (boolean (can-place-fn stack)))))
+      (.withMayPickup (FnSupplier/of (fn [] true)))))
+
 (defn create-conditional-slot
   [inventory slot-index x y active?-fn]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (boolean (active?-fn)))))
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] (boolean (active?-fn)))))
       (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn create-conditional-energy-slot
@@ -99,7 +112,7 @@
 (defn create-conditional-output-slot
   [inventory slot-index x y active?-fn]
   (-> (DynamicSlot. inventory (int slot-index) (int x) (int y))
-      (.withMayPlace (FnPredicate/of (fn [_ ^ItemStack _stack] (and (active?-fn) false))))
+      (.withMayPlace (FnPredicate/of (fn [^ItemStack _stack] (and (active?-fn) false))))
       (.withMayPickup (FnSupplier/of (fn [] (boolean (active?-fn)))))))
 
 (defn- slot-by-type-conditional
@@ -160,11 +173,17 @@
   ([add-slot! get-slot-layout inventory gui-id x-offset y-offset active?-fn]
    (when-let [layout (get-slot-layout gui-id)]
      (doseq [slot-def (:slots layout)]
-       (let [{:keys [type index x y]} slot-def
+       (let [{:keys [type index x y can-place]} slot-def
              abs-x (+ x-offset x)
              abs-y (+ y-offset y)
-             ^Slot slot (if active?-fn
+             ^Slot slot (cond
+                          ;; Item-restricted slot (mayPlace validates the stack
+                          ;; at the slot level — the container canPlaceItem is
+                          ;; bypassed by DynamicSlot).
+                          can-place (create-validated-slot inventory index abs-x abs-y can-place)
+                          active?-fn
                           (slot-by-type-conditional (or type :standard) inventory index abs-x abs-y active?-fn)
+                          :else
                           (case type
                             :energy (create-energy-slot inventory index abs-x abs-y)
                             :plate (create-plate-slot inventory index abs-x abs-y)

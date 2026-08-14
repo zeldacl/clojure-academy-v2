@@ -29,7 +29,7 @@
                 {:registry-name "solar_gen"
                  :physical {:material :stone
                             :hardness 1.5
-                            :resistance 6.0
+                            :resistance 7.5
                             :requires-tool true
                             :harvest-tool :pickaxe
                             :harvest-level 1

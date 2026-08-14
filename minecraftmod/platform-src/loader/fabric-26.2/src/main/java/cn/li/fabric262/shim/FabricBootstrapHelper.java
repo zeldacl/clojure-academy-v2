@@ -36,6 +36,10 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createStoneProperties(registryId);
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String registryId, String material, float hardness, float resistance, boolean requiresCorrectTool) {
+        return SharedBootstrapBlockHelper.createBlockProperties(registryId, material, hardness, resistance, requiresCorrectTool);
+    }
+
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         return SharedBootstrapBlockHelper.carrierBlockProperties(base);
     }
@@ -90,20 +94,24 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createPlainBlock(blockProperties);
     }
 
-    public static Block createLiquidBlock(String registryId, Supplier<? extends FlowingFluid> fluidSupplier) {
+    public static Block createLiquidBlock(String registryId, Supplier<? extends FlowingFluid> fluidSupplier,
+                                          int lightLevel) {
         return new LiquidBlock(Objects.requireNonNull(fluidSupplier.get(), "fluid"),
-            SharedBootstrapBlockHelper.createWaterProperties(registryId));
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel));
     }
 
     public static Block createScriptedLiquidBlock(String registryId,
                                                    Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
-                                                   String tileId) {
+                                                   String tileId,
+                                                   int lightLevel) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            SharedBootstrapBlockHelper.createWaterProperties(registryId),
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;

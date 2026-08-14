@@ -13,15 +13,15 @@
                   :pivot-xz-override [0.0 0.0]
                   :tesr-use-raw-rotation-center? true
                   :tesr-y-deg-override 0.0}
-    :common {:physical {:material :metal :hardness 4.0 :resistance 10.0
-                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}}
-    :controller {:registry-name "developer_normal"
+    :common {:physical {:material :stone :hardness 4.0 :resistance 20.0
+                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :stone}}
+    :controller {:registry-name "dev_normal"
                  :rendering {:light-level 1.0
                              :flat-item-icon? true
              :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "dev_normal")}}
                  :events {:on-right-click (dev-logic/open-developer-gui-for "developer-normal")}}
-    :part {:registry-name "developer_normal_part"
+    :part {:registry-name "dev_normal_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "dev_normal")}}
@@ -33,15 +33,15 @@
                   :pivot-xz-override [0.0 0.0]
                   :tesr-use-raw-rotation-center? true
                   :tesr-y-deg-override 0.0}
-    :common {:physical {:material :metal :hardness 4.0 :resistance 10.0
-                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :metal}}
-    :controller {:registry-name "developer_advanced"
+    :common {:physical {:material :stone :hardness 4.0 :resistance 20.0
+                       :requires-tool true :harvest-tool :pickaxe :harvest-level 2 :sounds :stone}}
+    :controller {:registry-name "dev_advanced"
                  :rendering {:light-level 2.0
                              :flat-item-icon? true
              :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "dev_advanced")}}
                  :events {:on-right-click (dev-logic/open-developer-gui-for "developer-advanced")}}
-    :part {:registry-name "developer_advanced_part"
+    :part {:registry-name "dev_advanced_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "dev_advanced")}}
@@ -53,13 +53,13 @@
     {:guard ::init
      :log-label "Developer blocks"
      :tiles [{:id "developer-normal"
-              :registry-name "developer_normal"
+              :registry-name "dev_normal"
               :blocks ["developer-normal" "developer-normal-part"]
               :tick-fn dev-logic/developer-tick-fn
               :read-nbt-fn dev-logic/dev-scripted-load-fn
               :write-nbt-fn dev-logic/dev-scripted-save-fn}
              {:id "developer-advanced"
-              :registry-name "developer_advanced"
+              :registry-name "dev_advanced"
               :blocks ["developer-advanced" "developer-advanced-part"]
               :tick-fn dev-logic/developer-tick-fn
               :read-nbt-fn dev-logic/dev-scripted-load-fn

@@ -17,13 +17,13 @@
   (bdsl/create-block-spec
     id
     {:registry-name registry-name
-     :physical {:material :metal
+     :physical {:material :stone
                 :hardness 2.5
-                :resistance 6.0
+                :resistance 12.5
                 :requires-tool true
                 :harvest-tool :pickaxe
                 :harvest-level 1
-                :sounds :metal}
+                :sounds :stone}
      :rendering {:model-parent "minecraft:block/cube_all"}
      :block-state {:block-state-properties node-logic/block-state-properties}
      :events {:on-right-click (node-logic/handle-node-right-click node-type)

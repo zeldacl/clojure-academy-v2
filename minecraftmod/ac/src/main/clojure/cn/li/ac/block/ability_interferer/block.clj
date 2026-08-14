@@ -25,13 +25,11 @@
      :blocks [(bdsl/create-block-spec
                 "ability-interferer"
                 {:registry-name "ability_interferer"
-                 :physical {:material :metal
-                            :hardness 3.0
-                            :resistance 8.0
-                            :requires-tool true
-                            :harvest-tool :pickaxe
-                            :harvest-level 2
-                            :sounds :metal}
+                  :physical {:material :stone
+                             :hardness 0.0
+                             :resistance 0.0
+                             :requires-tool false
+                             :sounds :stone}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "ability_interf_off")}
                              :flat-item-icon? true

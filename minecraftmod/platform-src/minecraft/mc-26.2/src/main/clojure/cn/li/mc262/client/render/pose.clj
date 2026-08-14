@@ -12,3 +12,4 @@
 (def scale shared/scale)
 (def get-pose-matrix shared/get-pose-matrix)
 (def submit-vertex shared/submit-vertex)
+(def submit-vertex-no-overlay shared/submit-vertex-no-overlay)

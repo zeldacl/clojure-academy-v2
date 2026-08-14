@@ -53,3 +53,13 @@
                               (float u) (float v)
                               (int overlay) (int uv2)
                               (float nx) (float ny) (float nz)))
+
+(defn submit-vertex-no-overlay
+  "Submit one vertex to a POSITION_COLOR_TEX_LIGHTMAP render type, which has no
+  overlay and no normal element."
+  [^VertexConsumer vc ^PoseStack pose-stack x y z r g b a u v uv2]
+  (RenderInterop/submitVertexNoOverlay vc pose-stack
+                                       (float x) (float y) (float z)
+                                       (float r) (float g) (float b) (float a)
+                                       (float u) (float v)
+                                       (int uv2)))

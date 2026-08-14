@@ -34,11 +34,11 @@
                 {:registry-name "phase_gen"
                  :physical {:material :stone
                             :hardness 2.5
-                            :resistance 6.0
+                            :resistance 12.5
                             :requires-tool true
                             :harvest-tool :pickaxe
                             :harvest-level 1
-                            :sounds :metal}
+                            :sounds :stone}
                  :rendering {:model-parent "minecraft:block/block"
                              :textures {:all (modid/asset-path "block" "phase_gen")}
                              :flat-item-icon? true

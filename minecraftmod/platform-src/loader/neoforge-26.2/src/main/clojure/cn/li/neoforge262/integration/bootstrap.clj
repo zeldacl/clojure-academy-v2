@@ -7,6 +7,10 @@
 	([]
 	 (ForgeBootstrapHelper/createStoneProperties)))
 
+(defn create-block-properties
+	[^String registry-id ^String material hardness resistance requires-correct-tool]
+	(ForgeBootstrapHelper/createBlockProperties registry-id material (float hardness) (float resistance) (boolean requires-correct-tool)))
+
 (defn create-item-properties
 	[^String registry-id]
 	(ForgeBootstrapHelper/createItemProperties registry-id))
@@ -107,13 +111,13 @@
 	(ForgeBootstrapHelper/createFlowingFluid properties))
 
 (defn create-liquid-block
-	[fluid-supplier ^String registry-id]
-	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier registry-id))
+	[fluid-supplier ^String registry-id light-level]
+	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier registry-id (int light-level)))
 
 (defn create-scripted-liquid-block
-	[fluid-supplier block-id tile-id ^String registry-id]
+	[fluid-supplier block-id tile-id ^String registry-id light-level]
 	(ForgeBootstrapHelper/createScriptedLiquidBlock
-		fluid-supplier ^String block-id ^String tile-id registry-id))
+		fluid-supplier ^String block-id ^String tile-id registry-id (int light-level)))
 
 (defn create-fluid-bucket
 	[fluid-supplier ^String registry-id]

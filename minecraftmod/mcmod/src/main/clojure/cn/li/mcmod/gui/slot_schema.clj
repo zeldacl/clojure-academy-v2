@@ -35,12 +35,18 @@
 
 (defn- normalize-slot
   [idx slot]
-  (let [{:keys [id type x y]} slot]
+  (let [{:keys [id type x y can-place]} slot]
     {:id (ensure-keyword id ":slot/id")
      :type (ensure-keyword type ":slot/type")
      :x (ensure-int x ":slot/x")
      :y (ensure-int y ":slot/y")
-     :index idx}))
+     :index idx
+     ;; Optional (fn [ItemStack] -> boolean) restricting what may be placed.
+     ;; DynamicSlot.mayPlace overrides the container's canPlaceItem, so the
+     ;; GUI's :slot-can-place-fn is never consulted on click — without this
+     ;; predicate any item can enter a typed input slot (e.g. a crystal into
+     ;; the liquid-unit slot, where the machine logic then consumes it).
+     :can-place can-place}))
 
 (defn- derived-ranges
   [tile-slot-count]
@@ -76,8 +82,9 @@
         slots (mapv normalize-slot (range) slots)]
     (validate-slots! schema-id slots)
     (let [tile-slot-count (count slots)
-          slot-layout {:slots (mapv (fn [{:keys [type index x y]}]
-                                      {:type type :index index :x x :y y})
+          slot-layout {:slots (mapv (fn [{:keys [type index x y can-place]}]
+                                      {:type type :index index :x x :y y
+                                       :can-place can-place})
                                     slots)
                        :ranges (derived-ranges tile-slot-count)}
           schema {:schema-id schema-id

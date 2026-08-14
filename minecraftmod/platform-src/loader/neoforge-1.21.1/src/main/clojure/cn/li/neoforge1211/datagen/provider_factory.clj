@@ -8,7 +8,9 @@
             [cn.li.mc1211.datagen.lang-provider-shell :as lang]
             [cn.li.neoforge1211.datagen.recipe-provider :as rp]
             [cn.li.mc1211.datagen.worldgen-provider-shell :as worldgen]
-            [cn.li.mc1211.datagen.blockstate-provider-shell :as blockstate-shell])
+            [cn.li.mc1211.datagen.blockstate-provider-shell :as blockstate-shell]
+            [cn.li.mc1211.datagen.block-loot-provider-shell :as block-loot]
+            [cn.li.mc1211.datagen.block-tag-provider-shell :as block-tags])
   (:import [java.util.concurrent CompletableFuture]
            [net.minecraft.data DataGenerator DataProvider$Factory]
            [net.neoforged.neoforge.common.data ExistingFileHelper]))
@@ -19,6 +21,10 @@
 (def ^:private provider-factories
   {:blockstate (fn [pack-output _lookup _exfile-helper]
                  (blockstate-shell/create-provider pack-output blockstate-provider-name))
+   :block-loot (fn [pack-output _lookup _exfile-helper]
+                 (block-loot/create pack-output))
+   :block-tags (fn [pack-output _lookup _exfile-helper]
+                 (block-tags/create pack-output))
    :item-model (fn [pack-output _lookup exfile-helper]
                  (imp/create pack-output exfile-helper))
    :lang (fn [pack-output _lookup exfile-helper]

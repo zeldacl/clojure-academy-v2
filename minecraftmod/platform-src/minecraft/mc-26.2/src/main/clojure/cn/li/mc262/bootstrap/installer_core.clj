@@ -27,10 +27,10 @@
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item Item ItemStack]
            [net.minecraft.world.level Level]
-           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block Block Blocks]
            [net.minecraft.world.level.block.entity BlockEntity]
            [net.minecraft.world.level.block.state BlockState StateDefinition]
-           [net.minecraft.world.level.block.state.properties Property]
+           [net.minecraft.world.level.block.state.properties BooleanProperty EnumProperty IntegerProperty Property]
            [net.minecraft.world.phys Vec3]))
 
 (declare install-item-protocols!)
@@ -45,7 +45,15 @@
   {:world-get-tile-entity (fn [^Level level p] (.getBlockEntity level p))
    :world-get-block-state (fn [^Level level p] (.getBlockState level p))
    :world-set-block (fn [^Level level p s flags] (.setBlock level p s (int flags)))
-   :world-remove-block (fn [^Level level p] (.destroyBlock level p false))
+   :world-remove-block (fn [^Level level p]
+                                       (let [^BlockState bs (.getBlockState level p)]
+                                         ;; destroyBlock returns false for fluid
+                                         ;; blocks in some paths; setBlock(air)
+                                         ;; is the reliable fluid removal.
+                                         (if (.isEmpty (.getFluidState bs))
+                                           (.destroyBlock level p false)
+                                           (let [^Block air-block Blocks/AIR]
+                                             (.setBlock level p (.defaultBlockState air-block) 3)))))
    :world-break-block (fn [^Level level p drop?] (.destroyBlock level p (boolean drop?)))
    :world-place-block-by-id (fn [^Level level block-id p flags]
                               (world-block-ops/world-place-block-by-id adapter level block-id p flags))
@@ -91,8 +99,22 @@
                     :block-state-get-state-definition (fn [^BlockState this] (.getStateDefinition (.getBlock this)))
                     :block-state-get-property         (fn [_this ^StateDefinition state-def prop-name]
                                                         (.getProperty state-def (str prop-name)))
+                    ;; Clojure integers arrive as Long; IntegerProperty.setValue
+                    ;; rejects Long (its possible-values set holds Integer), so
+                    ;; cast by property kind before setting.
                     :block-state-set-property         (fn [^BlockState this ^Property prop value]
-                                                        (.setValue this prop value))}]
+                                                        (.setValue this prop
+                                                                   (cond
+                                                                     (instance? IntegerProperty prop) (int value)
+                                                                     (instance? BooleanProperty prop) (boolean value)
+                                                                     (instance? EnumProperty prop)
+                                                                     (let [v (.getValue prop (name value))]
+                                                                       ;; 1.20.1 Property.getValue returns Optional<T>, not T — unwrap
+                                                                       ;; before setValue (its Comparable cast rejects the Optional).
+                                                                       (if (instance? java.util.Optional v)
+                                                                         (.orElse ^java.util.Optional v nil)
+                                                                         v))
+                                                                     :else value)))}]
         (world/install-block-state-ops! bs-ops "mc262 block-state"))
       (log/info "mc262 block-state ops initialized"))))
 

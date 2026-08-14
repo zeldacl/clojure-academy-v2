@@ -42,6 +42,27 @@ public final class SharedBootstrapBlockHelper {
         return BlockBehaviour.Properties.copy(Blocks.STONE);
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String material,
+                                                                   float hardness,
+                                                                   float resistance,
+                                                                   boolean requiresCorrectTool) {
+        BlockBehaviour.Properties props = "metal".equals(material)
+            ? BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK)
+            : BlockBehaviour.Properties.copy(Blocks.STONE);
+        props = props.strength(hardness, resistance);
+        return requiresCorrectTool ? props.requiresCorrectToolForDrops() : props;
+    }
+
+    /**
+     * Apply a fluid's luminosity as block light emission. A FluidType's light
+     * level drives fog and entity lighting only, so a glowing fluid still needs
+     * its LiquidBlock to emit — vanilla lava does the same via its own
+     * Properties. A level of 0 leaves the properties untouched.
+     */
+    public static BlockBehaviour.Properties withLightLevel(BlockBehaviour.Properties props, int lightLevel) {
+        return lightLevel > 0 ? props.lightLevel(state -> lightLevel) : props;
+    }
+
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         BlockBehaviour.StatePredicate alwaysFalse = new BlockBehaviour.StatePredicate() {
             @Override

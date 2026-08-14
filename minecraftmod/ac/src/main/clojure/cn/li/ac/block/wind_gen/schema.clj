@@ -23,7 +23,11 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    ;; render.clj draws the fan from the CLIENT custom-state — without
+    ;; :client-sync? the tick never calls sync-to-client, so the client BE
+    ;; keeps its default false and the fan never renders.
+    :client-sync? true}
 
    {:key :no-obstacle
     :nbt-key "NoObstacle"
@@ -31,7 +35,8 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    :client-sync? true}
 
    {:key :fan-installed
     :nbt-key "FanInstalled"
@@ -39,7 +44,8 @@
     :default false
     :persist? true
     :gui-sync? true
-    :gui-coerce boolean}
+    :gui-coerce boolean
+    :client-sync? true}
 
    {:key :status
     :nbt-key "Status"
@@ -111,7 +117,13 @@
     :default "BASE_ONLY"
     :persist? true
     :gui-sync? true
-    :gui-data-slot? false}
+    ;; The base GUI structure icons read this field: it must ride the vanilla
+    ;; DataSlot path (gui-data-slot? false + no codec left the client at the
+    ;; default "BASE_ONLY" forever). Codes must match the values base-tick-state
+    ;; actually stores — (name completeness-kw), lower-case with hyphens
+    ;; ("complete"/"no-top"/"base-only") — not the upper-case status strings.
+    :gui-coerce str
+    :gui-data-slot-status-codes ["base-only" "no-top" "complete" "complete-not-working"]}
 
    {:key :status
     :nbt-key "Status"
@@ -119,7 +131,10 @@
     :default "IDLE"
     :persist? true
     :gui-sync? true
-    :gui-data-slot? false}
+    ;; Same DataSlot fix: the previous codes ("STOPPED"/"WEAK"/"STRONG") never
+    ;; matched the actual status values, so any encoded status fell back to 0.
+    :gui-coerce str
+    :gui-data-slot-status-codes ["IDLE" "BASE_ONLY" "NO_TOP" "COMPLETE" "COMPLETE_NOT_WORKING"]}
 
    {:key :structure-valid
     :type :boolean

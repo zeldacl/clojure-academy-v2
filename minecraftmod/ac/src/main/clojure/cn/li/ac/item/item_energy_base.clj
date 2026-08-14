@@ -6,7 +6,8 @@
 
   Energy operations (charge, pull, set, get) live in
   cn.li.ac.energy.service.item-manager, aligning with the original's IFItemManager."
-  (:require [cn.li.ac.energy.imag-energy-item :as energy-item]
+  (:require [clojure.string :as str]
+            [cn.li.ac.energy.imag-energy-item :as energy-item]
             [cn.li.mcmod.config :as modid]
             [cn.li.mcmod.platform.item :as item]
             [cn.li.mcmod.platform.structured-data :as sd]
@@ -56,7 +57,11 @@
           expected-portable-id (str modid/mod-id ":developer_portable")
           nbt-data (item/custom-data item-stack)
           nbt-type (when nbt-data (sd/get-string nbt-data "batteryType"))]
-      (or (when (seq nbt-type) (keyword nbt-type))
+      (or (when (seq nbt-type)
+            ;; Registry battery-type strings use underscores ("energy_unit");
+            ;; config keys use kebab-case (:energy-unit) — normalize so the
+            ;; NBT path resolves like the registry-name path.
+            (keyword (str/replace nbt-type "_" "-")))
           (cond
             (= registry-id expected-energy-id) :energy-unit
             (= registry-id expected-portable-id) :developer-portable

@@ -1,5 +1,6 @@
 (ns cn.li.ac.block.imag-fusor.schema
-  "Imaginary Fusor state schema")
+  "Imaginary Fusor state schema"
+  (:require [cn.li.mcmod.block.inventory-helpers :as inv-helpers]))
 
 (def imag-fusor-schema
   "Schema for imaginary fusor block"
@@ -98,10 +99,12 @@
 
    {:key :inventory
     :nbt-key "Inventory"
-    :type :item-list
-    :default []
+    :type :inventory
+    :default [nil nil nil nil nil]
     :persist? true
-    :size 5}
+    :gui-sync? false
+    :load-fn inv-helpers/load-inventory
+    :save-fn inv-helpers/save-inventory}
 
   {:key :check-cooldown
    :nbt-key "CheckCooldown"

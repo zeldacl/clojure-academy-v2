@@ -103,22 +103,46 @@
     (let [kind (get-matter-kind item-stack)
           hit (entity/player-raytrace-block player 5.0 (= kind :none))
           level (entity/player-get-level player)]
+      (log/info "[matter-unit] use kind=" kind "hit=" (boolean hit)
+                "hit-block-id=" (:block-id hit) "expected=" imag-phase-block-id)
       (if-not hit
         {:consume? false}
-        (let [{:keys [hit-pos place-pos block-id]} hit
+        (let [{:keys [hit-pos place-pos block-id hit-replaceable? place-replaceable?
+                      may-edit-hit? may-edit-place?]} hit
               hit-block-pos (pos/create-block-pos (:x hit-pos) (:y hit-pos) (:z hit-pos))
               place-block-pos (pos/create-block-pos (:x place-pos) (:y place-pos) (:z place-pos))]
           (cond
+            (and (= kind :none) (= block-id imag-phase-block-id) (not may-edit-hit?))
+            {:consume? false}
+
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (when (world/remove-block! level hit-block-pos)
-                (mutate-or-convert-main-hand! player item-stack :phase-liquid))
+              (let [removed? (world/remove-block! level hit-block-pos)]
+                (log/info "[matter-unit] collect removed=" removed?
+                          "kind-after=" (get-matter-kind item-stack)
+                          "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
+                          "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
+                (when removed?
+                  (mutate-or-convert-main-hand! player item-stack :phase-liquid)
+                  (log/info "[matter-unit] after-mutate kind=" (get-matter-kind item-stack)
+                            "damage=" (try (pitem/damage item-stack) (catch Exception _ -1)))))
               {:consume? true})
 
             (= kind :phase-liquid)
-            (let [target-state (world/get-block-state level place-block-pos)
-                  placeable? (or (nil? target-state) (world/block-state-is-air target-state))]
-              (if (and placeable? (world/place-block-by-id! level imag-phase-block-id place-block-pos 3))
+            ;; Upstream ItemMatterUnit replaces the targeted block when it is
+            ;; replaceable, and otherwise builds against the hit face. Its
+            ;; face-adjacent branch writes unconditionally, overwriting stone,
+            ;; chests, anything — that is not reproduced here: the adjacent
+            ;; position has to be replaceable too. "Replaceable" is vanilla's
+            ;; own notion, so snow layers, tall grass and fluids still get
+            ;; displaced the way they do upstream.
+            (let [[target-pos target-replaceable? may-edit?]
+                  (if hit-replaceable?
+                    [hit-block-pos true may-edit-hit?]
+                    [place-block-pos place-replaceable? may-edit-place?])]
+              (if (and target-replaceable?
+                       may-edit?
+                       (world/place-block-by-id! level imag-phase-block-id target-pos 3))
                 (do
                   (mutate-or-convert-main-hand! player item-stack :none)
                   {:consume? true})
