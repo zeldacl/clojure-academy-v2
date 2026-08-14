@@ -79,12 +79,13 @@
   (let [tag (pitem/ensure-custom-data item-stack)]
     (sd/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
     (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))
-    ;; Upstream getTranslationKey() appends the material name, so the empty
-    ;; unit reads "Empty Unit" and the filled one "Imag Phase Liquid Unit".
+    ;; Upstream getTranslationKey() appends the material name (Empty Unit /
+    ;; Imag Phase Liquid Unit). Use the same lang keys the creative-tab
+    ;; filled-variant carries, so every instance localizes identically.
     (pitem/set-hover-name! item-stack
                            (if (= kind :phase-liquid)
-                             "Imag Phase Liquid Unit"
-                             "Empty Unit"))))
+                             (str "item." modid/MOD-ID ".matter_unit_phase_liquid")
+                             (str "item." modid/MOD-ID ".matter_unit_none")))))
 
 (defn- make-matter-unit-stack
   [kind]
@@ -248,9 +249,10 @@
         "matter_unit"
         {:max-stack-size 16
          :creative-tab :misc
-         :properties {:tooltip ["Matter Unit (Empty)"
-                                "Right click to collect/place imaginary phase liquid"]
-                      :model-texture "matter_unit"
+         ;; No static tooltip: upstream ItemMatterUnit has none, and the
+         ;; empty/filled states are told apart by their hover names (lang
+         ;; keys item.<modid>.matter_unit_none / _phase_liquid).
+         :properties {:model-texture "matter_unit"
                       :filled-variant {:nbt {"matterKind" "phase-liquid"}
                                        :damage 1
                                        :label "phase-liquid"}}
