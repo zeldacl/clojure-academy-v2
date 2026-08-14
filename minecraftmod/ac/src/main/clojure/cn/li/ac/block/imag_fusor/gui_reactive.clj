@@ -67,7 +67,7 @@
                 "x=" (.getX pn) "y=" (.getY pn)
                 "w=" (.getW pn) "h=" (.getH pn)
                 "dslot0=" (.getDSlot pn 0)
-                "oslot2=" (some-> (.getOSlot pn 2) str))))
+                "oslot2=" (some-> (.getOSlot pn 2) str)))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
