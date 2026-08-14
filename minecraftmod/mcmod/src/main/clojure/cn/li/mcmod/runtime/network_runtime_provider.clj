@@ -4,6 +4,6 @@
             [cn.li.mcmod.content.registry :as content-registry]))
 
 (defn runtime-provider [_]
-  {:encode codec/encode :decode codec/decode
-   :list-descriptors content-registry/list-descriptors
-   :handle-request server/handle-request})
+  {:encode #'codec/encode :decode #'codec/decode
+   :list-descriptors #'content-registry/list-descriptors
+   :handle-request #'server/handle-request})

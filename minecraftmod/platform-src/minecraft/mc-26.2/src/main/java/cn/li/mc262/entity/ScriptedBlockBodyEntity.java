@@ -16,6 +16,8 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -298,11 +300,16 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
         discard();
     }
 
-    private static boolean placeIfReplaceable(Level level, BlockPos pos, BlockState state) {
+    private boolean placeIfReplaceable(Level level, BlockPos pos, BlockState state) {
         if (!level.getBlockState(pos).canBeReplaced()) {
             return false;
         }
         level.setBlock(pos, state, 3);
+        // Original EntityBlock placed through ItemBlock#placeBlockAt, which runs
+        // onBlockPlacedBy. Without the modern equivalent an oriented block always
+        // lands in its default state instead of facing the thrower.
+        LivingEntity placer = getOwner() instanceof LivingEntity living ? living : null;
+        state.getBlock().setPlacedBy(level, pos, state, placer, new ItemStack(state.getBlock()));
         return true;
     }
 

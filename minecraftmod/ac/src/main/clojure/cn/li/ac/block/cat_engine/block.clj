@@ -25,13 +25,11 @@
      :blocks [(bdsl/create-block-spec
                 "cat-engine"
                 {:registry-name "cat_engine"
-                 :physical {:material :metal
-                            :hardness 2.0
-                            :resistance 6.0
-                            :requires-tool true
-                            :harvest-tool :pickaxe
-                            :harvest-level 1
-                            :sounds :metal}
+                 :physical {:material :stone
+                            :hardness 0.0
+                            :resistance 0.0
+                            :requires-tool false
+                            :sounds :stone}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "cat_engine")}
                              :flat-item-icon? true

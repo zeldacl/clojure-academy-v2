@@ -20,6 +20,8 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
@@ -319,14 +321,12 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
             return;
         }
         BlockPos origin = result.getBlockPos();
-        if (canReplace(level, origin)) {
-            level.setBlock(origin, state, 3);
+        if (placeIfReplaceable(level, origin, state)) {
             this.discard();
             return;
         }
         BlockPos adjacent = origin.relative(result.getDirection());
-        if (canReplace(level, adjacent)) {
-            level.setBlock(adjacent, state, 3);
+        if (placeIfReplaceable(level, adjacent, state)) {
             this.discard();
             return;
         }
@@ -343,8 +343,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
                         continue;
                     }
                     BlockPos candidate = origin.offset(dx, dy, dz);
-                    if (canReplace(level, candidate)) {
-                        level.setBlock(candidate, state, 3);
+                    if (placeIfReplaceable(level, candidate, state)) {
                         this.discard();
                         return;
                     }
@@ -356,8 +355,7 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
             // to ten checks when the local candidates are all occupied.
             BlockPos candidate = origin;
             for (int remaining = 10; remaining > 0; remaining--) {
-                if (canReplace(level, candidate)) {
-                    level.setBlock(candidate, state, 3);
+                if (placeIfReplaceable(level, candidate, state)) {
                     this.discard();
                     return;
                 }
@@ -367,8 +365,17 @@ public class ScriptedBlockBodyEntity extends ScriptedProjectileEntity implements
         this.discard();
     }
 
-    private static boolean canReplace(Level level, BlockPos pos) {
-        return level.getBlockState(pos).canBeReplaced();
+    private boolean placeIfReplaceable(Level level, BlockPos pos, BlockState state) {
+        if (!level.getBlockState(pos).canBeReplaced()) {
+            return false;
+        }
+        level.setBlock(pos, state, 3);
+        // Original EntityBlock placed through ItemBlock#placeBlockAt, which runs
+        // onBlockPlacedBy. Without the modern equivalent an oriented block always
+        // lands in its default state instead of facing the thrower.
+        LivingEntity placer = getOwner() instanceof LivingEntity living ? living : null;
+        state.getBlock().setPlacedBy(level, pos, state, placer, new ItemStack(state.getBlock()));
+        return true;
     }
 
     private BlockState resolveSyncedBlockState() {

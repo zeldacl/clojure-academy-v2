@@ -95,6 +95,10 @@ public final class ForgeBootstrapHelper {
         return SharedBootstrapBlockHelper.createStoneProperties(registryId);
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String registryId, String material, float hardness, float resistance, boolean requiresCorrectTool) {
+        return SharedBootstrapBlockHelper.createBlockProperties(registryId, material, hardness, resistance, requiresCorrectTool);
+    }
+
     public static Item.Properties createItemProperties(String registryId) {
         return SharedBootstrapBlockHelper.createItemProperties(registryId);
     }
@@ -210,22 +214,26 @@ public final class ForgeBootstrapHelper {
     }
 
     public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
-                                          String registryId) {
+                                          String registryId,
+                                          int lightLevel) {
         return new LiquidBlock(
             fluidSupplier.get(),
-            SharedBootstrapBlockHelper.createWaterProperties(registryId)
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel)
         );
     }
 
     public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
                                                    String tileId,
-                                                   String registryId) {
+                                                   String registryId,
+                                                   int lightLevel) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            SharedBootstrapBlockHelper.createWaterProperties(registryId),
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;

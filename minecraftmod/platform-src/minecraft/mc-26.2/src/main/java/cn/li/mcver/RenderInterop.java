@@ -9,6 +9,9 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
  * 26.2: addVertex / set* plus deferred SubmitNode collector path.
  */
 public final class RenderInterop {
+    /** OverlayTexture.NO_OVERLAY — pack(u=0, v=WHITE_OVERLAY_V=10). */
+    private static final int NO_OVERLAY = 10 << 16;
+
     private RenderInterop() {
     }
 
@@ -37,6 +40,25 @@ public final class RenderInterop {
                 .setOverlay(overlay)
                 .setUv2(light & 0xFFFF, (light >> 16) & 0xFFFF)
                 .setNormal(pose, nx, ny, nz);
+    }
+
+    /**
+     * Vertex for this version's see-through translucent render type. The vertex
+     * format differs per version and this method owns the difference: 1.20.1
+     * and 1.21.1 use POSITION_COLOR_TEX_LIGHTMAP (no overlay, no normal), while
+     * 26.2's {@code ModRenderTypes.academyQuadsTranslucent} is built on
+     * DefaultVertexFormat.ENTITY and therefore needs both — supplied here as
+     * NO_OVERLAY and an upward normal, matching the flat quads the callers draw.
+     */
+    public static void submitVertexNoOverlay(
+            VertexConsumer vc,
+            PoseStack poseStack,
+            float x, float y, float z,
+            float r, float g, float b, float a,
+            float u, float v,
+            int light) {
+        submitVertex(vc, poseStack, x, y, z, r, g, b, a, u, v,
+                NO_OVERLAY, light, 0.0F, 1.0F, 0.0F);
     }
 
     public static void addColoredVertex(VertexConsumer vc, float x, float y, float z, float r, float g, float b, float a) {

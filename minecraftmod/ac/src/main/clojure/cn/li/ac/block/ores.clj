@@ -17,28 +17,30 @@
     (bdsl/register-block!
       (bdsl/create-block-spec
         "constrained-ore"
-        {:registry-name "constrained_ore"
+        {:registry-name "constraint_metal"
          :physical {:material :stone
                     :hardness 4.0
-                    :resistance 3.0
+                     :resistance 20.0
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 1
-                    :sounds :stone}
+                     :sounds :stone}
+         :loot {:type :ore :drop-item "constraint_metal" :min-count 1 :max-count 2}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "constraint_metal")}
                      :flat-item-icon? true}}))
     (bdsl/register-block!
       (bdsl/create-block-spec
         "imaginary-ore"
-        {:registry-name "imaginary_ore"
+        {:registry-name "imagsil_ore"
          :physical {:material :stone
                     :hardness 3.75
-                    :resistance 3.0
+                     :resistance 18.75
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 2
-                    :sounds :stone}
+                     :sounds :stone}
+         :loot {:type :ore :drop-item "imagsil_ore" :min-count 1 :max-count 2}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "imagsil_ore")}
                      :flat-item-icon? true}}))
@@ -48,11 +50,12 @@
         {:registry-name "reso_ore"
          :physical {:material :stone
                     :hardness 3.0
-                    :resistance 3.0
+                     :resistance 15.0
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 2
-                    :sounds :stone}
+                     :sounds :stone}
+         :loot {:type :ore :drop-item "crystal_low" :min-count 1 :max-count 3}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "reso_ore")}
                      :flat-item-icon? true}}))
@@ -62,11 +65,12 @@
         {:registry-name "crystal_ore"
          :physical {:material :stone
                     :hardness 3.0
-                    :resistance 3.0
+                     :resistance 15.0
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 2
-                    :sounds :stone}
+                     :sounds :stone}
+         :loot {:type :ore :drop-item "reso_crystal" :min-count 1 :max-count 2}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "crystal_ore")}
                      :flat-item-icon? true}}))
@@ -74,9 +78,9 @@
       (bdsl/create-block-spec
         "machine-frame"
         {:registry-name "machine_frame"
-         :physical {:material :stone
-                    :hardness 3.0
-                    :resistance 6.0
+          :physical {:material :stone
+                     :hardness 4.0
+                     :resistance 20.0
                     :requires-tool true
                     :harvest-tool :pickaxe
                     :harvest-level 1

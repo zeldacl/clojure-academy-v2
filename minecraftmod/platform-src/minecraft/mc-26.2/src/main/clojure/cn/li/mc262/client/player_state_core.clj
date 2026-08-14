@@ -24,6 +24,20 @@
     (when-let [player (.player mc)]
       {:x (.getX player) :y (.getY player) :z (.getZ player)})))
 
+(defn camera-position
+  "Returns {:x :y :z} for the render camera, or nil if not in-game.
+
+  This is the true camera, not the player: in third person it sits behind them.
+  Legacy TESRs received block-minus-camera offsets as their x/y/z arguments, so
+  ports that reconstruct that vector must use this rather than the player pos.
+  26.2 renamed both accessors (mainCamera/position)."
+  []
+  (when-let [^Minecraft mc (Minecraft/getInstance)]
+    (when-let [renderer (.gameRenderer mc)]
+      (when-let [camera (.mainCamera renderer)]
+        (let [^Vec3 p (.position camera)]
+          {:x (.x p) :y (.y p) :z (.z p)})))))
+
 (defn local-player-eye-pos
   "Returns {:x :y :z} for the local player eye position (y offset +1.62), or nil."
   []

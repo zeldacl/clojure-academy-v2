@@ -3,6 +3,7 @@ package cn.li.neoforge262.client;
 import cn.li.mc262.client.particle.MdParticle;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc262.client.render.GuiRenderPipelines;
+import cn.li.mc262.client.render.ModRenderTypes;
 import cn.li.mc262.client.render.PlasmaRenderTypes;
 import cn.li.mc262.client.render.ReactivePreviewPipRenderer;
 import cn.li.mc262.client.render.ReactivePreviewRenderState;
@@ -104,6 +105,7 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {
         event.registerPipeline(PlasmaRenderTypes.plasmaBodyPipeline());
+        event.registerPipeline(ModRenderTypes.academyQuadsTranslucentPipeline());
         GuiRenderPipelines.all().forEach(event::registerPipeline);
     }
 

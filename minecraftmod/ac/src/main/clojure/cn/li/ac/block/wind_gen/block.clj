@@ -13,20 +13,20 @@
     :multi-block {:positions [[0 0 0] [0 0 -1] [0 0 1]]
                   :rotation-center [0.5 0.0 0.4]
                   :tesr-use-raw-rotation-center? true}
-    :common {:physical {:material :metal
-                       :hardness 3.0
-                       :resistance 6.0
+     :common {:physical {:material :stone
+                        :hardness 4.0
+                        :resistance 20.0
                        :requires-tool true
                        :harvest-tool :pickaxe
-                       :harvest-level 1
-                       :sounds :metal}}
-    :controller {:registry-name "wind_gen_main"
+                        :harvest-level 2
+                        :sounds :stone}}
+     :controller {:registry-name "windgen_main"
                  :rendering {:flat-item-icon? true
              :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "windgen_main")}}
                  :events {:on-right-click wind-logic/open-wind-main-gui!
                           :on-place wind-logic/on-wind-main-placed!}}
-    :part {:registry-name "wind_gen_main_part"
+     :part {:registry-name "windgen_main_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "windgen_main")}}
@@ -36,19 +36,19 @@
     :multi-block {:positions [[0 0 0] [0 1 0]]
                   :rotation-center [0.5 0.0 0.5]
                   :tesr-use-raw-rotation-center? true}
-    :common {:physical {:material :metal
-                       :hardness 3.0
-                       :resistance 6.0
+     :common {:physical {:material :stone
+                        :hardness 4.0
+                        :resistance 20.0
                        :requires-tool true
                        :harvest-tool :pickaxe
-                       :harvest-level 1
-                       :sounds :metal}}
-    :controller {:registry-name "wind_gen_base"
+                        :harvest-level 2
+                        :sounds :stone}}
+     :controller {:registry-name "windgen_base"
                  :rendering {:flat-item-icon? true
              :render-shape :invisible
                              :textures {:all (modid/asset-path "block" "windgen_base")}}
                  :events {:on-right-click wind-logic/open-wind-base-gui!}}
-    :part {:registry-name "wind_gen_base_part"
+     :part {:registry-name "windgen_base_part"
           :rendering {:model-parent "minecraft:block/cube_all"
             :render-shape :invisible
                        :textures {:all (modid/asset-path "block" "windgen_base")}}
@@ -59,19 +59,19 @@
     {:guard ::init
      :log-label "Wind Generator (main/base multiblock + pillar)"
      :tiles [{:id "wind-gen-main"
-              :registry-name "wind_gen_main"
+              :registry-name "windgen_main"
               :blocks ["wind-gen-main" "wind-gen-main-part"]
               :tick-fn wind-logic/main-tick-fn
               :read-nbt-fn wind-logic/main-scripted-load-fn
               :write-nbt-fn wind-logic/main-scripted-save-fn}
              {:id "wind-gen-base"
-              :registry-name "wind_gen_base"
+              :registry-name "windgen_base"
               :blocks ["wind-gen-base" "wind-gen-base-part"]
               :tick-fn wind-logic/base-tick-fn
               :read-nbt-fn wind-logic/base-scripted-load-fn
               :write-nbt-fn wind-logic/base-scripted-save-fn}
              {:id "wind-gen-pillar"
-              :registry-name "wind_gen_pillar"
+              :registry-name "windgen_pillar"
               :blocks ["wind-gen-pillar"]
               :tick-fn wind-logic/pillar-tick-fn
               :read-nbt-fn wind-logic/pillar-scripted-load-fn
@@ -85,14 +85,14 @@
      :after register-wind-multiblocks!
      :blocks [(bdsl/create-block-spec
                 "wind-gen-pillar"
-                {:registry-name "wind_gen_pillar"
-                 :physical {:material :metal
-                            :hardness 3.0
-                            :resistance 6.0
+                 {:registry-name "windgen_pillar"
+                  :physical {:material :stone
+                             :hardness 4.0
+                             :resistance 20.0
                             :requires-tool true
                             :harvest-tool :pickaxe
-                            :harvest-level 1
-                            :sounds :metal}
+                             :harvest-level 2
+                             :sounds :stone}
                  :events {:on-place wind-logic/on-wind-pillar-placed!}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "windgen_pillar")}

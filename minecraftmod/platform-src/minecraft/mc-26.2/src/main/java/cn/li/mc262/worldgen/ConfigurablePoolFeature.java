@@ -108,8 +108,11 @@ public class ConfigurablePoolFeature extends Feature<NoneFeatureConfiguration> {
                             return false;
                         }
 
-                        // 26.2: isSolidRender() no longer takes level/pos.
-                        if (by < 4 && !state.isSolidRender() && !state.is(fillBlock.getBlock())) {
+                        // Upstream tests Material#isSolid, whose 1.20+ successor is
+                        // BlockStateBase#isSolid (the legacySolid flag). isSolidRender
+                        // demands a full opaque cube, which also rejects slabs, glass and
+                        // leaves and made pools rarer here than upstream.
+                        if (by < 4 && !state.isSolid() && !state.is(fillBlock.getBlock())) {
                             return false;
                         }
                     }

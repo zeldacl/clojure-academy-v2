@@ -29,6 +29,26 @@ public final class RenderInterop {
                 .endVertex();
     }
 
+    /**
+     * Vertex for POSITION_COLOR_TEX_LIGHTMAP render types, which carry no
+     * overlay and no normal element — writing those would misalign the buffer.
+     * Used by the see-through translucent types that mirror upstream's
+     * glDisable(GL_DEPTH_TEST) + glDepthMask(false) overlays.
+     */
+    public static void submitVertexNoOverlay(
+            VertexConsumer vc,
+            PoseStack poseStack,
+            float x, float y, float z,
+            float r, float g, float b, float a,
+            float u, float v,
+            int light) {
+        vc.vertex(poseStack.last().pose(), x, y, z)
+                .color(r, g, b, a)
+                .uv(u, v)
+                .uv2(light)
+                .endVertex();
+    }
+
     public static void addColoredVertex(VertexConsumer vc, float x, float y, float z, float r, float g, float b, float a) {
         vc.vertex(x, y, z).color(r, g, b, a).endVertex();
     }

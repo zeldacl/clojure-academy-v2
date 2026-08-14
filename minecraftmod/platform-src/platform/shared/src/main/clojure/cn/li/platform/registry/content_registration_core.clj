@@ -127,11 +127,20 @@
 (defn block-plan
   "Build a registration plan map for one block-id."
   [block-id]
-  (let [has-be? (boolean (metadata/has-block-entity? block-id))]
+  (let [has-be? (boolean (metadata/has-block-entity? block-id))
+        fluid-id (metadata/get-fluid-id-for-block block-id)
+        block-spec (metadata/get-block-spec block-id)]
     {:block-id block-id
      :registry-name (metadata/get-block-registry-name block-id)
-     :fluid-id (metadata/get-fluid-id-for-block block-id)
+     :physical (:physical block-spec)
+     :fluid-id fluid-id
      :fluid-block? (boolean (metadata/fluid-block? block-id))
+     ;; A FluidType's luminosity only drives fog/entity lighting; the block has
+     ;; to emit separately, so loaders need it when building LiquidBlock props.
+     :fluid-luminosity (or (when fluid-id
+                             (get-in (metadata/get-fluid-spec fluid-id)
+                                     [:physical :luminosity]))
+                           0)
      :needs-dynamic-properties? (boolean (metadata/has-block-state-properties? block-id))
      :has-be? has-be?
      :tile-id (when has-be? (metadata/get-block-tile-id block-id))

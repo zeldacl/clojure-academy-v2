@@ -37,6 +37,27 @@
 (defn get-cutout-no-cull-buffer [buffer-source texture]
   ((require-buffer-fn (buffer-op :cutout-no-cull) :cutout-no-cull) buffer-source texture))
 
+;; See-through translucent: no depth test, no depth write, no cull — the state
+;; legacy renderers got from glDisable(GL_DEPTH_TEST) + glDepthMask(false) +
+;; glDisable(GL_CULL_FACE). Its vertex format is version-specific, so vertices
+;; must go through `submit-vertex-no-overlay`, which owns that difference.
+;; Kept outside `buffer-ops-keys` (i.e. optional rather than required) so a
+;; loader that cannot express the state degrades to the depth-tested buffer
+;; instead of erroring; callers must check availability first.
+(defn translucent-see-through-available? []
+  (boolean (and (buffer-op :translucent-see-through)
+                (buffer-op :submit-vertex-no-overlay))))
+
+(defn get-translucent-see-through-buffer [buffer-source texture]
+  (when-let [f (buffer-op :translucent-see-through)]
+    (f buffer-source texture)))
+
+(defn submit-vertex-no-overlay [vertex-consumer pose-stack x y z r g b a u v uv2]
+  (let [submit-fn (or (buffer-op :submit-vertex-no-overlay)
+                      (throw (ex-info "No platform submit-vertex-no-overlay function bound"
+                                      {:hint "Guard with translucent-see-through-available?"})))]
+    (submit-fn vertex-consumer pose-stack x y z r g b a u v uv2)))
+
 (defn triangle-vertex-order []
   ((require-buffer-fn (buffer-op :triangle-vertex-order) :triangle-vertex-order)))
 

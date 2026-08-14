@@ -27,13 +27,20 @@
                     :temperature 0
                     :can-convert-to-source false
                     :supports-boat false}
-         :rendering {:still-texture (modid/asset-path "block" "phase_liquid")
-                     :flowing-texture (modid/asset-path "block" "phase_liquid")
+         ;; Upstream ACFluids registers `imagproj` with black still/flowing
+         ;; textures: the fluid surface itself is featureless and the whole
+         ;; visible effect comes from the TESR overlay. phase_liquid is the
+         ;; item icon only (see the block spec's :rendering below).
+         :rendering {:still-texture (modid/asset-path "block" "black")
+                     :flowing-texture (modid/asset-path "block" "black")
                      :overlay-texture (modid/asset-path "block" "black")
                      :tint-color -1
                      :is-translucent true}
+         ;; Upstream BlockImagPhase sets quantaPerBlock 3, so a source spreads
+         ;; only 2 blocks. 1.20 fluids are fixed at 8 levels, so the equivalent
+         ;; is a decrease of 3 per block (8 -> 5 -> 2): same 3-tile reach.
          :behavior {:slope-find-distance 3
-                    :level-decrease-per-block 1
+                    :level-decrease-per-block 3
                     :tick-rate 8
                     :explosion-resistance 100.0}
          :block {:block-id "imag-phase"
@@ -48,9 +55,12 @@
         "imag-phase"
         {:impl :scripted
          :blocks ["imag-phase"]}))
-    ;; Block spec: has-item-form? true so a BlockItem is generated (animated
-    ;; icon via phase_liquid.png.mcmeta). Forge registration selects
-    ;; ScriptedLiquidBlock when fluid metadata exists and has-block-entity?.
+    ;; Block spec: has-item-form? true so a BlockItem is generated. Upstream's
+    ;; item model is item/generated over blocks/phase_liquid, so flat-item-icon?
+    ;; is required — the default parents the item model to the cube model and
+    ;; shows a 3D block in the creative tab instead of the animated flat icon.
+    ;; Forge registration selects ScriptedLiquidBlock when fluid metadata
+    ;; exists and has-block-entity?.
     (bdsl/register-block!
       (bdsl/create-block-spec
         "imag-phase"
@@ -62,7 +72,8 @@
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "phase_liquid")}
-                     :has-item-form? true}
+                     :has-item-form? true
+                     :flat-item-icon? true}
          :events {:on-right-click imag-phase-handlers/handle-imag-phase-click}}))
     ;; Register as the configurable-pool fill block so worldgen providers
     ;; can resolve the fill block without hardcoding content-specific IDs.

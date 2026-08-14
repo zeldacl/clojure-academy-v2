@@ -13,7 +13,7 @@
 
 (defrecord BlockSpec
   [id registry-name properties
-  physical rendering block-state events multi-block]
+  physical rendering block-state events multi-block loot]
   ;; Complete block specification with nested configuration groups.
   ;;
   ;; Core identity fields:
@@ -143,7 +143,8 @@
        :rendering rendering
        :block-state block-state
        :events events
-       :multi-block multi-block})))
+       :multi-block multi-block
+       :loot (or (:loot options) {:type :self})})))
 
 ;; ============================================================================
 ;; Registry Management

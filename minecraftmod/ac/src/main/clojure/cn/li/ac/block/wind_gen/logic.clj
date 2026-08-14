@@ -31,8 +31,8 @@
 (def pillar-scripted-save-fn (:save-fn pillar-rt))
 
 ;; Block identification
-(def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part"})
-(def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part"})
+(def ^:private wind-main-ids #{"wind-gen-main" "wind-gen-main-part" "wind_gen_main" "wind_gen_main_part" "windgen_main" "windgen_main_part"})
+(def ^:private wind-base-ids #{"wind-gen-base" "wind-gen-base-part" "wind_gen_base" "wind_gen_base_part" "windgen_base" "windgen_base_part"})
 (def ^:private wind-pillar-ids #{"wind-gen-pillar" "wind_gen_pillar" "windgen_pillar"})
 (def ^:private wind-main-controller-ids #{"wind-gen-main" "wind_gen_main"})
 (def ^:private wind-main-part-ids #{"wind-gen-main-part" "wind_gen_main_part"})

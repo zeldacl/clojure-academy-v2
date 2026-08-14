@@ -5,9 +5,9 @@
             [cn.li.mcmod.command.runtime-hooks :as hooks]))
 
 (defn runtime-provider [_]
-  {:create-context context/create-context
-   :execute actions/execute
-   :execute-action-impl actions/execute-action-impl
-   :get-all-command-ids metadata/get-all-command-ids
-   :get-command-spec metadata/get-command-spec
-   :init-commands! hooks/init-commands!})
+  {:create-context #'context/create-context
+   :execute #'actions/execute
+   :execute-action-impl #'actions/execute-action-impl
+   :get-all-command-ids #'metadata/get-all-command-ids
+   :get-command-spec #'metadata/get-command-spec
+   :init-commands! #'hooks/init-commands!})

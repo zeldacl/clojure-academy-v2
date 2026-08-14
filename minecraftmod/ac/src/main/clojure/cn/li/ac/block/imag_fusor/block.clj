@@ -45,11 +45,11 @@
                 {:registry-name "imag_fusor"
                  :physical {:material :stone
                             :hardness 3.0
-                            :resistance 6.0
+                            :resistance 15.0
                             :requires-tool true
                             :harvest-tool :pickaxe
                             :harvest-level 1
-                            :sounds :metal}
+                            :sounds :stone}
                  ;; Original AcademyCraft emits light level 6 when working (getLightValue).
                  ;; Dynamic light emission (frame>0 → 6, idle → 0) requires forge-layer
                  ;; Block.getLightEmission override keyed on frame blockstate property.
