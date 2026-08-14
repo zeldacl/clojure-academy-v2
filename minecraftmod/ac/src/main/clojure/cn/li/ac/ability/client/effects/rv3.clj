@@ -10,7 +10,7 @@
   pr-str/read-string can't serialize a Java object). This namespace is the
   render-pipeline-only counterpart, used from render-util/arc-fx/arc-patterns/
   surround-arc/vec-reflection-fx/the fx-templates impls, and consumed at the
-  other end by mc1201.client.effects.level-renderer's emit-line!/emit-quad!."
+  other end by the version Presentation world geometry backend's emit-line!/emit-quad!."
   (:import [cn.li.mcmod.math V3]))
 
 (defn v3

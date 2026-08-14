@@ -34,26 +34,6 @@
 (def ^:private foreground-color 0x00FFFFFF)
 (def ^:private title-color 0x00FFFF55)
 
-(defn- ->text-element
-  "Create a pair of :text overlay elements (shadow + foreground) for one line."
-  [text line-num color]
-  (let [y (+ base-y (* line-num line-height))]
-    [{:kind :text :text text :x (+ base-x 0.5) :y (+ y 0.5) :color shadow-color}
-     {:kind :text :text text :x base-x :y y :color color}]))
-
-(defn- text-lines->elements
-  "Convert a sequence of [text color] pairs into interleaved shadow+foreground elements.
-   Transient building — no mapcat overhead."
-  [lines]
-  (persistent!
-    (let [out (transient [])]
-      (doseq [[idx [text color]] (map-indexed vector lines)]
-        (let [y (+ base-y (* idx line-height))
-              c (or color foreground-color)]
-          (conj! out {:kind :text :text text :x (+ base-x 0.5) :y (+ y 0.5) :color shadow-color})
-          (conj! out {:kind :text :text text :x base-x :y y :color c})))
-      out)))
-
 (defn- resolve-category-name
   "Resolve human-readable category name from category-id keyword."
   [category-id]
@@ -168,19 +148,3 @@
                  :text text
                  :color (or color foreground-color)})
               (map-indexed vector lines)))))
-
-  (defn build-debug-overlay-elements
-    "Returns a vector of overlay :text element maps for the current debug state.
-
-     player-state: the resolved player-state map (from get-client-player-state).
-     Returns [] when debug state is :none or player-state is nil."
-    [player-state]
-    (when player-state
-      (let [state (current-state)
-            ability-data (:ability-data player-state)
-            resource-data (:resource-data player-state)]
-        (case state
-          :none []
-          :normal (text-lines->elements (build-normal-lines ability-data resource-data))
-          :show-exp (text-lines->elements (build-show-exp-lines ability-data))
-          []))))

@@ -7,7 +7,7 @@
   refactors produce instead of the code that produces it."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.skill-config.common :as config-common]
             [cn.li.ac.ability.registry.event :as ability-event]

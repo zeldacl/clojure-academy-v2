@@ -3,8 +3,8 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.groundshock-fx :as gfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]

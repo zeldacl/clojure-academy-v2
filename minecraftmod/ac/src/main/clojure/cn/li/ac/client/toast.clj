@@ -117,34 +117,6 @@
           (map vector active (range (count active)))))
       [])))
 
-(defn build-toast-elements
-  "Return overlay elements for the currently active toast.
-  Called each frame from the overlay plan builder.
-
-  Elements use the same :kind values as the overlay renderer
-  (:fill for backgrounds/borders, :text for strings).
-
-  Visual style matches original AcademyCraft drawTextBox:
-  - background: 0x77272727 (dark grey, ~47% alpha)
-  - glow border: 0xaaffffff (white, ~67% alpha)"
-  [screen-width screen-height now-ms]
-  (let [now (long (or now-ms (now-ms)))
-        layouts (build-toast-layouts screen-width screen-height now)]
-    (persistent!
-      (let [out (transient [])]
-        (doseq [{:keys [x y w h bg borders text]} layouts]
-          (conj! out {:kind :fill :x x :y y :w w :h h :color bg})
-          (doseq [{:keys [x y w h a]} borders]
-            (conj! out {:kind :fill :x x :y y :w w :h h
-                        :color {:r 255 :g 255 :b 255 :a a}}))
-          (conj! out (assoc text :kind :text)))
-        out))))
-
-
-;; ============================================================================
-;; Test support
-;; ============================================================================
-
 (defn reset-toasts-for-test!
   []
   (.clear active-toasts)

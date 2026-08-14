@@ -93,8 +93,14 @@
   "Mount a generic application Screen and return its VM/mount/refresh handle.
    `snapshot` is an initial state map; `dispatch-action!` receives a keyword
    action and the current state and may update the supplied state atom through
-   `:refresh!` or return a replacement state map."
-  [owner title snapshot dispatch-action! on-close]
+   `:refresh!` or return a replacement state map.
+
+   `host-kind` is normally `:screen`; finite HUD applications (for example a
+   world interaction prompt) use `:hud` and therefore stay in the same
+   Presentation frame without creating a second overlay renderer."
+  ([owner title snapshot dispatch-action! on-close]
+   (mount! owner title snapshot dispatch-action! on-close :screen))
+  ([owner title snapshot dispatch-action! on-close host-kind]
   (let [api (client-bridge/call-adapter :presentation-host-api)
         state (atom (merge {:title title :lines [] :status "" :scroll 0.0}
                            snapshot))
@@ -107,9 +113,18 @@
                     (when (map? result) (swap! state merge result))
                     result))
         vm (model state action!)
-        mount ((:mount! api) owner :screen "academy:application" vm)]
+        mount ((:mount! api) owner host-kind "academy:application" vm)]
     ((:set-input-handler! api) mount
       (fn [event] (input-handler state action! on-close event)))
-    (client-bridge/call-adapter :presentation-open-screen!
-                                 mount title on-close)
-    {:mount mount :model vm :state state :refresh! refresh!}))
+    (when (= host-kind :screen)
+      (client-bridge/call-adapter :presentation-open-screen!
+                                   mount title on-close))
+    {:mount mount :model vm :state state :refresh! refresh! :host-kind host-kind})))
+
+(defn unmount!
+  "Unmount an application regardless of whether it is a Screen or HUD host."
+  [{:keys [mount]}]
+  (when mount
+    (when-let [api (client-bridge/call-adapter :presentation-host-api)]
+      ((:unmount! api) mount)))
+  nil)

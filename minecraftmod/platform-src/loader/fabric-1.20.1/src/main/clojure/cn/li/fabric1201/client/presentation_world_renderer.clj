@@ -1,6 +1,6 @@
-(ns cn.li.fabric1201.client.level-effect-renderer
+(ns cn.li.fabric1201.client.presentation-world-renderer
   "CLIENT-ONLY world Presentation Runtime submission adapter."
-  (:require [cn.li.mc1201.client.effects.level-renderer :as geometry]
+  (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])

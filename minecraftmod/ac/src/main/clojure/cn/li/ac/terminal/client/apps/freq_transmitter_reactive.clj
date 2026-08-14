@@ -15,7 +15,7 @@
 
 (def ^:private normal-timeout-ms 20000)
 (def ^:private transmitting-timeout-ms 3000)
-(defonce ^:private overlay-sessions (atom {}))
+(defonce ^:private interaction-sessions (atom {}))
 
 (defn- net-owner [] (runtime-hooks/default-client-owner))
 (defn- player-uuid [player]
@@ -33,10 +33,6 @@
          :phase-start-ms (System/currentTimeMillis)
          :timeout-ms (if return-phase 700 1000)))
 
-(defn- finish-overlay! [puuid]
-  (swap! overlay-sessions dissoc (str puuid))
-  (bridge/set-active-overlay-app! nil puuid))
-
 (defn- state-lines [state]
   (let [{:keys [phase source-type source-name message]} @state]
     (case phase
@@ -48,22 +44,51 @@
                        (local "s2_0" "Aim at a wireless node to link.")
                        (local "s3_0" "Aim at a wireless user to link."))}]
       :transmitting [{:label (or message (local "s1_1" "Transmitting..."))}]
-      :notice [{:label (or message "")}]
-      [])))
+       :notice [{:label (or message "")}]
+       [])))
+
+(defn- refresh-interaction-ui! [key]
+  (when-let [{:keys [state refresh!]} (get @interaction-sessions key)]
+    (when refresh!
+      (refresh! {:lines (state-lines state)
+                 :status (name (:phase @state))
+                 :input (or (:password @state) "")}))))
+
+(defn- finish-interaction! [puuid]
+  (let [key (str puuid)]
+    (when-let [session (get @interaction-sessions key)]
+      (application/unmount! (:mount session)))
+    (swap! interaction-sessions dissoc key)))
 
 (defn- refresh-state! [state refresh!]
   (refresh! {:lines (state-lines state)
              :status (name (:phase @state))
              :password (:password @state)}))
 
-(defn- start-link-overlay! [puuid state]
-  (swap! overlay-sessions assoc (str puuid)
-         {:phase :link :source-type (:source-type @state)
-          :source-pos (:source-pos @state) :password (:password @state)
-          :last-click? false :phase-start-ms (System/currentTimeMillis)
-          :timeout-ms normal-timeout-ms})
-  (bridge/set-active-overlay-app! :freq-tx puuid)
-  (bridge/close-screen!))
+(defn- start-link-interaction! [puuid state]
+  (let [key (str puuid)
+        link-state (atom {:phase :link :source-type (:source-type @state)
+                          :source-pos (:source-pos @state)
+                          :password (:password @state)
+                          :last-click? false
+                          :phase-start-ms (System/currentTimeMillis)
+                          :timeout-ms normal-timeout-ms})
+        vm (application/mount!
+             (str "hud/frequency-transmitter/" puuid)
+             "Frequency Transmitter"
+             {:lines (state-lines link-state)
+              :status "link"
+              :input ""
+              :button-left {:label "Link" :visible? true}}
+             (fn [_action _current] nil)
+             #(finish-interaction! puuid)
+             :hud)]
+    (swap! interaction-sessions assoc key
+           (assoc @link-state
+                  :state link-state
+                  :mount vm
+                  :refresh! (:refresh! vm)))
+    (bridge/close-screen!)))
 
 (defn- scan-source! [state puuid refresh!]
   (swap! state assoc :phase :transmitting :message (local "s1_1" "Transmitting...")
@@ -94,7 +119,7 @@
      :source-pos (:source-pos @state) :password (:password @state)}
     (fn [response]
       (if (:success response)
-        (start-link-overlay! puuid state)
+         (start-link-interaction! puuid state)
         (notice! state (local "e1" "Authorization failed") nil))
       (refresh-state! state refresh!))))
 
@@ -147,61 +172,46 @@
      vm))
   ([] (open! nil)))
 
-(defn build-overlay-elements [player-uuid screen-width screen-height]
-  (when-let [{:keys [phase source-type message]} (get @overlay-sessions (str player-uuid))]
-    (let [prompt (case phase
-                   :transmitting (local "e5" "Transmitting...")
-                   :notice message
-                   (if (= source-type :matrix)
-                     (local "s2_0" "Aim at a wireless node and right-click.")
-                     (local "s3_0" "Aim at a wireless user and right-click.")))
-          title (or (i18n/translate (str "app." modid/MOD-ID ".freq_transmitter"))
-                    "Frequency Transmitter")
-          box-w 180 x (+ (/ screen-width 2.0) 10) y (+ (/ screen-height 2.0) 10)]
-      [{:kind :fill :x 15 :y 15 :w 30 :h 18 :color 0x77272727}
-       {:kind :texture :src (modid/asset-path "textures/guis/apps" "freq_transmitter/icon.png")
-        :x 17 :y 15 :w 18 :h 18 :color 0xFFFFFFFF}
-       {:kind :text :text title :x 39 :y 19 :color 0xFFFFFFFF}
-       {:kind :fill :x x :y y :w box-w :h 28 :color 0x77272727}
-       {:kind :text :text prompt :x (+ x 5) :y (+ y 8) :color 0xFFFFFFFF}])))
+(defn interaction-active? [player-uuid]
+  (contains? @interaction-sessions (str player-uuid)))
 
-(defn overlay-active? [player-uuid]
-  (contains? @overlay-sessions (str player-uuid)))
-
-(defn- overlay-link! [player-uuid session]
-  (let [key (str player-uuid)]
-    (swap! overlay-sessions assoc key
-           (assoc session :phase :transmitting
-                  :phase-start-ms (System/currentTimeMillis)
-                  :timeout-ms transmitting-timeout-ms))
+(defn- submit-link! [player-uuid session]
+  (let [key (str player-uuid)
+        state (:state session)]
+    (swap! state assoc :phase :transmitting
+           :phase-start-ms (System/currentTimeMillis)
+           :timeout-ms transmitting-timeout-ms)
     (net-client/send-to-server (net-owner) freq-net/freq-config-msg
-      {:operation :link-target :source-type (:source-type session)
-       :source-pos (:source-pos session) :password (:password session)}
+      {:operation :link-target :source-type (:source-type @state)
+       :source-pos (:source-pos @state) :password (:password @state)}
       (fn [response]
         (show-messages! response)
-        (swap! overlay-sessions assoc key
-               (assoc session :phase :notice
-                      :message (if (:success response)
-                                 (local "e6" "Link successful")
-                                 (or (:error response) (local "e2" "Link failed")))
-                      :return-phase (when (:success response) :link)
-                      :phase-start-ms (System/currentTimeMillis)
-                       :timeout-ms (if (:success response) 700 1000)))))))
+        (swap! state assoc :phase :notice
+               :message (if (:success response)
+                          (local "e6" "Link successful")
+                          (or (:error response) (local "e2" "Link failed")))
+               :return-phase (when (:success response) :link)
+               :phase-start-ms (System/currentTimeMillis)
+               :timeout-ms (if (:success response) 700 1000))
+         (refresh-interaction-ui! key)))))
 
-(defn tick-overlay-input! [player-uuid right-click-down?]
+(defn tick-interaction! [player-uuid right-click-down?]
   (let [key (str player-uuid)]
-    (when-let [session (get @overlay-sessions key)]
-      (let [now (System/currentTimeMillis)
-            elapsed (- now (:phase-start-ms session))
-            expired? (> elapsed (:timeout-ms session))]
+    (when-let [session (get @interaction-sessions key)]
+      (let [state (:state session)
+            snapshot @state
+            now (System/currentTimeMillis)
+            elapsed (- now (:phase-start-ms snapshot))
+            expired? (> elapsed (:timeout-ms snapshot))]
         (cond
-          (and (= :notice (:phase session)) expired? (:return-phase session))
-          (swap! overlay-sessions assoc key
-                 (assoc session :phase :link :return-phase nil
-                        :phase-start-ms now :timeout-ms normal-timeout-ms))
-          (and (= :notice (:phase session)) expired?) (finish-overlay! player-uuid)
-          (and (not= :notice (:phase session)) expired?) (finish-overlay! player-uuid)
-          (and (= :link (:phase session)) right-click-down?
-               (not (:last-click? session))) (overlay-link! player-uuid session)
-          :else (swap! overlay-sessions assoc-in [key :last-click?]
-                       (boolean right-click-down?)))))))
+          (and (= :notice (:phase snapshot)) expired? (:return-phase snapshot))
+          (do (swap! state assoc :phase :link :return-phase nil
+                     :phase-start-ms now :timeout-ms normal-timeout-ms)
+              (refresh-interaction-ui! key))
+          (and (= :notice (:phase snapshot)) expired?) (finish-interaction! player-uuid)
+          (and (not= :notice (:phase snapshot)) expired?) (finish-interaction! player-uuid)
+          (and (= :link (:phase snapshot)) right-click-down?
+               (not (:last-click? snapshot))) (submit-link! player-uuid session)
+          :else (do
+                  (swap! state assoc :last-click? (boolean right-click-down?))
+                  (refresh-interaction-ui! key)))))))

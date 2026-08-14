@@ -50,15 +50,21 @@ Gradle 依赖铁律：`presentation-core -> mcmod`、`minecraft/base -> mcmod`�
 4. 按 HUD/Screen/Container/VFX/手部相机/后处理迁移；只复用业务规则和资源，不复用旧 renderer、节点或 facade。
 5. 所有目标构建和关键场景通过后，原子切换入口并删除旧 Runtime、XML loader、overlay plan、script-render runtime/compiler/executor/registry、level-effect draw-plan 和双引擎开关。
 
-当前已落地：Core/Compiler/Devtools 模块骨架、事务/Frame Graph/Host Runtime、UI/FX EDN 编译校验、失败热重载保留上一份有效模板、三版本 backend profile 数据、容量 2 最新帧邮箱、分层 dirty 状态、Semantics/Narration Tree、战斗 HUD ViewModel/Action 样板、Terminal ViewModel/Screen 模板、Container/Slot MenuBridge 与机器 GUI 样板、统一 Effect owner 生命周期、capture/target/bubble 输入、pointer capture、焦点和 IME 状态、`minecraft/base` Host 生命周期协议和依赖方向门禁。当前仍在迁移阶段，旧 HUD/Overlay/Script Render 入口尚未原子删除。
+当前已落地：Core/Compiler/Devtools 模块骨架、事务/Frame Graph/Host Runtime、UI/FX EDN 编译校验、失败热重载保留上一份有效模板、三版本 backend profile 数据、容量 2 最新帧邮箱、分层 dirty 状态、Semantics/Narration Tree、战斗 HUD ViewModel/Action 样板、Terminal ViewModel/Screen 模板、Container/Slot MenuBridge 与机器 GUI 样板、统一 Effect owner 生命周期、capture/target/bubble 输入、pointer capture、焦点和 IME 状态、`minecraft/base` Host 生命周期协议和依赖方向门禁。原子切换已完成，旧 HUD/Overlay/Script Render 入口已删除，Presentation Runtime 是唯一自定义表现入口。
 
 当前帧提交链：loader 初始化时只注册对应 `minecraft/mc-*` 的不透明 backend；HUD 和世界阶段回调经 `platform/neutral` 提取 `FramePacket`，再通过 `:submit!` 交给版本 backend。`mcmod` 只保存中立 profile、能力和诊断提交记录，不能读取 Core 的 Render IR；实际 GuiGraphics/BufferBuilder/后处理映射留在版本 backend 的 Clojure 桥接与允许的 Minecraft API 边界内。
 
 Core 到版本 backend 的转换在 AC/Core 边界完成为 `mcmod` 的 `PresentationFrame/Pass/Command` 数据记录。版本 backend 只消费这些中立记录，并按当前 render stage 解释 Quad、GlyphRun、Clip 等命令；因此 `minecraft/base` 和 `minecraft/mc-*` 不需要、也不得导入 `presentation-core`。
 
-Effect 纵向样板：AC 创建 Runtime 时编译并注册 `body_intensify.fx.edn`，每帧在客户端线程 tick，按 owner 清理，提取后的 Beam/Ribbon/Particle 等命令与 HUD 同批进入 `PresentationFrame`；旧 level-effect draw-plan 仍在迁移期间并行保留。
+Effect 纵向样板：AC 创建 Runtime 时编译并注册 `body_intensify.fx.edn`，每帧在客户端线程 tick，按 owner 清理，提取后的 Beam/Ribbon/Particle 等命令与 HUD 同批进入 `PresentationFrame`；旧 level-effect draw-plan 已删除。
 
 Screen/Container 迁移边界已增加：AC host API 只返回不透明 mount token，Terminal 文本/IME/Modal 状态和 Menu/Slot 快照仍留在 AC 与服务端权威桥接内；loader/base 不接触 ViewModel、节点树或业务状态。各版本 Screen 只把键盘、字符和鼠标事件规范化为中立 map，经 `platform/neutral` 转交 AC，再由 Clojure 构造 `PresentationInputEvent` 并 dispatch；版本边界不直接依赖 Core 类型。
+
+六平台构建门禁：每次 Presentation Runtime 变更都必须完成以下六个目标的完整
+Gradle `:platform:compileClojure` 构建（使用目标对应的 Gradle/toolchain profile），
+不得只验证单一默认目标：`forge-1.20.1`、`fabric-1.20.1`、`fabric-1.21.1`、
+`neoforge-1.21.1`、`fabric-26.2`、`neoforge-26.2`。构建前后还必须通过
+`verifyCurrentPlatforms`，该任务包含依赖方向、Java 纯度、loader hook 和原子切换门禁。
 
 ## 验收门槛
 
@@ -141,8 +147,9 @@ network info now uses the same `:textbox` data/render leaf and host-side action
 wiring.
 
 Atomic cut-over gate: `verifyPresentationAtomicSwitch` is included in
-`verifyCurrentPlatforms`, but remains report-only during migration. The final
-release build must pass `-PpresentationAtomicSwitch=true`; the gate then rejects
+`verifyCurrentPlatforms` and is strict by default. A local intermediate worktree
+may explicitly pass `-PpresentationAtomicSwitch=false`; normal and release builds
+must keep the gate enabled, which rejects
 XML loaders, reactive screen entry points, overlay/draw plans, kind renderers
 and script-render runtime references under AC, loader and minecraft/base.
 It also rejects the old Java `mcmod/ui` and `mcmod/uipojo` runtime packages.

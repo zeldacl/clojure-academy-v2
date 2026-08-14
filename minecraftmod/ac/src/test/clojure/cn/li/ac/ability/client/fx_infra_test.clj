@@ -3,8 +3,8 @@
             [cn.li.ac.ability.client.effects.particles :as particles]
             [cn.li.ac.ability.client.effects.sounds :as sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]

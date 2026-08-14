@@ -160,26 +160,3 @@
          :content {:x content-x :y content-y
                    :text (:title notif)
                    :color {:r 255 :g 255 :b 255 :a (int (* 255 text-alpha))}}}))))
-
-(defn build-notification-elements!
-  "Return overlay elements for the currently active notification.
-  Called each frame from the overlay plan builder (client_ui_hooks.clj).
-
-  Elements: {:kind :blit-texture ...} for textures, {:kind :text ...} for strings."
-  [screen-width screen-height now-ms]
-  (let [now-sec (/ (double now-ms) 1000.0)
-        _ (when (seq @(notifications-atom))
-            (swap! (notifications-atom)
-                   (fn [notifs]
-                     (let [needs-init? (some #(nil? (:start-sec %)) notifs)
-                           initialized (if needs-init?
-                                         (mapv #(if (:start-sec %) % (assoc % :start-sec now-sec)) notifs)
-                                         notifs)]
-                       (filterv #(<= (- now-sec (:start-sec %)) total-keep-time) initialized)))))]
-    (when-let [layout (build-notification-layout screen-width screen-height now-ms)]
-      (let [[dx dy] (gameplay/hud-position :notification)
-            offset #(-> % (update :x + dx) (update :y + dy))]
-        [(-> (:bg layout) offset (assoc :kind :blit-texture :texture (:src (:bg layout))) (dissoc :src))
-         (-> (:icon layout) offset (assoc :kind :blit-texture :texture (:src (:icon layout))) (dissoc :src))
-         (-> (:title layout) offset (assoc :kind :text))
-         (-> (:content layout) offset (assoc :kind :text))]))))

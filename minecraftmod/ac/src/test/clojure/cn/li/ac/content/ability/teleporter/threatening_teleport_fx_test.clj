@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.content.ability.teleporter.threatening-teleport-fx :as tfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))

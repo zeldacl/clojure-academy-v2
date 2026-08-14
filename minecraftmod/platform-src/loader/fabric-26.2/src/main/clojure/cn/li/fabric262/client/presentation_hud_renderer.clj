@@ -1,4 +1,4 @@
-(ns cn.li.fabric262.client.overlay-renderer
+(ns cn.li.fabric262.client.presentation-hud-renderer
   "Fabric 26.2 HUD extraction hook for the unified Presentation Runtime."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.neutral.presentation :as presentation]

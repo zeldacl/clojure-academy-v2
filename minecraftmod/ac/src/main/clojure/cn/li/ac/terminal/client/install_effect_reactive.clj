@@ -44,12 +44,6 @@
         (finish! player)))
     nil))
 
-(defn build-overlay-elements
-  "Legacy callers may still ask for diagnostics during migration.  The
-   authoritative visual is now the mounted Presentation application."
-  [_player-uuid _screen-width _screen-height]
-  [])
-
 (defn install-push-handler! []
   (install/framework-once! ::install-effect-reactive-push-handler-installed?
     (fn []

@@ -1,7 +1,7 @@
-(ns cn.li.neoforge1211.client.level-effect-renderer
+(ns cn.li.forge1201.client.presentation-world-renderer
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader only subscribes the events and delegates to the shared renderer."
-  (:require [cn.li.mc1211.client.effects.level-renderer :as geometry]
+  (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
@@ -9,12 +9,12 @@
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]
-           [net.neoforged.neoforge.client.event RenderLevelStageEvent RenderLevelStageEvent$Stage]
-           [net.neoforged.neoforge.common NeoForge]
-           [net.neoforged.bus.api EventPriority]))
+           [net.minecraftforge.client.event RenderLevelStageEvent RenderLevelStageEvent$Stage]
+           [net.minecraftforge.common MinecraftForge]
+           [net.minecraftforge.eventbus.api EventPriority]))
 
 (defn- render-stage-eligible? [^RenderLevelStageEvent evt]
-  ;; Stage is a fixed enum-like singleton set (RenderLevelStageEvent$Stage) —identical?
+  ;; Stage is a fixed enum-like singleton set (RenderLevelStageEvent$Stage) — identical?
   ;; avoids a fresh string allocation + two substring scans on every stage dispatch
   ;; this tick (~9 stages/frame), most of which are not eligible.
   ;;
@@ -23,7 +23,7 @@
   ;; entire build-plan + vertex-emission pipeline twice per frame and
   ;; double-blended translucent quads. AFTER_TRANSLUCENT_BLOCKS is correct
   ;; for translucent beam/line geometry that must composite after translucent
-  ;; terrain (water/glass) —matches Fabric's WorldRenderEvents/AFTER_TRANSLUCENT.
+  ;; terrain (water/glass) — matches Fabric's WorldRenderEvents/AFTER_TRANSLUCENT.
   (identical? (.getStage evt) RenderLevelStageEvent$Stage/AFTER_TRANSLUCENT_BLOCKS))
 
 (defn- submit-presentation-frame! [^RenderLevelStageEvent evt]
@@ -57,7 +57,7 @@
 
 (defn init! []
   (install/process-once! ::render-listener-registered
-    #(.addListener (NeoForge/EVENT_BUS)
+    #(.addListener (MinecraftForge/EVENT_BUS)
                    EventPriority/NORMAL false RenderLevelStageEvent
                    (reify java.util.function.Consumer
                      (accept [_ evt] (on-render-level-stage evt)))))

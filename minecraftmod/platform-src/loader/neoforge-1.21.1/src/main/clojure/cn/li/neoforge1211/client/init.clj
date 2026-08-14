@@ -30,7 +30,7 @@
             [cn.li.neoforge1211.client.runtime-bridge :as runtime-bridge]
             [cn.li.mc1211.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.neoforge1211.client.keyboard-event-handler :as keyboard-event-handler]
-            [cn.li.neoforge1211.client.overlay-renderer :as overlay-renderer]
+            [cn.li.neoforge1211.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mc1211.presentation.screen :as presentation-screen]
             [cn.li.mc1211.presentation.container]
@@ -39,7 +39,7 @@
             [cn.li.neoforge1211.gui.screen-impl :as gui-screen-impl]
             [cn.li.neoforge1211.runtime.owner :as runtime-owner]
             [cn.li.neoforge1211.client.hand-effect-renderer :as hand-effect-renderer]
-            [cn.li.neoforge1211.client.level-effect-renderer :as level-effect-renderer]
+            [cn.li.neoforge1211.client.presentation-world-renderer :as presentation-world-renderer]
             [cn.li.neoforge1211.client.fov-renderer :as fov-renderer]
             [cn.li.mc1211.client.energy-item-model-properties :as energy-item-model-properties]
             [cn.li.platform.neutral.client-runtime :as pose]
@@ -203,10 +203,6 @@
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
          (overlay-state/get-client-activated owner)))
-     :client-active-overlay-app
-     (fn [_owner]
-       (when-let [owner (mc-session/current-local-player-owner)]
-         (overlay-state/get-active-overlay-app owner)))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
                             :mcmod/get-entity-position
@@ -244,10 +240,6 @@
                             (log/debug "Unhandled client effect key" effect-key)))
 	     :get-client-player #(.player (Minecraft/getInstance))
 	     :local-player-uuid mc-session/local-player-uuid
-	     :set-active-overlay-app (fn [app-kw player-uuid]
-	                                (overlay-state/set-active-overlay-app!
-	                                  {:client-session-id "" :player-uuid (str player-uuid)}
-	                                  app-kw))
 	     :screen-active? #(some? (.screen (Minecraft/getInstance)))
        :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
        :settings-key-name key-scheme-core/key-display-name
@@ -420,13 +412,13 @@
 
   ;; Runtime client systems
   (runtime-bridge/init!)
-  (overlay-renderer/init!)
+  (presentation-hud-renderer/init!)
   (msdf-setup/init!)
   (particle/init!)
   (sound/init!)
   (media-playback-bridge/install-media-playback-bridge!)
   (hand-effect-renderer/init!)
-  (level-effect-renderer/init!)
+  (presentation-world-renderer/init!)
   (fov-renderer/init!)
   (request-bridge/init!)
 

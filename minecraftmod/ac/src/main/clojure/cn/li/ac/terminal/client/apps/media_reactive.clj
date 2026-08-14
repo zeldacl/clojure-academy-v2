@@ -103,19 +103,3 @@
                       (when-let [refresh-state (:refresh! vm)]
                         (refresh-state {:lines (lines state)}))))
     vm))
-
-(defn build-aux-overlay-elements [screen-width screen-height]
-  (when-let [track (current-track)]
-    (let [{:keys [status elapsed-secs]} (playback-state)
-          length (double (or (:length-secs track) 0.0))
-          progress (if (pos? length)
-                     (max 0.0 (min 1.0 (/ elapsed-secs length)))
-                     0.0)
-          [dx dy] (gameplay/hud-position :media)
-          x (+ (- screen-width 151) dx)
-          y (+ (- screen-height 42) dy)]
-      (when-not (= status :stopped)
-        [{:kind :text :text (:name track) :x (+ x 13) :y (+ y 17) :color 0xFFFFFFFF}
-         {:kind :fill :x (+ x 14) :y (+ y 27) :w 120 :h 2 :color 0x33000000}
-         {:kind :fill :x (+ x 14) :y (+ y 27) :w (* 120.0 progress) :h 2 :color 0xFFFFFFFF}
-         {:kind :text :text (display-time elapsed-secs) :x (+ x 117) :y (+ y 27) :color 0xFFFFFFFF}]))))

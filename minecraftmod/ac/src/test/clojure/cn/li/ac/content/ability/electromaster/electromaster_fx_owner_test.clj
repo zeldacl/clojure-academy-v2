@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-hand]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))

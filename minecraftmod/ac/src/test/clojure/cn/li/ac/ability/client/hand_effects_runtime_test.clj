@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.hand-effects-runtime-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]))
+            [cn.li.ac.client.effect-controller :as vfx-hand]))
 
 (defn- reset-fixture [f]
   (vfx-hand/reset-hand-effect-registry-for-test!)

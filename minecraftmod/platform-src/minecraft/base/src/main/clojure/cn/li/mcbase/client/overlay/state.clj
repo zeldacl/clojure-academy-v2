@@ -4,8 +4,7 @@
 (defn create-overlay-state-runtime
   []
   {::runtime ::overlay-state-runtime
-   :client-activated-overlay* (atom {})
-   :active-overlay-app* (atom {})})
+   :client-activated-overlay* (atom {})})
 
 (def ^:private overlay-state-runtime-atom (atom (create-overlay-state-runtime)))
 
@@ -55,43 +54,12 @@
   nil)
 
 ;; ============================================================================
-;; Overlay App Switching (passOn equivalent)
-;; ============================================================================
-
-(defn- active-overlay-app-atom
-  []
-  (:active-overlay-app* (current-overlay-state-runtime)))
-
-(defn get-active-overlay-app
-  "Return the currently active overlay app for owner, or nil."
-  [owner]
-  (get @(active-overlay-app-atom) (client-session/owner-key owner)))
-
-(defn set-active-overlay-app!
-  "Set the active overlay app for owner. app-kw should be a keyword like :freq-tx."
-  [owner app-kw]
-  (swap! (active-overlay-app-atom) assoc (client-session/owner-key owner) app-kw)
-  nil)
-
-(defn clear-active-overlay-app!
-  "Clear the active overlay app for owner, returning to normal HUD."
-  [owner]
-  (swap! (active-overlay-app-atom) dissoc (client-session/owner-key owner))
-  nil)
-
-;; ============================================================================
 ;; Session cleanup
 ;; ============================================================================
 
 (defn clear-client-overlay-session!
   [client-session-id]
   (swap! (client-activated-overlay-atom)
-         (fn [states]
-           (into {}
-                 (remove (fn [[[entry-session-id _player-uuid] _value]]
-                           (= client-session-id entry-session-id))
-                         states))))
-  (swap! (active-overlay-app-atom)
          (fn [states]
            (into {}
                  (remove (fn [[[entry-session-id _player-uuid] _value]]
@@ -108,5 +76,4 @@
    (reset-client-activated-for-test! {}))
   ([snapshot]
    (reset! (client-activated-overlay-atom) (or snapshot {}))
-   (reset! (active-overlay-app-atom) {})
    nil))

@@ -1,19 +1,17 @@
-(ns cn.li.mc1211.client.effects.level-renderer
+(ns cn.li.mc1201.client.effects.presentation-world
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.mcbase.runtime.raycast-normalize :as rn])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
-           [cn.li.mc1211.bridge RenderInterop]
-           [cn.li.mc1211.client.render ModRenderTypes]
+           [cn.li.mc1201.client.render ModRenderTypes]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
-           [cn.li.mc1211.runtime Raycast]
+           [cn.li.mc1201.runtime Raycast]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries Registries]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource RenderType]
            [net.minecraft.client.renderer.texture OverlayTexture]
            [net.minecraft.resources ResourceLocation]
-           [cn.li.mcver ResourceLocations]
            [net.minecraft.tags BlockTags TagKey]
            [net.minecraft.world.entity.player Abilities]
            [net.minecraft.world.level.block Block]
@@ -31,46 +29,46 @@
   ;; construction because touching Registries/BLOCK during AOT compilation
   ;; triggers Minecraft's bootstrap guard.
   (delay
-    [(TagKey/create Registries/BLOCK (ResourceLocations/parse "forge:ores"))
-     (TagKey/create Registries/BLOCK (ResourceLocations/parse "c:ores"))]))
+    [(TagKey/create Registries/BLOCK (ResourceLocation. "forge:ores"))
+     (TagKey/create Registries/BLOCK (ResourceLocation. "c:ores"))]))
 
-(defn create-level-renderer-runtime
+(defn create-presentation-world-runtime
   []
-  {::runtime ::level-renderer-runtime
+  {::runtime ::presentation-world-runtime
    :last-applied-walk-speed* (atom {})})
 
-(def ^:private level-renderer-runtime-atom (atom (create-level-renderer-runtime)))
+(def ^:private presentation-world-runtime-atom (atom (create-presentation-world-runtime)))
 
-(defn- level-renderer-runtime?
+(defn- presentation-world-runtime?
   [runtime]
   (and (map? runtime)
-       (= ::level-renderer-runtime (::runtime runtime))
+       (= ::presentation-world-runtime (::runtime runtime))
        (some? (:last-applied-walk-speed* runtime))))
 
-(defn call-with-level-renderer-runtime
+(defn call-with-presentation-world-runtime
   "Set the level renderer runtime for the current context (primarily for testing)."
   [runtime f]
-  (when-not (level-renderer-runtime? runtime)
+  (when-not (presentation-world-runtime? runtime)
     (throw (ex-info "Expected level renderer runtime"
                     {:runtime runtime})))
-  (let [saved @level-renderer-runtime-atom]
+  (let [saved @presentation-world-runtime-atom]
     (try
-      (reset! level-renderer-runtime-atom runtime)
+      (reset! presentation-world-runtime-atom runtime)
       (f)
       (finally
-        (reset! level-renderer-runtime-atom saved)))))
+        (reset! presentation-world-runtime-atom saved)))))
 
-(defmacro with-level-renderer-runtime
+(defmacro with-presentation-world-runtime
   [runtime & body]
-  `(call-with-level-renderer-runtime ~runtime (fn [] ~@body)))
+  `(call-with-presentation-world-runtime ~runtime (fn [] ~@body)))
 
-(defn- current-level-renderer-runtime
+(defn- current-presentation-world-runtime
   []
-  @level-renderer-runtime-atom)
+  @presentation-world-runtime-atom)
 
 (defn- last-applied-walk-speed-atom
   []
-  (:last-applied-walk-speed* (current-level-renderer-runtime)))
+  (:last-applied-walk-speed* (current-presentation-world-runtime)))
 
 (defn- walk-speed-owner-key
   [owner]
@@ -353,17 +351,13 @@
     :else
     [255 255 255 255]))
 
-(defn- channel->float
-  [c]
-  (float (/ (double c) 255.0)))
-
 (defn- emit-line-vertex!
-  [^VertexConsumer vc ^Matrix4f mat x y z r g b a]
-  (let [v (Vector3f. (float x) (float y) (float z))]
-    (.transformPosition mat v)
-    (RenderInterop/addColoredVertex vc (.-x v) (.-y v) (.-z v)
-                                    (channel->float r) (channel->float g)
-                                    (channel->float b) (channel->float a))))
+  [^VertexConsumer vc mat x y z r g b a]
+  (-> vc
+      (.vertex mat (float x) (float y) (float z))
+      (.color (int r) (int g) (int b) (int a))
+      (.normal 0.0 1.0 0.0)
+      (.endVertex)))
 
 (defn- emit-line!
   [^VertexConsumer vc mat {:keys [^V3 p1 ^V3 p2 color]}]
@@ -372,15 +366,16 @@
     (emit-line-vertex! vc mat (.-x p2) (.-y p2) (.-z p2) r g b a)))
 
 (defn- emit-quad-vertex!
-  [^VertexConsumer vc ^PoseStack pose-stack ^V3 p u v color]
+  [^VertexConsumer vc mat ^V3 p u v color]
   (let [[a r g b] (color-int→channels color)]
-    (RenderInterop/submitVertex vc pose-stack
-                                (float (.-x p)) (float (.-y p)) (float (.-z p))
-                                (channel->float r) (channel->float g)
-                                (channel->float b) (channel->float a)
-                                (float u) (float v)
-                                (int OverlayTexture/NO_OVERLAY) (int full-bright-uv2)
-                                (float 0.0) (float 1.0) (float 0.0))))
+    (-> vc
+        (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
+        (.color (int r) (int g) (int b) (int a))
+        (.uv (float u) (float v))
+        (.overlayCoords (int OverlayTexture/NO_OVERLAY))
+        (.uv2 (int full-bright-uv2))
+        (.normal 0.0 1.0 0.0)
+        (.endVertex))))
 
 (defn- emit-quad!
   "Emit ONE quad as exactly 4 vertices.
@@ -396,30 +391,34 @@
   p0/p1 are the two corners at the segment's start and p2/p3 at its end (see
   render-util's beam quads), so `u` runs along the beam and `v` across its
   width."
-  [^VertexConsumer vc ^PoseStack pose-stack {:keys [p0 p1 p2 p3 u0 u1 v0 v1 color]}]
-  (emit-quad-vertex! vc pose-stack p0 u0 v0 color)
-  (emit-quad-vertex! vc pose-stack p1 u0 v1 color)
-  (emit-quad-vertex! vc pose-stack p2 u1 v1 color)
-  (emit-quad-vertex! vc pose-stack p3 u1 v0 color))
+  [^VertexConsumer vc mat {:keys [p0 p1 p2 p3 u0 u1 v0 v1 color]}]
+  (emit-quad-vertex! vc mat p0 u0 v0 color)
+  (emit-quad-vertex! vc mat p1 u0 v1 color)
+  (emit-quad-vertex! vc mat p2 u1 v1 color)
+  (emit-quad-vertex! vc mat p3 u1 v0 color))
 
 (defn- sort-ops
-  "Single pass over `ops`, bucketing into {:lines [...] :quads {texture [...]}
-  :plasma [...]} with transients / LinkedHashMap — avoids per-op persistent
-  conj/update.
+  "Single pass over `ops`, bucketing into {:lines [...] :translucent-lines [...]
+  :quads {texture [...]} :plasma [...]} with transients / LinkedHashMap —
+  avoids per-op persistent conj/update.
 
   The map has to keep INSERTION order. Quads are batched per texture, and
   translucent geometry writes depth, so whichever texture is drawn first wins
   the depth test where they overlap. A plain HashMap made that order arbitrary:
   a ray's glow boards and its cylinders are different textures, and when the
   boards happened to go last the wide flat glow sat on top of the round tube
-  and the whole beam read as a sheet."
+  and the whole beam read as a sheet. Insertion order is the order the effect
+  emitted its ops, which is the order upstream draws them in."
   [ops]
   (let [lines (transient [])
+        tlines (transient [])
         plasma (transient [])
         ^java.util.LinkedHashMap quads-t (java.util.LinkedHashMap.)]
     (doseq [op ops]
       (case (:kind op)
-        :line (conj! lines op)
+        :line (if (:translucent? op)
+                (conj! tlines op)
+                (conj! lines op))
         :quad (let [tex (:texture op)
                     bucket (or (.get quads-t tex)
                                (let [b (transient [])]
@@ -429,7 +428,7 @@
         :plasma-body (conj! plasma op)
         nil))
     {:lines (persistent! lines)
-
+     :translucent-lines (persistent! tlines)
      ;; array-map preserves insertion order for the small number of textures a
      ;; frame's effects use; into {} would rehash and lose it again.
      :quads (reduce (fn [m ^java.util.Map$Entry e]
@@ -494,10 +493,10 @@
                        (aget row 8) (aget row 9) (aget row 10) (aget row 11)
                        (aget row 12) (aget row 13) (aget row 14) (aget row 15))))))))
 
-(defn- emit-plasma-vertex! [^VertexConsumer vc ^Matrix4f mat ^V3 p]
-  (let [v (Vector3f. (float (.-x p)) (float (.-y p)) (float (.-z p)))]
-    (.transformPosition mat v)
-    (RenderInterop/addVertex vc (.-x v) (.-y v) (.-z v))))
+(defn- emit-plasma-vertex! [^VertexConsumer vc mat ^V3 p]
+  (-> vc
+      (.vertex mat (float (.-x p)) (float (.-y p)) (float (.-z p)))
+      (.endVertex)))
 
 (def ^:private world-up (V3. 0.0 1.0 0.0))
 (def ^:private axis-x (V3. 1.0 0.0 0.0))
@@ -557,7 +556,7 @@
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
-      (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
+      (let [{:keys [lines translucent-lines quads plasma]} (sort-ops (:ops plan))]
         (.pushPose pose-stack)
         (.translate pose-stack
                     (double (- (:x camera-pos)))
@@ -568,6 +567,12 @@
             (let [^VertexConsumer line-vc (.getBuffer buffer-source (RenderType/lines))]
               (doseq [op lines]
                 (emit-line! line-vc mat op))))
+          (when (seq translucent-lines)
+            ;; The render type owns the line-width GL state via its
+            ;; LineStateShard — no raw GL calls here.
+            (let [^VertexConsumer tline-vc (.getBuffer buffer-source (ModRenderTypes/academyLinesTranslucent))]
+              (doseq [op translucent-lines]
+                (emit-line! tline-vc mat op))))
           (doseq [[texture texture-ops] quads]
             (when-let [loc (ResourceLocation/tryParse texture)]
               (let [no-fog-ops (filter :no-fog? texture-ops)
@@ -590,29 +595,29 @@
                 (when (seq depth-ops)
                   (let [^VertexConsumer quad-vc (.getBuffer buffer-source (RenderType/entityTranslucent loc))]
                     (doseq [op depth-ops]
-                      (emit-quad! quad-vc pose-stack op))))
+                      (emit-quad! quad-vc mat op))))
                 ;; Depth test on, depth WRITE off — vanilla entityNoOutline is
                 ;; entityTranslucent with COLOR_WRITE, i.e. exactly what
                 ;; upstream's SubArcHandler.drawAll gets from glDepthMask(false).
                 (when (seq read-only-ops)
                   (let [^VertexConsumer ro-vc (.getBuffer buffer-source (RenderType/entityNoOutline loc))]
                     (doseq [op read-only-ops]
-                      (emit-quad! ro-vc pose-stack op))))
+                      (emit-quad! ro-vc mat op))))
                 (when (seq additive-ops)
                   (let [^VertexConsumer ad-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsAdditive loc))]
                     (doseq [op additive-ops]
-                      (emit-quad! ad-vc pose-stack op))))
+                      (emit-quad! ad-vc mat op))))
                 (when (seq no-depth-ops)
                   (let [^VertexConsumer nd-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsTranslucent loc))]
                     (doseq [op no-depth-ops]
-                      (emit-quad! nd-vc pose-stack op))))
+                      (emit-quad! nd-vc mat op))))
                 ;; Fog-free quads (MineDetect ore highlights): upstream
                 ;; HandlerRender disables GL_FOG for the mineview pass so the
                 ;; boxes stay visible through the skill's own blindness fog.
                 (when (seq no-fog-ops)
                   (let [^VertexConsumer nf-vc (.getBuffer buffer-source (ModRenderTypes/academyQuadsNoFog loc))]
                     (doseq [op no-fog-ops]
-                      (emit-quad! nf-vc pose-stack op)))))))
+                      (emit-quad! nf-vc mat op)))))))
           (when (seq plasma)
             (doseq [op plasma]
               (render-plasma-op! {:buffer-source buffer-source

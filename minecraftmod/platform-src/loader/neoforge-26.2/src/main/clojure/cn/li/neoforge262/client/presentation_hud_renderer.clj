@@ -1,4 +1,4 @@
-(ns cn.li.neoforge262.client.overlay-renderer
+(ns cn.li.neoforge262.client.presentation-hud-renderer
   "NeoForge 26.2 HUD callback for the unified Presentation Runtime."
   (:require [cn.li.mcbase.client.session :as client-session]
             [cn.li.platform.neutral.presentation :as presentation]

@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-fx-owner-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.flashing-fx :as flashing-fx]

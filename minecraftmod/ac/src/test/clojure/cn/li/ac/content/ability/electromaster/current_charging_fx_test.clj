@@ -6,8 +6,8 @@
             ;; would not resolve at load time.
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))

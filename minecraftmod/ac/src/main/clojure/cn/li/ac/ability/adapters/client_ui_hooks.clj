@@ -52,8 +52,6 @@
 (defonce ^:private ^HashMap slot-context-ids (HashMap.))
 (defonce ^:private ^HashMap slot-key-tick-ms (HashMap.))
 (defonce ^:private ^HashMap charge-coin-state (HashMap.))
-(defonce ^:private ^HashMap overlay-skill-shape-cache (HashMap.))
-(defonce ^:private ^HashMap overlay-context-cache (HashMap.))
 (defonce ^:private push-handlers-registered (boolean-array 1))
 
 (defn create-client-ui-runtime []
@@ -74,14 +72,6 @@
 (defn- charge-coin-state-snapshot
   []
   charge-coin-state)
-
-(defn- overlay-skill-shape-cache-snapshot
-  []
-  overlay-skill-shape-cache)
-
-(defn- overlay-context-cache-snapshot
-  []
-  overlay-context-cache)
 
 (defn- current-client-session-id
   []
@@ -312,8 +302,6 @@
           (when (= owner-key (slot-key-owner (.next iterator)))
             (.remove iterator)))))
     (.remove charge-coin-state owner-key)
-    (.remove overlay-skill-shape-cache owner-key)
-    (.remove overlay-context-cache owner-key)
     (reactive-hud/clear-vm-wave-for-owner! (read-model/owner-key owner nil))
     (reactive-hud/clear-charging-arcs-for-owner! (read-model/owner-key owner nil))
     nil))
@@ -350,8 +338,6 @@
   (.clear slot-context-ids)
   (.clear slot-key-tick-ms)
   (.clear charge-coin-state)
-  (.clear overlay-skill-shape-cache)
-  (.clear overlay-context-cache)
   (aset-boolean ^booleans push-handlers-registered 0 false)
   (managed-screens/reset-managed-screen-state-for-test!)
   nil)
@@ -513,70 +499,6 @@
     {:active? (boolean ctx-data)
      :charge-ticks hold-ticks
      :charge-ratio (max 0.0 (min 1.0 (/ (double hold-ticks) (double max-ticks))))}))
-
-(defn- coin-qte-overlay-elements
-  "Build golden coin-QTE timing window overlay elements.
-   Rendered when railgun is in coin-QTE mode with an active timing window.
-   Shows a ring/bar at screen center indicating window progress and the
-   coin-active threshold marker, matching original AcademyCraft QTE UI."
-  [player-uuid screen-width screen-height now-ms]
-  (let [coin-state (charge-coin-visual-state player-uuid now-ms)]
-    (when (and (:active? coin-state) (pos? (:coin-progress coin-state)))
-      (let [cx (int (/ screen-width 2))
-            cy (int (/ screen-height 2))
-            progress (double (:coin-progress coin-state))
-            coin-active? (boolean (:coin-active? coin-state))
-            threshold (double (railgun-coin-active-threshold))
-            ;; Ring geometry
-            ring-radius 24
-            ring-thickness 3
-            segments 48
-            dot-count 12
-            ;; Colors
-            window-color (if coin-active?
-                          {:r 255 :g 215 :b 0 :a 220}   ;; gold when in active zone
-                          {:r 180 :g 150 :b 50 :a 160}) ;; dim amber outside zone
-            threshold-color {:r 255 :g 220 :b 80 :a 240}
-            bg-color {:r 20 :g 18 :b 10 :a 100}]
-        (concat
-          ;; Background disc
-          [{:kind :fill
-            :x (- cx ring-radius) :y (- cy ring-radius)
-            :w (* 2 ring-radius) :h (* 2 ring-radius)
-            :color bg-color}]
-          ;; Progress arc — dots around the ring showing window progress
-          (for [i (range dot-count)
-                :let [angle (* 2.0 Math/PI (/ i dot-count))
-                      dot-active? (< (/ i dot-count) progress)
-                      dx (int (* ring-radius (Math/cos angle)))
-                      dy (int (* ring-radius (Math/sin angle)))
-                      dot-size 3]]
-            {:kind :fill
-             :x (+ cx dx (- dot-size)) :y (+ cy dy (- dot-size))
-             :w (* 2 dot-size) :h (* 2 dot-size)
-             :color (if dot-active?
-                     (update window-color :a #(int (* % (if coin-active? 1.0 0.6))))
-                     (assoc window-color :a 40))})
-          ;; Threshold marker — small bright dot at the threshold angle
-          (let [threshold-angle (* 2.0 Math/PI threshold)
-                tx (int (* ring-radius (Math/cos threshold-angle)))
-                ty (int (* ring-radius (Math/sin threshold-angle)))
-                marker-size 2]
-            [{:kind :fill
-              :x (+ cx tx (- marker-size)) :y (+ cy ty (- marker-size))
-              :w (* 2 marker-size) :h (* 2 marker-size)
-              :color threshold-color}])
-          ;; Center text: progress percentage
-          [{:kind :text
-            :x (- cx 14) :y (- cy 4)
-            :text (str (int (* 100.0 progress)) "%")
-            :color (if coin-active?
-                    {:r 255 :g 215 :b 0 :a 255}
-                    {:r 180 :g 150 :b 50 :a 200})}])))))
-
-(defn- preset-switch-state-for-overlay
-  [player-uuid]
-  (client-keybinds/get-preset-switch-state player-uuid))
 
 (defn- remove-slot-context! [ctx-id]
   (let [iterator (.iterator (.entrySet slot-context-ids))]
@@ -811,283 +733,6 @@
         acc))
     {:reflection-active? false :deviation-active? false :reflection-intensity 0.0}
     (ctx/get-all-contexts)))
-
-(defn- vm-wave-elements [player-uuid now-ms tint]
-  (reactive-hud/build-vm-wave-overlay-elements player-uuid now-ms tint))
-
-(defn- build-hud-model-from-state [player-state activated-override]
-  (when player-state
-    (let [resource-data (:resource-data player-state)
-          ability-data (:ability-data player-state)
-          preset-data-map (:preset-data player-state)
-          activated (if (contains? activated-override :value)
-                      (:value activated-override)
-                      (boolean (:activated resource-data)))
-          category-id (:category-id ability-data)
-          cat (when category-id (category/get-category category-id))]
-      {:cp {:cur (double (or (:cur-cp resource-data) 0.0))
-            :max (double (or (:max-cp resource-data) 1.0))}
-       :overload {:cur (double (or (:cur-overload resource-data) 0.0))
-                  :max (double (or (:max-overload resource-data) 1.0))
-                  :fine (boolean (get resource-data :overload-fine true))}
-       :active-slots (vec (preset-data/get-active-slots preset-data-map))
-       :activated activated
-       :category-id category-id
-       :category-color (:color cat)
-       :category-icon (:icon cat)
-       :interfered? (boolean (seq (:interferences resource-data)))})))
-
-(defn- hud-render-data->overlay-elements [hud-render-data screen-width screen-height]
-  (let [cp-bar (some-> (:cp-bar hud-render-data) (assoc :kind :bar) (dissoc :type))
-        overload-bar (some-> (:overload-bar hud-render-data) (assoc :kind :bar) (dissoc :type))
-        activation-indicator (some-> (:activation-indicator hud-render-data)
-                                     (assoc :kind :activation-indicator
-                                            :x (int (/ screen-width 2)))
-                                     (dissoc :type))
-      combat-notice (some-> (:combat-notice hud-render-data)
-            (assoc :kind :text
-                   :x (int (/ screen-width 2)))
-            (dissoc :type))
-         skill-slots (mapv (fn [slot]
-              (-> slot
-                  (assoc :kind :content-slot
-                    :content-icon (:skill-icon slot)
-                    :content-label (:skill-name slot)
-                    :disabled? (:in-cooldown slot)
-                    :status-seconds (:cooldown-seconds slot)
-                    :timer-total (:cooldown-total slot)
-                    :timer-remaining (:cooldown-remaining slot))
-                  (dissoc :type :skill-id :skill-icon :skill-name :in-cooldown :cooldown-seconds
-                          :cooldown-total :cooldown-remaining)))
-                          (or (:skill-slots hud-render-data) []))
-        preset-indicators (mapv (fn [p]
-                        (-> p
-                            (assoc :kind :selection-indicator
-                                   :x (int (/ screen-width 2))
-                                   :y (- screen-height 45))
-                            (dissoc :type)))
-                      (or (:preset-indicators hud-render-data) []))
-        overload-pulse (when-let [ol-bar (:overload-bar hud-render-data)]
-                         (let [pct (double (or (:percent ol-bar) 0.0))]
-                           (when (> pct 0.8)
-                             {:kind :overload-pulse
-                              :intensity (* (- pct 0.8) 5.0)})))
-        numbers-texts (or (:numbers-texts hud-render-data) [])
-        movement-hints (some-> (:movement-hints hud-render-data) (dissoc :type))]
-                (persistent!
-                  (let [out (transient [])]
-                    (doseq [x (keep identity [cp-bar overload-bar activation-indicator combat-notice overload-pulse])]
-                      (conj! out x))
-                    (doseq [x preset-indicators] (conj! out x))
-                    (doseq [x skill-slots] (conj! out x))
-                    (when movement-hints (conj! out movement-hints))
-                    (doseq [x numbers-texts] (conj! out x))
-                    out))))
-
-(defn- tutorial-notification-elements [screen-width screen-height now-ms]
-  (try
-    (tutorial-notification/build-notification-elements! screen-width screen-height now-ms)
-    (catch Throwable _ [])))
-
-(defn- active-skill-cp-cost-from-contexts
-  "Compute consumption-hint CP cost for the first active skill with a computable cost,
-   given an already-fetched contexts collection. Iterates over active (non-terminated)
-   contexts, trying common cost paths (tick, down, up, release) in order. Returns nil
-   if no active skill has a cost.
-
-   Replaces the railgun-specific coin-QTE logic with a general approach that
-   works for all skills matching original AcademyCraft CPBar consumption-hint behavior."
-  [contexts]
-  (let [active-ctxs (filter ctx/active-context? contexts)]
-    (some
-      (fn [ctx-data]
-        (let [skill-id (:skill-id ctx-data)
-              exp (double (or (:exp ctx-data) 0.0))]
-          (some
-            (fn [cost-path]
-              (try
-                (let [cost (skill-config/lerp-double skill-id cost-path exp)]
-                  (when (pos? cost) (double cost)))
-                (catch Throwable _ nil)))
-            [:cost.tick.cp :cost.down.cp :cost.up.cp :cost.release.cp :cost.attack.cp])))
-      active-ctxs)))
-
-(defn- cached-skill-slot-shapes
-  "Cache A: skill-slot shape (icon/name/key-label/position), keyed on preset-data
-   identity. Returns cached shapes when preset-data is unchanged, else rebuilds
-   via hud-renderer/build-skill-slot-shape and writes the cache."
-  [owner-key hud-model screen-width screen-height preset-data]
-  (let [cache (get (overlay-skill-shape-cache-snapshot) owner-key)]
-    (if (and cache (identical? preset-data (:last-preset-data cache)))
-      (:shapes cache)
-      (let [shapes (hud-renderer/build-skill-slot-shape hud-model screen-width screen-height)]
-        (.put overlay-skill-shape-cache owner-key
-              {:last-preset-data preset-data :shapes shapes})
-        shapes))))
-
-(defn- cached-context-data
-  "Cache B: active-contexts + consumption-hint, keyed on a context-registry
-   snapshot token. Both the skill-slot delegate-state patch and the
-   consumption-hint computation share this single (allocating) context read
-   instead of each scanning contexts independently every frame."
-  [owner-key player-uuid]
-  (let [token (ctx/contexts-version-token)
-        cache (get (overlay-context-cache-snapshot) owner-key)]
-    (if (and cache (identical? token (:last-contexts-token cache)))
-      cache
-      (let [contexts (player-contexts player-uuid)
-            hint (active-skill-cp-cost-from-contexts contexts)
-            entry {:last-contexts-token token
-                   :active-contexts contexts
-                   :consumption-hint hint}]
-        (.put overlay-context-cache owner-key entry)
-        entry))))
-
-(defn hud-signal-snapshot
-  "Signal-oriented HUD snapshot for reactive overlay updates.
-   Reuses the same state reads as the legacy frame builder without building element vectors."
-  [player-uuid overlay-state]
-  (let [player-state (get-client-player-state player-uuid)
-        resource-data (:resource-data player-state)
-        activated-override {:value (if (some? (:activated-override overlay-state))
-                                     (boolean (:activated-override overlay-state))
-                                     (boolean (get resource-data :activated false)))}
-        hud-model (build-hud-model-from-state player-state activated-override)
-        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))]
-    (when hud-model
-      (let [cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))
-            overload-bar (when (:activated hud-model)
-                           (hud-renderer/build-overload-bar-render-data hud-model now-ms))]
-        {:activated (:activated hud-model)
-         :cp-percent (double (or (:percent cp-bar) 0.0))
-         :cp-hint-percent (some-> cp-bar :hint-percent double)
-         :cp-full-glow? (boolean (:full-glow? cp-bar))
-         :overload-percent (double (or (:percent overload-bar) 0.0))
-         :overload-scroll (double (or (:scroll-offset overload-bar) 0.0))
-         :overloaded? (boolean (:overloaded overload-bar))
-         :interfered? (:interfered? hud-model)}))))
-
-(defn- build-retired-overlay-frame [player-uuid screen-width screen-height overlay-state]
-  ;; When an overlay app is active, skip normal HUD and render overlay app elements.
-  (if-let [app-kw (:active-overlay-app overlay-state)]
-    (case app-kw
-      :freq-tx {:elements (vec (freq-tx/build-overlay-elements player-uuid screen-width screen-height))
-                :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.45}
-                :interfered? false}
-      :install-fx {:elements (vec (install-fx/build-overlay-elements player-uuid screen-width screen-height))
-                   :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.4}
-                   :interfered? false}
-      {:elements [{:kind :text :text (str "Unknown overlay app: " (name app-kw)) :x 20 :y 20 :color 0xFFFF0000}]
-       :background-mask {:r 0.0 :g 0.0 :b 0.0 :a 0.0}
-       :interfered? false})
-    ;; Normal HUD rendering
-    (let [player-state (get-client-player-state player-uuid)
-        resource-data (:resource-data player-state)
-        ability-data (:ability-data player-state)
-        activated-override {:value (if (some? (:activated-override overlay-state))
-                                     (boolean (:activated-override overlay-state))
-                                     (boolean (get resource-data :activated false)))}
-        ;; BackgroundMask: compute target color from category / overload state
-        category-id (:category-id ability-data)
-        cat (when category-id (category/get-category category-id))
-        cat-color (:color cat)
-        overloaded? (not (get resource-data :overload-fine true))
-        activated? (boolean (get resource-data :activated false))
-        bg-mask (cond
-                  overloaded? {:r 0.82 :g 0.08 :b 0.08 :a 0.65}   ;; red, original CRL_OVERRIDE
-                  (and activated? cat-color) {:r (double (nth cat-color 0))
-                                              :g (double (nth cat-color 1))
-                                              :b (double (nth cat-color 2))
-                                              :a 0.35}              ;; subtle category tint
-                  :else {:r 0.0 :g 0.0 :b 0.0 :a 0.0})            ;; invisible
-        ;; Interference detection
-        interfered? (boolean (seq (:interferences resource-data)))
-        ;; Numbers display state (was previously dropped)
-        showing-numbers? (boolean (:showing-numbers? overlay-state false))
-        last-show-value-change-ms (long (or (:last-show-value-change-ms overlay-state) 0))
-        hud-model (build-hud-model-from-state player-state activated-override)
-        now-ms (long (or (:now-ms overlay-state) (System/currentTimeMillis)))
-        charge-state (charge-coin-visual-state player-uuid now-ms)
-        owner-key (client-ui-owner-key player-uuid)
-        preset-data (:preset-data player-state)
-        {:keys [active-contexts consumption-hint]} (cached-context-data owner-key player-uuid)
-        hud-model (if consumption-hint
-                    (assoc hud-model :consumption-hint consumption-hint)
-                    hud-model)
-        cooldown-data (:cooldown-data player-state)
-        skill-exps (get-in player-state [:ability-data :skill-exps])
-        activate-hint (client-keybinds/get-activate-hint player-uuid)
-        preset-state (preset-switch-state-for-overlay player-uuid)
-        ;; Reactive assembly (Cache A/B, see docs/dev plan "Overlay/HUD 响应式重构"):
-        ;; cp-bar/overload-bar/activation-indicator/preset-indicators/numbers-texts stay
-        ;; unconditional per-frame calls (cheap, no registry/context lookups). Skill-slot
-        ;; shape (registry lookups) is Cache A; delegate-state/consumption-hint share the
-        ;; single Cache B context read above; cooldown fields are patched fresh every frame.
-        preset-indicators (hud-renderer/build-preset-indicators-data preset-state now-ms)
-        preset-indicator (last preset-indicators)
-        numbers-texts (hud-renderer/build-numbers-texts-data hud-model showing-numbers?
-                                                             last-show-value-change-ms now-ms)
-        skill-slots (when (:activated hud-model)
-                      (-> (cached-skill-slot-shapes owner-key hud-model screen-width screen-height preset-data)
-                          (hud-renderer/patch-skill-slot-cooldown cooldown-data {:player-id player-uuid
-                                                     :skill-exps skill-exps})
-                          (hud-renderer/patch-skill-slot-visual active-contexts player-uuid now-ms)))
-        movement-hints (reactive-hud/build-movement-hints-data
-                        player-uuid active-contexts screen-width screen-height)
-        hud-render-data (when (or (:activated hud-model) preset-indicator showing-numbers?
-                                  (pos? last-show-value-change-ms))
-                          {:cp-bar (when (:activated hud-model) (hud-renderer/build-cp-bar-render-data hud-model))
-                           :overload-bar (when (:activated hud-model)
-                                           (hud-renderer/build-overload-bar-render-data hud-model now-ms))
-                           :skill-slots skill-slots
-                           :movement-hints movement-hints
-                           :activation-indicator (when (:activated hud-model)
-                                                    (hud-renderer/build-activation-indicator-data hud-model activate-hint))
-                           :combat-notice nil
-                           :preset-indicator preset-indicator
-                           :preset-indicators preset-indicators
-                           :numbers-texts numbers-texts})
-         base-elements (hud-render-data->overlay-elements hud-render-data screen-width screen-height)
-         coin-qte-elements (coin-qte-overlay-elements player-uuid screen-width screen-height now-ms)
-         media-elements (media-player/build-aux-overlay-elements screen-width screen-height)
-        vm (scan-vm-contexts player-uuid)
-        reflection-active? (:reflection-active? vm)
-        deviation-active? (:deviation-active? vm)
-        vec-reflection-intensity (:reflection-intensity vm)
-        vm-wave-active? (or reflection-active? deviation-active?)
-        phase (double (/ (mod now-ms 1200) 1200.0))
-        vm-wave-tint (cond
-                       (and reflection-active? deviation-active?) [0.4 0.7 1.0]  ;; both: cyan-blue blend
-                       reflection-active? [0.3 0.6 1.0]                           ;; VecReflection: blue
-                       deviation-active? [0.3 1.0 0.6]                            ;; VecDeviation: green
-                       :else [1.0 1.0 1.0])                                       ;; fallback: white
-        vm-wave (vm-wave-elements player-uuid now-ms vm-wave-tint)
-        crosshair (when reflection-active?
-              {:kind :content-crosshair
-                     :x (int (/ screen-width 2))
-                     :y (int (/ screen-height 2))
-                     :phase phase
-                     :intensity (double (or vec-reflection-intensity 1.0))})]
-    {:elements (persistent!
-                 (let [out (transient [])]
-                    (doseq [coll [base-elements coin-qte-elements media-elements vm-wave]]
-                     (doseq [x coll] (conj! out x)))
-                   (when crosshair (conj! out crosshair))
-                   ;; Lazy: only build toast elements when toasts are active
-                   (when (seq (toast/active-toasts-snapshot))
-                     (doseq [x (toast/build-toast-elements screen-width screen-height now-ms)]
-                       (conj! out x)))
-                   ;; Lazy: only build notification elements when notifications are active
-                   (when (seq (tutorial-notification/active-snapshot))
-                     (doseq [x (tutorial-notification-elements screen-width screen-height now-ms)]
-                       (conj! out x)))
-                   ;; Lazy: only build debug elements when debug state is active
-                   (when (not= :none (debug-overlay/current-state))
-                     (doseq [x (debug-overlay/build-debug-overlay-elements player-state)]
-                       (conj! out x)))
-                   out))
-     :background-mask bg-mask
-     :interfered? interfered?})))
 
 (defn- on-context-channel-push! [{:keys [ctx-id channel payload]}]
   (fx-registry/dispatch-fx-channel! ctx-id channel payload)

@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.client.session-cleanup-core
   "Shared client owner cleanup/orchestration for disconnects and server switches.
 
-  Version modules install :clear-walk-speed! (level-renderer) before use."
+  Version modules install :clear-walk-speed! (Presentation world) before use."
   (:require [cn.li.mcbase.client.overlay.state :as overlay-state]
             [cn.li.mcbase.presentation.host-lifecycle :as presentation-lifecycle]
             [cn.li.mcbase.client.session :as client-session]

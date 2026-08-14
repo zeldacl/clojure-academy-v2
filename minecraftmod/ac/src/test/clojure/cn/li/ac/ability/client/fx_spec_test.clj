@@ -2,8 +2,8 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]))
+            [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-level]))
 
 (defn- reset-fixture [f]
   (fx-registry/reset-fx-registry-for-test!)

@@ -1,4 +1,4 @@
-(ns cn.li.mc262.client.effects.level-renderer
+(ns cn.li.mc262.client.effects.presentation-world
   "Shared client level-effect core for Minecraft 26.2.
 
    Effect plans are extracted before level submission and emitted through
@@ -32,38 +32,38 @@
      (TagKey/create Registries/BLOCK (ResourceLocations/parse "forge:ores"))
      (TagKey/create Registries/BLOCK (ResourceLocations/parse "neoforge:ores"))]))
 
-(defn create-level-renderer-runtime
+(defn create-presentation-world-runtime
   []
-  {::runtime ::level-renderer-runtime
+  {::runtime ::presentation-world-runtime
    :last-applied-walk-speed* (atom {})})
 
-(def ^:private level-renderer-runtime-atom (atom (create-level-renderer-runtime)))
+(def ^:private presentation-world-runtime-atom (atom (create-presentation-world-runtime)))
 
-(defn- level-renderer-runtime?
+(defn- presentation-world-runtime?
   [runtime]
   (and (map? runtime)
-       (= ::level-renderer-runtime (::runtime runtime))
+       (= ::presentation-world-runtime (::runtime runtime))
        (some? (:last-applied-walk-speed* runtime))))
 
-(defn call-with-level-renderer-runtime
+(defn call-with-presentation-world-runtime
   [runtime f]
-  (when-not (level-renderer-runtime? runtime)
+  (when-not (presentation-world-runtime? runtime)
     (throw (ex-info "Expected level renderer runtime"
                     {:runtime runtime})))
-  (let [saved @level-renderer-runtime-atom]
+  (let [saved @presentation-world-runtime-atom]
     (try
-      (reset! level-renderer-runtime-atom runtime)
+      (reset! presentation-world-runtime-atom runtime)
       (f)
       (finally
-        (reset! level-renderer-runtime-atom saved)))))
+        (reset! presentation-world-runtime-atom saved)))))
 
-(defn- current-level-renderer-runtime
+(defn- current-presentation-world-runtime
   []
-  @level-renderer-runtime-atom)
+  @presentation-world-runtime-atom)
 
 (defn- last-applied-walk-speed-atom
   []
-  (:last-applied-walk-speed* (current-level-renderer-runtime)))
+  (:last-applied-walk-speed* (current-presentation-world-runtime)))
 
 (defn- walk-speed-owner-key
   [owner]

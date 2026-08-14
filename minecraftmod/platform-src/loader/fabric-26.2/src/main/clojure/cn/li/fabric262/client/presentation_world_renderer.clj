@@ -1,7 +1,7 @@
-(ns cn.li.fabric262.client.level-effect-renderer
+(ns cn.li.fabric262.client.presentation-world-renderer
   "Fabric 26.2 extraction/render hooks for world-space presentation effects."
   (:require [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mc262.client.effects.level-renderer :as geometry]
+            [cn.li.mc262.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.presentation :as presentation])
   (:import [net.fabricmc.fabric.api.client.rendering.v1.level LevelExtractionEvents LevelRenderEvents
             LevelExtractionEvents$EndExtraction LevelRenderEvents$AfterTranslucentTerrain

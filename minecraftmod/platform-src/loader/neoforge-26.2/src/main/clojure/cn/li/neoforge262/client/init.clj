@@ -26,8 +26,8 @@
             [cn.li.neoforge262.client.runtime-bridge :as runtime-bridge]
             [cn.li.neoforge262.client.fov-renderer :as fov-renderer]
             [cn.li.neoforge262.client.hand-effect-renderer :as hand-effect-renderer]
-            [cn.li.neoforge262.client.level-effect-renderer :as level-effect-renderer]
-            [cn.li.neoforge262.client.overlay-renderer :as overlay-renderer]
+            [cn.li.neoforge262.client.presentation-world-renderer :as presentation-world-renderer]
+            [cn.li.neoforge262.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.neoforge262.adapter.gui-registry :as gui-registry]
             [cn.li.neoforge262.gui.network.shared :as gui-network]
             [cn.li.neoforge262.gui.screen-impl :as gui-screen-impl]
@@ -182,10 +182,6 @@
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
          (overlay-state/get-client-activated owner)))
-     :client-active-overlay-app
-     (fn [_owner]
-       (when-let [owner (mc-session/current-local-player-owner)]
-         (overlay-state/get-active-overlay-app owner)))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
                             :mcmod/get-entity-position
@@ -223,10 +219,6 @@
                             (log/debug "Unhandled client effect key" effect-key)))
      :get-client-player #(.player (Minecraft/getInstance))
      :local-player-uuid mc-session/local-player-uuid
-     :set-active-overlay-app (fn [app-kw player-uuid]
-                                (overlay-state/set-active-overlay-app!
-                                  {:client-session-id "" :player-uuid (str player-uuid)}
-                                  app-kw))
      :screen-active? #(some? (some-> (Minecraft/getInstance) .gui .screen))
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
@@ -395,12 +387,12 @@
   (power-runtime/client-font-init!)
 
   (runtime-bridge/init!)
-  (overlay-renderer/init!)
+  (presentation-hud-renderer/init!)
   (particle/init!)
   (sound/init!)
   (media-playback-bridge/install-media-playback-bridge!)
   (hand-effect-renderer/init!)
-  (level-effect-renderer/init!)
+  (presentation-world-renderer/init!)
   (fov-renderer/init!)
   (request-bridge/init!)
 

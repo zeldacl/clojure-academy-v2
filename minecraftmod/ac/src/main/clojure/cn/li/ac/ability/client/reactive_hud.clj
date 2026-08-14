@@ -383,25 +383,6 @@
          (filter #(pos? (:alpha %)))
          vec)))
 
-(defn build-vm-wave-overlay-elements
-  "Plan-path bridge for tests — returns :blit-texture element maps."
-  [player-uuid now-ms tint]
-  (mapv (fn [item]
-          (-> item
-              (assoc :kind :blit-texture :texture (:src item))
-              (dissoc :src)))
-        (or (build-vm-wave-items player-uuid now-ms tint) [])))
-
-(defn- build-overlay-app-ui [app screen-w screen-h]
-  (case app
-    :freq-tx {:panel {:x 0 :y 0 :w 640 :h 480 :color {:r 32 :g 32 :b 32 :a 192}}
-              :title {:x 200 :y 10 :text "Frequency Transmitter (Overlay)" :color 0xFFFFFFFF}
-              :subtitle {:x 200 :y 30 :text "Press ESC to close" :color 0xFF888888}}
-    :install-fx (let [cx (quot screen-w 2) cy (quot screen-h 2)]
-                  {:panel {:x (- cx 150) :y (- cy 20) :w 300 :h 40 :color {:r 32 :g 32 :b 32 :a 192}}
-                   :title {:x (- cx 60) :y (- cy 5) :text "Installing terminal..." :color 0xFFFFFFFF}})
-    nil))
-
 (defn- build-hud-model [player-state activated?]
   (when player-state
     (let [resource-data (:resource-data player-state)
@@ -602,7 +583,7 @@
 
 (defn build-snapshot
   "Reactive HUD snapshot for one frame.
-   opts: {:activated-override :showing-numbers? :last-show-value-change-ms :active-overlay-app :now-ms}"
+   opts: {:activated-override :showing-numbers? :last-show-value-change-ms :now-ms}"
   [player-uuid screen-w screen-h opts]
   (let [now-ms (long (or (:now-ms opts) (System/currentTimeMillis)))
         ok (owner-key player-uuid)
@@ -635,10 +616,8 @@
                   (:deviation-active? vm) [90 255 120]
                   :else nil)
         phase (double (/ (mod now-ms 1200) 1200.0))
-        ol-pct (double (or (:percent overload-bar) 0.0))
-        overlay-app (:active-overlay-app opts)]
-    {:overlay-app overlay-app
-     :overlay-app-ui (when overlay-app (build-overlay-app-ui overlay-app screen-w screen-h))
+        ol-pct (double (or (:percent overload-bar) 0.0))]
+    {
      :background-mask bg-mask
      :interfered? (boolean (seq (:interferences resource-data)))
      :activated? activated?

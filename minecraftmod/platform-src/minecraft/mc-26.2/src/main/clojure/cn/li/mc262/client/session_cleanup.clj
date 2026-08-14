@@ -1,10 +1,10 @@
 (ns cn.li.mc262.client.session-cleanup
-  "Session cleanup -- installs level-renderer walk-speed hook, re-exports core."
+  "Session cleanup -- installs Presentation world walk-speed hook, re-exports core."
   (:require [cn.li.mcbase.client.session-cleanup-core :as shared]
-            [cn.li.mc262.client.effects.level-renderer :as level-renderer]))
+            [cn.li.mc262.client.effects.presentation-world :as presentation-world]))
 
 (shared/install-session-cleanup-hooks!
-  {:clear-walk-speed! level-renderer/clear-owner-walk-speed!})
+  {:clear-walk-speed! presentation-world/clear-owner-walk-speed!})
 
 (def create-session-cleanup-runtime shared/create-session-cleanup-runtime)
 (def call-with-session-cleanup-runtime shared/call-with-session-cleanup-runtime)

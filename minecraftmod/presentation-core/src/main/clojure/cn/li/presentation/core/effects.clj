@@ -2,7 +2,7 @@
   "Deterministic effect-instance runtime shared by HUD/world/first-person hosts.
 
    Templates are data compiled from *.fx.edn. Controllers may spawn/stop an
-   instance, but cannot inject an arbitrary draw-plan or call a backend."
+   instance, but cannot inject arbitrary backend commands or call a backend."
   (:require [cn.li.presentation.core.animation :as animation])
   (:import [cn.li.presentation.core RenderCommand$Beam RenderCommand$Billboard
             RenderCommand$Mesh RenderCommand$ParticleBatch RenderCommand$Ribbon

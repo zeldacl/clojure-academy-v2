@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.rv3 :as v3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
 (defn- invoke-level-enqueue! [ctx-id channel payload]

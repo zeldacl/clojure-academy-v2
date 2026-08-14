@@ -14,9 +14,9 @@
             [cn.li.platform.neutral.client-runtime :as render-init]
             [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.fabric1211.adapter.gui-registry :as gui-registry]
-            [cn.li.fabric1211.client.overlay-renderer :as overlay-renderer]
+            [cn.li.fabric1211.client.presentation-hud-renderer :as presentation-hud-renderer]
             [cn.li.fabric1211.client.hand-effect-renderer :as hand-effect-renderer]
-            [cn.li.fabric1211.client.level-effect-renderer :as level-effect-renderer]
+            [cn.li.fabric1211.client.presentation-world-renderer :as presentation-world-renderer]
             [cn.li.fabric1211.client.keyboard-init :as kb-init]
             [cn.li.fabric1211.client.obj-model-registration :as obj-models]
             [cn.li.mc1211.client.font.msdf-setup :as msdf-setup]
@@ -114,16 +114,8 @@
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
          (overlay-state/get-client-activated owner)))
-     :client-active-overlay-app
-     (fn [_owner]
-       (when-let [owner (mc-session/current-local-player-owner)]
-         (overlay-state/get-active-overlay-app owner)))
      :get-client-player #(.player (Minecraft/getInstance))
      :local-player-uuid mc-session/local-player-uuid
-     :set-active-overlay-app (fn [app-kw player-uuid]
-                                (overlay-state/set-active-overlay-app!
-                                  {:client-session-id "" :player-uuid (str player-uuid)}
-                                  app-kw))
      :screen-active? #(some? (.screen (Minecraft/getInstance)))
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
@@ -277,9 +269,9 @@
   (register-fluid-client!)
   (energy-item-model-properties/register!)
   (obj-models/register!)
-  (overlay-renderer/init!)
+  (presentation-hud-renderer/init!)
   (hand-effect-renderer/init!)
-  (level-effect-renderer/init!)
+  (presentation-world-renderer/init!)
   (msdf-setup/init!)
   (media-playback-bridge/install-media-playback-bridge!)
   (log/info "Fabric client initialization complete"))

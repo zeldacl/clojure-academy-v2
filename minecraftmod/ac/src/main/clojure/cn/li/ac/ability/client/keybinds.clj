@@ -459,7 +459,7 @@
   ([player-uuid]
    (cond
      (nil? player-uuid) []
-     (freq-transmitter/overlay-active? player-uuid) [-100 -99]
+    (freq-transmitter/interaction-active? player-uuid) [-100 -99]
      (activated? player-uuid)
      (into (into []
                  (keep (fn [idx]
@@ -493,8 +493,8 @@
     ;; does not keep swinging while a skill owns LMB/RMB (upstream ControlOverrider).
     (sync-vanilla-input-overrides! player-uuid)
     (if player-uuid
-      (if (freq-transmitter/overlay-active? player-uuid)
-        (freq-transmitter/tick-overlay-input!
+      (if (freq-transmitter/interaction-active? player-uuid)
+        (freq-transmitter/tick-interaction!
           player-uuid
           (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
         (doseq [idx (range 4)]

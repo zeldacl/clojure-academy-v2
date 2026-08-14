@@ -1,7 +1,7 @@
-(ns cn.li.neoforge262.client.level-effect-renderer
+(ns cn.li.neoforge262.client.presentation-world-renderer
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader extracts immutable state, then submits its custom geometry."
-  (:require [cn.li.mc262.client.effects.level-renderer :as geometry]
+  (:require [cn.li.mc262.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])

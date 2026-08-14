@@ -953,25 +953,26 @@ tasks.register("verifyPresentationLoaderHooks") {
         def requiredFiles = []
         roots.findAll { it.directory }.each { File root ->
             fileTree(root) {
-                include "**/overlay_renderer.clj"
+                include "**/presentation_hud_renderer.clj"
+                include "**/presentation_world_renderer.clj"
             }.files.each { File source -> requiredFiles << source }
         }
         def missing = requiredFiles.findAll { !it.text.contains("cn.li.platform.neutral.presentation") }
         if (!missing.isEmpty()) {
             throw new GradleException("Loader Presentation hook missing:\n" + missing.join("\n"))
         }
-        def overlays = requiredFiles.findAll { it.name == "overlay_renderer.clj" }
+        def overlays = requiredFiles.findAll { it.name == "presentation_hud_renderer.clj" }
         def backendMissing = overlays.findAll { source ->
             !source.text.contains("presentation-backend") || !source.text.contains("register-backend!")
         }
         if (!backendMissing.isEmpty()) {
-                throw new GradleException("Loader overlay backend registration missing:\n" + backendMissing.join("\n"))
+                throw new GradleException("Loader Presentation HUD backend registration missing:\n" + backendMissing.join("\n"))
         }
         def extractionMissing = overlays.findAll { source ->
             !source.text.contains("submit-current-frame!")
         }
         if (!extractionMissing.isEmpty()) {
-            throw new GradleException("Loader overlay frame extraction missing:\n" + extractionMissing.join("\n"))
+                throw new GradleException("Loader Presentation HUD frame extraction missing:\n" + extractionMissing.join("\n"))
         }
         logger.lifecycle("[verifyPresentationLoaderHooks] ok ({} loader render seams)", requiredFiles.size())
     }
@@ -1020,21 +1021,24 @@ tasks.register("verifyPresentationAtomicSwitch") {
     group = "verification"
     description = "Guard the final Presentation Runtime cut-over and legacy renderer deletion."
     doLast {
-        // The migration is intentionally developed beside the old runtime.  A
-        // release/cut-over build opts in explicitly so an incomplete migration
-        // cannot silently ship a dual engine.  Keeping this check opt-in also
-        // lets the vertical slices compile while the remaining screens are
-        // converted.
-        def enabled = (findProperty("presentationAtomicSwitch") ?: "false").toString().equalsIgnoreCase("true")
+        // The repository is now on the Presentation Runtime side of the
+        // atomic switch.  A local developer may explicitly disable this gate
+        // while inspecting an intermediate worktree, but normal verification
+        // must reject any reintroduced legacy seam.
+        def enabled = !(findProperty("presentationAtomicSwitch") ?: "true").toString().equalsIgnoreCase("false")
         if (!enabled) {
-            logger.lifecycle("[verifyPresentationAtomicSwitch] skipped (pass -PpresentationAtomicSwitch=true at cut-over)")
+            logger.lifecycle("[verifyPresentationAtomicSwitch] skipped (-PpresentationAtomicSwitch=false)")
             return
         }
         def roots = [file("ac/src/main/clojure"),
                      file("ac/src/main/resources"),
                      file("mcmod/src/main/clojure"),
+                     file("platform-src/platform/shared"),
                      file("platform-src/minecraft"),
-                     file("platform-src/loader")].findAll { it.directory }
+                     file("platform-src/loader"),
+                     file("presentation-core/src/main"),
+                     file("presentation-compiler/src/main"),
+                     file("presentation-devtools/src/main")].findAll { it.directory }
         def forbidden = [
             ~/script-render-(runtime|executor|compiler)/,
             ~/script_render_(runtime|executor|compiler|registry)/,
@@ -1054,7 +1058,16 @@ tasks.register("verifyPresentationAtomicSwitch") {
             ~/ui-xml\/load-spec/,
             ~/open-reactive-screen!/,
             ~/client-presentation-frame-legacy/,
-            ~/build-presentation-frame-legacy/
+            ~/build-presentation-frame-legacy/,
+            ~/overlay_renderer/,
+            ~/overlay-renderer/,
+            ~/overlay-elements/,
+            ~/build-overlay/,
+            ~/active-overlay-app/,
+            ~/level_effect_renderer/,
+            ~/level-effect-renderer/,
+            ~/level_renderer/,
+            ~/level-renderer/
         ]
         def offenders = []
         roots.each { root ->

@@ -41,7 +41,6 @@
 (def ^:private terminal-cursor-show-fn nil)
 (def ^:private local-player-uuid-fn nil)
 (def ^:private overlay-activated-override-fn nil)
-(def ^:private active-overlay-app-fn nil)
 
 (def ^:private hot-operation-vars
   {:slot-key-down #'slot-key-down-fn
@@ -66,7 +65,7 @@
    :terminal-cursor-show! #'terminal-cursor-show-fn
    :local-player-uuid #'local-player-uuid-fn
    :client-overlay-activated-override #'overlay-activated-override-fn
-   :client-active-overlay-app #'active-overlay-app-fn})
+   })
 
 (defn- replace-hot-operations! [ops]
   (doseq [[operation target-var] hot-operation-vars]
@@ -117,7 +116,6 @@
 (defn run-client-effect!         [effect-key payload] (run-client-effect-fn effect-key payload))
 (defn get-client-player          [& args] (apply bridge-op :get-client-player args))
 (defn screen-active?             [& args] (apply bridge-op :screen-active? args))
-(defn set-active-overlay-app!     [& args] (apply bridge-op :set-active-overlay-app args))
 (defn close-screen!              [& args] (apply bridge-op :close-screen! args))
 (defn send-system-message!       [& args] (apply bridge-op :send-system-message! args))
 (defn game-time-ms               [] (game-time-ms-fn))
@@ -144,9 +142,6 @@
 (defn local-player-uuid          [] (when local-player-uuid-fn (local-player-uuid-fn)))
 (defn client-overlay-activated-override [owner]
   (when overlay-activated-override-fn (overlay-activated-override-fn owner)))
-(defn client-active-overlay-app [owner]
-  (when active-overlay-app-fn (active-overlay-app-fn owner)))
-
 (defn local-player-block-aim
   "Where the local player is aiming, as {:x :y :z}: the precise block hit
   within `distance`, else the look end. nil when the loader does not provide

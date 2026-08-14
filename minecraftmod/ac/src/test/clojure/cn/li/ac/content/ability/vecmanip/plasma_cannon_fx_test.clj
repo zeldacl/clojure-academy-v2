@@ -10,7 +10,7 @@
             [cn.li.ac.ability.client.effects.tornado :as tornado]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as pcfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
