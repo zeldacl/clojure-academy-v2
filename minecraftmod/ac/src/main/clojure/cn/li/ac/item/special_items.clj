@@ -96,20 +96,12 @@
 
 (defn- mutate-or-convert-main-hand!
   [player item-stack target-kind]
-  (let [count (int (pitem/stack-count item-stack))]
-    (log/info "[matter-unit] mutate count=" count "target=" target-kind)
-    (if (<= count 1)
-      (do (set-matter-kind! item-stack target-kind)
-          (log/info "[matter-unit] mutate direct kind=" (get-matter-kind item-stack)))
-      (do
-        (let [consumed? (entity/player-consume-main-hand-item! player 1)
-              converted (make-matter-unit-stack target-kind)]
-          (log/info "[matter-unit] mutate consumed=" consumed?
-                    "converted=" (boolean converted)
-                    "count-after=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
-          (when converted
-            (entity/player-give-item-stack! player converted)
-            (log/info "[matter-unit] mutate gave kind=" (get-matter-kind converted))))))))
+  (if (<= (int (pitem/stack-count item-stack)) 1)
+    (set-matter-kind! item-stack target-kind)
+    (do
+      (entity/player-consume-main-hand-item! player 1)
+      (when-let [converted (make-matter-unit-stack target-kind)]
+        (entity/player-give-item-stack! player converted)))))
 
 (defn- use-matter-unit!
   [{:keys [player item-stack side]}]
@@ -118,8 +110,6 @@
     (let [kind (get-matter-kind item-stack)
           hit (entity/player-raytrace-block player 5.0 (= kind :none))
           level (entity/player-get-level player)]
-      (log/info "[matter-unit] use kind=" kind "hit=" (boolean hit)
-                "hit-block-id=" (:block-id hit) "expected=" imag-phase-block-id)
       (if-not hit
         {:consume? false}
         (let [{:keys [hit-pos place-pos block-id hit-replaceable? place-replaceable?
@@ -136,16 +126,8 @@
               ;; the loader bindings (Level.destroyBlock returns false for
               ;; fluid blocks); plain place-block-by-id! "minecraft:air" does
               ;; NOT work — air is not in the mod's block registry.
-              (let [removed? (world/remove-block! level hit-block-pos)]
-                (log/info "[matter-unit] collect removed=" removed?
-                          "hit-pos=" [(:x hit-pos) (:y hit-pos) (:z hit-pos)]
-                          "kind-after=" (get-matter-kind item-stack)
-                          "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
-                          "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
-                (when removed?
-                  (mutate-or-convert-main-hand! player item-stack :phase-liquid)
-                  (log/info "[matter-unit] after-mutate kind=" (get-matter-kind item-stack)
-                            "damage=" (try (pitem/damage item-stack) (catch Exception _ -1)))))
+              (when (world/remove-block! level hit-block-pos)
+                (mutate-or-convert-main-hand! player item-stack :phase-liquid))
               {:consume? true})
 
             (= kind :phase-liquid)
