@@ -591,12 +591,15 @@
                 (-> (ImmediateDraw/vertex pose x1  y0 0.0)  (.uv (u-at x1)  (float v0))  (.endVertex))
                 (ImmediateDraw/draw))
               ;; Rectangular fill: existing scissor+blit path
-              (let [uoff (float (* scroll iw))]
-                (apply-color!)  ;; BEFORE blit
-                (.enableScissor gg seg-start iy seg-end ih)
-                (let [hh (unchecked-int h)]  ;; node HEIGHT — ih is the bottom edge (y+h)
-                  (.blit gg fg-rl ix iy uoff 0.0 iw hh (float iw) (float hh)))
-                (.disableScissor gg)))))))]
+              (let [uoff (float (* scroll iw))
+                    hh (unchecked-int h)         ;; node HEIGHT — ih is the bottom edge (y+h)
+                    fw (- (int seg-end) (int seg-start))]
+                ;; Clip by UV, not scissor: GuiGraphics.enableScissor takes
+                ;; absolute SCREEN coords, but node x/y are GUI-local — on a
+                ;; centered container the bar fell outside the scissor rect
+                ;; and vanished. Blit only the filled width (u 0..fw/iw).
+                (apply-color!)
+                (.blit gg fg-rl ix iy uoff 0.0 fw hh (float iw) (float hh))))))))]
     ;; ---- background ----
     (when bg-rl
       (.blit gg bg-rl ix iy 0 0 iw (unchecked-int h) iw (unchecked-int h)))
