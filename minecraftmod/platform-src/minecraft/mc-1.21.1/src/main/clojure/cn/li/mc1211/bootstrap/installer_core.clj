@@ -183,6 +183,8 @@
                                       (ItemData/getOrCreateCustomData this))
         :item-get-max-damage       (fn [^ItemStack this] (.getMaxDamage this))
         :item-set-damage!          (fn [^ItemStack this dmg] (.setDamageValue this (int dmg)))
+        :item-set-hover-name!     (fn [^ItemStack this name]
+                                    (.setHoverName this (Component/literal (str name))))
         :item-get-damage           (fn [^ItemStack this] (.getDamageValue this))
         :item-get-item             (fn [^ItemStack this] (.getItem this))
         :item-get-custom-data      (fn [^ItemStack this]

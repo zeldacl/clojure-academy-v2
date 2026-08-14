@@ -78,7 +78,13 @@
   [item-stack kind]
   (let [tag (pitem/ensure-custom-data item-stack)]
     (sd/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
-    (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))))
+    (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))
+    ;; Upstream getTranslationKey() appends the material name, so the empty
+    ;; unit reads "Empty Unit" and the filled one "Imag Phase Liquid Unit".
+    (pitem/set-hover-name! item-stack
+                           (if (= kind :phase-liquid)
+                             "Imag Phase Liquid Unit"
+                             "Empty Unit"))))
 
 (defn- make-matter-unit-stack
   [kind]

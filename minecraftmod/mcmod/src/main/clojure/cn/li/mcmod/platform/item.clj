@@ -7,7 +7,7 @@
   #{:item-is-empty? :item-get-count :item-get-max-stack-size :item-is-equal?
     :item-save-to-data :item-ensure-custom-data :item-get-max-damage
     :item-set-damage! :item-get-damage :item-get-item :item-get-custom-data :item-split
-    :item-get-description-id :item-get-registry-name
+    :item-set-hover-name! :item-get-description-id :item-get-registry-name
     :create-item-from-data :create-item-stack-by-id :item-stack-empty?})
 
 (defn install-item-ops!
@@ -44,6 +44,7 @@
 (defn ensure-custom-data  [stack]        (call :item-ensure-custom-data stack))
 (defn max-damage          [stack]        (call :item-get-max-damage stack))
 (defn set-damage!         [stack dmg]    (call :item-set-damage! stack dmg))
+(defn set-hover-name!     [stack name]  (call :item-set-hover-name! stack name))
 (defn damage              [stack]        (call :item-get-damage stack))
 (defn object              [stack]        (call :item-get-item stack))
 (defn custom-data         [stack]        (call :item-get-custom-data stack))
