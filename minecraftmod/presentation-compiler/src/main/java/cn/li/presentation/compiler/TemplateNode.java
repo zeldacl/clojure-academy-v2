@@ -7,17 +7,15 @@ import java.util.List;
 import java.util.Map;
 
 public record TemplateNode(String type, String key, List<TemplateNode> children,
-                           Integer bindingId, ActionId action,
+                           Map<String, Integer> bindings,
+                           Map<String, ActionId> actions,
                            Map<String, Object> props) {
-    public TemplateNode(String type, String key, List<TemplateNode> children,
-                        Integer bindingId, ActionId action) {
-        this(type, key, children, bindingId, action, Map.of());
-    }
-
     public TemplateNode {
         type = type == null ? "" : type;
         key = key == null ? "" : key;
         children = List.copyOf(children == null ? List.of() : children);
+        bindings = Map.copyOf(bindings == null ? Map.of() : bindings);
+        actions = Map.copyOf(actions == null ? Map.of() : actions);
         props = Map.copyOf(props == null ? Map.of() : props);
     }
 }

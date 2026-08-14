@@ -967,7 +967,7 @@
          :overloaded? (boolean (:overloaded overload-bar))
          :interfered? (:interfered? hud-model)}))))
 
-(defn build-presentation-frame-legacy [player-uuid screen-width screen-height overlay-state]
+(defn- build-retired-overlay-frame [player-uuid screen-width screen-height overlay-state]
   ;; When an overlay app is active, skip normal HUD and render overlay app elements.
   (if-let [app-kw (:active-overlay-app overlay-state)]
     (case app-kw
@@ -1271,10 +1271,6 @@
        (let [active-ctxs (player-contexts player-uuid)
              skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
          (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id player-uuid))))
-
-     :client-presentation-frame-legacy
-     (fn [player-uuid screen-width screen-height overlay-state]
-       (build-presentation-frame-legacy player-uuid screen-width screen-height overlay-state))
 
      :client-req-learn-skill!
      (fn [player-uuid skill-id extra callback]

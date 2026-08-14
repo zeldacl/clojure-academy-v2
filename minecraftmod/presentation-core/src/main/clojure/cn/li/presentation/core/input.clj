@@ -14,6 +14,12 @@
                                          :focusable? false :tab-index 0})
   node-id)
 
+(defn unregister-node! [runtime node-id]
+  (swap! (:nodes runtime) dissoc node-id)
+  (when (= node-id @(:focus runtime)) (reset! (:focus runtime) nil))
+  (when (= node-id @(:pointer-capture runtime)) (reset! (:pointer-capture runtime) nil))
+  nil)
+
 (defn set-focusable! [runtime node-id focusable? tab-index]
   (swap! (:nodes runtime) update node-id merge
          {:focusable? (boolean focusable?) :tab-index (int tab-index)})

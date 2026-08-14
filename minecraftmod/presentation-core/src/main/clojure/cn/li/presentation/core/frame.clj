@@ -26,7 +26,12 @@
     frame))
 
 (defn frame-graph
-  ([] (zipmap stages (map vector (rest stages))))
+  ([] (into {}
+            (map-indexed (fn [idx stage]
+                           [stage (if-let [next-stage (nth (vec (rest stages)) idx nil)]
+                                    [next-stage]
+                                    [])])
+                         stages)))
   ([edges] edges))
 
 (defn validate-graph!

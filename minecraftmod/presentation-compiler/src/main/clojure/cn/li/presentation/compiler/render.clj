@@ -8,8 +8,8 @@
            [cn.li.presentation.core BindingTable PresentationViewModel
             RenderCommand$GlyphRun RenderCommand$Image RenderCommand$Quad]))
 
-(defn- binding-value [^PresentationViewModel model ^TemplateNode node]
-  (when-let [id (.bindingId node)]
+(defn- binding-value [^PresentationViewModel model ^TemplateNode node attr]
+  (when-let [id (get (.bindings node) (name attr))]
     (.value ^BindingTable (.bindings model) (int id))))
 
 (defn- clamp [x lo hi]
@@ -53,14 +53,14 @@
       (mapcat #(render-node % model x y width height) children))))
 
 (defn render-node [^TemplateNode node model x y width height]
-  (let [value (binding-value model node)
+  (let [value (binding-value model node :value)
         type (.type node)]
     (case type
       ("stack" "flex" "grid" "scroll" "portal")
       (render-children node model x y width height)
 
       "virtual-list"
-      (let [items (vec (or value []))
+      (let [items (vec (or (binding-value model node :items) value []))
             n (max 1 (count items))
             row-height 18.0
             visible-count (+ 2 (int (Math/ceil (/ height row-height))))
@@ -134,7 +134,7 @@
         [(RenderCommand$Quad. (float x) (float y) (float w) (float h) rgba)])
 
       "skill-wheel"
-      (let [items (vec (or value []))
+      (let [items (vec (or (binding-value model node :items) value []))
             n (max 1 (count items))]
         (mapcat (fn [[idx item]]
                   (let [angle (* 2.0 Math/PI (/ idx n))

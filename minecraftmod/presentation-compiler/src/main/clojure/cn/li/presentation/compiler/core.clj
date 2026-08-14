@@ -65,27 +65,23 @@
                              (let [value (get* m attr)]
                                (when (and (vector? value) (= :bind (first value)))
                                  [attr (ref-name (second value))]))) binding-attrs)
-        binding (when-let [[attr name] (first binding-refs)]
-                  (let [id (or ((:binding symbols) name)
-                               ((:binding symbols) (keyword name)))]
-                    (when (nil? id) (fail (str path "." (clojure.core/name attr)) (str "unknown binding '" name "'")))
-                    (swap! bindings assoc name (int id)) (int id)))
-        _ (doseq [[attr name] (rest binding-refs)]
+        _ (doseq [[attr name] binding-refs]
             (let [id (or ((:binding symbols) name)
                          ((:binding symbols) (keyword name)))]
               (when (nil? id) (fail (str path "." (clojure.core/name attr)) (str "unknown binding '" name "'")))
-              (swap! bindings assoc name (int id))))
+              (swap! bindings assoc (clojure.core/name attr) (int id))))
         action-attrs [:on-select :on-activate :on-submit :on-close :on-click]
         action-entry (some (fn [attr]
                             (let [value (get* m attr)]
                               (when (and (vector? value) (= :action (first value)))
                                 [attr value]))) action-attrs)
-        action (when action-entry
-                 (let [[attr value] action-entry
-                       action-name (ref-name (second value)) id (or ((:action symbols) action-name)
-                                                                    ((:action symbols) (keyword action-name)))]
-                   (when (nil? id) (fail (str path "." (clojure.core/name attr)) (str "unknown action '" action-name "'")))
-                   (swap! actions assoc action-name (int id)) (ActionId. (int id))))
+        node-actions (when action-entry
+                       (let [[attr value] action-entry
+                             action-name (ref-name (second value)) id (or ((:action symbols) action-name)
+                                                                          ((:action symbols) (keyword action-name)))]
+                         (when (nil? id) (fail (str path "." (clojure.core/name attr)) (str "unknown action '" action-name "'")))
+                         (swap! actions assoc action-name (int id))
+                         {(clojure.core/name attr) (ActionId. (int id))}))
         semantics (get* m :semantics)
         _ (when (and semantics (not (map? semantics)))
             (fail (str path ".semantics") "must be a map"))
@@ -100,7 +96,11 @@
                                   (compile-node % (str path ".children") symbols seen bindings actions)) children-value))
                    (containers type) (fail (str path ".children") "container requires children")
                    :else [])]
-    (TemplateNode. (name type) key children binding action
+    (TemplateNode. (name type) key children
+                   (into {} (map (fn [[attr binding-name]]
+                                   [(clojure.core/name attr)
+                                    (int (get @bindings (clojure.core/name attr)))]) binding-refs))
+                   (or node-actions {})
                    (into {} (remove (comp nil? val)
                                     (select-keys m [:label :rgba :x :y :w :h]))))))
 

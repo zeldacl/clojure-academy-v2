@@ -2,6 +2,7 @@
   "Reactive GUI bridge — installs reactive handlers via client bridge merge.
    Individual block GUIs self-register via their own init-*-reactive! functions."
   (:require [clojure.java.io :as io]
+            [clojure.string :as string]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
@@ -9,7 +10,9 @@
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.presentation.core.export :as presentation-export]
+            [cn.li.presentation.core.effects :as presentation-effects]
             [cn.li.presentation.compiler.core :as presentation-compiler]
+            [cn.li.presentation.compiler.fx :as presentation-fx]
             [cn.li.presentation.compiler.render :as presentation-render]
             [cn.li.mcmod.util.log :as log]))
 
@@ -44,6 +47,11 @@
    "academy:machine_container" "machine_container.ui.edn"
    "academy:wireless_matrix" "wireless_matrix.ui.edn"
    "academy:wireless_node" "wireless_node.ui.edn"})
+
+(def ^:private effect-template-files
+  {"academy:body_intensify" "body_intensify.fx.edn"
+   "academy:body_intensify_burst" "body_intensify_burst.fx.edn"
+   "academy:railgun_charge" "railgun_charge.fx.edn"})
 
 (def ^:private template-symbols
   {"academy:combat_hud"
@@ -110,6 +118,12 @@
                              (slurp resource)
                              (throw (ex-info "Presentation resource missing"
                                              {:resource path}))))]
+    (doseq [[effect-id file] effect-template-files]
+      (when-let [resource (io/resource (str "assets/academy/presentation/" file))]
+        (let [compiled (presentation-fx/compile-edn (slurp resource))]
+          (presentation-effects/register-template!
+            (presentation-host/effect-runtime runtime)
+            (assoc compiled :id (keyword (last (string/split effect-id #":"))))))))
     runtime))
 
 (defn- ensure-combat-hud! [runtime player-uuid width height]
@@ -184,6 +198,15 @@
                             :else :pass)))
      :set-input-handler! (fn [mount handler]
                            (presentation-host/set-input-handler! runtime mount handler))
+     :presentation-spawn-effect! (fn [template-id owner params now-ms]
+                                   (presentation-host/spawn-effect!
+                                     runtime template-id owner params now-ms))
+     :presentation-destroy-effect! (fn [instance-id]
+                                     (presentation-host/destroy-effect! runtime instance-id))
+     :presentation-clear-effect-owner! (fn [owner]
+                                         (presentation-host/clear-effect-owner! runtime owner))
+     :presentation-tick-effects! (fn [delta-ms]
+                                   (presentation-host/tick-effects! runtime delta-ms))
      :unmount-all! (fn []
                      (reset! combat-hud* nil)
                      (reset! terminal* nil)

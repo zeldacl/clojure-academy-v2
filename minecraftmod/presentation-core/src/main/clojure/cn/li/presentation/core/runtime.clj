@@ -4,7 +4,8 @@
             [cn.li.presentation.core.dirty :as dirty]
             [cn.li.presentation.core.effects :as effects]
             [cn.li.presentation.core.tree :as tree]
-            [cn.li.presentation.core.layout :as layout])
+            [cn.li.presentation.core.layout :as layout]
+            [cn.li.presentation.core.input :as input])
   (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext FramePacket RenderPass RenderStage
             PresentationInputEvent PresentationInputEvent$Pointer PresentationInputEvent$Pointer$Type
             PresentationInputEvent$Key PresentationInputEvent$CharacterInput PresentationInputEvent$Scroll
@@ -16,6 +17,7 @@
   ([options]
    (let [runtime (atom {:mounts {} :next-id 1 :invalidated? true
                         :effects (effects/create)
+                        :input (input/create)
                         :template-resolver (:template-resolver options)
                         :template-renderer (:template-renderer options)})
         dirty-state (dirty/create)]
@@ -53,7 +55,14 @@
         handle (MountHandle. (dec id))]
     (swap! (state runtime) assoc-in [:mounts handle]
            {:host host :template template :model model :commands (atom {})
-            :handler nil :tree nil :layout nil})
+            :handler nil :tree nil :layout nil
+            :input-node (str "mount/" (.value handle))})
+    (input/register-node! (:input @(state runtime))
+                          (str "mount/" (.value handle)) nil
+                          (fn [_phase event]
+                            (if-let [handler (get-in @(state runtime) [:mounts handle :handler])]
+                              (handler event)
+                              EventResult/PASS)))
     (swap! (state runtime) assoc :invalidated? true)
     handle))
 
@@ -102,11 +111,12 @@
   (let [mount (get-in @(state runtime) [:mounts handle])]
     (when-not mount (throw (ex-info "unknown mount" {:mount handle})))
     (swap! (:commands mount) update stage (fnil conj []) command)
-    (dirty/mark! (:dirty (state runtime)) [:paint])
+    (dirty/mark! (:dirty @(state runtime)) [:paint])
     (swap! (state runtime) assoc :invalidated? true)))
 
 (defn set-input-handler! [runtime handle handler]
-  (swap! (state runtime) assoc-in [:mounts handle :handler] handler))
+  (swap! (state runtime) assoc-in [:mounts handle :handler] handler)
+  nil)
 
 (defn- normalize-input-event
   "Convert the neutral map emitted by Minecraft boundaries to the immutable
@@ -136,11 +146,25 @@
       event)))
 
 (defn dispatch! [runtime handle event]
-  (when-let [handler (get-in @(state runtime) [:mounts handle :handler])]
-    (let [result (handler (normalize-input-event event))]
-      (when-not (= result EventResult/PASS)
-        (swap! (state runtime) assoc :invalidated? true))
-      result)))
+  (when-let [mount (get-in @(state runtime) [:mounts handle])]
+    (let [result* (atom EventResult/PASS)
+          node-id (:input-node mount)
+          input-runtime (:input @(state runtime))
+          event (normalize-input-event event)]
+      (input/register-node! input-runtime node-id nil
+                            (fn [phase e]
+                              (let [result (if (= phase :target)
+                                             (if-let [handler (:handler mount)]
+                                               (handler e)
+                                               EventResult/PASS)
+                                             EventResult/PASS)]
+                                (reset! result* result)
+                                result)))
+      (input/dispatch! input-runtime node-id event)
+      (let [result @result*]
+        (when-not (= result EventResult/PASS)
+          (swap! (state runtime) assoc :invalidated? true))
+        result))))
 
 (defn extract! [runtime ^FrameContext context]
   (let [snapshot @(state runtime)
@@ -185,6 +209,7 @@
     (when-let [model (:model mount)]
       (when (instance? AutoCloseable model)
         (.close ^AutoCloseable model)))
+    (input/unregister-node! (:input @(state runtime)) (:input-node mount))
     (swap! (state runtime) update :mounts dissoc handle)
     (swap! (state runtime) assoc :invalidated? true))
   nil)

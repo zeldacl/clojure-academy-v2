@@ -1,0 +1,10 @@
+{:id :railgun-charge
+ :host :vfx
+ :primitive :beam
+ :stage :world-after-translucent
+ :owner :ability
+ :duration-ms 1600
+ :resources []
+ :timeline [{:property :alpha :at 0.0 :value 0.0}
+            {:property :alpha :at 0.1 :value 1.0}
+            {:property :alpha :at 1.0 :value 0.0}]}

@@ -16,14 +16,14 @@
   {:type (.type node)
    :key (.key node)
    :children (mapv node->data (.children node))
-   :binding-id (.bindingId node)
-   :action (some-> (.action node) .value)
+   :bindings (into {} (.bindings node))
+   :actions (into {} (map (fn [[k v]] [k (.value ^ActionId v)]) (.actions node)))
    :props (into {} (.props node))})
 
-(defn- data->node [{:keys [type key children binding-id action props]}]
+(defn- data->node [{:keys [type key children bindings actions props]}]
   (TemplateNode. (str type) (str key) (mapv data->node children)
-                 (when (some? binding-id) (int binding-id))
-                 (when (some? action) (ActionId. (int action)))
+                 (into {} (map (fn [[k v]] [(str k) (int v)]) bindings))
+                 (into {} (map (fn [[k v]] [(str k) (ActionId. (int v))]) actions))
                  (or props {})))
 
 (defn encode
