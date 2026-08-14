@@ -67,7 +67,7 @@
    :client-terminate-context! noop
    :client-transition-to-alive! noop
    :client-send-context-local! noop
-   :client-build-overlay-plan (fn [_ _ _ _] nil)
+   :client-presentation-frame-legacy (fn [_ _ _ _] nil)
    :set-client-overlay-activated! (fn [_ _] nil)
    :client-poll-particle-effects (fn [_owner] [])
    :client-poll-sound-effects (fn [_owner] [])
@@ -129,7 +129,7 @@
 (def ^:private client-on-movement-key-tick-fn noop)
 (def ^:private client-on-movement-key-up-fn noop)
 (def ^:private client-on-slot-wheel-fn noop)
-(def ^:private client-build-overlay-plan-fn (fn [_ _ _ _] nil))
+(def ^:private client-presentation-frame-legacy-fn (fn [_ _ _ _] nil))
 (def ^:private client-poll-particle-effects-fn (fn [_] []))
 (def ^:private client-poll-sound-effects-fn (fn [_] []))
 (def ^:private client-current-hand-transform-fn (fn [] nil))
@@ -154,7 +154,7 @@
    :client-on-movement-key-tick! #'client-on-movement-key-tick-fn
    :client-on-movement-key-up! #'client-on-movement-key-up-fn
    :client-on-slot-wheel! #'client-on-slot-wheel-fn
-   :client-build-overlay-plan #'client-build-overlay-plan-fn
+   :client-presentation-frame-legacy #'client-presentation-frame-legacy-fn
    :client-poll-particle-effects #'client-poll-particle-effects-fn
    :client-poll-sound-effects #'client-poll-sound-effects-fn
    :client-current-hand-transform #'client-current-hand-transform-fn
@@ -685,9 +685,9 @@
   [ctx-id channel payload]
   ((:client-send-context-local! (hooks-core-state-snapshot)) ctx-id channel payload))
 
-(defn client-build-overlay-plan
+(defn client-presentation-frame-legacy
   [player-uuid screen-width screen-height overlay-state]
-  (client-build-overlay-plan-fn player-uuid screen-width screen-height overlay-state))
+  (client-presentation-frame-legacy-fn player-uuid screen-width screen-height overlay-state))
 
 (defn set-client-overlay-activated!
   "Notify the overlay layer that activation state has changed for a player.

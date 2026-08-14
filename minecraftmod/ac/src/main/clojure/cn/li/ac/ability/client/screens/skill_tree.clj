@@ -14,8 +14,8 @@
    [cn.li.mcmod.i18n :as i18n]
    [cn.li.mcmod.runtime.install :as install]
    [cn.li.mcmod.client.platform-bridge :as client-bridge]
-   [cn.li.mcmod.client.ui.registry :as widget-registry]
-   [cn.li.mcmod.util.log :as log]))
+   [cn.li.mcmod.util.log :as log]
+   [cn.li.ac.gui.presentation-application :as application]))
 
 ;; Forward declares for functions used by widget factory (defined later in file)
 (declare ensure-screen-player-state! swap-screen-state! on-mouse-move handle-screen-click!)
@@ -314,6 +314,31 @@
 (defn close-screen! [owner]
   (managed-screens/clear-screen-state! screen-id (screen-owner-key owner)))
 
+(defn- presentation-state [owner]
+  (let [data (or (build-screen-render-data owner) {})]
+    {:lines (vec (concat
+                   [{:label (str "Category: " (or (get-in data [:ability-info :category-id]) "unknown"))}
+                    {:label (str "Level: " (or (get-in data [:ability-info :level]) 0))}
+                    {:label (str "Skill points: " (or (get-in data [:ability-info :skill-points]) 0))}]
+                   (map (fn [{:keys [skill-id learned progress]}]
+                          {:label (str (if learned "[learned] " "[ ] ") (name skill-id)
+                                       " " (format "%.0f%%" (* 100.0 (double (or progress 0.0)))))})
+                        (:skill-nodes data))))
+     :status "Activate a skill after selecting it"
+     :button-left {:label "Refresh" :visible? true}}))
+
+(defn open-presentation! [player-uuid & [learn-context]]
+  (let [owner (read-model/local-client-owner player-uuid "skill-tree")]
+    (open-screen! owner learn-context)
+    (application/mount!
+      (str "application/skill-tree/" player-uuid)
+      "Skill Tree"
+      (presentation-state owner)
+      (fn [action _current]
+        (when (= action :application/activate)
+          (presentation-state owner)))
+      #(close-screen! owner))))
+
 ;; ============================================================================
 ;; CGui Widget Factory — reactive screen dispatch for :ac/skill-tree
 ;; ============================================================================
@@ -324,7 +349,7 @@
    Opened by the N key and the terminal skill-tree app. requiring-resolve
    avoids a static cycle (panel-reactive requires this ns's tree logic)."
   [_payload]
-  (let [create-viewer-runtime (requiring-resolve 'cn.li.ac.block.developer.panel-reactive/create-viewer-runtime)
+  #_(let [create-viewer-runtime (requiring-resolve 'cn.li.ac.block.developer.panel-reactive/create-viewer-runtime)
         get-client-player (requiring-resolve 'cn.li.mcmod.client.platform-bridge/get-client-player)
         player (get-client-player)]
     {:type :reactive-screen
@@ -334,7 +359,7 @@
 (defn install-widget-factory!
   "Register skill-tree CGui widget factory. Idempotent."
   []
-  (install/framework-once! ::install-widget-factory
+   #_(install/framework-once! ::install-widget-factory
     (fn []
       (widget-registry/register-widget-factory! :ac/skill-tree create-skill-tree-widget)
       (log/info "Skill-tree widget factory registered")))

@@ -6,8 +6,6 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.model.ability :as adata]
             [cn.li.mcmod.i18n :as i18n]
-            [cn.li.mcmod.runtime.install :as install]
-            [cn.li.mcmod.client.ui.registry :as widget-registry]
             [cn.li.mcmod.util.log :as log]))
 
 ;; Forward declares for functions called by widget factory (defined later)
@@ -215,12 +213,3 @@
      :runtime r
      :title "Preset Editor"
      :on-close #(on-close! owner)}))
-
-(defn install-widget-factory!
-  "Register preset-editor CGui widget factory. Idempotent."
-  []
-  (install/framework-once! ::install-widget-factory
-    (fn []
-      (widget-registry/register-widget-factory! :ac/preset-editor create-preset-editor-widget)
-      (log/info "Preset-editor widget factory registered")))
-  nil)

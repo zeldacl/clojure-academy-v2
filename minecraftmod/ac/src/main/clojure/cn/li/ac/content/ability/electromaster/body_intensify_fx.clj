@@ -8,13 +8,20 @@
 
 (def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
 (def ^:private loop-sound-id (modid/namespaced-path "em.intensify_loop"))
-(def ^:private intensify-effect-id "intensify_effect")
-
 (defn- loop-key [ctx-id]
   (str "body-intensify/" ctx-id))
 
+(defn- presentation-owner [ctx-id payload]
+  (str "body-intensify/" (or (:source-player-id payload) "unknown") "/" ctx-id))
+
 (defn- on-fx-start
   [ctx-id _channel payload]
+  (client-bridge/call-adapter
+    :presentation-spawn-effect!
+    :academy/body-intensify-charge
+    (presentation-owner ctx-id payload)
+    {:count 1 :material-id 0}
+    (System/currentTimeMillis))
   ;; FollowEntitySound upstream is a real ambient loop attached to the caster.
   (client-bridge/run-client-effect!
    :mcmod/start-loop-sound-at-player
@@ -25,7 +32,10 @@
     :pitch 1.0}))
 
 (defn- on-fx-end
-  [ctx-id channel payload]
+  [ctx-id _channel payload]
+  (client-bridge/call-adapter
+    :presentation-clear-effect-owner!
+    (presentation-owner ctx-id payload))
   ;; Stop any charging loop started by fx-start before handling release.
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
@@ -44,12 +54,15 @@
          (number? x) (assoc :x (double x))
          (number? y) (assoc :y (double y))
          (number? z) (assoc :z (double z)))))
-    (client-bridge/run-client-effect!
-     :mcmod/spawn-scripted-effect-at-player
-     {:effect-id intensify-effect-id
-      :owner-uuid (:source-player-id payload)
-      :ctx-id ctx-id
-      :channel channel})))
+    ;; The performed burst is now a typed Effect Instance.  Position is data
+    ;; in the instance params; the version backend decides how to bill-board
+    ;; or batch the particle command for the active world.
+    (client-bridge/call-adapter
+      :presentation-spawn-effect!
+      :academy/body-intensify-burst
+      (presentation-owner ctx-id payload)
+      (select-keys (:caster-pos payload) [:x :y :z])
+      (System/currentTimeMillis))))
 
 (def ^:private spec
   (arc-beam/build-spec

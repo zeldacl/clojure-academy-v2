@@ -1,0 +1,31 @@
+{:type :stack
+ :key :container/root
+ :children
+ [{:type :grid
+   :key :container/slots
+   :children
+   [{:type :virtual-list
+     :key :container/slot-list
+     :items [:bind :slots]
+     :semantics {:role :list}}
+    {:type :text
+     :key :container/state
+     :value [:bind :machine-state]}]}
+  {:type :progress
+   :key :container/energy
+   :value [:bind :energy-ratio]
+   :semantics {:role :progress}}
+  {:type :progress
+   :key :container/progress
+   :value [:bind :progress-ratio]
+   :semantics {:role :progress}}
+  {:type :button
+   :key :container/button-left
+   :value [:bind :button-left]
+   :on-click [:action :container/button]
+   :semantics {:role :button}}
+  {:type :button
+   :key :container/button-right
+   :value [:bind :button-right]
+   :on-click [:action :container/button]
+   :semantics {:role :button}}]}

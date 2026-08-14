@@ -6,7 +6,7 @@
 
 (defn install-ui-hooks!
   []
-  (shell-reactive/install-ui-hooks-reactive!))
+  nil)
 
 (defn open-terminal!
   [player]

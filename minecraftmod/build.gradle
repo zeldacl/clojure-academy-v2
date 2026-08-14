@@ -72,6 +72,35 @@ allprojects {
     }
 }
 
+// Clojurephant exposes compileClojure late in project evaluation. Declare the
+// cross-module AOT ordering after all projects are evaluated so Gradle 8's
+// implicit-output validation cannot race presentation-core and its consumers.
+gradle.projectsEvaluated {
+    [":presentation-compiler", ":presentation-devtools"].each { consumerPath ->
+        def consumer = findProject(consumerPath)
+        def core = findProject(":presentation-core")
+        if (consumer != null && core != null &&
+            consumer.tasks.findByName("compileClojure") != null &&
+            core.tasks.findByName("compileClojure") != null) {
+            consumer.tasks.matching { it.name in ["compileJava", "checkClojure", "compileClojure", "compileTestJava", "compileTestClojure"] }
+                .configureEach {
+                    dependsOn core.tasks.named("compileClojure")
+                }
+        }
+    }
+    def ac = findProject(":ac")
+    def compiler = findProject(":presentation-compiler")
+    def core = findProject(":presentation-core")
+    if (ac != null && compiler != null && core != null) {
+        ["compileJava", "checkClojure", "compileClojure", "compileTestClojure"].each { taskName ->
+            def task = ac.tasks.findByName(taskName)
+            if (task != null) {
+                task.dependsOn compiler.tasks.named("compileClojure"), core.tasks.named("compileClojure")
+            }
+        }
+    }
+}
+
 subprojects {
     plugins.withId("dev.clojurephant.clojure") {
         local.ClojurephantFlushFix.configure(project)
@@ -658,6 +687,234 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
     }
 }
 
+tasks.register("verifyPresentationJavaPurity") {
+    group = "verification"
+    description = "Ensure Presentation Java contracts stay free of Minecraft APIs and logic modules stay in Clojure."
+    doLast {
+        def roots = [file("presentation-core/src/main/java"),
+                     file("presentation-compiler/src/main/java"),
+                     file("presentation-devtools/src/main/java")]
+        def violations = []
+        roots.findAll { it.directory }.each { File root ->
+            fileTree(root) { include "**/*.java" }.files.each { File source ->
+                def text = source.text
+                if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged)\./) {
+                    violations << "${source}: presentation Java may not import Minecraft/loader APIs"
+                }
+                if (text =~ /\bclass\s+(?!.*Exception\b)[A-Za-z_][A-Za-z0-9_]*\s+\{/) {
+                    violations << "${source}: presentation Java classes must be records/interfaces or data exceptions"
+                }
+                if (text =~ /\b(class|interface|record|enum)\s+[^\{]+\{[\s\S]*(for\s*\(|while\s*\(|switch\s*\(|\.submit\s*\(|\.run\s*\()/) {
+                    // Data records and contracts may contain accessors/defaults;
+                    // runtime loops/dispatch belong in Clojure.
+                    violations << "${source}: executable loop/dispatch logic must be Clojure"
+                }
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationJavaPurity] ok")
+    }
+}
+
+tasks.register("verifyPresentationDependencyDirection") {
+    group = "verification"
+    description = "Enforce Presentation Runtime module dependency direction."
+    doLast {
+        def coreBuild = file("presentation-core/build.gradle").text
+        def mcmodBuild = file("mcmod/build.gradle").text
+        def acBuild = file("ac/build.gradle").text
+        def platformBuild = file("build-logic/platform-target.gradle").text
+        def violations = []
+        // This check is intentionally source-oriented.  The platform targets
+        // are generated from build-logic and therefore a future contributor
+        // could accidentally reintroduce the forbidden edge in a different
+        // Gradle convention plugin without touching the current declaration.
+        // AC/compiler/devtools may mention the core project. Platform/base
+        // must reach the shared contract through mcmod instead.
+        fileTree(rootDir) {
+            include "**/build.gradle"
+            include "**/*.gradle"
+            exclude "**/build/**"
+            exclude "**/.gradle/**"
+        }.files.each { File buildFile ->
+            def path = rootDir.toPath().relativize(buildFile.toPath()).toString().replace('\\', '/')
+            def mentionsCore = buildFile.text =~ /project\([\"']:?presentation-core[\"']\)/
+            if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "presentation-core/build.gradle",
+                                           "presentation-compiler/build.gradle",
+                                           "presentation-devtools/build.gradle"])) {
+                violations << "${buildFile}: forbidden direct dependency on presentation-core (platform/base must use mcmod contract)"
+            }
+        }
+        if (!(coreBuild =~ /project\("?:mcmod"?\)/)) violations << "presentation-core must depend on mcmod"
+        if (mcmodBuild =~ /project\([\"']:?presentation-core[\"']\)/) violations << "mcmod must not depend on presentation-core"
+        if (platformBuild =~ /presentationCoreProject|project\([\"']:?presentation-core[\"']\)/) violations << "platform target must not directly depend on presentation-core"
+        if (!(platformBuild =~ /project\(mcmodProject\.path\)/)) violations << "minecraft/base platform target must explicitly depend on mcmod"
+        if (!(platformBuild =~ /mcmodContract\s+rootProject\.project\(mcmodProject\.path\)/)) violations << "minecraft/base platform target must carry mcmod in its isolated contract configuration"
+        if (!(platformBuild =~ /runtimeClassOutput\(mcmodProject\)/)) violations << "minecraft/base platform target must consume mcmod output"
+        if (!(acBuild =~ /project\([\"']:?presentation-core[\"']\)/)) violations << "ac must depend on presentation-core"
+        [file("platform-src")].findAll { it.directory }.each { File root ->
+            fileTree(root) { include "**/*.clj" }.files.each { File source ->
+                if (source.text.contains("cn.li.presentation.core")) violations << "${source}: platform source imports presentation-core"
+            }
+        }
+        fileTree(file("presentation-core/src/main")) {
+            include "**/*.clj"
+            include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /cn\.li\.(mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge)\./) {
+                violations << "${source}: presentation-core must not import platform/base or version namespaces"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyPresentationDependencyDirection] ok")
+    }
+}
+
+tasks.register("verifyPresentationLoaderHooks") {
+    group = "verification"
+    description = "Ensure each loader render callback enters the neutral Presentation host seam."
+    doLast {
+        def roots = ["platform-src/loader"].collect { file(it) }
+        def requiredFiles = []
+        roots.findAll { it.directory }.each { File root ->
+            fileTree(root) {
+                include "**/overlay_renderer.clj"
+                include "**/level_effect_renderer.clj"
+            }.files.each { File source -> requiredFiles << source }
+        }
+        def missing = requiredFiles.findAll { !it.text.contains("cn.li.platform.neutral.presentation") }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Loader Presentation hook missing:\n" + missing.join("\n"))
+        }
+        def overlays = requiredFiles.findAll { it.name == "overlay_renderer.clj" }
+        def backendMissing = overlays.findAll { source ->
+            !source.text.contains("presentation-backend") || !source.text.contains("register-backend!")
+        }
+        if (!backendMissing.isEmpty()) {
+            throw new GradleException("Loader overlay backend registration missing:\n" + backendMissing.join("\n"))
+        }
+        logger.lifecycle("[verifyPresentationLoaderHooks] ok ({} loader render seams)", requiredFiles.size())
+    }
+}
+
+tasks.register("verifyPresentationContainerHooks") {
+    group = "verification"
+    description = "Ensure the three Minecraft container boundaries are installed and every loader initializes one."
+    doLast {
+        def versions = [
+            "mc-1.20.1": "mc1201",
+            "mc-1.21.1": "mc1211",
+            "mc-26.2": "mc262"
+        ]
+        def missing = []
+        versions.each { dir, ns ->
+            def source = file("platform-src/minecraft/${dir}/src/main/clojure/cn/li/${ns}/presentation/container.clj")
+            if (!source.isFile() || !source.text.contains("install-create-presentation-container-screen!")) {
+                missing << source
+            }
+        }
+        fileTree("platform-src/loader") {
+            include "**/client/init.clj"
+        }.files.each { source ->
+            if (!(source.text =~ /presentation\.container/)) missing << source
+        }
+        [file("ac/src/main/clojure/cn/li/ac/block/wind_gen/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/solar_gen/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/phase_gen/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/imag_fusor/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/ability_interferer/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/metal_former/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/integration/block/energy_converter/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/wireless_matrix/gui_reactive.clj"),
+         file("ac/src/main/clojure/cn/li/ac/block/wireless_node/gui_reactive.clj")].each { source ->
+            if (!source.isFile() || !source.text.contains("presentation-screen-data")) missing << source
+        }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Presentation container boundary missing:\n" + missing.join("\n"))
+        }
+        logger.lifecycle("[verifyPresentationContainerHooks] ok ({} version boundaries, {} loaders)", versions.size(), fileTree("platform-src/loader") { include "**/client/init.clj" }.files.size())
+    }
+}
+
+tasks.register("verifyPresentationAtomicSwitch") {
+    group = "verification"
+    description = "Guard the final Presentation Runtime cut-over and legacy renderer deletion."
+    doLast {
+        // The migration is intentionally developed beside the old runtime.  A
+        // release/cut-over build opts in explicitly so an incomplete migration
+        // cannot silently ship a dual engine.  Keeping this check opt-in also
+        // lets the vertical slices compile while the remaining screens are
+        // converted.
+        def enabled = (findProperty("presentationAtomicSwitch") ?: "false").toString().equalsIgnoreCase("true")
+        if (!enabled) {
+            logger.lifecycle("[verifyPresentationAtomicSwitch] skipped (pass -PpresentationAtomicSwitch=true at cut-over)")
+            return
+        }
+        def roots = [file("ac/src/main/clojure"),
+                     file("ac/src/main/resources"),
+                     file("mcmod/src/main/clojure"),
+                     file("platform-src/minecraft"),
+                     file("platform-src/loader")].findAll { it.directory }
+        def forbidden = [
+            ~/script-render-(runtime|executor|compiler)/,
+            ~/script_render_(runtime|executor|compiler|registry)/,
+            ~/script-render-registry/,
+            ~/build-client-overlay-plan/,
+            ~/overlay-plan/,
+            ~/draw-plan/,
+            ~/kind-renderer/,
+            ~/reactive-container-screen/,
+            ~/ui-xml\/load-spec/,
+            ~/open-reactive-screen!/
+        ]
+        def offenders = []
+        roots.each { root ->
+            fileTree(root) {
+                include "**/*.clj"
+                include "**/*.edn"
+                include "**/*.xml"
+            }.files.each { source ->
+                if (source.name.toLowerCase().endsWith(".xml")) {
+                    offenders << "${source}: legacy XML layout source"
+                } else {
+                    def lines = source.readLines("UTF-8")
+                    lines.eachWithIndex { line, index ->
+                        if (forbidden.any { pattern -> pattern.matcher(line).find() }) {
+                            offenders << "${source}:${index + 1}: ${line.trim()}"
+                        }
+                    }
+                }
+            }
+        }
+        if (!offenders.isEmpty()) {
+            throw new GradleException(
+                "Presentation atomic switch requested, but legacy UI/render references remain:\n" +
+                offenders.take(120).join("\n") +
+                (offenders.size() > 120 ? "\n... and ${offenders.size() - 120} more" : ""))
+        }
+        def legacyJavaRoots = [file("mcmod/src/main/java"),
+                               file("platform-src/minecraft"),
+                               file("platform-src/loader")].findAll { it.directory }
+        def legacyJava = []
+        legacyJavaRoots.each { root ->
+            fileTree(root) { include "**/*.java" }.files.each { source ->
+                def path = source.toString().replace('\\', '/')
+                if (path.contains("/mcmod/src/main/java/cn/li/mcmod/ui/") ||
+                    path.contains("/mcmod/src/main/java/cn/li/mcmod/uipojo/")) {
+                    legacyJava << "${source}: legacy UI Java must be removed before atomic switch"
+                }
+            }
+        }
+        if (!legacyJava.isEmpty()) {
+            throw new GradleException(
+                "Presentation atomic switch requested, but legacy Java UI/render code remains:\n" +
+                legacyJava.take(120).join("\n") +
+                (legacyJava.size() > 120 ? "\n... and ${legacyJava.size() - 120} more" : ""))
+        }
+        logger.lifecycle("[verifyPresentationAtomicSwitch] ok (legacy UI/render chain absent)")
+    }
+}
+
 def targetProviderDescriptors = { target ->
     ((target.providerManifests ?: [:]).values().collectMany { modules -> modules ?: [] })
 }
@@ -727,8 +984,14 @@ tasks.register("verifyNeutralProviderClosure") {
 tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     group = "verification"
     description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
-    dependsOn ":api:classes", ":mcmod:classes", ":ac:classes"
-    def neutralProjects = [project(":api"), project(":mcmod"), project(":ac")]
+    dependsOn ":api:classes", ":mcmod:classes", ":presentation-core:classes",
+              ":presentation-compiler:classes", ":ac:classes"
+    // AC's neutral provider closure now owns Presentation Runtime ViewModels;
+    // include the core/compiler artifacts in this isolated classpath while
+    // still excluding every Minecraft/loader project.
+    def neutralProjects = [project(":api"), project(":mcmod"),
+                           project(":presentation-core"),
+                           project(":presentation-compiler"), project(":ac")]
     // Gradle 9 rejects resolving a child project's Configuration while this
     // JavaExec task's inputs are being snapshotted.  Resolve this deliberately
     // at configuration time instead: it still contains only api/mcmod/ac
@@ -902,6 +1165,10 @@ tasks.register("verifyCurrentPlatforms") {
               "verifySingleApiBoundary",
               "verifyRepositoryHygiene",
               "verifyNeutralClojureNoMinecraftApis",
+              "verifyPresentationJavaPurity",
+              "verifyPresentationDependencyDirection",
+              "verifyPresentationLoaderHooks",
+              "verifyPresentationAtomicSwitch",
               "verifyNeutralProviderClosure",
               "verifyNeutralProviderRuntimeLoad",
               "verifyMinecraftComponentNeutrality",

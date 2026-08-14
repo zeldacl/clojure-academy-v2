@@ -1,11 +1,8 @@
 (ns cn.li.neoforge262.client.overlay-renderer
-  "CLIENT-ONLY Forge overlay event adapter — drives reactive overlay-host.
-
-  26.2: RenderGuiEvent$Post supplies GuiGraphicsExtractor (not GuiGraphics);
-  overlay-host layout, clock, and render-tape submission are live."
-  (:require [cn.li.mc262.gui.reactive.overlay-host :as overlay-host]
-            [cn.li.mcbase.client.session :as client-session]
-            [cn.li.platform.neutral.client-runtime :as client-bridge]
+  "NeoForge 26.2 HUD callback for the unified Presentation Runtime."
+  (:require [cn.li.mcbase.client.session :as client-session]
+            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.mc262.presentation.backend :as presentation-backend]
             [cn.li.mcmod.util.log :as log])
   (:import [net.neoforged.neoforge.client.event RenderGuiEvent$Post]
            [net.neoforged.neoforge.common NeoForge]
@@ -13,31 +10,25 @@
            [net.minecraft.client Minecraft]
            [cn.li.neoforge262.bridge ClientTimeInterop]))
 
-(defn- bridge-build-fn [w h]
-  (client-bridge/reactive-overlay-build w h))
+(defn on-mode-switch-key-state! [& _] nil)
 
-(defn- bridge-update-fn [rt]
-  (client-bridge/reactive-overlay-update rt))
-
-(defn- on-render-gui-overlay [^RenderGuiEvent$Post event]
+(defn- on-render-gui [^RenderGuiEvent$Post event]
   (let [^Minecraft mc (Minecraft/getInstance)
         w (.getGuiScaledWidth (.getWindow mc))
         h (.getGuiScaledHeight (.getWindow mc))
         pt (ClientTimeInterop/getFrameTime mc)]
     (client-session/with-current-client-session
-      #(overlay-host/update-overlay!
-         (.getGuiGraphics event) "default" w h pt
-         bridge-build-fn bridge-update-fn))))
-
-(defn on-mode-switch-key-state!
-  ([is-down]
-   (client-bridge/reactive-overlay-mode-switch! is-down))
-  ([_owner is-down]
-   (client-bridge/reactive-overlay-mode-switch! is-down)))
+      #(do
+         (when-let [player (.player mc)]
+           (presentation/ensure-combat-hud!
+             (str (.getUUID player)) w h))
+         (presentation/submit-current-frame! :hud (float pt) w h
+                                             (.getGuiGraphics event))))))
 
 (defn init! []
+  (presentation/register-backend! (presentation-backend/create))
   (.addListener (NeoForge/EVENT_BUS)
                 EventPriority/NORMAL false RenderGuiEvent$Post
                 (reify java.util.function.Consumer
-                  (accept [_ evt] (on-render-gui-overlay evt))))
-  (log/info "Reactive overlay renderer initialized"))
+                  (accept [_ evt] (on-render-gui evt))))
+  (log/info "Presentation HUD renderer initialized (NeoForge 26.2)"))

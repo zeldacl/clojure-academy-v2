@@ -2,7 +2,7 @@
   "Reactive GUI registration for the Developer block.
    Owns container, slot, sync, and validation wiring. Screen content
    (developer layout, console, skill-tree area, cover overlays) lives in
-   panel-reactive.clj."
+   Presentation Runtime."
   (:require [clojure.string :as str]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]
@@ -12,8 +12,7 @@
             [cn.li.ac.block.developer.schema :as dev-schema]
             [cn.li.ac.block.developer.logic :as dev-logic]
             [cn.li.ac.block.developer.session :as dev-session]
-            [cn.li.ac.block.developer.panel-reactive :as panel-reactive]
-            [cn.li.ac.block.developer.console-reactive :as console-reactive]
+            [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -90,13 +89,13 @@
 ;; ============================================================================
 
 (defn create-screen [container menu player]
-  (panel-reactive/create-screen container menu player))
+  (presentation-container/presentation-screen-data
+    container menu player :developer "academy:machine_container"))
 
 (defn init-developer-reactive!
   []
   (install/framework-once! ::developer-gui-reactive-installed?
   (fn []
-    (console-reactive/register-builtin-commands!)
     (gui-reg/register-block-gui!
       (gui-manifest/gui-name :developer)
       (merge (gui-manifest/gui-registration :developer)
@@ -112,4 +111,4 @@
          :slot-set-fn set-slot-item!
          :slot-can-place-fn can-place-item?
          :slot-changed-fn slot-changed!}))
-    (log/info "Ability Developer GUI initialized (reactive: classic layout + console + skill-tree area)"))))
+    (log/info "Ability Developer GUI initialized (Presentation Runtime)"))))

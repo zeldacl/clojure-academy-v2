@@ -1,0 +1,25 @@
+{:type :stack
+ :key :terminal/root
+ :children
+ [{:type :grid
+   :key :terminal/app-grid
+   :children
+   [{:type :virtual-list
+     :key :terminal/apps
+     :items [:bind :apps]
+     :semantics {:role :list}}
+    {:type :text
+     :key :terminal/page
+     :value [:bind :page]}]}
+  {:type :textbox
+   :key :terminal/query-input
+   :value [:bind :query]
+   :semantics {:role :textbox}}
+  {:type :modal
+   :key :terminal/modal
+   :value [:bind :modal]
+   :semantics {:role :dialog}}
+  {:type :progress
+   :key :terminal/loading
+   :value [:bind :loading?]
+   :semantics {:role :progress}}]}

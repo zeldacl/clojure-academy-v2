@@ -13,9 +13,6 @@
 (defn get-config-values [& _] (unavailable :get-config-values))
 (defn set-config-value! [& _] (unavailable :set-config-value!))
 (defn set-config-values! [& _] (unavailable :set-config-values!))
-(defn disabled-renderer-ids [& _] (unavailable :disabled-renderer-ids))
-(defn init-descriptors! [& _] (unavailable :init-descriptors!))
-(defn script-render-enabled? [& _] (unavailable :script-render-enabled?))
 
 (def ^:private operation-vars
   {:mod-id #'mod-id
@@ -26,10 +23,7 @@
    :get-config-descriptors #'get-config-descriptors
    :get-config-values #'get-config-values
    :set-config-value! #'set-config-value!
-   :set-config-values! #'set-config-values!
-   :disabled-renderer-ids #'disabled-renderer-ids
-   :init-descriptors! #'init-descriptors!
-   :script-render-enabled? #'script-render-enabled?})
+   :set-config-values! #'set-config-values!})
 
 (defn install!
   [operations]

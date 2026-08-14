@@ -1,6 +1,7 @@
 (ns cn.li.fabric1201.client.level-effect-renderer
   "CLIENT-ONLY Fabric level effect renderer adapter."
   (:require [cn.li.mc1201.client.effects.level-renderer :as shared-level]
+            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
@@ -15,6 +16,7 @@
 
 (defn- on-after-translucent-render [^WorldRenderContext ctx]
   (try
+    (presentation/dispatch-current-frame! :world-after-translucent 0.0 0 0)
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.camera ctx)

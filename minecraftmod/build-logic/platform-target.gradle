@@ -132,6 +132,14 @@ if (target.loader != "none") {
 
     def apiProject = project(":api")
     def mcmodProject = project(":mcmod")
+    // Loom 1.13.469 is binary-incompatible with Gradle 8.8 when a
+    // ProjectDependency is present on compileClasspath/runtimeClasspath: it
+    // calls the removed ProjectDependency.getPath() method while discovering
+    // dependent mods. Keep the architectural project edge in an isolated
+    // contract configuration and put the already-compiled mcmod output on the
+    // actual classpaths. This preserves the platform/base -> mcmod contract
+    // without making Loom's dependency scanner execute the incompatible call.
+    configurations.maybeCreate("mcmodContract")
     def contentProjectIds = (target.contentProjects ?: []).collect { it.toString() }
     if (contentProjectIds.isEmpty()) {
         throw new GradleException("Target '${targetId}' must declare contentProjects")
@@ -176,6 +184,16 @@ if (target.loader != "none") {
                 clojure.srcDir componentDir(component, "clojure")
                 resources.srcDir componentDir(component, "resources")
             }
+        }
+    }
+
+    // Gradle 9.5 (Fabric 26.2) treats a source-only Clojure test component
+    // with no JUnit-discovered classes as a hard failure. The real platform
+    // tests are executed by runPlatformClojureTests; keep the Java Test task
+    // as a packaging/check lifecycle participant on every Gradle generation.
+    tasks.matching { it.name == "test" }.configureEach { testTask ->
+        if (testTask.metaClass.hasProperty(testTask, "failOnNoDiscoveredTests")) {
+            testTask.failOnNoDiscoveredTests = false
         }
     }
 
@@ -255,9 +273,22 @@ if (target.loader != "none") {
     dependencies {
         compileOnly runtimeClassOutput(apiProject)
         runtimeOnly runtimeClassOutput(apiProject)
+        // The platform/base seam has an explicit Gradle dependency on mcmod.
+        // The output-directory fast path below remains necessary for the
+        // source-first/AOT split, while compileOnly/runtimeOnly make the
+        // architecture visible to Gradle and packaging. There is deliberately
+        // no edge from platform/base to presentation-core; AC is the owner.
+        mcmodContract rootProject.project(mcmodProject.path)
         compileOnly runtimeClassOutput(mcmodProject)
         runtimeOnly runtimeClassOutput(mcmodProject)
-        contentProjects.each { contentProject -> runtimeOnly runtimeClassOutput(contentProject) }
+        contentProjects.each { contentProject ->
+            // Keep the target's source/output fast path. ProjectDependency
+            // edges are intentionally absent from Loom classpaths (Loom
+            // 1.13.469 calls the Gradle-removed ProjectDependency.getPath()).
+            // The selected content project is still packaged and task-linked
+            // below, while its compiled output is the actual classpath input.
+            runtimeOnly runtimeClassOutput(contentProject)
+        }
         clojureRuntimeLibraries.each { dependencyNotation ->
             implementation dependencyNotation
         }
@@ -903,6 +934,7 @@ if (target.loader != "none") {
         }
 
         def copyTask = tasks.register("copy${label}RuntimeClassesToPlatformOutput", Copy) {
+            dependsOn packagingDeps
             dependsOn runtimeClassDependencies
             if (neutralAotStripTask != null) {
                 dependsOn neutralAotStripTask

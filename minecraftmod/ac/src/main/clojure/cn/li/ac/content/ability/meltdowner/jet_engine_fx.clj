@@ -26,7 +26,7 @@
   an inert {:type :screen-flash} op — the world-space :ops renderer only
   understands :kind (:line/:quad/:plasma-body), so it was silently dropped
   every frame. The real consumer is the 2D screen overlay
-  (reactive-hud/build-snapshot -> reactive-overlay's :skill-flash-screen),
+  (reactive-hud/build-snapshot -> Presentation HUD's :skill-flash-screen),
   which has no notion of :ops at all."
   [player-uuid]
   (let [states (vals (:fx-state (fx-snapshot)))

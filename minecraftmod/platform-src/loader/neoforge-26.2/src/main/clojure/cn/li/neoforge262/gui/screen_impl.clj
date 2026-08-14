@@ -7,7 +7,6 @@
   ScreenEvent$BackgroundRendered was removed in 26.2 — on-render-tail is a no-op.
   create-screen uses DelegatingCGuiContainerScreen and the live reactive host."
   (:require [cn.li.mcbase.gui.screen.registry :as screen-registry]
-            [cn.li.mc262.gui.reactive.host-container]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens MenuScreens$ScreenConstructor]

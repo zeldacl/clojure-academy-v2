@@ -6,7 +6,6 @@
 
   Uses shared CGUI runtime host path for :cgui-screen-container payloads."
   (:require [cn.li.mcbase.gui.screen.registry :as screen-registry]
-            [cn.li.mc1201.gui.reactive.host-container]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens MenuScreens]))

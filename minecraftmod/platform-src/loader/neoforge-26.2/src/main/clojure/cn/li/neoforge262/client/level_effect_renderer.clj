@@ -2,6 +2,7 @@
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader extracts immutable state, then submits its custom geometry."
   (:require [cn.li.mc262.client.effects.level-renderer :as shared-level]
+            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver ResourceLocations]
@@ -29,6 +30,7 @@
 
 (defn- extract-level-plan!
   [^ExtractLevelRenderStateEvent evt]
+  (presentation/dispatch-current-frame! :world-after-translucent 0.0 0 0)
   (let [^LevelRenderState render-state (.getRenderState evt)
         ^Minecraft minecraft (Minecraft/getInstance)
         ^LocalPlayer player (when minecraft (.player minecraft))

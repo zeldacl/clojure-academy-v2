@@ -100,6 +100,15 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
         }
     }
 
+    /** Preserve vanilla hover bookkeeping when the Presentation boundary is installed. */
+    public void callSuperMouseMoved(double mouseX, double mouseY) {
+        super.mouseMoved(mouseX, mouseY);
+    }
+
+    public boolean callSuperMouseScrolled(double mouseX, double mouseY, double scrollDelta) {
+        return super.mouseScrolled(mouseX, mouseY, 0.0D, scrollDelta);
+    }
+
     @Override public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (mouseScrolledFn != null) {
             Object r = mouseScrolledFn.invoke(this, mouseX, mouseY, scrollY);

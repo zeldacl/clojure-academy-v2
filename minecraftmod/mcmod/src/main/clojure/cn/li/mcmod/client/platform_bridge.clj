@@ -35,9 +35,6 @@
 (def ^:private window-size-fn nil)
 (def ^:private shader-fn nil)
 (def ^:private local-player-block-aim-fn nil)
-(def ^:private overlay-build-fn nil)
-(def ^:private overlay-update-fn nil)
-(def ^:private overlay-mode-switch-fn nil)
 (def ^:private terminal-apply-perspective-fn nil)
 (def ^:private terminal-render-cursor-fn nil)
 (def ^:private terminal-cursor-hide-fn nil)
@@ -63,9 +60,6 @@
    :get-window-size #'window-size-fn
    :resolve-shader #'shader-fn
    :local-player-block-aim #'local-player-block-aim-fn
-   :reactive-overlay-build #'overlay-build-fn
-   :reactive-overlay-update #'overlay-update-fn
-   :reactive-overlay-mode-switch! #'overlay-mode-switch-fn
    :terminal-apply-perspective! #'terminal-apply-perspective-fn
    :terminal-render-cursor! #'terminal-render-cursor-fn
    :terminal-cursor-hide! #'terminal-cursor-hide-fn
@@ -120,7 +114,6 @@
 (defn on-movement-key-down!      [player-uuid movement-key] (movement-key-down-fn player-uuid movement-key))
 (defn on-movement-key-tick!      [player-uuid movement-key] (movement-key-tick-fn player-uuid movement-key))
 (defn on-movement-key-up!        [player-uuid movement-key] (movement-key-up-fn player-uuid movement-key))
-(defn open-screen!               [& args] (apply bridge-op :open-screen args))
 (defn run-client-effect!         [effect-key payload] (run-client-effect-fn effect-key payload))
 (defn get-client-player          [& args] (apply bridge-op :get-client-player args))
 (defn screen-active?             [& args] (apply bridge-op :screen-active? args))
@@ -166,16 +159,12 @@
 ;; These adapters are invoked by the platform's render callbacks.  Keeping
 ;; their public shapes explicit makes the cached IFn boundary visible and
 ;; prevents frame-time Framework/map dispatch.
-(defn reactive-overlay-build [width height] (overlay-build-fn width height))
-(defn reactive-overlay-update [render-tick] (overlay-update-fn render-tick))
-(defn reactive-overlay-mode-switch! [is-down] (overlay-mode-switch-fn is-down))
 (defn terminal-apply-perspective! [graphics render-state mouse-x mouse-y partial-tick]
   (terminal-apply-perspective-fn graphics render-state mouse-x mouse-y partial-tick))
 (defn terminal-render-cursor! [graphics render-state mouse-x mouse-y partial-tick]
   (terminal-render-cursor-fn graphics render-state mouse-x mouse-y partial-tick))
 (defn terminal-cursor-hide! [] (terminal-cursor-hide-fn))
 (defn terminal-cursor-show! [] (terminal-cursor-show-fn))
-(defn open-reactive-screen!      [& args] (apply bridge-op :open-reactive-screen args))
 
 (defn call-adapter
   "Look up and call an optional bridge function by key."

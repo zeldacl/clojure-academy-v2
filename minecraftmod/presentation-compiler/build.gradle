@@ -1,0 +1,19 @@
+plugins { id "java-library"; id "dev.clojurephant.clojure" }
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(21) }
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = "UTF-8" }
+dependencies {
+    api project(":presentation-core")
+    implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
+}
+tasks.register("runCompilerClojureTests", JavaExec) {
+    group = "verification"
+    description = "Run Presentation compiler Clojure schema tests."
+    dependsOn tasks.named("compileTestClojure"), tasks.named("compileClojure"), tasks.named("classes")
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    args "-m", "cn.li.presentation.compiler.test-runner"
+}

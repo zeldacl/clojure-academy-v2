@@ -13,8 +13,7 @@
             [cn.li.platform.neutral.gui-runtime :as gui-runtime]
             [cn.li.platform.neutral.client-render :as client-render]
             [cn.li.platform.neutral.integration-runtime :as integration-runtime]
-            [cn.li.platform.neutral.network-runtime :as network-runtime]
-            [cn.li.platform.neutral.ui :as ui]))
+            [cn.li.platform.neutral.network-runtime :as network-runtime]))
 
 (defn- require-resolve! [namespace-name symbol-name]
   (let [ns-sym (symbol namespace-name) var-sym (symbol symbol-name)]
@@ -81,9 +80,7 @@
       (when-let [operations (:integration-runtime providers)]
         (integration-runtime/install! operations))
       (when-let [operations (:network-runtime providers)]
-        (network-runtime/install! operations))
-      (when-let [operations (:ui providers)]
-        (ui/install! operations))))
+        (network-runtime/install! operations))))
   nil)
 
 (defn initialize-datagen-content!

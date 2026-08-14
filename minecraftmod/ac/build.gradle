@@ -3,6 +3,12 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 
+// Keep neutral-module outputs under the shared writable build tree.
+layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
+tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
+    checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
+}
+
 // Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
 // but cannot infer a dependency automatically.
 tasks.named('compileJava').configure {
@@ -153,8 +159,40 @@ dependencies {
 
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
+    implementation project(':presentation-core')
+    implementation project(':presentation-compiler')
     testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
     cloverageRuntime "cloverage:cloverage:${clojureVersions.cloverage}"
+}
+
+// AC is the owner of Presentation Runtime usage.  The target platform only
+// packages AC's neutral output, so fold the two presentation modules into that
+// output here instead of adding a forbidden platform/base -> presentation-core
+// edge.  Their Java contracts and Clojure AOT classes remain unchanged.
+def presentationRuntimeProjects = [project(':presentation-core'), project(':presentation-compiler')]
+presentationRuntimeProjects.each { evaluationDependsOn(it.path) }
+def copyPresentationRuntimeIntoAc = tasks.register('copyPresentationRuntimeIntoAc', Copy) {
+    group = 'build'
+    description = 'Embed Presentation Runtime classes in the AC neutral runtime output.'
+    dependsOn presentationRuntimeProjects.collect { it.tasks.named('classes') }
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    presentationRuntimeProjects.each { presentationProject ->
+        from(presentationProject.layout.buildDirectory.dir('classes/java/main')) {
+            include '**/*.class'
+            exclude 'META-INF/MANIFEST.MF'
+        }
+        from(presentationProject.layout.buildDirectory.dir('clojure/main')) {
+            include '**/*.class'
+            exclude 'META-INF/MANIFEST.MF'
+        }
+    }
+    into layout.buildDirectory.dir('classes/java/main')
+}
+tasks.named('classes').configure {
+    dependsOn copyPresentationRuntimeIntoAc
+}
+tasks.matching { it.name in ['checkClojure', 'compileTestClojure'] }.configureEach {
+    dependsOn copyPresentationRuntimeIntoAc
 }
 
 sourceSets.test.clojure.srcDir rootProject.file('platform-src/test-support/src/main/clojure')

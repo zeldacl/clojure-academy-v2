@@ -5,9 +5,8 @@
             [cn.li.mcmod.gui.spec :as gui-reg] [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.platform.item :as pitem] [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
-            [cn.li.ac.gui.block-gui-reactive :as bgui]
-            [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.gui.sync :as gui-sync]
+            [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.wireless.gui.container.common :as common]
             [cn.li.ac.block.phase-gen.schema :as phase-schema]
             [cn.li.ac.block.phase-gen.config :as phase-config]))
@@ -19,7 +18,7 @@
 (defn- stack-id [s] (when-not (stack-empty? s) (try (some-> s pitem/object pitem/registry-name str) (catch Exception _ nil))))
 (defn- phase-liquid-unit? [s] (and (not (stack-empty? s)) (= (stack-id s) phase-config/matter-unit-item-id) (= (int (try (pitem/damage s) (catch Exception _ -1))) phase-config/matter-unit-phase-liquid-meta)))
 
-(defn create-container [tile player] (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player gui-type {:gui-id (gui-manifest/gui-id :phase-gen)}))
+(defn create-container [tile player] (assoc (gui-sync/create-schema-container phase-schema/phase-gen-schema tile player gui-type {:gui-id (gui-manifest/gui-id :phase-gen)}) :presentation-close-fn (:on-close sync)))
 (defn get-slot-count [_] (slot-schema/tile-slot-count slot-schema-id))
 (defn get-slot-item [c i] (common/get-slot-item-be c i))
 (defn set-slot-item! [c i s] (common/set-slot-item-be! c i s {:inventory [nil]} identity))
@@ -27,21 +26,10 @@
 (defn still-valid? [_ _] true) (def server-menu-sync! (:server-menu-sync! sync))
 (def on-close (:on-close sync)) (defn handle-button-click! [_ _ _] nil)
 
-(defn- attach-binds! [r container _menu _player _signals]
-  (rt/put-user-signal! r :liquid-amount
-    (sig/computed-o [(rt/clock-ms-sig r)] (fn [_] (str (or @(:liquid container) 0) " mB")))))
-
 (defn create-screen [container menu player]
-  (let [safe-val #(some-> % deref)]
-    (bgui/create-screen
-      {:page-xml "guis/rework/new/page_phasegen.xml" :texture-name "phasegen"
-       :container container :menu menu
-       :histograms [(bgui/hist-buffer (fn [] (double @(:energy container))) (fn [] (max 1.0 (double @(:max-energy container)))))]
-       :properties {:status (fn [] (or (safe-val (:status container)) "IDLE"))
-                    :liquid (fn [] (str (or (safe-val (:liquid container)) 0) " mB"))}
-       :wireless? true :wireless-role :generator :custom-bind! attach-binds!})))
+  (presentation-container/presentation-screen-data
+    container menu player slot-schema-id "academy:machine_container"))
 
-(def update! bgui/update-signals!) (def open! bgui/open!)
 (defn- container? [c] (and (map? c) (= (:container-type c) gui-type) (contains? c :tile-entity) (contains? c :energy)))
 (defn init-phase-gen-reactive! []
   (install/framework-once! ::phase-gen-reactive-installed?

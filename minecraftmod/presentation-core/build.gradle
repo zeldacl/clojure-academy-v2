@@ -1,0 +1,38 @@
+plugins {
+    id "java-library"
+    id "dev.clojurephant.clojure"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = "UTF-8"
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.register("runCoreClojureTests", JavaExec) {
+    group = "verification"
+    description = "Run Presentation core Clojure runtime tests."
+    dependsOn tasks.named("compileTestClojure"), tasks.named("compileClojure"), tasks.named("classes")
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    args "-m", "cn.li.presentation.core.test-runner"
+}
+
+// Core behavior remains Minecraft-free. The only shared compile contract is
+// mcmod's version-neutral domain/data bridge; no loader dependency is allowed.
+dependencies {
+    implementation project(":mcmod")
+    implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
+    testImplementation platform("org.junit:junit-bom:5.10.2")
+    testImplementation "org.junit.jupiter:junit-jupiter"
+}

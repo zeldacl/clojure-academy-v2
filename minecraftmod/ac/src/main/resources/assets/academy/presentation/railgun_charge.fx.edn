@@ -1,0 +1,10 @@
+{:id :academy/railgun-charge
+ :host :world-ui
+ :primitive :billboard
+ :stage :world-after-translucent
+ :owner :ability/railgun
+ :duration-ms 1650
+ :timeline [{:at 0.0 :property :alpha :value 0.0}
+            {:at 0.15 :property :alpha :value 1.0}
+            {:at 1.0 :property :alpha :value 0.0}]
+ :resources ["academy:textures/effects/railgun.png"]}

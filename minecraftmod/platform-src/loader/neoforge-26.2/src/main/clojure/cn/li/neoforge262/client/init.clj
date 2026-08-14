@@ -36,9 +36,8 @@
             [cn.li.mc262.client.render.buffer :as buffer-impl]
             [cn.li.platform.neutral.client-runtime :as pose]
             [cn.li.platform.neutral.client-runtime :as buffer]
-            [cn.li.mc262.gui.reactive.host :as reactive-host]
-            [cn.li.mc262.gui.reactive.terminal-render :as terminal-render]
-            [cn.li.platform.neutral.client-runtime :as widget-registry]
+            [cn.li.mc262.presentation.screen :as presentation-screen]
+            [cn.li.mc262.presentation.container]
             [cn.li.mcmod.util.render :as render]
             [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.platform.neutral.client-runtime :as render-init]
@@ -154,23 +153,15 @@
             (ScriptedBlockEntityBerProvider/provider))
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
-(defn- open-screen-dispatcher
-  "Dispatch open-screen to a registered reactive widget factory."
-  [arg payload]
-  (when (keyword? arg)
-    (let [widget (widget-registry/create-widget arg payload)]
-      (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
-
-(defn- open-reactive-screen-handler [& args]
-  (apply reactive-host/open-reactive-screen! args))
+(defn- open-screen-dispatcher [_arg _payload]
+  nil)
 
 (defn init-content-client-bridge!
   "Merge client platform adapters."
   []
   (client-bridge/merge-client-bridge!
     {:open-screen open-screen-dispatcher
-     :open-reactive-screen open-reactive-screen-handler
+     :presentation-open-screen! presentation-screen/open!
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -314,10 +305,10 @@
                                   handle (.handle w)]
                               (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                             (catch Throwable _ false)))
-     :terminal-apply-perspective! terminal-render/apply-perspective!
-     :terminal-render-cursor! terminal-render/render-cursor!
-     :terminal-cursor-hide! terminal-render/hide-cursor!
-     :terminal-cursor-show! terminal-render/show-cursor!
+     :terminal-apply-perspective! (fn [& _] nil)
+     :terminal-render-cursor! (fn [& _] nil)
+     :terminal-cursor-hide! (fn [& _] nil)
+     :terminal-cursor-show! (fn [& _] nil)
      :keybind-rebind-supported? (constantly true)
      :keybind-get-key-name key-mapping-adapter/get-key-display-name
      :keybind-get-key-code key-mapping-adapter/get-key-code
@@ -402,7 +393,6 @@
   (init-client-input-systems!)
 
   (init-content-client-bridge!)
-  (terminal-render/install-terminal-render-bridge!)
   (init-render-bindings!)
   (render/register-texture-binder! bind-texture-forge!)
   (gui-screen-impl/init-client!)

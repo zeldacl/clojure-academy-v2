@@ -8,7 +8,7 @@
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
-            [cn.li.ac.gui.block-gui-reactive :as bgui]
+            [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.block.wireless-matrix.matrix-info-reactive :as matrix-info]
             [cn.li.ac.block.wireless-matrix.capability :as matrix-capability]
             [cn.li.ac.block.wireless-matrix.logic :as matrix-logic]
@@ -65,6 +65,8 @@
         (log/warn "Could not resolve customState from BE:"(ex-message e))
         [tile {}]))))
 
+(declare handle-button-click!)
+
 (defn create-container
   "Create a Matrix GUI container instance.
   Uses container atoms for sync; platform layer may attach DataSlots if needed."
@@ -72,14 +74,73 @@
   (let [[be state] (resolve-state tile)
         entity (or be tile)
         proxy (matrix-capability/->MatrixJavaProxy entity)]
-    (gui-sync/create-schema-container
-      matrix-schema/unified-matrix-schema
-      state
-      player
-      :matrix
-      {:gui-id (gui-manifest/gui-id :wireless-matrix)
-       :base {:tile-entity entity
-              :tile-java proxy}})))
+    (let [container (gui-sync/create-schema-container
+                      matrix-schema/unified-matrix-schema
+                      state
+                      player
+                      :matrix
+                      {:gui-id (gui-manifest/gui-id :wireless-matrix)
+                       :base {:tile-entity entity
+                              :tile-java proxy}})]
+      (assoc container
+             :presentation-network (atom {:initialized false :ssid "" :password ""
+                                           :owner "Unknown" :load 0 :max-capacity 16
+                                           :range 64 :bandwidth 100})
+             :presentation-form-state (atom {:ssid "" :password ""})
+             :presentation-buttons [{:id :left :button-id 0 :x 12 :y 145
+                                     :width 52 :height 18 :label "Init/Refresh"}
+                                    {:id :right :button-id 1 :x 70 :y 145
+                                     :width 52 :height 18 :label "Eject"}]
+             :presentation-text-fields [{:id :ssid :binding-key :network-ssid
+                                         :x 12 :y 82 :width 120 :height 18
+                                         :value-fn (fn [c _]
+                                                     (get @(:presentation-network c) :ssid ""))}
+                                        {:id :password :binding-key :network-password
+                                         :x 12 :y 105 :width 120 :height 18
+                                         :value-fn (fn [c _]
+                                                     (get @(:presentation-network c) :password ""))}]
+             :presentation-snapshot-fn
+             (fn [c _]
+               (let [data @(:presentation-network c)
+                     max-capacity (max 1.0 (double (or (:max-capacity data) 1)))]
+                 {:network-state (if (:initialized data) "Initialized" "Not initialized")
+                  :network-owner (str "Owner: " (or (:owner data) "Unknown"))
+                  :network-range (str "Range: " (or (:range data) 0))
+                  :network-bandwidth (str "Bandwidth: " (or (:bandwidth data) 0) " IF/T")
+                  :network-load (max 0.0 (min 1.0 (/ (double (or (:load data) 0)) max-capacity)))}))
+             :presentation-text-submit!
+             (fn [field value]
+               (swap! (:presentation-form-state container) assoc field value)
+               (when (and (:initialized @(:presentation-network container))
+                          (matrix-logic/owner-authorized? state player))
+                 (case field
+                   :ssid (matrix-info/send-change-ssid container value)
+                   :password (matrix-info/send-change-password container value)
+                   nil)))
+             :presentation-text-change!
+             (fn [field value]
+               (swap! (:presentation-form-state container) assoc field value))
+             :presentation-dispatch-action!
+             (fn [action payload]
+               (when (= action :container/button)
+                 (case (int (:button-id payload))
+                   0 (if (:initialized @(:presentation-network container))
+                       (matrix-info/send-gather-info
+                         container (fn [data]
+                                     (reset! (:presentation-network container) (into {} data))))
+                       (let [{:keys [ssid password]} @(:presentation-form-state container)]
+                         (when (and (seq ssid) (seq password)
+                                    (matrix-logic/owner-authorized? state player))
+                           (matrix-info/send-init-network
+                             container ssid password
+                             (fn [success]
+                               (when success
+                                 (matrix-info/send-gather-info
+                                   container (fn [data]
+                                               (reset! (:presentation-network container)
+                                                       (into {} data))))))))))
+                   1 (handle-button-click! container 1 nil)
+                   nil)))))))
 
 ;; ============================================================================
 ;; Slot Management
@@ -164,14 +225,15 @@
   (matrix-info/attach! r (assoc container :minecraft-container menu) _player))
 
 (defn create-screen [container menu player]
-  (bgui/create-screen
-    {:page-xml "guis/rework/new/page_matrix.xml" :texture-name "matrix"
-     :container container :menu menu :player player :info-area? true
-     :histograms [(bgui/hist-energy 0xFF4488CC)]
-     :custom-bind! attach-binds!}))
+  (let [screen (presentation-container/presentation-screen-data
+                 container menu player :wireless-matrix "academy:wireless_matrix")]
+    ;; Network information is a typed snapshot; it is never mirrored from the
+    ;; Menu. The callback refreshes only the fields exposed to Presentation.
+    (matrix-info/send-gather-info
+      container
+      #(reset! (:presentation-network container) (into {} %)))
+    screen))
 
-(def update! bgui/update-signals!)
-(def open! bgui/open!)
 
 ;; ============================================================================
 ;; Registration

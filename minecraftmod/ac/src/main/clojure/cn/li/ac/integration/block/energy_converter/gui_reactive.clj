@@ -9,17 +9,14 @@
    tab pair); it builds a bare page_wireless.xml runtime instead, matching
    the old single-page layout exactly."
   (:require [cn.li.mcmod.runtime.install :as install]
-            [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.gui.spec :as gui-reg]
             [cn.li.mcmod.gui.slot-schema :as slot-schema]
             [cn.li.mcmod.util.log :as log]
             [cn.li.ac.gui.manifest :as gui-manifest]
+            [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
-            [cn.li.ac.wireless.gui.tab-reactive :as wireless-tab]
             [cn.li.mcmod.platform.be :as platform-be]
-            [cn.li.mcmod.ui.runtime :as rt]
-            [cn.li.mcmod.ui.xml :as ui-xml]
             [cn.li.ac.integration.block.energy-converter.config :as ec-config]
             [cn.li.ac.integration.block.energy-converter.schema :as ec-schema]))
 
@@ -53,7 +50,7 @@
   [tile player]
   (let [state (or (common/get-tile-state tile) {})
         block-id (str (platform-be/get-block-id tile))]
-    (gui-sync/create-schema-container ec-schema/energy-converter-gui-schema
+    (assoc (gui-sync/create-schema-container ec-schema/energy-converter-gui-schema
       tile
       player
       converter-gui-type
@@ -61,7 +58,8 @@
        :state state
        :base {:block-id block-id
               :wireless-mode (atom (block-wireless-mode block-id))
-              :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})))
+              :status (atom (if (output-block? block-id) "OUTPUT" "INPUT"))}})
+          :presentation-close-fn (:on-close converter-sync))))
 
 (defn get-slot-count [_container]
   (slot-schema/tile-slot-count converter-slot-schema-id))
@@ -88,18 +86,9 @@
 ;; ============================================================================
 
 (defn create-screen
-  [container menu _player]
-  (let [r (rt/create-runtime)
-        spec (ui-xml/load-spec (modid/namespaced-path "guis/rework/new/page_wireless.xml"))
-        _ (rt/build! r spec)
-        role (if (= @(:wireless-mode container) :generator) :generator :receiver)]
-    (wireless-tab/attach-panel! r {:role role :container container :menu menu})
-    {:type :reactive-container-screen
-     :runtime r
-     :container container
-     :menu menu
-     :size-dx 0
-     :size-dy 21}))
+  [container menu player]
+  (presentation-container/presentation-screen-data
+    container menu player converter-slot-schema-id "academy:machine_container"))
 
 ;; ============================================================================
 ;; Registration

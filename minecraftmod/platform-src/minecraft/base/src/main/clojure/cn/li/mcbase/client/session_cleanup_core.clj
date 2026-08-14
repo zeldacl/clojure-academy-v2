@@ -3,7 +3,7 @@
 
   Version modules install :clear-walk-speed! (level-renderer) before use."
   (:require [cn.li.mcbase.client.overlay.state :as overlay-state]
-            [cn.li.mcbase.gui.reactive.overlay-host-core :as overlay-host]
+            [cn.li.mcbase.presentation.host-lifecycle :as presentation-lifecycle]
             [cn.li.mcbase.client.session :as client-session]
             [cn.li.platform.neutral.hooks :as runtime-hooks]
             [cn.li.platform.neutral.client-network :as net-client]
@@ -108,7 +108,11 @@
        (clear-owner-input-state! owner*))
      (runtime-hooks/client-clear-owner-state! owner*)
      (overlay-state/clear-client-activated! owner*)
-     (overlay-host/dispose-overlay! (:client-session-id owner*))
+     ;; Drop every Presentation mount owned by the disconnected session. The
+     ;; lifecycle registry is the only base-side knowledge needed here; the
+     ;; Runtime decides how nodes/effects are disposed.
+     (presentation-lifecycle/unregister-host!
+       (presentation-lifecycle/shared) :presentation)
      ((:clear-walk-speed! (hooks)) owner* ^LocalPlayer (local-player))
      (when session-id
        (net-client/clear-client-session-state! session-id))

@@ -20,6 +20,7 @@
   (let [handlers* (atom {})
         sounds* (atom [])
         client-effects* (atom [])
+        presentation-effects* (atom [])
         blends* (atom [])]
     (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
@@ -30,6 +31,11 @@
                   reactive-hud/start-charging-blend! (fn [source-player-id performed?]
                                                        (swap! blends* conj [source-player-id performed?])
                                                        nil)
+                  client-bridge/call-adapter (fn [adapter-key & args]
+                                               (when (#{:presentation-spawn-effect!
+                                                        :presentation-clear-effect-owner!} adapter-key)
+                                                 (swap! presentation-effects* conj [adapter-key args]))
+                                               nil)
                   client-bridge/run-client-effect! (fn [effect-key payload]
                                                      (swap! client-effects* conj [effect-key payload])
                                                      nil)]
@@ -56,15 +62,13 @@
              (dissoc (first @sounds*) :sound-id)))
       (is (= [:mcmod/start-loop-sound-at-player
               :mcmod/stop-loop-sound
-              :mcmod/spawn-scripted-effect-at-player
               :mcmod/stop-loop-sound]
              (mapv first @client-effects*)))
       (is (= "player-1"
              (get-in @client-effects* [0 1 :owner-uuid])))
-      (is (= {:effect-id "intensify_effect"
-              :owner-uuid "player-1"
-              :ctx-id "ctx-1"
-              :channel :body-intensify/fx-end}
-             (get-in @client-effects* [2 1])))
+      (is (some (fn [[key args]]
+                  (and (= :presentation-spawn-effect! key)
+                       (= :academy/body-intensify-burst (first args))))
+                @presentation-effects*))
       (is (= [["player-1" true] ["player-2" false]] @blends*)
           "every release drives CurrentChargingHUD.startBlend(performed)"))))

@@ -49,6 +49,9 @@ pluginManagement {
 rootProject.name = "clojure-minecraft-mod"
 
 include "api"
+include "presentation-core"
+include "presentation-compiler"
+include "presentation-devtools"
 include "mcmod"
 include "ac"
 include "platform"

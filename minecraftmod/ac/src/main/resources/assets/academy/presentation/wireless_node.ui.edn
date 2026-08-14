@@ -1,0 +1,17 @@
+{:type :stack
+ :key :node/root
+ :children
+ [{:type :text :key :node/title :value [:bind :network-state]}
+  {:type :text :key :node/owner :value [:bind :network-owner]}
+  {:type :text :key :node/range :value [:bind :network-range]}
+  {:type :text :key :node/bandwidth :value [:bind :network-bandwidth]}
+  {:type :progress :key :node/load :value [:bind :network-load]
+   :semantics {:role :progress}}
+  {:type :textbox :key :node/name :query [:bind :node-name]
+   :semantics {:role :textbox}}
+  {:type :textbox :key :node/password :query [:bind :network-password]
+   :semantics {:role :textbox}}
+  {:type :button :key :node/action-left :value [:bind :button-left]
+   :on-click [:action :container/button] :semantics {:role :button}}
+  {:type :button :key :node/action-right :value [:bind :button-right]
+   :on-click [:action :container/button] :semantics {:role :button}}]}

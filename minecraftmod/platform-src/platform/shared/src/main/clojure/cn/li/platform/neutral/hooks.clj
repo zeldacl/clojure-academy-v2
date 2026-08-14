@@ -30,7 +30,7 @@
     resolve-item-use-action on-runtime-item-action! build-item-use-plan compute-aoe-damage
     select-reflection-target compute-reflected-damage get-reflection-search-radius
     client-new-context client-register-context! client-get-context client-terminate-context!
-    client-transition-to-alive! client-send-context-local! client-build-overlay-plan
+    client-transition-to-alive! client-send-context-local! client-presentation-frame-legacy
     set-client-overlay-activated! client-poll-particle-effects client-poll-sound-effects
     client-tick-start! client-font-init! client-tick-keys! client-active-contexts
     client-latest-sync client-register-push-handlers! client-notify-visual-event!
@@ -69,7 +69,7 @@
          resolve-item-use-action on-runtime-item-action! build-item-use-plan compute-aoe-damage
          select-reflection-target compute-reflected-damage get-reflection-search-radius
          client-new-context client-register-context! client-get-context client-terminate-context!
-         client-transition-to-alive! client-send-context-local! client-build-overlay-plan
+         client-transition-to-alive! client-send-context-local! client-presentation-frame-legacy
          set-client-overlay-activated! client-poll-particle-effects client-poll-sound-effects
          client-tick-start! client-font-init! client-tick-keys! client-active-contexts
          client-latest-sync client-register-push-handlers! client-notify-visual-event!

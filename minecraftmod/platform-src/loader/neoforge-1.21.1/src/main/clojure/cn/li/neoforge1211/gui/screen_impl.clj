@@ -4,7 +4,6 @@
   MenuScreens/register is package-private on 1.21.1; registration runs on
   RegisterMenuScreensEvent (see ModClientRenderSetup)."
   (:require [cn.li.mcbase.gui.screen.registry :as screen-registry]
-            [cn.li.mc1211.gui.reactive.host-container]
             [cn.li.platform.target :as target]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client.gui.screens Screen MenuScreens$ScreenConstructor]

@@ -3,7 +3,6 @@
   (:require [cn.li.mcbase.runtime.event.item-use :as item-use]
             [clojure.string :as str]
             [cn.li.mcmod.item.dsl :as idsl]
-            [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.platform.neutral.hooks :as hooks-core]
             [cn.li.platform.registry.metadata :as registry-metadata]
@@ -124,10 +123,9 @@
                    (or (:payload action) {})))
 
           :open-screen
-          (client-bridge/open-screen!
-            (:screen-key action)
-            (merge {:player-uuid player-uuid}
-                   (or (:payload action) {})))
+          ;; Screen opening is now an explicit Presentation Action. Generic
+          ;; descriptor-driven screen dispatch was removed at the cut-over.
+          nil
 
           nil)))
 

@@ -1,0 +1,17 @@
+{:type :stack
+ :key :matrix/root
+ :children
+ [{:type :text :key :matrix/title :value [:bind :network-state]}
+  {:type :text :key :matrix/owner :value [:bind :network-owner]}
+  {:type :text :key :matrix/range :value [:bind :network-range]}
+  {:type :text :key :matrix/bandwidth :value [:bind :network-bandwidth]}
+  {:type :progress :key :matrix/load :value [:bind :network-load]
+   :semantics {:role :progress}}
+  {:type :textbox :key :matrix/ssid :query [:bind :network-ssid]
+   :semantics {:role :textbox}}
+  {:type :textbox :key :matrix/password :query [:bind :network-password]
+   :semantics {:role :textbox}}
+  {:type :button :key :matrix/action-left :value [:bind :button-left]
+   :on-click [:action :container/button] :semantics {:role :button}}
+  {:type :button :key :matrix/action-right :value [:bind :button-right]
+   :on-click [:action :container/button] :semantics {:role :button}}]}

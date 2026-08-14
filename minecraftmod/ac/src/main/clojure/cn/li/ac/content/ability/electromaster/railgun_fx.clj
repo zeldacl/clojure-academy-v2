@@ -1,13 +1,12 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
-  (:require [cn.li.ac.ability.client.effects.beam-ops :as beam-ops]
-            [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
+  (:require [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 ;; Plain registry id, not a namespaced resource path: the platform entity
 ;; registries (ModEntities) are keyed by the bare registry name, and the
 ;; spawner resolves the EntityType with that exact string.
-(def ^:private charge-glow-effect-id "railgun_charge")
+(defn- presentation-owner [ctx-id owner-uuid]
+  (str "railgun-charge/" (or owner-uuid "unknown") "/" ctx-id))
 
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
@@ -44,21 +43,22 @@
 
 (defn- on-charge-start! [ctx-id _channel payload]
   (when-let [owner-uuid (:source-player-id payload)]
-    (when-let [entity-uuid (client-bridge/run-client-effect!
-                             :mcmod/spawn-scripted-effect-at-player
-                             {:effect-id charge-glow-effect-id
-                              :owner-uuid (str owner-uuid)})]
-      (let [now (now-ms)]
+    (when-let [spawn! (client-bridge/call-adapter :presentation-spawn-effect!)]
+      (let [owner (presentation-owner ctx-id owner-uuid)
+            instance-id (spawn! :academy/railgun-charge owner
+                                {:material-id 0 :texture-id 0 :count 1
+                                 :source-player-id (str owner-uuid)}
+                                (System/currentTimeMillis))
+            now (now-ms)]
         (swap! active-glows*
                (fn [glows]
                  (assoc (prune-stale glows now)
-                        ctx-id {:entity-uuid entity-uuid :spawned-ms now})))))))
+                        ctx-id {:instance-id instance-id :owner owner :spawned-ms now})))))))
 
 (defn- on-charge-end! [ctx-id _channel _payload]
-  (when-let [entity-uuid (:entity-uuid (get @active-glows* ctx-id))]
-    (client-bridge/run-client-effect!
-      :mcmod/remove-local-scripted-effect
-      {:entity-uuid entity-uuid})
+  (when-let [{:keys [owner]} (get @active-glows* ctx-id)]
+    (when-let [clear-owner! (client-bridge/call-adapter :presentation-clear-effect-owner!)]
+      (clear-owner! owner))
     (swap! active-glows* dissoc ctx-id)))
 
 (def ^:private spec

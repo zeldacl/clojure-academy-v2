@@ -8,7 +8,6 @@
           [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.platform.neutral.client-runtime :as content-actions]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.spi.key-scheme-provider :as key-scheme-spi]
             [cn.li.platform.bootstrap :as platform-bootstrap]
             [cn.li.mcmod.util.render :as render]
@@ -26,7 +25,6 @@
             [cn.li.mc1201.client.i18n :as i18n]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mcbase.client.session :as mc-session]
-            [cn.li.mc1201.gui.reactive.host-container :as reactive-host-container]
             [cn.li.mc1201.key-scheme-provider-core :as key-scheme-core]
             [cn.li.mc1201.vanilla-input-control-core :as vanilla-control]
             [cn.li.forge1201.client.runtime-bridge :as runtime-bridge]
@@ -34,8 +32,8 @@
             [cn.li.forge1201.client.keyboard-event-handler :as keyboard-event-handler]
             [cn.li.forge1201.client.overlay-renderer :as overlay-renderer]
             [cn.li.mcbase.client.overlay.state :as overlay-state]
-            [cn.li.mc1201.gui.reactive.host :as reactive-host]
-            [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
+            [cn.li.mc1201.presentation.screen :as presentation-screen]
+            [cn.li.mc1201.presentation.container]
             [cn.li.forge1201.adapter.gui-registry :as gui-registry]
             [cn.li.forge1201.gui.network.shared :as gui-network]
             [cn.li.forge1201.gui.screen-impl :as gui-screen-impl]
@@ -173,26 +171,18 @@
             (ScriptedBlockEntityBerProvider.))
           (log/info (str "  BER registered for tile-id " tile-id)))))))
 
-(defn- open-screen-dispatcher
-  "Dispatch open-screen to a registered reactive widget factory."
-  [arg payload]
-  (when (keyword? arg)
-    (let [widget (widget-registry/create-widget arg payload)]
-      (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
-
-(defn- open-reactive-screen-handler [& args]
-  (apply reactive-host/open-reactive-screen! args))
+(defn- open-screen-dispatcher [_arg _payload]
+  nil)
 
 (defn- init-content-client-bridge!
   []
   ;; MERGE, not install: install-client-bridge! REPLACES the whole map and
   ;; wipes adapters content modules registered earlier during modloading —
-  ;; ac's :reactive-overlay-build/update were lost here, leaving the reactive
+  ;; Presentation callbacks are installed once at the unified host boundary.
   ;; HUD permanently unbuilt (no CP bar on V toggle).
   (client-bridge/merge-client-bridge!
     {:open-screen open-screen-dispatcher
-     :open-reactive-screen open-reactive-screen-handler
+     :presentation-open-screen! presentation-screen/open!
      :slot-key-down runtime-bridge/on-slot-key-down!
      :slot-key-tick runtime-bridge/on-slot-key-tick!
      :slot-key-up runtime-bridge/on-slot-key-up!
@@ -335,10 +325,10 @@
                                 (= 1 (org.lwjgl.glfw.GLFW/glfwGetKey handle (int key-code))))
                               (catch Throwable _ false)))
        ;; Terminal 3D perspective + cursor rendering (delegated from ac module)
-       :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
-       :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
-       :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
-       :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!
+       :terminal-apply-perspective! (fn [& _] nil)
+       :terminal-render-cursor!    (fn [& _] nil)
+       :terminal-cursor-hide!      (fn [& _] nil)
+       :terminal-cursor-show!      (fn [& _] nil)
        ;; Settings app "keys" category rebinding — Forge-only (Fabric has no
        ;; KeyMapping remapping support; see key-mapping-adapter.clj / fabric's
        ;; keyboard_init.clj comment). Rows still render read-only on Fabric.
@@ -431,7 +421,6 @@
   (init-content-client-bridge!)
   ;; The shared screen factory needs the MC 1.20.1 container-screen seams
   ;; installed before Forge invokes MenuScreens factories.
-  (reactive-host-container/install!)
   (gui-screen-impl/init-client!)
   (i18n/install-client-i18n!)
 

@@ -13,6 +13,8 @@
   No business logic lives here — only wiring."
   (:require [cn.li.ac.ability.client.input-state-machine :as sm]
             [cn.li.ac.ability.client.api :as api]
+            [cn.li.ac.ability.client.screens.preset-editor-reactive :as preset-editor]
+            [cn.li.ac.ability.client.screens.skill-tree :as skill-tree]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.runtime :as runtime]))
 
@@ -68,8 +70,8 @@
   (when (and event player-uuid)
     (let [gui-type (:gui-type event)]
       (case gui-type
-        :skill-tree    (client-bridge/open-screen! :ac/skill-tree    {:player-uuid player-uuid})
-        :preset-editor (client-bridge/open-screen! :ac/preset-editor {:player-uuid player-uuid})
+        :skill-tree    (skill-tree/open-presentation! player-uuid)
+        :preset-editor (preset-editor/open! player-uuid)
         nil)))
   nil)
 

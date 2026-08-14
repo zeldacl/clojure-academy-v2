@@ -8,7 +8,9 @@
    :installed-apps #{}
    :available-apps []
    :loading? false
-   :page 0})
+   :page 0
+   :query ""
+   :modal nil})
 
 (defn- fresh-runtime-state
   []
@@ -155,6 +157,9 @@
 
     :terminal/set-page
     (assoc state :page (int (or (:page payload) 0)))
+
+    :terminal/set-query
+    (assoc state :query (str (or (:query payload) "")))
 
     :playback/set-volume
     (assoc state :volume (:volume payload))

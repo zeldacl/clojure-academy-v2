@@ -1,0 +1,36 @@
+{:type :stack
+ :key :application/root
+ :children
+ [{:type :text
+   :key :application/title
+   :value [:bind :title]
+   :semantics {:role :heading}}
+  {:type :button
+   :key :application/left
+   :value [:bind :button-left]
+   :on-click [:action :application/left]
+   :props {:x 8 :y 24 :w 72 :h 20 :label "<"}}
+  {:type :button
+   :key :application/right
+   :value [:bind :button-right]
+   :on-click [:action :application/right]
+   :props {:x 88 :y 24 :w 72 :h 20 :label ">"}}
+  {:type :virtual-list
+   :key :application/lines
+   :items [:bind :lines]
+   :semantics {:role :list}}
+  {:type :text
+   :key :application/status
+   :value [:bind :status]}
+  {:type :textbox
+   :key :application/input
+   :value [:bind :input]
+   :semantics {:role :textbox}}
+  {:type :progress
+   :key :application/scroll
+   :value [:bind :scroll]
+   :semantics {:role :progress}}
+  {:type :modal
+   :key :application/modal
+   :value [:bind :modal]
+   :semantics {:role :dialog}}]}

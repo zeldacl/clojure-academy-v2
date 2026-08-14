@@ -943,9 +943,9 @@
         (.put overlay-context-cache owner-key entry)
         entry))))
 
-(defn reactive-overlay-snapshot
+(defn hud-signal-snapshot
   "Signal-oriented HUD snapshot for reactive overlay updates.
-   Reuses the same state reads as build-client-overlay-plan without building element vectors."
+   Reuses the same state reads as the legacy frame builder without building element vectors."
   [player-uuid overlay-state]
   (let [player-state (get-client-player-state player-uuid)
         resource-data (:resource-data player-state)
@@ -967,7 +967,7 @@
          :overloaded? (boolean (:overloaded overload-bar))
          :interfered? (:interfered? hud-model)}))))
 
-(defn build-client-overlay-plan [player-uuid screen-width screen-height overlay-state]
+(defn build-presentation-frame-legacy [player-uuid screen-width screen-height overlay-state]
   ;; When an overlay app is active, skip normal HUD and render overlay app elements.
   (if-let [app-kw (:active-overlay-app overlay-state)]
     (case app-kw
@@ -1094,15 +1094,15 @@
   (when (= channel :location-teleport/ui-open)
     (when-let [owner (managed-screens/active-owner location-teleport-reactive/screen-id)]
       (location-teleport-reactive/apply-server-payload! owner payload))
-    (client-bridge/open-screen! :ac/saved-position payload))
+    ;; Presentation screens are mounted directly by AC.  The loader only
+    ;; owns the opaque Screen boundary; no legacy widget factory is involved.
+    (location-teleport-reactive/open-screen!
+      (client-bridge/get-client-player) payload))
   (ctx/ctx-send-to-local! ctx-id channel payload))
 
 (defn register-client-push-handlers!
   []
   (when (mark-client-push-handlers-registered!)
-    ;; Register reactive screen widget factories.
-    (skill-tree-screen/install-widget-factory!)
-    (preset-editor-screen/install-widget-factory!)
     (location-teleport-reactive/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-V2 apply-client-runtime-v2!)
             ;; the player-state hash — no push-refresh needed.
@@ -1272,9 +1272,9 @@
              skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
          (:state (delegate-state/delegate-state-for-slot active-ctxs skill-id player-uuid))))
 
-     :client-build-overlay-plan
+     :client-presentation-frame-legacy
      (fn [player-uuid screen-width screen-height overlay-state]
-       (build-client-overlay-plan player-uuid screen-width screen-height overlay-state))
+       (build-presentation-frame-legacy player-uuid screen-width screen-height overlay-state))
 
      :client-req-learn-skill!
      (fn [player-uuid skill-id extra callback]

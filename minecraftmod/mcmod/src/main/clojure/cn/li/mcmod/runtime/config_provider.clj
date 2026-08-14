@@ -1,8 +1,7 @@
 (ns cn.li.mcmod.runtime.config-provider
   "Neutral configuration provider for platform AOT adapters."
   (:require [cn.li.mcmod.config :as config]
-            [cn.li.mcmod.config.registry :as registry]
-            [cn.li.mcmod.config.script-render :as script-render]))
+            [cn.li.mcmod.config.registry :as registry]))
 
 (defn runtime-provider
   [_]
@@ -14,7 +13,4 @@
    :get-config-descriptors registry/get-config-descriptors
    :get-config-values registry/get-config-values
    :set-config-value! registry/set-config-value!
-   :set-config-values! registry/set-config-values!
-   :disabled-renderer-ids script-render/disabled-renderer-ids
-   :init-descriptors! script-render/init-descriptors!
-   :script-render-enabled? script-render/script-render-enabled?})
+   :set-config-values! registry/set-config-values!})

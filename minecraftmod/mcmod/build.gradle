@@ -3,6 +3,12 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 
+// Keep neutral-module outputs under the shared writable build tree.
+layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
+tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
+    checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
+}
+
 // ============================================================================
 // ModId.java — generated from gradle.properties mod_id (single source of truth)
 // ============================================================================

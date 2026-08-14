@@ -1,29 +1,18 @@
 (ns cn.li.fabric1201.client.overlay-renderer
-  "CLIENT-ONLY Fabric overlay event adapter — renders via reactive overlay-host.
-   Build/update fns come from the client bridge (installed by ac via merge-client-bridge!,
-   keys :reactive-overlay-build / :reactive-overlay-update). Zero static ac dependency."
-  (:require [cn.li.mc1201.gui.reactive.overlay-host :as overlay-host]
-            [cn.li.mcbase.client.session :as client-session]
-            [cn.li.platform.neutral.client-runtime :as client-bridge]
+  "Fabric HUD callback for the unified Presentation Runtime."
+  (:require [cn.li.mcbase.client.session :as client-session]
+            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.mc1201.presentation.backend :as presentation-backend]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.fabricmc.fabric.api.client.rendering.v1 HudRenderCallback]
            [net.minecraft.client Minecraft]))
 
-(defn- bridge-build-fn [w h]
-  (client-bridge/reactive-overlay-build w h))
+(defn on-mode-switch-key-state! [& _]
+  nil)
 
-(defn- bridge-update-fn [rt]
-  (client-bridge/reactive-overlay-update rt))
-
-(defn on-mode-switch-key-state!
-  ([is-down]
-   (client-bridge/reactive-overlay-mode-switch! is-down))
-  ([_owner is-down]
-   (client-bridge/reactive-overlay-mode-switch! is-down)))
-
-(defn init!
-  []
+(defn init! []
+  (presentation/register-backend! (presentation-backend/create))
   (install/process-once! ::hud-listener-registered
     #(.register HudRenderCallback/EVENT
                 (reify HudRenderCallback
@@ -31,12 +20,11 @@
                     (let [^Minecraft mc (Minecraft/getInstance)
                           w (.getGuiScaledWidth (.getWindow mc))
                           h (.getGuiScaledHeight (.getWindow mc))]
-                      ;; Overlay render is a client dispatch boundary (hooks.core
-                      ;; 调用规范 #2): bind the CURRENT connection session so
-                      ;; reactive HUD state reads resolve the live store partition.
                       (client-session/with-current-client-session
                         (fn []
-                          (overlay-host/update-overlay!
-                            graphics "default" w h (float tick-delta)
-                            bridge-build-fn bridge-update-fn))))))))
-  (log/info "Reactive overlay renderer initialized (Fabric)"))
+                          (when-let [player (.player mc)]
+                            (presentation/ensure-combat-hud!
+                              (str (.getUUID player)) w h))
+                          (presentation/submit-current-frame!
+                            :hud (float tick-delta) w h graphics))))))))
+  (log/info "Presentation HUD renderer initialized (Fabric)"))

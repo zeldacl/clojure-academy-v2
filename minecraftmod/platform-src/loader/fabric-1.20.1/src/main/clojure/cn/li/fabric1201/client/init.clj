@@ -8,7 +8,6 @@
             [cn.li.mc1201.integration.recipe-query :as recipe-query]
             [cn.li.platform.neutral.client-runtime :as client-bridge]
             [cn.li.mcmod.util.log :as log]
-            [cn.li.platform.neutral.client-runtime :as widget-registry]
             [cn.li.mcmod.util.render :as render]
             [cn.li.platform.neutral.client-runtime :as pose]
             [cn.li.platform.neutral.client-runtime :as buffer]
@@ -22,8 +21,8 @@
             [cn.li.fabric1201.client.obj-model-registration :as obj-models]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
             [cn.li.mcbase.client.session :as mc-session]
-            [cn.li.mc1201.gui.reactive.host :as reactive-host]
-            [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
+            [cn.li.mc1201.presentation.screen :as presentation-screen]
+            [cn.li.mc1201.presentation.container]
             [cn.li.mc1201.gui.cgui.font :as cgui-font]
             [cn.li.mc1201.client.effects.sound :as sound]
             [cn.li.mcbase.client.audio.media-playback :as media-playback-bridge]
@@ -101,25 +100,19 @@
             (ScriptedBlockEntityBer.))))
       (log/info (str "Fabric BER registered for tile-id " tile-id)))))
 
-(defn- open-screen-dispatcher
-  "Dispatch open-screen to a registered reactive widget factory."
-  [arg payload]
-  (when (keyword? arg)
-    (let [widget (widget-registry/create-widget arg payload)]
-      (reactive-host/open-reactive-screen!
-        (:runtime widget) (:title widget "Screen") {:on-close (:on-close widget)}))))
-
-(defn- open-reactive-screen-handler [& args]
-  (apply reactive-host/open-reactive-screen! args))
+(defn- open-screen-dispatcher [_arg _payload]
+  ;; Screen creation is now explicit in the Presentation Application API.
+  ;; Generic legacy widget descriptors are intentionally not dispatched.
+  nil)
 
 (defn- init-content-client-bridge!
   []
   ;; MERGE, not install: install-client-bridge! REPLACES the whole map and
   ;; wipes adapters content modules registered earlier during modloading
-  ;; (ac's :reactive-overlay-build/update — see forge init note).
+  ;; Presentation HUD callbacks are registered by the unified host.
   (client-bridge/merge-client-bridge!
     {:open-screen open-screen-dispatcher
-     :open-reactive-screen open-reactive-screen-handler
+     :presentation-open-screen! presentation-screen/open!
      :client-overlay-activated-override
      (fn [_owner]
        (when-let [owner (mc-session/current-local-player-owner)]
@@ -240,10 +233,10 @@
                         (recipe-query/all-recipes-for item-id recipe-kind))
      :find-recipes (fn [item-id]
                      (recipe-query/find-recipes item-id))
-     :terminal-apply-perspective! cn.li.mc1201.gui.reactive.terminal-render/apply-perspective!
-     :terminal-render-cursor!    cn.li.mc1201.gui.reactive.terminal-render/render-cursor!
-     :terminal-cursor-hide!      cn.li.mc1201.gui.reactive.terminal-render/hide-cursor!
-     :terminal-cursor-show!      cn.li.mc1201.gui.reactive.terminal-render/show-cursor!}))
+     :terminal-apply-perspective! (fn [& _] nil)
+     :terminal-render-cursor!    (fn [& _] nil)
+     :terminal-cursor-hide!      (fn [& _] nil)
+     :terminal-cursor-show!      (fn [& _] nil)}))
 
 (defn- install-client-owner-hooks!
   []

@@ -1,0 +1,19 @@
+{:type :stack
+ :key :combat/root
+ :children
+ [{:type :progress
+   :key :combat/cp
+   :value [:bind :cp-ratio]
+   :semantics {:role :progress}}
+  {:type :progress
+   :key :combat/overload
+   :value [:bind :overload-ratio]
+   :semantics {:role :progress}}
+  {:type :skill-wheel
+   :key :combat/skills
+   :items [:bind :skills]
+   :selected [:bind :selected-skill]
+   :on-select [:action :combat/select-skill]}
+  {:type :quad
+   :key :combat/crosshair
+   :value [:bind :crosshair]}]}

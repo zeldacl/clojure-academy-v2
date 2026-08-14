@@ -8,20 +8,23 @@
             [cn.li.platform.neutral.gui-runtime :as gui-reg]
             [cn.li.mcmod.runtime.owner :as runtime-owner]))
 
-(defonce ^:private create-tech-ui-container-screen-atom
+(defonce ^:private create-presentation-container-screen-atom
   (atom nil))
 
-(defn install-create-tech-ui-container-screen!
-  "Install versioned host-container create-tech-ui-container-screen."
+(defn install-create-presentation-container-screen!
+  "Install the version-owned Presentation Container Screen constructor.
+
+   The callback receives only opaque AC screen data; this base module never
+   imports presentation-core or Minecraft screen classes."
   [f]
-  (reset! create-tech-ui-container-screen-atom f)
+  (reset! create-presentation-container-screen-atom f)
   f)
 
-(defn- create-tech-ui-container-screen
+(defn- create-presentation-container-screen
   [screen-data]
-  (let [f @create-tech-ui-container-screen-atom]
-    (when (nil? f)
-      (throw (IllegalStateException. "create-tech-ui-container-screen not installed")))
+  (let [f @create-presentation-container-screen-atom]
+    (when-not f
+      (throw (IllegalStateException. "presentation container screen constructor not installed")))
     (f screen-data)))
 
 ;; Vanilla AbstractContainerScreen defaults (MC 1.20.1 inventory GUI size).
@@ -46,13 +49,12 @@
         [(+ default-image-width dx)
          (+ default-image-height dy)]))))
 
-(defn reactive-container-screen?
-  "True for the {:type :reactive-container-screen :runtime rt ...} shape
-   returned by ac.gui.block-gui-reactive/create-screen and friends."
+(defn presentation-container-screen?
+  "True for the opaque Presentation Container screen boundary."
   [m]
   (and (map? m)
-       (= (:type m) :reactive-container-screen)
-       (contains? m :runtime)))
+       (= (:type m) :presentation-container-screen)
+       (fn? (:mount-fn m))))
 
 (defn owner-for-screen-menu
   "Resolve canonical client owner for a Minecraft menu's Clojure container."
@@ -76,11 +78,13 @@
   (let [factory-fn (gui-reg/get-screen-factory-fn factory-fn-kw)
         screen-data (client-session/with-current-client-owner
                       #(factory-fn menu player-inventory title))]
-    (when-not (reactive-container-screen? screen-data)
-      (throw (ex-info "Screen factory must return reactive container screen data"
+    (when-not (presentation-container-screen? screen-data)
+      (throw (ex-info "Screen factory must return Presentation container screen data"
                       {:gui-id gui-id
                        :factory-fn-kw factory-fn-kw
                        :returned-type (some-> screen-data type str)
                        :returned-type-key (:type screen-data)})))
-    (create-tech-ui-container-screen
-      (assoc screen-data :minecraft-container menu :screen-title (str title) :player-inventory player-inventory))))
+    (let [screen-data (assoc screen-data :minecraft-container menu
+                             :screen-title (str title)
+                             :player-inventory player-inventory)]
+      (create-presentation-container-screen screen-data))))

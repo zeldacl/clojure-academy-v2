@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.client.reactive-hud
-  "Reactive HUD snapshot — independent of build-client-overlay-plan.
+  "Reactive HUD snapshot — independent of the legacy frame builder.
    Reads player projection + hud.clj builders; no element-vector plan."
   (:require
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
@@ -466,7 +466,7 @@
   their pure inputs actually changed instead of every render frame.
 
   Two independent sub-keys, matching the split already proven correct for
-  the (now-superseded) client-ui-hooks overlay-plan cache:
+  the (now-superseded) client-ui-hooks frame cache:
   - contexts/hud-model/background-mask key off whole player-state identity —
     resource-data (cp/overload) can legitimately change every server tick via
     continuous regen, and hud-model must reflect that, so this cache mostly
