@@ -48,12 +48,15 @@
   ;; (IDLE when no recipe). Bind both instead of leaving static text.
   (log/info "[fusor-gui] attach-binds entered")
   (let [clock (rt/clock-ms-sig r)
+        pn (rt/node-by-id r :progress)
         diag-tick (atom 0)
         progress-sig (sig/computed-d [clock]
                        (fn [_]
                          (let [v (double (or @(:work-progress container) 0.0))]
                            (when (zero? (mod (swap! diag-tick inc) 20))
                              (log/info "[fusor-gui] progress atom=" v
+                                       "dslot0=" (some-> pn (.getDSlot ^cn.li.mcmod.ui.node.INode pn 0))
+                                       "oslot9=" (some-> pn (.getOSlot ^cn.li.mcmod.ui.node.INode pn 9) str)
                                        "recipe-liquid=" (int (or @(:current-recipe-liquid container) 0))))
                            v)))
         liquid-sig (sig/computed-o [clock]
