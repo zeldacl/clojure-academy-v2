@@ -98,29 +98,29 @@
         \E (item (m "energy_convert_component"))
         \M (item (m "machine_frame"))}
        {:item (m "solar_gen") :count 1})
-     (shaped "wind_gen_base"
+     (shaped "windgen_base"
        ["C"
         "M"
         "E"]
        {\C (item (m "constraint_ingot"))
         \M (item (m "machine_frame"))
         \E (item (m "energy_convert_component"))}
-       {:item (m "wind_gen_base") :count 1})
-     (shaped "wind_gen_pillar"
+       {:item (m "windgen_base") :count 1})
+     (shaped "windgen_pillar"
        ["B"
         "R"
         "B"]
        {\B (item "minecraft:iron_bars")
         \R (item "minecraft:redstone")}
-       {:item (m "wind_gen_pillar") :count 1})
-     (shaped "wind_gen_main"
+       {:item (m "windgen_pillar") :count 1})
+     (shaped "windgen_main"
        [" M "
         "CEC"
         " M "]
        {\M (item (m "machine_frame"))
         \C (item (m "constraint_plate"))
         \E (item (m "energy_convert_component"))}
-       {:item (m "wind_gen_main") :count 1})
+       {:item (m "windgen_main") :count 1})
      (shaped "windgen_fan"
        [" P "
         "PBP"
@@ -277,13 +277,13 @@
         \E (item "minecraft:ender_pearl")
         \M (item (m "mat_core_1"))}
        {:item (m "mat_core_2") :count 1})
-     (smelting "imag_silicon_ingot_from_imaginary_ore_smelting"
-       (item (m "imaginary_ore"))
+     (smelting "imag_silicon_ingot_from_imagsil_ore_smelting"
+       (item (m "imagsil_ore"))
        {:item (m "imag_silicon_ingot") :count 1}
        0.8
        200)
-     (smelting "constraint_ingot_from_constrained_ore_smelting"
-       (item (m "constrained_ore"))
+     (smelting "constraint_ingot_from_constraint_metal_smelting"
+       (item (m "constraint_metal"))
        {:item (m "constraint_ingot") :count 1}
        0.7
        200)
@@ -379,7 +379,7 @@
         \C (item (m "crystal_normal"))
         \M (item (m "machine_frame"))
         \R (item "minecraft:redstone")}
-       {:item (m "developer_normal") :count 1})
+        {:item (m "dev_normal") :count 1})
      (shaped "developer_normal_variant_2"
        ["BIE"
         "UPS"
@@ -393,18 +393,18 @@
         \C (item (m "crystal_normal"))
         \M (item (m "machine_frame"))
         \R (item "minecraft:redstone")}
-       {:item (m "developer_normal") :count 1})
+        {:item (m "dev_normal") :count 1})
      (shaped "developer_advanced"
        ["CCC"
         "GDG"
         "NPR"]
        {\C (item (m "constraint_plate"))
         \G (item "minecraft:glowstone")
-        \D (item (m "developer_normal"))
+        \D (item (m "dev_normal"))
         \N (item (m "node_standard"))
         \P (item (m "crystal_pure"))
         \R (item (m "reso_crystal"))}
-       {:item (m "developer_advanced") :count 1})
+        {:item (m "dev_advanced") :count 1})
      (shaped "ability_interferer"
        [" E "
         "BMN"
@@ -435,48 +435,48 @@
      ;; Energy Converter (Energy Bridge) blocks
      ;; Ported from AcademyCraft 1.12 RFSupport / IC2Support recipes
      ;; ============================================================
-     (shaped "converter_rf_input"
+      (shaped "ac_rf_input"
        ["abc"
         " d "]
        {\a (item (m "energy_unit"))
         \b (item (m "machine_frame"))
         \c (item (m "constraint_plate"))
         \d (item (m "energy_convert_component"))}
-       {:item (m "converter_rf_input") :count 1})
-     (shaped "converter_rf_output"
+        {:item (m "ac_rf_input") :count 1})
+      (shaped "ac_rf_output"
        ["abc"
         " d "]
        {\a (item (m "energy_unit"))
         \b (item (m "machine_frame"))
         \c (item (m "reso_crystal"))
         \d (item (m "energy_convert_component"))}
-       {:item (m "converter_rf_output") :count 1})
-     (shaped "converter_eu_input"
+        {:item (m "ac_rf_output") :count 1})
+      (shaped "eu_input"
        ["abc"
         " d "]
        {\a (item (m "energy_unit"))
         \b (item (m "machine_frame"))
         \c (item "minecraft:copper_ingot")
         \d (item (m "energy_convert_component"))}
-       {:item (m "converter_eu_input") :count 1})
-     (shaped "converter_eu_output"
+        {:item (m "eu_input") :count 1})
+      (shaped "eu_output"
        ["abc"
         " d "]
        {\a (item (m "crystal_low"))
         \b (item (m "machine_frame"))
         \c (item "minecraft:copper_ingot")
         \d (item (m "energy_convert_component"))}
-       {:item (m "converter_eu_output") :count 1})
+        {:item (m "eu_output") :count 1})
      ;; Reversible Input <-> Output conversion (shapeless)
-     (shapeless "converter_rf_input_from_output"
-       [(item (m "converter_rf_output"))]
-       {:item (m "converter_rf_input") :count 1})
-     (shapeless "converter_rf_output_from_input"
-       [(item (m "converter_rf_input"))]
-       {:item (m "converter_rf_output") :count 1})
-     (shapeless "converter_eu_input_from_output"
-       [(item (m "converter_eu_output"))]
-       {:item (m "converter_eu_input") :count 1})
-     (shapeless "converter_eu_output_from_input"
-       [(item (m "converter_eu_input"))]
-       {:item (m "converter_eu_output") :count 1})])))
+      (shapeless "ac_rf_input_from_output"
+        [(item (m "ac_rf_output"))]
+        {:item (m "ac_rf_input") :count 1})
+      (shapeless "ac_rf_output_from_input"
+        [(item (m "ac_rf_input"))]
+        {:item (m "ac_rf_output") :count 1})
+      (shapeless "eu_input_from_output"
+        [(item (m "eu_output"))]
+        {:item (m "eu_input") :count 1})
+      (shapeless "eu_output_from_input"
+        [(item (m "eu_input"))]
+        {:item (m "eu_output") :count 1})])))

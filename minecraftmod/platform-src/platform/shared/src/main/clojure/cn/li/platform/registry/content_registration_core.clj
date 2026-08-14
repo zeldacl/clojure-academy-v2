@@ -128,9 +128,11 @@
   "Build a registration plan map for one block-id."
   [block-id]
   (let [has-be? (boolean (metadata/has-block-entity? block-id))
-        fluid-id (metadata/get-fluid-id-for-block block-id)]
+        fluid-id (metadata/get-fluid-id-for-block block-id)
+        block-spec (metadata/get-block-spec block-id)]
     {:block-id block-id
      :registry-name (metadata/get-block-registry-name block-id)
+     :physical (:physical block-spec)
      :fluid-id fluid-id
      :fluid-block? (boolean (metadata/fluid-block? block-id))
      ;; A FluidType's luminosity only drives fog/entity lighting; the block has

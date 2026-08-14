@@ -9,7 +9,7 @@
 
   A condition is a map:
     {:type   :item-obtained        ; :item-crafted | :item-smelted | :item-pickup
-     :item-id string}              ; runtime item id e.g. \"academy:constrained_ore\"
+     :item-id string}              ; runtime item id e.g. \"academy:constraint_metal\"
 
   Note: energy_bridge.md exists in resources but was NEVER registered in the
   original AcademyCraft TutorialInit.java — we preserve that decision by NOT
@@ -32,8 +32,8 @@
 
    {:id :ores
     :default-installed? false
-    :conditions [{:type :item-obtained :item-id (item "constrained_ore")}
-                 {:type :item-obtained :item-id (item "imaginary_ore")}
+    :conditions [{:type :item-obtained :item-id (item "constraint_metal")}
+                 {:type :item-obtained :item-id (item "imagsil_ore")}
                  {:type :item-obtained :item-id (item "crystal_ore")}
                  {:type :item-obtained :item-id (item "reso_ore")}]}
 

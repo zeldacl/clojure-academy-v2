@@ -91,6 +91,10 @@ public final class ForgeBootstrapHelper {
         return SharedBootstrapBlockHelper.createStoneProperties();
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String material, float hardness, float resistance, boolean requiresCorrectTool) {
+        return SharedBootstrapBlockHelper.createBlockProperties(material, hardness, resistance, requiresCorrectTool);
+    }
+
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         return SharedBootstrapBlockHelper.carrierBlockProperties(base);
     }

@@ -16,10 +16,8 @@
                   :rotation-center [1.0 0 1.0]}
     :common {:physical {:material :stone
                         :hardness 3.0
-                        :resistance 6.0
-                        :requires-tool true
-                        :harvest-tool :pickaxe
-                        :harvest-level 1
+                        :resistance 15.0
+                        :requires-tool false
                         :sounds :stone}
              :rendering {:light-level 1.0}}
     :controller {:registry-name "matrix"

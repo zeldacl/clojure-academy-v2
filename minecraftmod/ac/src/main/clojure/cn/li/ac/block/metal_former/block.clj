@@ -45,11 +45,11 @@
                 {:registry-name "metal_former"
                  :physical {:material :stone
                             :hardness 3.0
-                            :resistance 6.0
+                            :resistance 15.0
                             :requires-tool true
                             :harvest-tool :pickaxe
                             :harvest-level 1
-                            :sounds :metal}
+                            :sounds :stone}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "metal_former_front")}
                              :flat-item-icon? true}

@@ -57,6 +57,21 @@ public final class SharedBootstrapBlockHelper {
         return createStoneProperties().setId(blockKey(registryId));
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String registryId,
+                                                                   String material,
+                                                                   float hardness,
+                                                                   float resistance,
+                                                                   boolean requiresCorrectTool) {
+        BlockBehaviour.Properties props = "metal".equals(material)
+            ? BlockBehaviour.Properties.ofFullCopy(Blocks.IRON_BLOCK)
+            : BlockBehaviour.Properties.ofFullCopy(Blocks.STONE);
+        props = props.strength(hardness, resistance);
+        if (requiresCorrectTool) {
+            props = props.requiresCorrectToolForDrops();
+        }
+        return props.setId(blockKey(registryId));
+    }
+
     public static BlockBehaviour.Properties createWaterProperties(String registryId) {
         return BlockBehaviour.Properties.ofFullCopy(Blocks.WATER).setId(blockKey(registryId));
     }

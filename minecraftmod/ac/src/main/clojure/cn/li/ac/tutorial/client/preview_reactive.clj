@@ -170,10 +170,10 @@
   [tut-id]
   (let [raw (case tut-id
     :ores
-    [{:tag :view :display-text (view-text :constrained_ore "Constraint Metal Ore")
-      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "constrained_ore")}]}
-     {:tag :view :display-text (view-text :imaginary_ore "Imag Silicon Ore")
-      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "imaginary_ore")}]}
+    [{:tag :view :display-text (view-text :constraint_metal "Constraint Metal Ore")
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "constraint_metal")}]}
+     {:tag :view :display-text (view-text :imagsil_ore "Imag Silicon Ore")
+      :sub-views [{:type :block-3d :block-id (modid/namespaced-path "imagsil_ore")}]}
      {:tag :view :display-text (view-text :crystal_ore "Crystal Ore")
       :sub-views [{:type :block-3d :block-id (modid/namespaced-path "crystal_ore")}]}
      {:tag :view :display-text (view-text :reso_ore "Resonant Crystal Ore")
@@ -209,13 +209,13 @@
 
     :wind_generator
     ;; Display names come from the blocks' own lang keys
-    ;; (block.<MOD-ID>.wind_gen_*), which the datagen supplies from the
+    ;; (block.<MOD-ID>.windgen_*), which the datagen supplies from the
     ;; corresponding block registrations; the literals below are only the
     ;; English fallback when a lang entry is missing.
     (vec (for [[item-id fallback]
-               [[(modid/namespaced-path "wind_gen_base") "Wind Generator Pillar Base"]
-                [(modid/namespaced-path "wind_gen_pillar") "Wind Generator Pillar"]
-                [(modid/namespaced-path "wind_gen_main") "Wind Generator"]
+               [[(modid/namespaced-path "windgen_base") "Wind Generator Pillar Base"]
+                [(modid/namespaced-path "windgen_pillar") "Wind Generator Pillar"]
+                [(modid/namespaced-path "windgen_main") "Wind Generator"]
                 [(modid/namespaced-path "windgen_fan") "Wind Generator Fan"]]]
            {:tag :craft :display-text (craft-display-text item-id fallback)
             :sub-views [{:type :recipe :recipe-kind "MetalFormer"
@@ -260,12 +260,12 @@
     [{:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_portable") "Portable Developer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
                   :item-id (modid/namespaced-path "developer_portable")}]}
-     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_normal") "Normal Developer")
+      {:tag :craft :display-text (craft-display-text (modid/namespaced-path "dev_normal") "Normal Developer")
+       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
+                    :item-id (modid/namespaced-path "dev_normal")}]}
+     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "dev_advanced") "Advanced Developer")
       :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id (modid/namespaced-path "developer_normal")}]}
-     {:tag :craft :display-text (craft-display-text (modid/namespaced-path "developer_advanced") "Advanced Developer")
-      :sub-views [{:type :recipe :recipe-kind "MetalFormer"
-                  :item-id (modid/namespaced-path "developer_advanced")}]}]
+                   :item-id (modid/namespaced-path "dev_advanced")}]}]
 
     [])
       expanded (mapv expand-recipe-sub-views raw)]

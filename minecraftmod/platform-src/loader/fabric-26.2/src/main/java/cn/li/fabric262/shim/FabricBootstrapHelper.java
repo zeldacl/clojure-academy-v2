@@ -36,6 +36,10 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createStoneProperties(registryId);
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String registryId, String material, float hardness, float resistance, boolean requiresCorrectTool) {
+        return SharedBootstrapBlockHelper.createBlockProperties(registryId, material, hardness, resistance, requiresCorrectTool);
+    }
+
     public static BlockBehaviour.Properties carrierBlockProperties(BlockBehaviour.Properties base) {
         return SharedBootstrapBlockHelper.carrierBlockProperties(base);
     }

@@ -96,30 +96,37 @@
   [{:keys [registered-blocks registered-fluids-source base-properties carrier-properties]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (core/for-each-block-plan!
-      (fn [{:keys [block-id registry-name fluid-id fluid-block? fluid-luminosity
+      (fn [{:keys [block-id registry-name physical fluid-id fluid-block? fluid-luminosity
                    needs-dynamic-properties? has-be? tile-id]}]
-        (let [block-inst (cond
+        (let [physical (or physical {})
+              block-properties (FabricBootstrapHelper/createBlockProperties
+                                (name (or (:material physical) :stone))
+                                (float (or (:hardness physical) 1.5))
+                                (float (or (:resistance physical) 6.0))
+                                (boolean (:requires-tool physical)))
+              carrier-properties (bootstrap/carrier-block-properties block-properties)
+              block-inst (cond
                            (and fluid-id fluid-block?)
                            (create-fluid-backed-block
                              block-id fluid-id has-be? tile-id fluid-luminosity
                              registered-fluids-source)
 
                            (and fluid-id (not fluid-block?))
-                           (FabricBootstrapHelper/createPlainBlock base-properties)
+                           (FabricBootstrapHelper/createPlainBlock block-properties)
 
                            (and needs-dynamic-properties? has-be?)
                            (let [props (bsp/get-all-properties block-id)]
-                             (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
+                              (FabricBootstrapHelper/createCarrierScriptedDynamicBlock block-id tile-id props carrier-properties))
 
                            needs-dynamic-properties?
                            (let [props (bsp/get-all-properties block-id)]
-                             (FabricBootstrapHelper/createDynamicStateBlock block-id props base-properties))
+                            (FabricBootstrapHelper/createDynamicStateBlock block-id props block-properties))
 
                            has-be?
                            (FabricBootstrapHelper/createCarrierScriptedBlock block-id tile-id carrier-properties)
 
                            :else
-                           (FabricBootstrapHelper/createPlainBlock base-properties))
+                            (FabricBootstrapHelper/createPlainBlock block-properties))
               _ (install-bundle-on-block! block-inst tile-id bundles)
               registered (fabric-dispatch/register-block registry-name block-inst)]
           ((:swap-state! registered-blocks) #(assoc % block-id registered)))))))

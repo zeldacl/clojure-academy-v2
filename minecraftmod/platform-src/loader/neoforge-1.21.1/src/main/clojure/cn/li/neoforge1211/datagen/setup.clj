@@ -17,6 +17,16 @@
     :label "BlockState"
     :summary-label "blockstate"
     :factory :blockstate}
+   {:group :block-loot
+    :id :block-loot
+    :label "Block Loot"
+    :summary-label "block-loot"
+    :factory :block-loot}
+   {:group :block-tags
+    :id :block-tags
+    :label "Block Tags"
+    :summary-label "block-tags"
+    :factory :block-tags}
    {:group :item-model
     :id :item-model
     :label "Item Model"

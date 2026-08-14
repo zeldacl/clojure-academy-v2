@@ -8,6 +8,8 @@
             [cn.li.fabric262.datagen.worldgen-provider :as worldgen-provider]
             [cn.li.mc262.datagen.advancement-provider-shell :as advancement-shell]
             [cn.li.mc262.datagen.blockstate-provider-shell :as blockstate-shell]
+            [cn.li.mc262.datagen.block-loot-provider-shell :as block-loot]
+            [cn.li.mc262.datagen.block-tag-provider-shell :as block-tags]
             [cn.li.mc262.datagen.lang-provider-shell :as lang-shell])
   (:import [net.fabricmc.fabric.api.datagen.v1 FabricDataGenerator$Pack FabricDataGenerator$Pack$Factory FabricDataGenerator$Pack$RegistryDependentFactory]))
 
@@ -20,6 +22,8 @@
     ;; Shared shell emits all merged langs; ignore per-entry :language when present.
     :lang (lang-shell/create output)
     :blockstate (blockstate-shell/create-provider output blockstate-provider-name)
+    :block-loot (block-loot/create output)
+    :block-tags (block-tags/create output)
     :item-model (item-model-provider/create-provider output)
     :advancement (advancement-shell/create output)
     :recipe (throw (ex-info "Recipe providers require Fabric registries" {:provider provider}))

@@ -7,6 +7,10 @@
 	([]
 	 (ForgeBootstrapHelper/createStoneProperties)))
 
+(defn create-block-properties
+	[^String registry-id ^String material hardness resistance requires-correct-tool]
+	(ForgeBootstrapHelper/createBlockProperties registry-id material (float hardness) (float resistance) (boolean requires-correct-tool)))
+
 (defn create-item-properties
 	[^String registry-id]
 	(ForgeBootstrapHelper/createItemProperties registry-id))

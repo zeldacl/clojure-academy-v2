@@ -97,17 +97,22 @@
   [{:keys [blocks-register registered-fluids-source mod-id]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (core/for-each-block-plan!
-      (fn [{:keys [block-id registry-name fluid-id fluid-luminosity
+      (fn [{:keys [block-id registry-name physical fluid-id fluid-luminosity
                    needs-dynamic-properties? has-be? tile-id]}]
         (let [registry-id (str mod-id ":" registry-name)
               registered-obj
               (.register ^DeferredRegister blocks-register ^String (str registry-name)
                          (reify java.util.function.Supplier
                            (get [_]
-                             (let [base-properties (bootstrap/create-stone-properties registry-id)
-                                   carrier-properties (bootstrap/carrier-block-properties
-                                                        (bootstrap/create-stone-properties registry-id))
-                                   block (cond
+                              (let [physical (or physical {})
+                                    block-properties (bootstrap/create-block-properties
+                                                       registry-id
+                                                       (name (or (:material physical) :stone))
+                                                       (float (or (:hardness physical) 1.5))
+                                                       (float (or (:resistance physical) 6.0))
+                                                       (boolean (:requires-tool physical)))
+                                    carrier-properties (bootstrap/carrier-block-properties block-properties)
+                                    block (cond
                                            (and fluid-id has-be?)
                                            (when-let [fluid-source-ro (get (core/registry-source-snapshot registered-fluids-source) fluid-id)]
                                              (bootstrap/create-scripted-liquid-block
@@ -128,14 +133,14 @@
                                                fluid-luminosity))
                                            (and needs-dynamic-properties? has-be?)
                                            (let [props (blockstate-props/get-all-properties block-id)]
-                                             (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))
+                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props block-properties))
                                            needs-dynamic-properties?
                                            (let [props (blockstate-props/get-all-properties block-id)]
-                                             (bootstrap/create-dynamic-state-block block-id props base-properties))
+                                              (bootstrap/create-dynamic-state-block block-id props block-properties))
                                            has-be?
                                            (bootstrap/create-carrier-scripted-block block-id tile-id carrier-properties)
                                            :else
-                                           (bootstrap/create-plain-block base-properties))]
+                                            (bootstrap/create-plain-block block-properties))]
                                (install-bundle-on-block! block tile-id bundles)
                                block))))]
           (registry-state/register-block! block-id registered-obj))))))

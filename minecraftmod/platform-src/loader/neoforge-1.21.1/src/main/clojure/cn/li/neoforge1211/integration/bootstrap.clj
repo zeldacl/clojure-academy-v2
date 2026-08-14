@@ -5,6 +5,10 @@
 	[]
 	(ForgeBootstrapHelper/createStoneProperties))
 
+(defn create-block-properties
+	[^String material hardness resistance requires-correct-tool]
+	(ForgeBootstrapHelper/createBlockProperties material (float hardness) (float resistance) (boolean requires-correct-tool)))
+
 (defn carrier-block-properties
 	[base]
 	(ForgeBootstrapHelper/carrierBlockProperties base))

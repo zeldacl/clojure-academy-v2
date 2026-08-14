@@ -42,6 +42,17 @@ public final class SharedBootstrapBlockHelper {
         return BlockBehaviour.Properties.copy(Blocks.STONE);
     }
 
+    public static BlockBehaviour.Properties createBlockProperties(String material,
+                                                                   float hardness,
+                                                                   float resistance,
+                                                                   boolean requiresCorrectTool) {
+        BlockBehaviour.Properties props = "metal".equals(material)
+            ? BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK)
+            : BlockBehaviour.Properties.copy(Blocks.STONE);
+        props = props.strength(hardness, resistance);
+        return requiresCorrectTool ? props.requiresCorrectToolForDrops() : props;
+    }
+
     /**
      * Apply a fluid's luminosity as block light emission. A FluidType's light
      * level drives fog and entity lighting only, so a glowing fluid still needs

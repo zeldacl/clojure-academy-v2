@@ -134,13 +134,13 @@
       :input {:item (str m ":constraint_ingot") :count 1}
       :output {:item (str m ":constraint_plate") :count 1}}
 
-     {:id "mf_refine_imaginary_ore"
+     {:id "mf_refine_imagsil_ore"
       :mode "refine"
-      :input {:item (str m ":imaginary_ore") :count 1}
+      :input {:item (str m ":imagsil_ore") :count 1}
       :output {:item (str m ":imag_silicon_ingot") :count 4}}
-     {:id "mf_refine_constrained_ore"
+     {:id "mf_refine_constraint_metal"
       :mode "refine"
-      :input {:item (str m ":constrained_ore") :count 1}
+      :input {:item (str m ":constraint_metal") :count 1}
       :output {:item (str m ":constraint_ingot") :count 2}}
      {:id "mf_refine_reso_ore"
       :mode "refine"

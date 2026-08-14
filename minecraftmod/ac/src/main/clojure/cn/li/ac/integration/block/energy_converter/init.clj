@@ -61,8 +61,9 @@
 		(bdsl/create-block-spec
 			block-id
 			{:registry-name registry-name
-			 :physical {:material :stone
+				 :physical {:material :stone
 									:hardness 2.5
+									:resistance 12.5
 									:requires-tool true
 									:harvest-tool :pickaxe
 									:harvest-level 0
