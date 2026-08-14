@@ -6,6 +6,7 @@
             [cn.li.mcmod.util.log :as log] [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.core :as ui]
+            [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.runtime :as rt] [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.wireless.gui.container.common :as common]
@@ -59,7 +60,14 @@
                        (let [need (int (or @(:current-recipe-liquid container) 0))]
                          (if (pos? need) (str need) "IDLE"))))]
     (ui/bind! r :progress :progress progress-sig)
-    (ui/bind! r :text_imagneeded :text liquid-sig)))
+    (ui/bind! r :text_imagneeded :text liquid-sig)
+    (when-let [^cn.li.mcmod.ui.node.INode pn (rt/node-by-id r :progress)]
+      (log/info "[fusor-gui] progress node kind=" (.getKind pn)
+                "visible=" (.isVisible pn)
+                "x=" (.getX pn) "y=" (.getY pn)
+                "w=" (.getW pn) "h=" (.getH pn)
+                "dslot0=" (.getDSlot pn 0)
+                "oslot2=" (some-> (.getOSlot pn 2) str))))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]
