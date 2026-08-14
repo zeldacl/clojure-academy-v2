@@ -5,7 +5,9 @@
   Version modules install RuntimeAccess/BlockRegistry/ItemRegistry/ParticleEntity
   wrappers via install-runtime-ops!."
   (:import [cn.li.mcbase.runtime ItemPlayerOps]
-           [net.minecraft.core BlockPos]
+           [net.minecraft.core BlockPos Direction]
+           [net.minecraft.server MinecraftServer]
+           [net.minecraft.server.level ServerLevel]
            [net.minecraft.world.entity.item ItemEntity]
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.item ItemStack]
@@ -27,6 +29,23 @@
       (throw (IllegalStateException. "runtime-ops not installed")))
     m))
 
+(defn- may-modify-block?
+  "Whether `player` is allowed to change the block at `pos`.
+
+  The 1.20+ equivalent of what legacy item code spelled as
+  `canPlayerEdit` + `World.canMineBlockBody`: mayUseItemAt covers adventure
+  mode and the mayBuild flag, isUnderSpawnProtection covers the server's
+  spawn radius. The spawn check only exists server-side, so a client-side or
+  serverless level answers on mayUseItemAt alone."
+  [^Player player ^Level level ^BlockPos pos ^Direction face]
+  (and (some? player)
+       (.mayUseItemAt player pos face (.getMainHandItem player))
+       (if (instance? ServerLevel level)
+         (let [^MinecraftServer server (.getServer level)]
+           (or (nil? server)
+               (not (.isUnderSpawnProtection server ^ServerLevel level pos player))))
+         true)))
+
 (defn- raytrace-block
   [player reach fluid-source-only?]
   (when-let [^BlockHitResult hit ((:playerRaytraceBlock (ops))
@@ -34,12 +53,22 @@
                                   (double (or reach 5.0))
                                   (boolean fluid-source-only?))]
     (let [^BlockPos hit-pos (.getBlockPos hit)
-          ^BlockPos place-pos (.relative hit-pos (.getDirection hit))
+          ^Direction face (.getDirection hit)
+          ^BlockPos place-pos (.relative hit-pos face)
           ^Level level ((:getEntityLevel (ops)) player)
-          ^BlockState hit-state (.getBlockState level hit-pos)]
+          ^BlockState hit-state (.getBlockState level hit-pos)
+          ^BlockState place-state (.getBlockState level place-pos)
+          ^Player p player]
       {:hit-pos {:x (.getX hit-pos) :y (.getY hit-pos) :z (.getZ hit-pos)}
        :place-pos {:x (.getX place-pos) :y (.getY place-pos) :z (.getZ place-pos)}
-       :block-id ((:getBlockKey (ops)) (.getBlock hit-state))})))
+       :block-id ((:getBlockKey (ops)) (.getBlock hit-state))
+       :direction (.getName face)
+       ;; canBeReplaced is the modern spelling of Block#isReplaceable: true for
+       ;; air, snow layers, tall grass, fluids, fire — false for stone, chests.
+       :hit-replaceable? (.canBeReplaced hit-state)
+       :place-replaceable? (.canBeReplaced place-state)
+       :may-edit-hit? (may-modify-block? p level hit-pos face)
+       :may-edit-place? (may-modify-block? p level place-pos face)})))
 
 (defn- drop-player-main-hand-item-at!
   [player amount x y z]

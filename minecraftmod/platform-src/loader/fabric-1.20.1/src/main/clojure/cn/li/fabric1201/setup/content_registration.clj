@@ -104,7 +104,7 @@
                                 (float (or (:hardness physical) 1.5))
                                 (float (or (:resistance physical) 6.0))
                                 (boolean (:requires-tool physical)))
-              carrier-properties (bootstrap/carrier-block-properties block-properties)
+              carrier-properties (FabricBootstrapHelper/carrierBlockProperties block-properties)
               block-inst (cond
                            (and fluid-id fluid-block?)
                            (create-fluid-backed-block
