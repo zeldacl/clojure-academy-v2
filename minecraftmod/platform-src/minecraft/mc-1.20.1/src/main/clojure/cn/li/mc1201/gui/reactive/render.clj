@@ -594,11 +594,12 @@
               (let [uoff (float (* scroll iw))]
                 (apply-color!)  ;; BEFORE blit
                 (.enableScissor gg seg-start iy seg-end ih)
-                (.blit gg fg-rl ix iy uoff 0.0 iw ih (float iw) (float ih))
+                (let [hh (unchecked-int h)]  ;; node HEIGHT — ih is the bottom edge (y+h)
+                  (.blit gg fg-rl ix iy uoff 0.0 iw hh (float iw) (float hh)))
                 (.disableScissor gg)))))))]
     ;; ---- background ----
     (when bg-rl
-      (.blit gg bg-rl ix iy 0 0 iw ih iw ih))
+      (.blit gg bg-rl ix iy 0 0 iw (unchecked-int h) iw (unchecked-int h)))
     ;; ---- upstream autoLerp: multi-stop color lerp (bands nil → white/no tint) ----
     (when (and fg-rl (pos? filled-w))
       (let [t       (double (max 0.0 (min 1.0 percent)))
