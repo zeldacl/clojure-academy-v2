@@ -9,7 +9,7 @@
             [cn.li.platform.neutral.ui :as node]
             [cn.li.platform.neutral.ui :as ui-layout]
             [clojure.string :as str]
-            [cn.li.mcmod.util.log])
+            [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
@@ -512,8 +512,8 @@
         w        (scaled-w node)     h        (scaled-h node)
         percent  (double (.getDSlot node SLOT-PROG-PROGRESS))
         _        (when (zero? (mod (swap! progress-diag-tick inc) progress-diag-interval))
-                   (cn.li.mcmod.util.log/info "[progress-render] percent=" percent
-                                              "x=" x "y=" y "w=" w "h=" h))
+                   (log/info "[progress-render] percent=" percent
+                             "x=" x "y=" y "w=" w "h=" h))
         diag-tan (double (.getDSlot node 1))            ;; :corner dslot (0=rect, 0.695=44deg)
         scroll   (.getDSlot node 3)                      ;; :scroll-offset
         raw-alpha (.getDSlot node 4)                     ;; :alpha (0.0 = unset → default 1.0)
