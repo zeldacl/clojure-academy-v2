@@ -610,11 +610,15 @@
           (let [bar-right (int (+ x w))
                 bar-start (int (- bar-right filled-w))]
             (draw-trap! (max ix bar-start) bar-right r g b fill-alpha))
-          (let [bar-end (int (+ x filled-w))]
+          (let [bar-end (int (+ x filled-w))
+                ;; Absolute right edge of the node — `iw` is the node WIDTH
+                ;; (relative), and the trap segments are absolute screen x.
+                ;; (min bar-end iw) clipped a 90%-full bar to ~6px.
+                node-right (int (+ x w))]
             (if (and cutout-x0 cutout-w (pos? cutout-w))
               (do (draw-trap! ix       (min bar-end cutout-x0) r g b fill-alpha)
-                  (draw-trap! cutout-x1 (min bar-end         iw) r g b fill-alpha))
-              (draw-trap! ix (min bar-end iw) r g b fill-alpha))))))
+                  (draw-trap! cutout-x1 (min bar-end node-right) r g b fill-alpha))
+              (draw-trap! ix (min bar-end node-right) r g b fill-alpha))))))
     ;; ---- icon overlay ----
     (when (and cutout-x0 cutout-w (pos? cutout-w) icon-rl)
       (.blit gg icon-rl cutout-x0 cutout-y0 0 0 cutout-w cutout-h cutout-w cutout-h))
