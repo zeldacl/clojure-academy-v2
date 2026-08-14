@@ -89,12 +89,20 @@
 
 (defn- mutate-or-convert-main-hand!
   [player item-stack target-kind]
-  (if (<= (int (pitem/stack-count item-stack)) 1)
-    (set-matter-kind! item-stack target-kind)
-    (do
-      (entity/player-consume-main-hand-item! player 1)
-      (when-let [converted (make-matter-unit-stack target-kind)]
-        (entity/player-give-item-stack! player converted)))))
+  (let [count (int (pitem/stack-count item-stack))]
+    (log/info "[matter-unit] mutate count=" count "target=" target-kind)
+    (if (<= count 1)
+      (do (set-matter-kind! item-stack target-kind)
+          (log/info "[matter-unit] mutate direct kind=" (get-matter-kind item-stack)))
+      (do
+        (let [consumed? (entity/player-consume-main-hand-item! player 1)
+              converted (make-matter-unit-stack target-kind)]
+          (log/info "[matter-unit] mutate consumed=" consumed?
+                    "converted=" (boolean converted)
+                    "count-after=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
+          (when converted
+            (entity/player-give-item-stack! player converted)
+            (log/info "[matter-unit] mutate gave kind=" (get-matter-kind converted))))))))
 
 (defn- use-matter-unit!
   [{:keys [player item-stack side]}]
