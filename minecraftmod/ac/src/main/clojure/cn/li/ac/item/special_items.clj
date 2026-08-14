@@ -117,11 +117,11 @@
 
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              ;; Remove the fluid by placing air: Level.destroyBlock returns
-              ;; false for fluid blocks (and Level.setBlock's own boolean is
-              ;; unreliable here); place-block-by-id! always reports success
-              ;; once the block resolves, and minecraft:air always resolves.
-              (let [removed? (world/place-block-by-id! level "minecraft:air" hit-block-pos 3)]
+              ;; world/remove-block! now removes fluids via setBlock(air) in
+              ;; the loader bindings (Level.destroyBlock returns false for
+              ;; fluid blocks); plain place-block-by-id! "minecraft:air" does
+              ;; NOT work — air is not in the mod's block registry.
+              (let [removed? (world/remove-block! level hit-block-pos)]
                 (log/info "[matter-unit] collect removed=" removed?
                           "hit-pos=" [(:x hit-pos) (:y hit-pos) (:z hit-pos)]
                           "kind-after=" (get-matter-kind item-stack)
