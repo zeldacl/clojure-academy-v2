@@ -507,6 +507,7 @@
 
 (def ^:private ^:const progress-diag-interval 60)
 (def ^:private progress-diag-tick (atom 0))
+(def ^:private progress-draw-tick (atom 0))
 (defn render-progress! [^GuiGraphics gg ^INode node]
   (let [x        (node-abs-x node)   y        (node-abs-y node)
         w        (scaled-w node)     h        (scaled-h node)
@@ -556,7 +557,7 @@
         (fn draw-trap! ([seg-start seg-end]
                          (draw-trap! seg-start seg-end 255 255 255 1.0))
                         ([seg-start seg-end r g b a]
-          (when (zero? (mod (swap! progress-diag-tick inc) 60))
+          (when (zero? (mod (swap! progress-draw-tick inc) 60))
             (log/info "[progress-draw] seg=" [(int seg-start) (int seg-end)]
                       "filled-w=" filled-w "fg-rl=" (some-> fg-rl str)
                       "diag-tan=" diag-tan "uv-region=" (boolean uv-region)))
