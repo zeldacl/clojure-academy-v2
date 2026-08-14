@@ -46,6 +46,7 @@
   ;; Upstream GuiImagFusor drives the XML progress bar each frame from
   ;; tile.getWorkProgress and the requirement text from getCurrentRecipe
   ;; (IDLE when no recipe). Bind both instead of leaving static text.
+  (log/info "[fusor-gui] attach-binds entered")
   (let [clock (rt/clock-ms-sig r)
         diag-tick (atom 0)
         progress-sig (sig/computed-d [clock]
