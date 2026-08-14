@@ -29,7 +29,6 @@
             [cn.li.mcmod.runtime.keyboard-input-provider :as keyboard-input-provider]
             [cn.li.mcmod.runtime.network-runtime-provider :as network-runtime-provider]
             [cn.li.mcmod.runtime.tabbed-gui-provider :as tabbed-gui-provider]
-            [cn.li.mcmod.runtime.ui-provider :as ui-provider]
             [cn.li.platform.neutral.block-runtime :as block-runtime]
             [cn.li.platform.neutral.client-network :as client-network]
             [cn.li.platform.neutral.client-render :as client-render]
@@ -43,8 +42,7 @@
             [cn.li.platform.neutral.keyboard-input :as keyboard-input]
             [cn.li.platform.neutral.network-runtime :as network-runtime]
             [cn.li.platform.neutral.tabbed-gui :as tabbed-gui]
-            [cn.li.platform.registry.metadata :as registry-metadata]
-            [cn.li.platform.neutral.ui :as ui]))
+            [cn.li.platform.registry.metadata :as registry-metadata]))
 
 (def ^:private facade-installers
   "Every neutral facade cn.li.platform.bootstrap/initialize-common-content!
@@ -69,8 +67,7 @@
    [#'client-render/install! (fn [] (client-render-provider/runtime-provider nil))]
    [#'client-network/install! (fn [] (client-network-provider/runtime-provider nil))]
    [#'integration-runtime/install! (fn [] (integration-runtime-provider/runtime-provider nil))]
-   [#'network-runtime/install! (fn [] (network-runtime-provider/runtime-provider nil))]
-   [#'ui/install! (fn [] (ui-provider/runtime-provider nil))]])
+   [#'network-runtime/install! (fn [] (network-runtime-provider/runtime-provider nil))]])
 
 (defn install!
   "Install complete, test-safe provider maps for neutral AOT facades."

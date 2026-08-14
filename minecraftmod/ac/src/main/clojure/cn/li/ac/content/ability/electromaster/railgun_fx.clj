@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   (:require [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx]))
+            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
@@ -12,10 +12,11 @@
 ;; so a stranded entry is only bookkeeping; prune it by age so the map cannot
 ;; grow for a whole session.
 (defn- on-charge-start! [ctx-id _channel payload]
-  (vfx/enqueue-level-effect! :railgun-shot ctx-id :charge-start payload))
+  (client-bridge/presentation-spawn-effect!
+    :railgun-charge [:ctx ctx-id] payload (client-bridge/game-time-ms)))
 
 (defn- on-charge-end! [ctx-id _channel _payload]
-  (vfx/enqueue-level-effect! :railgun-shot ctx-id :charge-end _payload))
+  (client-bridge/presentation-clear-effect-owner! [:ctx ctx-id]))
 
 (def ^:private spec
   (arc-beam/build-spec

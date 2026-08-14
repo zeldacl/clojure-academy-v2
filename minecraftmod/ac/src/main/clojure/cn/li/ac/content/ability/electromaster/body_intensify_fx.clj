@@ -4,7 +4,6 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
-            [cn.li.ac.client.vfx-runtime :as vfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
@@ -14,7 +13,8 @@
 
 (defn- on-fx-start
   [ctx-id _channel payload]
-  (vfx/enqueue-level-effect! :body-intensify ctx-id :fx-start payload)
+  (client-bridge/presentation-spawn-effect!
+    :body-intensify [:ctx ctx-id] payload (client-bridge/game-time-ms))
   ;; FollowEntitySound upstream is a real ambient loop attached to the caster.
   (client-bridge/run-client-effect!
    :mcmod/start-loop-sound-at-player
@@ -26,7 +26,7 @@
 
 (defn- on-fx-end
   [ctx-id _channel payload]
-  (vfx/enqueue-level-effect! :body-intensify ctx-id :fx-end payload)
+  (client-bridge/presentation-clear-effect-owner! [:ctx ctx-id])
   ;; Stop any charging loop started by fx-start before handling release.
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
@@ -45,7 +45,8 @@
          (number? x) (assoc :x (double x))
          (number? y) (assoc :y (double y))
          (number? z) (assoc :z (double z)))))
-    (vfx/enqueue-level-effect! :body-intensify ctx-id :burst payload)))
+    (client-bridge/presentation-spawn-effect!
+      :body-intensify-burst [:ctx ctx-id] payload (client-bridge/game-time-ms))))
 
 (def ^:private spec
   (arc-beam/build-spec

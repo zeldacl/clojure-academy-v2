@@ -170,3 +170,15 @@
   "Look up and call an optional bridge function by key."
   [k & args]
   (apply bridge-op-optional k args))
+
+(defn presentation-spawn-effect! [template-id owner params now-ms]
+  (bridge-op-optional :presentation-spawn-effect! template-id owner params now-ms))
+
+(defn presentation-destroy-effect! [instance-id]
+  (bridge-op-optional :presentation-destroy-effect! instance-id))
+
+(defn presentation-clear-effect-owner! [owner]
+  (bridge-op-optional :presentation-clear-effect-owner! owner))
+
+(defn presentation-tick-effects! [delta-ms]
+  (bridge-op-optional :presentation-tick-effects! delta-ms))

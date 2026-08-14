@@ -81,13 +81,19 @@
   (let [mount (get-in @(state runtime) [:mounts handle])]
     (when-not mount (throw (ex-info "unknown mount" {:mount handle})))
     (let [old (:tree mount)
-          result (tree/reconcile old spec)]
-      (swap! (state runtime) assoc-in [:mounts handle :tree] (:node result))
-      (dirty/mark! (:dirty @(state runtime))
-                   (if (:created? result)
-                     [:structure :measure :layout :paint]
-                     [:structure :measure :layout :paint]))
-      (:node result))))
+          result (tree/reconcile old spec)
+          next-node (:node result)
+          changed? (not (identical? old next-node))
+          structure? (or (:created? result)
+                         (not= (tree/structure-signature old)
+                               (tree/structure-signature next-node)))]
+      (swap! (state runtime) assoc-in [:mounts handle :tree] next-node)
+      (when changed?
+        (dirty/mark! (:dirty @(state runtime))
+                     (if structure?
+                       [:structure :measure :layout :paint]
+                       [:paint])))
+      next-node)))
 
 (defn layout-tree! [runtime handle width height]
   (let [mount (get-in @(state runtime) [:mounts handle])]

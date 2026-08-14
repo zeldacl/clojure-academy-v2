@@ -107,3 +107,13 @@
     (if (= key (:key root))
       root
       (some #(find-by-key % key) (:children root)))))
+
+(defn structure-signature
+  "Return the stable shape used by Runtime dirty classification.
+
+   Props are intentionally excluded: signal/value changes repaint or update
+   instances, while only a type/key/child-shape change invalidates measure and
+   layout."
+  [^RNode node]
+  (when node
+    [(:type node) (:key node) (mapv structure-signature (:children node))]))

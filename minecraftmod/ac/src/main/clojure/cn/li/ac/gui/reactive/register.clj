@@ -4,13 +4,14 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as string]
             [cn.li.mcmod.client.platform-bridge :as bridge]
+            [cn.li.mcmod.client.content-actions :as content-actions]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.presentation.core.export :as presentation-export]
-            [cn.li.presentation.core.effects :as presentation-effects]
+            [cn.li.presentation.core.effects :as effects-runtime]
             [cn.li.presentation.compiler.core :as presentation-compiler]
             [cn.li.presentation.compiler.fx :as presentation-fx]
             [cn.li.presentation.compiler.render :as presentation-render]
@@ -39,6 +40,7 @@
 (defonce ^:private template-cache* (atom {}))
 (defonce ^:private combat-hud* (atom nil))
 (defonce ^:private terminal* (atom nil))
+(defonce ^:private effects-tick-installed* (atom false))
 
 (def ^:private template-files
   {"academy:combat_hud" "combat_hud.ui.edn"
@@ -121,7 +123,7 @@
     (doseq [[effect-id file] effect-template-files]
       (when-let [resource (io/resource (str "assets/academy/presentation/" file))]
         (let [compiled (presentation-fx/compile-edn (slurp resource))]
-          (presentation-effects/register-template!
+          (effects-runtime/register-template!
             (presentation-host/effect-runtime runtime)
             (assoc compiled :id (keyword (last (string/split effect-id #":"))))))))
     runtime))
@@ -215,7 +217,16 @@
 (defn install-bridge!
   "Install the Presentation Runtime bridge into the neutral client boundary."
   []
-  (bridge/merge-client-bridge!
-    {:presentation-runtime presentation-runtime
-     :presentation-host-api presentation-host-api})
+  (let [api (presentation-host-api)]
+    (bridge/merge-client-bridge!
+      {:presentation-runtime presentation-runtime
+       :presentation-host-api presentation-host-api
+       :presentation-spawn-effect! (:presentation-spawn-effect! api)
+       :presentation-destroy-effect! (:presentation-destroy-effect! api)
+       :presentation-clear-effect-owner! (:presentation-clear-effect-owner! api)
+       :presentation-tick-effects! (:presentation-tick-effects! api)}))
+  (when (compare-and-set! effects-tick-installed* false true)
+    (content-actions/register-client-tick-hook!
+      #(when-let [runtime @presentation-runtime*]
+         (presentation-host/tick-effects! runtime 50))))
   (log/info "Presentation Runtime bridge installed"))
