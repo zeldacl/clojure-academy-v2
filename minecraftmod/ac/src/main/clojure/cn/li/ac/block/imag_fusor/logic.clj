@@ -18,6 +18,7 @@
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.item :as pitem]
+            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
