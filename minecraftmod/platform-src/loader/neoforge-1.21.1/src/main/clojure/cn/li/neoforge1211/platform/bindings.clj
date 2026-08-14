@@ -33,7 +33,15 @@
 
 (defn world-remove-block
 	[^Level level pos]
-	(.destroyBlock level pos false))
+	(let [^net.minecraft.world.level.block.state.BlockState bs (.getBlockState level pos)]
+		;; destroyBlock returns false for fluid blocks (matter-unit collection);
+		;; remove fluids by setting air directly.
+		(if (.isEmpty (.getFluidState bs))
+			(.destroyBlock level pos false)
+			(.setBlock level pos
+				(.defaultBlockState ^net.minecraft.world.level.block.Block
+					net.minecraft.world.level.block.Blocks/AIR)
+				3))))
 
 (defn world-break-block
 	[^Level level pos drop?]

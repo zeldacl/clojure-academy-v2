@@ -113,11 +113,13 @@
           (cond
             (and (= kind :none) (= block-id imag-phase-block-id))
             (do
-              (let [bs-at (try (world/get-block-state level hit-block-pos) (catch Exception _ nil))
-                    removed? (world/remove-block! level hit-block-pos)]
+              ;; Remove the fluid by placing air: Level.destroyBlock returns
+              ;; false for fluid blocks (and Level.setBlock's own boolean is
+              ;; unreliable here); place-block-by-id! always reports success
+              ;; once the block resolves, and minecraft:air always resolves.
+              (let [removed? (world/place-block-by-id! level "minecraft:air" hit-block-pos 3)]
                 (log/info "[matter-unit] collect removed=" removed?
                           "hit-pos=" [(:x hit-pos) (:y hit-pos) (:z hit-pos)]
-                          "block-at=" (some-> bs-at str)
                           "kind-after=" (get-matter-kind item-stack)
                           "damage=" (try (pitem/damage item-stack) (catch Exception _ -1))
                           "count=" (try (pitem/stack-count item-stack) (catch Exception _ -1)))
