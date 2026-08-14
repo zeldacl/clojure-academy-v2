@@ -9,7 +9,7 @@
             [cn.li.platform.neutral.ui :as node]
             [cn.li.platform.neutral.ui :as ui-layout]
             [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log])
   (:import [cn.li.mc1201.client GuiGraphicsHelper]
            [cn.li.mcmod.ui.node INode]
            [cn.li.mcmod.uipojo.runtime UiRt]
@@ -505,16 +505,11 @@
                    (int (+ (double b0) (* (- (double b) (double b0)) f)))]))
               (recur (inc i)))))))))
 
-(def ^:private ^:const progress-diag-interval 60)
-(def ^:private progress-diag-tick (atom 0))
-(def ^:private progress-draw-tick (atom 0))
+
 (defn render-progress! [^GuiGraphics gg ^INode node]
   (let [x        (node-abs-x node)   y        (node-abs-y node)
         w        (scaled-w node)     h        (scaled-h node)
         percent  (double (.getDSlot node SLOT-PROG-PROGRESS))
-        _        (when (zero? (mod (swap! progress-diag-tick inc) progress-diag-interval))
-                   (log/info "[progress-render] percent=" percent
-                             "x=" x "y=" y "w=" w "h=" h))
         diag-tan (double (.getDSlot node 1))            ;; :corner dslot (0=rect, 0.695=44deg)
         scroll   (.getDSlot node 3)                      ;; :scroll-offset
         raw-alpha (.getDSlot node 4)                     ;; :alpha (0.0 = unset → default 1.0)
@@ -557,10 +552,6 @@
         (fn draw-trap! ([seg-start seg-end]
                          (draw-trap! seg-start seg-end 255 255 255 1.0))
                         ([seg-start seg-end r g b a]
-          (when (zero? (mod (swap! progress-draw-tick inc) 60))
-            (log/info "[progress-draw] seg=" [(int seg-start) (int seg-end)]
-                      "filled-w=" filled-w "fg-rl=" (some-> fg-rl str)
-                      "diag-tan=" diag-tan "uv-region=" (boolean uv-region)))
           (when (< seg-start seg-end)
             (let [apply-color! #(RenderSystem/setShaderColor
                                    (float (/ (double r) 255.0))

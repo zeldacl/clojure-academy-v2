@@ -46,32 +46,15 @@
   ;; Upstream GuiImagFusor drives the XML progress bar each frame from
   ;; tile.getWorkProgress and the requirement text from getCurrentRecipe
   ;; (IDLE when no recipe). Bind both instead of leaving static text.
-  (log/info "[fusor-gui] attach-binds entered")
   (let [clock (rt/clock-ms-sig r)
-        pn (rt/node-by-id r :progress)
-        diag-tick (atom 0)
         progress-sig (sig/computed-d [clock]
-                       (fn [_]
-                         (let [v (double (or @(:work-progress container) 0.0))]
-                           (when (zero? (mod (swap! diag-tick inc) 20))
-                             (log/info "[fusor-gui] progress atom=" v
-                                       "dslot0=" (.getDSlot ^cn.li.mcmod.ui.node.INode pn 0)
-                                       "oslot9=" (some-> pn (.getOSlot 9) str)
-                                       "recipe-liquid=" (int (or @(:current-recipe-liquid container) 0))))
-                           v)))
+                       (fn [_] (double (or @(:work-progress container) 0.0))))
         liquid-sig (sig/computed-o [clock]
                      (fn [_]
                        (let [need (int (or @(:current-recipe-liquid container) 0))]
                          (if (pos? need) (str need) "IDLE"))))]
     (ui/bind! r :progress :progress progress-sig)
-    (ui/bind! r :text_imagneeded :text liquid-sig)
-    (when-let [^cn.li.mcmod.ui.node.INode pn (rt/node-by-id r :progress)]
-      (log/info "[fusor-gui] progress node kind=" (.getKind pn)
-                "visible=" (.isVisible pn)
-                "x=" (.getX pn) "y=" (.getY pn)
-                "w=" (.getW pn) "h=" (.getH pn)
-                "dslot0=" (.getDSlot pn 0)
-                "oslot2=" (some-> (.getOSlot pn 2) str)))))
+    (ui/bind! r :text_imagneeded :text liquid-sig)))
 
 (defn create-screen [container menu player]
   (let [safe-val #(some-> % deref)]

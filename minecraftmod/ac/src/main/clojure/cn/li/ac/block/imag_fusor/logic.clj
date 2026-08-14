@@ -18,7 +18,6 @@
             [cn.li.ac.block.machine.runtime :as machine-runtime]
             [cn.li.ac.energy.operations :as energy]
             [cn.li.mcmod.platform.item :as pitem]
-            [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.platform.position :as pos]
             [cn.li.mcmod.platform.world :as world]
             [cn.li.mcmod.platform.world-effects :as world-effects]))
@@ -136,10 +135,6 @@
           energy (double (:energy state 0.0))
           liquid-amount (int (:liquid-amount state 0))
           max-progress (max 1 (int (:max-progress state fusor-config/craft-time-ticks)))]
-      (log/info "[fusor] tick working recipe=" (some-> recipe :id)
-                "input=" (some-> input-item str) "output=" (some-> output-item str)
-                "energy=" energy "liquid=" liquid-amount
-                "progress=" (double (:work-progress state 0.0)))
       (if (recipes/can-continue-crafting? recipe input-item output-item energy liquid-amount)
         ;; Energy is deducted every tick while working, even when action-blocked.
         ;; Matches original pullEnergy() in updateWork() guard clause.
