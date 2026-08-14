@@ -556,6 +556,10 @@
         (fn draw-trap! ([seg-start seg-end]
                          (draw-trap! seg-start seg-end 255 255 255 1.0))
                         ([seg-start seg-end r g b a]
+          (when (zero? (mod (swap! progress-diag-tick inc) 60))
+            (log/info "[progress-draw] seg=" [(int seg-start) (int seg-end)]
+                      "filled-w=" filled-w "fg-rl=" (some-> fg-rl str)
+                      "diag-tan=" diag-tan "uv-region=" (boolean uv-region)))
           (when (< seg-start seg-end)
             (let [apply-color! #(RenderSystem/setShaderColor
                                    (float (/ (double r) 255.0))
