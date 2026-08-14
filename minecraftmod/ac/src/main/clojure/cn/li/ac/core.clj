@@ -59,9 +59,8 @@
   ;; Resolve lazily so the client-only FX graph is never loaded while the
   ;; dedicated server requires this shared lifecycle namespace.
   ((requiring-resolve 'cn.li.ac.content.ability-client/init-client-fx!))
-  ;; VFX is installed only from the client bootstrap. Platform code receives
-  ;; the opaque function table through mcmod and never requires this namespace.
-  ((requiring-resolve 'cn.li.ac.client.vfx-host/install!))
+  ;; Presentation Runtime is installed by content-loader after all AC client
+  ;; descriptors are loaded. Platform code only sees its opaque mcmod bridge.
   ;; Register entity render namespaces into the neutral mcmod registry
   ;; so that Minecraft-version Java renderer classes can resolve them without
   ;; hardcoding AC namespace strings.

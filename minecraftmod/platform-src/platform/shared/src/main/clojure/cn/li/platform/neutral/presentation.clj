@@ -69,16 +69,23 @@
                                             (ensure-registered!) host-id))]
     (dispatch! mount event)))
 
+(defn dispatch-stage-with-context!
+  [stage frame-id delta-seconds width height context]
+  (let [registry (ensure-registered!)
+        api (lifecycle/host-api registry host-id)]
+    (if-let [frame-with-context! (:frame-with-context! api)]
+      (frame-with-context! frame-id delta-seconds width height context)
+      (lifecycle/dispatch-runtime-stage!
+        registry host-id stage frame-id delta-seconds width height))))
+
 (defn dispatch-stage!
   [stage frame-id delta-seconds width height]
-  (let [registry (ensure-registered!)]
-    (lifecycle/dispatch-runtime-stage!
-      registry host-id stage frame-id delta-seconds width height)))
+  (dispatch-stage-with-context! stage frame-id delta-seconds width height nil))
 
 (defn dispatch-current-frame!
   [stage delta-seconds width height]
-  (let [result (dispatch-stage! stage (swap! frame-sequence* inc)
-                                delta-seconds width height)]
+  (let [result (dispatch-stage-with-context! stage (swap! frame-sequence* inc)
+                                             delta-seconds width height nil)]
     ;; Backend submission is intentionally an opaque callback.  The neutral
     ;; seam never inspects FramePacket or imports presentation-core; a mapped
     ;; mc-* backend decides how to consume the packet for its Minecraft API.
@@ -93,12 +100,42 @@
    The context is normally GuiGraphics/GuiGraphicsExtractor. It never enters
    mcbase or the Runtime API and is consumed only by the matching mc-* backend."
   [stage delta-seconds width height render-context]
-  (let [result (dispatch-stage! stage (swap! frame-sequence* inc)
-                                delta-seconds width height)]
+  (let [frame-context (when (map? render-context)
+                        (:presentation-context render-context))
+        backend-context (if (and (map? render-context)
+                                 (contains? render-context :backend-context))
+                          (:backend-context render-context)
+                          render-context)
+        result (dispatch-stage-with-context! stage (swap! frame-sequence* inc)
+                                              delta-seconds width height frame-context)]
     (when-let [submit! (:submit! @backend*)]
       (when result
-        (submit! (:stage result) (:frame result) render-context)))
+        (submit! (:stage result) (:frame result) backend-context)))
     result))
+
+(defn fov-offset
+  [player-uuid]
+  (when-let [f (:presentation-fov-offset
+                (lifecycle/host-api (ensure-registered!) host-id))]
+    (f player-uuid)))
+
+(defn tick-effects!
+  [delta-ms]
+  (when-let [f (:presentation-tick-effects!
+                (lifecycle/host-api (ensure-registered!) host-id))]
+    (f delta-ms)))
+
+(defn hand-transform
+  []
+  (when-let [f (:presentation-hand-transform
+                (lifecycle/host-api (ensure-registered!) host-id))]
+    (f)))
+
+(defn drain-camera-pitch-deltas!
+  [owner]
+  (when-let [f (:presentation-drain-camera-pitch-deltas!
+                (lifecycle/host-api (ensure-registered!) host-id))]
+    (f owner)))
 
 (defn register-backend!
   "Install the version-owned backend callback for this client target.

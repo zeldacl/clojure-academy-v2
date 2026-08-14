@@ -1,7 +1,7 @@
 (ns cn.li.mcbase.client.effects.hand
   "Shared client hand-effect helpers for Minecraft 1.20.1."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.platform.neutral.vfx :as neutral-vfx])
+            [cn.li.platform.neutral.presentation :as presentation])
   (:import [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]))
 
@@ -10,12 +10,12 @@
   (let [mc (Minecraft/getInstance)
         level (when mc (.level mc))
         tick-id (if level (.getGameTime level) (quot (System/currentTimeMillis) 50))]
-    (neutral-vfx/tick! {:tick-id tick-id :delta-seconds 0.05})))
+    (presentation/tick-effects! 50)))
 
 (defn apply-camera-pitch-deltas!
   [^LocalPlayer player]
   (when (and player (client-session/current-local-player-owner))
-    (doseq [delta (neutral-vfx/drain-camera-pitch-deltas!
+      (doseq [delta (presentation/drain-camera-pitch-deltas!
                     (client-session/current-local-player-owner))]
       (.setXRot player (+ (.getXRot player) (float delta))))))
 
@@ -26,4 +26,4 @@
 
 (defn current-hand-transform
   []
-  (neutral-vfx/hand-transform))
+  (presentation/hand-transform))

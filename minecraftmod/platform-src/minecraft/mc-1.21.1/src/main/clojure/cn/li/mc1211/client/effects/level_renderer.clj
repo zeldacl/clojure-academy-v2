@@ -220,6 +220,18 @@
      :y (+ base-y -0.22 (* (.-y look) 0.06))
      :z (+ base-z (* (.-z look) 0.35) (* right-z 0.22))}))
 
+(declare make-nearby-block-query-fn)
+
+(defn presentation-frame-context
+  "Build the immutable anchor/query context consumed by AC's Presentation
+   frame extractor. Minecraft objects stay on the version callback side; only
+   maps and query functions cross the neutral host boundary."
+  [^LocalPlayer player camera-pos tick]
+  {:camera-pos camera-pos
+   :tick tick
+   :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
+   :query-nearby-blocks-fn (make-nearby-block-query-fn player)})
+
 (defn- block-id-for-state
   [^BlockState block-state]
   (let [^Block block (.getBlock block-state)
@@ -545,23 +557,25 @@
     (emit-plasma-quad! plasma-vc mat camera-pos op)
     (.endBatch buffer-source rtype)))
 
-(defn render-level-plan!
+(defn render-presentation-geometry!
   [{:keys [^LocalPlayer player
            ^PoseStack pose-stack
            ^MultiBufferSource$BufferSource buffer-source
            camera-pos
-           tick]}]
+           tick
+           plan]}]
   (let [owner (client-session/current-local-player-owner)
         ;; Skip hand-center-pos/query-fn allocation and the plan build itself
         ;; when no level effect is active (idle skill) — checked first so the
         ;; common (idle) frame does none of the below.
-        plan (when (neutral-vfx/active?)
-               (neutral-vfx/level-plan!
-                {:frame-id (neutral-vfx/next-frame-id!)
-                 :tick tick
-                 :camera-pos camera-pos
-                 :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
-                 :query-nearby-blocks-fn (make-nearby-block-query-fn player)}))]
+        plan (or plan
+                 (when (neutral-vfx/active?)
+                   (neutral-vfx/level-plan!
+                    {:frame-id (neutral-vfx/next-frame-id!)
+                     :tick tick
+                     :camera-pos camera-pos
+                     :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
+                     :query-nearby-blocks-fn (make-nearby-block-query-fn player)})))]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))

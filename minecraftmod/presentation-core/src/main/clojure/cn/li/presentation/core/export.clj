@@ -35,7 +35,7 @@
      (double (.width ^RenderCommand$PushClip command)) (double (.height ^RenderCommand$PushClip command))]
     (instance? RenderCommand$PopClip command) []
     (instance? RenderCommand$Layer command) [(int (.id ^RenderCommand$Layer command))]
-    (instance? RenderCommand$Mesh command) [(int (.meshId ^RenderCommand$Mesh command)) (int (.materialId ^RenderCommand$Mesh command)) (int (.instanceCount ^RenderCommand$Mesh command))]
+    (instance? RenderCommand$Mesh command) [(int (.meshId ^RenderCommand$Mesh command)) (int (.materialId ^RenderCommand$Mesh command)) (int (.instanceCount ^RenderCommand$Mesh command)) (.payload ^RenderCommand$Mesh command)]
     (instance? RenderCommand$Billboard command) [(int (.textureId ^RenderCommand$Billboard command)) (int (.materialId ^RenderCommand$Billboard command)) (int (.instanceCount ^RenderCommand$Billboard command))
                                                  (double (.originX ^RenderCommand$Billboard command)) (double (.originY ^RenderCommand$Billboard command)) (double (.originZ ^RenderCommand$Billboard command))]
     (instance? RenderCommand$ParticleBatch command) [(int (.materialId ^RenderCommand$ParticleBatch command)) (int (.count ^RenderCommand$ParticleBatch command))

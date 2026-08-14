@@ -1,17 +1,14 @@
 (ns cn.li.fabric1201.client.level-effect-renderer
-  "CLIENT-ONLY Fabric level effect renderer adapter."
-  (:require [cn.li.mc1201.client.effects.level-renderer :as shared-level]
+  "CLIENT-ONLY world Presentation Runtime submission adapter."
+  (:require [cn.li.mc1201.client.effects.level-renderer :as geometry]
+            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
-           [net.fabricmc.fabric.api.client.event.lifecycle.v1 ClientTickEvents ClientTickEvents$EndTick]
            [net.fabricmc.fabric.api.client.rendering.v1 WorldRenderContext WorldRenderEvents WorldRenderEvents$AfterTranslucent]
            [net.minecraft.client Minecraft]
            [net.minecraft.client.player LocalPlayer]
            [net.minecraft.client.renderer MultiBufferSource$BufferSource]))
-
-(defn- on-client-tick []
-  (shared-level/tick-level-effects!))
 
 (defn- on-after-translucent-render [^WorldRenderContext ctx]
   (try
@@ -25,22 +22,26 @@
               ^MultiBufferSource$BufferSource buffer-source (or (.consumers ctx)
                                                                  (.bufferSource (.renderBuffers mc)))]
           (when (and pose-stack buffer-source)
-            (shared-level/render-level-plan!
-             {:player player
-              :pose-stack pose-stack
-              :buffer-source buffer-source
-              :camera-pos cam-pos
-              :tick tick})))))
+            (let [backend-context
+                  {:draw-mesh!
+                   (fn [_ _ _ _ _ payload]
+                     (geometry/render-presentation-geometry!
+                       {:player player
+                        :pose-stack pose-stack
+                        :buffer-source buffer-source
+                        :camera-pos cam-pos
+                        :tick tick
+                        :plan payload}))}
+                  frame-context (geometry/presentation-frame-context player cam-pos tick)]
+              (presentation/submit-current-frame!
+                :world-after-translucent 0.0 0 0
+                {:presentation-context frame-context
+                 :backend-context backend-context}))))))
     (catch Exception e
       (log/error "Fabric level effect render failed" e))))
 
 (defn init!
   []
-  (install/process-once! ::tick-listener-registered
-    #(.register ClientTickEvents/END_CLIENT_TICK
-                (reify ClientTickEvents$EndTick
-                  (onEndTick [_ _client]
-                    (on-client-tick)))))
   (install/process-once! ::render-listener-registered
     #(.register WorldRenderEvents/AFTER_TRANSLUCENT
                 (reify WorldRenderEvents$AfterTranslucent

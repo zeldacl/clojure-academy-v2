@@ -568,29 +568,24 @@
       (render [_ pose consumer]
         (render-fn pose consumer)))))
 
-(defn extract-level-plan!
-  "Build the immutable render plan during ExtractLevelRenderStateEvent.
-   World queries and player-speed synchronization happen only in extraction."
-  [{:keys [^LocalPlayer player camera-pos tick]}]
-  (let [owner (client-session/current-local-player-owner)
-        plan (when (neutral-vfx/active?)
-               (neutral-vfx/level-plan!
-                {:frame-id (neutral-vfx/next-frame-id!)
-                 :tick tick
-                 :camera-pos camera-pos
-                 :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
-                 :query-nearby-blocks-fn (make-nearby-block-query-fn player)}))]
-    (when owner
-      (apply-local-walk-speed-from-plan! owner player plan))
-    {:plan plan
-     :camera-pos camera-pos}))
+(defn presentation-frame-context
+  "Build the Minecraft-owned context consumed by the neutral presentation frame.
+   Effect sampling itself stays in AC's Clojure controller."
+  [^LocalPlayer player camera-pos tick]
+  {:camera-pos camera-pos
+   :tick tick
+   :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
+   :query-nearby-blocks-fn (make-nearby-block-query-fn player)})
 
-(defn render-level-plan!
+(defn render-presentation-geometry!
   "Submit an extracted level-effect plan to 26.2's collector.
    RenderType owns blend/depth/texture/pipeline state for every callback."
-  [{:keys [plan camera-pos
+  [{:keys [plan camera-pos ^LocalPlayer player
            ^PoseStack pose-stack
            ^SubmitNodeCollector submit-node-collector]}]
+  (when (and player (number? (:local-walk-speed plan)))
+    (when-let [owner (client-session/current-local-player-owner)]
+      (apply-local-walk-speed-from-plan! owner player plan)))
   (when (seq (:ops plan))
     (let [{:keys [lines quads plasma]} (sort-ops (:ops plan))]
       (.pushPose pose-stack)
@@ -669,6 +664,4 @@
                 (emit-plasma-op! consumer pose camera-pos op)))))
         (finally
           (.popPose pose-stack)))))
-  (when-let [frame-id (:frame-id plan)]
-    (neutral-vfx/release-frame! frame-id))
   plan)

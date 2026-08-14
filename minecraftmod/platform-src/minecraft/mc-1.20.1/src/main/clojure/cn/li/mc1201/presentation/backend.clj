@@ -48,7 +48,7 @@
                                      (int (+ (double a) (double c)))
                                      (int (+ (double b) (double d))))
       "pop-clip" (.disableScissor graphics)
-      "mesh" (callback! context :draw-mesh! [graphics stage a b c])
+      "mesh" (callback! context :draw-mesh! [graphics stage a b c d])
       "billboard" (callback! context :draw-billboard! [graphics stage a b c d e f])
       "particle-batch" (callback! context :draw-particle-batch! [graphics stage a b c d e])
       "ribbon" (callback! context :draw-ribbon! [graphics stage a b])
@@ -63,12 +63,13 @@
 (defn render! [graphics stage ^PresentationFrame frame]
   (let [context (if (map? graphics) graphics {})
         graphics (if (map? graphics) (:graphics graphics) graphics)]
-    (when (instance? GuiGraphics graphics)
-      (let [wanted (stage-name stage)]
+    (let [wanted (stage-name stage)]
       (doseq [^PresentationPass pass (.passes frame)
               :when (= wanted (.stage pass))
               ^PresentationCommand command (.commands pass)]
-        (draw-command! graphics stage context command)))))
+        (when (or (instance? GuiGraphics graphics)
+                  (and (map? context) (fn? (:draw-mesh! context))))
+          (draw-command! graphics stage context command)))))
   frame)
 
 (defn create []

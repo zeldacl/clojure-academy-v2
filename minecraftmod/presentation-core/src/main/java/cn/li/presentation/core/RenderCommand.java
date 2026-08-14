@@ -15,7 +15,17 @@ public sealed interface RenderCommand
     record PushClip(float x, float y, float width, float height) implements RenderCommand {}
     record PopClip() implements RenderCommand {}
     record Layer(int id) implements RenderCommand {}
-    record Mesh(int meshId, int materialId, int instanceCount) implements RenderCommand {}
+    /**
+     * Version-neutral mesh submission.  The optional payload is immutable
+     * presentation data (for example a geometry batch extracted by the
+     * Clojure effect controller); it is never a backend draw-plan or a
+     * Minecraft object.
+     */
+    record Mesh(int meshId, int materialId, int instanceCount, Object payload) implements RenderCommand {
+        public Mesh(int meshId, int materialId, int instanceCount) {
+            this(meshId, materialId, instanceCount, null);
+        }
+    }
     record Billboard(int textureId, int materialId, int instanceCount,
                      float originX, float originY, float originZ) implements RenderCommand {
         public Billboard(int textureId, int materialId, int instanceCount) {
