@@ -23,7 +23,9 @@
       (let [item-cur (double (energy/get-item-energy stack))
             item-max (double (energy/get-item-max-energy stack))
             need (max 0.0 (- item-max item-cur))
-            amount (min cur need)
+            ;; TileGeneratorBase.tryChargeStack caps per-tick charging at the
+            ;; generator's bandwidth (LATENCY_MK1 = 50 IF/tick).
+            amount (min cur need (double phase-config/default-bandwidth))
             leftover (double (energy/charge-energy-to-item stack amount false))
             accepted (max 0.0 (- amount leftover))]
         (if (pos? accepted)
