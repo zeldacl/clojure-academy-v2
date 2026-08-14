@@ -12,7 +12,7 @@
                            :sd-set-boolean! :sd-get-boolean :sd-set-double! :sd-get-double
                            :sd-set-entry! :sd-get-entry :sd-get-structured :sd-get-list
                            :sd-has-key? :sd-set-float! :sd-get-float
-                           :sd-set-long! :sd-get-long})
+                           :sd-set-long! :sd-get-long :sd-remove-entry!})
 (def structured-list-keys #{:sd-append! :sd-list-size :sd-list-get :sd-list-get-structured})
 (def structured-factory-keys #{:create-structured :create-list})
 
@@ -58,6 +58,7 @@
 (defn set-double!   [c k v]     (call :sd-set-double! c k v))
 (defn get-double    [c k]       (call :sd-get-double c k))
 (defn set-entry!    [c k entry] (call :sd-set-entry! c k entry))
+(defn remove-entry! [c k]       (call :sd-remove-entry! c k))
 (defn get-entry     [c k]       (call :sd-get-entry c k))
 (defn get-structured [c k]      (call :sd-get-structured c k))
 (defn get-list      [c k]       (call :sd-get-list c k))

@@ -74,10 +74,22 @@
           1 :phase-liquid
           :none))))
 
+(def ^:private matter-kind->nbt
+  "Material kind -> matterKind NBT value. Empty units deliberately have NO
+   matterKind NBT (damage 0 means empty, like upstream's MAT_NONE): a "none"
+   tag would make some empty stacks NBT-tagged and some not, so
+   ItemStack.isSameItemSameTags refused to merge two empty stacks (they
+   swapped on drag instead of stacking). nil = remove the tag."
+  {:phase-liquid "phase-liquid"
+   :none nil})
+
 (defn- set-matter-kind!
   [item-stack kind]
-  (let [tag (pitem/ensure-custom-data item-stack)]
-    (sd/set-string! tag "matterKind" (if (= kind :phase-liquid) "phase-liquid" "none"))
+  (let [tag (pitem/ensure-custom-data item-stack)
+        nbt-value (get matter-kind->nbt kind)]
+    (if nbt-value
+      (sd/set-string! tag "matterKind" nbt-value)
+      (sd/remove-entry! tag "matterKind"))
     (pitem/set-damage! item-stack (if (= kind :phase-liquid) 1 0))
     ;; Upstream getTranslationKey() appends the material name (Empty Unit /
     ;; Imag Phase Liquid Unit). Use the same lang keys the creative-tab

@@ -131,6 +131,7 @@
          :sd-set-double!   (fn [^CompoundTag this key value] (.putDouble this (str key) (double value)) this)
          :sd-get-double    (fn [^CompoundTag this key] (NbtAccess/getDouble this (str key)))
          :sd-set-entry!    (fn [^CompoundTag this key entry] (.put this (str key) entry) this)
+         :sd-remove-entry! (fn [^CompoundTag this key] (.remove this (str key)))
          :sd-get-entry     (fn [^CompoundTag this key] (.get this (str key)))
          :sd-get-structured (fn [^CompoundTag this key] (NbtAccess/getCompound this (str key)))
          :sd-get-list      (fn [^CompoundTag this key] (NbtAccess/getList this (str key)))
