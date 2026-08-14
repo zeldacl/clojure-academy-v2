@@ -125,26 +125,28 @@
                 [{:label (or (:label h) "Value")
                   :color (or (:color h) 0xFF25C4FF)
                   :value-fn (:value-fn h)
-                  :max ((:max-fn h))
+                  ;; :max-fn not :max — evaluated per frame like :value-fn, so
+                  ;; a max that syncs in late (DataSlot) still scales the bar
+                  ;; correctly instead of freezing the ratio at attach time.
+                  :max-fn (:max-fn h)
                   :desc-fn (or (:desc-fn h) default-desc)}]))
-    :energy (let [value-fn (fn [] (double (or @(:energy container) 0.0)))
-                  max-energy (max 1.0 (double (or @(:max-energy container) 1.0)))]
+    :energy (let [value-fn (fn [] (double (or @(:energy container) 0.0)))]
               (info-area/add-histogram!
                 ctx
                 [{:label "Energy"
                   :color 0xFF25C4FF
                   :value-fn value-fn
-                  :max max-energy
+                  :max-fn (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
                   :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}]))
     :capacity (let [load-fn (fn [] (double (or @(:load container) 0.0)))
-                    max-capacity (max 1.0 (double (or @(:max-capacity container) 1.0)))]
+                    max-fn (fn [] (max 1.0 (double (or @(:max-capacity container) 1.0))))]
                 (info-area/add-histogram!
                   ctx
                   [{:label "Load"
                     :color 0xFFFF6C00
                     :value-fn load-fn
-                    :max max-capacity
-                    :desc-fn (fn [] (str (long (load-fn)) "/" (long max-capacity)))}]))
+                    :max-fn max-fn
+                    :desc-fn (fn [] (str (long (load-fn)) "/" (long (max-fn))))}]))
     nil))
 
 (defn- attach-histograms-and-properties!

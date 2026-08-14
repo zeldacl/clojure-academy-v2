@@ -77,11 +77,15 @@
       (info-area/add-histogram! ctx
         [{:label "Energy" :color 0xFF25C4FF
           :value-fn (fn [] (double (or @(:energy container) 0.0)))
-          :max (max 1.0 (double (or @(:max-energy container) 1.0)))
+          :max-fn (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
           :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))}
          {:label "Load" :color 0xFFFF6C00
           :value-fn (fn [] (double (or @(:capacity container) 0.0)))
-          :max (max 1.0 (double (or @(:max-capacity container) 1.0)))
+          ;; :max-fn not :max — :max-capacity arrives via DataSlot sync after
+          ;; the info-area is built (gui-init default 0); a captured static max
+          ;; of 1.0 drew the bar at 100% while the text row showed the synced
+          ;; "2/8".
+          :max-fn (fn [] (max 1.0 (double (or @(:max-capacity container) 1.0))))
           :desc-fn (fn [] (str (long (or @(:capacity container) 0))
                                "/" (long (max 1.0 (double (or @(:max-capacity container) 1.0))))))}])
       (info-area/add-sepline! ctx "Info")

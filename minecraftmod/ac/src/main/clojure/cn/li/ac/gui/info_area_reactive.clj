@@ -206,11 +206,20 @@
     (doseq [[idx elem] (map-indexed vector elems)]
       (when-let [^INode bar (rt/node-by-id rt (fill-id idx))]
         (let [vf (:value-fn elem)
-              cap (max 1.0 (double (:max elem)))
+              mf (:max-fn elem)
+              ;; The bar ratio divides by a max. A static :max is captured once
+              ;; here; a :max-fn is evaluated every frame like :value-fn. Live
+              ;; max matters when the real maximum arrives asynchronously (e.g.
+              ;; the node's :max-capacity DataSlot syncs after the info-area is
+              ;; built) — a stale cap of 1.0 renders the bar at 100% while the
+              ;; text row already shows the correct "2/8".
+              static-cap (when-not mf (max 1.0 (double (:max elem))))
               pct-sig (sig/computed-d [(rt/clock-ms-sig rt)]
-                        (fn [_] (max 0.03 (min 1.0 (/ (double (vf)) cap)))))
-              b (sig/bind! pct-sig bar (partial write-box-height! bar-h) (rt/get-dirty-bindings-q rt))]
-          (rt/register-binding! rt (.getIdx bar) b))))
+                        (fn [_]
+                          (let [cap (or static-cap (max 1.0 (double (mf))))
+                                pct (/ (double (vf)) cap)]
+                            (max 0.03 (min 1.0 pct)))))]
+          (rt/register-binding! rt (.getIdx bar) (sig/bind! pct-sig bar (partial write-box-height! bar-h) (rt/get-dirty-bindings-q rt))))))
     (advance! ctx (+ 4.0 (* 210.0 scale)))
     ;; per-elem property row: label + colored icon + live value text (histProperty)
     (doseq [elem elems]

@@ -8,10 +8,13 @@
     :section :network
     :path "network.update-interval-ticks"
     :type :int
-    :default 40
+    :default 1
     :min 1
     :max 1200
-    :comment "Ticks between wireless network energy balance passes."}
+    :comment "Ticks between wireless network energy balance passes. Upstream
+      WirelessNet.tick() balances every server tick (WirelessSystem.onServerTick
+      -> WiWorldData.tick -> net.tick); 40 made node-to-node transfer ~0.75 IF/t
+      instead of upstream's ~30 IF/t — effectively invisible."}
    {:key :network-buffer-max
     :section :network
     :path "network.buffer-max"
