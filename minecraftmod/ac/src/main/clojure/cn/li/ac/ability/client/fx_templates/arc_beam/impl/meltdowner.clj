@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.effects.rv3 :as vec3])

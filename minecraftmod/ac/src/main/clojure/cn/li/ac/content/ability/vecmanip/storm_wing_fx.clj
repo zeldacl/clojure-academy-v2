@@ -11,7 +11,7 @@
             [cn.li.ac.ability.client.effects.tornado :as tornado]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private storm-wing-effect-id :storm-wing)

@@ -4,7 +4,6 @@
    Effect plans are extracted before level submission and emitted through
    SubmitNodeCollector, with all GPU state owned by RenderType."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.platform.neutral.vfx :as neutral-vfx]
             [cn.li.mcbase.runtime.raycast-normalize :as rn]
             [cn.li.mc262.runtime.registry :as registry])
   (:import [com.mojang.blaze3d.vertex PoseStack PoseStack$Pose VertexConsumer]
@@ -80,17 +79,6 @@
   ([snapshot]
    (reset! (last-applied-walk-speed-atom) (or snapshot {}))
    nil))
-
-(defn tick-level-effects!
-  []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [^LocalPlayer player (.player mc)]
-      (neutral-vfx/tick! {:tick-id (.getGameTime (.level player))
-                         :delta-seconds 0.05}))))
-
-(defn current-fov-offset
-  [player-uuid]
-  (neutral-vfx/fov-offset player-uuid))
 
 (defn set-local-walk-speed!
   [^LocalPlayer player speed]
@@ -578,7 +566,7 @@
    :query-nearby-blocks-fn (make-nearby-block-query-fn player)})
 
 (defn render-presentation-geometry!
-  "Submit an extracted level-effect plan to 26.2's collector.
+  "Submit a Presentation Runtime mesh payload to 26.2's collector.
    RenderType owns blend/depth/texture/pipeline state for every callback."
   [{:keys [plan camera-pos ^LocalPlayer player
            ^PoseStack pose-stack

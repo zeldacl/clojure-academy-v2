@@ -1,7 +1,6 @@
 (ns cn.li.mc1201.client.effects.level-renderer
   "Shared client level-effect rendering core (Minecraft 1.20.1)."
   (:require [cn.li.mcbase.client.session :as client-session]
-            [cn.li.platform.neutral.vfx :as neutral-vfx]
             [cn.li.mcbase.runtime.raycast-normalize :as rn])
   (:import [com.mojang.blaze3d.vertex PoseStack VertexConsumer]
            [cn.li.mc1201.client.render ModRenderTypes]
@@ -86,20 +85,6 @@
   (reset! (last-applied-walk-speed-atom) (or snapshot {}))
    nil))
 
-(defn tick-level-effects!
-  []
-  (when-let [^Minecraft mc (Minecraft/getInstance)]
-    (when-let [^LocalPlayer player (.player mc)]
-      (neutral-vfx/tick! {:tick-id (.getGameTime (.level player))
-                         :delta-seconds 0.05}))))
-
-(defn current-fov-offset
-  "Per-frame camera FOV offset (degrees) contributed by the local player's
-  active level effects (meltdowner charge zoom). Read by the loader's
-  ComputeFov handler."
-  [player-uuid]
-  (neutral-vfx/fov-offset player-uuid))
-
 (defn set-local-walk-speed!
   [^LocalPlayer player speed]
   (try
@@ -139,7 +124,7 @@
 
   This is the port of the original's ViewOptimize.isFirstPerson gameSettings
   half; effect code pairs it with an is-this-my-effect check on the uuid.
-  Both loaders' level-effect renderers call render-level-plan! below, so
+  Both loaders' world geometry callbacks call the Presentation Runtime below, so
   reading it here from Minecraft's own options is all the wiring it needs."
   []
   (if-let [^Minecraft mc (Minecraft/getInstance)]
@@ -567,14 +552,7 @@
         ;; Skip hand-center-pos/query-fn allocation and the plan build itself
         ;; when no level effect is active (idle skill) — checked first so the
         ;; common (idle) frame does none of the below.
-        plan (or plan
-                 (when (neutral-vfx/active?)
-                   (neutral-vfx/level-plan!
-                    {:frame-id (neutral-vfx/next-frame-id!)
-                     :tick tick
-                     :camera-pos camera-pos
-                     :hand-center-pos (merge (hand-center-pos player) (client-world-fns player))
-                     :query-nearby-blocks-fn (make-nearby-block-query-fn player)})))]
+        plan plan]
     (when owner
       (apply-local-walk-speed-from-plan! owner player plan))
     (when (seq (:ops plan))
@@ -648,6 +626,4 @@
                                   :op op})))
           (.popPose pose-stack)
           (.endBatch buffer-source))))
-    (when-let [frame-id (:frame-id plan)]
-      (neutral-vfx/release-frame! frame-id))
     plan))

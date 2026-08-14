@@ -4,7 +4,7 @@
   Skills register level/hand runtimes and channel handlers through `register!`
   instead of hand-written `fx-registry` case blocks."
   (:require [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.client.vfx-runtime :as vfx]))
+            [cn.li.ac.client.effect-controller :as vfx]))
 
 (def ^:private meta-keys
   [:effect-instance-id :source-player-id :world-id])

@@ -10,7 +10,7 @@
             [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx]
+            [cn.li.ac.client.effect-controller :as vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))

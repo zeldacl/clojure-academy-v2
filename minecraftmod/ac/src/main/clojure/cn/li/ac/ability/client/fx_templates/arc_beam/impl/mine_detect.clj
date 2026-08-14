@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]

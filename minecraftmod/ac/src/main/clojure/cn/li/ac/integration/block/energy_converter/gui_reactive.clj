@@ -6,7 +6,7 @@
    The old screen showed only the wireless panel (no inventory tab, no
    histogram — the block has zero I/O slots), so this does not go through
    cn.li.ac.gui.block-gui-reactive (which always builds an inv+wireless
-   tab pair); it builds a bare page_wireless.xml runtime instead, matching
+   tab pair); it builds a bare wireless-page Presentation template instead, matching
    the old single-page layout exactly."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.gui.spec :as gui-reg]

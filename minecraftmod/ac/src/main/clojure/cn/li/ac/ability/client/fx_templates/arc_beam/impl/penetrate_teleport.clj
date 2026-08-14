@@ -17,7 +17,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
             [cn.li.ac.content.ability.teleporter.penetrate-dest :as pdest]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.config.modid :as modid]))
 
 (def ^:private eye-height

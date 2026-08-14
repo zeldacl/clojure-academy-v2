@@ -15,7 +15,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
             [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as dest]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.config.modid :as modid]))
 
 (def ^:private mark-color {:r 255 :g 255 :b 255 :a 255})

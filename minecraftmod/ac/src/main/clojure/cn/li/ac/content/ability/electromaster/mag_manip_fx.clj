@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.electromaster.mag-manip-fx
   (:require [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]))
+            [cn.li.ac.client.effect-controller :as vfx-hand]))
 
 (def ^:private mag-manip-effect-id :mag-manip)
 

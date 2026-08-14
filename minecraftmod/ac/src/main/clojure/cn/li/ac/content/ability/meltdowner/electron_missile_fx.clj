@@ -14,7 +14,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]))
+            [cn.li.ac.client.effect-controller :as vfx-level]))
 
 (def ^:private electron-missile-effect-id :electron-missile)
 

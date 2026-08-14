@@ -275,7 +275,7 @@
 ;; Preview node specs — native replacement for build-preview-widget.
 ;; All positioned to exactly fill the 134×134 "area" node (abs computed by
 ;; the caller — see tutorial_reactive.clj's showWindow layout), matching the
-;; CENTER/CENTER + scale math from the original XML/tutorial_windows.xml.
+;; CENTER/CENTER + scale math from the migrated tutorial UI template.
 ;; ============================================================================
 
 (def ^:private recipe-bg
@@ -284,7 +284,7 @@
    "Smelting" (modid/asset-path "textures/guis" "tutorial_smelting.png")})
 
 ;; [x y w h scale] within the 134×134 area, CENTER/CENTER-aligned raw texture
-;; size from tutorial_windows.xml (ImagFusor 196×128×0.6, MetalFormer
+;; size from the migrated tutorial template (ImagFusor 196×128×0.6, MetalFormer
 ;; 192×192×0.5, Smelting 192×128×0.6).
 (def ^:private recipe-geom
   {"ImagFusor" [8.2 28.6 196.0 128.0 0.6]
@@ -296,7 +296,7 @@
 
 ;; ============================================================================
 ;; Recipe slot layout — slot positions within the 134×134 preview area,
-;; hand-derived from tutorial_windows.xml slot coords × scale + recipe-geom offset.
+;; hand-derived from the template slot coordinates × scale + recipe-geom offset.
 ;; ============================================================================
 
 (def ^:private recipe-slots

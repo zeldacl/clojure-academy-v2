@@ -2,7 +2,7 @@
   (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]

@@ -9,7 +9,7 @@
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
-            [cn.li.ac.client.vfx-runtime :as effect-controller]
+            [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.presentation.core.frame :as presentation-frame]
             [cn.li.presentation.core.export :as presentation-export]

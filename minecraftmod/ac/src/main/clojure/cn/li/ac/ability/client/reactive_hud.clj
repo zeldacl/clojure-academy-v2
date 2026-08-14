@@ -5,7 +5,7 @@
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as keybinds]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]

@@ -8,8 +8,8 @@
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.client.vfx-runtime :as vfx-hand]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])

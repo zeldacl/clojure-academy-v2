@@ -3,7 +3,7 @@
             [cn.li.ac.ability.client.effects.academy-arc :as academy-arc]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]

@@ -9,7 +9,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.client.vfx-runtime :as vfx-level]
+            [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 

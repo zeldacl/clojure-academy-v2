@@ -1,10 +1,9 @@
-(ns cn.li.ac.client.vfx-runtime
-  "AC composition root for legacy skill descriptors on the neutral VFX Runtime.
+(ns cn.li.ac.client.effect-controller
+  "AC composition root for skill descriptors on the Presentation Runtime.
 
    Skill code supplies pure enqueue/tick/sample callbacks.  This namespace is
    the only AC-owned state adapter; it stores no renderer or Minecraft object."
-  (:require [cn.li.mcmod.runtime.vfx-contract :as contract]
-            [cn.li.mcmod.util.log :as log]
+  (:require [cn.li.mcmod.util.log :as log]
             [cn.li.vfx.runtime :as core])
   (:import [java.util ArrayDeque]))
 
@@ -49,9 +48,9 @@
               ops (vec (or (:ops plan) []))]
           (when (or (seq ops) (:local-walk-speed plan))
             ((:emit! sink)
-             {:stage :world-after-translucent
+            {:stage :world-after-translucent
               :primitive :mesh
-              :material :vfx-legacy-neutral
+              :material :presentation-world
               :variant :ops
               :count (long (max 1 (count ops)))
               :payload [plan]})))
@@ -66,7 +65,7 @@
           ((:emit! sink)
            {:stage :first-person
             :primitive :first-person
-            :material :vfx-hand-neutral
+            :material :presentation-first-person
             :variant :transform
             :count 1
             :payload [transform]}))
@@ -108,7 +107,7 @@
   nil)
 
 (defn warmup!
-  "Eagerly invoke the neutral runtime once while the client bootstrap is
+  "Eagerly invoke the Presentation Runtime once while the client bootstrap is
   still outside gameplay.  This loads all effect namespaces and surfaces
   malformed descriptors before the first visible frame."
   []
@@ -218,7 +217,7 @@
 (defn reload-resources! [generation]
   (core/reload-resources! (runtime) generation))
 
-(defn build-level-plan [camera-pos hand-center-pos tick query-nearby-blocks-fn]
+(defn build-world-geometry-payload [camera-pos hand-center-pos tick query-nearby-blocks-fn]
   (let [batches (get-in (sample-frame! {:frame-id tick
                                         :tick tick
                                         :camera-pos camera-pos
@@ -335,8 +334,8 @@
 (defn tick-level-effects! [] (tick!))
 (defn tick-hand-effects! [] (tick!))
 (defn any-level-effect-active? [] (active?))
-(defn build-level-effect-plan [camera-pos hand-center-pos tick query-fn]
-  (build-level-plan camera-pos hand-center-pos tick query-fn))
+(defn build-presentation-world-payload [camera-pos hand-center-pos tick query-fn]
+  (build-world-geometry-payload camera-pos hand-center-pos tick query-fn))
 (defn level-effect-registry-snapshot []
   {:registry (into {} (map (fn [[id {:keys [level]}]] [id level]) @handlers*))
    :order (vec (registered-effects)) :frozen? @frozen?*})
