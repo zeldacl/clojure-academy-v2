@@ -46,8 +46,14 @@
   ;; tile.getWorkProgress and the requirement text from getCurrentRecipe
   ;; (IDLE when no recipe). Bind both instead of leaving static text.
   (let [clock (rt/clock-ms-sig r)
+        diag-tick (atom 0)
         progress-sig (sig/computed-d [clock]
-                       (fn [_] (double (or @(:work-progress container) 0.0))))
+                       (fn [_]
+                         (let [v (double (or @(:work-progress container) 0.0))]
+                           (when (zero? (mod (swap! diag-tick inc) 20))
+                             (log/info "[fusor-gui] progress atom=" v
+                                       "recipe-liquid=" (int (or @(:current-recipe-liquid container) 0))))
+                           v)))
         liquid-sig (sig/computed-o [clock]
                      (fn [_]
                        (let [need (int (or @(:current-recipe-liquid container) 0))]
