@@ -11,7 +11,7 @@
             [cn.li.ac.ability.client.effects.tornado :as tornado]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private storm-wing-effect-id :storm-wing)
@@ -48,19 +48,19 @@
 
 (defn storm-wing-fx-snapshot
   []
-  (or (level-effects/effect-state-snapshot storm-wing-effect-id)
+  (or (vfx-level/effect-state-snapshot storm-wing-effect-id)
       (default-storm-wing-fx-runtime-state)))
 
 (defn reset-storm-wing-fx-for-test!
   []
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     storm-wing-effect-id
     (default-storm-wing-fx-runtime-state))
   nil)
 
 (defn clear-storm-wing-owner!
   [owner-key]
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     storm-wing-effect-id
     (fn [store]
       (update (or store (default-storm-wing-fx-runtime-state)) :effect-state dissoc owner-key)))
@@ -182,7 +182,7 @@
   multiplies :offset-* by :speed to get the spawn velocity)."
   [owner-key sw tick px py pz]
   (when (not= tick (:last-particle-tick sw))
-    (level-effects/update-effect-state!
+    (vfx-level/update-effect-state!
       storm-wing-effect-id
       (fn [store]
         (update-in (or store (default-storm-wing-fx-runtime-state))

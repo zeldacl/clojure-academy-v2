@@ -9,7 +9,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
@@ -131,12 +131,12 @@
 
 (defn mine-ray-fx-snapshot
   []
-  (or (level-effects/effect-state-snapshot mine-ray-effect-id)
+  (or (vfx-level/effect-state-snapshot mine-ray-effect-id)
       (default-mine-ray-fx-runtime-state)))
 
 (defn reset-mine-ray-fx-for-test!
   []
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     mine-ray-effect-id
     (default-mine-ray-fx-runtime-state))
   nil)
@@ -147,7 +147,7 @@
   ;; too (upstream c_end stops it on MSG_TERMINATED).
   (when (and (vector? owner-key) (= :ctx (first owner-key)))
     (stop-loop-sound! (second owner-key)))
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     mine-ray-effect-id
     (fn [store]
       (update (or store (default-mine-ray-fx-runtime-state)) :effect-state dissoc owner-key)))

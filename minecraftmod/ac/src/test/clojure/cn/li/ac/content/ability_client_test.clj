@@ -1,9 +1,9 @@
 (ns cn.li.ac.content.ability-client-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
             [cn.li.ac.ability.client.keybinds :as keybinds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability-client :as ability-client]
             [cn.li.ac.test.support.framework :as support-fw]))
 
@@ -26,10 +26,10 @@
                   keybinds/freeze-keybind-registries! (fn []
                                                         (swap! freeze-calls* conj :keybinds)
                                                         nil)
-                  level-effects/freeze-level-effect-registry! (fn []
+                  vfx-level/freeze-level-effect-registry! (fn []
                                                                  (swap! freeze-calls* conj :level)
                                                                  nil)
-                  hand-effects/freeze-hand-effect-registry! (fn []
+                  vfx-hand/freeze-hand-effect-registry! (fn []
                                                                (swap! freeze-calls* conj :hand)
                                                                nil)
                   cn.li.mcmod.util.log/info (fn [& _] nil)]

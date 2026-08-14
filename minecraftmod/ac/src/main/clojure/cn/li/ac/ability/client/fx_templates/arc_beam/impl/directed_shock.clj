@@ -2,8 +2,8 @@
   (:require [cn.li.ac.ability.client.effects.arc-fx :as arc-fx]
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -32,19 +32,19 @@
 ;; ---------------------------------------------------------------------------
 
 (defn- prepare-transform [progress]
-  {:tx (hand-effects/sample-curve [[0.0 0.0] [1.0 -0.02]] progress)
-   :ty (hand-effects/sample-curve [[0.0 0.0] [0.5 0.2] [1.0 0.4]] progress)
-   :tz (hand-effects/sample-curve [[0.0 0.0] [1.0 -0.05]] progress)
-   :rot-x (hand-effects/sample-curve [[0.0 0.0] [1.0 -20.0]] progress)
+  {:tx (vfx-hand/sample-curve [[0.0 0.0] [1.0 -0.02]] progress)
+   :ty (vfx-hand/sample-curve [[0.0 0.0] [0.5 0.2] [1.0 0.4]] progress)
+   :tz (vfx-hand/sample-curve [[0.0 0.0] [1.0 -0.05]] progress)
+   :rot-x (vfx-hand/sample-curve [[0.0 0.0] [1.0 -20.0]] progress)
    :rot-y 0.0
    :rot-z 0.0})
 
 (defn- punch-transform [progress]
-  {:tx (hand-effects/sample-curve [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]] progress)
-   :ty (hand-effects/sample-curve [[0.0 0.8] [0.5 0.75] [1.0 0.0]] progress)
-   :tz (hand-effects/sample-curve [[0.0 0.0] [0.3 -0.4] [1.0 0.0]] progress)
-   :rot-x (hand-effects/sample-curve [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]] progress)
-   :rot-y (hand-effects/sample-curve [[0.0 0.0] [0.3 10.0] [1.0 0.0]] progress)
+  {:tx (vfx-hand/sample-curve [[0.0 -0.04] [0.5 -0.04] [1.0 0.0]] progress)
+   :ty (vfx-hand/sample-curve [[0.0 0.8] [0.5 0.75] [1.0 0.0]] progress)
+   :tz (vfx-hand/sample-curve [[0.0 0.0] [0.3 -0.4] [1.0 0.0]] progress)
+   :rot-x (vfx-hand/sample-curve [[0.0 -40.0] [0.5 -45.0] [1.0 0.0]] progress)
+   :rot-y (vfx-hand/sample-curve [[0.0 0.0] [0.3 10.0] [1.0 0.0]] progress)
    :rot-z 0.0})
 
 ;; ---------------------------------------------------------------------------
@@ -125,10 +125,10 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-shock :hand] [_ _] {:effect-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:directed-shock :hand]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:directed-shock :hand] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:directed-shock :hand]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:directed-shock :hand] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :directed-shock [_effect-id] (transform))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-shock [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:directed-shock :hand] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :directed-shock [_effect-id] (transform))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :directed-shock [_ store owner-key]
   (update store :effect-state dissoc owner-key))

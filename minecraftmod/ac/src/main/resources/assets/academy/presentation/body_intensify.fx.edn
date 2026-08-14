@@ -1,9 +1,0 @@
-{:id :academy/body-intensify-charge
- :host :vfx
- :primitive :arc
- :stage :hud-overlay
- :owner :ability/body-intensify
- :timeline [{:at 0.0 :property :alpha :value 0.0}
-            {:at 0.5 :property :alpha :value 1.0}
-            {:at 1.0 :property :alpha :value 0.0}]
- :resources ["academy:textures/effects/arcs/0.png"]}

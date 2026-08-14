@@ -155,14 +155,14 @@
         (when (seq ops)
           {:ops ops})))))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:electron-bomb :level] [_ _] {:effect-state {} :beams {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:electron-bomb :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:electron-bomb :level] [_ _] {:effect-state {} :beams {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:electron-bomb :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:electron-bomb :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :electron-bomb
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:electron-bomb :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :electron-bomb
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
   ;; The ball state is context-bound; the settlement beam is upstream's
   ;; EntityMdRaySmall — a world entity with its own 14-tick life. This skill is
   ;; :instant, so the context is usually gone before the delayed beam even

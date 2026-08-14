@@ -3,7 +3,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as je-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks])
@@ -11,22 +11,22 @@
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (je-fx/reset-fx-for-test!)
           (f)
           (finally
             (je-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
 (defn- dispatch! [ctx-id channel payload]
-  (level-effects/enqueue-level-effect! :jet-engine ctx-id channel payload :owner-key [:ctx ctx-id]))
+  (vfx-level/enqueue-level-effect! :jet-engine ctx-id channel payload :owner-key [:ctx ctx-id]))
 
 (deftest init-registers-parity-jet-engine-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -72,7 +72,7 @@
         (is (some #(= :quad (:kind %)) ops)))
 
       (dotimes [_ 20]
-        (level-effects/tick-level-effects!))
+        (vfx-level/tick-level-effects!))
       (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 2)))
       ;; Skill sounds are commented out until fitting ones are found.
       (is (empty? @sounds*))
@@ -174,13 +174,13 @@
       (let [a0 (je-fx/flash-alpha nil)]
         (is (pos? a0))
         (dotimes [_ 13]
-          (level-effects/tick-level-effects!))
+          (vfx-level/tick-level-effects!))
         (let [a1 (je-fx/flash-alpha nil)]
           (is (> a0 a1)
               "screen flash alpha should fade as trigger ttl decreases")))
 
       (dotimes [_ 7]
-        (level-effects/tick-level-effects!))
+        (vfx-level/tick-level-effects!))
 
       (is (nil? (arc-beam/effect-build-plan :jet-engine {:x 0.0 :y 65.0 :z 0.0} nil 20)))
       (is (zero? (je-fx/flash-alpha nil)))

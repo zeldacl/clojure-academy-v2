@@ -1,6 +1,6 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mine-detect
   (:require [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
@@ -203,7 +203,7 @@
 
 (defn- maybe-refresh-ores!
   [owner-key hand-center-pos query-fn]
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     :mine-detect
     (fn [store]
       (let [store* (if (contains? (or store {}) :effect-state)
@@ -236,14 +236,14 @@
       (when (seq ops)
         {:ops ops}))))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mine-detect :level] [_ _] {:effect-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mine-detect :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mine-detect :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mine-detect :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mine-detect :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mine-detect
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mine-detect :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mine-detect
   [_effect-id camera-pos hand-center-pos tick & [query-fn]]
   (build-plan camera-pos hand-center-pos tick query-fn))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mine-detect [_ store _owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mine-detect [_ store _owner-key]
   ;; The ore-highlight visual is a one-shot world effect (upstream's
   ;; HandlerEntity) with its own 100-tick life. The :instant context ends
   ;; right after perform, so MSG-CTX-TERMINATED reaches clear-effect-owner!

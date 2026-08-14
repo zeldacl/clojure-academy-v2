@@ -7,7 +7,7 @@
   refactors produce instead of the code that produces it."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.skill-config.common :as config-common]
             [cn.li.ac.ability.registry.event :as ability-event]
@@ -48,11 +48,11 @@
   (testing "the fx spec registers all four channels and forwards charge-pos"
     (let [handlers* (atom {})
           enqueued* (atom [])]
-      (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+      (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                     fx-registry/register-fx-channel! (fn [topic handler]
                                                        (swap! handlers* assoc topic handler)
                                                        nil)
-                    level-effects/enqueue-level-effect! (fn [_ _ _ payload & _]
+                    vfx-level/enqueue-level-effect! (fn [_ _ _ payload & _]
                                                           (swap! enqueued* conj payload)
                                                           nil)]
         (pc-fx/init!)

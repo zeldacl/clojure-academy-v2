@@ -1,12 +1,6 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
   (:require [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
-
-;; Plain registry id, not a namespaced resource path: the platform entity
-;; registries (ModEntities) are keyed by the bare registry name, and the
-;; spawner resolves the EntityType with that exact string.
-(defn- presentation-owner [ctx-id owner-uuid]
-  (str "railgun-charge/" (or owner-uuid "unknown") "/" ctx-id))
+            [cn.li.ac.client.vfx-runtime :as vfx]))
 
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
@@ -17,49 +11,11 @@
 ;; sends one. The entity itself is fine either way (life-ticks 32 disposes it),
 ;; so a stranded entry is only bookkeeping; prune it by age so the map cannot
 ;; grow for a whole session.
-(defonce ^:private active-glows* (atom {}))
-
-;; The effect's own life (railgun_charge, entities/all.clj) plus a tick of slack.
-(def ^:private glow-life-ms 1650)
-
-(defn reset-charge-glows-for-test! []
-  (reset! active-glows* {}))
-
-(defn active-charge-glows
-  "Live glow bookkeeping, for tests."
-  []
-  @active-glows*)
-
-(defn now-ms
-  "Wall clock for glow bookkeeping; a var so tests can drive it."
-  []
-  (System/currentTimeMillis))
-
-(defn- prune-stale [glows now-ms]
-  (into {}
-        (remove (fn [[_ {:keys [spawned-ms]}]]
-                  (>= (- (long now-ms) (long (or spawned-ms 0))) glow-life-ms)))
-        glows))
-
 (defn- on-charge-start! [ctx-id _channel payload]
-  (when-let [owner-uuid (:source-player-id payload)]
-    (when-let [spawn! (client-bridge/call-adapter :presentation-spawn-effect!)]
-      (let [owner (presentation-owner ctx-id owner-uuid)
-            instance-id (spawn! :academy/railgun-charge owner
-                                {:material-id 0 :texture-id 0 :count 1
-                                 :source-player-id (str owner-uuid)}
-                                (System/currentTimeMillis))
-            now (now-ms)]
-        (swap! active-glows*
-               (fn [glows]
-                 (assoc (prune-stale glows now)
-                        ctx-id {:instance-id instance-id :owner owner :spawned-ms now})))))))
+  (vfx/enqueue-level-effect! :railgun-shot ctx-id :charge-start payload))
 
 (defn- on-charge-end! [ctx-id _channel _payload]
-  (when-let [{:keys [owner]} (get @active-glows* ctx-id)]
-    (when-let [clear-owner! (client-bridge/call-adapter :presentation-clear-effect-owner!)]
-      (clear-owner! owner))
-    (swap! active-glows* dissoc ctx-id)))
+  (vfx/enqueue-level-effect! :railgun-shot ctx-id :charge-end _payload))
 
 (def ^:private spec
   (arc-beam/build-spec
@@ -70,7 +26,6 @@
                 ;; :level target is the idle-gating marker — see
                 ;; impl/railgun_shot.clj and content/railgun.clj's
                 ;; send-charge-start!/-update!/-end!. :immediate spawns/
-                ;; despawns the world-anchored charge effect (railgun_charge,
                 ;; entities/all.clj), keyed by :source-player-id so every
                 ;; recipient's client anchors it to the CASTER, not
                 ;; themselves — this is what makes it visible to bystanders,

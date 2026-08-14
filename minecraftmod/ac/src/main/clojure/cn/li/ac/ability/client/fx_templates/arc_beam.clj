@@ -1,5 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam
-  "Shared FX template: arc-beam defaults + defmulti registry for custom effects.
+  "Shared FX template: arc-beam defaults + explicit function registry for custom effects.
 
   Ability FX namespaces register via `build-spec` and expose only `init!`
   plus test helpers delegating to this template."
@@ -8,8 +8,8 @@
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
@@ -38,77 +38,73 @@
 (defn- snapshot-runtime
   [effect-id runtime]
   (case runtime
-    :hand (hand-effects/effect-state-snapshot effect-id)
-    :level (level-effects/effect-state-snapshot effect-id)
+    :hand (vfx-hand/effect-hand-state effect-id)
+    :level (vfx-level/effect-state-snapshot effect-id)
     nil))
 
 (defn- update-runtime-state!
   [effect-id runtime f]
   (case runtime
-    :hand (hand-effects/update-effect-state! effect-id f)
-    :level (level-effects/update-effect-state! effect-id f)))
+    :hand (vfx-hand/update-hand-effect-state! effect-id f)
+    :level (vfx-level/update-effect-state! effect-id f)))
 
 (defn- reset-runtime-state!
   [effect-id runtime initial-state]
   (case runtime
-    :hand (hand-effects/reset-hand-effect-state-for-test! effect-id initial-state)
-    :level (level-effects/reset-level-effect-state-for-test! effect-id initial-state)))
+    :hand (vfx-hand/reset-hand-effect-state-for-test! effect-id initial-state)
+    :level (vfx-level/reset-level-effect-state-for-test! effect-id initial-state)))
 
 ;; ---------------------------------------------------------------------------
-;; defmulti effect implementations (custom + default arc)
+;; Explicit function registry (custom + default arc)
 ;; ---------------------------------------------------------------------------
 
-(defmulti effect-initial-state
-  (fn [effect-id runtime] [effect-id runtime]))
+(defonce ^:private method-registry* (atom {}))
 
-(defmulti effect-enqueue-state!
-  (fn [runtime effect-id _store _ctx-id _channel _owner-key _payload]
-    [effect-id runtime]))
+(defn register-method-runtime! [dispatch-key dispatch-value f]
+  (swap! method-registry* assoc-in [dispatch-key dispatch-value] f)
+  nil)
 
-(defmulti effect-tick-state!
-  (fn [runtime effect-id _store] [effect-id runtime]))
+(defmacro register-method! [dispatch-var dispatch-value args & body]
+  `(register-method-runtime! ~(keyword (name dispatch-var))
+                             ~dispatch-value
+                             (fn ~args ~@body)))
 
-(defmulti effect-build-plan
-  (fn [effect-id _camera-pos _hand-center-pos _tick & _rest]
-    effect-id))
+(defn- dispatch-method [dispatch-key dispatch-value args]
+  (let [f (or (get-in @method-registry* [dispatch-key dispatch-value])
+              (get-in @method-registry* [dispatch-key :default]))]
+    (when-not f
+      (throw (ex-info "Unregistered VFX effect handler"
+                      {:dispatch-key dispatch-key :dispatch-value dispatch-value})))
+    (apply f args)))
 
-(defmulti effect-clear-owner!
-  (fn [effect-id _store _owner-key] effect-id))
+(defn effect-initial-state [effect-id runtime]
+  (dispatch-method :effect-initial-state [effect-id runtime] [effect-id runtime]))
+(defn effect-enqueue-state! [runtime effect-id store ctx-id channel owner-key payload]
+  (dispatch-method :effect-enqueue-state! [effect-id runtime]
+                   [runtime effect-id store ctx-id channel owner-key payload]))
+(defn effect-tick-state! [runtime effect-id store]
+  (dispatch-method :effect-tick-state! [effect-id runtime] [runtime effect-id store]))
+(defn effect-build-plan [effect-id camera-pos hand-center-pos tick & rest]
+  (apply dispatch-method :effect-build-plan effect-id
+         (into [effect-id camera-pos hand-center-pos tick] rest)))
+(defn effect-clear-owner! [effect-id store owner-key]
+  (dispatch-method :effect-clear-owner! effect-id [effect-id store owner-key]))
+(defn effect-transform-fn [effect-id]
+  (dispatch-method :effect-transform-fn effect-id [effect-id]))
 
-(defmulti effect-transform-fn
-  (fn [effect-id] effect-id))
+(defn validate-method-registry! []
+  (doseq [[dispatch-key methods] @method-registry*]
+    (when-not (seq methods)
+      (throw (ex-info "Empty VFX handler registry" {:dispatch-key dispatch-key})))
+    (doseq [[dispatch-value f] methods]
+      (when-not (ifn? f)
+        (throw (ex-info "VFX handler is not callable"
+                        {:dispatch-key dispatch-key :dispatch-value dispatch-value})))))
+  true)
 
-(defn validate-multimethod-arity!
-  "Check every NON-VARIADIC defmethod of `mf` against `dispatch-arity`.
-  Variadic defmethods (with `& args`) accept extra args from the dispatch
-  fn beyond their named params, so a lower required-arity is legitimate.
-  Only flag methods that are FIXED-ARITY and don't match — those are the
-  ones that corrupt the dispatch table."
-  [label mf dispatch-arity]
-  (let [mis (keep (fn [[dv method]]
-                    (let [ma (if (instance? clojure.lang.RestFn method)
-                               (.getRequiredArity ^clojure.lang.RestFn method)
-                               dispatch-arity)]  ;; non-RestFn → skip check
-                      (when (< ma (dec dispatch-arity))
-                        {:dispatch-value dv :method-arity ma :min-acceptable (dec dispatch-arity)})))
-                  (.getMethodTable ^clojure.lang.MultiFn mf))]
-    (when (seq mis)
-      (throw (ex-info (str label ": defmethod arity mismatch — "
-                           (count mis) " FIXED-ARITY method(s) have wrong arity "
-                           "(the MULTIMETHOD dispatch table is CORRUPTED, "
-                           "ALL calls silently return nil)")
-                      {:multimethod label :mismatches mis})))))
+(defn validate-fx-multimethods! []
+  (validate-method-registry!))
 
-(defn validate-fx-multimethods!
-  "Call after all impl namespaces are loaded (post init-discovered-fx!).
-  Catches the groundshock-class bug where a defmethod with wrong arity
-  silently breaks every effect's build-plan / clear / transform."
-  []
-  (validate-multimethod-arity! "effect-build-plan"   effect-build-plan   4)
-  (validate-multimethod-arity! "effect-clear-owner!"  effect-clear-owner! 3)
-  (validate-multimethod-arity! "effect-transform-fn"  effect-transform-fn  1))
-
-;; ---------------------------------------------------------------------------
 ;; Default arc state / arc implementation
 ;; ---------------------------------------------------------------------------
 
@@ -312,7 +308,7 @@
 (defn- build-arc-plan
   [opts camera-pos hand-center-pos _tick]
   (let [effect-id (:effect-id opts)
-        by-owner (:arcs (level-effects/effect-state-snapshot effect-id))]
+        by-owner (:arcs (vfx-level/effect-state-snapshot effect-id))]
     (when (seq by-owner)
       (let [cam-v3 (rv3/map->v3 camera-pos)
             wiggle-phase (arc-patterns/wiggle-phase)
@@ -321,7 +317,7 @@
         (when (seq ops)
           {:ops ops})))))
 
-(defmethod effect-initial-state :default
+(register-method! effect-initial-state :default
   [effect-id runtime]
   (if-let [entry (effect-entry effect-id)]
     (let [init (case runtime
@@ -333,28 +329,28 @@
         :else (default-arc-state)))
     (default-arc-state)))
 
-(defmethod effect-enqueue-state! :default
+(register-method! effect-enqueue-state! :default
   [runtime effect-id store ctx-id channel owner-key payload]
   (when (= runtime :level)
     (enqueue-arc-state! (:arc-opts (effect-entry effect-id))
                         store ctx-id channel owner-key payload)))
 
-(defmethod effect-tick-state! :default
+(register-method! effect-tick-state! :default
   [runtime effect-id store]
   (when (= runtime :level)
     (tick-arc-state! store)))
 
-(defmethod effect-build-plan :default
+(register-method! effect-build-plan :default
   [effect-id camera-pos hand-center-pos tick & _args]
   (when-let [entry (effect-entry effect-id)]
     (when-let [arc-opts (:arc-opts entry)]
       (build-arc-plan arc-opts camera-pos hand-center-pos tick))))
 
-(defmethod effect-clear-owner! :default
+(register-method! effect-clear-owner! :default
   [effect-id store owner-key]
   (update (ensure-arc-store store) :arcs dissoc owner-key))
 
-(defmethod effect-transform-fn :default
+(register-method! effect-transform-fn :default
   [_effect-id]
   nil)
 
@@ -496,7 +492,7 @@
   Runtime: `:runtime` — :level (default), :hand, :both, :none
   State: `:initial-state`, or `:level-initial-state` / `:hand-initial-state` for :both
   FOV: `:fov-offset-fn` — optional (fn [player-uuid] -> number|nil), queried
-  per frame by level-effects/current-fov-offset for the camera zoom
+  per frame by vfx-level/current-fov-offset for the camera zoom
   Arc opts (default impl): `:sound-id`, `:arc-life`, `:arc-pattern`, `:aoe-points?`,
   `:hand-origin?` (arc is cast from the player — shift it out of their eye into
   their hand, as the original's ViewOptimize.fix does)

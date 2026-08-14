@@ -159,11 +159,43 @@ dependencies {
 
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
+    implementation project(':vfx-core')
     implementation project(':presentation-core')
     implementation project(':presentation-compiler')
     testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
     cloverageRuntime "cloverage:cloverage:${clojureVersions.cloverage}"
 }
+
+// The platform target consumes AC as its selected content project.  Expose the
+// neutral source roots that AC composes without making platform build logic
+// depend on (or even name) vfx-core directly.
+evaluationDependsOn(':vfx-core')
+ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs +
+    project(':vfx-core').sourceSets.main.clojure.srcDirs
+
+// Consumable source-first variant for platform targets.  The target build
+// selects AC from the catalog and receives this already-composed directory;
+// it never adds a direct project dependency on vfx-core.
+configurations {
+    neutralRuntimeSources {
+        canBeConsumed = true
+        canBeResolved = false
+    }
+}
+def assembleNeutralRuntimeSources = tasks.register('assembleNeutralRuntimeSources', Sync) {
+    group = 'build'
+    description = 'Compose AC and vfx-core neutral Clojure sources for platform consumption.'
+    from(sourceSets.main.clojure.srcDirs)
+    from(project(':vfx-core').sourceSets.main.clojure.srcDirs)
+    from(project(':vfx-core').sourceSets.main.resources.srcDirs) {
+        exclude '**/*.class'
+    }
+    into(layout.buildDirectory.dir('neutral-runtime-sources'))
+}
+artifacts {
+    neutralRuntimeSources assembleNeutralRuntimeSources
+}
+tasks.named('classes').configure { dependsOn assembleNeutralRuntimeSources }
 
 // AC is the owner of Presentation Runtime usage.  The target platform only
 // packages AC's neutral output, so fold the two presentation modules into that

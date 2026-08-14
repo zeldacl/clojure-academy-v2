@@ -3,22 +3,18 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [clojure.string :as str]
             [cn.li.ac.ability.client.fx-templates.arc-beam])
   (:import [cn.li.mcmod.math V3]))
 
-(def ^:private local-scripted-effect-key :mcmod/spawn-local-scripted-effect)
-(def ^:private local-remove-scripted-effect-key :mcmod/remove-local-scripted-effect)
-(def ^:private diamond-shield-effect-id "entity_diamond_shield")
 
 
 (def ^:private mark-ttl 8)
@@ -192,16 +188,13 @@
 
 (defn- spawn-diamond-shield!
   []
-  (let [entity-uuid (client-bridge/run-client-effect! local-scripted-effect-key
-                                                       {:effect-id diamond-shield-effect-id})]
-    (when (seq entity-uuid)
-      entity-uuid)))
+  ;; The shield is represented by the neutral trigger batches below; no
+  ;; client-side scripted entity is created.
+  ::neutral-shield)
 
 (defn- remove-diamond-shield!
   [entity-uuid]
-  (when (seq entity-uuid)
-    (client-bridge/run-client-effect! local-remove-scripted-effect-key
-                                      {:entity-uuid entity-uuid})))
+  nil)
 
 (defn- enqueue-state!
   [store ctx-id channel owner-key payload]
@@ -367,12 +360,12 @@
     (cond-> (when (seq ops) {:ops ops})
       ws (assoc :local-walk-speed (float ws)))))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:jet-engine :level] [_ _] {:fx-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:jet-engine :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:jet-engine :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:jet-engine :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:jet-engine :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :jet-engine
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:jet-engine :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :jet-engine
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :jet-engine [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :jet-engine [_ store owner-key]
   (update store :fx-state dissoc owner-key))

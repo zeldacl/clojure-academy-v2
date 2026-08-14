@@ -9,18 +9,18 @@
             ;; requires, so the multimethod vars must already be bound.
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.meltdowner :as meltdowner-impl]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn []
     (try
-      (level-effects/reset-level-effect-registry-for-test!)
+      (vfx-level/reset-level-effect-registry-for-test!)
       (meltdowner-impl/reset-fov-offset-for-test!)
       (f)
       (finally
         (meltdowner-impl/reset-fov-offset-for-test!)
-        (level-effects/reset-level-effect-registry-for-test!))))))
+        (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -35,7 +35,7 @@
    :rays {}})
 
 (deftest fov-offset-eases-toward-own-charge-and-decays-after-release-test
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     :meltdowner (charge-state "p1" 0.5 true))
   (is (= 1.44 (meltdowner-impl/current-fov-offset "p1"))
       "first frame: 12% of target (0.5 * 24deg)")
@@ -47,7 +47,7 @@
       "converges toward charge-ratio * max (12deg)")
 
   ;; Release: state goes inactive -> eases back to 0
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     :meltdowner (charge-state "p1" 0.0 false))
   (let [after (meltdowner-impl/current-fov-offset "p1")]
     (is (< after 12.0) "starts decaying immediately after release"))
@@ -57,7 +57,7 @@
       "fully restored after ~2s of frames"))
 
 (deftest fov-offset-ignores-other-players-charges-test
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     :meltdowner (charge-state "p2" 0.9 true))
   (is (zero? (meltdowner-impl/current-fov-offset "p1"))
       "another player's charge never zooms my camera")

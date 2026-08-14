@@ -19,7 +19,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.math V3]))
@@ -183,14 +183,14 @@
           fixed (into preray-fixed barrage)]
       {:ops (vec (mapcat #(ray-ops cam-v %) fixed))})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {:beam-queue {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:ray-barrage :level] [_ _] {:beam-queue {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:ray-barrage :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:ray-barrage :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :ray-barrage
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:ray-barrage :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :ray-barrage
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store _owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :ray-barrage [_ store _owner-key]
   ;; The rays are one-shot world visuals (upstream EntityBarrageRayPre /
   ;; EntityMdRayBarrage carry their own lives). The :instant context ends on
   ;; the same tick as perform, so MSG-CTX-TERMINATED reaches

@@ -4,24 +4,24 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.content.ability.teleporter.threatening-teleport-fx :as tfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-threatening-teleport-fx-runtime [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (tfx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (tfx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-threatening-teleport-fx-runtime)
 
 (defn- enqueue! [ctx-id channel payload]
-  (level-effects/enqueue-level-effect! :threatening-teleport ctx-id channel payload
+  (vfx-level/enqueue-level-effect! :threatening-teleport ctx-id channel payload
                                        :owner-key [:ctx ctx-id]))
 
 (defn- build-plan []
@@ -34,7 +34,7 @@
 (deftest init-registers-threatening-teleport-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]

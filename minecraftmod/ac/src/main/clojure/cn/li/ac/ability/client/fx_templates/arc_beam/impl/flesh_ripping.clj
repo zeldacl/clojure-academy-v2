@@ -2,10 +2,9 @@
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
 (def ^:private stale-owner-ttl-ticks 80)
@@ -20,8 +19,9 @@
   hit — the spec is follow-owner? false with a 10-tick life, so spawnLocalAt
   leaves it where it lands)."
   [x y z]
-  (client-bridge/run-client-effect! :mcmod/spawn-local-scripted-effect-at
-    {:effect-id "entity_blood_splash" :x x :y y :z z}))
+  ;; Blood splash is emitted as ordinary VFX ops by the owning effect.  Keep
+  ;; this hook pure so no scripted entity renderer is needed on a platform.
+  nil)
 
 (defn- corner-tick-ops
   "Upstream RenderMarker.renderMark: at each of the 8 box corners draw 3 short
@@ -62,10 +62,9 @@
   (let [color (if (:hit? st) color-threatening color-disabled)
         ;; McAccess.clientEntitySnapshot returns a String-keyed map —
         ;; keywordize so the keyword reads below actually resolve.
-        live (when-let [uuid (:target-uuid st)]
-               (when-let [raw (client-bridge/run-client-effect!
-                               :mcmod/get-entity-position {:entity-uuid uuid})]
-                 (into {} (map (fn [[k v]] [(keyword k) v])) raw)))
+        ;; Target positions arrive as neutral snapshots in the effect payload;
+        ;; the AC layer never queries Minecraft entities directly.
+        live nil
         aim (:aim st)
         ;; Upstream l_updateEffect pins the marker at 1.0x1.0 without a target;
         ;; only a targeted entity resizes it (target box x1.2). The synced
@@ -159,7 +158,7 @@
                 states)))))
 
 (defn- build-plan [_camera-pos _hand-center-pos tick]
-  (let [states (vals (:fx-state (level-effects/effect-state-snapshot :flesh-ripping)))
+  (let [states (vals (:fx-state (vfx-level/effect-state-snapshot :flesh-ripping)))
         marker-ops
         (vec
          (mapcat (fn [st]
@@ -169,12 +168,12 @@
     (when (seq marker-ops)
       {:ops marker-ops})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flesh-ripping :level] [_ _] {:fx-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:flesh-ripping :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flesh-ripping :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:flesh-ripping :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:flesh-ripping :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :flesh-ripping
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:flesh-ripping :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :flesh-ripping
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :flesh-ripping [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :flesh-ripping [_ store owner-key]
   (update store :fx-state dissoc owner-key))

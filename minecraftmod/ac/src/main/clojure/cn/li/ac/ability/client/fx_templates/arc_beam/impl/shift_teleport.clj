@@ -2,7 +2,7 @@
   (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.render-util :as ru]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
 
@@ -138,7 +138,7 @@
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
   (let [cam (rv3/map->v3 camera-pos)
-        states (vals (:fx-state (level-effects/effect-state-snapshot :shift-teleport)))
+        states (vals (:fx-state (vfx-level/effect-state-snapshot :shift-teleport)))
         marker-ops
         (vec
          (mapcat (fn [st]
@@ -174,12 +174,12 @@
     (when (seq (concat marker-ops particle-ops))
       {:ops (vec (concat marker-ops particle-ops))})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {:fx-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:shift-teleport :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:shift-teleport :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:shift-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:shift-teleport :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :shift-teleport
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:shift-teleport :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :shift-teleport
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :shift-teleport [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :shift-teleport [_ store owner-key]
   (update store :fx-state dissoc owner-key))

@@ -1,6 +1,8 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.light-shield
   (:require [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
+            [cn.li.ac.ability.client.effects.rv3 :as vec3]
+            [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-templates.arc-beam]))
@@ -101,21 +103,40 @@
           states)))))
 
 (defn- build-plan
-  [_camera-pos _hand-center-pos _tick]
+  [camera-pos _hand-center-pos tick]
   ;; The shield visual is the spawned entity_md_shield (spinning-shield
   ;; render profile — upstream EntityMdShield + RenderMdShield); the old
   ;; fx-level ring/spokes/glow at the hand rendered a stray light disc by
   ;; the head that read as a useless overhead ray. Particles above.
-  nil)
+  (let [cam-v (when (map? camera-pos) (vec3/map->v3 camera-pos))
+        states (vals (:effect-state
+                      (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :light-shield)))
+        texture (modid/namespaced-path "textures/effects/mdshield.png")
+        ops (keep (fn [{:keys [active? pos ticks]}]
+                    (when (and active? pos cam-v)
+                      (let [center (vec3/map->v3 pos)
+                            right (ru/camera-facing-right-axis center cam-v)
+                            up (ru/billboard-up-axis center cam-v right)
+                            pulse (+ 1.0 (* 0.08 (Math/sin (* 0.18 (double (or ticks tick 0))))))
+                            side (vec3/v* right (* 0.95 pulse))
+                            top (vec3/v* up (* 1.15 pulse))]
+                        (ru/quad-op texture
+                                    (vec3/v+ (vec3/v- center side) top)
+                                    (vec3/v+ (vec3/v+ center side) top)
+                                    (vec3/v- (vec3/v+ center side) top)
+                                    (vec3/v- (vec3/v- center side) top)
+                                    {:r 170 :g 245 :b 255 :a 190}))))
+                  states)]
+    (when (seq ops) {:ops (vec ops)})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:light-shield :level] [_ _] {:effect-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:light-shield :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:light-shield :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:light-shield :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:light-shield :level] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :light-shield
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:light-shield :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :light-shield
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :light-shield [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :light-shield [_ store owner-key]
   ;; A context torn down without its :end channel (world unload, disconnect)
   ;; would otherwise leave the loop sample playing forever.
   (when-let [ctx-id (get-in store [:effect-state owner-key :ctx-id])]

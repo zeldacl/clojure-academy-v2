@@ -41,7 +41,7 @@ ext {
         coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
 
-    // Neutral runtime projects (:ac and :mcmod) are source-first by default.
+    // Neutral runtime projects (:ac, :mcmod and :vfx-core) are source-first by default.
     // Pass -PfullAot or -PfullAot=true to restore the historical full-AOT build.
     def fullAotRaw = findProperty("fullAot")
     def fullAotText = fullAotRaw == null ? "false" : fullAotRaw.toString().trim()
@@ -52,6 +52,11 @@ ext {
         throw new GradleException("-PfullAot must be true or false (or pass -PfullAot for true), got '${fullAotRaw}'")
     }
     fullAotEnabled = fullAotText.equalsIgnoreCase("true")
+    // Neutral Clojure projects remain source-first in normal platform builds.
+    // Only platform namespaces that touch Minecraft/Loader APIs are required
+    // to be AOT/remapped.  The explicit fullAot switch remains available for
+    // the historical diagnostic build mode.
+    neutralSourceFirstProjects = [":ac", ":mcmod", ":vfx-core"]
 }
 
 allprojects {
@@ -91,11 +96,15 @@ gradle.projectsEvaluated {
     def ac = findProject(":ac")
     def compiler = findProject(":presentation-compiler")
     def core = findProject(":presentation-core")
+    def vfx = findProject(":vfx-core")
     if (ac != null && compiler != null && core != null) {
         ["compileJava", "checkClojure", "compileClojure", "compileTestClojure"].each { taskName ->
             def task = ac.tasks.findByName(taskName)
             if (task != null) {
                 task.dependsOn compiler.tasks.named("compileClojure"), core.tasks.named("compileClojure")
+                if (vfx != null) {
+                    task.dependsOn vfx.tasks.named("classes")
+                }
             }
         }
     }
@@ -114,7 +123,7 @@ subprojects {
             clojure {
                 builds {
                     main {
-                        if (rootProject.ext.fullAotEnabled || !(project.path in [":ac", ":mcmod"])) {
+                        if (rootProject.ext.fullAotEnabled || !(project.path in rootProject.ext.neutralSourceFirstProjects)) {
                             aotAll()
                         } else {
                             // Empty AOT set keeps the plugin available for source
@@ -129,7 +138,7 @@ subprojects {
 
             tasks.named("compileClojure").configure { task ->
                 doLast {
-                    if (!rootProject.ext.fullAotEnabled && project.path in [":ac", ":mcmod"]) {
+                    if (!rootProject.ext.fullAotEnabled && project.path in rootProject.ext.neutralSourceFirstProjects) {
                         return
                     }
                     def sourceRoots = sourceSets.main.clojure.srcDirs.findAll { it.isDirectory() }
@@ -603,7 +612,9 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
             file("ac/src/main/clojure"),
             file("ac/src/test/clojure"),
             file("mcmod/src/main/clojure"),
-            file("mcmod/src/test/clojure")
+            file("mcmod/src/test/clojure"),
+            file("vfx-core/src/main/clojure"),
+            file("vfx-core/src/test/clojure")
         ].findAll { it.directory }
         // Real API refs look like net.minecraft.Foo ??docstrings saying "net.minecraft.*" do not match.
         def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
@@ -658,7 +669,7 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
         }
         // Also ban loader coordinates in neutral-module build scripts.
         def gradleForbidden = ~/net\.(minecraftforge|fabricmc|neoforged):/
-        ["ac/build.gradle", "mcmod/build.gradle"].each { String path ->
+        ["ac/build.gradle", "mcmod/build.gradle", "vfx-core/build.gradle"].each { String path ->
             def gradleFile = file(path)
             if (!gradleFile.isFile()) {
                 return
@@ -770,6 +781,170 @@ tasks.register("verifyPresentationDependencyDirection") {
     }
 }
 
+tasks.register("verifyVfxDependencyDirection") {
+    group = "verification"
+    description = "Enforce the zero-platform-reference VFX dependency direction."
+    doLast {
+        def vfxBuild = file("vfx-core/build.gradle").text
+        def mcmodBuild = file("mcmod/build.gradle").text
+        def acBuild = file("ac/build.gradle").text
+        def platformBuild = file("build-logic/platform-target.gradle").text
+        def violations = []
+        if (!(vfxBuild =~ /project\([\"']:?mcmod[\"']\)/)) {
+            violations << "vfx-core must depend on mcmod"
+        }
+        if (vfxBuild =~ /project\([\"']:(?:ac|platform|presentation-core|presentation-compiler)[\"']\)/) {
+            violations << "vfx-core must not depend on AC, platform or Presentation modules"
+        }
+        if (!(acBuild =~ /project\([\"']:?vfx-core[\"']\)/)) {
+            violations << "AC must compose vfx-core"
+        }
+        if (platformBuild =~ /vfx-core|project\([\"']:?vfx-core[\"']\)/) {
+            violations << "platform build logic must not mention vfx-core"
+        }
+        if (mcmodBuild =~ /cn\.li\.vfx\./) {
+            violations << "mcmod must expose only the ABI and must not depend on vfx-core namespaces"
+        }
+        fileTree(file("mcmod/src/main")) {
+            include "**/*.clj"
+            include "**/*.cljc"
+            include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /cn\.li\.vfx\./) {
+                violations << "${source}: mcmod must not require vfx-core"
+            }
+        }
+        fileTree(file("platform-src")) {
+            include "**/*.clj"
+            include "**/*.cljc"
+            include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /cn\.li\.(?:vfx|ac\.vfx)\./) {
+                violations << "${source}: platform source statically requires VFX/AC VFX"
+            }
+        }
+        fileTree(file("vfx-core/src/main")) {
+            include "**/*.clj"
+            include "**/*.cljc"
+            include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /(?:net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged|cn\.li\.(?:platform|mcbase|mc1201|mc1211|mc262|ac|presentation))\./) {
+                violations << "${source}: vfx-core contains a platform/AC/Presentation reference"
+            }
+        }
+        [file("ac/src/main/clojure"), file("platform-src")].findAll { it.directory }.each { File root ->
+            fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files.each { File source ->
+                if (source.text =~ /cn\.li\.ac\.ability\.client\.(?:level-effects|hand-effects)/) {
+                    violations << "${source}: removed Level/Hand Effects namespace is still referenced"
+                }
+                if (source.text.contains("presentation-effects") || source.text.contains("render-profiles.effect-profiles")) {
+                    violations << "${source}: removed AC Presentation Effect/render-profile module is still referenced"
+                }
+                if ((source.text.contains("defmulti") || source.text.contains("(defmethod")) && source.path.replace('\\','/') =~ /fx_templates\/arc_beam/) {
+                    violations << "${source}: Arc-Beam must use explicit method registry, not defmulti/defmethod"
+                }
+            }
+        }
+        fileTree(file("platform-src")) {
+            include "**/EffectRendererDispatcher.java"
+            include "**/ScriptedEffectBillboardRenderer.java"
+            include "**/ScriptedMarkerBillboardRenderer.java"
+            include "**/ScriptedRayCompositeRenderer.java"
+            include "**/TieredZigzagArcRenderer.java"
+            include "**/*.clj"
+            include "**/*.java"
+        }.files.each { File source ->
+            if (source.name in ["EffectRendererDispatcher.java", "ScriptedEffectBillboardRenderer.java",
+                                "ScriptedMarkerBillboardRenderer.java", "ScriptedRayCompositeRenderer.java",
+                                "TieredZigzagArcRenderer.java"]) {
+                violations << "${source}: removed effect-specific VFX renderer remains"
+            }
+            if (source.text.contains("script-render-runtime")) {
+                violations << "${source}: removed Script Render Runtime is still referenced"
+            }
+            if (source.text =~ /ScriptedEffectSpawner|spawn-local-scripted-effect|move-local-scripted-effect|remove-local-scripted-effect/) {
+                violations << "${source}: removed client scripted-effect bridge remains"
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("VFX dependency direction violations:\n" + violations.unique().join("\n"))
+        }
+        logger.lifecycle("[verifyVfxDependencyDirection] ok")
+    }
+}
+
+tasks.register("verifyVfxAotBoundary") {
+    group = "verification"
+    description = "Verify source-first VFX packaging and the platform AOT exclusion boundary."
+    dependsOn ":ac:assembleNeutralRuntimeSources"
+    doLast {
+        def violations = []
+        def vfxBuild = file("vfx-core/build.gradle").text
+        if (!(vfxBuild =~ /onlyIf\s*\{\s*rootProject\.ext\.fullAotEnabled\s*\}/)) {
+            violations << "vfx-core compileClojure must remain disabled unless -PfullAot=true"
+        }
+        if (!rootProject.ext.fullAotEnabled) {
+            def neutralVfxSource = file("build/neutral/ac/neutral-runtime-sources/cn/li/vfx/runtime.clj")
+            if (!neutralVfxSource.file) {
+                violations << "default neutral runtime must publish vfx-core source-first runtime.clj"
+            }
+            fileTree(file("build")) { include "**/*__init.class" }.files.each { File classFile ->
+                def normalized = classFile.absolutePath.replace('\\', '/')
+                if (!normalized.contains('/clojure/test/') &&
+                    (normalized.contains('/cn/li/vfx/') || normalized.contains('/cn/li/ac/vfx/'))) {
+                    violations << "default AOT output contains VFX namespace: ${classFile}"
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("VFX AOT boundary violations:\n" + violations.unique().join("\n"))
+        }
+        logger.lifecycle("[verifyVfxAotBoundary] ok (fullAot={})", rootProject.ext.fullAotEnabled)
+    }
+}
+
+tasks.register("verifyNeutralSourceAotXor") {
+    group = "verification"
+    description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
+    dependsOn ":ac:assembleNeutralRuntimeSources"
+    doLast {
+        def violations = []
+        rootProject.ext.neutralSourceFirstProjects.each { projectPath ->
+            def p = project(projectPath)
+            def sourceNamespaces = [] as Set
+            p.sourceSets.main.clojure.srcDirs.findAll { it.directory }.each { File root ->
+                fileTree(root) { include "**/*.clj"; include "**/*.cljc" }.files.each { File f ->
+                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
+                    sourceNamespaces << rel.replaceAll(/\.cljc?$/, '').replace('/','.')
+                        .replace('_','-')
+                }
+            }
+            def classRoots = [
+                p.layout.buildDirectory.dir("clojure/main").get().asFile,
+                p.layout.buildDirectory.dir("classes/java/main").get().asFile
+            ]
+            def aotNamespaces = [] as Set
+            classRoots.findAll { it.directory }.each { File root ->
+                fileTree(root) { include "**/*__init.class" }.files.each { File f ->
+                    def rel = root.toPath().relativize(f.toPath()).toString().replace('\\','/')
+                    aotNamespaces << rel.replaceFirst(/__init\.class$/, '').replace('/','.')
+                        .replace('_','-')
+                }
+            }
+            def overlap = sourceNamespaces.intersect(aotNamespaces)
+            if (!rootProject.ext.fullAotEnabled && !overlap.isEmpty()) {
+                violations << "${projectPath}: neutral namespaces present as both source and AOT: ${overlap.sort()}"
+            }
+            if (rootProject.ext.fullAotEnabled) {
+                def missing = sourceNamespaces.findAll { !(it in aotNamespaces) }
+                if (!missing.isEmpty()) violations << "${projectPath}: fullAot missing classes: ${missing.sort()}"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyNeutralSourceAotXor] ok")
+    }
+}
+
 tasks.register("verifyPresentationLoaderHooks") {
     group = "verification"
     description = "Ensure each loader render callback enters the neutral Presentation host seam."
@@ -779,7 +954,6 @@ tasks.register("verifyPresentationLoaderHooks") {
         roots.findAll { it.directory }.each { File root ->
             fileTree(root) {
                 include "**/overlay_renderer.clj"
-                include "**/level_effect_renderer.clj"
             }.files.each { File source -> requiredFiles << source }
         }
         def missing = requiredFiles.findAll { !it.text.contains("cn.li.platform.neutral.presentation") }
@@ -924,7 +1098,8 @@ tasks.register("verifyNeutralProviderClosure") {
     description = "Verify generated runtime providers resolve only platform-neutral source namespaces."
     doLast {
         def catalog = rootProject.ext.platformCatalog()
-        def roots = [file("api/src/main/clojure"), file("mcmod/src/main/clojure"), file("ac/src/main/clojure")]
+        def roots = [file("api/src/main/clojure"), file("mcmod/src/main/clojure"),
+                     file("vfx-core/src/main/clojure"), file("ac/src/main/clojure")]
             .findAll { it.directory }
         def forbidden = java.util.regex.Pattern.compile("(?:net\\.(minecraft|minecraftforge|fabricmc|neoforged)|cn\\.li\\.(mc1201|mc1211|mc262|mcbase|fabric1201|fabric1211|fabric262|fabricbase|forge1201|neoforge1211|neoforge262|neoforgebase))\\.")
         def findSource = { String namespaceName ->
@@ -985,11 +1160,11 @@ tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     group = "verification"
     description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
     dependsOn ":api:classes", ":mcmod:classes", ":presentation-core:classes",
-              ":presentation-compiler:classes", ":ac:classes"
+              ":presentation-compiler:classes", ":vfx-core:classes", ":ac:classes"
     // AC's neutral provider closure now owns Presentation Runtime ViewModels;
     // include the core/compiler artifacts in this isolated classpath while
     // still excluding every Minecraft/loader project.
-    def neutralProjects = [project(":api"), project(":mcmod"),
+    def neutralProjects = [project(":api"), project(":mcmod"), project(":vfx-core"),
                            project(":presentation-core"),
                            project(":presentation-compiler"), project(":ac")]
     // Gradle 9 rejects resolving a child project's Configuration while this
@@ -1167,6 +1342,9 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyNeutralClojureNoMinecraftApis",
               "verifyPresentationJavaPurity",
               "verifyPresentationDependencyDirection",
+              "verifyVfxDependencyDirection",
+              "verifyVfxAotBoundary",
+              "verifyNeutralSourceAotXor",
               "verifyPresentationLoaderHooks",
               "verifyPresentationAtomicSwitch",
               "verifyNeutralProviderClosure",

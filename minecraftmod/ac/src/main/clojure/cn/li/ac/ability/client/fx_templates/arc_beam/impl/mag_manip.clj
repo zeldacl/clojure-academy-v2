@@ -3,8 +3,8 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -131,15 +131,15 @@
 
 (defn- on-fx-hold [ctx-id channel payload]
 	(when-let [mode (:mode payload)]
-		(hand-effects/enqueue-hand-effect! :mag-manip ctx-id channel
+		(vfx-hand/enqueue-hand-effect! :mag-manip ctx-id channel
 			(assoc (or payload {}) :mode mode))))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-manip :hand] [_ _] {:states {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-manip :hand]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-manip :hand] [_ _] {:states {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-manip :hand]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mag-manip :hand] [_ _ store] (tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :mag-manip [_effect-id] (current-hand-transform))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-manip [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mag-manip :hand] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-transform-fn :mag-manip [_effect-id] (current-hand-transform))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-manip [_ store owner-key]
   ;; Externally aborted contexts never get :end — stop the hold loop here too,
   ;; or it plays forever.
   (stop-hold-loop! (second owner-key))

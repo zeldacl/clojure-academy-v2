@@ -11,8 +11,7 @@
              [cn.li.mcmod.util.log :as log]
              [cn.li.mc1211.client.player-state-core :as player-state]
              [cn.li.mc1211.client.font.msdf-tick :as msdf-tick])
-  (:import [cn.li.mc1211.client.effect ScriptedEffectSpawner]
-            [net.neoforged.neoforge.common NeoForge]
+  (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post]
            [net.neoforged.neoforge.client.event InputEvent$MouseScrollingEvent]
            [net.neoforged.bus.api EventPriority]
@@ -38,33 +37,6 @@
     (overlay-state/clear-client-activated! owner)
     (when-let [session-id (client-session/client-session-id)]
       (overlay-state/clear-client-overlay-session! session-id))))
-
-(defn spawn-local-scripted-effect!
-  "Returns the spawned entity's UUID string (nil on failure) so callers that
-  own a despawn —e.g. JetEngine's diamond shield —can remove it later."
-  [effect-id]
-  (ScriptedEffectSpawner/spawnLocalWithUuid effect-id))
-
-(defn spawn-local-scripted-effect-at! [effect-id x y z]
-  (ScriptedEffectSpawner/spawnLocalAt effect-id x y z))
-
-(defn spawn-scripted-effect-at-player!
-  "Spawn a scripted effect anchored to `owner-uuid` (any currently-loaded
-  player, not just the local one) —the string UUID of the spawned entity is
-  returned so the caller can despawn it later via
-  remove-local-scripted-effect!. Used for effects that must appear at a
-  skill's caster for every nearby viewer, not just the caster's own screen."
-  [effect-id owner-uuid]
-  (ScriptedEffectSpawner/spawnAtPlayerWithUuid effect-id owner-uuid))
-
-(defn move-local-scripted-effect!
-  "Move a client-local scripted effect entity to an absolute position
-  (upstream Flashing localTick: marking.setPosition(dest))."
-  [entity-uuid x y z]
-  (ScriptedEffectSpawner/moveLocalByUuid entity-uuid (double x) (double y) (double z)))
-
-(defn remove-local-scripted-effect! [entity-uuid]
-  (ScriptedEffectSpawner/removeLocalByUuid entity-uuid))
 
 (defn slot-visual-state [player-uuid key-idx]
   (client-session/with-current-client-session #(power-runtime/client-slot-visual-state player-uuid key-idx)))

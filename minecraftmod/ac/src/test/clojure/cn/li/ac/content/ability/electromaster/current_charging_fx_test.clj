@@ -6,8 +6,8 @@
             ;; would not resolve at load time.
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.current-charging]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -22,12 +22,12 @@
     (fn []
       (with-redefs [client-bridge/game-time-ms (constantly 1000)]
         (try
-          (hand-effects/reset-hand-effect-registry-for-test!)
+          (vfx-hand/reset-hand-effect-registry-for-test!)
           (current-charging-fx/reset-fx-for-test!)
           (current-charging-fx/init!)
           (f)
           (finally
-            (hand-effects/reset-hand-effect-registry-for-test!)
+            (vfx-hand/reset-hand-effect-registry-for-test!)
             (current-charging-fx/reset-fx-for-test!)))))))
 
 (use-fixtures :each with-fresh-current-charging-fx-runtime)
@@ -35,10 +35,10 @@
 (deftest init-registers-current-charging-fx-channels-test
   (let [registered-topics* (atom #{})
         registered-level* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                           (reset! registered-level* [effect-id effect-map])
                                                           nil)
-                  level-effects/reset-level-effect-state-for-test! (fn [& _] nil)
+                  vfx-level/reset-level-effect-state-for-test! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
                                                       (swap! registered-topics* conj topic)
                                                       nil)]
@@ -52,12 +52,12 @@
 (deftest fx-handler-routes-through-level-effects-test
   (let [handlers* (atom {})
         level-enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  level-effects/reset-level-effect-state-for-test! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
+                  vfx-level/reset-level-effect-state-for-test! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! level-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (current-charging-fx/init!)
@@ -122,7 +122,7 @@
              (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= :mcmod/start-loop-sound (ffirst @effects*)))
       (is (= "academy:em.charge_loop" (get-in @effects* [0 1 :sound-id])))
-      (let [plan (level-effects/build-level-effect-plan
+      (let [plan (vfx-level/build-level-effect-plan
                   {:x 1.0 :y 65.0 :z 2.0}
                   {:player-uuid "local-player"}
                   0
@@ -134,7 +134,7 @@
       ;; Visual animation is driven by client ticks, not by the most recent
       ;; server charge-ticks packet. This prevents a hidden network sample
       ;; from making the beam disappear for an arbitrary number of frames.
-      (level-effects/tick-level-effects!)
+      (vfx-level/tick-level-effects!)
       (is (= 1 (:visual-ticks
                 (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= 0 (:charge-ticks
@@ -143,7 +143,7 @@
       ;; No update packet arrives for two seconds. A held upstream effect
       ;; remains alive; only an explicit end/owner cleanup may remove it.
       (reset! now-ms* 3000)
-      (level-effects/tick-level-effects!)
+      (vfx-level/tick-level-effects!)
       (is (true? (:active? (current-charging-fx/current-state [:ctx "ctx-block"]))))
       (is (= target
              (:target (current-charging-fx/current-state [:ctx "ctx-block"]))))
@@ -205,7 +205,7 @@
      :target {:x 0.5 :y 64.5 :z 10.0}
      :block-pos [0 64 10]})
   (let [immediate-plan
-        (level-effects/build-level-effect-plan
+        (vfx-level/build-level-effect-plan
          {:x 0.5 :y 65.62 :z 0.5}
          {:player-uuid "local-player"}
          0
@@ -214,8 +214,8 @@
         parts*
         (reduce
          (fn [parts tick]
-           (level-effects/tick-level-effects!)
-           (let [plan (level-effects/build-level-effect-plan
+           (vfx-level/tick-level-effects!)
+           (let [plan (vfx-level/build-level-effect-plan
                        {:x 0.5 :y 65.62 :z 0.5}
                        {:player-uuid "local-player"}
                        tick
@@ -236,8 +236,8 @@
   (let [parts*
         (reduce
          (fn [parts tick]
-           (level-effects/tick-level-effects!)
-           (let [plan (level-effects/build-level-effect-plan
+           (vfx-level/tick-level-effects!)
+           (let [plan (vfx-level/build-level-effect-plan
                        {:x 2.0 :y 65.62 :z -2.0}
                        {:player-uuid "local-player"
                         :player-x 2.0
@@ -299,8 +299,8 @@
      :caster-pos {:x 0.5 :y 65.62 :z 0.5}
      :target {:x 0.5 :y 64.5 :z 10.0}
      :block-pos [0 64 10]})
-  (level-effects/tick-level-effects!)
-  (let [ops (:ops (level-effects/build-level-effect-plan
+  (vfx-level/tick-level-effects!)
+  (let [ops (:ops (vfx-level/build-level-effect-plan
                    {:x 0.5 :y 65.62 :z 0.5}
                    {:player-uuid "local-player"}
                    1

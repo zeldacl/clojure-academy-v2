@@ -4,19 +4,19 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.light-shield-fx :as ls-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (ls-fx/reset-fx-for-test!)
           (f)
           (finally
             (ls-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,7 +30,7 @@
 (deftest init-registers-owner-aware-light-shield-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -65,14 +65,14 @@
       (is (some? (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-ls"]])))
       ;; No lookingPos, no particles: they are world-space and the caster's
       ;; position only arrives on the per-tick channel.
-      (level-effects/update-effect-state! :light-shield
+      (vfx-level/update-effect-state! :light-shield
         (fn [store] (arc-beam/effect-tick-state! :level :light-shield store)))
       (is (empty? @particles*))
       (arc-beam/enqueue-for-test! :light-shield "ctx-ls" :light-shield/fx-tick
                                   {:mode :tick :pos {:x 20.0 :y 65.6 :z -8.0}
                                    :source-player-id "player-a"})
       (dotimes [_ 5]
-        (level-effects/update-effect-state! :light-shield
+        (vfx-level/update-effect-state! :light-shield
           (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
       (is (seq @particles*))
       ;; lookingPos(player, 1) +/- 0.5 on each axis — never the world origin.
@@ -124,7 +124,7 @@
                                   {:mode :tick :pos {:x 0.0 :y 65.6 :z 0.0}
                                    :source-player-id "player-a"})
       (dotimes [_ 10]
-        (level-effects/update-effect-state! :light-shield
+        (vfx-level/update-effect-state! :light-shield
           (fn [store] (arc-beam/effect-tick-state! :level :light-shield store))))
       (let [ticks (get-in (ls-fx/fx-snapshot) [:effect-state [:ctx "ctx-cadence"] :ticks])]
         (arc-beam/enqueue-for-test! :light-shield "ctx-cadence" :light-shield/fx-end {:mode :end :source-player-id "player-a"})

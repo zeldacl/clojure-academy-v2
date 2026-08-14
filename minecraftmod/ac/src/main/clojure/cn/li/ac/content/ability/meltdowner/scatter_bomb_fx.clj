@@ -10,7 +10,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.ray-composite :as ray-composite]
             [cn.li.ac.ability.client.effects.rv3 :as vec3]))
 
@@ -22,19 +22,19 @@
 
 (defn scatter-bomb-fx-snapshot
   []
-  (or (level-effects/effect-state-snapshot scatter-bomb-effect-id)
+  (or (vfx-level/effect-state-snapshot scatter-bomb-effect-id)
       (default-scatter-bomb-fx-runtime-state)))
 
 (defn reset-scatter-bomb-fx-for-test!
   []
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     scatter-bomb-effect-id
     (default-scatter-bomb-fx-runtime-state))
   nil)
 
 (defn clear-scatter-bomb-owner!
   [owner-key]
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     scatter-bomb-effect-id
     (fn [store]
       (-> (or store (default-scatter-bomb-fx-runtime-state))
@@ -214,7 +214,7 @@
 
 (defn- build-plan
   [camera-pos _hand-center-pos _tick & _query-fn]
-  (let [snapshot (or (level-effects/effect-state-snapshot scatter-bomb-effect-id)
+  (let [snapshot (or (vfx-level/effect-state-snapshot scatter-bomb-effect-id)
                      (default-scatter-bomb-fx-runtime-state))
         beams (get snapshot :beams)]
     (when (seq beams)

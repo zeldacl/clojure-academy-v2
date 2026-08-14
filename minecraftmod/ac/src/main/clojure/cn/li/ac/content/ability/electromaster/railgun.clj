@@ -393,7 +393,6 @@
 ;; 2. The actual charge-hand glow: original's RailgunHandEffect is a
 ;;    PlayerRenderHook attached to the caster's model, rendered by whoever
 ;;    can see that model. Ported as a world-anchored scripted-effect entity
-;;    (entities/all.clj's railgun_charge, :follow-owner? true) spawned on
 ;;    fx-charge-start and despawned on fx-charge-end — see
 ;;    railgun_fx.clj's :immediate channel handlers. It's keyed by
 ;;    :source-player-id, not the local viewer, so every recipient's client

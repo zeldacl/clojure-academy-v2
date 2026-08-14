@@ -4,19 +4,19 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.mine-ray-fx :as mr-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (mr-fx/reset-mine-ray-fx-for-test!)
           (f)
           (finally
             (mr-fx/reset-mine-ray-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,20 +30,20 @@
 ;; them through fx-spec, so tests drive those directly.
 (defn- enqueue!
   [enqueue-state! ctx-id channel payload]
-  (level-effects/update-effect-state! :mine-ray
+  (vfx-level/update-effect-state! :mine-ray
     (fn [store] (enqueue-state! store ctx-id channel [:ctx ctx-id] payload)))
   nil)
 
 (defn- tick!
   [tick-state!]
-  (level-effects/update-effect-state! :mine-ray
+  (vfx-level/update-effect-state! :mine-ray
     (fn [store] (tick-state! store)))
   nil)
 
 (deftest init-registers-owner-aware-mine-ray-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]

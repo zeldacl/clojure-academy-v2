@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.directed-shock :as ds-impl]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
             [cn.li.ac.content.ability.vecmanip.directed-shock-fx :as dsfx]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
@@ -12,12 +12,12 @@
 
 (defn- with-fresh-directed-shock-runtime [f]
   (try
-    (hand-effects/reset-hand-effect-registry-for-test!)
+    (vfx-hand/reset-hand-effect-registry-for-test!)
     (dsfx/reset-fx-for-test!)
     (dsfx/init!)
     (f)
     (finally
-      (hand-effects/reset-hand-effect-registry-for-test!)
+      (vfx-hand/reset-hand-effect-registry-for-test!)
       (dsfx/reset-fx-for-test!))))
 
 (defn- owner-state [ctx-id]
@@ -28,7 +28,7 @@
 (deftest init-registers-directed-shock-fx-channels-test
   (let [registered-hand* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-hand/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand* [effect-id effect-map]))
                   fx-registry/register-fx-channel! (fn [topic _handler]
                                                       (swap! registered-topics* conj topic))]
@@ -42,10 +42,10 @@
 (deftest fx-handler-routes-start-perform-end-test
   (let [handlers* (atom {})
         hand-enqueued* (atom [])]
-    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+    (with-redefs [vfx-hand/register-hand-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler))
-                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-hand/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
                                                       (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts)))]
       (dsfx/init!)
       ((get @handlers* :directed-shock/fx-start) "ctx-1" :directed-shock/fx-start nil)
@@ -71,7 +71,7 @@
 (deftest immediate-perform-plays-world-positioned-sound-test
   (let [handlers* (atom {})
         sound-calls* (atom [])]
-    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+    (with-redefs [vfx-hand/register-hand-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler))
                   client-sounds/queue-current-sound-effect! (fn [payload]
@@ -87,7 +87,7 @@
 (deftest immediate-perform-skips-sound-without-position-test
   (let [handlers* (atom {})
         sound-calls* (atom [])]
-    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+    (with-redefs [vfx-hand/register-hand-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler))
                   client-sounds/queue-current-sound-effect! (fn [payload]
@@ -113,7 +113,7 @@
       (fn []
         (invoke-hand-enqueue! "ctx-a" :directed-shock/fx-perform {:mode :perform})
         (swap! now* + 301)
-        (hand-effects/update-effect-state! :directed-shock
+        (vfx-hand/update-hand-effect-state! :directed-shock
           (fn [store] (arc-beam/effect-tick-state! :hand :directed-shock store)))
         (is (empty? (:effect-state (dsfx/fx-snapshot))))))))
 

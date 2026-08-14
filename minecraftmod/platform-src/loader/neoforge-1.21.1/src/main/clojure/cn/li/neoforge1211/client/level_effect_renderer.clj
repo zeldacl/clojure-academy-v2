@@ -2,7 +2,6 @@
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader only subscribes the events and delegates to the shared renderer."
   (:require [cn.li.mc1211.client.effects.level-renderer :as shared-level]
-            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
@@ -29,7 +28,6 @@
 
 (defn- render-level-plan! [^RenderLevelStageEvent evt]
   (when (render-stage-eligible? evt)
-    (presentation/dispatch-current-frame! :world-after-translucent 0.0 0 0)
     (when-let [^Minecraft mc (Minecraft/getInstance)]
       (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.getMainCamera (.gameRenderer mc))

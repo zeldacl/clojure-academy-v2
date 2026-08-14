@@ -16,7 +16,7 @@
   message) + this burst are the entire upstream effect."
   (:require [cn.li.ac.ability.client.effects.billboard-particles :as bp]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -123,7 +123,7 @@
                     bursts)))))
 
 (defn- build-plan [camera-pos _hand-center-pos _tick]
-  (let [store (level-effects/effect-state-snapshot :teleporter-crit)
+  (let [store (vfx-level/effect-state-snapshot :teleporter-crit)
         cam (rv3/map->v3 camera-pos)
         ops (vec (mapcat (fn [burst]
                            (bp/particle-ops cam (:particles burst)))
@@ -131,14 +131,14 @@
     (when (seq ops)
       {:ops ops})))
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:teleporter-crit :level] [_ _] {:bursts []})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:teleporter-crit :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:teleporter-crit :level] [_ _] {:bursts []})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:teleporter-crit :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:teleporter-crit :level] [_ _ store] (tick! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :teleporter-crit
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:teleporter-crit :level] [_ _ store] (tick! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :teleporter-crit
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :teleporter-crit [_ store _owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :teleporter-crit [_ store _owner-key]
   ;; Bursts are transient and owner-independent — upstream spawns the crit
   ;; particles as entities that live out their life after the event, so
   ;; context termination (MSG-CTX-TERMINATED right after up!) must NOT wipe

@@ -79,11 +79,6 @@
    :client-register-push-handlers! noop
    :client-notify-visual-event! noop
    :client-show-combat-notice! noop
-   :client-enqueue-level-effect! noop
-   :client-build-level-effect-plan (fn [_ _ _ _] nil)
-   :client-level-effects-active? (fn [] false)
-   :client-tick-level-effects! noop
-   :client-level-effect-fov-offset (fn [_player-uuid] 0.0)
    :client-slot-visual-state (fn [_ _] :idle)
    :client-visual-state (fn [_ _] nil)
    :client-on-slot-key-down! noop
@@ -97,9 +92,6 @@
    :client-clear-owner-state! noop
    :client-abort-all! noop
    :client-tick! noop
-   :client-tick-hand-effects! noop
-   :client-drain-camera-pitch-deltas! (fn [_owner] [])
-   :client-current-hand-transform (fn [] nil)
    :toggle-debug-overlay-state! noop})
 
 ;; ============================================================================
@@ -114,11 +106,6 @@
 (def ^:private client-tick-start-fn noop)
 (def ^:private client-tick-keys-fn noop)
 (def ^:private client-tick-fn noop)
-(def ^:private client-tick-hand-effects-fn noop)
-(def ^:private client-tick-level-effects-fn noop)
-(def ^:private client-level-effects-active-fn (fn [] false))
-(def ^:private client-build-level-effect-plan-fn (fn [_ _ _ _] nil))
-(def ^:private client-level-effect-fov-offset-fn (fn [_] 0.0))
 (def ^:private client-slot-visual-state-fn (fn [_ _] :idle))
 (def ^:private client-visual-state-fn (fn [_ _] nil))
 (def ^:private client-on-slot-key-down-fn noop)
@@ -132,18 +119,11 @@
 (def ^:private client-presentation-frame-legacy-fn (fn [_ _ _ _] nil))
 (def ^:private client-poll-particle-effects-fn (fn [_] []))
 (def ^:private client-poll-sound-effects-fn (fn [_] []))
-(def ^:private client-current-hand-transform-fn (fn [] nil))
-(def ^:private client-drain-camera-pitch-deltas-fn (fn [_] []))
 
 (def ^:private hot-client-hook-vars
   {:client-tick-start! #'client-tick-start-fn
    :client-tick-keys! #'client-tick-keys-fn
    :client-tick! #'client-tick-fn
-   :client-tick-hand-effects! #'client-tick-hand-effects-fn
-   :client-tick-level-effects! #'client-tick-level-effects-fn
-   :client-level-effects-active? #'client-level-effects-active-fn
-   :client-build-level-effect-plan #'client-build-level-effect-plan-fn
-   :client-level-effect-fov-offset #'client-level-effect-fov-offset-fn
    :client-slot-visual-state #'client-slot-visual-state-fn
    :client-visual-state #'client-visual-state-fn
    :client-on-slot-key-down! #'client-on-slot-key-down-fn
@@ -157,8 +137,7 @@
    :client-presentation-frame-legacy #'client-presentation-frame-legacy-fn
    :client-poll-particle-effects #'client-poll-particle-effects-fn
    :client-poll-sound-effects #'client-poll-sound-effects-fn
-   :client-current-hand-transform #'client-current-hand-transform-fn
-   :client-drain-camera-pitch-deltas! #'client-drain-camera-pitch-deltas-fn})
+   })
 
 (defn- publish-hot-client-hooks! [hooks]
   (doseq [[hook target-var] hot-client-hook-vars]
@@ -747,29 +726,6 @@
   [notice-id payload]
   ((:client-show-combat-notice! (hooks-core-state-snapshot)) notice-id payload))
 
-(defn client-enqueue-level-effect!
-  [effect-id ctx-id channel payload & opts]
-  (apply (:client-enqueue-level-effect! (hooks-core-state-snapshot)) effect-id ctx-id channel payload opts))
-
-(defn client-build-level-effect-plan
-  [camera-pos hand-center-pos tick query-nearby-blocks-fn]
-  (client-build-level-effect-plan-fn
-   camera-pos hand-center-pos tick query-nearby-blocks-fn))
-
-(defn client-level-effects-active?
-  []
-  (client-level-effects-active-fn))
-
-(defn client-tick-level-effects!
-  []
-  (client-tick-level-effects-fn))
-
-(defn client-level-effect-fov-offset
-  "Per-frame camera FOV offset (degrees) from active level effects, for the
-  local player (ComputeFov event handler)."
-  [player-uuid]
-  (client-level-effect-fov-offset-fn player-uuid))
-
 (defn client-slot-visual-state
   [player-uuid key-idx]
   (client-slot-visual-state-fn player-uuid key-idx))
@@ -821,20 +777,6 @@
 (defn client-tick!
   []
   (client-tick-fn))
-
-(defn client-tick-hand-effects!
-  []
-  (client-tick-hand-effects-fn))
-
-(defn client-drain-camera-pitch-deltas!
-  ([]
-   (client-drain-camera-pitch-deltas! nil))
-  ([owner]
-   (client-drain-camera-pitch-deltas-fn owner)))
-
-(defn client-current-hand-transform
-  []
-  (client-current-hand-transform-fn))
 
 (defn toggle-debug-overlay-state! []
   ((:toggle-debug-overlay-state! (hooks-core-state-snapshot))))

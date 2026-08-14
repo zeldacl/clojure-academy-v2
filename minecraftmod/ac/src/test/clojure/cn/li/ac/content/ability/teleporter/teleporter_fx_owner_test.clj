@@ -1,6 +1,6 @@
 (ns cn.li.ac.content.ability.teleporter.teleporter-fx-owner-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.flashing-fx :as flashing-fx]
@@ -11,7 +11,7 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
       (flashing-fx/reset-fx-for-test!)
       (flesh-ripping-fx/reset-fx-for-test!)
       (mark-teleport-fx/reset-fx-for-test!)
@@ -25,7 +25,7 @@
           (mark-teleport-fx/reset-fx-for-test!)
           (penetrate-teleport-fx/reset-fx-for-test!)
           (shift-teleport-fx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -36,7 +36,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- enqueue! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
+  (vfx-level/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest teleporter-stateful-fx-keep-state-per-owner-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)

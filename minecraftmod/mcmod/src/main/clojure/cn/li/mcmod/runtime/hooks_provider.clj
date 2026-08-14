@@ -30,13 +30,11 @@
     set-client-overlay-activated! client-poll-particle-effects client-poll-sound-effects
     client-tick-start! client-font-init! client-tick-keys! client-active-contexts
     client-latest-sync client-register-push-handlers! client-notify-visual-event!
-    client-show-combat-notice! client-enqueue-level-effect! client-build-level-effect-plan
-    client-level-effects-active? client-tick-level-effects! client-level-effect-fov-offset
+    client-show-combat-notice!
     client-slot-visual-state client-visual-state client-on-slot-key-down!
     client-on-slot-key-tick! client-on-slot-key-up! client-on-slot-key-abort!
     client-on-movement-key-down! client-on-movement-key-tick! client-on-movement-key-up!
     client-on-slot-wheel! client-clear-owner-state! client-abort-all! client-tick!
-    client-tick-hand-effects! client-drain-camera-pitch-deltas! client-current-hand-transform
     toggle-debug-overlay-state! set-default-client-owner-fn! default-client-owner])
 
 (defn runtime-provider

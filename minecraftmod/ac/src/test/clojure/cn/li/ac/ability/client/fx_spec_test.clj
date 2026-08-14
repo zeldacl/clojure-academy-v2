@@ -2,19 +2,19 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]))
 
 (defn- reset-fixture [f]
   (fx-registry/reset-fx-registry-for-test!)
-  (level-effects/reset-level-effect-registry-for-test!)
-  (hand-effects/reset-hand-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
+  (vfx-hand/reset-hand-effect-registry-for-test!)
   (try
     (f)
     (finally
       (fx-registry/reset-fx-registry-for-test!)
-      (level-effects/reset-level-effect-registry-for-test!)
-      (hand-effects/reset-hand-effect-registry-for-test!))))
+      (vfx-level/reset-level-effect-registry-for-test!)
+      (vfx-hand/reset-hand-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,9 +30,9 @@
   (let [registered-topics* (atom #{})
         level* (atom nil)
         hand* (atom nil)]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! level* [effect-id effect-map]))
-                  hand-effects/register-hand-effect! (fn [effect-id effect-map]
+                  vfx-hand/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! hand* [effect-id effect-map]))
                   fx-registry/register-fx-channel! (fn [topic _handler]
                                                        (swap! registered-topics* conj topic))]
@@ -49,11 +49,11 @@
 (deftest register-dispatches-to-level-and-hand-targets-test
   (let [enqueued-level* (atom [])
         enqueued-hand* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  hand-effects/register-hand-effect! (fn [& _] nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
+                  vfx-hand/register-hand-effect! (fn [& _] nil)
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued-level* conj (into [effect-id ctx-id channel payload] opts)))
-                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-hand/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
                                                       (swap! enqueued-hand* conj (into [effect-id ctx-id channel payload] opts)))]
       (fx-spec/register!
         {:id :test-effect

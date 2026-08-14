@@ -2,7 +2,6 @@ package cn.li.mc262.client.render.effect;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import cn.li.mcbase.clj.ClojureInterop;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -12,12 +11,6 @@ import org.joml.Matrix4f;
 /** Shared render-state extraction and draw-plan access for scripted renderers. */
 abstract class AbstractScriptedGeometryRenderer<T extends Entity>
         extends EntityRenderer<T, ScriptedEntityRenderState<T>> {
-    private static final String RUNTIME_NS = "cn.li.mcbase.client.render.script-render-runtime";
-
-    static {
-        ClojureInterop.requireNamespace(RUNTIME_NS);
-    }
-
     protected final String configuredRendererId;
 
     protected AbstractScriptedGeometryRenderer(EntityRendererProvider.Context context,
@@ -41,30 +34,7 @@ abstract class AbstractScriptedGeometryRenderer<T extends Entity>
         state.entityId = entity.getId();
         state.ageTicks = ScriptedRenderAccess.getAgeTicks(entity);
         state.rendererId = configuredRendererId;
-        state.rendererKey = planString("draw-plan-renderer-key", configuredRendererId, configuredRendererId);
-    }
-
-    protected static float planFloat(String rendererId, String key, float fallback) {
-        Object value = ClojureInterop.invoke(RUNTIME_NS, "draw-plan-param-double",
-                rendererId, key, (double) fallback);
-        return value instanceof Number number ? number.floatValue() : fallback;
-    }
-
-    protected static int planInt(String rendererId, String key, int fallback) {
-        Object value = ClojureInterop.invoke(RUNTIME_NS, "draw-plan-param-int",
-                rendererId, key, fallback);
-        return value instanceof Number number ? number.intValue() : fallback;
-    }
-
-    protected static String planString(String function, String rendererId, String fallback) {
-        Object value = ClojureInterop.invoke(RUNTIME_NS, function, rendererId);
-        return value == null || value.toString().isBlank() ? fallback : value.toString();
-    }
-
-    protected static String planParamString(String rendererId, String key, String fallback) {
-        Object value = ClojureInterop.invoke(RUNTIME_NS, "draw-plan-param-string",
-                rendererId, key, fallback);
-        return value instanceof String string ? string : fallback;
+        state.rendererKey = configuredRendererId;
     }
 
     protected static void line(VertexConsumer consumer, Matrix4f matrix,

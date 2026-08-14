@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.electron-bomb-fx :as electron-bomb-fx]
             [cn.li.ac.content.ability.meltdowner.electron-missile-fx :as electron-missile-fx]
             [cn.li.ac.content.ability.meltdowner.jet-engine-fx :as jet-engine-fx]
@@ -14,7 +14,7 @@
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- reset-fixture [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
       (electron-bomb-fx/init!)
       (electron-missile-fx/init!)
       (jet-engine-fx/init!)
@@ -42,7 +42,7 @@
           (mine-ray-fx/reset-mine-ray-fx-for-test!)
           (ray-barrage-fx/reset-fx-for-test!)
           (scatter-bomb-fx/reset-scatter-bomb-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -53,7 +53,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- dispatch! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
+  (vfx-level/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (def ^:private p0 {:x 0.0 :y 64.0 :z 0.0})
 (def ^:private p1 {:x 1.0 :y 64.0 :z 0.0})
@@ -145,5 +145,4 @@
       (is (<= 26 b-count 31)))
     (is (= 3 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-a"] :balls])))
     (is (= 5 (get-in (scatter-bomb-fx/scatter-bomb-fx-snapshot) [:effect-state [:ctx "ctx-b"] :balls])))))
-
 

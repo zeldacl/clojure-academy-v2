@@ -4,7 +4,6 @@
   (:require [clojure.java.io :as io]
             [cn.li.mcmod.client.platform-bridge :as bridge]
             [cn.li.ac.ability.client.presentation-hud :as presentation-hud]
-            [cn.li.ac.ability.client.presentation-effects :as presentation-effects]
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
@@ -106,14 +105,11 @@
   (let [runtime (presentation-host/create
                   {:template-resolver resolve-template
                    :template-renderer presentation-render/render-template})
-        resource-reader (fn [path]
-                          (if-let [resource (io/resource path)]
-                            (slurp resource)
-                            (throw (ex-info "Presentation effect resource missing"
-                                            {:resource path}))))]
-    (presentation-effects/install-templates!
-      (presentation-host/effect-runtime runtime)
-      resource-reader)
+        _resource-reader (fn [path]
+                           (if-let [resource (io/resource path)]
+                             (slurp resource)
+                             (throw (ex-info "Presentation resource missing"
+                                             {:resource path}))))]
     runtime))
 
 (defn- ensure-combat-hud! [runtime player-uuid width height]
@@ -151,7 +147,6 @@
     {:mount! (fn [id kind template model]
                (presentation-host/mount-host! runtime id kind template model))
      :frame! (fn [frame-id delta-seconds width height]
-               (presentation-host/tick-effects! runtime (* 1000.0 (double delta-seconds)))
                (when-let [refresh! (:refresh! @combat-hud*)]
                  (refresh! width height {}))
                (when-let [refresh! (:refresh! @terminal*)]
@@ -174,20 +169,6 @@
                     (reset! combat-hud* nil))
                   (when (= mount (:mount @terminal*))
                     (reset! terminal* nil)))
-     :spawn-effect! (fn [template-id owner params now-ms]
-                      (presentation-host/spawn-effect! runtime template-id owner params now-ms))
-     :presentation-spawn-effect! (fn [template-id owner params now-ms]
-                                   (presentation-host/spawn-effect!
-                                     runtime template-id owner params now-ms))
-     :presentation-clear-effect-owner! (fn [owner]
-                                         (presentation-host/clear-effect-owner!
-                                           runtime owner))
-     :destroy-effect! (fn [instance-id]
-                        (presentation-host/destroy-effect! runtime instance-id))
-     :clear-effect-owner! (fn [owner]
-                            (presentation-host/clear-effect-owner! runtime owner))
-     :tick-effects! (fn [delta-ms]
-                      (presentation-host/tick-effects! runtime delta-ms))
      :reload-resources! (fn [generation]
                           (reset! template-cache* {})
                           (presentation-host/reload-resources! runtime generation))

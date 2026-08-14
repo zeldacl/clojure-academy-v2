@@ -30,9 +30,9 @@
     :init-fns '[cn.li.ac.content.items.all/init-items!
                 cn.li.ac.content.sounds/init-sounds!]}
    {:phase :entity
-    :namespaces '[cn.li.ac.content.render-profiles.effect-profiles
+    :namespaces '[
             cn.li.ac.content.entities.all]
-    :init-fns '[cn.li.ac.content.render-profiles.effect-profiles/init-render-profiles!
+    :init-fns '[
           cn.li.ac.content.entities.all/init-entities!]}
    {:phase :ability
     :namespaces '[cn.li.ac.content.ability

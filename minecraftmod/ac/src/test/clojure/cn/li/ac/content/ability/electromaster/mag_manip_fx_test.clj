@@ -4,24 +4,24 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
   (arc-beam/enqueue-for-test! :mag-manip ctx-id channel payload {:runtime :hand}))
 
 (defn- invoke-tick! []
-  (hand-effects/update-effect-state! :mag-manip
+  (vfx-hand/update-hand-effect-state! :mag-manip
     (fn [store] (arc-beam/effect-tick-state! :hand :mag-manip store))))
 
 (defn- with-fresh-mag-manip-fx-runtime [f]
   (try
-    (hand-effects/reset-hand-effect-registry-for-test!)
+    (vfx-hand/reset-hand-effect-registry-for-test!)
     (mag-manip-fx/reset-fx-for-test!)
     (mag-manip-fx/init!)
     (f)
     (finally
-      (hand-effects/reset-hand-effect-registry-for-test!)
+      (vfx-hand/reset-hand-effect-registry-for-test!)
       (mag-manip-fx/reset-fx-for-test!))))
 
 (use-fixtures :each with-fresh-mag-manip-fx-runtime)
@@ -29,7 +29,7 @@
 (deftest init-registers-mag-manip-fx-channels-test
   (let [registered-hand* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [hand-effects/register-hand-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-hand/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand* [effect-id effect-map])
                                                        nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -45,11 +45,11 @@
 (deftest fx-handler-routes-hold-throw-end-and-queues-sounds-test
   (let [handlers* (atom {})
         hand-enqueued* (atom [])]
-    (with-redefs [hand-effects/register-hand-effect! (fn [& _] nil)
+    (with-redefs [vfx-hand/register-hand-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-hand/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
                                                       (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts)))]
       (mag-manip-fx/init!)
       ((get @handlers* :mag-manip/fx-hold) "ctx-1" :mag-manip/fx-hold {:mode :hold-start :block-id "minecraft:iron_block"})

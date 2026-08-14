@@ -3,17 +3,17 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.vecmanip.vec-accel-fx :as vafx]))
 
 (defn- reset-fixture [f]
   (try
-        (level-effects/reset-level-effect-registry-for-test!)
+        (vfx-level/reset-level-effect-registry-for-test!)
         (vafx/reset-fx-for-test!)
         (f)
         (finally
           (vafx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -27,7 +27,7 @@
 (deftest init-registers-owner-aware-vec-accel-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -69,11 +69,11 @@
 (deftest init-handler-routes-update-through-level-effects-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [& _] nil)]

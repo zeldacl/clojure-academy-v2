@@ -5,7 +5,7 @@
             [cn.li.ac.config.modid :as modid] [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.hud :as hud]
             [cn.li.ac.ability.client.keybinds :as keybinds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.read-model :as read-model]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]
@@ -561,9 +561,9 @@
                    ;; Storm-wing stores its state under :effect-state, flashing
                    ;; under :fx-state — read whichever key the effect uses.
                    (vals (or (:effect-state
-                              (level-effects/effect-state-snapshot effect-id))
+                              (vfx-level/effect-state-snapshot effect-id))
                              (:fx-state
-                              (level-effects/effect-state-snapshot effect-id)))))
+                              (vfx-level/effect-state-snapshot effect-id)))))
         sw-storm
         (some (fn [st]
                 (when (and (:active? st)

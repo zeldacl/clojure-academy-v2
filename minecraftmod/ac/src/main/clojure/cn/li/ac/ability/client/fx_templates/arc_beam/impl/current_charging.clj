@@ -3,7 +3,7 @@
             [cn.li.ac.ability.client.effects.academy-arc :as academy-arc]
             [cn.li.ac.ability.client.effects.rv3 :as rv3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.config.modid :as modid]
@@ -608,7 +608,7 @@
 
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
-  (let [store (:states (level-effects/effect-state-snapshot :current-charging))
+  (let [store (:states (vfx-level/effect-state-snapshot :current-charging))
         active-states (filter :active? (vals (or store {})))
         cam-v (rv3/map->v3 camera-pos)
         ops (vec
@@ -681,14 +681,14 @@
     (when (seq ops)
       {:ops ops})))
 
-(defmethod arc-beam/effect-initial-state [:current-charging :level] [_ _] {:states {}})
-(defmethod arc-beam/effect-enqueue-state! [:current-charging :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-initial-state [:current-charging :level] [_ _] {:states {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-enqueue-state! [:current-charging :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(defmethod arc-beam/effect-tick-state! [:current-charging :level] [_ _ store] (tick-state! store))
-(defmethod arc-beam/effect-build-plan :current-charging
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-tick-state! [:current-charging :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-build-plan :current-charging
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod arc-beam/effect-clear-owner! :current-charging [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-clear-owner! :current-charging [_ store owner-key]
   (when (contains? (or (:states store) {}) owner-key)
     (stop-loop-sound! owner-key))
   (assoc (or store {:states {}})

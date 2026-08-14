@@ -4,18 +4,18 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.electron-bomb-fx :as electron-bomb-fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (electron-bomb-fx/reset-fx-for-test!)
           (f)
           (finally
             (electron-bomb-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -28,7 +28,7 @@
 (deftest init-registers-owner-aware-electron-bomb-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -45,11 +45,11 @@
 (deftest fx-handler-routes-events-with-ctx-metadata-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (electron-bomb-fx/init!)
@@ -108,7 +108,7 @@
       ;; Original EntityMdRaySmall life is 14 ticks — beam must outlive the
       ;; old 8-tick window.
       (dotimes [_ 14]
-        (level-effects/update-effect-state! :electron-bomb
+        (vfx-level/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (is (seq @particles*))
@@ -126,7 +126,7 @@
 
       ;; Casting emits no particles of its own — the ball entity is the visual.
       (dotimes [_ 20]
-        (level-effects/update-effect-state! :electron-bomb
+        (vfx-level/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (empty? @particles*))
 
@@ -136,7 +136,7 @@
                 :end {:x 1.0 :y 64.0 :z 17.0}})
       (is (seq (:ops (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))))
       (dotimes [_ 14]
-        (level-effects/update-effect-state! :electron-bomb
+        (vfx-level/update-effect-state! :electron-bomb
           (fn [store] (arc-beam/effect-tick-state! :level :electron-bomb store))))
       (is (nil? (arc-beam/effect-build-plan :electron-bomb {:x 0.0 :y 65.0 :z 0.0} nil 0))
           "beam flash plan should disappear when ttl decays to zero")
@@ -168,4 +168,3 @@
         "a fired settlement beam survives its context ending")
     (is (nil? (get (:effect-state (electron-bomb-fx/fx-snapshot)) [:ctx "ctx-clear"]))
         "the context-bound ball state is still cleared")))
-

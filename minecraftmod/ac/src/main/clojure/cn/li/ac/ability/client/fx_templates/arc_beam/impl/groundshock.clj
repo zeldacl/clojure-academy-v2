@@ -3,8 +3,8 @@
             [cn.li.ac.ability.client.effects.beam-ops :as fx-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.ability.client.runtime :as client-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
@@ -94,7 +94,7 @@
                          (<= tick 20) 1.0
                          (<= tick 25) (- 1.0 (/ (- tick 20) 5.0))
                          :else 0.0)]
-                (hand-effects/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
+                (vfx-hand/add-camera-pitch-delta! (:queue-owner base-meta) (* -0.2 pitch-factor))))
               (merge base-meta
                  {:charge-ticks next-val
                   :perform-ticks (long (or (:perform-ticks owner-state) 0))
@@ -122,7 +122,7 @@
                     (keep (fn [[owner-key owner-state]]
                             (let [remaining (long (or (:perform-ticks owner-state) 0))]
                       (when (pos? remaining)
-                        (hand-effects/add-camera-pitch-delta! (:queue-owner owner-state) perform-step))
+                        (vfx-hand/add-camera-pitch-delta! (:queue-owner owner-state) perform-step))
                       (let [next-state (if (> remaining 1)
                                          (assoc owner-state :perform-ticks (dec remaining))
                                          (when (or (:active? owner-state) (pos? remaining))
@@ -135,12 +135,12 @@
 ;; FX channel registration
 ;; ---------------------------------------------------------------------------
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:groundshock :level] [_ _] {})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:groundshock :hand] [_ _] {:hand-state {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:groundshock :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:groundshock :level] [_ _] {})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:groundshock :hand] [_ _] {:hand-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:groundshock :level]
   [_ _ store ctx-id channel owner-key payload] (level-enqueue! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:groundshock :hand]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:groundshock :hand]
   [_ _ store ctx-id channel owner-key payload] (hand-enqueue-state! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :level] [_ _ store] (level-tick! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :hand] [_ _ store] (hand-tick-state! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :groundshock [_ store owner-key] (update store :hand-state dissoc owner-key))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :level] [_ _ store] (level-tick! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:groundshock :hand] [_ _ store] (hand-tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :groundshock [_ store owner-key] (update store :hand-state dissoc owner-key))

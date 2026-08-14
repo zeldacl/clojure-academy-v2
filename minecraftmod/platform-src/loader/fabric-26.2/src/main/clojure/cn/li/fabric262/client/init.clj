@@ -39,7 +39,6 @@
            [com.mojang.blaze3d.platform Window]
            [net.minecraft.world.entity.player Player]
            [cn.li.mc262.client GuiGraphicsHelper]
-           [cn.li.mc262.client.effect ScriptedEffectSpawner]
            [cn.li.mcver McAccess]))
 
 (defn- bind-texture-fabric!
@@ -151,23 +150,6 @@
                         (sound/stop-all-media!))
      :run-client-effect (fn [effect-key payload]
                           (case effect-key
-                            :mcmod/spawn-local-scripted-effect
-                            (ScriptedEffectSpawner/spawnLocalWithUuid (:effect-id payload))
-
-                            :mcmod/spawn-local-scripted-effect-at
-                            (ScriptedEffectSpawner/spawnLocalAt
-                              (:effect-id payload)
-                              (:x payload) (:y payload) (:z payload))
-
-                            :mcmod/spawn-scripted-effect-at-player
-                            (ScriptedEffectSpawner/spawnAtPlayerWithUuid
-                              (:effect-id payload) (:owner-uuid payload))
-
-                            :mcmod/move-local-scripted-effect
-                            (ScriptedEffectSpawner/moveLocalByUuid (:entity-uuid payload) (:x payload) (:y payload) (:z payload))
-                            :mcmod/remove-local-scripted-effect
-                            (ScriptedEffectSpawner/removeLocalByUuid (:entity-uuid payload))
-
                             :mcmod/get-entity-position
                             (try
                               (McAccess/clientEntitySnapshot

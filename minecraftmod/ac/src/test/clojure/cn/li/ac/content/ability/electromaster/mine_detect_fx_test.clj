@@ -3,13 +3,13 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.mine-detect-fx :as mine-detect-fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-      (level-effects/reset-level-effect-registry-for-test!)
+      (vfx-level/reset-level-effect-registry-for-test!)
       (mine-detect-fx/reset-fx-for-test!)
       (mine-detect-fx/init!)
       (client-sounds/poll-sound-effects!)
@@ -17,7 +17,7 @@
       (finally
         (mine-detect-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
-        (level-effects/reset-level-effect-registry-for-test!))))))
+        (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (defn- event [ctx-id payload]
   {:payload payload
@@ -35,7 +35,7 @@
   (arc-beam/enqueue-for-test! :mine-detect ctx-id channel payload))
 
 (defn- invoke-tick! []
-  (level-effects/update-effect-state! :mine-detect
+  (vfx-level/update-effect-state! :mine-detect
     (fn [store] (arc-beam/effect-tick-state! :level :mine-detect store))))
 
 (use-fixtures :each reset-fixture)
@@ -43,7 +43,7 @@
 (deftest init-registers-mine-detect-fx-channels-test
   (let [registered-effect* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                           (reset! registered-effect* [effect-id effect-map])
                                                           nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -57,11 +57,11 @@
 (deftest fx-handler-routes-perform-and-end-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (mine-detect-fx/init!)

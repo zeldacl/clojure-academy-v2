@@ -4,19 +4,19 @@
             [cn.li.ac.ability.client.effects.particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.meltdowner-fx :as md-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (md-fx/reset-fx-for-test!)
           (f)
           (finally
             (md-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,7 +30,7 @@
 (deftest init-registers-owner-aware-meltdowner-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -49,11 +49,11 @@
 (deftest fx-handler-routes-meltdowner-channels-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (md-fx/init!)
@@ -147,7 +147,7 @@
       (is (some? (arc-beam/effect-build-plan :meltdowner {:x 0.0 :y 65.0 :z 0.0}
                              {:player-uuid "player-a" :x 0.0 :y 64.0 :z 0.0}
                              0)))
-      (level-effects/update-effect-state! :meltdowner
+      (vfx-level/update-effect-state! :meltdowner
         (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store)))
       (is (seq @sounds*) "fire sound queued from :perform")
       (is (= 1 (count @bridge*)) "no loop re-queue on tick")
@@ -177,7 +177,7 @@
       ;; charging, stopped on :end (original c_terminate's sound.stop()).
       ;; EntityMDRay.life is a flat 50 ticks (the port used to roll 16-23).
       (dotimes [_ 50]
-        (level-effects/update-effect-state! :meltdowner
+        (vfx-level/update-effect-state! :meltdowner
           (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store))))
       (is (= 1 (count @bridge*))
           "loop sound started once, no per-tick re-queue")
@@ -230,7 +230,7 @@
 
 (defn- tick-fx! [n]
   (dotimes [_ n]
-    (level-effects/update-effect-state! :meltdowner
+    (vfx-level/update-effect-state! :meltdowner
       (fn [store] (arc-beam/effect-tick-state! :level :meltdowner store)))))
 
 (defn- ray-ops []

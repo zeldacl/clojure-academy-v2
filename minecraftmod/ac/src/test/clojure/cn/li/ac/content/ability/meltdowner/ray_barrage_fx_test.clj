@@ -3,18 +3,18 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.meltdowner.ray-barrage-fx :as rb-fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-          (level-effects/reset-level-effect-registry-for-test!)
+          (vfx-level/reset-level-effect-registry-for-test!)
           (rb-fx/reset-fx-for-test!)
           (f)
           (finally
             (rb-fx/reset-fx-for-test!)
-            (level-effects/reset-level-effect-registry-for-test!))))))
+            (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
@@ -24,7 +24,7 @@
 (deftest init-registers-owner-aware-ray-barrage-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -40,11 +40,11 @@
   (let [handlers* (atom {})
         enqueued* (atom [])
         sounds* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
@@ -69,11 +69,11 @@
 (deftest fx-handler-preray-and-barrage-play-ray-small-sounds-test
   (let [handlers* (atom {})
         sounds* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [& _] nil)
+                  vfx-level/enqueue-level-effect! (fn [& _] nil)
                   client-sounds/queue-current-sound-effect! (fn [payload]
                                                               (swap! sounds* conj payload)
                                                               nil)]
@@ -95,7 +95,7 @@
     (is (seq (:ops (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0}
                                                {:player-uuid "player-a"} 0))))
     (dotimes [_ 30]
-      (level-effects/update-effect-state! :ray-barrage
+      (vfx-level/update-effect-state! :ray-barrage
         (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))))
     (is (nil? (arc-beam/effect-build-plan :ray-barrage {:x 0.0 :y 65.0 :z 0.0} nil 0)))
     (is (empty? (:beam-queue (rb-fx/fx-snapshot))))))
@@ -118,7 +118,7 @@
                                                {:player-uuid "player-a"} 0)))
         "and still renders")
     (dotimes [_ 31]
-      (level-effects/update-effect-state! :ray-barrage
+      (vfx-level/update-effect-state! :ray-barrage
         (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store))))
     (is (empty? (:beam-queue (rb-fx/fx-snapshot)))
         "expires on its own ttl")))
@@ -150,7 +150,7 @@
 
 (defn- tick-fx! [n]
   (dotimes [_ n]
-    (level-effects/update-effect-state! :ray-barrage
+    (vfx-level/update-effect-state! :ray-barrage
       (fn [store] (arc-beam/effect-tick-state! :level :ray-barrage store)))))
 
 (defn- ops-for [ctx-id]

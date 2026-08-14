@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
             [cn.li.ac.content.ability.electromaster.current-charging-fx :as current-charging-fx]
             [cn.li.ac.content.ability.electromaster.mag-manip-fx :as mag-manip-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
@@ -18,7 +18,7 @@
 
 (defn- reset-fixture [f]
   (try
-    (hand-effects/reset-hand-effect-registry-for-test!)
+    (vfx-hand/reset-hand-effect-registry-for-test!)
     (mag-manip-fx/reset-fx-for-test!)
     (current-charging-fx/reset-fx-for-test!)
     (mag-manip-fx/init!)
@@ -27,7 +27,7 @@
     (finally
       (mag-manip-fx/reset-fx-for-test!)
       (current-charging-fx/reset-fx-for-test!)
-      (hand-effects/reset-hand-effect-registry-for-test!))))
+      (vfx-hand/reset-hand-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 

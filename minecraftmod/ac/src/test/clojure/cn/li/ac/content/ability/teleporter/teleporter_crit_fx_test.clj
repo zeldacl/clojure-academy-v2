@@ -2,7 +2,7 @@
   (:require [clojure.test :refer [deftest is]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.teleporter.teleporter-crit-fx :as crit-fx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
@@ -10,7 +10,7 @@
 (deftest init-registers-teleporter-crit-channel-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -24,11 +24,11 @@
 (deftest fx-handler-routes-crit-payload-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (crit-fx/init!)
@@ -53,7 +53,7 @@
   ;; MSG-CTX-TERMINATED arrives right after up! — clear-effect-owner! must
   ;; not erase the just-enqueued burst (upstream particles live out their
   ;; life after the event instead of dying with the context).
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (try
     (with-redefs [client-bridge/run-client-effect!
                   (fn [effect-key _payload]
@@ -62,21 +62,21 @@
                        "width" 1.0 "height" 2.0}))
                   runtime-hooks/client-show-combat-notice! (fn [& _] nil)]
       (crit-fx/init!)
-      (level-effects/enqueue-level-effect! :teleporter-crit "ctx-1" :teleporter/fx-crit-hit
+      (vfx-level/enqueue-level-effect! :teleporter-crit "ctx-1" :teleporter/fx-crit-hit
                                            {:mode :crit-hit
                                             :x 1.0 :y 2.0 :z 3.0
                                             :target-uuid "t"}
                                            :owner-key [:ctx "ctx-1"])
-      (level-effects/clear-effect-owner! [:ctx "ctx-1"])
+      (vfx-level/clear-effect-owner! [:ctx "ctx-1"])
       (let [{:keys [ops]} (arc-beam/effect-build-plan
                            :teleporter-crit {:x 0.0 :y 0.0 :z 0.0}
                            {:player-uuid "viewer"} 0 nil)]
         (is (<= 5 (count ops) 8))))
     (finally
-      (level-effects/reset-level-effect-registry-for-test!))))
+      (vfx-level/reset-level-effect-registry-for-test!))))
 
 (deftest enqueue-crit-hit-spawns-formula-burst-and-notice-test
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (try
     (let [notices* (atom [])]
       (with-redefs [client-bridge/run-client-effect!
@@ -88,7 +88,7 @@
                     runtime-hooks/client-show-combat-notice! (fn [notice-id payload]
                                                                (swap! notices* conj [notice-id payload]))]
         (crit-fx/init!)
-        (level-effects/enqueue-level-effect! :teleporter-crit "ctx-1" :teleporter/fx-crit-hit
+        (vfx-level/enqueue-level-effect! :teleporter-crit "ctx-1" :teleporter/fx-crit-hit
                                              {:mode :crit-hit
                                               :x 1.0 :y 2.0 :z 3.0
                                               :crit-level 2 :crit-rate 2.6
@@ -121,4 +121,4 @@
                                (<= 28.0 z 32.0)))
                         ps))))))
     (finally
-      (level-effects/reset-level-effect-registry-for-test!))))
+      (vfx-level/reset-level-effect-registry-for-test!))))

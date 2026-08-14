@@ -1,27 +1,27 @@
 (ns cn.li.ac.content.ability.teleporter.flashing-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.flashing-fx :as ffx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-flashing-fx-runtime [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (ffx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (ffx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-flashing-fx-runtime)
 
 (deftest init-registers-flashing-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -40,11 +40,11 @@
 (deftest fx-handler-routes-preview-and-perform-events-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (ffx/init!)
@@ -79,13 +79,13 @@
                                                       (swap! sounds* conj args)
                                                       nil)]
       (ffx/init!)
-      (level-effects/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-state-start {:mode :state-start}
+      (vfx-level/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-state-start {:mode :state-start}
                                          :owner-key [:ctx "ctx-1"])
-      (level-effects/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-preview-update {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0}
+      (vfx-level/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-preview-update {:mode :preview-update :to-x 1.0 :to-y 64.0 :to-z 1.0}
                                          :owner-key [:ctx "ctx-1"])
-      (level-effects/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-perform {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 2.0 :to-y 64.0 :to-z 2.0}
+      (vfx-level/enqueue-level-effect! :flashing "ctx-1" :flashing/fx-perform {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :to-x 2.0 :to-y 64.0 :to-z 2.0}
                                          :owner-key [:ctx "ctx-1"])
-      (level-effects/tick-level-effects!)
+      (vfx-level/tick-level-effects!)
       (is (= 1 (count @sounds*)))
       (is (>= (count @particles*) 2))
       (is (= "academy:tp.tp_flashing" (:sound-id (second (first @sounds*))))))))

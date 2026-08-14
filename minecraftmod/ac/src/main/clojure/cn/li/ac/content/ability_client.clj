@@ -10,9 +10,8 @@
             [cn.li.ac.discovery.core :as discovery-core]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
 
@@ -40,8 +39,8 @@
     (arc-beam/validate-fx-multimethods!)
     (fx-registry/freeze-fx-registry!)
     (keybinds/freeze-keybind-registries!)
-    (level-effects/freeze-level-effect-registry!)
-    (hand-effects/freeze-hand-effect-registry!)
+    (vfx/warmup!)
+    (vfx/freeze!)
     (log/info "Ability client FX content initialized"))))
 
 (defn reset-client-fx-for-test!

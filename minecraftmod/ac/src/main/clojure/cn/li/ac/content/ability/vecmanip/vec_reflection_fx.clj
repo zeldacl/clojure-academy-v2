@@ -6,7 +6,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.wave-effect :as wave]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
@@ -20,19 +20,19 @@
 
 (defn vec-reflection-fx-snapshot
   []
-  (or (level-effects/effect-state-snapshot vec-reflection-effect-id)
+  (or (vfx-level/effect-state-snapshot vec-reflection-effect-id)
       (default-vec-reflection-fx-runtime-state)))
 
 (defn reset-vec-reflection-fx-for-test!
   []
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     vec-reflection-effect-id
     (default-vec-reflection-fx-runtime-state))
   nil)
 
 (defn clear-vec-reflection-owner!
   [owner-key]
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     vec-reflection-effect-id
     (fn [state]
       (-> (or state (default-vec-reflection-fx-runtime-state))

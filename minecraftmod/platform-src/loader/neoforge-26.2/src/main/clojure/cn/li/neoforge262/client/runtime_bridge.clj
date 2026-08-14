@@ -10,8 +10,7 @@
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]
             [cn.li.mc262.client.player-state-core :as player-state])
-  (:import [cn.li.mc262.client.effect ScriptedEffectSpawner]
-           [net.neoforged.neoforge.common NeoForge]
+  (:import [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post]
            [net.neoforged.bus.api EventPriority]
            [net.minecraft.client Minecraft]))
@@ -36,27 +35,6 @@
     (overlay-state/clear-client-activated! owner)
     (when-let [session-id (client-session/client-session-id)]
       (overlay-state/clear-client-overlay-session! session-id))))
-
-(defn spawn-local-scripted-effect!
-  "Returns the spawned entity's UUID string (nil on failure)."
-  [effect-id]
-  (ScriptedEffectSpawner/spawnLocalWithUuid (str effect-id)))
-
-(defn spawn-local-scripted-effect-at! [effect-id x y z]
-  (ScriptedEffectSpawner/spawnLocalAt (str effect-id) (double x) (double y) (double z)))
-
-(defn spawn-scripted-effect-at-player!
-  [effect-id owner-uuid]
-  (ScriptedEffectSpawner/spawnAtPlayerWithUuid (str effect-id) (str owner-uuid)))
-
-(defn move-local-scripted-effect!
-  "Move a client-local scripted effect entity to an absolute position
-  (upstream Flashing localTick: marking.setPosition(dest))."
-  [entity-uuid x y z]
-  (ScriptedEffectSpawner/moveLocalByUuid entity-uuid (double x) (double y) (double z)))
-
-(defn remove-local-scripted-effect! [entity-uuid]
-  (ScriptedEffectSpawner/removeLocalByUuid (str entity-uuid)))
 
 (defn slot-visual-state [player-uuid key-idx]
   (client-session/with-current-client-session #(power-runtime/client-slot-visual-state player-uuid key-idx)))

@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.effects.rv3 :as v3]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.arc-gen-fx :as arc-fx]))
 
 (defn- invoke-level-enqueue! [ctx-id channel payload]
@@ -12,20 +12,20 @@
 
 (defn- with-fresh-arc-gen-fx-runtime [f]
   (try
-    (level-effects/reset-level-effect-registry-for-test!)
+    (vfx-level/reset-level-effect-registry-for-test!)
     (arc-fx/reset-fx-for-test!)
     (arc-fx/init!)
     (f)
     (finally
       (arc-fx/reset-fx-for-test!)
-      (level-effects/reset-level-effect-registry-for-test!))))
+      (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-arc-gen-fx-runtime)
 
 (deftest init-registers-arc-gen-fx-channel-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -38,11 +38,11 @@
 (deftest fx-handler-routes-perform-payload-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (arc-fx/init!)

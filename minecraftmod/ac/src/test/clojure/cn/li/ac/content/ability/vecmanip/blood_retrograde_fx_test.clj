@@ -3,17 +3,17 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.blood-retrograde-fx :as brfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]))
 
 (defn- reset-fixture [f]
   (try
-        (level-effects/reset-level-effect-registry-for-test!)
+        (vfx-level/reset-level-effect-registry-for-test!)
         (brfx/reset-fx-for-test!)
         (f)
         (finally
           (brfx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -37,7 +37,7 @@
 (deftest init-registers-blood-retrograde-fx-channels-test
   (let [registered-effect (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-effect [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -56,15 +56,15 @@
         enqueue-fn* (atom nil)
         enqueued-effects* (atom [])
         sound-calls* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [_effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [_effect-id effect-map]
                                                          (reset! enqueue-fn* (:enqueue-state-fn effect-map))
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued-effects* conj [effect-id ctx-id channel payload opts])
-                                                        (level-effects/update-effect-state! effect-id
+                                                        (vfx-level/update-effect-state! effect-id
                                                           @enqueue-fn*
                                                           ctx-id channel [:ctx ctx-id] payload)
                                                         nil)
@@ -122,11 +122,11 @@
                      :splashes [{:x 1.0 :y 2.0 :z 3.0 :size 1.0}]
                      :sprays [{:x 4.0 :y 5.0 :z 6.0 :face :up :size 1.0 :rotation 0.0
                                :offset-u 0.0 :offset-v 0.0 :texture-id 1}]})
-      (level-effects/update-effect-state! :blood-retrograde
+      (vfx-level/update-effect-state! :blood-retrograde
         (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store)))
       (is (= 21 (:ticks (get (:effect-state (brfx/fx-snapshot)) [:ctx "ctx-main"]))))
       (dotimes [_ 9]
-        (level-effects/update-effect-state! :blood-retrograde
+        (vfx-level/update-effect-state! :blood-retrograde
           (fn [store] (arc-beam/effect-tick-state! :level :blood-retrograde store))))
       (let [snapshot (brfx/fx-snapshot)]
         (is (nil? (get (:splashes snapshot) [:ctx "ctx-main"])))

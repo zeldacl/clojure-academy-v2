@@ -3,21 +3,21 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.content.ability.vecmanip.groundshock-fx :as gfx]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- invoke-hand-enqueue! [ctx-id channel payload]
   (arc-beam/enqueue-for-test! :groundshock ctx-id channel payload))
 
 (defn- reset-fixture [f]
-  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (hand-effects/reset-hand-effect-registry-for-test!)
+  (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (vfx-hand/reset-hand-effect-registry-for-test!)
     (gfx/reset-fx-for-test!)
     (gfx/init!)
     (try
       (f)
       (finally
-        (hand-effects/reset-hand-effect-registry-for-test!)
+        (vfx-hand/reset-hand-effect-registry-for-test!)
         (gfx/reset-fx-for-test!))))))
 
 (use-fixtures :each reset-fixture)
@@ -26,10 +26,10 @@
   (let [registered-level (atom nil)
         registered-hand (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level [effect-id effect-map])
                                                          nil)
-                  hand-effects/register-hand-effect! (fn [effect-id effect-map]
+                  vfx-hand/register-hand-effect! (fn [effect-id effect-map]
                                                        (reset! registered-hand [effect-id effect-map])
                                                        nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -48,15 +48,15 @@
   (let [handlers* (atom {})
         hand-enqueued* (atom [])
         level-enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
-                  hand-effects/register-hand-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
+                  vfx-hand/register-hand-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  hand-effects/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-hand/enqueue-hand-effect! (fn [effect-id ctx-id channel payload & opts]
                                                       (swap! hand-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! level-enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (gfx/init!)
@@ -80,7 +80,7 @@
 
 (deftest two-owners-keep-groundshock-hand-state-independent-test
   (let [pitch-deltas* (atom [])]
-    (with-redefs [hand-effects/add-camera-pitch-delta! (fn
+    (with-redefs [vfx-hand/add-camera-pitch-delta! (fn
                                                          ([delta]
                                                           (swap! pitch-deltas* conj delta)
                                                           nil)
@@ -97,7 +97,7 @@
         (is (= 6 (count @pitch-deltas*))))
       (invoke-hand-enqueue! "ctx-a" :groundshock/fx-perform {:mode :perform})
       (invoke-hand-enqueue! "ctx-b" :groundshock/fx-end {:mode :end :performed? false})
-      (hand-effects/update-effect-state! :groundshock
+      (vfx-hand/update-hand-effect-state! :groundshock
         (fn [store] (arc-beam/effect-tick-state! :hand :groundshock store)))
       (let [snapshot (gfx/fx-snapshot)]
         (is (= 3 (:perform-ticks (get (:hand-state snapshot) [:ctx "ctx-a"]))))

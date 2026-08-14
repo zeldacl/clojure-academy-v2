@@ -4,20 +4,20 @@
             [cn.li.ac.ability.client.effects.arc-fx]
             [cn.li.ac.ability.client.effects.rv3]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.content.ability.electromaster.railgun-fx :as railgun-fx]))
 
 (defn- reset-fixture [f]
   (try
-        (level-effects/reset-level-effect-registry-for-test!)
+        (vfx-level/reset-level-effect-registry-for-test!)
         (railgun-fx/reset-fx-for-test!)
         (railgun-fx/reset-charge-glows-for-test!)
         (f)
         (finally
           (railgun-fx/reset-fx-for-test!)
           (railgun-fx/reset-charge-glows-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,7 +30,7 @@
 (deftest init-registers-owner-aware-railgun-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -46,11 +46,11 @@
 (deftest fx-handler-routes-with-ctx-metadata-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (railgun-fx/init!)
@@ -74,7 +74,7 @@
                                            :end {:x 3.0 :y 64.0 :z 3.0}
                                            :hit-distance 18.0})
     ;; Upstream beam length blends from zero over its first 150 ms.
-    (level-effects/update-effect-state! :railgun-shot
+    (vfx-level/update-effect-state! :railgun-shot
       (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store)))
     (let [plan (arc-beam/effect-build-plan :railgun-shot {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (some? plan))
@@ -103,7 +103,7 @@
 (deftest fired-beam-outlives-its-context-test
   ;; Railgun's context ends on the same tick the shot goes out (the charge
   ;; window closes), and client_ui_hooks' MSG-CTX-TERMINATED handler calls
-  ;; level-effects/clear-effect-owner!. Upstream's EntityRailgunFX is a world
+  ;; vfx-level/clear-effect-owner!. Upstream's EntityRailgunFX is a world
   ;; entity with its own ~2.5 s life that the ability context never kills, so
   ;; the beam has to survive that: clearing the owner used to delete it a tick
   ;; or two after firing, and the shot rendered nothing at all.
@@ -118,7 +118,7 @@
       "and still renders")
   ;; It is the ttl, not the context, that ends it.
   (dotimes [_ 51]
-    (level-effects/update-effect-state! :railgun-shot
+    (vfx-level/update-effect-state! :railgun-shot
       (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store))))
   (is (empty? (get (:beam-effects (railgun-fx/fx-snapshot)) [:ctx "ctx-fire"]))
       "and expires on its own ttl"))
@@ -180,7 +180,7 @@
 (deftest charge-start-spawns-glow-anchored-to-caster-test
   (let [handlers* (atom {})
         run-calls* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
@@ -199,7 +199,7 @@
 (deftest charge-start-without-source-player-id-does-not-spawn-test
   (let [handlers* (atom {})
         run-calls* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
@@ -214,7 +214,7 @@
 (deftest charge-end-clears-enhanced-world-glow-without-affecting-hand-animation-test
   (let [handlers* (atom {})
         run-calls* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
@@ -239,7 +239,7 @@
   ;; unconditionally on abort even when no charge was ever active.
   (let [handlers* (atom {})
         run-calls* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
@@ -256,7 +256,7 @@
     (arc-beam/enqueue-for-test! :railgun-shot "ctx-stale" :railgun/fx-charge-start {:mode :charge-start})
     (is (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"]))
     (dotimes [_ 32]
-      (level-effects/update-effect-state! :railgun-shot
+      (vfx-level/update-effect-state! :railgun-shot
         (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store))))
     (is (not (contains? (:charging (railgun-fx/fx-snapshot)) [:ctx "ctx-stale"])))))
 
@@ -273,7 +273,7 @@
 
 (defn- tick-fx! [n]
   (dotimes [_ n]
-    (level-effects/update-effect-state! :railgun-shot
+    (vfx-level/update-effect-state! :railgun-shot
       (fn [store] (arc-beam/effect-tick-state! :level :railgun-shot store)))))
 
 (defn- beam-state [ctx-id]
@@ -481,7 +481,7 @@
   ;; growing for a whole session.
   (let [handlers* (atom {})
         clock (atom 1000000)]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)

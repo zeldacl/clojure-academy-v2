@@ -260,7 +260,7 @@ if (target.loader != "none") {
     def runtimeClassOutput = { Project runtimeProject ->
         def outputDirs = [runtimeProject.layout.buildDirectory.dir("classes/java/main")]
         if (runtimeProject.tasks.findByName("compileClojure") != null &&
-            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in [":ac", ":mcmod"]))) {
+            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in rootProject.ext.neutralSourceFirstProjects))) {
             outputDirs << runtimeProject.layout.buildDirectory.dir("clojure/main")
         }
         files(outputDirs)
@@ -302,7 +302,7 @@ if (target.loader != "none") {
         def result = [runtimeProject.tasks.named("compileJava")]
         def compileClojure = runtimeProject.tasks.findByName("compileClojure")
         if (compileClojure != null &&
-            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in [":ac", ":mcmod"]))) {
+            (rootProject.ext.fullAotEnabled || !(runtimeProject.path in rootProject.ext.neutralSourceFirstProjects))) {
             result << compileClojure
         }
         result
@@ -353,14 +353,19 @@ if (target.loader != "none") {
         })
     }
 
+    def contentNeutralSourceRoots = contentProjects.collectMany { contentProject ->
+        def roots = contentProject.hasProperty("neutralRuntimeSourceRoots")
+            ? contentProject.neutralRuntimeSourceRoots
+            : [contentProject.file("src/main/clojure")]
+        roots as List
+    }
     def platformClojureSourceClasspath = files(sourceComponents.collect { component ->
         componentDir(component, "clojure")
-    } + [mcmodProject.file("src/main/clojure")] +
-        contentProjects.collect { it.file("src/main/clojure") })
+    } + [mcmodProject.file("src/main/clojure")] + contentNeutralSourceRoots)
 
     def clojureAotDir = layout.buildDirectory.dir("clojure/main")
     def neutralClojureSourceRoots = [mcmodProject.file("src/main/clojure")] +
-        contentProjects.collect { it.file("src/main/clojure") }
+        contentNeutralSourceRoots
     def neutralClojureResourceDir = layout.buildDirectory.dir("generated/neutral-clojure-resources")
     def neutralClojureReportDir = layout.buildDirectory.dir("reports/neutral-clojure")
     def neutralAotBasesManifest = neutralClojureReportDir.map { it.file("aot-bases.txt") }
@@ -878,7 +883,7 @@ if (target.loader != "none") {
             packagingDeps << neutralAotStripTask
         }
         def runtimeClassDependencies = runtimeClassTasks(contentProject)
-        def includeStandaloneAotClasses = rootProject.ext.fullAotEnabled || !(contentProject.path in [":ac", ":mcmod"])
+        def includeStandaloneAotClasses = rootProject.ext.fullAotEnabled || !(contentProject.path in rootProject.ext.neutralSourceFirstProjects)
 
         tasks.named("jar", Jar).configure {
             dependsOn packagingDeps

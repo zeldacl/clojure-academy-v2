@@ -4,6 +4,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
+            [cn.li.ac.client.vfx-runtime :as vfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (def ^:private activate-sound-id (modid/namespaced-path "em.intensify_activate"))
@@ -11,17 +12,9 @@
 (defn- loop-key [ctx-id]
   (str "body-intensify/" ctx-id))
 
-(defn- presentation-owner [ctx-id payload]
-  (str "body-intensify/" (or (:source-player-id payload) "unknown") "/" ctx-id))
-
 (defn- on-fx-start
   [ctx-id _channel payload]
-  (client-bridge/call-adapter
-    :presentation-spawn-effect!
-    :academy/body-intensify-charge
-    (presentation-owner ctx-id payload)
-    {:count 1 :material-id 0}
-    (System/currentTimeMillis))
+  (vfx/enqueue-level-effect! :body-intensify ctx-id :fx-start payload)
   ;; FollowEntitySound upstream is a real ambient loop attached to the caster.
   (client-bridge/run-client-effect!
    :mcmod/start-loop-sound-at-player
@@ -33,9 +26,7 @@
 
 (defn- on-fx-end
   [ctx-id _channel payload]
-  (client-bridge/call-adapter
-    :presentation-clear-effect-owner!
-    (presentation-owner ctx-id payload))
+  (vfx/enqueue-level-effect! :body-intensify ctx-id :fx-end payload)
   ;; Stop any charging loop started by fx-start before handling release.
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
@@ -54,15 +45,7 @@
          (number? x) (assoc :x (double x))
          (number? y) (assoc :y (double y))
          (number? z) (assoc :z (double z)))))
-    ;; The performed burst is now a typed Effect Instance.  Position is data
-    ;; in the instance params; the version backend decides how to bill-board
-    ;; or batch the particle command for the active world.
-    (client-bridge/call-adapter
-      :presentation-spawn-effect!
-      :academy/body-intensify-burst
-      (presentation-owner ctx-id payload)
-      (select-keys (:caster-pos payload) [:x :y :z])
-      (System/currentTimeMillis))))
+    (vfx/enqueue-level-effect! :body-intensify ctx-id :burst payload)))
 
 (def ^:private spec
   (arc-beam/build-spec

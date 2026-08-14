@@ -4,19 +4,19 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.thunder-bolt-fx :as tb-fx])
   (:import [cn.li.mcmod.math V3]))
 
 (defn- reset-fixture [f]
   (try
-        (level-effects/reset-level-effect-registry-for-test!)
+        (vfx-level/reset-level-effect-registry-for-test!)
         (tb-fx/init!)
         (tb-fx/reset-fx-for-test!)
         (f)
         (finally
           (tb-fx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -30,7 +30,7 @@
 (deftest init-registers-thunder-bolt-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -44,11 +44,11 @@
 (deftest fx-handler-routes-payload-to-level-effect-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
                                                      nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj [effect-id ctx-id channel payload opts])
                                                         nil)]
       (tb-fx/init!)
@@ -93,7 +93,7 @@
       (is (= "academy:em.arc_strong" (:sound-id (first @sounds*))))
       (is (some? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0)))
       (dotimes [_ 30]
-        (level-effects/update-effect-state! :thunder-bolt-strike
+        (vfx-level/update-effect-state! :thunder-bolt-strike
           (fn [store] (arc-beam/effect-tick-state! :level :thunder-bolt-strike store))))
       (is (empty? (:arcs (tb-fx/fx-snapshot))))
       (is (nil? (arc-beam/effect-build-plan :thunder-bolt-strike {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
@@ -151,7 +151,7 @@
      :aoe-origin {:x 0.0 :y 65.0 :z 20.0}
      :aoe-points [{:x 3.0 :y 65.5 :z 21.0} {:x -2.0 :y 65.5 :z 19.0}]
      :source-player-id "player-a"}))
-  (mapcat val (:arcs (level-effects/effect-state-snapshot :thunder-bolt-strike))))
+  (mapcat val (:arcs (vfx-level/effect-state-snapshot :thunder-bolt-strike))))
 
 (deftest three-main-arcs-are-independent-bolts-test
   ;; c_spawnEffect loops `for(i <- 0 to 2)` and spawns three separate

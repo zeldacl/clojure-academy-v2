@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.mag-movement-fx :as mag-movement-fx]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -12,12 +12,12 @@
   (arc-beam/enqueue-for-test! :mag-movement ctx-id channel payload))
 
 (defn- invoke-tick! []
-  (level-effects/update-effect-state! :mag-movement
+  (vfx-level/update-effect-state! :mag-movement
     (fn [store] (arc-beam/effect-tick-state! :level :mag-movement store))))
 
 (defn- reset-fixture [f]
   (runtime-hooks/with-client-ctx-fn {:session-id :test-session} (fn [] (try
-      (level-effects/reset-level-effect-registry-for-test!)
+      (vfx-level/reset-level-effect-registry-for-test!)
       (mag-movement-fx/reset-fx-for-test!)
       (mag-movement-fx/init!)
       (client-sounds/poll-sound-effects!)
@@ -25,14 +25,14 @@
       (finally
         (mag-movement-fx/reset-fx-for-test!)
         (client-sounds/poll-sound-effects!)
-        (level-effects/reset-level-effect-registry-for-test!))))))
+        (vfx-level/reset-level-effect-registry-for-test!))))))
 
 (use-fixtures :each reset-fixture)
 
 (deftest init-registers-mag-movement-fx-channels-test
   (let [registered-effect* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                           (reset! registered-effect* [effect-id effect-map])
                                                           nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -46,11 +46,11 @@
 (deftest fx-handler-routes-start-update-end-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & opts]
                                                         (swap! enqueued* conj (into [effect-id ctx-id channel payload] opts))
                                                         nil)]
       (mag-movement-fx/init!)

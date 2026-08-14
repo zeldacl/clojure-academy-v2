@@ -14,7 +14,7 @@
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-spec :as fx-spec]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.client.vfx-runtime :as vfx-level]))
 
 (def ^:private electron-missile-effect-id :electron-missile)
 
@@ -45,19 +45,19 @@
 
 (defn electron-missile-fx-snapshot
   []
-  (or (level-effects/effect-state-snapshot electron-missile-effect-id)
+  (or (vfx-level/effect-state-snapshot electron-missile-effect-id)
       (default-electron-missile-fx-runtime-state)))
 
 (defn reset-electron-missile-fx-for-test!
   []
-  (level-effects/reset-level-effect-state-for-test!
+  (vfx-level/reset-level-effect-state-for-test!
     electron-missile-effect-id
     (default-electron-missile-fx-runtime-state))
   nil)
 
 (defn clear-electron-missile-owner!
   [owner-key]
-  (level-effects/update-effect-state!
+  (vfx-level/update-effect-state!
     electron-missile-effect-id
     (fn [store]
       (-> (or store (default-electron-missile-fx-runtime-state))

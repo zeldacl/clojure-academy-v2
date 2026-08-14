@@ -2,25 +2,25 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.mark-teleport-fx :as mfx]))
 
 (defn- with-fresh-mark-teleport-fx-runtime [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (mfx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (mfx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-mark-teleport-fx-runtime)
 
 (deftest init-registers-mark-teleport-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -43,7 +43,7 @@
                                                       (swap! sounds* conj args)
                                                       nil)]
       (mfx/init!)
-      (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-perform {:mode :perform :target {:x 2.0 :y 64.0 :z 3.0} :distance 8.0}
+      (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-perform {:mode :perform :target {:x 2.0 :y 64.0 :z 3.0} :distance 8.0}
                                          :owner-key [:ctx "ctx-1"])
       (is (= 1 (count @sounds*)))
       (is (= "academy:tp.tp" (:sound-id (second (first @sounds*))))))))
@@ -53,13 +53,13 @@
                 ;; rand-range calls (rand (- b a)) — keep both arities.
                 clojure.core/rand (fn [& _] 0.0)]
     (mfx/init!)
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start
                                          {:mode :start :target {:x 1.0 :y 64.0 :z 3.0} :distance 8.0}
                                          :owner-key [:ctx "ctx-1"])
     ;; Two ticks: the humanoid frame advances and ambient particles spawn
     ;; (rand 0.0 -> the 0.4 gate always passes).
-    (level-effects/tick-level-effects!)
-    (level-effects/tick-level-effects!)
+    (vfx-level/tick-level-effects!)
+    (vfx-level/tick-level-effects!)
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :mark-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
@@ -117,7 +117,7 @@
                 client-sounds/queue-sound-effect! (fn [& _] nil)
                 clojure.core/rand (fn [& _] 0.0)]
     (mfx/init!)
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-face" :mark-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-face" :mark-teleport/fx-start
                                          {:mode :start :target {:x 0.0 :y 64.0 :z 10.0} :distance 10.0}
                                          :owner-key [:ctx "ctx-face"])
     (let [plan (fn [cam yaw]
@@ -164,7 +164,7 @@
                 client-sounds/queue-sound-effect! (fn [& _] nil)
                 clojure.core/rand (fn [& _] 0.0)]
     (mfx/init!)
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-live" :mark-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-live" :mark-teleport/fx-start
                                          {:mode :start
                                           ;; a deliberately stale server answer
                                           :target {:x 0.0 :y 64.0 :z 10.0}
@@ -195,11 +195,11 @@
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})
                 client-sounds/queue-sound-effect! (fn [& _] nil)]
     (mfx/init!)
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start
                                          {:mode :start :target {:x 1.0 :y 2.0 :z 3.0} :distance 8.0}
                                          :owner-key [:ctx "ctx-1"])
     (is (some? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-perform
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-perform
                                          {:mode :perform :target {:x 1.0 :y 2.0 :z 3.0} :distance 8.0}
                                          :owner-key [:ctx "ctx-1"])
     ;; Upstream l_end kills the mark on MSG_TERMINATED.
@@ -208,12 +208,12 @@
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-sounds/current-effect-owner (fn [] {:client-session-id "mark-teleport-test"})]
     (mfx/init!)
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start {:mode :start}
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-start {:mode :start}
                                          :owner-key [:ctx "ctx-1"])
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-update {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-update {:mode :update :target {:x 1.0 :y 2.0 :z 3.0} :distance 2.0}
                                          :owner-key [:ctx "ctx-1"])
     (is (some? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))
-    (level-effects/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-end {:mode :end}
+    (vfx-level/enqueue-level-effect! :mark-teleport "ctx-1" :mark-teleport/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-1"])
     (is (nil? (get (:effect-state (mfx/fx-snapshot)) [:ctx "ctx-1"])))))
 

@@ -10,9 +10,9 @@
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.hud :as hud-renderer]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-hand]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
@@ -341,7 +341,7 @@
   (client-keybinds/clear-client-keybind-state! owner)
   (client-particles/clear-owner-particle-effects! owner)
   (client-sounds/clear-owner-sound-effects! owner)
-  (hand-effects/clear-owner-camera-pitch-deltas! owner)
+  (vfx-hand/clear-owner-camera-pitch-deltas! owner)
   (clear-client-player-state! owner)
   nil)
 
@@ -645,7 +645,7 @@
         (fn [_owner]
           (ctx/with-context-owner (client-context-owner player-uuid)
             (ctx/terminate-context! ctx-id nil)
-            (level-effects/clear-effect-owner! [:ctx ctx-id]))))
+            (vfx-level/clear-effect-owner! [:ctx ctx-id]))))
       ctx-id)))
 
 (defn- clear-slot-key-ticks!
@@ -1121,12 +1121,12 @@
         ;; Externally aborted contexts (overload stun, death, category change)
         ;; never get their skill's :end channel — release the fx state so
         ;; persistent effects (storm-wing wings/loop sound) stop rendering.
-        (level-effects/clear-effect-owner! [:ctx ctx-id])))
+        (vfx-level/clear-effect-owner! [:ctx ctx-id])))
     (net-client/register-push-handler! catalog/MSG-CTX-TERMINATED
       (fn [{:keys [ctx-id]}]
         (remove-slot-context! ctx-id)
         (ctx/terminate-context! ctx-id nil)
-        (level-effects/clear-effect-owner! [:ctx ctx-id])))
+        (vfx-level/clear-effect-owner! [:ctx ctx-id])))
     (net-client/register-push-handler! catalog/MSG-CTX-CHANNEL on-context-channel-push!)
     ;; Side-effect cleanup moved out of render path into tick hooks
     (content-actions/register-client-tick-hook!
@@ -1175,7 +1175,7 @@
      (fn [ctx-id _reason]
        (remove-slot-context! ctx-id)
        (ctx/terminate-context! ctx-id nil)
-       (level-effects/clear-effect-owner! [:ctx ctx-id]))
+       (vfx-level/clear-effect-owner! [:ctx ctx-id]))
 
      :client-transition-to-alive!
      (fn [ctx-id server-id payload]

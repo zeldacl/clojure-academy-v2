@@ -3,18 +3,18 @@
             [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.electromaster.thunder-clap-fx :as thunder-clap-fx]))
 
 (defn- reset-fixture [f]
   (try
-        (level-effects/reset-level-effect-registry-for-test!)
+        (vfx-level/reset-level-effect-registry-for-test!)
         (thunder-clap-fx/init!)
         (thunder-clap-fx/reset-fx-for-test!)
         (f)
         (finally
           (thunder-clap-fx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each reset-fixture)
 
@@ -28,7 +28,7 @@
 (deftest init-registers-owner-aware-thunder-clap-fx-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -46,11 +46,11 @@
 (deftest fx-handler-routes-four-stages-with-ctx-metadata-test
   (let [handlers* (atom {})
         enqueued* (atom [])]
-    (with-redefs [level-effects/register-level-effect! (fn [& _] nil)
+    (with-redefs [vfx-level/register-level-effect! (fn [& _] nil)
                   fx-registry/register-fx-channel! (fn [topic handler]
                                                       (swap! handlers* assoc topic handler)
                                                       nil)
-                  level-effects/enqueue-level-effect! (fn [effect-id ctx-id channel payload & {:keys [owner-key]}]
+                  vfx-level/enqueue-level-effect! (fn [effect-id ctx-id channel payload & {:keys [owner-key]}]
                                                         (swap! enqueued* conj
                                                                [effect-id payload
                                                                 {:ctx-id ctx-id
@@ -144,7 +144,7 @@
                                                 :source-player-id "player-a"})
     (let [plan (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0)]
       (is (seq (:ops plan))))
-    (level-effects/update-effect-state! :thunder-clap
+    (vfx-level/update-effect-state! :thunder-clap
       (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store)))
     (is (seq (:ops (arc-beam/effect-build-plan :thunder-clap {:x 0.0 :y 65.0 :z 0.0} nil 0))))))
 
@@ -192,7 +192,7 @@
       ;; 60 ticks is comfortably beyond the ~33 expected ticks to life 30
       ;; (tick advances with p=0.9), for all 5 arcs.
       (dotimes [_ 60]
-        (level-effects/update-effect-state! :thunder-clap
+        (vfx-level/update-effect-state! :thunder-clap
           (fn [store] (arc-beam/effect-tick-state! :level :thunder-clap store))))
       (let [second-batch (:surround (get-in (thunder-clap-fx/fx-snapshot) [:effect-state [:ctx "ctx-a"]]))]
         (is (not= first-batch second-batch))

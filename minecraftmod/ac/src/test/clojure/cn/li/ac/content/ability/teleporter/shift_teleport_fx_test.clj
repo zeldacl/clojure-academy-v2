@@ -1,26 +1,26 @@
 (ns cn.li.ac.content.ability.teleporter.shift-teleport-fx-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.teleporter.shift-teleport-fx :as stfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-shift-teleport-fx-runtime [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (stfx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (stfx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-shift-teleport-fx-runtime)
 
 (deftest init-registers-shift-teleport-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -42,7 +42,7 @@
   ;; lingers until they fade and build-plan emits tp_particle quads — the
   ;; vanilla :portal alias would render purple.
   (stfx/init!)
-  (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform
+  (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform
                                        {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :x 5.0 :y 64.0 :z 0.0}
                                        :owner-key [:ctx "ctx-1"])
   (let [st (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])]
@@ -68,7 +68,7 @@
   ;; feet-anchored: the block marker spans dest[1]..dest[1]+1.2, an entity
   ;; marker spans its feet..feet+height.
   (stfx/init!)
-  (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update
+  (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update
                                          {:mode :update :x 10.0 :y 65.0 :z 12.0
                                           :target-count 2 :target-hit? true :hand-valid? true
                                           :entities [{:x 8.0 :y 64.0 :z 9.0}
@@ -96,11 +96,11 @@
 
 (deftest perform-kills-markers-but-keeps-trail-until-fade-test
   (stfx/init!)
-    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-start
                                          {:mode :start :x 1.0 :y 2.0 :z 3.0 :hand-valid? true}
                                          :owner-key [:ctx "ctx-1"])
     (is (some? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))
-    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform
+    (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-perform
                                          {:mode :perform :from-x 0.0 :from-y 64.0 :from-z 0.0 :x 5.0 :y 64.0 :z 0.0}
                                          :owner-key [:ctx "ctx-1"])
     ;; Upstream c_end kills the block marker and every target marker — the
@@ -121,12 +121,12 @@
 (deftest enqueue-end-clears-state-test
   (with-redefs [client-bridge/run-client-effect! (fn [& _] nil)]
     (stfx/init!)
-    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-start {:mode :start}
+    (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-start {:mode :start}
                                          :owner-key [:ctx "ctx-1"])
-    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}
+    (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-update {:mode :update :x 1.0 :y 2.0 :z 3.0 :target-count 1 :target-hit? false :hand-valid? true}
                                          :owner-key [:ctx "ctx-1"])
     (is (some? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))
-    (level-effects/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-end {:mode :end}
+    (vfx-level/enqueue-level-effect! :shift-teleport "ctx-1" :shift-teleport/fx-end {:mode :end}
                                          :owner-key [:ctx "ctx-1"])
     (is (nil? (get (:fx-state (stfx/fx-snapshot)) [:ctx "ctx-1"])))))
 

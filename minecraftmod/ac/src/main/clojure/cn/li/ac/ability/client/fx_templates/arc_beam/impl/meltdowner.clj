@@ -4,7 +4,7 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.config.modid :as modid]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.ac.ability.client.effects.rv3 :as vec3])
@@ -12,7 +12,7 @@
 
 (defn- update-meltdowner-fx-state!
   [f & args]
-  (apply level-effects/update-effect-state! :meltdowner f args))
+  (apply vfx-level/update-effect-state! :meltdowner f args))
 (def ^:private charge-loop-sound (modid/namespaced-path "md.md_charge"))
 (def ^:private fire-sound (modid/namespaced-path "md.meltdowner"))
 (defn- loop-sound-key [ctx-id] (str "meltdowner/" ctx-id))
@@ -317,14 +317,14 @@
 ;; Registration
 ;; ---------------------------------------------------------------------------
 
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:meltdowner :level] [_ _] {:effect-state {} :rays {}})
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:meltdowner :level]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:meltdowner :level] [_ _] {:effect-state {} :rays {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:meltdowner :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue! store ctx-id channel owner-key payload))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:meltdowner :level] [_ _ store] (tick! store))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :meltdowner
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:meltdowner :level] [_ _ store] (tick! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :meltdowner
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(defmethod cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :meltdowner [_ store owner-key]
   ;; Charge state and loop sound are context-bound; a fired ray is not.
   ;; Upstream c_perform spawns EntityMDRay into the world and c_terminate only
   ;; restores walk speed and stops the sound — the ray lives out its own life.

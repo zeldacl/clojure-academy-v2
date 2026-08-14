@@ -7,7 +7,6 @@ import cn.li.forge1201.entity.ModEntities;
 import cn.li.mcbase.clj.ClojureInterop;
 import cn.li.mc1201.client.font.msdf.MsdfRenderTypes;
 import cn.li.mc1201.client.effects.particle.MdParticle;
-import cn.li.mc1201.client.render.EffectRendererDispatcher;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import cn.li.mc1201.client.render.ModRenderTypes;
@@ -15,13 +14,8 @@ import cn.li.mcbase.client.render.RenderProfileBootstrap;
 import cn.li.mc1201.client.render.effect.BehaviorObjRenderer;
 import cn.li.mc1201.client.render.effect.ScriptedBlockBodyRenderer;
 import cn.li.mc1201.entity.ScriptedBlockBodyEntity;
-import cn.li.mc1201.entity.ScriptedEffectEntity;
-import cn.li.mc1201.entity.ScriptedMarkerEntity;
 import cn.li.mc1201.entity.ScriptedProjectileEntity;
-import cn.li.mc1201.entity.ScriptedRayEntity;
 import cn.li.mcbase.entity.spec.ScriptedBlockBodySpec;
-import cn.li.mcbase.entity.spec.ScriptedMarkerSpec;
-import cn.li.mcbase.entity.spec.ScriptedRaySpec;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
@@ -52,18 +46,6 @@ public final class ForgeClientRenderRegistry {
     public static void registerEntityAndBlockRenderers(EntityRenderersEvent.RegisterRenderers event) {
         RenderProfileBootstrap.runContentClientInitHooks();
 
-        for (String registryName : ModEntities.getScriptedEffectRegistryNames()) {
-            EntityType<ScriptedEffectEntity> effectType = ModEntities.getEntityType(registryName, ScriptedEffectEntity.class);
-            if (effectType == null) {
-                continue;
-            }
-            String rendererId = "effect-billboard";
-            if (ModEntities.getScriptedEffectSpec(registryName) != null) {
-                rendererId = ModEntities.getScriptedEffectSpec(registryName).getRendererId();
-            }
-            event.registerEntityRenderer(effectType, EffectRendererDispatcher.pickEffectRenderer(rendererId));
-        }
-
         EntityType<ScriptedProjectileEntity> magHook =
             ModEntities.getEntityType("entity_mag_hook", ScriptedProjectileEntity.class);
         if (magHook != null) {
@@ -73,41 +55,12 @@ public final class ForgeClientRenderRegistry {
             event.registerEntityRenderer(magHook, BehaviorObjRenderer::new);
         }
 
-        for (String registryName : ModEntities.getScriptedRayRegistryNames()) {
-            EntityType<ScriptedRayEntity> rayType = ModEntities.getEntityType(registryName, ScriptedRayEntity.class);
-            if (rayType == null) {
-                continue;
-            }
-            ScriptedRaySpec raySpec = ModEntities.getScriptedRaySpec(registryName);
-            String rendererId = raySpec == null ? "ray-composite" : raySpec.getRendererId();
-            event.registerEntityRenderer(rayType, EffectRendererDispatcher.pickRayRenderer(rendererId));
-        }
-
-        for (String registryName : ModEntities.getScriptedMarkerRegistryNames()) {
-            EntityType<ScriptedMarkerEntity> markerType = ModEntities.getEntityType(registryName, ScriptedMarkerEntity.class);
-            if (markerType == null) {
-                continue;
-            }
-            ScriptedMarkerSpec markerSpec = ModEntities.getScriptedMarkerSpec(registryName);
-            String rendererId = markerSpec == null ? "marker-billboard" : markerSpec.getRendererId();
-            event.registerEntityRenderer(markerType, EffectRendererDispatcher.pickMarkerRenderer(rendererId));
-        }
-
         for (String registryName : ModEntities.getScriptedBlockBodyRegistryNames()) {
             EntityType<ScriptedBlockBodyEntity> blockBodyType = ModEntities.getEntityType(registryName, ScriptedBlockBodyEntity.class);
             if (blockBodyType == null) {
                 continue;
             }
-            ScriptedBlockBodySpec spec = ModEntities.getScriptedBlockBodySpec(registryName);
-            String rendererId = spec == null ? "block-body" : spec.getRendererId();
-            if ("block-body".equals(rendererId)) {
-                event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
-            } else {
-                // Behavior-driven block-body entities (e.g. the silbarn)
-                // render their own model: BehaviorObjRenderer resolves the
-                // content render namespace from the spec's hook id.
-                event.registerEntityRenderer(blockBodyType, BehaviorObjRenderer::new);
-            }
+            event.registerEntityRenderer(blockBodyType, ScriptedBlockBodyRenderer::new);
         }
 
         ClojureInterop.requireNamespace("cn.li.forge1201.client.init");

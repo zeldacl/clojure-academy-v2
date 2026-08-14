@@ -1,7 +1,7 @@
 (ns cn.li.ac.content.ability.vecmanip.vecmanip-fx-owner-test
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.content.ability.vecmanip.plasma-cannon-fx :as plasma-cannon-fx]
@@ -36,7 +36,7 @@
    :owner-key [:ctx ctx-id]})
 
 (defn- dispatch! [effect-id {:keys [payload ctx-id channel owner-key]}]
-  (level-effects/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
+  (vfx-level/enqueue-level-effect! effect-id ctx-id channel payload :owner-key owner-key))
 
 (deftest vec-deviation-keeps-state-and-waves-per-owner-test
   (with-redefs [client-sounds/queue-current-sound-effect! (fn [& _] nil)
@@ -113,10 +113,10 @@
     ;; The bodies fade in from alpha 0, so they need to have ticked before they
     ;; contribute any ops.
     (dotimes [_ 40]
-      (level-effects/update-effect-state! :plasma-cannon
+      (vfx-level/update-effect-state! :plasma-cannon
         (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
     (let [snapshot (plasma-cannon-fx/fx-snapshot)
-          plan (level-effects/build-level-effect-plan nil nil 0 nil)]
+          plan (vfx-level/build-level-effect-plan nil nil 0 nil)]
       (is (= 24 (:charge-ticks (get (:effect-state snapshot) [:ctx "ctx-a"]))))
       (is (= :go (:state (get (:effect-state snapshot) [:ctx "ctx-b"]))))
       (is (= 2 (count (filter #(= :plasma-body (:kind %)) (:ops plan))))
@@ -128,7 +128,7 @@
       (is (true? (:terminated? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-a"]))))
       (is (some? (get (:effect-state (plasma-cannon-fx/fx-snapshot)) [:ctx "ctx-b"])))
       (dotimes [_ 40]
-        (level-effects/update-effect-state! :plasma-cannon
+        (vfx-level/update-effect-state! :plasma-cannon
           (fn [store] (arc-beam/effect-tick-state! :level :plasma-cannon store))))
       (let [after-fade (plasma-cannon-fx/fx-snapshot)]
         (is (nil? (get (:effect-state after-fade) [:ctx "ctx-a"])))

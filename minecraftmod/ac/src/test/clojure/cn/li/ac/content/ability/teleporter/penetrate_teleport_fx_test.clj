@@ -3,18 +3,18 @@
             [cn.li.ac.ability.client.effects.sounds :as client-sounds]
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.ac.ability.client.level-effects :as level-effects]
+            [cn.li.ac.client.vfx-runtime :as vfx-level]
             [cn.li.ac.content.ability.teleporter.penetrate-teleport-fx :as pfx]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]))
 
 (defn- with-fresh-penetrate-teleport-fx-runtime [f]
-  (level-effects/reset-level-effect-registry-for-test!)
+  (vfx-level/reset-level-effect-registry-for-test!)
   (pfx/reset-fx-for-test!)
       (try
         (f)
         (finally
           (pfx/reset-fx-for-test!)
-          (level-effects/reset-level-effect-registry-for-test!))))
+          (vfx-level/reset-level-effect-registry-for-test!))))
 
 (use-fixtures :each with-fresh-penetrate-teleport-fx-runtime)
 
@@ -23,7 +23,7 @@
 (deftest init-registers-penetrate-fx-channels-test
   (let [registered-level* (atom nil)
         registered-topics* (atom #{})]
-    (with-redefs [level-effects/register-level-effect! (fn [effect-id effect-map]
+    (with-redefs [vfx-level/register-level-effect! (fn [effect-id effect-map]
                                                          (reset! registered-level* [effect-id effect-map])
                                                          nil)
                   fx-registry/register-fx-channel! (fn [topic _handler]
@@ -57,7 +57,7 @@
                 ;; rand-range calls (rand (- b a)) — keep both arities.
                 clojure.core/rand (fn [& _] 0.0)]
     (pfx/init!)
-    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
                                          {:mode :start :available? true :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
     (let [{:keys [ops]} (arc-beam/effect-build-plan
@@ -88,7 +88,7 @@
   (with-redefs [client-sounds/current-effect-owner owner
                 clojure.core/rand (fn [& _] 0.0)]
     (pfx/init!)
-    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-live" :penetrate-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-live" :penetrate-teleport/fx-start
                                          {:mode :start
                                           ;; a deliberately stale server answer
                                           :available? true :distance 12.0 :march-distance 12.0
@@ -128,10 +128,10 @@
   (with-redefs [client-sounds/current-effect-owner owner
                 clojure.core/rand (fn [& _] 0.0)]
     (pfx/init!)
-    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
                                          {:mode :start :available? false :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
-    (dotimes [_ 3] (level-effects/tick-level-effects!))
+    (dotimes [_ 3] (vfx-level/tick-level-effects!))
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
@@ -145,15 +145,15 @@
   (with-redefs [client-sounds/current-effect-owner owner
                 clojure.core/rand (fn [& _] 0.0)]
     (pfx/init!)
-    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
+    (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start
                                          {:mode :start :available? true :distance 12.0 :x 1.0 :y 64.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
     ;; l_updateMark runs every tick — an update must refresh the target but
     ;; keep the accumulated :ticks / :ambient-particles.
-    (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update
+    (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update
                                          {:mode :update :available? true :distance 14.0 :x 1.0 :y 64.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
-    (dotimes [_ 2] (level-effects/tick-level-effects!))
+    (dotimes [_ 2] (vfx-level/tick-level-effects!))
     (let [{:keys [ops]} (arc-beam/effect-build-plan
                          :penetrate-teleport {:x 0.0 :y 0.0 :z 0.0}
                          {:player-uuid "viewer"} 0 nil)]
@@ -171,13 +171,13 @@
                                                       (swap! sound-calls* conj args)
                                                       nil)]
       (pfx/init!)
-      (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start {:mode :start}
+      (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-start {:mode :start}
                                          :owner-key [:ctx "ctx-1"])
-      (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update {:mode :update :available? true :distance 12.0 :x 1.0 :y 2.0 :z 3.0}
+      (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-update {:mode :update :available? true :distance 12.0 :x 1.0 :y 2.0 :z 3.0}
                                          :owner-key [:ctx "ctx-1"])
-      (dotimes [_ 3] (level-effects/tick-level-effects!))
+      (dotimes [_ 3] (vfx-level/tick-level-effects!))
       (is (true? (get-in (pfx/fx-snapshot) [:fx-state [:ctx "ctx-1"] :available?])))
-      (level-effects/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-perform {:mode :perform :to-x 4.0 :to-y 5.0 :to-z 6.0}
+      (vfx-level/enqueue-level-effect! :penetrate-teleport "ctx-1" :penetrate-teleport/fx-perform {:mode :perform :to-x 4.0 :to-y 5.0 :to-z 6.0}
                                          :owner-key [:ctx "ctx-1"])
       (is (= 1 (count @sound-calls*)))
       (is (= "academy:tp.tp" (:sound-id (second (first @sound-calls*)))))

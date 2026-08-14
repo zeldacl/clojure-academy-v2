@@ -4,8 +4,7 @@
   Skills register level/hand runtimes and channel handlers through `register!`
   instead of hand-written `fx-registry` case blocks."
   (:require [cn.li.ac.ability.client.fx-registry :as fx-registry]
-            [cn.li.ac.ability.client.hand-effects :as hand-effects]
-            [cn.li.ac.ability.client.level-effects :as level-effects]))
+            [cn.li.ac.client.vfx-runtime :as vfx]))
 
 (def ^:private meta-keys
   [:effect-instance-id :source-player-id :world-id])
@@ -49,14 +48,14 @@
 
 (defn- register-runtime!
   [effect-id {:keys [level hand]}]
-  (when level
-    (level-effects/register-level-effect!
-      effect-id
-      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn :build-plan-fn :empty-state? :fov-offset-fn :clear-owner-fn])))
-  (when hand
-    (hand-effects/register-hand-effect!
-      effect-id
-      (select-keys hand [:initial-state :enqueue-state-fn :tick-state-fn :transform-fn])))
+  (vfx/register-effect!
+    effect-id
+    {:level (when level
+              (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn
+                                  :build-plan-fn :empty-state? :fov-offset-fn :clear-owner-fn]))
+     :hand (when hand
+             (select-keys hand [:initial-state :enqueue-state-fn :tick-state-fn
+                                :transform-fn :clear-owner-fn]))})
   nil)
 
 (defn- channel-handler
@@ -82,10 +81,10 @@
           (doseq [target targets*]
             (case target
               :immediate (when immediate-fn (immediate-fn ctx-id channel payload*))
-              :level (level-effects/enqueue-level-effect!
-                       effect-id ctx-id channel merged :owner-key owner-key)
-              :hand (hand-effects/enqueue-hand-effect!
-                      effect-id ctx-id channel
+              :level (vfx/enqueue!
+                       effect-id :level ctx-id channel merged :owner-key owner-key)
+              :hand (vfx/enqueue!
+                      effect-id :hand ctx-id channel
                       (dissoc hand-merged :affected-blocks :broken-blocks)
                       :owner-key owner-key)
               nil)))))))
