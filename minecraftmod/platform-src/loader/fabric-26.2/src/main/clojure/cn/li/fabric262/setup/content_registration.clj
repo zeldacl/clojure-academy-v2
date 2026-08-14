@@ -77,7 +77,7 @@
              #(assoc % (:bucket-item-id block-spec) registered-bucket))))))))
 
 (defn- create-fluid-backed-block
-  [registry-name block-id fluid-id has-be? tile-id registered-fluids-source]
+  [registry-name block-id fluid-id has-be? tile-id light-level registered-fluids-source]
   (let [source (registry-core/lookup registered-fluids-source fluid-id)]
     (when-not source
       (throw (ex-info "Fluid source missing for liquid block"
@@ -87,8 +87,9 @@
                              (cast FlowingFluid source)))
           block-inst (if has-be?
                        (FabricBootstrapHelper/createScriptedLiquidBlock
-                         registry-name fluid-supplier block-id tile-id)
-                       (FabricBootstrapHelper/createLiquidBlock registry-name fluid-supplier))]
+                         registry-name fluid-supplier block-id tile-id (int light-level))
+                       (FabricBootstrapHelper/createLiquidBlock
+                         registry-name fluid-supplier (int light-level)))]
       (when-let [block-holder (get @fluid-block-holders fluid-id)]
         (reset! block-holder block-inst))
       block-inst)))
@@ -97,12 +98,13 @@
   [{:keys [registered-blocks registered-fluids-source base-properties carrier-properties]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (core/for-each-block-plan!
-      (fn [{:keys [block-id registry-name fluid-id fluid-block?
+      (fn [{:keys [block-id registry-name fluid-id fluid-block? fluid-luminosity
                    needs-dynamic-properties? has-be? tile-id]}]
         (let [block-inst (cond
                            (and fluid-id fluid-block?)
                            (create-fluid-backed-block
-                             registry-name block-id fluid-id has-be? tile-id registered-fluids-source)
+                             registry-name block-id fluid-id has-be? tile-id
+                             fluid-luminosity registered-fluids-source)
 
                            (and fluid-id (not fluid-block?))
                            (FabricBootstrapHelper/createPlainBlock

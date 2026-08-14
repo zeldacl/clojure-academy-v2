@@ -101,13 +101,13 @@
 	(ForgeBootstrapHelper/createFlowingFluid properties))
 
 (defn create-liquid-block
-	[fluid-supplier]
-	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier))
+	[fluid-supplier light-level]
+	(ForgeBootstrapHelper/createLiquidBlock fluid-supplier (int light-level)))
 
 (defn create-scripted-liquid-block
-	[fluid-supplier block-id tile-id]
+	[fluid-supplier block-id tile-id light-level]
 	(ForgeBootstrapHelper/createScriptedLiquidBlock
-		fluid-supplier ^String block-id ^String tile-id))
+		fluid-supplier ^String block-id ^String tile-id (int light-level)))
 
 (defn create-fluid-bucket
 	[fluid-supplier]

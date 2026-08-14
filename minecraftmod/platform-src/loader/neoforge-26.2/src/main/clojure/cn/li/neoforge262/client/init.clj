@@ -126,6 +126,8 @@
     :translucent buffer-impl/get-translucent-buffer
     :cutout-no-cull buffer-impl/get-cutout-no-cull-buffer
     :submit-vertex pose-impl/submit-vertex
+    :translucent-see-through buffer-impl/get-translucent-see-through-buffer
+    :submit-vertex-no-overlay pose-impl/submit-vertex-no-overlay
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "neoforge-26.2-client")
   nil)
@@ -181,6 +183,7 @@
      :local-player-item-id runtime-bridge/local-player-item-id
      :local-player-pos runtime-bridge/local-player-pos
      :local-player-eye-pos runtime-bridge/local-player-eye-pos
+     :camera-position runtime-bridge/camera-position
      :local-player-look-end runtime-bridge/local-player-look-end
      :local-player-block-aim runtime-bridge/local-player-block-aim
      :clear-client-activated-overlay runtime-bridge/clear-client-activated-overlay!

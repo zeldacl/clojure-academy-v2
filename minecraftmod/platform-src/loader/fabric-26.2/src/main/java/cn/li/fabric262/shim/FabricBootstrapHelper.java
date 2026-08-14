@@ -90,20 +90,24 @@ public final class FabricBootstrapHelper {
         return SharedBootstrapBlockHelper.createPlainBlock(blockProperties);
     }
 
-    public static Block createLiquidBlock(String registryId, Supplier<? extends FlowingFluid> fluidSupplier) {
+    public static Block createLiquidBlock(String registryId, Supplier<? extends FlowingFluid> fluidSupplier,
+                                          int lightLevel) {
         return new LiquidBlock(Objects.requireNonNull(fluidSupplier.get(), "fluid"),
-            SharedBootstrapBlockHelper.createWaterProperties(registryId));
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel));
     }
 
     public static Block createScriptedLiquidBlock(String registryId,
                                                    Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
-                                                   String tileId) {
+                                                   String tileId,
+                                                   int lightLevel) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            SharedBootstrapBlockHelper.createWaterProperties(registryId),
+            SharedBootstrapBlockHelper.withLightLevel(
+                SharedBootstrapBlockHelper.createWaterProperties(registryId), lightLevel),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;

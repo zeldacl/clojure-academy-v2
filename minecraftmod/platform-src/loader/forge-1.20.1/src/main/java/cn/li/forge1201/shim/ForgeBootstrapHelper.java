@@ -201,18 +201,21 @@ public final class ForgeBootstrapHelper {
         return new ForgeFlowingFluid.Flowing(properties);
     }
 
-    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier) {
-        return new LiquidBlock(fluidSupplier, BlockBehaviour.Properties.copy(Blocks.WATER));
+    public static Block createLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier, int lightLevel) {
+        return new LiquidBlock(fluidSupplier, SharedBootstrapBlockHelper.withLightLevel(
+            BlockBehaviour.Properties.copy(Blocks.WATER), lightLevel));
     }
 
     public static Block createScriptedLiquidBlock(Supplier<? extends FlowingFluid> fluidSupplier,
                                                    String blockId,
-                                                   String tileId) {
+                                                   String tileId,
+                                                   int lightLevel) {
         return new ScriptedLiquidBlock(
             fluidSupplier,
             blockId,
             tileId,
-            BlockBehaviour.Properties.copy(Blocks.WATER),
+            SharedBootstrapBlockHelper.withLightLevel(
+                BlockBehaviour.Properties.copy(Blocks.WATER), lightLevel),
             (resolvedTileId, resolvedBlockId, pos, state) -> {
                 BlockEntityType<ScriptedBlockEntity> type = ScriptedBlockEntity.getType(resolvedTileId);
                 return type != null ? new ScriptedBlockEntity(type, pos, state, resolvedTileId, resolvedBlockId) : null;

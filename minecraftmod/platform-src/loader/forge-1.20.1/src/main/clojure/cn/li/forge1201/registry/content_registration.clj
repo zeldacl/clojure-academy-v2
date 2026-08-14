@@ -97,8 +97,8 @@
   [{:keys [blocks-register registered-fluids-source base-properties carrier-properties]}]
   (let [bundles (logic-pipeline/compile-all-bundles)]
     (core/for-each-block-plan!
-      (fn [{:keys [block-id registry-name fluid-id needs-dynamic-properties?
-                   has-be? tile-id]}]
+      (fn [{:keys [block-id registry-name fluid-id fluid-luminosity
+                   needs-dynamic-properties? has-be? tile-id]}]
         (let [registered-obj
               (.register ^DeferredRegister blocks-register registry-name
                          (reify java.util.function.Supplier
@@ -111,13 +111,15 @@
                                                  (get [_]
                                                    (.get ^RegistryObject fluid-source-ro)))
                                                block-id
-                                               tile-id))
+                                               tile-id
+                                               fluid-luminosity))
                                            fluid-id
                                            (when-let [fluid-source-ro (get (core/registry-source-snapshot registered-fluids-source) fluid-id)]
                                              (bootstrap/create-liquid-block
                                                (reify java.util.function.Supplier
                                                  (get [_]
-                                                   (.get ^RegistryObject fluid-source-ro)))))
+                                                   (.get ^RegistryObject fluid-source-ro)))
+                                               fluid-luminosity))
                                            (and needs-dynamic-properties? has-be?)
                                            (let [props (blockstate-props/get-all-properties block-id)]
                                              (bootstrap/create-carrier-scripted-dynamic-block block-id tile-id props base-properties))

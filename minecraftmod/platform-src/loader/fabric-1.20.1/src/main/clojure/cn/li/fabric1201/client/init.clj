@@ -21,6 +21,7 @@
             [cn.li.fabric1201.client.keyboard-init :as kb-init]
             [cn.li.fabric1201.client.obj-model-registration :as obj-models]
             [cn.li.mc1201.client.font.msdf-setup :as msdf-setup]
+            [cn.li.mc1201.client.player-state-core :as player-state]
             [cn.li.mcbase.client.session :as mc-session]
             [cn.li.mc1201.gui.reactive.host :as reactive-host]
             [cn.li.mc1201.gui.reactive.terminal-render :as terminal-render]
@@ -84,6 +85,8 @@
     :translucent buffer-impl/get-translucent-buffer
     :cutout-no-cull buffer-impl/get-cutout-no-cull-buffer
     :submit-vertex pose-impl/submit-vertex
+    :translucent-see-through buffer-impl/get-translucent-see-through-buffer
+    :submit-vertex-no-overlay pose-impl/submit-vertex-no-overlay
     :triangle-vertex-order (fn [] [0 1 2 2])}
    "fabric-client")
 
@@ -118,7 +121,8 @@
   ;; wipes adapters content modules registered earlier during modloading
   ;; (ac's :reactive-overlay-build/update — see forge init note).
   (client-bridge/merge-client-bridge!
-    {:open-screen open-screen-dispatcher
+    {:camera-position player-state/camera-position
+     :open-screen open-screen-dispatcher
      :open-reactive-screen open-reactive-screen-handler
      :client-overlay-activated-override
      (fn [_owner]
