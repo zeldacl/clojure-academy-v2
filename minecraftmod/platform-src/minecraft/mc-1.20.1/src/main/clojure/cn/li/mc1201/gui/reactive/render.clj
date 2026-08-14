@@ -505,10 +505,15 @@
                    (int (+ (double b0) (* (- (double b) (double b0)) f)))]))
               (recur (inc i)))))))))
 
+(def ^:private ^:const progress-diag-interval 60)
+(def ^:private progress-diag-tick (atom 0))
 (defn render-progress! [^GuiGraphics gg ^INode node]
   (let [x        (node-abs-x node)   y        (node-abs-y node)
         w        (scaled-w node)     h        (scaled-h node)
         percent  (double (.getDSlot node SLOT-PROG-PROGRESS))
+        _        (when (zero? (mod (swap! progress-diag-tick inc) progress-diag-interval))
+                   (cn.li.mcmod.util.log/info "[progress-render] percent=" percent
+                                              "x=" x "y=" y "w=" w "h=" h))
         diag-tan (double (.getDSlot node 1))            ;; :corner dslot (0=rect, 0.695=44deg)
         scroll   (.getDSlot node 3)                      ;; :scroll-offset
         raw-alpha (.getDSlot node 4)                     ;; :alpha (0.0 = unset → default 1.0)
