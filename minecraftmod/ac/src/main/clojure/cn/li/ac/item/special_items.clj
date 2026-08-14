@@ -76,7 +76,7 @@
 
 (def ^:private matter-kind->nbt
   "Material kind -> matterKind NBT value. Empty units deliberately have NO
-   matterKind NBT (damage 0 means empty, like upstream's MAT_NONE): a "none"
+   matterKind NBT (damage 0 means empty, like upstream's MAT_NONE): a none
    tag would make some empty stacks NBT-tagged and some not, so
    ItemStack.isSameItemSameTags refused to merge two empty stacks (they
    swapped on drag instead of stacking). nil = remove the tag."
