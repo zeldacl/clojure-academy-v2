@@ -55,8 +55,8 @@
                          (let [v (double (or @(:work-progress container) 0.0))]
                            (when (zero? (mod (swap! diag-tick inc) 20))
                              (log/info "[fusor-gui] progress atom=" v
-                                       "dslot0=" (some-> pn (.getDSlot ^cn.li.mcmod.ui.node.INode pn 0))
-                                       "oslot9=" (some-> pn (.getOSlot ^cn.li.mcmod.ui.node.INode pn 9) str)
+                                       "dslot0=" (.getDSlot ^cn.li.mcmod.ui.node.INode pn 0)
+                                       "oslot9=" (some-> pn (.getOSlot 9) str)
                                        "recipe-liquid=" (int (or @(:current-recipe-liquid container) 0))))
                            v)))
         liquid-sig (sig/computed-o [clock]
