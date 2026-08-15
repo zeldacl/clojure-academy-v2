@@ -264,6 +264,20 @@
     (resolver owner intent)
     (:ability-id intent)))
 
+(defn- session-id-for-intent
+  "Resolve release/abort to the owner's unique active session when the
+   network envelope intentionally omits a server-generated session id."
+  [engine owner intent]
+  (or (:session-id intent)
+      (let [ability-id (resolve-ability-id engine owner intent)
+            matches (for [[session-id session] @(:sessions engine)
+                          :when (and (= owner (:owner session))
+                                     (or (nil? ability-id)
+                                         (= ability-id (:ability-id session))))]
+                      session-id)]
+        (when (= 1 (count matches))
+          (first matches)))))
+
 (defn- cooldown-ready? [state ability-id tick]
   (or (not (contains? state :cooldowns))
       (not (pos? (long (or (get-in state [:cooldowns ability-id]) 0))))))
@@ -327,9 +341,10 @@
                 result))))))))
 
 (defn- release! [engine owner intent]
-  (if-let [session (get @(:sessions engine) (:session-id intent))]
+  (let [session-id (session-id-for-intent engine owner intent)]
+    (if-let [session (get @(:sessions engine) session-id)]
     (let [ability (ability engine (:ability-id session))
-          result (execute engine ability {:owner owner :session-id (:session-id session)
+          result (execute engine ability {:owner owner :session-id session-id
                                           :ability-id (:ability-id session)
                                           :session-state (:state session)
                                           :tick (long ((:now-tick engine)))
@@ -340,15 +355,16 @@
                                           :event-seq (long (or (:event-seq intent) 1))})]
       (swap! (:sessions engine) dissoc (:session-id session))
       (update result :session-ops conj
-              {:op :release :session-id (:session-id session) :owner owner}))
-    (reject :unknown-session {:session-id (:session-id intent)})))
+              {:op :release :session-id session-id :owner owner}))
+    (reject :unknown-session {:session-id session-id}))))
 
 (defn- abort! [engine owner intent]
-  (if (contains? @(:sessions engine) (:session-id intent))
-    (let [session (get @(:sessions engine) (:session-id intent))
+  (let [session-id (session-id-for-intent engine owner intent)]
+    (if (contains? @(:sessions engine) session-id)
+    (let [session (get @(:sessions engine) session-id)
           ability (ability engine (:ability-id session))
           result (execute engine ability {:owner owner
-                                          :session-id (:session-id intent)
+                                          :session-id session-id
                                           :ability-id (:ability-id session)
                                           :session-state (:state session)
                                           :tick (long ((:now-tick engine)))
@@ -360,10 +376,10 @@
                                           :flags (:flags intent)
                                           :refs (:refs intent)
                                           :event-seq (long (or (:event-seq intent) 1))})]
-      (swap! (:sessions engine) dissoc (:session-id intent))
+      (swap! (:sessions engine) dissoc session-id)
       (update result :session-ops conj
-              {:op :abort :session-id (:session-id intent) :owner owner}))
-    (reject :unknown-session {:session-id (:session-id intent)})))
+              {:op :abort :session-id session-id :owner owner}))
+    (reject :unknown-session {:session-id session-id}))))
 
 (defn dispatch-intent! [engine owner raw-intent]
   (let [intent (contract/intent (assoc raw-intent :owner owner))]

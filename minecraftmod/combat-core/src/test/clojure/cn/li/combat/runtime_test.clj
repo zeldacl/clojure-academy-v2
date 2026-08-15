@@ -178,8 +178,7 @@
                                            :ability-id :test/phased})
         pulsed (first (runtime/tick! engine 2))
         aborted (runtime/dispatch-intent! engine "p"
-                                          {:intent-id 46 :op :abort
-                                           :session-id ["p" 45]})]
+                                          {:intent-id 46 :op :abort})]
     (is (= :accepted (:status started)))
     (is (empty? (:vfx-signals started)))
     (is (= :pulse (get-in pulsed [:vfx-signals 0 :event])))
