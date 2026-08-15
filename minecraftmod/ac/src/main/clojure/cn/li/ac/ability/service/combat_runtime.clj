@@ -140,7 +140,8 @@
   (let [state (runtime-store/get-player-state (server-session-id) (str owner))
         resource-data (:resource-data state)
         cooldown-data (:cooldown-data state)]
-    {:resources {:cp (double (or (:cur-cp resource-data) 0.0))}
+    {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
+                 :overload (double (or (:cur-overload resource-data) 0.0))}
      :cooldowns (into {}
                      (map (fn [[[ctrl-id _sub-id] value]]
                             [ctrl-id (long (or (:ticks value) 0))])
@@ -161,9 +162,14 @@
         commands (keep (fn [[kind key amount]]
                          (case kind
                            :resource
-                           (when (= key :cp)
+                           (cond
+                             (= key :cp)
                              {:command :consume-resource
-                              :cp (- (double amount))})
+                              :cp (- (double amount))}
+                             (= key :overload)
+                             {:command :consume-resource
+                              :overload (- (double amount))}
+                             :else nil)
                            :ability-exp
                            {:command :add-skill-exp
                             :skill-id key

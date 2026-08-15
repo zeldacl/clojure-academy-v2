@@ -224,3 +224,21 @@
                         [:sessions 0 :state :started?])))
     (is (= [[:resource :cp -2.0]] (:state-patch pulsed)))
     (is (empty? (:state-patch released)))))
+
+(deftest overload-resource-is-authoritative-and-phase-aware
+  (dsl/defability overload-pulse
+    {:id :test/overload-pulse :activation :session :period-ticks 1
+     :cost-phase :pulse :cost {:overload 4}
+     :program {:op :phase
+               :start {:op :patch :entries []}
+               :pulse {:op :patch :entries []}
+               :release {:op :patch :entries []}}})
+  (let [engine (runtime/create-engine
+                {:catalog (compiler/compile-all!)
+                 :initial-owner-state (fn [_] {:resources {:overload 5}})})
+        started (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 60 :op :start
+                                           :ability-id :test/overload-pulse})
+        pulsed (first (runtime/tick! engine 1))]
+    (is (empty? (:state-patch started)))
+    (is (= [[:resource :overload -4.0]] (:state-patch pulsed)))))

@@ -61,6 +61,18 @@
   (into {} (map (fn [[resource amount]]
                   [resource (double (resolve-value amount context))]) cost)))
 
+(defn- activation-cost
+  "Resolve only the cost due at the current lifecycle phase.
+
+   Session recipes may declare :cost-phase :pulse/release; their start still
+   validates affordability against the same amount, but does not deduct it
+   until that phase executes."
+  [ability context]
+  (if (and (:cost-phase ability)
+           (not= (:cost-phase ability) (:phase context)))
+    {}
+    (resolve-cost (:cost ability) context)))
+
 (defn- ref-path
   [context ref path]
   (get-in (get-in context [:refs ref]) path))
@@ -235,11 +247,9 @@
 
 (defn- execute [engine ability context]
   (let [result (run-node engine (:program ability) context)
-        cost (if (or (:skip-cost? context)
-                     (and (:cost-phase ability)
-                          (not= (:cost-phase ability) (:phase context))))
+        cost (if (:skip-cost? context)
                {}
-               (resolve-cost (:cost ability) context))
+               (activation-cost ability context))
         result (if (and (seq cost) (not= :rejected (:status result)))
                  (update result :state-patch into (mapv (fn [[resource amount]]
                                                           [:resource resource (- (double amount))]) cost))
@@ -313,7 +323,8 @@
       (let [state ((:owner-state engine) owner)
             tick (long ((:now-tick engine)))
             cost (resolve-cost (:cost ability)
-                               {:ability-id ability-id :state state})]
+                               {:ability-id ability-id :state state
+                                :phase :start})]
         (cond
           (not (resources-available? state cost))
           (reject :insufficient-resource {:ability-id ability-id})
