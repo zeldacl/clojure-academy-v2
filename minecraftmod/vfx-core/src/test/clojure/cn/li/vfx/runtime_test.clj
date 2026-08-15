@@ -25,6 +25,23 @@
       (runtime/tick! rt {:tick-id 2 :delta-seconds 0.05})
       (is (empty? @(:instances rt))))))
 
+(deftest ended-instance-releases-stable-key
+  (let [rt (runtime/create-runtime)
+        effect (assoc (test-effect)
+                      :update (fn [_ _] nil))]
+    (runtime/register-effect! rt effect)
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :test/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {}})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    (is (nil? (runtime/instance-for-key rt [:session 1 :main])))
+    ;; The same key can be reused after the descriptor ends.
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :test/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 2 :params {}})
+    (is (some? (runtime/instance-for-key rt [:session 1 :main])))))
+
 (deftest duplicate-frame-is-idempotent
   (let [rt (runtime/create-runtime)]
     (runtime/register-effect! rt (test-effect)) (runtime/freeze-registry! rt)
@@ -87,7 +104,8 @@
     (runtime/release-frame! rt 1)
     (is (= [{:stage :first-person :primitive :first-person
              :material :hand :layout-version 1 :count 1 :sort-mode :stable
-             :schema-version contract/schema-version :payload [{:tx 1.0}]}]
+             :schema-version contract/schema-version :variant nil
+             :payload [{:tx 1.0}]}]
            (runtime/latest-frame-stage rt :first-person)))))
 
 (deftest abi-rejects-version-mismatch
@@ -129,7 +147,7 @@
     (let [frame (runtime/sample-frame! rt {:frame-id 1 :partial-tick 0.5
                                            :camera-pos [0 0 0]
                                            :view-distance 8.0})]
-      (is (= [{:value 0.5 :x 0}] @samples))
+      (is (= [{:value 0.5 :x 0.0}] @samples))
       (is (= 1 (count (get-in frame [:stages :world-after-translucent])))))
     (reset! samples [])
     (runtime/spawn! rt :sampled {:owner :far :params {:x 100}})
@@ -144,8 +162,35 @@
     (dotimes [i 10] (runtime/signal! rt {:instance i} :event {:i i}))
     (is (= 3 (count @(:signals rt))))))
 
+(deftest stable-key-signal-dispatch-is-idempotent
+  (let [rt (runtime/create-runtime)
+        seen (atom [])]
+    (runtime/register-effect! rt
+      {:id :stable/effect
+       :init (fn [_] {:value 0})
+       :update (fn [state {:keys [events]}]
+                 (swap! seen conj events)
+                 state)
+       :bounds (fn [_ _] nil)
+       :sample (fn [_] nil)})
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :stable/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1
+                                   :params {}})
+    (runtime/dispatch-signal! rt {:op :signal :effect-id :stable/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1
+                                   :event :duplicate :params {}})
+    (runtime/dispatch-signal! rt {:op :signal :effect-id :stable/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 2
+                                   :event :accepted :params {}})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    (is (= [:accepted] (mapv :event (first @seen))))))
+
 (deftest invalid-context-is-rejected
-  (is (thrown? IllegalArgumentException
+  (is (thrown? clojure.lang.ExceptionInfo
                (contract/tick-context {:tick-id 1 :delta-seconds -1.0})))
-  (is (thrown? IllegalArgumentException
+  (is (thrown? clojure.lang.ExceptionInfo
                (contract/frame-context {:frame-id 1 :partial-tick 2.0}))))

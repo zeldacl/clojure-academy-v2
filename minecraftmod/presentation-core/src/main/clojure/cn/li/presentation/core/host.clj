@@ -31,10 +31,6 @@
   (let [kind (case kind
                :hud HostDescriptor$HostKind/HUD
                :world-ui HostDescriptor$HostKind/WORLD_UI
-               :vfx HostDescriptor$HostKind/VFX
-               :first-person HostDescriptor$HostKind/FIRST_PERSON
-               :camera HostDescriptor$HostKind/CAMERA
-               :post-process HostDescriptor$HostKind/POST_PROCESS
                :screen HostDescriptor$HostKind/SCREEN
                (throw (ex-info "unknown presentation host" {:kind kind})))
         host (HostDescriptor. (name id) kind 0 0 nil HostDescriptor$InputPolicy/PASSTHROUGH)]
@@ -45,10 +41,6 @@
   (let [kind (case kind
                :hud HostDescriptor$HostKind/HUD
                :world-ui HostDescriptor$HostKind/WORLD_UI
-               :vfx HostDescriptor$HostKind/VFX
-               :first-person HostDescriptor$HostKind/FIRST_PERSON
-               :camera HostDescriptor$HostKind/CAMERA
-               :post-process HostDescriptor$HostKind/POST_PROCESS
                :screen HostDescriptor$HostKind/SCREEN
                (throw (ex-info "unknown presentation host" {:kind kind})))
         host (HostDescriptor. (name id) kind 0 0 nil HostDescriptor$InputPolicy/PASSTHROUGH)]
@@ -82,25 +74,6 @@
 
 (defn unmount! [runtime mount]
   (runtime/unmount! (or (:state runtime) runtime) mount))
-
-(defn effect-runtime [runtime]
-  (runtime/effect-runtime (or (:state runtime) runtime)))
-
-(defn spawn-effect! [runtime template-id owner params now-ms]
-  (runtime/spawn-effect! (or (:state runtime) runtime)
-                         template-id owner params now-ms))
-
-(defn destroy-effect! [runtime instance-id]
-  (runtime/destroy-effect! (or (:state runtime) runtime) instance-id))
-
-(defn clear-effect-owner! [runtime owner]
-  (runtime/clear-effect-owner! (or (:state runtime) runtime) owner))
-
-(defn tick-effects! [runtime delta-ms]
-  (runtime/tick-effects! (or (:state runtime) runtime) delta-ms))
-
-(defn reload-resources! [runtime generation]
-  (runtime/reload-resources! (or (:state runtime) runtime) generation))
 
 (defn submit-frame! [^RenderBackend backend ^FramePacket frame]
   (doseq [^RenderPass pass (.passes frame)]

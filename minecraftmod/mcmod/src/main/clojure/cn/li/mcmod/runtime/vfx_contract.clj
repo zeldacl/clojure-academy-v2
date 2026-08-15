@@ -9,6 +9,8 @@
 (def primitives #{:billboard :particle :beam :ribbon :line :mesh
                   :first-person :camera :post-process})
 
+(def signal-ops #{:spawn :signal :destroy :clear-owner})
+
 (defn- require-key [m k]
   (when-not (contains? m k)
     (throw (ex-info "missing VFX ABI field" {:field k :value m})))
@@ -60,6 +62,17 @@
                            (when-not (contains? stages stage)
                              (throw (ex-info "unknown VFX frame stage" {:stage stage})))
                            [stage (vec batches)])) stages-map)})
+
+(defn signal [{:keys [op] :as value}]
+  (when-not (contains? signal-ops op)
+    (throw (ex-info "unknown VFX signal operation" {:value value})))
+  (when (#{:spawn :signal} op)
+    (doseq [k [:effect-id :instance-key :owner :event-seq]]
+      (require-key value k)))
+  (when (and (contains? value :event-seq)
+             (not (integer? (:event-seq value))))
+    (throw (ex-info "VFX event-seq must be an integer" {:value value})))
+  (assoc value :schema-version schema-version))
 
 (def required-host-operations
   #{:schema-version :required-anchors :tick! :sample-frame! :frame-stage :latest-frame-stage :release-frame!

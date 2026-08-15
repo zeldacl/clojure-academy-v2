@@ -5,9 +5,19 @@ plugins {
 
 // Keep neutral-module outputs under the shared writable build tree.
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
+evaluationDependsOn(':vfx-core')
+evaluationDependsOn(':combat-core')
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
-    checkTask.dependsOn ":mcmod:classes", ":vfx-core:classes"
+    checkTask.dependsOn ":mcmod:classes", ":vfx-core:classes", ":combat-core:jar"
+    // Source-first neutral dependencies are not AOT jars in the default
+    // build; expose their Clojure roots to AC's namespace checker explicitly.
+    checkTask.classpath.from(project(':vfx-core').file('src/main/clojure'))
+    checkTask.classpath.from(project(':combat-core').file('src/main/clojure'))
+    checkTask.classpath.from(project(':vfx-core').tasks.named('jar'))
+    checkTask.classpath.from(project(':combat-core').tasks.named('jar'))
+    checkTask.classpath.from(rootProject.file('build/neutral/vfx-core/resources/main'))
+    checkTask.classpath.from(rootProject.file('build/neutral/combat-core/resources/main'))
 }
 
 // Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
@@ -161,6 +171,7 @@ dependencies {
     api project(':api') // 使用 api 关键字确保依赖向下传递
     implementation project(':mcmod')
     implementation project(':vfx-core')
+    implementation project(':combat-core')
     implementation project(':presentation-core')
     implementation project(':presentation-compiler')
     testImplementation "org.clojure:test.check:${clojureVersions.testCheck}"
@@ -171,8 +182,10 @@ dependencies {
 // neutral source roots that AC composes without making platform build logic
 // depend on (or even name) vfx-core directly.
 evaluationDependsOn(':vfx-core')
+evaluationDependsOn(':combat-core')
 ext.neutralRuntimeSourceRoots = sourceSets.main.clojure.srcDirs +
-    project(':vfx-core').sourceSets.main.clojure.srcDirs
+    project(':vfx-core').sourceSets.main.clojure.srcDirs +
+    project(':combat-core').sourceSets.main.clojure.srcDirs
 
 // Consumable source-first variant for platform targets.  The target build
 // selects AC from the catalog and receives this already-composed directory;
@@ -185,9 +198,10 @@ configurations {
 }
 def assembleNeutralRuntimeSources = tasks.register('assembleNeutralRuntimeSources', Sync) {
     group = 'build'
-    description = 'Compose AC and vfx-core neutral Clojure sources for platform consumption.'
+    description = 'Compose AC, combat-core and vfx-core neutral Clojure sources for platform consumption.'
     from(sourceSets.main.clojure.srcDirs)
     from(project(':vfx-core').sourceSets.main.clojure.srcDirs)
+    from(project(':combat-core').sourceSets.main.clojure.srcDirs)
     from(project(':vfx-core').sourceSets.main.resources.srcDirs) {
         exclude '**/*.class'
     }

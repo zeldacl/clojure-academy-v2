@@ -1,0 +1,59 @@
+plugins {
+    id "java-library"
+    id "dev.clojurephant.clojure"
+}
+
+// Combat Core is neutral, source-first Clojure.  It is deliberately kept
+// separate from AC content and from every Minecraft/loader target.
+layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
+
+tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
+    checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
+    checkTask.dependsOn ":mcmod:classes"
+}
+
+tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
+    forkOptions.jvmArgs += ["-Dclojure.compile.warn-on-reflection=true"]
+}
+
+tasks.named("processResources").configure {
+    if (rootProject.ext.fullAotEnabled) {
+        exclude "**/*.clj", "**/*.cljc"
+    } else {
+        from(sourceSets.main.clojure.srcDirs) {
+            include "**/*.clj", "**/*.cljc"
+        }
+    }
+}
+
+tasks.named("compileClojure").configure { task ->
+    onlyIf { rootProject.ext.fullAotEnabled }
+    dependsOn ":mcmod:compileClojure"
+    def targetDir = layout.buildDirectory.dir("clojure/main")
+    if (task.metaClass.hasProperty(task, "destinationDirectory")) {
+        task.destinationDirectory = targetDir
+    } else {
+        task.destinationDir = targetDir.get().asFile
+    }
+}
+
+def clearNeutralAotOutput = tasks.register("clearNeutralAotOutput") {
+    onlyIf { !rootProject.ext.fullAotEnabled }
+    doLast { delete(layout.buildDirectory.dir("clojure/main").get().asFile) }
+}
+tasks.named("classes").configure { dependsOn clearNeutralAotOutput }
+tasks.named("jar").configure { dependsOn clearNeutralAotOutput }
+
+tasks.register("runCombatClojureTests", JavaExec) {
+    group = "verification"
+    dependsOn "compileTestClojure", "classes"
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = "clojure.main"
+    args "-m", "cn.li.combat.test-runner"
+}
+
+dependencies {
+    implementation project(":mcmod")
+    implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
+    testImplementation "org.clojure:test.check:${rootProject.ext.clojureVersions.testCheck}"
+}

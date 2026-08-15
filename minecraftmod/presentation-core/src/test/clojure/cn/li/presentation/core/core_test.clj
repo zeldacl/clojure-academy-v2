@@ -1,6 +1,5 @@
 (ns cn.li.presentation.core.core-test
   (:require [clojure.test :refer :all]
-            [cn.li.presentation.core.effects :as effects]
             [cn.li.presentation.core.input :as input]
             [cn.li.presentation.core.frame :as frame]
             [cn.li.presentation.core.dirty :as dirty]
@@ -9,41 +8,9 @@
             [cn.li.presentation.core.export :as export]
             [cn.li.presentation.core.tree :as tree]
             [cn.li.presentation.core.layout :as layout]
-            [cn.li.presentation.core.animation :as animation]
-            [cn.li.presentation.core.effects :as effects])
+            [cn.li.presentation.core.animation :as animation])
   (:import [cn.li.presentation.core FrameContext HostDescriptor HostDescriptor$HostKind
             HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput]))
-
-(def template {:id :test/beam :host :vfx :primitive :beam
-               :stage :hud-overlay :owner :test :duration-ms 100})
-
-(deftest owner-cleanup-is-deterministic
-  (let [runtime (effects/create)]
-    (effects/register-template! runtime template)
-    (let [a (effects/spawn! runtime :test/beam :owner/a {:count 2} 0)
-          b (effects/spawn! runtime :test/beam :owner/b {:count 3} 0)]
-      (is (= 2 (count @(get runtime :instances))))
-      (effects/clear-owner! runtime :owner/a)
-      (is (= #{b} (set (keys @(get runtime :instances))))))))
-
-(deftest expired-effects-are-removed-before-extraction
-  (let [runtime (effects/create)]
-    (effects/register-template! runtime template)
-    (effects/spawn! runtime :test/beam :owner {:count 1} 0)
-    (effects/tick! runtime 101)
-    (is (empty? (effects/extract-passes runtime)))))
-
-(deftest world-particle-command-retains-origin-data
-  (let [runtime (effects/create)
-        particle (assoc template :id :test/particle :primitive :particle
-                        :stage :world-after-translucent)]
-    (effects/register-template! runtime particle)
-    (effects/spawn! runtime :test/particle :owner {:count 4 :x 1.25 :y 2.5 :z -3.0} 0)
-    (let [pass (first (effects/extract-passes runtime))
-          command (first (.commands pass))]
-      (is (= 1.25 (double (.originX ^cn.li.presentation.core.RenderCommand$ParticleBatch command))))
-      (is (= 2.5 (double (.originY ^cn.li.presentation.core.RenderCommand$ParticleBatch command))))
-      (is (= -3.0 (double (.originZ ^cn.li.presentation.core.RenderCommand$ParticleBatch command)))))))
 
 (deftest input-dispatches-capture-target-bubble-and-pointer-capture
   (let [runtime (input/create)
@@ -80,15 +47,6 @@
     (semantics/upsert! tree :input :root :textbox "Query" "abc" nil)
     (semantics/upsert! tree :submit :root :button "Search" nil nil)
     (is (= ["Terminal" "Query: abc" "Search"] (semantics/narration tree)))))
-
-(deftest runtime-frame-includes-unified-effect-passes
-  (let [rt (runtime/create-runtime)
-        fx (assoc template :id :test/runtime-beam)]
-    (effects/register-template! (runtime/effect-runtime rt) fx)
-    (effects/spawn! (runtime/effect-runtime rt) :test/runtime-beam :owner {:count 2} 0)
-    (let [packet (runtime/extract! rt (FrameContext. 1 0.016 320 180))]
-      (is (= 1 (count (.passes packet))))
-      (is (= 1 (count (.commands (first (.passes packet)))))))))
 
 (deftest export-produces-mcmod-neutral-frame
   (let [rt (runtime/create-runtime)
@@ -176,28 +134,3 @@
     (animation/advance! tl 50)
     (is (= 1.0 (double (:alpha (animation/sample tl)))))
     (is (animation/done? tl))))
-
-(deftest effect-runtime-advances-compiled-timeline
-  (let [rt (effects/create)
-        template (assoc template :id :test/timeline
-                        :duration-ms 100
-                        :timeline [{:property :alpha :at 0.0 :value 0.0}
-                                   {:property :alpha :at 1.0 :value 1.0}])
-        _ (effects/register-template! rt template)
-        id (effects/spawn! rt :test/timeline :owner {} 0)]
-    (effects/tick! rt 50)
-    (is (= 0.5 (double (:alpha (animation/sample (:timeline (get @(get rt :instances) id)))))))
-    (effects/tick! rt 50)
-    (is (empty? (effects/extract-passes rt)))))
-
-(deftest camera-effect-emits-camera-contribution
-  (let [rt (effects/create)
-        camera-template {:id :test/camera :host :camera :primitive :camera
-                         :stage :world-before-translucent :owner :test
-                         :duration-ms 100}]
-    (effects/register-template! rt camera-template)
-    (effects/spawn! rt :test/camera :owner
-                    {:fov-delta 2.0 :shake-x 0.1 :shake-y 0.2 :roll 0.05} 0)
-    (let [pass (first (effects/extract-passes rt))
-          command (first (.commands pass))]
-      (is (= "CameraContribution" (.getSimpleName (class command)))))))

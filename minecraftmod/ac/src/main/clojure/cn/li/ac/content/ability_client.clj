@@ -11,6 +11,7 @@
             [cn.li.ac.ability.client.fx-registry :as fx-registry]
             [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
             [cn.li.ac.client.effect-controller :as vfx]
+            [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.ability.client.keybinds :as keybinds]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log]))
@@ -41,6 +42,7 @@
     (keybinds/freeze-keybind-registries!)
     (vfx/warmup!)
     (vfx/freeze!)
+    (combat-vfx/install-dispatch! vfx/dispatch-signal!)
     (log/info "Ability client FX content initialized"))))
 
 (defn reset-client-fx-for-test!

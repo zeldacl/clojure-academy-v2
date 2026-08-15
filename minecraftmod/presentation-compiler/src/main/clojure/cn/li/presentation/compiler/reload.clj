@@ -1,7 +1,6 @@
 (ns cn.li.presentation.compiler.reload
   "Hot reload state. A failed compile never replaces the last valid template."
-  (:require [cn.li.presentation.compiler.core :as ui]
-            [cn.li.presentation.compiler.fx :as fx]))
+  (:require [cn.li.presentation.compiler.core :as ui]))
 
 (defn create []
   {:templates (atom {})
@@ -12,8 +11,7 @@
   (try
     (let [template (if (= kind :ui)
                      (ui/compile-edn template-id text symbols)
-                     (if (= kind :fx) (fx/compile-edn text)
-                         (throw (ex-info "unknown template kind" {:kind kind}))))
+                     (throw (ex-info "unknown presentation template kind" {:kind kind})))
           generation (swap! (:generation runtime) inc)]
       (swap! (:templates runtime) assoc template-id
              {:generation generation :template template})

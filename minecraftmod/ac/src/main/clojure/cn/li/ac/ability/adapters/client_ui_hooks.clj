@@ -13,6 +13,7 @@
             [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.hud :as hud-renderer]
             [cn.li.ac.client.effect-controller :as vfx-hand]
+            [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.reactive-hud :as reactive-hud]
@@ -25,6 +26,7 @@
             [cn.li.ac.ability.client.screens.skill-tree :as skill-tree-screen]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.combat-content :as combat-content]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
@@ -52,6 +54,12 @@
 (defonce ^:private ^HashMap slot-context-ids (HashMap.))
 (defonce ^:private ^HashMap slot-key-tick-ms (HashMap.))
 (defonce ^:private ^HashMap charge-coin-state (HashMap.))
+(defonce ^:private combat-intent-seq* (atom 0))
+(defonce ^:private combat-slot-keys* (atom #{}))
+(defn- combat-ability-slot?
+  [player-uuid key-idx]
+  (contains? combat-content/ability-ids
+            (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)))
 (defonce ^:private push-handlers-registered (boolean-array 1))
 
 (defn create-client-ui-runtime []
@@ -526,6 +534,23 @@
                              payload
                              callback))
 
+(defn send-combat-intent!
+  "Send the neutral CombatIntent envelope without allocating a Context."
+  [player-uuid slot op]
+  (let [intent-id (swap! combat-intent-seq* inc)]
+    (send-with-client-owner!
+      player-uuid
+      catalog/MSG-COMBAT-INTENT
+      {:schema-version 1
+       :intent-id intent-id
+       :op op
+       :slot (long slot)
+       :client-tick (long (quot (or (client-bridge/game-time-ms) 0) 50))}
+      (fn [response]
+        (when (map? response)
+          (combat-vfx/dispatch-result! response))))
+    intent-id))
+
 (defn- send-slot-key-message!
   [msg-id player-uuid key-idx]
   (if-let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
@@ -804,6 +829,10 @@
      (fn [cat-id ctrl-id]
        (skill-query/get-skill-by-controllable cat-id ctrl-id))
 
+     :client-send-combat-intent!
+     (fn [player-uuid slot op]
+       (send-combat-intent! player-uuid slot op))
+
      :client-new-context
      (fn [player-uuid skill-id]
        (with-client-context-owner player-uuid (fn [owner] (ctx/new-context player-uuid skill-id owner))))
@@ -832,31 +861,42 @@
 
      :client-on-slot-key-down!
      (fn [player-uuid key-idx]
-       ;; Reset keepalive throttle so the first hold refresh after key-down is never suppressed.
-       (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
-       (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))
+        (if (combat-ability-slot? player-uuid key-idx)
+         (do (swap! combat-slot-keys* conj (slot-context-key player-uuid key-idx))
+             (send-combat-intent! player-uuid key-idx :start))
+         (do
+           ;; Legacy content remains isolated until its Combat Core program is
+           ;; migrated; it does not receive a partial protocol switch.
+           (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
+           (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))))
 
      :client-on-slot-key-tick!
      (fn [player-uuid key-idx]
-       (let [slot-key (slot-context-key player-uuid key-idx)
-             now-ms   (System/currentTimeMillis)
-             last-ms  (get (slot-key-tick-ms-snapshot) slot-key 0)]
-         (when (>= (- now-ms last-ms) 100)
-           (.put slot-key-tick-ms slot-key now-ms)
-           ;; Active contexts are advanced authoritatively by
-           ;; context-manager/tick-player-contexts! once per server tick.
-           ;; Sending MSG-SLOT-KEY-TICK here as well double-dispatched costs
-           ;; and effects (20 server ticks + client network ticks).
-           (send-slot-keepalive! player-uuid key-idx))))
+       (let [slot-key (slot-context-key player-uuid key-idx)]
+         (if (contains? @combat-slot-keys* slot-key)
+           nil
+           (let [now-ms  (System/currentTimeMillis)
+                 last-ms (get (slot-key-tick-ms-snapshot) slot-key 0)]
+             (when (>= (- now-ms last-ms) 100)
+               (.put slot-key-tick-ms slot-key now-ms)
+               (send-slot-keepalive! player-uuid key-idx))))))
 
      :client-on-slot-key-up!
      (fn [player-uuid key-idx]
-       (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
-       (send-slot-key-up-message! player-uuid key-idx))
+       (let [slot-key (slot-context-key player-uuid key-idx)]
+         (if (contains? @combat-slot-keys* slot-key)
+           (do (swap! combat-slot-keys* disj slot-key)
+               (send-combat-intent! player-uuid key-idx :release))
+           (do (.remove slot-key-tick-ms slot-key)
+               (send-slot-key-up-message! player-uuid key-idx)))))
 
      :client-on-slot-key-abort!
      (fn [player-uuid key-idx]
-       (abort-slot-context! player-uuid key-idx))
+       (let [slot-key (slot-context-key player-uuid key-idx)]
+         (if (contains? @combat-slot-keys* slot-key)
+           (do (swap! combat-slot-keys* disj slot-key)
+               (send-combat-intent! player-uuid key-idx :abort))
+           (abort-slot-context! player-uuid key-idx))))
 
      :client-on-movement-key-down!
      (fn [player-uuid movement-key]

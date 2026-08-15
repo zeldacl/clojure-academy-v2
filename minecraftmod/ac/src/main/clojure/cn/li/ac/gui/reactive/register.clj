@@ -175,8 +175,7 @@
                     (reset! terminal* nil)))
      :reload-resources! (fn [generation]
                           (reset! template-cache* {})
-                          (effect-controller/reload-resources! generation)
-                          (presentation-host/reload-resources! runtime generation))
+                          (effect-controller/reload-resources! generation))
      :dispatch! (fn [mount event]
                   (.dispatch ^cn.li.presentation.core.PresentationRuntime
                              (:api runtime) mount event))
@@ -202,10 +201,4 @@
       {:presentation-runtime presentation-runtime
        :presentation-host-api presentation-host-api
        :vfx-host-api effect-controller/vfx-host-api}))
-  (when (compare-and-set! effects-tick-installed* false true)
-    (content-actions/register-client-tick-hook!
-      #(do
-         (when-let [runtime @presentation-runtime*]
-           (presentation-host/tick-effects! runtime 50))
-         nil)))
   (log/info "Presentation Runtime bridge installed"))

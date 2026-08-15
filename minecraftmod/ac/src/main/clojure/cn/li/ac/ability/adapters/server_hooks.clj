@@ -14,6 +14,7 @@
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.context-manager :as ctx-mgr]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
@@ -242,6 +243,7 @@
 
    :on-player-logout!
    (fn [player-uuid]
+     (combat-runtime/abort-owner! player-uuid)
      (ctx-mgr/abort-player-contexts! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
@@ -252,6 +254,8 @@
 
    :on-server-stop!
    (fn [session-id]
+    (doseq [player-uuid (runtime-list-player-uuids)]
+      (combat-runtime/abort-owner! player-uuid))
     (ctx/clear-store-session-contexts! session-id)
      (store/remove-session! session-id)
      (world-registry/clear-session-world-data! session-id)
@@ -267,6 +271,7 @@
 
    :on-player-death!
    (fn [player-uuid]
+     (combat-runtime/abort-owner! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
@@ -275,6 +280,7 @@
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
+     (combat-runtime/abort-owner! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
@@ -286,8 +292,9 @@
      (vec (skill-query/get-skills-for-category cat-id)))
 
    :on-server-tick-start!
-   (fn [_tick-id]
+   (fn [tick-id]
      ;; Global work is driven once per server tick, before the player phase.
+     (combat-runtime/tick! tick-id)
      (md-damage/tick-marks!)
      (ctx-mgr/tick-context-manager!))
 

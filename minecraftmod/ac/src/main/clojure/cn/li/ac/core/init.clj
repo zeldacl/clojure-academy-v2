@@ -7,6 +7,8 @@
             [cn.li.ac.ability.runtime-container :as ability-runtime-container]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.service.combat-content :as combat-content]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.block.platform-bridge :as block-bridge]
             [cn.li.ac.command.platform-bridge :as command-bridge]
             [cn.li.ac.config.modid :as modid]
@@ -50,6 +52,10 @@
   (block-bridge/install-blockstate-hooks!)
   (command-bridge/install-command-hooks!)
   (wireless-world/init-world-data!)
+  ;; Register and compile the new neutral combat catalog before runtime
+  ;; content activation.  The registry freezes inside initialize!.
+  (combat-content/register! combat-runtime/register-provider!)
+  (combat-runtime/initialize!)
   (config-registry/init-configs!)
   ;; Global "Enable PvP" / "Destroy blocks" settings gates — matching upstream
   ;; AbilityPipeline.canAttackPlayer()/canBreakBlock(), consulted by every

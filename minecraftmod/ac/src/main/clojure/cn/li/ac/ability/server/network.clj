@@ -12,6 +12,7 @@
             [cn.li.mcmod.platform.entity        :as entity]            [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.rules.learning-rules :as learning-rules]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.registry.skill             :as skill]
             [cn.li.ac.ability.rules.progression          :as progression]
             [cn.li.ac.ability.server.handlers.level-handler :as level-handler]
@@ -111,8 +112,20 @@
   ;; Ability handlers do not operate on open GUI containers; they carry
   ;; self-contained payloads (activated, skill-id, category-id, etc.) and do
   ;; not need sync-routing validation.
-  (def ^:private ability-handler-contract
+(def ^:private ability-handler-contract
     {:owner-spec :server :payload-routing :none})
+
+(defn- handle-combat-intent-request
+  [payload player]
+  (let [owner (uuid/player-uuid player)
+        intent (select-keys payload [:schema-version :intent-id :op :slot :client-tick])
+        result (combat-runtime/dispatch-intent! owner intent)
+        result (if (= :accepted (:status result))
+                 (combat-runtime/execute-world-effects! owner result)
+                 result)]
+    (when (= :rejected (:status result))
+      (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))
+    result))
 
 (defn register-handlers! []
   (net-srv/register-handler catalog/MSG-REQ-LEARN-NODE     handle-learn-skill-request    ability-handler-contract)
@@ -129,6 +142,7 @@
   (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill ability-handler-contract)
   (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill ability-handler-contract)
   (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill ability-handler-contract)
+  (net-srv/register-handler catalog/MSG-COMBAT-INTENT
+                            handle-combat-intent-request
+                            ability-handler-contract)
   (log/info "Ability network handlers registered"))
-
-

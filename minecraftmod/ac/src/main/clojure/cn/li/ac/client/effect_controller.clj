@@ -1,5 +1,5 @@
 (ns cn.li.ac.client.effect-controller
-  "AC composition root for skill descriptors on the Presentation Runtime.
+  "AC composition root for legacy skill descriptors on VFX Core.
 
    Skill code supplies pure enqueue/tick/sample callbacks.  This namespace is
    the only AC-owned state adapter; it stores no renderer or Minecraft object."
@@ -201,6 +201,11 @@
 
 (defn release-frame! [frame-id]
   (core/release-frame! (runtime) frame-id))
+
+(defn dispatch-signal!
+  "Apply one stable-key combat VFX signal directly to vfx-core."
+  [signal]
+  (core/dispatch-signal! (runtime) signal))
 
 (defn clear-world! [world-id]
   ;; AC keeps one aggregate instance per descriptor.  Strip only payloads

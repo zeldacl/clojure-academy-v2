@@ -1,9 +1,7 @@
 (ns cn.li.presentation.compiler.core-test
   (:require [clojure.test :refer :all]
             [cn.li.presentation.compiler.core :as compiler]
-            [cn.li.presentation.compiler.fx :as fx]
             [cn.li.presentation.compiler.artifact :as artifact]
-            [cn.li.presentation.compiler.reload :as reload]
             [cn.li.presentation.compiler.render :as render])
   (:import [cn.li.presentation.core TemplateId]))
 
@@ -26,25 +24,6 @@
                 (TemplateId. "academy:bad")
                 "{:type :quad :key :root :on-select [:action :nope]}"
                 symbols))))
-
-(deftest compiles-effect-template-with-deterministic-hash
-  (let [source {:id :academy/test :host :vfx :primitive :beam
-                :stage :hud-overlay :owner :test-owner}
-        a (fx/compile-template source)
-        b (fx/compile-template source)]
-    (is (= (:content-hash a) (:content-hash b)))
-    (is (= :beam (:primitive a)))))
-
-(deftest hot-reload-keeps-last-valid-template-on-error
-  (let [runtime (reload/create)
-        valid "{:id :test/fx :host :vfx :primitive :beam :stage :hud :owner :test}"
-        invalid "{:id :test/fx :host :vfx :primitive :unknown :stage :hud :owner :test}"
-        first-result (reload/reload! runtime :test/fx :fx valid {})
-        second-result (reload/reload! runtime :test/fx :fx invalid {})]
-    (is (:ok? first-result))
-    (is (false? (:ok? second-result)))
-    (is (= (:template first-result) (:template second-result)))
-    (is (= 1 (count (reload/errors runtime))))))
 
 (deftest render-interpreter-emits-core-command-records
   (let [template (compiler/compile-edn
@@ -99,7 +78,7 @@
         decoded (artifact/decode bytes)
         roundtrip (:template decoded)]
     (is (= (.contentHash template) (.contentHash roundtrip)))
-    (is (= (.actions template) (.actions roundtrip)))
+    (is (= (into {} (.actions template)) (into {} (.actions roundtrip))))
     (is (= ["academy:textures/ui.png"] (get-in decoded [:metadata :dependencies])))
     (is (thrown? Exception (artifact/decode (.getBytes "bad" "UTF-8"))))))
 
@@ -126,18 +105,3 @@
                   (TemplateId. "academy:capability") source {}
                   {:mc-1-20-1 #{:post-process}
                    :mc-1-21-1 #{:post-process :uniform-buffers}})))))
-
-(deftest validates-effect-timeline-and-resource-dependencies
-  (let [compiled (fx/compile-template
-                  {:id :academy/timeline :host :vfx :primitive :beam
-                   :stage :hud :owner :test
-                   :timeline [{:property :alpha :at 0.0 :value 0.0}
-                              {:property :alpha :at 1.0 :value 1.0}]
-                   :resources ["academy:textures/a.png"]})]
-    (is (= ["academy:textures/a.png"] (:dependencies compiled))))
-  (is (thrown? Exception
-               (fx/compile-template
-                {:id :academy/bad-timeline :host :vfx :primitive :beam
-                 :stage :hud :owner :test
-                 :timeline [{:property :alpha :at 1.0 :value 1.0}
-                            {:property :alpha :at 0.0 :value 0.0}]}))))

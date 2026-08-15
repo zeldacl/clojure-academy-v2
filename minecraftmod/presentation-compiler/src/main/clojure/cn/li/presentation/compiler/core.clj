@@ -69,7 +69,9 @@
             (let [id (or ((:binding symbols) name)
                          ((:binding symbols) (keyword name)))]
               (when (nil? id) (fail (str path "." (clojure.core/name attr)) (str "unknown binding '" name "'")))
-              (swap! bindings assoc (clojure.core/name attr) (int id))))
+              (swap! bindings assoc
+                     (clojure.core/name attr) (int id)
+                     name (int id))))
         action-attrs [:on-select :on-activate :on-submit :on-close :on-click]
         action-entry (some (fn [attr]
                             (let [value (get* m attr)]

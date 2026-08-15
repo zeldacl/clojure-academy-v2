@@ -16,6 +16,7 @@
    :slot-key-tick "ability:skill/key-tick"
    :slot-key-up "ability:skill/key-up"
    :slot-key-abort "ability:skill/key-abort"
+   :combat-intent "ability:combat/intent"
 
    :sync-v2 "ability:sync/runtime-v2"
 
@@ -41,6 +42,7 @@
 (def MSG-SLOT-KEY-TICK (:slot-key-tick message-ids))
 (def MSG-SLOT-KEY-UP (:slot-key-up message-ids))
 (def MSG-SLOT-KEY-ABORT (:slot-key-abort message-ids))
+(def MSG-COMBAT-INTENT (:combat-intent message-ids))
 
 (def MSG-SYNC-V2 (:sync-v2 message-ids))
 

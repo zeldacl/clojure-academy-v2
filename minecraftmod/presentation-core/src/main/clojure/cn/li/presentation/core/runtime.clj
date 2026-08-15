@@ -2,7 +2,6 @@
   (:require [cn.li.presentation.core.transaction :as tx]
             [cn.li.presentation.core.frame :as frame]
             [cn.li.presentation.core.dirty :as dirty]
-            [cn.li.presentation.core.effects :as effects]
             [cn.li.presentation.core.tree :as tree]
             [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.input :as input])
@@ -16,7 +15,6 @@
   ([] (create-runtime {}))
   ([options]
    (let [runtime (atom {:mounts {} :next-id 1 :invalidated? true
-                        :effects (effects/create)
                         :input (input/create)
                         :template-resolver (:template-resolver options)
                         :template-renderer (:template-renderer options)})
@@ -185,30 +183,8 @@
                       :when (seq commands)]
                   [stage commands])]
     (swap! (state runtime) assoc :invalidated? false)
-    (let [^FramePacket ui-packet (frame/packet (.frameId context) grouped)
-          effect-passes (effects/extract-passes (:effects snapshot))]
-      (FramePacket. (.frameId ui-packet)
-                    (into (vec (.passes ui-packet)) effect-passes)))))
-
-(defn effect-runtime [runtime]
-  (:effects @(state runtime)))
-
-(defn spawn-effect! [runtime template-id owner params now-ms]
-  (effects/spawn! (effect-runtime runtime) template-id owner params now-ms))
-
-(defn destroy-effect! [runtime instance-id]
-  (effects/destroy! (effect-runtime runtime) instance-id))
-
-(defn clear-effect-owner! [runtime owner]
-  (effects/clear-owner! (effect-runtime runtime) owner))
-
-(defn tick-effects! [runtime delta-ms]
-  (effects/tick! (effect-runtime runtime) delta-ms))
-
-(defn reload-resources! [runtime generation]
-  (effects/reload-resources! (effect-runtime runtime) generation)
-  (swap! (state runtime) assoc :invalidated? true)
-  generation)
+    (let [^FramePacket ui-packet (frame/packet (.frameId context) grouped)]
+      (FramePacket. (.frameId ui-packet) (vec (.passes ui-packet))))))
 
 (defn unmount! [runtime handle]
   (when-let [mount (get-in @(state runtime) [:mounts handle])]

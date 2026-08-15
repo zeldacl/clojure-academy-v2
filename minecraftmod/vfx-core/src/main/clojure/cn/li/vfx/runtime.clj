@@ -22,10 +22,12 @@
 
 (defn create-runtime
   ([] (create-runtime {}))
-  ([{:keys [resource-generation max-instances max-batches max-signals]}]
+  ([{:keys [resource-generation max-instances max-batches max-signals max-tombstones]}]
    {:next-id (atom 0) :registry (atom {}) :registry-frozen? (atom false)
     :instances (atom {}) :owner-index (atom {}) :world-index (atom {})
+    :instance-index (atom {}) :event-seq (atom {}) :tombstones (atom {})
     :signals (atom []) :max-signals (long (or max-signals 32768))
+    :max-tombstones (long (or max-tombstones 4096))
     :last-tick-id (atom nil)
     :last-frame-id (atom nil) :last-frame (atom nil) :latest-frame (atom nil)
     :resource-generation (atom (long (or resource-generation 0)))
@@ -67,16 +69,19 @@
   (or (get @(:registry runtime) effect-id)
       (throw (ex-info "unknown VFX effect" {:effect-id effect-id}))))
 
-(defn spawn! [runtime effect-id {:keys [owner world-id seed params anchor] :as context}]
+(defn spawn! [runtime effect-id {:keys [owner world-id seed params anchor instance-key event-seq] :as context}]
   (when (< (count @(:instances runtime)) (:max-instances runtime))
     (let [effect (descriptor runtime effect-id) id (swap! (:next-id runtime) inc)
           seed (long (or seed id))
           instance {:id id :effect-id effect-id :owner owner :world-id world-id
+                    :instance-key instance-key :event-seq (long (or event-seq -1))
                     :seed seed :anchor anchor :params (or params {}) :age-seconds 0.0
                     :prev-state nil :state ((:init effect) (assoc context :id id :seed seed))
                     :alive? true :priority (:priority effect)}]
       (index-add! (:owner-index runtime) owner id)
       (index-add! (:world-index runtime) world-id id)
+      (when instance-key (swap! (:instance-index runtime) assoc instance-key id))
+      (when instance-key (swap! (:event-seq runtime) assoc instance-key (long (or event-seq -1))))
       (swap! (:instances runtime) assoc id instance)
       id)))
 
@@ -87,11 +92,77 @@
              (conj pending {:target target :event event :payload payload})
              pending)))
   nil)
+
+(defn instance-for-key [runtime instance-key]
+  (get @(:instance-index runtime) instance-key))
+
+(defn- remember-tombstone! [runtime instance-key event-seq]
+  (when instance-key
+    (swap! (:tombstones runtime)
+           (fn [tombstones]
+             (let [next (assoc tombstones instance-key (long event-seq))]
+               (if (> (count next) (:max-tombstones runtime))
+                 (dissoc next (first (keys next)))
+                 next))))))
+
+(declare destroy! clear-owner!)
+
+(defn dispatch-signal!
+  "Apply a stable-key VFX signal exactly once.
+
+   The network/content layer owns the envelope; this function owns only the
+   client instance index and sequence/tombstone rules."
+  [runtime raw-signal]
+  (let [{:keys [op effect-id instance-key owner world-id event-seq event params seed]
+         :as signal} (contract/signal raw-signal)
+        event-seq (long (or event-seq -1))
+        current (long (or (get @(:event-seq runtime) instance-key) -1))
+        tombstone (long (or (get @(:tombstones runtime) instance-key) -1))]
+    (case op
+      :spawn
+      (cond
+        (<= event-seq tombstone) nil
+        (nil? (instance-for-key runtime instance-key))
+        (do (when (some? event)
+              (when-let [instance-id (spawn! runtime effect-id
+                                             {:owner owner :world-id world-id :seed seed
+                                              :params params :instance-key instance-key
+                                              :event-seq event-seq})]
+                (signal! runtime {:instance instance-id} event params)))
+            (when-not (some? event)
+              (spawn! runtime effect-id {:owner owner :world-id world-id :seed seed
+                                         :params params :instance-key instance-key
+                                         :event-seq event-seq}))
+            nil)
+        (> event-seq current)
+        (do (swap! (:event-seq runtime) assoc instance-key event-seq)
+            (signal! runtime {:instance (instance-for-key runtime instance-key)} event params))
+        :else nil)
+
+      :signal
+      (when-let [instance-id (instance-for-key runtime instance-key)]
+        (when (> event-seq current)
+          (swap! (:event-seq runtime) assoc instance-key event-seq)
+          (signal! runtime {:instance instance-id} event params)))
+
+      :destroy
+      (do (when-let [instance-id (instance-for-key runtime instance-key)]
+            (destroy! runtime instance-id))
+          (remember-tombstone! runtime instance-key event-seq)
+          nil)
+
+      :clear-owner
+      (do (clear-owner! runtime owner)
+          nil))))
+
 (defn destroy! [runtime instance-id]
   (when-let [instance (get @(:instances runtime) instance-id)]
     (swap! (:instances runtime) dissoc instance-id)
     (index-remove! (:owner-index runtime) (:owner instance) instance-id)
-    (index-remove! (:world-index runtime) (:world-id instance) instance-id))
+    (index-remove! (:world-index runtime) (:world-id instance) instance-id)
+    (when-let [instance-key (:instance-key instance)]
+      (swap! (:instance-index runtime) dissoc instance-key)
+      (swap! (:event-seq runtime) dissoc instance-key)))
   nil)
 
 (defn instance-state
@@ -181,7 +252,13 @@
                               {} instances)))
           (doseq [instance @removed]
             (index-remove! (:owner-index runtime) (:owner instance) (:id instance))
-            (index-remove! (:world-index runtime) (:world-id instance) (:id instance)))))
+            (index-remove! (:world-index runtime) (:world-id instance) (:id instance))
+            ;; A descriptor returning nil is a normal lifetime transition.
+            ;; Remove every secondary index as well, otherwise the stable key
+            ;; remains permanently occupied and a later spawn is discarded.
+            (when-let [instance-key (:instance-key instance)]
+              (swap! (:instance-index runtime) dissoc instance-key)
+              (swap! (:event-seq runtime) dissoc instance-key)))))
     nil)))
 
 (defn- make-sink [buckets batch-count max-batches]

@@ -41,7 +41,7 @@ ext {
         coreSpecsAlpha: findProperty("core_specs_alpha_version") ?: "0.6.122-alpha8"
     ]
 
-    // Neutral runtime projects (:ac, :mcmod and :vfx-core) are source-first by default.
+    // Neutral runtime projects (:ac, :mcmod, :vfx-core and :combat-core) are source-first by default.
     // Pass -PfullAot or -PfullAot=true to restore the historical full-AOT build.
     def fullAotRaw = findProperty("fullAot")
     def fullAotText = fullAotRaw == null ? "false" : fullAotRaw.toString().trim()
@@ -56,7 +56,7 @@ ext {
     // Only platform namespaces that touch Minecraft/Loader APIs are required
     // to be AOT/remapped.  The explicit fullAot switch remains available for
     // the historical diagnostic build mode.
-    neutralSourceFirstProjects = [":ac", ":mcmod", ":vfx-core"]
+    neutralSourceFirstProjects = [":ac", ":mcmod", ":vfx-core", ":combat-core"]
 }
 
 allprojects {
@@ -97,6 +97,7 @@ gradle.projectsEvaluated {
     def compiler = findProject(":presentation-compiler")
     def core = findProject(":presentation-core")
     def vfx = findProject(":vfx-core")
+    def combat = findProject(":combat-core")
     if (ac != null && compiler != null && core != null) {
         ["compileJava", "checkClojure", "compileClojure", "compileTestClojure"].each { taskName ->
             def task = ac.tasks.findByName(taskName)
@@ -104,6 +105,9 @@ gradle.projectsEvaluated {
                 task.dependsOn compiler.tasks.named("compileClojure"), core.tasks.named("compileClojure")
                 if (vfx != null) {
                     task.dependsOn vfx.tasks.named("classes")
+                }
+                if (combat != null) {
+                    task.dependsOn combat.tasks.named("classes")
                 }
             }
         }
@@ -614,7 +618,9 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
             file("mcmod/src/main/clojure"),
             file("mcmod/src/test/clojure"),
             file("vfx-core/src/main/clojure"),
-            file("vfx-core/src/test/clojure")
+            file("vfx-core/src/test/clojure"),
+            file("combat-core/src/main/clojure"),
+            file("combat-core/src/test/clojure")
         ].findAll { it.directory }
         // Real API refs look like net.minecraft.Foo ??docstrings saying "net.minecraft.*" do not match.
         def forbidden = ~/net\.(minecraft|minecraftforge|fabricmc|neoforged)\.[A-Za-z_]/
@@ -669,7 +675,7 @@ tasks.register("verifyNeutralClojureNoMinecraftApis") {
         }
         // Also ban loader coordinates in neutral-module build scripts.
         def gradleForbidden = ~/net\.(minecraftforge|fabricmc|neoforged):/
-        ["ac/build.gradle", "mcmod/build.gradle", "vfx-core/build.gradle"].each { String path ->
+        ["ac/build.gradle", "mcmod/build.gradle", "vfx-core/build.gradle", "combat-core/build.gradle"].each { String path ->
             def gradleFile = file(path)
             if (!gradleFile.isFile()) {
                 return
@@ -925,6 +931,120 @@ tasks.register("verifyVfxAotBoundary") {
     }
 }
 
+tasks.register("verifyCombatDependencyDirection") {
+    group = "verification"
+    description = "Enforce the neutral Combat Core dependency and namespace boundary."
+    doLast {
+        def combatBuild = file("combat-core/build.gradle").text
+        def acBuild = file("ac/build.gradle").text
+        def platformBuild = file("build-logic/platform-target.gradle").text
+        def violations = []
+        if (!(combatBuild =~ /project\([\"']:?mcmod[\"']\)/)) {
+            violations << "combat-core must depend on mcmod"
+        }
+        if (combatBuild =~ /project\([\"']:(?:ac|platform|vfx-core|presentation-core)[\"']\)/) {
+            violations << "combat-core must not depend on AC, platform, VFX or Presentation"
+        }
+        if (!(acBuild =~ /project\([\"']:?combat-core[\"']\)/)) {
+            violations << "AC must compose combat-core"
+        }
+        if (platformBuild =~ /combat-core|project\([\"']:?combat-core[\"']\)/) {
+            violations << "platform build logic must not mention combat-core"
+        }
+        fileTree(file("combat-core/src/main")) {
+            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /cn\.li\.(?:ac|platform|mcbase|mc1201|mc1211|mc262|forge|fabric|neoforge|vfx|presentation)\./) {
+                violations << "${source}: combat-core contains forbidden AC/platform/VFX/Presentation reference"
+            }
+        }
+        fileTree(file("platform-src")) {
+            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+        }.files.each { File source ->
+            if (source.text =~ /cn\.li\.combat\.|combat-core|combat\.runtime/) {
+                violations << "${source}: platform source references combat-core"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
+        logger.lifecycle("[verifyCombatDependencyDirection] ok")
+    }
+}
+
+tasks.register("verifyPresentationContainsNoVfxRuntime") {
+    group = "verification"
+    description = "Ensure Presentation Core is limited to UI/HUD and does not own skill VFX runtime."
+    doLast {
+        def violations = []
+        fileTree(file("presentation-core/src/main")) {
+            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+        }.files.each { File source ->
+            if (source.name == "effects.clj" || source.text =~ /spawn-effect!|tick-effects!|HostKind\/VFX|:vfx/) {
+                violations << "${source}: Presentation Core still contains skill VFX runtime"
+            }
+        }
+        fileTree(file("presentation-compiler/src/main")) {
+            include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
+        }.files.each { File source ->
+            if (source.name == "fx.clj") violations << "${source}: Presentation FX compiler must be removed"
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.unique().join("\n"))
+        logger.lifecycle("[verifyPresentationContainsNoVfxRuntime] ok")
+    }
+}
+
+// Combat-specific gates are intentionally small, composable checks so CI can
+// run one invariant without rebuilding every loader target.
+tasks.register("verifyCombatClojureOwnership") {
+    group = "verification"
+    dependsOn "verifyCombatDependencyDirection"
+    doLast {
+        def javaFiles = fileTree(file("combat-core/src/main/java")) { include "**/*.java" }.files
+        if (!javaFiles.isEmpty()) throw new GradleException("combat-core must not contain Java combat implementation")
+        logger.lifecycle("[verifyCombatClojureOwnership] ok")
+    }
+}
+tasks.register("verifyCombatNoPlatformNamespaces") {
+    group = "verification"
+    dependsOn "verifyCombatDependencyDirection"
+    doLast { logger.lifecycle("[verifyCombatNoPlatformNamespaces] ok") }
+}
+tasks.register("verifyCombatNoPrivateRuntime") {
+    group = "verification"
+    doLast {
+        def bad = fileTree(file("combat-core/src/main")) { include "**/*.clj" }.files.findAll {
+            it.text =~ /context-registry|context-dispatcher|AbilityContentProvider|ServiceLoader/
+        }
+        if (!bad.isEmpty()) throw new GradleException("Combat Core contains removed private runtime/SPI references: ${bad}")
+        logger.lifecycle("[verifyCombatNoPrivateRuntime] ok")
+    }
+}
+tasks.register("verifyCombatProviderClosure") { group = "verification"; dependsOn "verifyCombatDependencyDirection" }
+tasks.register("verifyCombatSkillCoverage") {
+    group = "verification"
+    description = "Require every controllable AC defskill to have a Combat Core definition."
+    doLast {
+        def skillIds = [] as Set
+        fileTree(file("ac/src/main/clojure/cn/li/ac/content/ability")) {
+            include "**/*.clj"
+            exclude "**/*_fx.clj", "**/*_reactive.clj", "**/*helper*.clj"
+        }.files.each { File source ->
+            def matcher = source.text =~ /(?s)\(defskill\s+[^\n]+.*?:id\s+(:[A-Za-z0-9!?*-]+)/
+            if (matcher.find()) skillIds << matcher.group(1).toString()
+        }
+        def combatContent = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj").text
+        def combatIds = [] as Set
+        (combatContent =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> combatIds << match[1].toString() }
+        def missing = skillIds - combatIds
+        if (!missing.isEmpty()) {
+            throw new GradleException("Combat Core skill coverage incomplete (${skillIds.size()} skills); missing: ${missing.sort().join(', ')}")
+        }
+        logger.lifecycle("[verifyCombatSkillCoverage] ok (${skillIds.size()} skills)")
+    }
+}
+tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
+tasks.register("verifyAbilityVfxRegistryCoverage") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
+tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
+
 tasks.register("verifyNeutralSourceAotXor") {
     group = "verification"
     description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
@@ -1161,7 +1281,8 @@ tasks.register("verifyNeutralProviderClosure") {
     doLast {
         def catalog = rootProject.ext.platformCatalog()
         def roots = [file("api/src/main/clojure"), file("mcmod/src/main/clojure"),
-                     file("vfx-core/src/main/clojure"), file("ac/src/main/clojure")]
+                     file("vfx-core/src/main/clojure"), file("combat-core/src/main/clojure"),
+                     file("ac/src/main/clojure")]
             .findAll { it.directory }
         def forbidden = java.util.regex.Pattern.compile("(?:net\\.(minecraft|minecraftforge|fabricmc|neoforged)|cn\\.li\\.(mc1201|mc1211|mc262|mcbase|fabric1201|fabric1211|fabric262|fabricbase|forge1201|neoforge1211|neoforge262|neoforgebase))\\.")
         def findSource = { String namespaceName ->
@@ -1222,11 +1343,12 @@ tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     group = "verification"
     description = "Require every neutral provider factory on a classpath without platform sources or Minecraft libraries."
     dependsOn ":api:classes", ":mcmod:classes", ":presentation-core:classes",
-              ":presentation-compiler:classes", ":vfx-core:classes", ":ac:classes"
+              ":presentation-compiler:classes", ":vfx-core:classes", ":combat-core:classes", ":ac:classes"
     // AC's neutral provider closure now owns Presentation Runtime ViewModels;
     // include the core/compiler artifacts in this isolated classpath while
     // still excluding every Minecraft/loader project.
     def neutralProjects = [project(":api"), project(":mcmod"), project(":vfx-core"),
+                           project(":combat-core"),
                            project(":presentation-core"),
                            project(":presentation-compiler"), project(":ac")]
     // The isolated classpath is materialized from project runtime classpaths,
@@ -1410,6 +1532,16 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyPresentationJavaPurity",
               "verifyPresentationDependencyDirection",
               "verifyVfxDependencyDirection",
+              "verifyCombatDependencyDirection",
+              "verifyCombatClojureOwnership",
+              "verifyCombatNoPlatformNamespaces",
+              "verifyCombatNoPrivateRuntime",
+              "verifyCombatProviderClosure",
+              "verifyCombatSkillCoverage",
+              "verifyCombatContentHash",
+              "verifyAbilityVfxRegistryCoverage",
+              "verifyVfxSingleTickPath",
+              "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxAotBoundary",
               "verifyNeutralSourceAotXor",
               "verifyPresentationLoaderHooks",

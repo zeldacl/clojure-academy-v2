@@ -1,0 +1,315 @@
+(ns cn.li.combat.runtime
+  "Authoritative Clojure combat execution runtime.
+
+   The runtime only produces neutral plans. AC owns persistence and host
+   adapters execute the returned world effects and VFX signals."
+  (:require [cn.li.mcmod.runtime.combat-contract :as contract]
+            [cn.li.combat.compiler :as compiler]
+            [cn.li.combat.damage :as damage]))
+
+(defn- empty-result [] (contract/result {}))
+(defn- reject [reason data]
+  (contract/result {:status :rejected :feedback [(merge {:reason reason} data)]}))
+
+(defn create-engine
+  [{:keys [catalog initial-owner-state query-port now-tick ability-resolver
+           damage-pipeline]
+    :or {initial-owner-state (fn [_] {}) now-tick (fn [] 0)}}]
+  (when-not (map? catalog) (throw (ex-info "combat engine requires compiled catalog" {})))
+  {:catalog catalog
+   :sessions (atom {})
+   :owner-state (or initial-owner-state (fn [_] {}))
+   :ability-resolver ability-resolver
+   :damage-pipeline (damage/compile-pipeline damage-pipeline)
+   :query-port (or query-port {})
+   :now-tick now-tick
+   :seen-intents (atom {})
+   :deadline-queue (atom (sorted-map))
+   :last-tick (atom nil)})
+
+(defn- ability [engine id]
+  (get-in (:catalog engine) [:abilities id]))
+
+(defn- append-output [result k values]
+  (if (seq values) (update result k into values) result))
+
+(defn- combine-results [left right]
+  (let [result (into {:status (cond
+                                (= :rejected (:status left)) :rejected
+                                (= :rejected (:status right)) :rejected
+                                (= :halt (:status right)) :halt
+                                :else (:status left))}
+                     (map (fn [key]
+                            [key (vec (concat (or (get left key) [])
+                                             (or (get right key) [])))])
+                          [:state-patch :world-effects :vfx-signals :events :feedback]))]
+    (assoc result :context (or (:context right) (:context left)))))
+
+(defn- run-node [engine node context]
+  (case (:op node)
+    :sequence (reduce (fn [result child]
+                       (if (#{:halt :rejected} (:status result))
+                         result
+                         (combine-results result
+                                          (run-node engine child
+                                                    (or (:context result) context)))))
+                     {:status :continue :context context} (:steps node))
+    :repeat (reduce (fn [result _]
+                      (if (#{:halt :rejected} (:status result))
+                        result
+                        (combine-results result
+                                         (run-node engine
+                                                   {:op :sequence :steps (:steps node)}
+                                                   context))))
+                    {:status :continue :context context}
+                    (range (long (:count node))))
+    :branch (if-let [selected (if (get-in context [:flags (:predicate node)])
+                                (:then node) (:else node))]
+              (run-node engine selected context)
+              {:status :continue})
+    :require (if (or (get-in context [:flags (:predicate node)])
+                     (some? (get-in context [:refs (:predicate node)])))
+               {:status :continue}
+               {:status :rejected :feedback [{:reason :required-condition-failed}]})
+    :query (let [query-fn (get (:queries context) (:query-type node))]
+             (if-not (ifn? query-fn)
+               {:status :rejected :feedback [{:reason :missing-query-port
+                                              :query-type (:query-type node)}]}
+               (let [value (query-fn context node)]
+                 (let [context (cond-> (assoc-in context [:refs (:result-ref node :hit)] value)
+                                 (and (map? value) (:world-id value))
+                                 (assoc :world-id (:world-id value)))]
+                 {:status :continue
+                :context context
+                :events [{:type :query
+                          :query-type (:query-type node)
+                           :result value}]}))))
+    :damage (let [target (or (:target node)
+                             (get-in context [:refs (:target-ref node)])
+                             (get-in context [:refs :target]))
+                  target (if (map? target)
+                           (or (:entity-id target) (:target-id target) (:uuid target) target)
+                           target)
+                  request (damage/apply-pipeline
+                           (:damage-pipeline engine)
+                           {:source (:owner context)
+                            :target target
+                            :base (:amount node)
+                            :type (:type node)
+                            :components {:direct (:amount node)}
+                            :tags #{:skill}
+                            :metadata {:ability-id (:ability-id context)
+                                       :world-id (:world-id context)}}
+                           context)]
+              (if (:cancelled? request)
+                {:status :continue}
+                {:status :continue :world-effects [(contract/world-effect
+                                                    {:type :damage
+                                                     :request request})]}))
+    :vfx {:status :continue
+          ;; A combat output is authoritative creation-or-update.  Using
+          ;; :spawn keeps the first confirmed signal from being dropped when
+          ;; the client has no local instance yet; vfx-core makes repeated
+          ;; stable-key spawns idempotent and sequence-checked.
+          :vfx-signals [(contract/signal {:op :spawn
+                                           :effect-id (:effect-id node)
+                                           :instance-key (or (:instance-key node)
+                                                             [:combat (:session-id context) (:effect-id node)])
+                                           :owner (:owner context)
+                                           :world-id (:world-id context)
+                                           :event-seq (long (or (:event-seq context) 0))
+                                           :seed (long (or (:seed context) 0))
+                                           :event (:event node)
+                                           :params (:params node)})]}
+    :world-effect (let [effect (dissoc node :op :effect-type)
+                        target (when-let [target-ref (:target-ref node)]
+                                 (get-in context [:refs target-ref]))
+                        targets (when-let [targets-ref (:targets-ref node)]
+                                  (get-in context [:refs targets-ref]))
+                        origin (when-let [origin-ref (:origin-ref node)]
+                                 (get-in context [:refs origin-ref]))
+                        scan (when-let [scan-ref (:scan-ref node)]
+                               (get-in context [:refs scan-ref]))
+                        effect (cond-> effect
+                                 (some? target) (assoc :target target)
+                                 (some? targets) (assoc :targets targets)
+                                 (some? origin) (assoc :origin origin)
+                                 (some? scan) (assoc :scan scan)
+                                 (:world-id context) (assoc :world-id (:world-id context))
+                                 true (dissoc :target-ref :targets-ref :origin-ref :scan-ref))]
+                    {:status :continue
+                     :world-effects [(contract/world-effect
+                                      (assoc effect :type (:effect-type node)))]})
+    :domain-event {:status :continue
+                   :events [(contract/domain-event
+                             (assoc (dissoc node :op :event-type)
+                                    :type (:event-type node)))]}
+    :patch {:status :continue :state-patch (:entries node)}
+    :node (let [descriptor (get-in (:catalog engine) [:nodes (:node-id node)])]
+            (if-let [run (:run descriptor)]
+              (run context node)
+              {:status :rejected :feedback [{:reason :unknown-node :node-id (:node-id node)}]}))
+    {:status :rejected :feedback [{:reason :unknown-op :op (:op node)}]}))
+
+(defn- execute [engine ability context]
+  (let [result (run-node engine (:program ability) context)
+        cost (:cost ability)
+        result (if (and (seq cost) (not= :rejected (:status result)))
+                 (update result :state-patch into (mapv (fn [[resource amount]]
+                                                          [:resource resource (- (double amount))]) cost))
+                 result)]
+    (if (= :rejected (:status result))
+      (contract/result (assoc result
+                             :ability-id (:ability-id ability)
+                             :program-hash (:program-hash ability)
+                             :content-hash (get-in engine [:catalog :content-hash])))
+      (contract/result (assoc (dissoc result :status)
+                              :ability-id (:ability-id ability)
+                              :program-hash (:program-hash ability)
+                              :content-hash (get-in engine [:catalog :content-hash]))))))
+
+(defn- mark-intent! [engine owner intent-id]
+  (swap! (:seen-intents engine) update owner (fnil conj #{}) intent-id))
+
+(defn- seen-intent? [engine owner intent-id]
+  (contains? (get @(:seen-intents engine) owner #{}) intent-id))
+
+(defn- resolve-ability-id [engine owner intent]
+  (if-let [resolver (:ability-resolver engine)]
+    (resolver owner intent)
+    (:ability-id intent)))
+
+(defn- cooldown-ready? [state ability-id tick]
+  (or (not (contains? state :cooldowns))
+      (not (pos? (long (or (get-in state [:cooldowns ability-id]) 0))))))
+
+(defn- resources-available? [state cost]
+  (or (not (contains? state :resources))
+      (every? (fn [[resource amount]]
+                (>= (double (or (get-in state [:resources resource]) 0.0))
+                    (double amount))) cost)))
+
+(defn- start! [engine owner intent]
+  (let [ability-id (resolve-ability-id engine owner intent)
+        ability (ability engine ability-id)]
+    (cond
+      (nil? ability) (reject :unknown-ability {:ability-id ability-id})
+      (= :passive (:activation ability))
+      (reject :passive-ability-cannot-start {:ability-id ability-id})
+      :else
+      (let [state ((:owner-state engine) owner)
+            tick (long ((:now-tick engine)))]
+        (cond
+          (not (resources-available? state (:cost ability)))
+          (reject :insufficient-resource {:ability-id ability-id})
+          (not (cooldown-ready? state ability-id tick))
+          (reject :cooldown-active {:ability-id ability-id})
+          :else
+          (let [session-id (or (:session-id intent) [owner (:intent-id intent)])
+                context {:owner owner :session-id session-id :input intent
+                         :ability-id ability-id :state state
+                         :queries (:query-port engine)
+                         :flags (:flags intent) :refs (:refs intent)
+                         :event-seq 0}
+                result (execute engine ability context)
+                result (if (and (not= :rejected (:status result))
+                                (seq (:cooldown ability)))
+                         (update result :state-patch conj
+                                 [:cooldown ability-id
+                                  (+ tick (long (or (:ticks (:cooldown ability)) 0)))])
+                         result)]
+            (if (= :rejected (:status result))
+              result
+              (if (#{:session :toggle} (:activation ability))
+                (let [deadline (+ tick (long (or (:period-ticks ability) 1)))]
+                  (swap! (:sessions engine) assoc session-id
+                         {:session-id session-id :owner owner :ability-id ability-id
+                          :phase :active :next-deadline deadline
+                          :intent-id (:intent-id intent)})
+                  (swap! (:deadline-queue engine) update deadline
+                         (fnil conj #{}) session-id)
+                  (update result :session-ops conj
+                          {:op :start :session-id session-id :owner owner
+                           :ability-id ability-id :next-deadline deadline}))
+                result))))))))
+
+(defn- release! [engine owner intent]
+  (if-let [session (get @(:sessions engine) (:session-id intent))]
+    (let [ability (ability engine (:ability-id session))
+          result (execute engine ability {:owner owner :session-id (:session-id session)
+                                          :ability-id (:ability-id session)
+                                          :input intent :phase :release
+                                          :state ((:owner-state engine) owner)
+                                          :queries (:query-port engine)
+                                          :flags (:flags intent) :refs (:refs intent)
+                                          :event-seq (long (or (:event-seq intent) 1))})]
+      (swap! (:sessions engine) dissoc (:session-id session))
+      (update result :session-ops conj
+              {:op :release :session-id (:session-id session) :owner owner}))
+    (reject :unknown-session {:session-id (:session-id intent)})))
+
+(defn- abort! [engine owner intent]
+  (if (contains? @(:sessions engine) (:session-id intent))
+    (do (swap! (:sessions engine) dissoc (:session-id intent))
+        (contract/result {:session-ops [{:op :abort
+                                         :session-id (:session-id intent)
+                                         :owner owner}]}))
+    (reject :unknown-session {:session-id (:session-id intent)})))
+
+(defn dispatch-intent! [engine owner raw-intent]
+  (let [intent (contract/intent (assoc raw-intent :owner owner))]
+    (if (seen-intent? engine owner (:intent-id intent))
+      (reject :duplicate-intent {:intent-id (:intent-id intent)})
+      (do
+        (mark-intent! engine owner (:intent-id intent))
+        (case (:op intent)
+          :start (start! engine owner intent)
+          :release (release! engine owner intent)
+          :abort (abort! engine owner intent))))))
+
+(defn tick! [engine tick]
+  (when-not (= tick @(:last-tick engine))
+    (reset! (:last-tick engine) tick)
+    (let [due (get @(:deadline-queue engine) tick #{})]
+      (swap! (:deadline-queue engine) dissoc tick)
+      (mapv (fn [session-id]
+              (if-let [session (get @(:sessions engine) session-id)]
+                (let [ability (ability engine (:ability-id session))
+                      result (execute engine ability {:owner (:owner session)
+                                                      :session-id session-id
+                                                      :phase :pulse
+                                                      :state ((:owner-state engine) (:owner session))
+                                                      :queries (:query-port engine)
+                                                      :event-seq tick})
+                      next-tick (+ tick (long (or (:period-ticks ability) 1)))]
+                  (swap! (:sessions engine) assoc-in [session-id :next-deadline] next-tick)
+                  (swap! (:deadline-queue engine) update next-tick (fnil conj #{}) session-id)
+                  result)
+                (reject :unknown-session {:session-id session-id}))) due))))
+
+(defn dispatch-domain-event! [engine event]
+  (reduce (fn [results [_ ability]]
+            (if (= :passive (:activation ability))
+              (conj results (execute engine ability {:owner (:owner event)
+                                                     :session-id (:event-id event)
+                                                     :phase :passive
+                                                     :event event
+                                                     :flags (:flags event)
+                                                     :refs (:refs event)
+                                                     :state ((:owner-state engine) (:owner event))
+                                                     :queries (:query-port engine)
+                                                     :event-seq (long (or (:event-seq event) 0))}))
+              results)) [] (get-in engine [:catalog :abilities])))
+
+(defn abort-owner! [engine owner]
+  (let [ids (for [[id session] @(:sessions engine) :when (= owner (:owner session))] id)]
+    (swap! (:sessions engine) #(apply dissoc % ids))
+    (swap! (:seen-intents engine) dissoc owner)
+    (vec ids)))
+
+(defn snapshot-owner [engine owner]
+  {:owner owner
+   :sessions (vec (for [[_ session] @(:sessions engine)
+                        :when (= owner (:owner session))]
+                    session))
+   :content-hash (get-in engine [:catalog :content-hash])})

@@ -21,20 +21,8 @@ import java.util.Map;
  * <b>both</b> the server and the client; the client needs the spec to build
  * skill-tree/HUD/keybind UI even though gameplay logic only runs server-side.
  */
-public interface AbilityContentProvider {
+final class AbilityContentProviderRetired {
 
-    /** Stable provider id, e.g. your mod id. Used only for logging/diagnostics. */
-    String providerId();
+    private AbilityContentProviderRetired() {}
 
-    /**
-     * Categories this provider contributes. Most providers register their
-     * skills into an existing host-mod category (electromaster, meltdowner,
-     * teleporter, vecmanip) and can leave this empty.
-     */
-    default List<Map<String, Object>> categories() {
-        return List.of();
-    }
-
-    /** Skills this provider contributes. */
-    List<SkillDefinition> skills();
 }
