@@ -636,9 +636,10 @@
                                valid? (and (string? approval-token)
                                            (<= 1 (count approval-token) 128)
                                            (#{:mark-teleport :penetrate-teleport
-                                              :shift-teleport :threatening-teleport}
+                                              :shift-teleport :threatening-teleport
+                                              :flashing}
                                             ability-id)
-                                           (#{:mark :penetrate :shift :threatening} mode)
+                                           (#{:mark :penetrate :shift :threatening :flashing} mode)
                                            (teleportation/available?))
                                applied? (when valid?
                                           (teleportation/teleport-approved-target!
@@ -668,6 +669,11 @@
         cooldown-data (:cooldown-data state)]
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
+     :active-abilities (if-let [engine @engine*]
+                         (->> (:sessions (combat/snapshot-owner engine (str owner)))
+                              (map :ability-id)
+                              set)
+                         #{})
      :cooldowns (into {}
                      (map (fn [[[ctrl-id _sub-id] value]]
                             [ctrl-id (long (or (:ticks value) 0))])
