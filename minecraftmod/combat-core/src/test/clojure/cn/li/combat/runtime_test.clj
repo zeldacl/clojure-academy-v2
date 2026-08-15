@@ -331,3 +331,16 @@
     (is (= :accepted (:status aborted)))
     (is (= :abort (get-in aborted [:vfx-signals 0 :event])))
     (is (empty? (:sessions (runtime/snapshot-owner engine "p"))))))
+
+(deftest domain-state-handler-is-observed
+  (let [engine (runtime/create-engine
+                {:catalog {:abilities {} :content-hash "domain-state-test"}
+                 :domain-event-handler
+                 (fn [state event]
+                   (if (= :mark (:type event))
+                     (assoc-in state [:marks (:target event)] (:rate event))
+                     state))})]
+    (runtime/dispatch-domain-event! engine
+                                    {:type :mark :target "victim" :rate 1.75})
+    (is (= {"victim" 1.75}
+           (get-in (runtime/domain-state engine) [:marks])))))

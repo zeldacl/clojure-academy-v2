@@ -13,7 +13,7 @@
 
 (defn create-engine
   [{:keys [catalog initial-owner-state query-port now-tick ability-resolver
-           damage-pipeline max-seen-intents]
+           damage-pipeline max-seen-intents domain-event-handler]
     :or {initial-owner-state (fn [_] {}) now-tick (fn [] 0)}}]
   (when-not (map? catalog) (throw (ex-info "combat engine requires compiled catalog" {})))
   {:catalog catalog
@@ -22,6 +22,8 @@
    :ability-resolver ability-resolver
    :damage-pipeline (damage/compile-pipeline damage-pipeline)
    :query-port (or query-port {})
+   :domain-state (atom {})
+   :domain-event-handler domain-event-handler
    :now-tick now-tick
    :seen-intents (atom {})
    :max-seen-intents (long (or max-seen-intents 4096))
@@ -45,6 +47,7 @@
                             :state (or target-state source-state)
                             :source-state source-state
                             :target-state target-state
+                            :domain-state @(:domain-state engine)
                             :queries (:query-port engine)
                             :tick (long ((:now-tick engine)))})))
 
@@ -591,6 +594,12 @@
             due))))
 
 (defn dispatch-domain-event! [engine event]
+  (when-let [handler (:domain-event-handler engine)]
+    (let [next-state (handler @(:domain-state engine) event)]
+      (when-not (map? next-state)
+        (throw (ex-info "combat domain event handler must return a map"
+                        {:event event :state next-state})))
+      (reset! (:domain-state engine) next-state)))
   (reduce (fn [results [_ ability]]
             (if (= :passive (:activation ability))
               (conj results (execute engine ability {:owner (:owner event)
@@ -604,6 +613,11 @@
                                                      :queries (:query-port engine)
                                                      :event-seq (long (or (:event-seq event) 0))}))
               results)) [] (get-in engine [:catalog :abilities])))
+
+(defn domain-state
+  "Return an immutable snapshot of composition-owned combat domain state." 
+  [engine]
+  @(:domain-state engine))
 
 (defn abort-owner! [engine owner]
   (let [ids (for [[id session] @(:sessions engine) :when (= owner (:owner session))] id)]
