@@ -42,6 +42,11 @@
   [world-id owner plan]
   (call :execute-ray-barrage! world-id owner plan))
 
+(defn execute-directed-blastwave!
+  "Execute the bounded block/entity shockwave behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-directed-blastwave! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))

@@ -95,7 +95,19 @@
                                               (:impact attack-data)
                                               10.0
                                               #{owner})]
-                                 (assoc attack-data :victims victims))))}]
+                                 (assoc attack-data :victims victims))))
+              :directed-blastwave (fn [context node]
+                                    (if-let [host-query (contract/host-port :query)]
+                                      (host-query :directed-blastwave context node)
+                                      (let [owner (:owner context)
+                                            range (double (or (:range node) 4.0))
+                                            attack-data (attack/resolve-attack-data owner range)
+                                            victims (attack/aoe-victims
+                                                     (:world-id attack-data)
+                                                     (:impact attack-data)
+                                                     3.0
+                                                     #{owner})]
+                                        (assoc attack-data :victims victims))))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -220,6 +232,41 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-ray-barrage!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :directed-blastwave
+                         (let [{:keys [world-id query-result ray-count aoe-radius
+                                       amount damage-type movement breaking]} effect
+                               {:keys [impulse knockback-y-adjust knockback-scale]} movement
+                               {:keys [hardness-caps break-probability drop-probability]} breaking
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               bounded-probabilities? (and (vector? break-probability)
+                                                           (= 2 (count break-probability))
+                                                           (every? #(and (finite? %) (<= 0.0 (double %) 1.0))
+                                                                   break-probability)
+                                                           (vector? drop-probability)
+                                                           (= 2 (count drop-probability))
+                                                           (every? #(and (finite? %) (<= 0.0 (double %) 1.0))
+                                                                   drop-probability))
+                               valid? (and world-id (map? query-result)
+                                            (<= 1 (long (or ray-count 1)) 16)
+                                            (finite? aoe-radius) (pos? (double aoe-radius))
+                                            (<= (double aoe-radius) 16.0)
+                                            (finite? amount) (pos? (double amount))
+                                            (<= (double amount) 1000.0)
+                                            (every? #(and (finite? %) (<= -10.0 (double %) 10.0))
+                                                    [impulse knockback-y-adjust knockback-scale])
+                                            (vector? hardness-caps)
+                                            (= 3 (count hardness-caps))
+                                            (every? #(and (finite? %) (<= 0.0 (double %) 100.0))
+                                                    hardness-caps)
+                                            bounded-probabilities?
+                                            (world-effects/available?))
+                               plan (assoc effect :ray-count (long (or ray-count 1)))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-directed-blastwave!
                                                world-id owner plan))
                                       :applied
                                       :failed)
