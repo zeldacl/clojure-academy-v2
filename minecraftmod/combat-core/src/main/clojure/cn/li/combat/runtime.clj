@@ -13,7 +13,7 @@
 
 (defn create-engine
   [{:keys [catalog initial-owner-state query-port now-tick ability-resolver
-           damage-pipeline]
+           damage-pipeline max-seen-intents]
     :or {initial-owner-state (fn [_] {}) now-tick (fn [] 0)}}]
   (when-not (map? catalog) (throw (ex-info "combat engine requires compiled catalog" {})))
   {:catalog catalog
@@ -24,6 +24,7 @@
    :query-port (or query-port {})
    :now-tick now-tick
    :seen-intents (atom {})
+   :max-seen-intents (long (or max-seen-intents 4096))
    :deadline-queue (atom (sorted-map))
    :last-tick (atom nil)})
 
@@ -256,10 +257,21 @@
                               :content-hash (get-in engine [:catalog :content-hash]))))))
 
 (defn- mark-intent! [engine owner intent-id]
-  (swap! (:seen-intents engine) update owner (fnil conj #{}) intent-id))
+  (swap! (:seen-intents engine)
+         update owner
+         (fn [history]
+           (let [history (vec (or history []))
+                 history (if (some #(= intent-id %) history)
+                           history
+                           (conj history intent-id))
+                 limit (:max-seen-intents engine)]
+             (if (> (count history) limit)
+               (subvec history (- (count history) limit))
+               history)))))
 
 (defn- seen-intent? [engine owner intent-id]
-  (contains? (get @(:seen-intents engine) owner #{}) intent-id))
+  (some #(= intent-id %)
+        (get @(:seen-intents engine) owner [])))
 
 (defn- resolve-ability-id [engine owner intent]
   (if-let [resolver (:ability-resolver engine)]

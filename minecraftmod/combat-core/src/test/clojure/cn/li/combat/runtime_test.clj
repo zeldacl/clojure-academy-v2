@@ -31,6 +31,20 @@
     (is (= :accepted (:status (runtime/dispatch-intent! engine "p" {:intent-id "x" :op :start :ability-id :test/a}))))
     (is (= :rejected (:status (runtime/dispatch-intent! engine "p" {:intent-id "x" :op :start :ability-id :test/a}))))))
 
+(deftest intent-cache-is-bounded-per-owner
+  (dsl/defability bounded {:id :test/bounded :activation :instant :program (dsl/patch [])})
+  (let [engine (runtime/create-engine {:catalog (compiler/compile-all!)
+                                       :max-seen-intents 2})]
+    (doseq [intent-id [1 2 3]]
+      (runtime/dispatch-intent! engine "p"
+                                {:intent-id intent-id :op :start
+                                 :ability-id :test/bounded}))
+    (is (= [2 3] (get @(:seen-intents engine) "p")))
+    (is (= :accepted
+           (:status (runtime/dispatch-intent! engine "p"
+                                              {:intent-id 1 :op :start
+                                               :ability-id :test/bounded}))))))
+
 (deftest session-is-deadline-driven
   (dsl/defability charging {:id :test/charging :activation :session :period-ticks 2
                              :program (dsl/vfx :test/charge {:event :pulse})})
