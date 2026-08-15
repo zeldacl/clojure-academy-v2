@@ -10,3 +10,5 @@
   (client-bridge/merge-client-bridge! {:vfx-host-api vfx/vfx-host-api})
   (vfx/vfx-host-api))
 
+(defn reload-resources! [generation]
+  (vfx/reload-resources! generation))

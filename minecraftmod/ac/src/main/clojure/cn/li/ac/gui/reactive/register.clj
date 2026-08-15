@@ -9,7 +9,7 @@
             [cn.li.ac.terminal.client.presentation-terminal :as presentation-terminal]
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
-            [cn.li.ac.client.effect-controller :as effect-controller]
+            [cn.li.ac.client.vfx-host :as vfx-host]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.presentation.core.export :as presentation-export]
             [cn.li.presentation.compiler.core :as presentation-compiler]
@@ -175,7 +175,7 @@
                     (reset! terminal* nil)))
      :reload-resources! (fn [generation]
                           (reset! template-cache* {})
-                          (effect-controller/reload-resources! generation))
+                          (vfx-host/reload-resources! generation))
      :dispatch! (fn [mount event]
                   (.dispatch ^cn.li.presentation.core.PresentationRuntime
                              (:api runtime) mount event))
