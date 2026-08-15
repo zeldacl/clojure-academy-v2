@@ -370,6 +370,7 @@
         event (some #(when (= :radiation-mark (:type %)) %) (:events result))]
     (is (= :accepted (:status result)))
     (is (= :radiation-mark (:type event)))
+    (is (true? (:combat-domain? event)))
     (is (= "owner" (:owner event)))
     (is (= 91 (:intent-id event)))
     (is (= "victim" (:target-id event)))

@@ -339,6 +339,7 @@
           event (cond-> (assoc event
                                :type (:event-type node)
                                :owner (:owner context)
+                               :combat-domain? true
                                :event-seq (long (or (:event-seq context) 0)))
                   intent-id (assoc :intent-id intent-id)
                   (:session-id context) (assoc :session-id (:session-id context))
