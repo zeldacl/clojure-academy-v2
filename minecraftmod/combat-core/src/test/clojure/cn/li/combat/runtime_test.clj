@@ -185,3 +185,24 @@
     (is (= :accepted (:status aborted)))
     (is (= :abort (get-in aborted [:vfx-signals 0 :event])))
     (is (empty? (:sessions (runtime/snapshot-owner engine "p"))))))
+
+(deftest session-cost-phase-keeps-start-and-release-free
+  (dsl/defability pulse-cost
+    {:id :test/pulse-cost :activation :session :period-ticks 1
+     :cost-phase :pulse :cost {:cp 2}
+     :program {:op :phase
+               :start {:op :patch :entries []}
+               :pulse {:op :patch :entries []}
+               :release {:op :patch :entries []}}})
+  (let [engine (runtime/create-engine
+                {:catalog (compiler/compile-all!)
+                 :initial-owner-state (fn [_] {:resources {:cp 4}})})
+        started (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 47 :op :start
+                                           :ability-id :test/pulse-cost})
+        pulsed (first (runtime/tick! engine 1))
+        released (runtime/dispatch-intent! engine "p"
+                                           {:intent-id 48 :op :release})]
+    (is (empty? (:state-patch started)))
+    (is (= [[:resource :cp -2.0]] (:state-patch pulsed)))
+    (is (empty? (:state-patch released)))))

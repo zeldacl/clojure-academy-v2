@@ -27,7 +27,10 @@
 
 (defn- walk! [node path nodes seen]
   (when-not (map? node) (fail "combat program node must be a map" {:path path :node node}))
-  (when (contains? @seen node)
+  ;; Use identity along the current recursion stack.  Equality is not a
+  ;; cycle: two independent phase branches may legitimately contain the same
+  ;; immutable node map.
+  (when (some #(identical? % node) @seen)
     (fail "combat program contains a cycle" {:path path}))
   (swap! seen conj node)
   (let [op (:op node)]
@@ -63,6 +66,7 @@
                 (fail "combat program references an unregistered custom node"
                       {:path path :node-id (:node-id node)})))
       nil)
+    (swap! seen pop)
     node))
 
 (defn- expand-activation [ability]
@@ -73,7 +77,7 @@
 
 (defn compile-ability [{:keys [id program] :as ability}]
   (when-not (keyword? id) (fail "ability id must be a keyword" {:ability ability}))
-  (walk! program [:program] (registry/nodes) (atom #{}))
+  (walk! program [:program] (registry/nodes) (atom []))
   (let [ability (expand-activation ability)
         hash (content-hash (dissoc ability :compiled?))
         nodes (tree-seq map? #(concat (:steps %) [(:then %) (:else %)]) program)

@@ -234,7 +234,9 @@
 
 (defn- execute [engine ability context]
   (let [result (run-node engine (:program ability) context)
-        cost (if (:skip-cost? context)
+        cost (if (or (:skip-cost? context)
+                     (and (:cost-phase ability)
+                          (not= (:cost-phase ability) (:phase context))))
                {}
                (resolve-cost (:cost ability) context))
         result (if (and (seq cost) (not= :rejected (:status result)))
