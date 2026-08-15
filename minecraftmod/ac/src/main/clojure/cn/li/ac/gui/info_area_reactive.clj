@@ -217,8 +217,14 @@
                                     :props {:id (fill-id idx) :x 0.0 :y 0.0 :w 16.0 :h 0.0
                                             :fill (:color elem) :align-h :bottom}}]}])
                     (range) elems))
+        ;; Upstream InfoPage.histogram runs blank(-30) BEFORE element(), but
+        ;; reset() starts elemY at 10 — so the first frame's page offset is
+        ;; 10 - 30 = -20 (its top 20px clipped, bars at frame-y 78×0.4 ≈ 31
+        ;; land near the page top). Our y cursor starts at 0, so the pull-up
+        ;; is -20, not -30 — a -30 frame renders the bars 10px higher and
+        ;; clips the top further than upstream.
         frame-spec {:kind :group
-                    :props {:id hist-id :x 8.0 :y y :w 210.0 :h 210.0 :scale scale}
+                    :props {:id hist-id :x 8.0 :y (- y 20.0) :w 210.0 :h 210.0 :scale scale}
                     :children (into [{:kind :image
                                       :props {:id (keyword (str (name hist-id) "-frame"))
                                               :x 0.0 :y 0.0 :w 210.0 :h 210.0 :src histogram-tex}}]
@@ -241,7 +247,11 @@
                                 pct (/ (double (vf)) cap)]
                             (max 0.03 (min 1.0 pct)))))]
           (rt/register-binding! rt (.getIdx bar) (sig/bind! pct-sig bar (partial write-box-height! bar-h) (rt/get-dirty-bindings-q rt))))))
-    (advance! ctx (+ 4.0 (* 210.0 scale)))
+    ;; Upstream element() advances by height × scale (84), but the frame was
+    ;; pulled up 20px — its bottom sits at cursor+64, and the property rows
+    ;; must start there (a plain 84 advance leaves a 20px gap between the
+    ;; frame and the text, exactly the upstream offset).
+    (advance! ctx (- (* 210.0 scale) 20.0))
     ;; per-elem property row: label + colored icon + live value text (histProperty)
     (doseq [elem elems]
       (let [ry @(:y ctx)
