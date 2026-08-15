@@ -242,3 +242,30 @@
         pulsed (first (runtime/tick! engine 1))]
     (is (empty? (:state-patch started)))
     (is (= [[:resource :overload -4.0]] (:state-patch pulsed)))))
+
+(deftest session-counter-enforces-release-window
+  (dsl/defability counted-session
+    {:id :test/counted-session :activation :session :period-ticks 1
+     :program {:op :phase
+               :start {:op :session-patch
+                       :entries [[[:charge-ticks] 0.0]]}
+               :pulse {:op :session-patch
+                       :entries [[[:charge-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :require-session
+                                  :path [:charge-ticks] :min 2.0}
+                                 {:op :vfx :effect-id :test/counted
+                                  :event :release}]}}})
+  (let [engine (runtime/create-engine {:catalog (compiler/compile-all!)
+                                       :now-tick (constantly 0)})
+        started (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 50 :op :start
+                                           :ability-id :test/counted-session})
+        _ (runtime/tick! engine 1)
+        _ (runtime/tick! engine 2)
+        released (runtime/dispatch-intent! engine "p"
+                                           {:intent-id 51 :op :release})]
+    (is (= :accepted (:status started)))
+    (is (= :accepted (:status released)))
+    (is (= :release (get-in released [:vfx-signals 0 :event])))))

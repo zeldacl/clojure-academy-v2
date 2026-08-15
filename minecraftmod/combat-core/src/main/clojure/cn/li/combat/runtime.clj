@@ -80,12 +80,18 @@
 (defn- resolve-session-patch
   [entries context]
   (mapv (fn [[path value]]
-          [path (resolve-value value context)]) entries))
+          [path (if (and (map? value) (= :increment (:op value)))
+                  {:op :increment
+                   :amount (double (resolve-value (or (:amount value) 1.0)
+                                                  context))}
+                  (resolve-value value context))]) entries))
 
 (defn- apply-session-patches
   [state patches]
   (reduce (fn [acc [path value]]
-            (assoc-in acc path value))
+            (if (and (map? value) (= :increment (:op value)))
+              (update-in acc path (fnil + 0.0) (double (:amount value)))
+              (assoc-in acc path value)))
           (or state {}) patches))
 
 (defn- combine-results [left right]
@@ -131,6 +137,21 @@
                      (some? (get-in context [:refs (:predicate node)])))
                {:status :continue}
                {:status :rejected :feedback [{:reason :required-condition-failed}]})
+    :require-session (let [value (get-in (:session-state context) (:path node))
+                           value (double (or value 0.0))
+                           min-value (when (contains? node :min)
+                                       (double (:min node)))
+                           max-value (when (contains? node :max)
+                                       (double (:max node)))]
+                       (if (and (or (nil? min-value) (>= value min-value))
+                                (or (nil? max-value) (<= value max-value)))
+                         {:status :continue}
+                         {:status :rejected
+                          :feedback [{:reason :session-window-failed
+                                      :path (:path node)
+                                      :value value
+                                      :min min-value
+                                      :max max-value}]}))
     :query (let [query-fn (get (:queries context) (:query-type node))
                  query-node (reduce (fn [resolved key]
                                      (if (contains? #{:distance :range :aoe-radius} key)

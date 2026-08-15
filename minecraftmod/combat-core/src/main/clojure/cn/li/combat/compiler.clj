@@ -5,8 +5,8 @@
            [java.security MessageDigest]))
 
 (def ^:private built-in-ops
-  #{:sequence :repeat :branch :require :query :damage :vfx :world-effect
-    :domain-event :patch :phase :session-patch})
+  #{:sequence :repeat :branch :require :require-session :query :damage :vfx
+    :world-effect :domain-event :patch :phase :session-patch})
 
 (defn- canonical [value]
   (cond
