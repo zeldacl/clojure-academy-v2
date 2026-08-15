@@ -200,5 +200,8 @@
     (bridge/merge-client-bridge!
       {:presentation-runtime presentation-runtime
        :presentation-host-api presentation-host-api
-       :vfx-host-api effect-controller/vfx-host-api}))
+       ;; VFX Core is installed directly by ac.client.vfx-host during client
+       ;; bootstrap.  Presentation exposes UI only and does not carry a VFX
+       ;; runtime seam.
+       }))
   (log/info "Presentation Runtime bridge installed"))
