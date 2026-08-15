@@ -463,6 +463,24 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         :mine-ray
+                         (let [{:keys [world-id scan range break-speed fortune]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:scan scan
+                                     :range (double (or range 0.0))
+                                     :break-speed (double (or break-speed 0.0))
+                                     :fortune (long (or fortune 0))}
+                               valid? (and world-id (map? scan)
+                                            (finite? range) (<= 1.0 (:range plan) 32.0)
+                                            (finite? break-speed) (<= 0.0 (:break-speed plan) 4.0)
+                                            (<= 0 (:fortune plan) 3)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-mine-ray!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          :teleport-approved
                          (let [{:keys [target destination radius ability-id]} effect
                                destination (or destination target)

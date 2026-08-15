@@ -77,6 +77,11 @@
   [world-id owner plan]
   (call :execute-plasma-cannon! world-id owner plan))
 
+(defn execute-mine-ray!
+  "Execute one bounded mining-ray tick behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-mine-ray! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]
