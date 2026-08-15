@@ -671,9 +671,19 @@
   @(:domain-state engine))
 
 (defn abort-owner! [engine owner]
-  (let [ids (for [[id session] @(:sessions engine) :when (= owner (:owner session))] id)]
+  (let [ids (set (for [[id session] @(:sessions engine) :when (= owner (:owner session))] id))]
     (swap! (:sessions engine) #(apply dissoc % ids))
+    (swap! (:deadline-queue engine)
+           (fn [queue]
+             (into (sorted-map)
+                   (keep (fn [[tick session-ids]]
+                           (let [remaining (apply disj session-ids ids)]
+                             (when (seq remaining) [tick remaining])))
+                         queue))))
     (swap! (:seen-intents engine) dissoc owner)
+    (swap! (:seen-domain-events engine)
+           (fn [events]
+             (set (remove #(= owner (first %)) events))))
     (vec ids)))
 
 (defn snapshot-owner [engine owner]

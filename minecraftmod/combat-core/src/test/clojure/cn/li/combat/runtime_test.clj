@@ -396,3 +396,27 @@
     (runtime/dispatch-domain-event! engine event)
     (is (= 1 @calls))
     (is (= 1 (get (runtime/domain-state engine) :count)))))
+
+(deftest abort-owner-clears-scheduled-sessions-and-domain-identity
+  (dsl/defability owner-session
+    {:id :test/owner-session :activation :session :period-ticks 4
+     :program (dsl/patch [])})
+  (let [engine (runtime/create-engine
+                {:catalog (compiler/compile-all!)
+                 :domain-event-handler (fn [state event]
+                                         (update state :events (fnil conj []) event))})]
+    (runtime/dispatch-intent! engine "owner"
+                               {:intent-id 12 :op :start
+                                :ability-id :test/owner-session})
+    (runtime/dispatch-domain-event! engine
+                                     {:type :mark :owner "owner"
+                                      :intent-id 12 :event-seq 1})
+    (is (seq @(:deadline-queue engine)))
+    (runtime/abort-owner! engine "owner")
+    (is (empty? (:sessions (runtime/snapshot-owner engine "owner"))))
+    (is (empty? @(:deadline-queue engine)))
+    ;; Reusing the same identity after owner cleanup is accepted again.
+    (runtime/dispatch-domain-event! engine
+                                     {:type :mark :owner "owner"
+                                      :intent-id 12 :event-seq 1})
+    (is (= 2 (count (get (runtime/domain-state engine) :events))))))
