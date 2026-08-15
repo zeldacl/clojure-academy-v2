@@ -688,6 +688,39 @@
                                   :mode :threatening}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
+    {:id :light-shield
+     :revision 1
+     :activation :toggle
+     :period-ticks 1
+     :max-session-ticks 180
+     :cost-phase :pulse
+     :cost {:cp (scale 9.0 4.0)}
+     :program {:op :phase
+               :start {:op :sequence
+                       :steps [{:op :patch
+                                :entries [[:resource :overload
+                                           {:op :multiply
+                                            :values [-1.0 (scale 110.0 60.0)]}]]}
+                               {:op :session-patch
+                                :entries [[[:ticks] 0.0]]}]}
+               :pulse {:op :sequence
+                       :steps [{:op :session-patch
+                                :entries [[[:ticks]
+                                           {:op :increment :amount 1.0}]]}
+                               {:op :query :query-type :light-shield
+                                :max-active-ticks (scale 120.0 180.0)
+                                :result-ref :shield}
+                               {:op :world-effect
+                                :effect-type :light-shield
+                                :query-ref :shield
+                                :ticks (session-value [:ticks])
+                                :absorb-damage (scale 15.0 50.0)
+                                :touch-damage (scale 2.0 6.0)
+                                :touch-radius 3.0
+                                :front-cone-degrees 60.0
+                                :max-active-ticks 180}
+                               {:op :vfx :effect-id :light-shield
+                                :event :active :params {:radius 3.0}}]}}}
     {:id :jet-engine
      :revision 1
      :activation :session

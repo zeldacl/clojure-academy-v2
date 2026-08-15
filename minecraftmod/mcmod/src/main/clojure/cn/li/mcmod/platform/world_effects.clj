@@ -92,6 +92,16 @@
   [world-id owner plan]
   (call :execute-jet-engine! world-id owner plan))
 
+(defn execute-vec-accel!
+  "Execute the charged Vector Acceleration movement behind a Host Port."
+  [world-id owner plan]
+  (call :execute-vec-accel! world-id owner plan))
+
+(defn execute-light-shield!
+  "Update the authoritative Light Shield state behind a Host Port."
+  [world-id owner plan]
+  (call :execute-light-shield! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]

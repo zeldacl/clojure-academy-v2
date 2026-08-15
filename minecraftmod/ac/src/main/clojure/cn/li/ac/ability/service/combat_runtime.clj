@@ -145,7 +145,10 @@
                                    (host-query :teleport-target context node)))
               :jet-engine (fn [context node]
                             (when-let [host-query (contract/host-port :query)]
-                              (host-query :jet-engine context node)))}]
+                              (host-query :jet-engine context node)))
+              :light-shield (fn [context node]
+                              (when-let [host-query (contract/host-port :query)]
+                                (host-query :light-shield context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -542,6 +545,33 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-jet-engine!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :light-shield
+                         (let [{:keys [world-id query-result ticks absorb-damage
+                                       touch-damage touch-radius front-cone-degrees
+                                       max-active-ticks]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :ticks (long (or ticks 0))
+                                     :absorb-damage (double (or absorb-damage 0.0))
+                                     :touch-damage (double (or touch-damage 0.0))
+                                     :touch-radius (double (or touch-radius 0.0))
+                                     :front-cone-degrees (double (or front-cone-degrees 60.0))
+                                     :max-active-ticks (long (or max-active-ticks 180))}
+                               valid? (and world-id (map? query-result)
+                                            (<= 0 (:ticks plan) (:max-active-ticks plan) 180)
+                                            (finite? absorb-damage) (<= 0.0 (:absorb-damage plan) 100.0)
+                                            (finite? touch-damage) (<= 0.0 (:touch-damage plan) 100.0)
+                                            (finite? touch-radius) (<= 0.0 (:touch-radius plan) 8.0)
+                                            (finite? front-cone-degrees)
+                                            (<= 0.0 (:front-cone-degrees plan) 180.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-light-shield!
                                                world-id owner plan))
                                       :applied
                                       :failed)
