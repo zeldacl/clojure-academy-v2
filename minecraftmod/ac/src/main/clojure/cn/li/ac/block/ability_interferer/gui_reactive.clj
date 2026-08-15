@@ -14,6 +14,7 @@
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.ac.config.modid :as modid]
             [cn.li.ac.block.ability-interferer.config :as interferer-config]
             [cn.li.ac.block.gui.sync :as gui-sync]
@@ -207,6 +208,9 @@
         scroll (atom 0)
         selected (atom nil)]
 
+    ;; Main-page labels (upstream XML hardcodes English; localize)
+    (ui/set-prop! r :switch_label :text (i18n/translate "gui.academy.common.pg_interfere.switch"))
+    (ui/set-prop! r :range_label :text (i18n/translate "gui.academy.common.pg_interfere.range"))
     ;; Range text (upstream element_text_range content = tile.range)
     (ui/bind! r :element_text_range :text
       (sig/computed-o [clock]

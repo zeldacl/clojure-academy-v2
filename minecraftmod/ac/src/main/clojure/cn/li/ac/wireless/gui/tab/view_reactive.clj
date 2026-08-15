@@ -1,6 +1,7 @@
 (ns cn.li.ac.wireless.gui.tab.view-reactive
   "Reactive view-layer for wireless tab — list-set! + editable password rows."
   (:require [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.i18n :as i18n]
             [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.events :as events]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -65,12 +66,20 @@
   [^UiRt rt {:keys [linked avail connect-fn disconnect-fn name-fn encrypted?-fn]}]
   (let [linked? (some? linked)
         alpha (if linked? 1.0 0.6)
-        name (if linked? (name-fn linked) "Not Connected")
+        name (if linked? (name-fn linked)
+              (i18n/translate "gui.academy.common.pg_wireless.not_connected"))
         ;; XML-parsed ids are keywords; string lookups fail silently
         ^INode ec-connect (ui/node rt :ec_icon_connect)
         ^INode ec-logo (ui/node rt :ec_icon_logo)
         ^INode ec-name (ui/node rt :ec_text_name)]
     (when ec-name (ui/set-node-prop! rt ec-name :text name))
+    ;; Static section headers (upstream XML hardcodes English; localize)
+    (when-let [^INode connected (ui/node rt :text_connected)]
+      (ui/set-node-prop! rt connected :text
+        (i18n/translate "gui.academy.common.pg_wireless.connected")))
+    (when-let [^INode available (ui/node rt :text_available)]
+      (ui/set-node-prop! rt available :text
+        (i18n/translate "gui.academy.common.pg_wireless.available")))
     (when ec-connect
       (ui/set-node-prop! rt ec-connect :src (if linked? tex-connected tex-unconnected))
       (set-image-alpha! rt ec-connect alpha)
