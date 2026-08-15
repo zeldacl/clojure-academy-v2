@@ -374,3 +374,18 @@
     (is (= "victim" (:target-id event)))
     (is (= 7 (:tick event)))
     (is (= 1.5 (get-in event [:metadata :rate])))))
+
+(deftest domain-event-identity-is-idempotent
+  (let [calls (atom 0)
+        engine (runtime/create-engine
+                {:catalog {:abilities {} :content-hash "domain-idempotency"}
+                 :domain-event-handler
+                 (fn [state _]
+                   (swap! calls inc)
+                   (update state :count (fnil inc 0)))})
+        event {:type :radiation-mark :owner "p" :intent-id 9
+               :session-id "s" :event-seq 4}]
+    (runtime/dispatch-domain-event! engine event)
+    (runtime/dispatch-domain-event! engine event)
+    (is (= 1 @calls))
+    (is (= 1 (get (runtime/domain-state engine) :count)))))

@@ -8,6 +8,7 @@
             [cn.li.combat.damage :as damage]))
 
 (defn- empty-result [] (contract/result {}))
+(def ^:private max-seen-domain-events 4096)
 (defn- reject [reason data]
   (contract/result {:status :rejected :feedback [(merge {:reason reason} data)]}))
 
@@ -24,6 +25,7 @@
    :query-port (or query-port {})
    :domain-state (atom {})
    :domain-event-handler domain-event-handler
+   :seen-domain-events (atom #{})
    :now-tick now-tick
    :seen-intents (atom {})
    :max-seen-intents (long (or max-seen-intents 4096))
@@ -614,25 +616,37 @@
        due))))
 
 (defn dispatch-domain-event! [engine event]
-  (when-let [handler (:domain-event-handler engine)]
-    (let [next-state (handler @(:domain-state engine) event)]
-      (when-not (map? next-state)
-        (throw (ex-info "combat domain event handler must return a map"
-                        {:event event :state next-state})))
-      (reset! (:domain-state engine) next-state)))
-  (reduce (fn [results [_ ability]]
-            (if (= :passive (:activation ability))
-              (conj results (execute engine ability {:owner (:owner event)
-                                                     :session-id (:event-id event)
-                                                     :phase :passive
-                                                     :tick (long ((:now-tick engine)))
-                                                     :event event
-                                                     :flags (:flags event)
-                                                     :refs (:refs event)
-                                                     :state ((:owner-state engine) (:owner event))
-                                                     :queries (:query-port engine)
-                                                     :event-seq (long (or (:event-seq event) 0))}))
-              results)) [] (get-in engine [:catalog :abilities])))
+  (let [event-key (when (or (:event-id event) (:intent-id event))
+                   [(:owner event) (:intent-id event) (:session-id event)
+                    (:event-id event) (:event-seq event) (:type event)])]
+    (if (and event-key (contains? @(:seen-domain-events engine) event-key))
+      []
+      (do
+        (when event-key
+          (swap! (:seen-domain-events engine)
+                 (fn [seen]
+                   (if (>= (count seen) max-seen-domain-events)
+                     #{event-key}
+                     (conj seen event-key)))))
+        (when-let [handler (:domain-event-handler engine)]
+          (let [next-state (handler @(:domain-state engine) event)]
+            (when-not (map? next-state)
+              (throw (ex-info "combat domain event handler must return a map"
+                              {:event event :state next-state})))
+            (reset! (:domain-state engine) next-state)))
+        (reduce (fn [results [_ ability]]
+                  (if (= :passive (:activation ability))
+                    (conj results (execute engine ability {:owner (:owner event)
+                                                           :session-id (:event-id event)
+                                                           :phase :passive
+                                                           :tick (long ((:now-tick engine)))
+                                                           :event event
+                                                           :flags (:flags event)
+                                                           :refs (:refs event)
+                                                           :state ((:owner-state engine) (:owner event))
+                                                           :queries (:query-port engine)
+                                                           :event-seq (long (or (:event-seq event) 0))}))
+                    results)) [] (get-in engine [:catalog :abilities]))))))
 
 (defn domain-state
   "Return an immutable snapshot of composition-owned combat domain state." 
