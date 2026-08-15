@@ -87,6 +87,11 @@
   [world-id owner plan]
   (call :execute-meltdowner! world-id owner plan))
 
+(defn execute-jet-engine!
+  "Execute the bounded Jet Engine dash/segment plan behind a Host Port."
+  [world-id owner plan]
+  (call :execute-jet-engine! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]

@@ -142,7 +142,10 @@
                                   (host-query :saved-location context node)))
               :teleport-target (fn [context node]
                                  (when-let [host-query (contract/host-port :query)]
-                                   (host-query :teleport-target context node)))}]
+                                   (host-query :teleport-target context node)))
+              :jet-engine (fn [context node]
+                            (when-let [host-query (contract/host-port :query)]
+                              (host-query :jet-engine context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -515,6 +518,30 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-meltdowner!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :jet-engine
+                         (let [{:keys [world-id query-result charge-ticks target-range
+                                       trigger-time-ticks trigger-lifetime-ticks damage]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :charge-ticks (long (or charge-ticks 0))
+                                     :target-range (double (or target-range 12.0))
+                                     :trigger-time-ticks (long (or trigger-time-ticks 8))
+                                     :trigger-lifetime-ticks (long (or trigger-lifetime-ticks 15))
+                                     :damage (double (or damage 0.0))}
+                               valid? (and world-id (map? query-result)
+                                            (<= 0 (:charge-ticks plan) 120)
+                                            (finite? target-range) (<= 1.0 (:target-range plan) 32.0)
+                                            (<= 1 (:trigger-time-ticks plan) 40)
+                                            (<= 1 (:trigger-lifetime-ticks plan) 40)
+                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-jet-engine!
                                                world-id owner plan))
                                       :applied
                                       :failed)

@@ -687,7 +687,35 @@
                                   :target-ref :destination
                                   :mode :threatening}
                                  {:op :vfx :effect-id :threatening-teleport
-                                  :event :release :params {:max-range 15.0}}]}}}
+                                 :event :release :params {:max-range 15.0}}]}}}
+    {:id :jet-engine
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 40
+     :cost-phase :release
+     :cost {:cp (scale 60.0 50.0)
+            :overload (scale 170.0 140.0)}
+     :cooldown {:ticks (scale 60.0 30.0)}
+     :program {:op :phase
+               :pulse {:op :session-patch
+                       :entries [[[:charge-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :jet-engine
+                                  :target-range 12.0
+                                  :result-ref :target}
+                                 {:op :require :predicate :target}
+                                 {:op :world-effect
+                                  :effect-type :jet-engine
+                                  :query-ref :target
+                                  :charge-ticks (session-value [:charge-ticks])
+                                  :target-range 12.0
+                                  :trigger-time-ticks 8
+                                  :trigger-lifetime-ticks 15
+                                  :damage (scale 7.0 20.0)}
+                                 {:op :vfx :effect-id :jet-engine
+                                  :event :release :params {:range 12.0}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
