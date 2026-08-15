@@ -97,18 +97,13 @@
   [^UiRt rt ^INode value-n editable? on-change color-change?]
   (when editable?
     (let [last-confirmed (volatile! nil)]
+      ;; Upstream TechUI InfoPage.property submits the editCallback ONLY on
+      ;; ConfirmInputEvent (Enter); ChangeContentEvent just tints the field
+      ;; edit-color and blur does nothing. Remove the lost-focus auto-confirm
+      ;; — matrix/node ssid+password edits apply on Enter, not on blur.
       (rt/register-event! rt (.getIdx value-n) :confirm-input
         (fn [_ _ evt]
           (let [v (:value evt)]
-            (when (and on-change (not= v @last-confirmed))
-              (vreset! last-confirmed v)
-              (on-change v)))
-          (when color-change?
-            (ui/set-node-prop! rt value-n :color idle-color))))
-      ;; Auto-confirm when focus leaves the editable field (click away / tab)
-      (rt/register-event! rt (.getIdx value-n) :lost-focus
-        (fn [_ node _]
-          (let [v (str (or (.getOSlot ^INode node 0) ""))]
             (when (and on-change (not= v @last-confirmed))
               (vreset! last-confirmed v)
               (on-change v)))

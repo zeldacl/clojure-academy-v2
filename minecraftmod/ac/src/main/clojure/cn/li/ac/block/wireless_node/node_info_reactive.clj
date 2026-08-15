@@ -79,7 +79,7 @@
           :value-fn (fn [] (double (or @(:energy container) 0.0)))
           :max-fn (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
           :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))}
-         {:label "Load" :color 0xFFFF6C00
+         {:label "capacity" :color 0xFFFF6C00
           :value-fn (fn [] (double (or @(:capacity container) 0.0)))
           ;; :max-fn not :max — :max-capacity arrives via DataSlot sync after
           ;; the info-area is built (gui-init default 0); a captured static max
