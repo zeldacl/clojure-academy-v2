@@ -40,7 +40,30 @@
                               (get-in context [:state :ability-data])
                               :rad-intensify))
                  multiplier (+ 1.4 (* 0.4 exp))]
-             (update request :base #(* (double %) multiplier))))}])
+             (update request :base #(* (double %) multiplier))))}
+   {:priority 50
+    :provider-id :academy/base
+    :ability-id :vec-deviation
+    :node-id :damage-reduction
+    :run (fn [request context]
+           (let [active? (contains? (get-in context [:state :active-abilities] #{})
+                                    :vec-deviation)
+                 base (double (:base request))
+                 exp (double (ability-model/get-skill-exp
+                              (get-in context [:state :ability-data])
+                              :vec-deviation))
+                 reduction-rate (+ 0.4 (* 0.5 exp))
+                 cp-cost (max 0.0 (+ 15.0 (* -3.0 exp)))]
+             (if (and active?
+                      (Double/isFinite base)
+                      (<= 0.0 base 9999.0))
+               (-> request
+                   (assoc :base (* base (- 1.0 reduction-rate)))
+                   (assoc-in [:metadata :resource-cost] {:cp cp-cost})
+                   (assoc-in [:metadata :vec-deviation]
+                             {:reduction-rate reduction-rate
+                              :damage-ignore-threshold 9999.0}))
+               request)))}])
 
 (defn initialize!
   ([] (initialize! {}))
@@ -163,7 +186,10 @@
                              (host-query :vec-accel context node)))
               :flashing (fn [context node]
                           (when-let [host-query (contract/host-port :query)]
-                            (host-query :flashing context node)))}]
+                            (host-query :flashing context node)))
+              :vec-deviation (fn [context node]
+                               (when-let [host-query (contract/host-port :query)]
+                                 (host-query :vec-deviation context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -617,6 +643,83 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-storm-wing!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :mag-manip
+                         (let [{:keys [world-id query-result mode hold-ticks
+                                       throw-speed max-hold-distance throw-range
+                                       target-policy physics collision-authoritative?]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :mode mode
+                                     :hold-ticks (long (or hold-ticks 0))
+                                     :throw-speed throw-speed
+                                     :max-hold-distance max-hold-distance
+                                     :throw-range throw-range
+                                     :target-policy target-policy
+                                     :physics physics
+                                     :collision-authoritative? collision-authoritative?}
+                               valid? (and world-id (map? query-result)
+                                            (= :throw mode)
+                                            (<= 0 (:hold-ticks plan) 200)
+                                            (finite? throw-speed)
+                                            (<= 0.5 (double throw-speed) 1.0)
+                                            (= 5.0 (double max-hold-distance))
+                                            (= 20.0 (double throw-range))
+                                            (= :metal-block-or-hand target-policy)
+                                            (= :tracked-block-body physics)
+                                            (= true collision-authoritative?)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-mag-manip!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :mag-movement
+                         (let [{:keys [world-id query-result acceleration range
+                                       movement-mode target-policy reset-fall-damage?
+                                       progression]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :acceleration acceleration
+                                     :range range
+                                     :movement-mode movement-mode
+                                     :target-policy target-policy
+                                     :reset-fall-damage? reset-fall-damage?
+                                     :progression progression}
+                               valid? (and world-id (map? query-result)
+                                            (= :target-follow movement-mode)
+                                            (= :normal-and-weak-metal target-policy)
+                                            (= true reset-fall-damage?)
+                                            (= :distance progression)
+                                            (finite? acceleration)
+                                            (= 0.08 (double acceleration))
+                                            (finite? range)
+                                            (= 25.0 (double range))
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-mag-movement!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :vec-accel
+                         (let [{:keys [world-id query-result charge-ticks max-charge-ticks]} effect
+                               valid? (and world-id (map? query-result)
+                                            (= 20 (long max-charge-ticks))
+                                            (<= 0 (long charge-ticks) 20)
+                                            (world-effects/available?))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :charge-ticks (long charge-ticks)
+                                     :max-charge-ticks (long max-charge-ticks)}]
+                           {:status (if (and valid?
+                                              (world-effects/execute-vec-accel!
                                                world-id owner plan))
                                       :applied
                                       :failed)

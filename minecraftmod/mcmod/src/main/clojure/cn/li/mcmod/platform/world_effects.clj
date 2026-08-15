@@ -112,6 +112,11 @@
   [world-id owner plan]
   (call :execute-flashing! world-id owner plan))
 
+(defn execute-vec-deviation!
+  "Execute one server-authoritative VecDeviation scan/deflection step."
+  [world-id owner plan]
+  (call :execute-vec-deviation! world-id owner plan))
+
 (defn execute-light-shield!
   "Update the authoritative Light Shield state behind a Host Port."
   [world-id owner plan]

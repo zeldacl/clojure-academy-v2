@@ -221,9 +221,15 @@
                            context)]
               (if (:cancelled? request)
                 {:status :continue}
-                {:status :continue :world-effects [(contract/world-effect
-                                                    {:type :damage
-                                                     :request request})]}))
+                (cond-> {:status :continue
+                         :world-effects [(contract/world-effect
+                                          {:type :damage
+                                           :request request})]}
+                  (get-in request [:metadata :resource-cost])
+                  (update :state-patch into
+                          (mapv (fn [[resource amount]]
+                                  [:resource resource (double amount)])
+                                (get-in request [:metadata :resource-cost]))))))
     :vfx {:status :continue
           ;; A combat output is authoritative creation-or-update.  Using
           ;; :spawn keeps the first confirmed signal from being dropped when

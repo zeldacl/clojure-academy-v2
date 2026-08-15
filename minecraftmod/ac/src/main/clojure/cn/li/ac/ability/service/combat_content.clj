@@ -688,6 +688,149 @@
                                   :mode :threatening}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
+    {:id :mag-manip
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 200
+     :cost-phase :release
+     :cost {:cp (scale 140.0 270.0)
+            :overload (scale 35.0 20.0)}
+     :cooldown-phase :release
+     :cooldown {:ticks (scale 60.0 40.0)}
+     :program {:op :phase
+               :start {:op :sequence
+                       :steps [{:op :query :query-type :mag-manip
+                                :grab-range 10.0
+                                :target-policy :metal-block-or-hand
+                                :result-ref :held}
+                               {:op :require :predicate :held}]}
+               :pulse {:op :session-patch
+                       :entries [[[:hold-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :mag-manip
+                                  :throw-range 20.0
+                                  :target-policy :metal-block-or-hand
+                                  :result-ref :held}
+                                 {:op :require :predicate :held}
+                                 {:op :world-effect
+                                  :effect-type :mag-manip
+                                  :query-ref :held
+                                  :mode :throw
+                                  :hold-ticks (session-value [:hold-ticks])
+                                  :throw-speed (scale 0.5 1.0)
+                                  :max-hold-distance 5.0
+                                  :throw-range 20.0
+                                  :target-policy :metal-block-or-hand
+                                  :physics :tracked-block-body
+                                  :collision-authoritative? true}
+                                 {:op :vfx :effect-id :mag-manip
+                                  :event :throw
+                                  :params {:throw-range 20.0}}]}}}
+    {:id :mag-movement
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 200
+     :cost-phase :pulse
+     :cost {:cp (scale 15.0 8.0)}
+     :program {:op :phase
+               :start {:op :sequence
+                       :steps [{:op :patch
+                                :entries [[:resource :overload
+                                           {:op :multiply
+                                            :values [-1.0 (scale 60.0 30.0)]}]]}
+                               {:op :query :query-type :mag-movement
+                                :range 25.0
+                                :target-policy :normal-and-weak-metal
+                                :result-ref :target}
+                               {:op :require :predicate :target}]}
+               :pulse {:op :sequence
+                       :steps [{:op :query :query-type :mag-movement
+                                :range 25.0
+                                :target-policy :normal-and-weak-metal
+                                :result-ref :target}
+                               {:op :require :predicate :target}
+                               {:op :world-effect
+                                :effect-type :mag-movement
+                                :query-ref :target
+                                :movement-mode :target-follow
+                                :target-policy :normal-and-weak-metal
+                                :acceleration 0.08
+                                :range 25.0
+                                :reset-fall-damage? true
+                                :progression :distance}
+                               {:op :vfx :effect-id :mag-movement
+                                :event :update
+                                :params {:acceleration 0.08 :range 25.0}}]}}}
+    {:id :flashing
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 150
+     :cost-phase :start
+     :cost {:cp (scale 80.0 60.0)
+            :overload (scale 250.0 180.0)}
+     :cooldown-phase :release
+     :cooldown {:ticks (scale 900.0 400.0)}
+     :program {:op :phase
+               :pulse {:op :session-patch
+                       :entries [[[:active-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :patch
+                                  :entries [[:resource :cp
+                                             {:op :multiply
+                                              :values [-1.0 (scale 13.0 6.0)]}]]}
+                                 {:op :query :query-type :teleport-target
+                                  :mode :flashing
+                                  :max-range (scale 12.0 18.0)
+                                  :result-ref :destination}
+                                 {:op :require :predicate :destination}
+                                 {:op :world-effect
+                                  :effect-type :teleport-approved-target
+                                  :target-ref :destination
+                                  :mode :flashing}
+                                 {:op :vfx :effect-id :flashing
+                                  :event :release
+                                  :params {:blink-distance (scale 12.0 18.0)}}]}}}
+    {:id :vec-accel
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 20
+     :cost-phase :release
+     :cost {:cp (scale 120.0 80.0)
+            :overload (scale 30.0 15.0)}
+     :cooldown {:ticks (scale 80.0 50.0)}
+     :program {:op :phase
+               :pulse {:op :session-patch
+                       :entries [[[:charge-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :vec-accel
+                                  :max-charge-ticks 20
+                                  :result-ref :launch}
+                                 {:op :require :predicate :launch}
+                                 {:op :world-effect
+                                  :effect-type :vec-accel
+                                  :query-ref :launch
+                                  :charge-ticks (session-value [:charge-ticks])
+                                  :max-charge-ticks 20}
+                                 {:op :vfx :effect-id :vec-accel
+                                  :event :perform
+                                  :params {:max-charge-ticks 20}}]}}}
+    {:id :vec-deviation
+     :revision 1
+     :activation :passive
+     :program {:op :sequence
+               :steps [{:op :domain-event :event-type :damage-modifier
+                        :metadata {:source :vec-deviation
+                                   :scan-radius 5.0
+                                   :damage-ignore-threshold 9999.0
+                                   :damage-reduction (scale 0.4 0.9)
+                                   :damage-cp (scale 15.0 12.0)}}]}}
     {:id :storm-wing
      :revision 1
      :activation :toggle
