@@ -215,6 +215,15 @@
                                  origin)
                         scan (when-let [scan-ref (:scan-ref node)]
                                (get-in context [:refs scan-ref]))
+                        projectile-spec (when (map? (:projectile-spec node))
+                                          (reduce-kv
+                                           (fn [spec key value]
+                                             (if (= key :target-ref)
+                                               (assoc spec :target
+                                                      (get-in context [:refs value]))
+                                               (assoc spec key (resolve-value value context))))
+                                           {}
+                                           (:projectile-spec node)))
                         effect (cond-> (if (contains? effect :amount)
                                          (update effect :amount resolve-value context)
                                          effect)
@@ -222,10 +231,12 @@
                                  (some? targets) (assoc :targets targets)
                                  (some? origin) (assoc :origin origin)
                                  (some? scan) (assoc :scan scan)
+                                 projectile-spec (assoc :projectile-spec projectile-spec)
                                  (:world-id context) (assoc :world-id (:world-id context))
                                  true (dissoc :target-ref :target-path
                                                :targets-ref :targets-path
-                                               :origin-ref :origin-path :scan-ref))]
+                                               :origin-ref :origin-path :scan-ref
+                                               :projectile-spec))]
                     {:status :continue
                      :world-effects [(contract/world-effect
                                       (assoc effect :type (:effect-type node)))]})

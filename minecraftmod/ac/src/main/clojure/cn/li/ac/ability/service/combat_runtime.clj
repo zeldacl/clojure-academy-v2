@@ -165,6 +165,26 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         :spawn-projectile
+                         (let [{:keys [world-id projectile-spec]} effect
+                               spec (if (map? projectile-spec)
+                                      (-> projectile-spec
+                                          (update :delay-ticks #(max 0 (long (or % 0))))
+                                          (update :damage #(when (number? %) (double %))))
+                                      {})
+                               valid? (and world-id
+                                            (= :electron-bomb (:kind spec))
+                                            (number? (:damage spec))
+                                            (Double/isFinite (double (:damage spec)))
+                                            (pos? (double (:damage spec)))
+                                            (map? (:target spec))
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/spawn-projectile!
+                                               world-id (assoc spec :owner owner)))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          {:status :unhandled
                           :reason :missing-world-effect-host-port
                           :effect effect}))))

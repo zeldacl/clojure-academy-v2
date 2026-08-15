@@ -156,8 +156,24 @@
                         :origin-path [:impact]
                         :visual-only? true}
                        {:op :vfx :effect-id :thunder-bolt-strike
-                        :event :perform
+                       :event :perform
                         :params {:range 20.0 :aoe-radius 8.0}}]}}
+    {:id :electron-bomb
+     :revision 1
+     :activation :instant
+     :cooldown {:ticks (scale 20.0 10.0)}
+     :program {:op :sequence
+               :steps [{:op :query :query-type :raycast
+                        :distance 20.0 :result-ref :aim}
+                       {:op :world-effect
+                        :effect-type :spawn-projectile
+                        :projectile-spec {:kind :electron-bomb
+                                          :damage (scale 6.0 12.0)
+                                          :delay-ticks 20
+                                          :target-ref :aim}}
+                       {:op :vfx :effect-id :electron-bomb
+                        :event :spawn
+                        :params {:settle-ticks 20}}]}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
