@@ -54,6 +54,11 @@
                (+ lo (* (- hi lo) (max 0.0 (min 1.0 exp)))))
       :add (reduce + 0.0 (map #(double (resolve-value % context)) (:values value)))
       :multiply (reduce * 1.0 (map #(double (resolve-value % context)) (:values value)))
+      :session (double (or (get-in (:session-state context) (:path value)) 0.0))
+      :clamp (let [v (double (resolve-value (:value value) context))
+                   lo (double (:min value))
+                   hi (double (:max value))]
+               (max lo (min hi v)))
       value)))
 
 (defn- resolve-cost
