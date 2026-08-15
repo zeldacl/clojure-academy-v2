@@ -60,6 +60,14 @@
   [player-uuid key-idx]
   (contains? combat-content/ability-ids
             (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)))
+
+(defn- assert-combat-slot-coverage!
+  [player-uuid]
+  (doseq [key-idx (range 4)
+          :let [skill-id (client-keybinds/get-skill-id-for-slot-public player-uuid key-idx)]
+          :when (and skill-id (not (contains? combat-content/ability-ids skill-id)))]
+    (throw (ex-info "Configured ability is missing from Combat Core catalog"
+                    {:player player-uuid :slot key-idx :ability-id skill-id}))))
 (defonce ^:private push-handlers-registered (boolean-array 1))
 
 (defn create-client-ui-runtime []
@@ -241,6 +249,7 @@
             (abort-all-slot-contexts-for-owner! uuid)
             (client-keybinds/clear-client-keybind-state! uuid))
           (when-not (zero? (bit-and mask store/preset-data-mask))
+            (assert-combat-slot-coverage! uuid)
             (client-keybinds/update-default-group! uuid)
             (preset-editor-reactive/refresh-active-screen! uuid)))))))
 
@@ -868,10 +877,8 @@
          (do (swap! combat-slot-keys* conj (slot-context-key player-uuid key-idx))
              (send-combat-intent! player-uuid key-idx :start))
          (do
-           ;; Legacy content remains isolated until its Combat Core program is
-           ;; migrated; it does not receive a partial protocol switch.
            (.remove slot-key-tick-ms (slot-context-key player-uuid key-idx))
-           (send-slot-key-message! catalog/MSG-SLOT-KEY-DOWN player-uuid key-idx))))
+           (log/warn "Ignoring uncompiled combat slot" {:player player-uuid :slot key-idx}))))
 
      :client-on-slot-key-tick!
      (fn [player-uuid key-idx]
@@ -882,7 +889,7 @@
                  last-ms (get (slot-key-tick-ms-snapshot) slot-key 0)]
              (when (>= (- now-ms last-ms) 100)
                (.put slot-key-tick-ms slot-key now-ms)
-               (send-slot-keepalive! player-uuid key-idx))))))
+               (log/warn "Ignoring uncompiled combat slot tick" {:player player-uuid :slot key-idx}))))))
 
      :client-on-slot-key-up!
      (fn [player-uuid key-idx]
@@ -891,7 +898,7 @@
            (do (swap! combat-slot-keys* disj slot-key)
                (send-combat-intent! player-uuid key-idx :release))
            (do (.remove slot-key-tick-ms slot-key)
-               (send-slot-key-up-message! player-uuid key-idx)))))
+               (log/warn "Ignoring uncompiled combat slot release" {:player player-uuid :slot key-idx})))))
 
      :client-on-slot-key-abort!
      (fn [player-uuid key-idx]
@@ -899,7 +906,7 @@
          (if (contains? @combat-slot-keys* slot-key)
            (do (swap! combat-slot-keys* disj slot-key)
                (send-combat-intent! player-uuid key-idx :abort))
-           (abort-slot-context! player-uuid key-idx))))
+           (log/warn "Ignoring uncompiled combat slot abort" {:player player-uuid :slot key-idx}))))
 
      :client-on-movement-key-down!
      (fn [player-uuid movement-key]

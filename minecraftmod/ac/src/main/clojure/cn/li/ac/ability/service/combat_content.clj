@@ -925,6 +925,18 @@
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
+
+(defn- collect-vfx-effect-ids
+  [value]
+  (cond
+    (map? value)
+    (into #{} (mapcat (fn [[k v]]
+                        (if (= k :effect-id) [v] (collect-vfx-effect-ids v))) value))
+    (sequential? value)
+    (into #{} (mapcat collect-vfx-effect-ids value))
+    :else #{}))
+
+(def vfx-effect-ids (collect-vfx-effect-ids (:abilities provider)))
 (defonce ^:private registered? (atom false))
 
 (defn register!

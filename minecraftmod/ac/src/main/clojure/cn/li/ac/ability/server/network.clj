@@ -20,8 +20,6 @@
             [cn.li.ac.ability.server.handlers.common :as handler-common]
             [cn.li.ac.ability.server.handlers.preset-handler :as preset-handler]
             [cn.li.ac.ability.server.handlers.activation-handler :as activation-handler]
-            [cn.li.ac.ability.server.handlers.context-handler :as context-handler]
-            [cn.li.ac.ability.server.handlers.input-handler :as input-handler]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]
             [cn.li.ac.ability.server.util.developer-validation :as dev-validate]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -134,14 +132,6 @@
   (net-srv/register-handler catalog/MSG-REQ-SET-PRESET     preset-handler/handle-set-preset-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SWITCH-PRESET  preset-handler/handle-switch-preset-request ability-handler-contract)
   (net-srv/register-handler catalog/MSG-REQ-SET-ACTIVATED  activation-handler/handle-set-activated-request ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-CTX-BEGIN-LINK     context-handler/handle-begin-link-context ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-CTX-KEEPALIVE      context-handler/handle-keepalive-context ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-CTX-TERMINATE      context-handler/handle-terminate-context ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-CTX-CHANNEL        context-handler/handle-channel-context ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-DOWN      input-handler/handle-key-down-skill ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-TICK      input-handler/handle-key-tick-skill ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-UP        input-handler/handle-key-up-skill ability-handler-contract)
-  (net-srv/register-handler catalog/MSG-SLOT-KEY-ABORT     input-handler/handle-key-abort-skill ability-handler-contract)
   (net-srv/register-handler catalog/MSG-COMBAT-INTENT
                             handle-combat-intent-request
                             ability-handler-contract)

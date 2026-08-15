@@ -60,7 +60,6 @@
                       (contains? state* :cooldown-data) (assoc :cooldown-data (:cooldown-data state*))
                       (contains? state* :preset-data) (assoc :preset-data (:preset-data state*))
                       (contains? state* :develop-data) (assoc :develop-data (:develop-data state*))
-                      (contains? state* :context-registry) (assoc :context-registry (:context-registry state*))
                       (contains? state* :runtime) (assoc :runtime-data (:runtime state*))
                       (contains? state* :dirty?) (assoc :dirty? (:dirty? state*)))]
     (if (> (count hydrate-cmd) 1)
@@ -218,7 +217,7 @@
      evt/EVT-CATEGORY-CHANGE
      (fn [{:keys [uuid]}]
        (when uuid
-         (ctx-mgr/abort-player-contexts! uuid)
+          (combat-runtime/abort-owner! uuid)
          (run-runtime-command! uuid {:command :clear-all-cooldowns})
          (run-runtime-command! uuid {:command :set-activated :activated false})
          (when-let [state (runtime-get-player-state uuid)]
@@ -233,7 +232,7 @@
      evt/EVT-OVERLOAD
      (fn [{:keys [uuid]}]
        (when uuid
-         (ctx-mgr/abort-player-contexts! uuid))))
+          (combat-runtime/abort-owner! uuid))))
     (log/info "Ability lifecycle event subscriptions registered"))))
 
 (defn runtime-server-hooks
@@ -245,7 +244,6 @@
    :on-player-logout!
    (fn [player-uuid]
      (combat-runtime/abort-owner! player-uuid)
-     (ctx-mgr/abort-player-contexts! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
@@ -257,7 +255,6 @@
    (fn [session-id]
     (doseq [player-uuid (runtime-list-player-uuids)]
       (combat-runtime/abort-owner! player-uuid))
-    (ctx/clear-store-session-contexts! session-id)
      (store/remove-session! session-id)
      (world-registry/clear-session-world-data! session-id)
      (when (platform-hooks/platform-fn-registered? fn-reset-server-runtimes)
@@ -277,7 +274,7 @@
      (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
-     (ctx-mgr/abort-player-contexts! player-uuid))
+     (combat-runtime/abort-owner! player-uuid))
 
    :on-player-dimension-change!
    (fn [player-uuid _from-dim _to-dim]
@@ -286,7 +283,7 @@
      (reflection-damage/clear-player-tasks! player-uuid)
      (md-damage/clear-target-mark! player-uuid)
      (md-damage/clear-source-marks! player-uuid)
-     (ctx-mgr/abort-player-contexts! player-uuid))
+     (combat-runtime/abort-owner! player-uuid))
 
    :get-skills-for-category
    (fn [cat-id]
