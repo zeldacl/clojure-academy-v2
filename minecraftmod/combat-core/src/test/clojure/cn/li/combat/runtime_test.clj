@@ -28,7 +28,10 @@
 (deftest duplicate-intent-is-rejected
   (dsl/defability test-ability {:id :test/a :activation :instant :program (dsl/patch [])})
   (let [engine (runtime/create-engine {:catalog (compiler/compile-all!)})]
-    (is (= :accepted (:status (runtime/dispatch-intent! engine "p" {:intent-id "x" :op :start :ability-id :test/a}))))
+    (let [accepted (runtime/dispatch-intent! engine "p" {:intent-id "x" :op :start :ability-id :test/a})]
+      (is (= :accepted (:status accepted)))
+      (is (= "p" (:owner accepted)))
+      (is (= "x" (:intent-id accepted))))
     (is (= :rejected (:status (runtime/dispatch-intent! engine "p" {:intent-id "x" :op :start :ability-id :test/a}))))))
 
 (deftest intent-cache-is-bounded-per-owner

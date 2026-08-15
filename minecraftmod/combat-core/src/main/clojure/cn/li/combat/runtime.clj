@@ -551,58 +551,67 @@
       (reject :duplicate-intent {:intent-id (:intent-id intent)})
       (do
         (mark-intent! engine owner (:intent-id intent))
-        (case (:op intent)
-          :start (start! engine owner intent)
-          :release (release! engine owner intent)
-          :abort (abort! engine owner intent))))))
+        (assoc (case (:op intent)
+                 :start (start! engine owner intent)
+                 :release (release! engine owner intent)
+                 :abort (abort! engine owner intent))
+               :owner owner
+               :intent-id (:intent-id intent))))))
 
 (defn tick! [engine tick]
   (when-not (= tick @(:last-tick engine))
     (reset! (:last-tick engine) tick)
     (let [due (get @(:deadline-queue engine) tick #{})]
       (swap! (:deadline-queue engine) dissoc tick)
-      (mapv (fn [session-id]
-              (if-let [session (get @(:sessions engine) session-id)]
-                (let [ability (ability engine (:ability-id session))
-                      expired? (and (:max-session-ticks ability)
-                                    (> (- (long tick)
-                                          (long (or (:started-tick session) tick)))
-                                       (long (:max-session-ticks ability))))]
-                  (if expired?
-                    (let [result (execute engine ability {:owner (:owner session)
-                                                          :session-id session-id
-                                                          :ability-id (:ability-id session)
-                                                          :session-state (:state session)
-                                                          :tick tick :phase :abort :skip-cost? true
-                                                          :state ((:owner-state engine) (:owner session))
-                                                          :queries (:query-port engine)
-                                                          :event-seq tick})]
-                      (swap! (:sessions engine) dissoc session-id)
-                      (update result :session-ops conj
-                              {:op :abort :reason :max-session-ticks
-                               :session-id session-id :owner (:owner session)}))
-                    (let [result (execute engine ability {:owner (:owner session)
-                                                          :session-id session-id
-                                                          :ability-id (:ability-id session)
-                                                          :session-state (:state session)
-                                                          :tick tick :phase :pulse
-                                                          :state ((:owner-state engine) (:owner session))
-                                                          :queries (:query-port engine)
-                                                          :event-seq tick})
-                          next-tick (+ tick (long (or (:period-ticks ability) 1)))]
-                      (swap! (:sessions engine)
-                             (fn [sessions]
-                               (-> sessions
-                                   (assoc-in [session-id :next-deadline] next-tick)
-                                   (assoc-in [session-id :state]
-                                             (apply-session-patches
-                                              (:state session)
-                                              (:session-patch result))))))
-                      (swap! (:deadline-queue engine) update next-tick
-                             (fnil conj #{}) session-id)
-                       result)))
-                (reject :unknown-session {:session-id session-id})))
-            due))))
+      (mapv
+       (fn [session-id]
+         (if-let [session (get @(:sessions engine) session-id)]
+           (let [ability (ability engine (:ability-id session))
+                 expired? (and (:max-session-ticks ability)
+                               (> (- (long tick)
+                                     (long (or (:started-tick session) tick)))
+                                  (long (:max-session-ticks ability))))]
+             (if expired?
+               (let [result (execute engine ability {:owner (:owner session)
+                                                     :session-id session-id
+                                                     :ability-id (:ability-id session)
+                                                     :session-state (:state session)
+                                                     :tick tick :phase :abort :skip-cost? true
+                                                     :state ((:owner-state engine) (:owner session))
+                                                     :queries (:query-port engine)
+                                                     :event-seq tick})]
+                 (swap! (:sessions engine) dissoc session-id)
+                 (assoc (update result :session-ops conj
+                                {:op :abort :reason :max-session-ticks
+                                 :session-id session-id :owner (:owner session)})
+                        :owner (:owner session)
+                        :session-id session-id
+                        :intent-id (:intent-id session)))
+               (let [result (execute engine ability {:owner (:owner session)
+                                                     :session-id session-id
+                                                     :ability-id (:ability-id session)
+                                                     :session-state (:state session)
+                                                     :tick tick :phase :pulse
+                                                     :state ((:owner-state engine) (:owner session))
+                                                     :queries (:query-port engine)
+                                                     :event-seq tick})
+                     next-tick (+ tick (long (or (:period-ticks ability) 1)))]
+                 (swap! (:sessions engine)
+                        (fn [sessions]
+                          (-> sessions
+                              (assoc-in [session-id :next-deadline] next-tick)
+                              (assoc-in [session-id :state]
+                                        (apply-session-patches
+                                         (:state session)
+                                         (:session-patch result))))))
+                 (swap! (:deadline-queue engine) update next-tick
+                        (fnil conj #{}) session-id)
+                 (assoc result
+                        :owner (:owner session)
+                        :session-id session-id
+                        :intent-id (:intent-id session)))))
+           (reject :unknown-session {:session-id session-id})))
+       due))))
 
 (defn dispatch-domain-event! [engine event]
   (when-let [handler (:domain-event-handler engine)]
