@@ -688,6 +688,36 @@
                                   :mode :threatening}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
+    {:id :storm-wing
+     :revision 1
+     :activation :toggle
+     :period-ticks 1
+     :max-session-ticks 240
+     :cost-phase :pulse
+     :cost {:cp (scale 40.0 25.0)
+            :overload (scale 10.0 7.0)}
+     :cooldown {:ticks (scale 30.0 10.0)}
+     :program {:op :phase
+               :start {:op :session-patch
+                       :entries [[[:charge-ticks] 0.0]]}
+               :pulse {:op :sequence
+                       :steps [{:op :session-patch
+                                :entries [[[:charge-ticks]
+                                           {:op :increment :amount 1.0}]]}
+                               {:op :query :query-type :storm-wing
+                                :result-ref :flight}
+                               {:op :world-effect
+                                :effect-type :storm-wing
+                                :query-ref :flight
+                                :charge-ticks (session-value [:charge-ticks])
+                                :charge-time (scale 70.0 30.0)
+                                :acceleration 0.16
+                                :hover-near-ground-velocity 0.1
+                                :hover-air-velocity 0.078
+                                :speed-scale (scale 2.0 3.0)
+                                :speed-threshold 0.45}
+                               {:op :vfx :effect-id :storm-wing
+                                :event :update :params {:acceleration 0.16}}]}}}
     {:id :light-shield
      :revision 1
      :activation :toggle

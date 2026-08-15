@@ -102,6 +102,11 @@
   [world-id owner plan]
   (call :execute-light-shield! world-id owner plan))
 
+(defn execute-storm-wing!
+  "Execute Storm Wing flight/hover physics behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-storm-wing! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]

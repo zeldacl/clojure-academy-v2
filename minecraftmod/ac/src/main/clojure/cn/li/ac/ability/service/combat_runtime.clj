@@ -148,7 +148,10 @@
                               (host-query :jet-engine context node)))
               :light-shield (fn [context node]
                               (when-let [host-query (contract/host-port :query)]
-                                (host-query :light-shield context node)))}]
+                                (host-query :light-shield context node)))
+              :storm-wing (fn [context node]
+                            (when-let [host-query (contract/host-port :query)]
+                              (host-query :storm-wing context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -572,6 +575,36 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-light-shield!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :storm-wing
+                         (let [{:keys [world-id query-result charge-ticks charge-time
+                                       acceleration hover-near-ground-velocity hover-air-velocity
+                                       speed-scale speed-threshold]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :charge-ticks (long (or charge-ticks 0))
+                                     :charge-time (double (or charge-time 30.0))
+                                     :acceleration (double (or acceleration 0.16))
+                                     :hover-near-ground-velocity (double (or hover-near-ground-velocity 0.1))
+                                     :hover-air-velocity (double (or hover-air-velocity 0.078))
+                                     :speed-scale (double (or speed-scale 2.0))
+                                     :speed-threshold (double (or speed-threshold 0.45))}
+                               valid? (and world-id (map? query-result)
+                                            (<= 0 (:charge-ticks plan) 240)
+                                            (finite? charge-time) (<= 1.0 (:charge-time plan) 120.0)
+                                            (finite? acceleration) (<= 0.0 (:acceleration plan) 1.0)
+                                            (finite? hover-near-ground-velocity)
+                                            (<= 0.0 (:hover-near-ground-velocity plan) 1.0)
+                                            (finite? hover-air-velocity) (<= 0.0 (:hover-air-velocity plan) 1.0)
+                                            (finite? speed-scale) (<= 0.0 (:speed-scale plan) 8.0)
+                                            (finite? speed-threshold) (<= 0.0 (:speed-threshold plan) 1.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-storm-wing!
                                                world-id owner plan))
                                       :applied
                                       :failed)
