@@ -776,6 +776,9 @@
     (location-teleport-reactive/init!)
     (net-client/register-push-handler! catalog/MSG-SYNC-V2 apply-client-runtime-v2!)
             ;; the player-state hash — no push-refresh needed.
+    (net-client/register-push-handler! catalog/MSG-COMBAT-RESULT
+      (fn [result]
+        (combat-vfx/dispatch-result! result)))
     (net-client/register-push-handler! catalog/MSG-CTX-ESTABLISH
       (fn [{:keys [ctx-id server-id]}]
         (when-let [owner (runtime-hooks/current-player-state-owner)]

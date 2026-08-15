@@ -161,10 +161,12 @@
     (if (= :rejected (:status result))
       (contract/result (assoc result
                              :ability-id (:ability-id ability)
+                             :owner (:owner context)
                              :program-hash (:program-hash ability)
                              :content-hash (get-in engine [:catalog :content-hash])))
       (contract/result (assoc (dissoc result :status)
                               :ability-id (:ability-id ability)
+                              :owner (:owner context)
                               :program-hash (:program-hash ability)
                               :content-hash (get-in engine [:catalog :content-hash]))))))
 

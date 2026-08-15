@@ -18,6 +18,7 @@
 (defonce ^:private engine* (atom nil))
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private world-effect-handler* (atom nil))
+(defonce ^:private result-sink* (atom nil))
 (declare owner-state resolve-slot)
 
 (defn- academy-damage-pipeline
@@ -204,7 +205,30 @@
                         :message (ex-message throwable)})))))
               (:world-effects result))]
     (assoc result :effect-results effect-results)))
-(defn tick! [tick] (combat/tick! (engine) tick))
+(defn install-result-sink!
+  "Install the AC network sink for server-driven session results.
+
+   The sink receives `[owner result]`; Combat Core remains unaware of the
+   network transport and only returns neutral result data."
+  [sink]
+  (when-not (ifn? sink)
+    (throw (ex-info "combat result sink must be callable" {:value sink})))
+  (reset! result-sink* sink)
+  sink)
+
+(defn- publish-result!
+  [result]
+  (when-let [sink @result-sink*]
+    (when-let [owner (:owner result)]
+      (sink owner result)))
+  result)
+
+(defn tick!
+  "Advance sessions, execute their world effects, and publish each result."
+  [tick]
+  (mapv (fn [result]
+          (publish-result! (execute-world-effects! (:owner result) result)))
+        (combat/tick! (engine) tick)))
 (defn abort-owner! [owner] (combat/abort-owner! (engine) owner))
 (defn snapshot-owner [owner] (combat/snapshot-owner (engine) owner))
 
@@ -212,4 +236,5 @@
   (reset! engine* nil)
   (reset! catalog* nil)
   (reset! world-effect-handler* nil)
+  (reset! result-sink* nil)
   nil)

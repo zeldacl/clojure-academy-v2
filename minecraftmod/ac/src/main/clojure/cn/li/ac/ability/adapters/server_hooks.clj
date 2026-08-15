@@ -10,6 +10,7 @@
             [cn.li.ac.ability.registry.event :as evt]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.server.network :as network]
+            [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
@@ -370,7 +371,11 @@
 
    :register-context-send-fns!
    (fn [fns-map]
-     (ctx-mgr/register-send-fns! fns-map))
+     (ctx-mgr/register-send-fns! fns-map)
+     (when-let [to-client (:to-client fns-map)]
+       (combat-runtime/install-result-sink!
+        (fn [owner result]
+          (to-client owner ability-messages/MSG-COMBAT-RESULT result)))))
 
    :get-context-player-uuid
    (fn [ctx-id]
