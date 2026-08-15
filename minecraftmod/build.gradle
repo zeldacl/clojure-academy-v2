@@ -1061,6 +1061,39 @@ tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":
 tasks.register("verifyAbilityVfxRegistryCoverage") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
 tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
 
+tasks.register("verifyCombatIntentOnlyNetwork") {
+    group = "verification"
+    description = "Ensure AC server combat registration exposes CombatIntent only, not Context/slot packets."
+    doLast {
+        def source = file("ac/src/main/clojure/cn/li/ac/ability/server/network.clj").text
+        def legacy = ["MSG-CTX-", "MSG-SLOT-KEY-"]
+        def violations = legacy.findAll { token -> source.contains(token) }
+        if (!violations.isEmpty()) {
+            throw new GradleException("AC server network still registers legacy combat packets: ${violations}")
+        }
+        if (!source.contains("MSG-COMBAT-INTENT")) {
+            throw new GradleException("AC server network is missing CombatIntent registration")
+        }
+        logger.lifecycle("[verifyCombatIntentOnlyNetwork] ok")
+    }
+}
+
+tasks.register("verifyVfxDirectHostBoundary") {
+    group = "verification"
+    description = "Ensure VFX host installation is independent from Presentation."
+    doLast {
+        def presentation = file("ac/src/main/clojure/cn/li/ac/gui/reactive/register.clj").text
+        def host = file("ac/src/main/clojure/cn/li/ac/client/vfx_host.clj")
+        if (!host.exists() || !host.text.contains(":vfx-host-api")) {
+            throw new GradleException("AC VFX Core host seam is missing")
+        }
+        if (presentation =~ /:vfx-host-api/) {
+            throw new GradleException("Presentation bridge still exports VFX host API")
+        }
+        logger.lifecycle("[verifyVfxDirectHostBoundary] ok")
+    }
+}
+
 tasks.register("verifyNeutralSourceAotXor") {
     group = "verification"
     description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
@@ -1555,8 +1588,10 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatProviderClosure",
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
+              "verifyCombatIntentOnlyNetwork",
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
+              "verifyVfxDirectHostBoundary",
               "verifyPresentationContainsNoVfxRuntime",
               "verifyVfxAotBoundary",
               "verifyNeutralSourceAotXor",
