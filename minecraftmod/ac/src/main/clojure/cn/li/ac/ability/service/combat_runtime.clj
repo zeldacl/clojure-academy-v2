@@ -12,6 +12,8 @@
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
+            [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
+            [cn.li.ac.ability.service.light-shield-state :as light-shield-state]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -24,6 +26,42 @@
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
 (declare owner-state resolve-slot)
+
+(defn apply-combat-domain-event
+  "Apply AC-owned combat domain transitions without platform or Context state.
+
+   Combat Core owns the domain-state atom; this function owns only the
+   immutable content semantics for radiation marks and Light Shield state.
+   World mutation and network/VFX delivery remain outside this reducer."
+  [state event]
+  (case (:type event)
+    :radiation-mark
+    (let [target (str (:target-id event))
+          marks (or (:radiation-marks state) {})]
+      (assoc state :radiation-marks
+             (assoc marks target
+                    (radiation-marks/mark (get marks target) event))))
+
+    :combat-tick
+    (update state :radiation-marks
+            #(radiation-marks/tick (or %) (:tick event)))
+
+    :combat-owner-clear
+    (update state :radiation-marks
+            #(radiation-marks/clear-owner (or %) (:owner event)))
+
+    :light-shield-start
+    (assoc-in state [:light-shields (str (:owner event))]
+              (light-shield-state/start (:overload-floor event)))
+
+    :light-shield-tick
+    (update-in state [:light-shields (str (:owner event))]
+               light-shield-state/tick)
+
+    :light-shield-end
+    (update state :light-shields dissoc (str (:owner event)))
+
+    state))
 
 (defn- vec-accel-query
   "Resolve the source VecAccel release query from neutral raycast ports.
@@ -150,7 +188,8 @@
 
 (defn initialize!
   ([] (initialize! {}))
-  ([{:keys [owner-state-fn query-port now-tick ability-resolver damage-pipeline]}]
+  ([{:keys [owner-state-fn query-port now-tick ability-resolver damage-pipeline
+            domain-event-handler]}]
    (or @engine*
        (let [catalog (compiler/compile-all!)
              default-query-port
@@ -283,6 +322,7 @@
                             :query-port (merge default-query-port (or query-port {}))
                             :now-tick now-tick
                             :ability-resolver (or ability-resolver resolve-slot)
+                            :domain-event-handler domain-event-handler
                             :damage-pipeline (or damage-pipeline
                                                  (academy-damage-pipeline))}))
          (when-not @world-effect-handler*

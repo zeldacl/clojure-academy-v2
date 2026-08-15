@@ -94,3 +94,25 @@
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
     (is (= 38 (count content/ability-ids)))))
+
+(deftest combat-domain-reducer-keeps-radiation-and-shield-state-pure
+  (let [marked (combat-runtime/apply-combat-domain-event
+                {}
+                {:type :radiation-mark
+                 :source-player-id "owner"
+                 :target-id "victim"
+                 :rate 1.75
+                 :duration 2
+                 :tick 10})
+        ticked (combat-runtime/apply-combat-domain-event
+                marked {:type :combat-tick :tick 11})
+        shielded (combat-runtime/apply-combat-domain-event
+                  ticked {:type :light-shield-start
+                          :owner "owner"
+                          :overload-floor 4.0})
+        ended (combat-runtime/apply-combat-domain-event
+               shielded {:type :light-shield-end :owner "owner"})]
+    (is (= 1.75 (get-in marked [:radiation-marks "victim" :rate])))
+    (is (= 1 (get-in ticked [:radiation-marks "victim" :ticks-left])))
+    (is (map? (get-in shielded [:light-shields "owner"])))
+    (is (nil? (get-in ended [:light-shields "owner"])))))
