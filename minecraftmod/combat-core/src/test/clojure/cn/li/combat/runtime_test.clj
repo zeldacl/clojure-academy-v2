@@ -97,3 +97,22 @@
                                          {:intent-id 42 :op :start
                                           :ability-id :test/amplified})]
     (is (= 20.0 (get-in result [:world-effects 0 :request :base])))))
+
+(deftest provider-custom-node-is-compiled-and-linked
+  (registry/register-provider!
+   {:provider-id :test/provider
+    :revision 1
+    :nodes [{:id :test/emit
+             :revision 2
+             :run (fn [_ _]
+                    {:status :continue
+                     :state-patch [[:ability-exp :test/custom 0.25]]})}]
+    :abilities [{:id :test/custom :activation :instant
+                 :program {:op :node :node-id :test/emit}}]})
+  (let [catalog (compiler/compile-all!)
+        engine (runtime/create-engine {:catalog catalog})
+        result (runtime/dispatch-intent! engine "p"
+                                         {:intent-id 43 :op :start
+                                          :ability-id :test/custom})]
+    (is (= :accepted (:status result)))
+    (is (= [[:ability-exp :test/custom 0.25]] (:state-patch result)))))

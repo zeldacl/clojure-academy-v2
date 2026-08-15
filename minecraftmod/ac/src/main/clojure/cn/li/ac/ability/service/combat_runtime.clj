@@ -147,6 +147,12 @@
         (when (= key :cp)
           (command-runtime/run-command-in-session!
             session-id owner {:command :consume-resource :cp (- (double amount))}))
+        :ability-exp
+        (command-runtime/run-command-in-session!
+          session-id owner {:command :add-skill-exp
+                            :skill-id key
+                            :amount (double amount)
+                            :source :combat-core})
         :cooldown
         (let [ticks (max 0 (long (- amount (long ((:now-tick (engine)))))))]
           (command-runtime/run-command-in-session!

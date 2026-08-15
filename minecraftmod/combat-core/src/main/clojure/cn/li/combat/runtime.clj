@@ -208,6 +208,7 @@
           (let [session-id (or (:session-id intent) [owner (:intent-id intent)])
                 context {:owner owner :session-id session-id :input intent
                          :ability-id ability-id :state state
+                         :tick tick
                          :queries (:query-port engine)
                          :flags (:flags intent) :refs (:refs intent)
                          :event-seq 0}
@@ -238,6 +239,7 @@
     (let [ability (ability engine (:ability-id session))
           result (execute engine ability {:owner owner :session-id (:session-id session)
                                           :ability-id (:ability-id session)
+                                          :tick (long ((:now-tick engine)))
                                           :input intent :phase :release
                                           :state ((:owner-state engine) owner)
                                           :queries (:query-port engine)
@@ -277,6 +279,7 @@
                 (let [ability (ability engine (:ability-id session))
                       result (execute engine ability {:owner (:owner session)
                                                       :session-id session-id
+                                                      :tick tick
                                                       :phase :pulse
                                                       :state ((:owner-state engine) (:owner session))
                                                       :queries (:query-port engine)
@@ -293,6 +296,7 @@
               (conj results (execute engine ability {:owner (:owner event)
                                                      :session-id (:event-id event)
                                                      :phase :passive
+                                                     :tick (long ((:now-tick engine)))
                                                      :event event
                                                      :flags (:flags event)
                                                      :refs (:refs event)
