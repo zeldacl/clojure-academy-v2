@@ -20,7 +20,6 @@
   (let [handlers* (atom {})
         sounds* (atom [])
         client-effects* (atom [])
-        presentation-effects* (atom [])
         blends* (atom [])]
     (with-redefs [fx-registry/register-fx-channel! (fn [topic handler]
                                                      (swap! handlers* assoc topic handler)
@@ -31,11 +30,6 @@
                   reactive-hud/start-charging-blend! (fn [source-player-id performed?]
                                                        (swap! blends* conj [source-player-id performed?])
                                                        nil)
-                  client-bridge/call-adapter (fn [adapter-key & args]
-                                               (when (#{:presentation-spawn-effect!
-                                                        :presentation-clear-effect-owner!} adapter-key)
-                                                 (swap! presentation-effects* conj [adapter-key args]))
-                                               nil)
                   client-bridge/run-client-effect! (fn [effect-key payload]
                                                      (swap! client-effects* conj [effect-key payload])
                                                      nil)]
@@ -66,9 +60,5 @@
              (mapv first @client-effects*)))
       (is (= "player-1"
              (get-in @client-effects* [0 1 :owner-uuid])))
-      (is (some (fn [[key args]]
-                  (and (= :presentation-spawn-effect! key)
-                       (= :academy/body-intensify-burst (first args))))
-                @presentation-effects*))
       (is (= [["player-1" true] ["player-2" false]] @blends*)
           "every release drives CurrentChargingHUD.startBlend(performed)"))))

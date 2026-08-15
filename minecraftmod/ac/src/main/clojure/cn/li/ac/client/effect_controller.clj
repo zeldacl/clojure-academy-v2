@@ -4,6 +4,7 @@
    Skill code supplies pure enqueue/tick/sample callbacks.  This namespace is
    the only AC-owned state adapter; it stores no renderer or Minecraft object."
   (:require [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.runtime.vfx-contract :as contract]
             [cn.li.vfx.runtime :as core])
   (:import [java.util ArrayDeque]))
 
@@ -217,26 +218,6 @@
 (defn reload-resources! [generation]
   (core/reload-resources! (runtime) generation))
 
-(defn build-world-geometry-payload [camera-pos hand-center-pos tick query-nearby-blocks-fn]
-  (let [batches (get-in (sample-frame! {:frame-id tick
-                                        :tick tick
-                                        :camera-pos camera-pos
-                                        :hand-center-pos hand-center-pos
-                                        :query-nearby-blocks-fn query-nearby-blocks-fn})
-                        [:stages :world-after-translucent])
-        plans (keep #(-> % :payload first) batches)
-        ops (vec (mapcat #(or (:ops %) []) plans))
-        walk-speed (reduce (fn [current plan]
-                             (let [candidate (:local-walk-speed plan)]
-                               (if (number? candidate)
-                                 (if (number? current)
-                                   (min (double current) (double candidate))
-                                   (double candidate))
-                                 current)))
-                           nil plans)]
-    (when (or (seq ops) (number? walk-speed))
-      {:ops ops :local-walk-speed (when (number? walk-speed) (float walk-speed))})))
-
 (defn current-fov-offset [player-uuid]
   (reduce max 0.0
           (for [[_ {:keys [level]}] @handlers*
@@ -285,8 +266,29 @@
 (defn resource-snapshot
   "Return the immutable resource view used by reload/warm-up diagnostics."
   []
-  {:generation (core/resource-generation (runtime))
+   {:generation (core/resource-generation (runtime))
    :effects (vec (sort (map name (registered-effects))))})
+
+(defn vfx-host-api
+  "Return the validated opaque VFX host API installed by AC.
+
+   Platform code receives this map through the client bridge and never loads
+   this namespace or the VFX runtime directly."
+  []
+  (contract/validate-host-api
+   {:schema-version contract/schema-version
+    :required-anchors required-anchors
+    :tick! tick!
+    :sample-frame! sample-frame!
+    :frame-stage frame-stage
+    :release-frame! release-frame!
+    :clear-world! clear-world!
+    :resource-snapshot resource-snapshot
+    :reload-resources! reload-resources!
+    :active? active?
+    :fov-offset current-fov-offset
+    :hand-transform current-hand-transform
+    :drain-camera-pitch-deltas! drain-camera-pitch-deltas!}))
 
 ;; Content effects use these narrow names while their namespaces are migrated
 ;; to this composition-root Runtime. They are intentionally thin calls into
@@ -334,8 +336,6 @@
 (defn tick-level-effects! [] (tick!))
 (defn tick-hand-effects! [] (tick!))
 (defn any-level-effect-active? [] (active?))
-(defn build-presentation-world-payload [camera-pos hand-center-pos tick query-fn]
-  (build-world-geometry-payload camera-pos hand-center-pos tick query-fn))
 (defn level-effect-registry-snapshot []
   {:registry (into {} (map (fn [[id {:keys [level]}]] [id level]) @handlers*))
    :order (vec (registered-effects)) :frozen? @frozen?*})

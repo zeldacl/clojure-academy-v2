@@ -1,6 +1,5 @@
 (ns cn.li.ac.content.ability.electromaster.railgun-fx
-  (:require [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]
-            [cn.li.mcmod.client.platform-bridge :as client-bridge]))
+  (:require [cn.li.ac.ability.client.fx-templates.arc-beam :as arc-beam]))
 
 ;; Tracks the enhanced world-anchored charge glow so it can be removed as soon
 ;; as charging ends. The separate hand animation remains a full 1.6-second
@@ -11,13 +10,6 @@
 ;; sends one. The entity itself is fine either way (life-ticks 32 disposes it),
 ;; so a stranded entry is only bookkeeping; prune it by age so the map cannot
 ;; grow for a whole session.
-(defn- on-charge-start! [ctx-id _channel payload]
-  (client-bridge/presentation-spawn-effect!
-    :railgun-charge [:ctx ctx-id] payload (client-bridge/game-time-ms)))
-
-(defn- on-charge-end! [ctx-id _channel _payload]
-  (client-bridge/presentation-clear-effect-owner! [:ctx ctx-id]))
-
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :railgun-shot
@@ -34,11 +26,9 @@
                 ;; (still driven by client-runtime/railgun-charge-visual-state
                 ;; for the caster's own first-person view).
                 :charge-start {:topic :railgun/fx-charge-start
-                               :targets [:level :immediate]
-                               :immediate-fn on-charge-start!}
+                               :targets [:level]}
                 :charge-update {:topic :railgun/fx-charge-update}
                 :charge-end {:topic :railgun/fx-charge-end
-                             :targets [:level :immediate]
-                             :immediate-fn on-charge-end!}}}))
+                             :targets [:level]}}}))
 
 (arc-beam/def-arc-beam-fx :railgun-shot)

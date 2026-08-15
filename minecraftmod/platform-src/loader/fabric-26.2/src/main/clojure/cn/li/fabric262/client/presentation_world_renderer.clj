@@ -2,7 +2,7 @@
   "Fabric 26.2 extraction/render hooks for world-space presentation effects."
   (:require [cn.li.mcmod.runtime.install :as install]
             [cn.li.mc262.client.effects.presentation-world :as geometry]
-            [cn.li.platform.neutral.presentation :as presentation])
+            [cn.li.platform.neutral.vfx :as vfx])
   (:import [net.fabricmc.fabric.api.client.rendering.v1.level LevelExtractionEvents LevelRenderEvents
             LevelExtractionEvents$EndExtraction LevelRenderEvents$AfterTranslucentTerrain
             LevelExtractionContext LevelRenderContext]
@@ -30,16 +30,19 @@
   (when-let [{:keys [^LocalPlayer player camera-pos tick presentation-context]}
              @extracted-context*]
     (try
-      (presentation/submit-current-frame!
-        :world-after-translucent 0.0 0 0
-        {:presentation-context presentation-context
-         :backend-context
-         {:draw-mesh!
-          (fn [_ _ _ _ _ payload]
+      (let [frame-id (vfx/next-frame-id)
+            frame (vfx/sample-frame!
+                    (assoc presentation-context :frame-id frame-id :partial-tick 0.0))]
+        (try
+          (doseq [batch (or (vfx/frame-stage frame-id :world-after-translucent) [])
+                  :when (= :mesh (:primitive batch))
+                  plan (or (:payload batch) [])]
             (geometry/render-presentation-geometry!
-              {:player player :camera-pos camera-pos :tick tick :plan payload
+              {:player player :camera-pos camera-pos :tick tick :plan plan
                :pose-stack (.poseStack context)
-               :submit-node-collector (.submitNodeCollector context)}))}})
+               :submit-node-collector (.submitNodeCollector context)}))
+          frame
+          (finally (vfx/release-frame! frame-id))))
       (finally
         (reset! extracted-context* nil)))))
 

@@ -13,8 +13,6 @@
 
 (defn- on-fx-start
   [ctx-id _channel payload]
-  (client-bridge/presentation-spawn-effect!
-    :body-intensify [:ctx ctx-id] payload (client-bridge/game-time-ms))
   ;; FollowEntitySound upstream is a real ambient loop attached to the caster.
   (client-bridge/run-client-effect!
    :mcmod/start-loop-sound-at-player
@@ -26,7 +24,6 @@
 
 (defn- on-fx-end
   [ctx-id _channel payload]
-  (client-bridge/presentation-clear-effect-owner! [:ctx ctx-id])
   ;; Stop any charging loop started by fx-start before handling release.
   (client-bridge/run-client-effect!
    :mcmod/stop-loop-sound
@@ -45,8 +42,7 @@
          (number? x) (assoc :x (double x))
          (number? y) (assoc :y (double y))
          (number? z) (assoc :z (double z)))))
-    (client-bridge/presentation-spawn-effect!
-      :body-intensify-burst [:ctx ctx-id] payload (client-bridge/game-time-ms))))
+    nil))
 
 (def ^:private spec
   (arc-beam/build-spec

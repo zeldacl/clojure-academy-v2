@@ -1,6 +1,8 @@
 (ns cn.li.ac.core
   (:require [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.lifecycle :as lifecycle]
+            [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
+            [cn.li.mcmod.events.world-owner-key :as world-owner-key]
             [cn.li.mcmod.spi.entity-render-registry :as entity-render-registry]
             [cn.li.mcmod.spi.entity-behavior-registry :as entity-behavior-registry]
             [cn.li.ac.bootstrap :as ac-bootstrap]
@@ -46,6 +48,19 @@
 (defn register-datagen-metadata!
   []
   (datagen-bootstrap/register-datagen-metadata!))
+
+(defn- clear-client-vfx-world!
+  "Drop VFX state for a world as it unloads without loading client code on a
+  dedicated server."
+  [world]
+  (when-let [clear! (try
+                      (requiring-resolve
+                       'cn.li.ac.client.effect-controller/clear-world!)
+                      (catch Throwable _ nil))]
+    (try
+      (clear! (world-owner-key/world-id world))
+      (catch Throwable _ nil)))
+  nil)
 
 ;; Register client-side initialization callback
 (defn- init-client-renderers
@@ -97,6 +112,9 @@
   (lifecycle/register-content-init! #'init)
   (lifecycle/register-runtime-content-activation! #'activate-runtime-content!)
   (lifecycle/register-world-tick! wireless-world/on-world-tick)
+  (world-lifecycle/register-world-lifecycle-handler!
+    {:id :ac/vfx-world-cleanup
+     :on-unload clear-client-vfx-world!})
   (lifecycle/register-datagen-metadata-init! #'register-datagen-metadata!)
   (lifecycle/register-client-init! init-client-renderers))
 

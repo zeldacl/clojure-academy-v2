@@ -2,7 +2,7 @@
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader extracts immutable state, then submits its custom geometry."
   (:require [cn.li.mc262.client.effects.presentation-world :as geometry]
-            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver ResourceLocations]
@@ -45,16 +45,19 @@
         extracted (.getRenderData render-state presentation-context-key)]
     (when extracted
       (let [{:keys [^LocalPlayer player camera-pos tick presentation-context]} extracted]
-        (presentation/submit-current-frame!
-          :world-after-translucent 0.0 0 0
-          {:presentation-context presentation-context
-           :backend-context
-           {:draw-mesh!
-            (fn [_ _ _ _ _ payload]
+        (let [frame-id (vfx/next-frame-id)
+              frame (vfx/sample-frame!
+                      (assoc presentation-context :frame-id frame-id :partial-tick 0.0))]
+          (try
+            (doseq [batch (or (vfx/frame-stage frame-id :world-after-translucent) [])
+                    :when (= :mesh (:primitive batch))
+                    plan (or (:payload batch) [])]
               (geometry/render-presentation-geometry!
-                {:player player :camera-pos camera-pos :tick tick :plan payload
+                {:player player :camera-pos camera-pos :tick tick :plan plan
                  :pose-stack (.getPoseStack evt)
-                 :submit-node-collector (.getSubmitNodeCollector evt)}))}})))))
+                 :submit-node-collector (.getSubmitNodeCollector evt)}))
+            frame
+            (finally (vfx/release-frame! frame-id)))))))
 
 (defn- on-extract-level-render-state [^ExtractLevelRenderStateEvent evt]
   (try

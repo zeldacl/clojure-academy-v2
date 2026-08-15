@@ -866,6 +866,18 @@ tasks.register("verifyVfxDependencyDirection") {
                 violations << "${source}: removed client scripted-effect bridge remains"
             }
         }
+        [file("ac/src/main"), file("mcmod/src/main"), file("platform-src")].findAll { it.directory }.each { File root ->
+            fileTree(root) { include "**/*.clj"; include "**/*.cljc"; include "**/*.java" }.files.each { File source ->
+                if (source.text =~ /presentation-(?:spawn|destroy|clear|tick)-effect/) {
+                    violations << "${source}: legacy Presentation Effect bridge remains; use the VFX Frame ABI"
+                }
+            }
+        }
+        fileTree(file("ac/src/main/resources")) {
+            include "**/*.fx.edn"
+        }.files.each { File source ->
+            violations << "${source}: legacy Presentation FX resource remains; register a Clojure VFX descriptor"
+        }
         if (!violations.isEmpty()) {
             throw new GradleException("VFX dependency direction violations:\n" + violations.unique().join("\n"))
         }
@@ -957,7 +969,12 @@ tasks.register("verifyPresentationLoaderHooks") {
                 include "**/presentation_world_renderer.clj"
             }.files.each { File source -> requiredFiles << source }
         }
-        def missing = requiredFiles.findAll { !it.text.contains("cn.li.platform.neutral.presentation") }
+        def missing = requiredFiles.findAll { source ->
+            source.name == "presentation_hud_renderer.clj"
+                ? !source.text.contains("cn.li.platform.neutral.presentation")
+                : !(source.text.contains("cn.li.platform.neutral.presentation") ||
+                    source.text.contains("cn.li.platform.neutral.vfx"))
+        }
         if (!missing.isEmpty()) {
             throw new GradleException("Loader Presentation hook missing:\n" + missing.join("\n"))
         }
@@ -1043,10 +1060,6 @@ tasks.register("verifyPresentationAtomicSwitch") {
             ~/script-render-(runtime|executor|compiler)/,
             ~/script_render_(runtime|executor|compiler|registry)/,
             ~/script-render-registry/,
-            ~/vfx-host/,
-            ~/vfx-runtime/,
-            ~/neutral-vfx/,
-            ~/platform\.neutral\.vfx/,
             ~/level-plan!/,
             ~/render-level-plan!/,
             ~/build-level-plan/,

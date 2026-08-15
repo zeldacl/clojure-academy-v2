@@ -11,11 +11,8 @@
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.presentation.core.host :as presentation-host]
-            [cn.li.presentation.core.frame :as presentation-frame]
             [cn.li.presentation.core.export :as presentation-export]
-            [cn.li.presentation.core.effects :as effects-runtime]
             [cn.li.presentation.compiler.core :as presentation-compiler]
-            [cn.li.presentation.compiler.fx :as presentation-fx]
             [cn.li.presentation.compiler.render :as presentation-render]
             [cn.li.mcmod.util.log :as log]))
 
@@ -51,43 +48,6 @@
    "academy:machine_container" "machine_container.ui.edn"
    "academy:wireless_matrix" "wireless_matrix.ui.edn"
    "academy:wireless_node" "wireless_node.ui.edn"})
-
-(def ^:private effect-template-files
-  {"academy:body_intensify" "body_intensify.fx.edn"
-   "academy:body_intensify_burst" "body_intensify_burst.fx.edn"
-   "academy:railgun_charge" "railgun_charge.fx.edn"})
-
-(defn- append-effect-geometry
-  [packet frame-id context]
-  (if-not (and (map? context) (:camera-pos context))
-    packet
-    (let [sample (when (effect-controller/active?)
-                 (effect-controller/sample-frame!
-                   {:frame-id frame-id
-                    :tick (:tick context)
-                    :camera-pos (:camera-pos context)
-                    :hand-center-pos (:hand-center-pos context)
-                    :query-nearby-blocks-fn (:query-nearby-blocks-fn context)}))
-        batches (get-in sample [:stages :world-after-translucent])
-        plans (keep #(-> % :payload first) batches)
-          ops (vec (mapcat #(or (:ops %) []) plans))
-          walk-speed (reduce (fn [current plan]
-                               (let [candidate (:local-walk-speed plan)]
-                                 (if (number? candidate)
-                                   (if (number? current)
-                                     (min (double current) (double candidate))
-                                     (double candidate))
-                                   current)))
-                             nil plans)]
-      (when-let [sample-frame-id (:frame-id sample)]
-        (effect-controller/release-frame! sample-frame-id))
-      (if (seq ops)
-        (presentation-frame/append-mesh-payload
-          packet cn.li.presentation.core.RenderStage/WORLD_AFTER_TRANSLUCENT
-          {:ops ops
-           :local-walk-speed (when (number? walk-speed) (float walk-speed))
-           :camera-pos (:camera-pos context)})
-        packet))))
 
 (def ^:private template-symbols
   {"academy:combat_hud"
@@ -154,12 +114,6 @@
                              (slurp resource)
                              (throw (ex-info "Presentation resource missing"
                                              {:resource path}))))]
-    (doseq [[effect-id file] effect-template-files]
-      (when-let [resource (io/resource (str "assets/academy/presentation/" file))]
-        (let [compiled (presentation-fx/compile-edn (slurp resource))]
-          (effects-runtime/register-template!
-            (presentation-host/effect-runtime runtime)
-            (assoc compiled :id (keyword (last (string/split effect-id #":"))))))))
     runtime))
 
 (defn- ensure-combat-hud! [runtime player-uuid width height]
@@ -203,12 +157,6 @@
                  (refresh!))
                (some-> (presentation-host/frame! runtime frame-id delta-seconds width height)
                        presentation-export/neutral-frame))
-     :frame-with-context! (fn [frame-id delta-seconds width height context]
-                            (let [packet (presentation-host/frame!
-                                           runtime frame-id delta-seconds width height)]
-                              (-> packet
-                                  (append-effect-geometry frame-id (or context {}))
-                                  presentation-export/neutral-frame)))
      :mount-combat-hud! (fn [player-uuid width height]
                           (ensure-combat-hud! runtime player-uuid width height))
      :mount-terminal! (fn [owner dispatch-action!]
@@ -227,6 +175,7 @@
                     (reset! terminal* nil)))
      :reload-resources! (fn [generation]
                           (reset! template-cache* {})
+                          (effect-controller/reload-resources! generation)
                           (presentation-host/reload-resources! runtime generation))
      :dispatch! (fn [mount event]
                   (.dispatch ^cn.li.presentation.core.PresentationRuntime
@@ -240,18 +189,6 @@
                             :else :pass)))
      :set-input-handler! (fn [mount handler]
                            (presentation-host/set-input-handler! runtime mount handler))
-     :presentation-spawn-effect! (fn [template-id owner params now-ms]
-                                   (presentation-host/spawn-effect!
-                                     runtime template-id owner params now-ms))
-     :presentation-destroy-effect! (fn [instance-id]
-                                     (presentation-host/destroy-effect! runtime instance-id))
-     :presentation-clear-effect-owner! (fn [owner]
-                                         (presentation-host/clear-effect-owner! runtime owner))
-     :presentation-tick-effects! (fn [delta-ms]
-                                   (presentation-host/tick-effects! runtime delta-ms))
-     :presentation-fov-offset effect-controller/current-fov-offset
-     :presentation-hand-transform effect-controller/current-hand-transform
-     :presentation-drain-camera-pitch-deltas! effect-controller/drain-camera-pitch-deltas!
      :unmount-all! (fn []
                      (reset! combat-hud* nil)
                      (reset! terminal* nil)
@@ -264,19 +201,11 @@
     (bridge/merge-client-bridge!
       {:presentation-runtime presentation-runtime
        :presentation-host-api presentation-host-api
-       :presentation-spawn-effect! (:presentation-spawn-effect! api)
-       :presentation-destroy-effect! (:presentation-destroy-effect! api)
-       :presentation-clear-effect-owner! (:presentation-clear-effect-owner! api)
-       :presentation-tick-effects! (:presentation-tick-effects! api)
-       :presentation-fov-offset (:presentation-fov-offset api)
-       :presentation-hand-transform (:presentation-hand-transform api)
-       :presentation-drain-camera-pitch-deltas! (:presentation-drain-camera-pitch-deltas! api)}))
+       :vfx-host-api effect-controller/vfx-host-api}))
   (when (compare-and-set! effects-tick-installed* false true)
     (content-actions/register-client-tick-hook!
       #(do
          (when-let [runtime @presentation-runtime*]
            (presentation-host/tick-effects! runtime 50))
-         ;; The remaining ability descriptors are sampled through the same
-         ;; Presentation frame bridge while their templates are converted.
-         (effect-controller/tick!))))
+         nil)))
   (log/info "Presentation Runtime bridge installed"))

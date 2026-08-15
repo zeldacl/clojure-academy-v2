@@ -5,7 +5,8 @@
    connects the client bridge's opaque AC host API to minecraft/base's lifecycle
    registry and returns opaque frame packets to version-owned callbacks."
   (:require [cn.li.mcbase.presentation.host-lifecycle :as lifecycle]
-            [cn.li.platform.neutral.client-runtime :as client-runtime]))
+            [cn.li.platform.neutral.client-runtime :as client-runtime]
+            [cn.li.platform.neutral.vfx :as vfx]))
 
 (def ^:private host-id :presentation)
 (def ^:private host-kind :unified)
@@ -115,27 +116,24 @@
 
 (defn fov-offset
   [player-uuid]
-  (when-let [f (:presentation-fov-offset
-                (lifecycle/host-api (ensure-registered!) host-id))]
-    (f player-uuid)))
+  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
+    ((:fov-offset api) player-uuid)))
 
 (defn tick-effects!
   [delta-ms]
-  (when-let [f (:presentation-tick-effects!
-                (lifecycle/host-api (ensure-registered!) host-id))]
-    (f delta-ms)))
+  (vfx/tick! {:tick-id (quot (long (System/currentTimeMillis))
+                             (max 1 (long delta-ms)))
+              :delta-seconds (/ (double delta-ms) 1000.0)}))
 
 (defn hand-transform
   []
-  (when-let [f (:presentation-hand-transform
-                (lifecycle/host-api (ensure-registered!) host-id))]
-    (f)))
+  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
+    ((:hand-transform api))))
 
 (defn drain-camera-pitch-deltas!
   [owner]
-  (when-let [f (:presentation-drain-camera-pitch-deltas!
-                (lifecycle/host-api (ensure-registered!) host-id))]
-    (f owner)))
+  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
+    ((:drain-camera-pitch-deltas! api) owner)))
 
 (defn register-backend!
   "Install the version-owned backend callback for this client target.

@@ -2,7 +2,7 @@
   "CLIENT-ONLY level effect executor. AC owns the effect state and render plan;
   this loader only subscribes the events and delegates to the shared renderer."
   (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
-            [cn.li.platform.neutral.presentation :as presentation]
+            [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
@@ -36,17 +36,19 @@
               tick (.getGameTime (.level player))
               ^PoseStack pose-stack (.getPoseStack evt)
               ^MultiBufferSource$BufferSource buffer-source (.bufferSource (.renderBuffers mc))]
-          (let [backend-context
-                {:draw-mesh!
-                 (fn [_ _ _ _ _ payload]
-                   (geometry/render-presentation-geometry!
-                     {:player player :pose-stack pose-stack :buffer-source buffer-source
-                      :camera-pos cam-pos :tick tick :plan payload}))}
-                frame-context (geometry/presentation-frame-context player cam-pos tick)]
-            (presentation/submit-current-frame!
-              :world-after-translucent 0.0 0 0
-              {:presentation-context frame-context
-               :backend-context backend-context})))))))
+          (let [frame-context (geometry/presentation-frame-context player cam-pos tick)]
+            (let [frame-id (vfx/next-frame-id)
+                  frame (vfx/sample-frame!
+                          (assoc frame-context :frame-id frame-id :partial-tick 0.0))]
+              (try
+                (doseq [batch (or (vfx/frame-stage frame-id :world-after-translucent) [])
+                        :when (= :mesh (:primitive batch))
+                        plan (or (:payload batch) [])]
+                  (geometry/render-presentation-geometry!
+                    {:player player :pose-stack pose-stack :buffer-source buffer-source
+                     :camera-pos cam-pos :tick tick :plan plan}))
+                frame
+                (finally (vfx/release-frame! frame-id))))))))))
 
 (defn- on-render-level-stage [^RenderLevelStageEvent evt]
   (try
