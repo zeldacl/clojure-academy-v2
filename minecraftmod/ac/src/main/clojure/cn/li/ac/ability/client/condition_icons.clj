@@ -5,7 +5,8 @@
   Original condition icon textures live under abilities/condition/.
   For now, we use existing texture paths; copy condition icons from
   original AcademyCraft assets as needed."
-  (:require [cn.li.ac.ability.registry.skill-query :as skill-query]))
+  (:require [cn.li.ac.ability.registry.skill-query :as skill-query]
+            [cn.li.mcmod.i18n :as i18n]))
 
 (def condition-icon-base-path
   "Base path for condition icon textures."
@@ -32,12 +33,18 @@
 ;; skill's icon, any-skill-level uses anyN.png.
 ;; ============================================================================
 
+(defn- developer-type-display-name
+  "Developer tier display name via the existing skill_tree.academy.type_* keys."
+  [dt]
+  (i18n/translate (str "skill_tree.academy.type_" (name dt))))
+
 (def condition-type-map
   {:developer-type
    {:icon-path (fn [c] (developer-type-texture (:required c (:developer-type c))))
     :text-fn (fn [c]
                (let [dt (:required c (:developer-type c))]
-                 (str "Requires " (name dt) " developer")))}
+                 (i18n/translate "skill_tree.academy.requires"
+                                 (developer-type-display-name dt))))}
 
    :prerequisite
    {:icon-path (fn [c] (skill-query/get-skill-icon-path (:skill-id c)))
@@ -45,12 +52,16 @@
                (let [sid (:skill-id c)
                      req (:required c (:min-exp c 0.0))]
                  (if (pos? (double req))
-                   (str "Requires " (name sid) " (" (int (* 100.0 req)) "%)")
-                   (str "Requires " (name sid)))))}
+                   (i18n/translate "skill_tree.academy.requires"
+                                   (str (skill-query/skill-display-name sid)
+                                        " (" (int (* 100.0 req)) "%)"))
+                   (i18n/translate "skill_tree.academy.requires"
+                                   (skill-query/skill-display-name sid)))))}
 
    :any-skill-level
    {:icon-path (fn [c] (condition-icon-path (str "any" (:required-level c (:level c 1)) ".png")))
-    :text-fn (fn [c] (str "Any Level " (:required-level c (:level c)) " skill learned"))}})
+    :text-fn (fn [c] (i18n/translate "skill_tree.academy.any_level"
+                                     (long (:required-level c (:level c 1)))))}})
 
 (defn condition-display-info
   "Given a condition map (from :failures or :conditions), return

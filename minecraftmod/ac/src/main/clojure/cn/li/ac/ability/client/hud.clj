@@ -160,7 +160,7 @@
              :key-label (ability-key-label idx)
              :skill-id skill-id
              :skill-icon (skill-query/get-skill-icon-path skill-id)
-             :skill-name (or (:name skill-spec) (name skill-id))
+             :skill-name (skill-query/skill-display-name skill-id)
              ;; Stand-in denominator for slots with no live cooldown to read a
              ;; recorded duration from — same declaration the apply paths use,
              ;; so the two can no longer disagree.

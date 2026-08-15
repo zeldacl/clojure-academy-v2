@@ -3,6 +3,7 @@
 	(:require [cn.li.ac.ability.registry.skill :as skill]
 					[cn.li.ac.ability.skill-config :as skill-config]
 					[cn.li.ac.config.modid :as modid]
+					[cn.li.mcmod.i18n :as i18n]
 					[clojure.string :as str]))
 
 (defn list-skills
@@ -50,6 +51,21 @@
 		(if (and (seq icon) (not (str/includes? icon ":")))
 			(str modid/MOD-ID ":" icon)
 			icon)))
+
+(defn skill-display-name
+	"Localized display name for a skill: its :name-key translation when the
+	key resolves (untranslated keys fall back to the raw name), the raw spec
+	:name otherwise, the keyword name as last resort. Single query point for
+	every skill-name display (developer panel, HUD slots, condition hints)."
+	[skill-id]
+	(let [spec (skill/get-skill skill-id)
+				nk (:name-key spec)]
+		(if nk
+			(let [t (i18n/translate nk)]
+				(if (not= t nk)
+					t
+					(or (:name spec) (name skill-id))))
+			(or (:name spec) (name skill-id)))))
 
 (defn controllable-key
 	[skill-id]

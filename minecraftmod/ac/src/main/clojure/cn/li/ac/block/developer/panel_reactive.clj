@@ -174,8 +174,11 @@
                          (>= lvl 5) 1.0
                          :else 0.0)
                    0.0)
-        exp-label (format "EXP %d%%" (int (* 100.0 exp-frac)))
-        level-label (format "Level %d" lvl)]  ;; matches upstream AbilityLocalization.levelDesc → "Level N"
+        exp-label (str (i18n/translate "skill_tree.academy.exp")
+                       " " (int (* 100.0 exp-frac)) "%")
+        ;; Upstream AbilityLocalization.levelDesc → "Level N"; the existing
+        ;; ability.academy.level0..5 keys carry the per-language names.
+        level-label (i18n/translate (str "ability.academy.level" lvl))]
     {:has-category? has-category?
      :can-upgrade? can-upgrade?
      :ability-name ability-name
@@ -333,6 +336,10 @@
         session-id (panel-session-id container)
         uuid-str (when player (uuid/player-uuid player))
         last-ver (atom ::none)]
+    ;; Static left-panel labels (the XML defaults are English).
+    (ui/set-prop! rt :text-wireless :text (i18n/translate "skill_tree.academy.current_node"))
+    (ui/set-prop! rt :text-power :text (i18n/translate "skill_tree.academy.power"))
+    (ui/set-prop! rt :text-syncrate :text (i18n/translate "skill_tree.academy.sync_rate"))
     (bind-box-width! rt :logo-progress 70.0 cat-prog)
     (bind-box-width! rt :progress-power 97.0 power)
     (bind-box-width! rt :progress-syncrate 97.0 sync-rate-sig)
@@ -601,7 +608,7 @@
   (let [_ (begin-cover! rt)
         dev-spec (developer/developer-spec (or dev-type :normal))
         skill-spec (skill/get-skill skill-id)
-        skill-name (or (:name skill-spec) (name skill-id) "Unknown")
+        skill-name (skill-query/skill-display-name skill-id)
         skill-level (int (or (:level skill-spec) 1))
         ;; Upstream LearningHelper.getEstimatedConsumption: CPS * stimulations.
         est-consumption (long (* (:cps dev-spec 700.0) (progression/skill-learning-stims skill-level)))
