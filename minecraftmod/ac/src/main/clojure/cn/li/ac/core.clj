@@ -13,6 +13,7 @@
             [cn.li.ac.terminal.client.actions :as terminal-actions]
             [cn.li.ac.terminal.client.install-effect-reactive :as install-effect-reactive]
             [cn.li.ac.client.platform-hooks :as platform-hooks]
+            [cn.li.ac.client.vfx-host :as vfx-host]
             [cn.li.ac.client.font-init :as font-init]
             [cn.li.ac.datagen.bootstrap :as datagen-bootstrap]
             [cn.li.ac.registry.hooks :as hooks]
@@ -74,6 +75,8 @@
   ;; Resolve lazily so the client-only FX graph is never loaded while the
   ;; dedicated server requires this shared lifecycle namespace.
   ((requiring-resolve 'cn.li.ac.content.ability-client/init-client-fx!))
+  ;; Install the VFX Core Frame ABI independently of Presentation.
+  (vfx-host/install!)
   ;; Presentation Runtime is installed by content-loader after all AC client
   ;; descriptors are loaded. Platform code only sees its opaque mcmod bridge.
   ;; Register entity render namespaces into the neutral mcmod registry
