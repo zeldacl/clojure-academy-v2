@@ -982,6 +982,22 @@
     result))
 (defn dispatch-domain-event! [event] (combat/dispatch-domain-event! (engine) event))
 
+(defn dispatch-result-domain-events!
+  "Dispatch explicit domain events from one CombatResult.
+
+   Query trace entries are intentionally ignored.  The caller controls when
+   this seam is invoked so ordering with StatePatch and WorldEffect commits is
+   explicit at the application boundary."
+  [owner result]
+  (reduce (fn [results event]
+            (if (and (map? event) (not= :query (:type event)))
+              (conj results
+                    (dispatch-domain-event!
+                     (assoc event :owner (or (:owner event) owner))))
+              results))
+          []
+          (:events result)))
+
 (defn process-damage-request!
   "Authoritative damage interception boundary for platform adapters.
 

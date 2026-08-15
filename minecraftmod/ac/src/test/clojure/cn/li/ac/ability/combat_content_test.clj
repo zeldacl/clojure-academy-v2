@@ -116,3 +116,19 @@
     (is (= 1 (get-in ticked [:radiation-marks "victim" :ticks-left])))
     (is (map? (get-in shielded [:light-shields "owner"])))
     (is (nil? (get-in ended [:light-shields "owner"])))))
+
+(deftest result-domain-event-seam-ignores-query-traces
+  (let [seen (atom [])]
+    (with-redefs [combat-runtime/dispatch-domain-event!
+                  (fn [event]
+                    (swap! seen conj event)
+                    {:status :accepted :event event})]
+      (let [results (combat-runtime/dispatch-result-domain-events!
+                     "owner"
+                     {:events [{:type :query :query-type :raycast}
+                               {:type :radiation-mark :target-id "victim"}]})]
+        (is (= 1 (count results)))
+        (is (= [{:type :radiation-mark
+                 :target-id "victim"
+                 :owner "owner"}]
+               @seen))))))
