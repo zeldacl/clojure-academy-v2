@@ -127,6 +127,21 @@
                                           :ability-id :test/amplified})]
     (is (= 20.0 (get-in result [:world-effects 0 :request :base])))))
 
+(deftest damage-resource-cost-becomes-neutral-state-patch
+  (let [engine (runtime/create-engine
+                {:catalog {:abilities {} :nodes {} :content-hash "damage-patch"}
+                 :damage-pipeline [{:priority 1 :provider-id :test
+                                    :ability-id :test/cost :node-id :cost
+                                    :run (fn [request _]
+                                           (assoc-in request
+                                                     [:metadata :resource-cost]
+                                                     {:cp -4.5}))}]})
+        request (runtime/process-damage-request
+                 engine {:source "attacker" :target "victim"
+                         :base 10.0 :type :generic})]
+    (is (= [[:resource :cp -4.5]] (:state-patch request)))
+    (is (= {:cp -4.5} (get-in request [:metadata :resource-cost])))))
+
 (deftest damage-request-exposes-source-and-target-snapshots
   (let [seen (atom nil)
         engine (runtime/create-engine

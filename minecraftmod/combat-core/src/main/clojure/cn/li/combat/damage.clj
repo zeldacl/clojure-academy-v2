@@ -32,9 +32,16 @@
 
 (defn apply-pipeline
   [pipeline request context]
-  (reduce (fn [result {:keys [run]}]
-            (if (or (:cancelled? result) (nil? result))
-              result
-              (run result context)))
-          (damage-request request)
-          pipeline))
+  (let [result (reduce (fn [result {:keys [run]}]
+                         (if (or (:cancelled? result) (nil? result))
+                           result
+                           (run result context)))
+                       (damage-request request)
+                       pipeline)
+        resource-cost (get-in result [:metadata :resource-cost])
+        state-patch (vec (concat (or (:state-patch result) [])
+                                 (for [[resource amount] resource-cost]
+                                   [:resource resource (double amount)])))]
+    ;; Providers remain pure: resource consumption is represented as a
+    ;; neutral StatePatch for the AC composition root to commit atomically.
+    (assoc result :state-patch state-patch)))
