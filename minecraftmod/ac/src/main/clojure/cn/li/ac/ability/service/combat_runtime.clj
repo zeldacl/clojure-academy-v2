@@ -139,7 +139,10 @@
                                 (host-query :scatter-bomb context node)))
               :saved-location (fn [context node]
                                 (when-let [host-query (contract/host-port :query)]
-                                  (host-query :saved-location context node)))}]
+                                  (host-query :saved-location context node)))
+              :teleport-target (fn [context node]
+                                 (when-let [host-query (contract/host-port :query)]
+                                   (host-query :teleport-target context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -497,6 +500,24 @@
                                applied? (when valid?
                                           (teleportation/teleport-approved-location!
                                            owner ability-id location-id radius))]
+                           {:status (if applied? :applied :failed)
+                            :effect effect})
+                         :teleport-approved-target
+                         (let [{:keys [target destination ability-id mode]} effect
+                               destination (or destination target)
+                               approval-token (when (map? destination)
+                                                (or (:approval-token destination)
+                                                    (:teleport-token destination)))
+                               valid? (and (string? approval-token)
+                                           (<= 1 (count approval-token) 128)
+                                           (#{:mark-teleport :penetrate-teleport
+                                              :shift-teleport :threatening-teleport}
+                                            ability-id)
+                                           (#{:mark :penetrate :shift :threatening} mode)
+                                           (teleportation/available?))
+                               applied? (when valid?
+                                          (teleportation/teleport-approved-target!
+                                           owner ability-id approval-token mode))]
                            {:status (if applied? :applied :failed)
                             :effect effect})
                          {:status :unhandled

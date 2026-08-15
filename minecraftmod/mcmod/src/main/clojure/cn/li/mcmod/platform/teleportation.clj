@@ -33,3 +33,10 @@
   [owner ability-id location-id radius]
   (boolean (call :teleport-approved-location!
                 owner ability-id location-id (double radius))))
+
+(defn teleport-approved-target!
+  "Teleport using a server-issued approval token from a target query.
+   Loader code owns target, collision, dimension and passenger validation."
+  [owner ability-id approval-token mode]
+  (boolean (call :teleport-approved-target!
+                owner ability-id approval-token mode)))
