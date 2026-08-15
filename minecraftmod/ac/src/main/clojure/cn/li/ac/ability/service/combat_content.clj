@@ -417,7 +417,38 @@
                                                  -30.0 -45.0 -60.0 -80.0]}
                                  {:op :vfx :effect-id :blood-retrograde
                                   :event :perform
-                                  :params {:max-charge-ticks 30}}]}}}
+                                 :params {:max-charge-ticks 30}}]}}}
+    {:id :electron-missile
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 200
+     :cost-phase :pulse
+     :cost {:cp (scale 12.0 5.0)}
+     :cooldown {:ticks 700}
+     :program {:op :phase
+               :start {:op :patch
+                       :entries [[:resource :overload -200.0]]}
+               :pulse {:op :sequence
+                       :steps [{:op :query :query-type :electron-missile
+                                :seek-range (scale 5.0 13.0)
+                                :result-ref :missile}
+                               {:op :world-effect
+                                :effect-type :electron-missile
+                                :query-ref :missile
+                                :damage (scale 10.0 18.0)
+                                :seek-range (scale 5.0 13.0)
+                                :spawn-interval 10
+                                :fire-interval 8
+                                :max-balls 5
+                                :max-hold-ticks 200
+                                :attack-cp (scale 60.0 25.0)
+                                :attack-overload (scale 9.0 4.0)}
+                               {:op :vfx :effect-id :electron-missile
+                                :event :update
+                                :params {:max-balls 5
+                                         :spawn-interval 10
+                                         :fire-interval 8}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
