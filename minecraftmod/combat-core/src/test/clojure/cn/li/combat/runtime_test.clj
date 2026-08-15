@@ -126,3 +126,38 @@
                                           :ability-id :test/custom})]
     (is (= :accepted (:status result)))
     (is (= [[:ability-exp :test/custom 0.25]] (:state-patch result)))))
+
+(deftest data-expression-and-query-paths-stay-neutral
+  (dsl/defability scaled-strike
+    {:id :test/scaled-strike :activation :instant
+     :program {:op :sequence
+               :steps [{:op :query :query-type :attack :result-ref :attack
+                        :result-paths {:target [:target-uuid]
+                                       :impact [:impact]
+                                       :victims [:victims]}}
+                       {:op :branch :predicate-ref :target
+                        :then {:op :damage :amount {:op :scale :min 10.0 :max 20.0}
+                               :type :electric :target-ref :target}
+                        :else {:op :patch :entries []}}
+                       {:op :world-effect :effect-type :damage-aoe
+                        :origin-ref :attack :origin-path [:impact]
+                        :targets-ref :attack :targets-path [:victims]
+                        :amount {:op :add :values [1.0 2.0]}
+                        :damage-type :electric}]}})
+  (let [engine (runtime/create-engine
+                {:catalog (compiler/compile-all!)
+                 :initial-owner-state (fn [_] {:ability-data {:skill-exps {:test/scaled-strike 0.5}}})
+                 :query-port {:attack (fn [_ _]
+                                        {:target-uuid "target-1"
+                                         :impact {:x 1 :y 2 :z 3}
+                                         :victims [{:uuid "target-2"}]})}})
+        result (runtime/dispatch-intent! engine "p"
+                                         {:intent-id 44 :op :start
+                                          :ability-id :test/scaled-strike})]
+    (is (= :accepted (:status result)))
+    (is (= "target-1" (get-in result [:world-effects 0 :request :target])))
+    (is (= 15.0 (get-in result [:world-effects 0 :request :base])))
+    (is (= [{:uuid "target-2"}]
+           (get-in result [:world-effects 1 :targets])))
+    (is (= {:x 1 :y 2 :z 3}
+           (get-in result [:world-effects 1 :origin])))))

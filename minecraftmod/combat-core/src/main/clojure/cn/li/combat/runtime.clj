@@ -33,6 +33,37 @@
 (defn- append-output [result k values]
   (if (seq values) (update result k into values) result))
 
+(defn- skill-exp
+  [context ability-id]
+  (double (or (get-in context [:state :ability-data :skill-exps ability-id])
+              (get-in context [:state :skill-exp ability-id])
+              0.0)))
+
+(defn- resolve-value
+  "Resolve bounded, data-only runtime expressions used by skill content.
+   Expressions are immutable data and never invoke host/platform code."
+  [value context]
+  (if-not (map? value)
+    value
+    (case (:op value)
+      :scale (let [exp (skill-exp context (or (:ability-id value)
+                                               (:ability-id context)))
+                   lo (double (:min value))
+                   hi (double (:max value))]
+               (+ lo (* (- hi lo) (max 0.0 (min 1.0 exp)))))
+      :add (reduce + 0.0 (map #(double (resolve-value % context)) (:values value)))
+      :multiply (reduce * 1.0 (map #(double (resolve-value % context)) (:values value)))
+      value)))
+
+(defn- resolve-cost
+  [cost context]
+  (into {} (map (fn [[resource amount]]
+                  [resource (double (resolve-value amount context))]) cost)))
+
+(defn- ref-path
+  [context ref path]
+  (get-in (get-in context [:refs ref]) path))
+
 (defn- combine-results [left right]
   (let [result (into {:status (cond
                                 (= :rejected (:status left)) :rejected
@@ -63,7 +94,9 @@
                                                    context))))
                     {:status :continue :context context}
                     (range (long (:count node))))
-    :branch (if-let [selected (if (get-in context [:flags (:predicate node)])
+    :branch (if-let [selected (if (or (get-in context [:flags (:predicate node)])
+                                      (and (:predicate-ref node)
+                                           (some? (get-in context [:refs (:predicate-ref node)]))))
                                 (:then node) (:else node))]
               (run-node engine selected context)
               {:status :continue})
@@ -75,8 +108,19 @@
              (if-not (ifn? query-fn)
                {:status :rejected :feedback [{:reason :missing-query-port
                                               :query-type (:query-type node)}]}
-               (let [value (query-fn context node)]
-                 (let [context (cond-> (assoc-in context [:refs (:result-ref node :hit)] value)
+               (let [value (query-fn context node)
+                     context (cond-> (assoc-in context [:refs (:result-ref node :hit)] value)
+                               (map? (:result-paths node))
+                               (as-> c (reduce-kv (fn [acc ref path]
+                                                    (assoc-in acc [:refs ref]
+                                                              (get-in value path)))
+                                                  c (:result-paths node)))
+                               (map? (:result-flags node))
+                               (as-> c (reduce-kv (fn [acc flag path]
+                                                    (assoc-in acc [:flags flag]
+                                                              (some? (get-in value path))))
+                                                  c (:result-flags node))))]
+                 (let [context (cond-> context
                                  (and (map? value) (:world-id value))
                                  (assoc :world-id (:world-id value)))]
                  {:status :continue
@@ -94,9 +138,9 @@
                            (:damage-pipeline engine)
                            {:source (:owner context)
                             :target target
-                            :base (:amount node)
+                            :base (double (resolve-value (:amount node) context))
                             :type (:type node)
-                            :components {:direct (:amount node)}
+                            :components {:direct (double (resolve-value (:amount node) context))}
                             :tags #{:skill}
                             :metadata {:ability-id (:ability-id context)
                                        :world-id (:world-id context)}}
@@ -120,23 +164,41 @@
                                            :event-seq (long (or (:event-seq context) 0))
                                            :seed (long (or (:seed context) 0))
                                            :event (:event node)
-                                           :params (:params node)})]}
+                                           :params (if-let [params-ref (:params-ref node)]
+                                                     (get-in context [:refs params-ref])
+                                                     (:params node))})]}
     :world-effect (let [effect (dissoc node :op :effect-type)
                         target (when-let [target-ref (:target-ref node)]
                                  (get-in context [:refs target-ref]))
+                        target (if (and (:target-ref node) (:target-path node))
+                                 (get-in (get-in context [:refs (:target-ref node)])
+                                         (:target-path node))
+                                 target)
                         targets (when-let [targets-ref (:targets-ref node)]
                                   (get-in context [:refs targets-ref]))
+                        targets (if (and (:targets-ref node) (:targets-path node))
+                                  (get-in (get-in context [:refs (:targets-ref node)])
+                                          (:targets-path node))
+                                  targets)
                         origin (when-let [origin-ref (:origin-ref node)]
                                  (get-in context [:refs origin-ref]))
+                        origin (if (and (:origin-ref node) (:origin-path node))
+                                 (get-in (get-in context [:refs (:origin-ref node)])
+                                         (:origin-path node))
+                                 origin)
                         scan (when-let [scan-ref (:scan-ref node)]
                                (get-in context [:refs scan-ref]))
-                        effect (cond-> effect
+                        effect (cond-> (if (contains? effect :amount)
+                                         (update effect :amount resolve-value context)
+                                         effect)
                                  (some? target) (assoc :target target)
                                  (some? targets) (assoc :targets targets)
                                  (some? origin) (assoc :origin origin)
                                  (some? scan) (assoc :scan scan)
                                  (:world-id context) (assoc :world-id (:world-id context))
-                                 true (dissoc :target-ref :targets-ref :origin-ref :scan-ref))]
+                                 true (dissoc :target-ref :target-path
+                                               :targets-ref :targets-path
+                                               :origin-ref :origin-path :scan-ref))]
                     {:status :continue
                      :world-effects [(contract/world-effect
                                       (assoc effect :type (:effect-type node)))]})
@@ -144,7 +206,10 @@
                    :events [(contract/domain-event
                              (assoc (dissoc node :op :event-type)
                                     :type (:event-type node)))]}
-    :patch {:status :continue :state-patch (:entries node)}
+    :patch {:status :continue
+            :state-patch (mapv (fn [[kind key value]]
+                                 [kind key (resolve-value value context)])
+                               (:entries node))}
     :node (let [descriptor (get-in (:catalog engine) [:nodes (:node-id node)])]
             (if-let [run (:run descriptor)]
               (run context node)
@@ -153,7 +218,7 @@
 
 (defn- execute [engine ability context]
   (let [result (run-node engine (:program ability) context)
-        cost (:cost ability)
+        cost (resolve-cost (:cost ability) context)
         result (if (and (seq cost) (not= :rejected (:status result)))
                  (update result :state-patch into (mapv (fn [[resource amount]]
                                                           [:resource resource (- (double amount))]) cost))
@@ -200,9 +265,11 @@
       (reject :passive-ability-cannot-start {:ability-id ability-id})
       :else
       (let [state ((:owner-state engine) owner)
-            tick (long ((:now-tick engine)))]
+            tick (long ((:now-tick engine)))
+            cost (resolve-cost (:cost ability)
+                               {:ability-id ability-id :state state})]
         (cond
-          (not (resources-available? state (:cost ability)))
+          (not (resources-available? state cost))
           (reject :insufficient-resource {:ability-id ability-id})
           (not (cooldown-ready? state ability-id tick))
           (reject :cooldown-active {:ability-id ability-id})
@@ -219,7 +286,9 @@
                                 (seq (:cooldown ability)))
                          (update result :state-patch conj
                                  [:cooldown ability-id
-                                  (+ tick (long (or (:ticks (:cooldown ability)) 0)))])
+                                  (+ tick (long (resolve-value
+                                                 (:ticks (:cooldown ability))
+                                                 context)))])
                          result)]
             (if (= :rejected (:status result))
               result

@@ -11,6 +11,7 @@
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.model.ability :as ability-model]
+            [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
@@ -66,7 +67,22 @@
                                  (host-query :charge-target context node)))
               :block-scan (fn [context node]
                             (when-let [host-query (contract/host-port :query)]
-                              (host-query :block-scan context node)))}]
+                              (host-query :block-scan context node)))
+              :attack (fn [context node]
+                        (if-let [host-query (contract/host-port :query)]
+                          (host-query :attack context node)
+                          (let [owner (:owner context)
+                                range (double (or (:range node) 20.0))
+                                attack-data (attack/resolve-attack-data owner range)
+                                excluded (cond-> #{owner}
+                                           (:target-uuid attack-data)
+                                           (conj (:target-uuid attack-data)))
+                                victims (attack/aoe-victims
+                                         (:world-id attack-data)
+                                         (:impact attack-data)
+                                         (double (or (:aoe-radius node) 8.0))
+                                         excluded)]
+                            (assoc attack-data :victims victims))))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
