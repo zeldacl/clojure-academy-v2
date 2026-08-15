@@ -45,6 +45,7 @@
                             :state (or target-state source-state)
                             :source-state source-state
                             :target-state target-state
+                            :queries (:query-port engine)
                             :tick (long ((:now-tick engine)))})))
 
 (defn- ability [engine id]

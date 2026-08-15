@@ -54,6 +54,17 @@
     (is (= :abort (get-in stopped [:session-ops 0 :op])))
     (is (= :end (get-in stopped [:vfx-signals 0 :event])))))
 
+(deftest light-shield-is-a-combat-core-toggle-recipe
+  (registry/reset-for-test!)
+  (content/reset-for-test!)
+  (content/register! registry/register-provider!)
+  (let [ability (get-in (compiler/compile-all!) [:abilities :light-shield])]
+    (is (= :toggle (:activation ability)))
+    (is (= :light-shield
+           (get-in ability [:program :pulse :steps 2 :effect-type])))
+    (is (= :light-shield
+           (get-in ability [:program :pulse :steps 3 :effect-id])))))
+
 (deftest attack-precheck-uses-one-combat-request
   (let [calls (atom 0)]
     (with-redefs [cn.li.combat.runtime/process-damage-request
@@ -65,3 +76,21 @@
                     (combat-runtime/process-attack-precheck!
                      "victim" "attacker" 4.0 {:damage-type :generic}))))
       (is (= 1 @calls)))))
+
+(deftest combat-catalog-covers-all-authoritative-skill-ids
+  ;; Every AC skill has one Combat Core recipe.  This is the replacement
+  ;; boundary used by the composition root when legacy namespace init hooks
+  ;; are removed.
+  (let [expected #{:arc-gen :blood-retrograde :body-intensify
+                   :current-charging :dim-folding-theorem :directed-blastwave
+                   :directed-shock :electron-bomb :electron-missile :flashing
+                   :flesh-ripping :groundshock :jet-engine :light-shield
+                   :location-teleport :mag-manip :mag-movement :mark-teleport
+                   :meltdowner :mine-detect :mine-ray-basic :mine-ray-expert
+                   :mine-ray-luck :penetrate-teleport :plasma-cannon
+                   :rad-intensify :railgun :ray-barrage :scatter-bomb
+                   :shift-teleport :space-fluct :storm-wing
+                   :threatening-teleport :thunder-bolt :thunder-clap
+                   :vec-accel :vec-deviation :vec-reflection}]
+    (is (= expected content/ability-ids))
+    (is (= 38 (count content/ability-ids)))))
