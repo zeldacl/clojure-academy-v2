@@ -1,7 +1,10 @@
 (ns cn.li.ac.gui.info-area-reactive
   "Reactive TechUI info-area — replaces tech-ui-common add-property/add-sepline/add-button."
   (:require
-            [cn.li.ac.config.modid :as modid] [cn.li.mcmod.ui.core :as ui]
+            [clojure.string :as str]
+            [cn.li.ac.config.modid :as modid]
+            [cn.li.mcmod.i18n :as i18n]
+            [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.node :as node]
             [cn.li.mcmod.ui.slot-write :as slot-write]
             [cn.li.mcmod.ui.runtime :as rt]
@@ -54,6 +57,22 @@
 
 (defn- advance! [ctx & [dy]] (swap! (:y ctx) + (or dy row-h)) @(:y ctx))
 
+(def ^:private gui-label-sections ["prop" "sep" "hist"])
+
+(defn- translate-label
+  "Resolve a short info-area label to its gui.academy.common.<section>.<tail>
+  translation key and localize it. Callers pass key tails (\"owner\", \"Info\",
+  \"Energy\", \"mode\") matching the datagen keys; labels without a key fall
+  through unchanged."
+  [label]
+  (let [tail (-> (str label) str/trim str/lower-case
+                 (str/replace #"[\s-]+" "_"))
+        key (some (fn [section]
+                    (let [k (str "gui.academy.common." section "." tail)]
+                      (when (not= (i18n/translate k) k) k)))
+                  gui-label-sections)]
+    (if key (i18n/translate key) (str label))))
+
 (defn add-sepline!
   [ctx label]
   (let [^UiRt rt (:rt ctx)
@@ -62,7 +81,7 @@
         ;; Upstream sepline: (expectWidth-3, 8) at pos(3,0).
         spec {:kind :text
               :props {:id id :x 3.0 :y y :w (- 100.0 3.0) :h 8.0
-                      :text (str "-- " label " --")
+                      :text (str "-- " (translate-label label) " --")
                       :font-size 6.0 :color 0x99FFFFFF}}]
     (rt/build-child! rt spec (area-node rt))
     (advance! ctx 11.0)))
@@ -128,7 +147,7 @@
                               (concat
                                 [{:kind :text
                                   :props {:id label-id :x 0.0 :y 0.0 :w label-w :h row-h
-                                          :text (str label) :font-size 8.0 :color 0xFFAAAAAA}}
+                                          :text (translate-label label) :font-size 8.0 :color 0xFFAAAAAA}}
                                  {:kind :text
                                   :props (cond-> {:id value-id
                                                   :x label-w :y 0.0 :w value-w :h row-h
@@ -231,7 +250,7 @@
                       :children
                       [{:kind :text :props {:id (keyword (str (name rid) "-l"))
                                             :x 0.0 :y 0.0 :w 30.0 :h 8.0
-                                            :text (:label elem) :font-size 8.0 :color 0xFFCCCCCC}}
+                                            :text (translate-label (:label elem)) :font-size 8.0 :color 0xFFCCCCCC}}
                        {:kind :box :props {:id (keyword (str (name rid) "-i"))
                                            :x 33.0 :y 1.0 :w 6.0 :h 6.0 :fill (:color elem)}}
                        {:kind :text :props {:id val-id :x 43.0 :y 0.0 :w 55.0 :h 8.0

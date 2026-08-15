@@ -7,8 +7,12 @@
             [cn.li.ac.block.metal-former.config :as former-config]
             [cn.li.ac.block.metal-former.recipes :as recipes]
             [cn.li.ac.block.metal-former.schema :as former-schema]
+            [cn.li.ac.config.modid :as modid]
             [cn.li.ac.energy.operations :as energy]
-            [cn.li.mcmod.platform.item :as pitem]))
+            [cn.li.mcmod.platform.item :as pitem]
+            [cn.li.mcmod.platform.position :as pos]
+            [cn.li.mcmod.platform.world :as world]
+            [cn.li.mcmod.platform.world-effects :as world-effects]))
 
 (def ^:private former-rt
   (machine-runtime/schema-runtime former-schema/metal-former-schema :server-only? true))
@@ -99,8 +103,31 @@
           (assoc state :work-counter 0)))
       (assoc state :work-counter counter))))
 
+(def former-sound-id
+  (modid/namespaced-path "machine.machine_work"))
+
+(def ^:private former-sound-interval 20)
+
+(defn- trigger-work-sound!
+  "Play working sound at block position when sound cooldown reaches 0.
+  Original TileMetalFormer loops machine.machine_work at volume 0.6 while
+  working (client TileEntitySound); the periodic server-side play is the same
+  approximation the Imaginary Fusor port uses."
+  [level pos]
+  (try
+    (when (world-effects/available?)
+      (let [world-id (world/dimension-id level)]
+        (world-effects/play-sound! world-id
+                                     (double (pos/pos-x pos))
+                                     (double (pos/pos-y pos))
+                                     (double (pos/pos-z pos))
+                                     former-sound-id
+                                     :blocks
+                                     0.6 1.0)))
+    (catch Exception _ nil)))
+
 (defn former-tick-state
-  [state _level _pos _block-state _be]
+  [state level pos _block-state _be]
   (machine-runtime/advance-tick! state)
   (let [state (assoc state :max-energy (double former-config/max-energy))
         energy-item (get-in state [:inventory energy-slot])
@@ -112,10 +139,18 @@
                   (if (pos? pulled)
                     (assoc state :energy (+ cur-energy pulled))
                     state))
-                state)]
-    (if (:working state false)
-      (tick-forming state)
-      (try-find-recipe state))))
+                state)
+        state (if (:working state false)
+                (tick-forming state)
+                (try-find-recipe state))
+        ;; Working sound (original AcademyCraft: machine.machine_work loop at volume 0.6)
+        sound-cooldown (dec (int (:sound-cooldown state former-sound-interval)))
+        working? (:working state false)
+        state (if (and working? (<= sound-cooldown 0))
+                (do (trigger-work-sound! level pos)
+                    (assoc state :sound-cooldown former-sound-interval))
+                (assoc state :sound-cooldown (if working? sound-cooldown 0)))]
+    state))
 
 (def former-tick-fn
   (machine-runtime/make-tick-fn

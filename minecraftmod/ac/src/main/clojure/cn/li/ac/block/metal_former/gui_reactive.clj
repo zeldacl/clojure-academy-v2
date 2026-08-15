@@ -10,6 +10,7 @@
             [cn.li.ac.gui.manifest :as gui-manifest]
             [cn.li.ac.gui.block-gui-reactive :as bgui]
             [cn.li.mcmod.ui.runtime :as rt]
+            [cn.li.mcmod.ui.core :as ui]
             [cn.li.mcmod.ui.signal :as sig]
             [cn.li.ac.block.gui.sync :as gui-sync]
             [cn.li.ac.block.metal-former.config :as cfg]
@@ -86,20 +87,22 @@
   ;; Merge menu into container so action-payload can resolve container-id
   ;; (click handlers in closures capture container — see send-link-query! pattern).
   (let [container (assoc container :minecraft-container menu)
-        clock (rt/clock-ms-sig r)]
-    ;; Work progress (replaces on-frame + set-progress! polling)
-    (rt/put-user-signal! r :work-progress
-      (sig/computed-d [clock]
-        (fn [_] (if @(:working container)
-                  (max 0.0 (min 1.0 (/ (double @(:work-counter container)) (double cfg/work-ticks))))
-                  0.0))))
-    ;; Mode display (replaces on-frame + set-texture! + set-text!)
-    (rt/put-user-signal! r :mode-texture
-      (sig/computed-o [clock]
-        (fn [_] (recipes/mode->icon-texture @(:mode container)))))
-    (rt/put-user-signal! r :mode-label
-      (sig/computed-o [clock]
-        (fn [_] (str/upper-case (recipes/mode->string @(:mode container))))))
+        clock (rt/clock-ms-sig r)
+        ;; Work progress — upstream GuiMetalFormer drives the XML progress bar
+        ;; each frame from tile.getWorkProgress. Must be BOUND (ui/bind!) to the
+        ;; :progress node; a bare put-user-signal! is never consumed.
+        progress-sig (sig/computed-d [clock]
+                       (fn [_] (if @(:working container)
+                                 (max 0.0 (min 1.0 (/ (double @(:work-counter container))
+                                                      (double cfg/work-ticks))))
+                                 0.0)))
+        ;; Mode icon — upstream updates icon_mode's texture on mode change /
+        ;; sync response (updateModeTexture); bind the src so switching modes
+        ;; (or the server returning a new mode) repaints the icon.
+        mode-sig (sig/computed-o [clock]
+                   (fn [_] (recipes/mode->icon-texture @(:mode container))))]
+    (ui/bind! r :progress :progress progress-sig)
+    (ui/bind! r :icon_mode :src mode-sig)
     ;; Mode switching buttons (replaces bind-buttons! + on-left-click)
     (cn.li.mcmod.ui.events/on! r :btn_left :left-click
       (fn [_rt _n _e] (request-alternate! container -1)))
@@ -112,8 +115,11 @@
       {:page-xml "guis/rework/new/page_metalformer.xml"
        :texture-name "metalformer"
        :container container :menu menu
-       :histograms [(bgui/hist-buffer (fn [] (double @(:energy container)))
-                                      (fn [] (max 1.0 (double @(:max-energy container)))))]
+       ;; Upstream GuiMetalFormer info page: histEnergy (blue, "%.0f IF").
+      :histograms [(bgui/hist-buffer (fn [] (double (or @(:energy container) 0.0)))
+                                      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
+                                      {:label "Energy" :color 0xFF25C4FF
+                                       :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))})]
        :properties {:mode (fn [] (str/upper-case (recipes/mode->string @(:mode container))))
                     :progress (fn [] (if @(:working container)
                                       (format "%d/%d" @(:work-counter container) cfg/work-ticks)

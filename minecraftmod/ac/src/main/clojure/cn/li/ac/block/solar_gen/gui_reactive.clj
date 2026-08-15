@@ -42,8 +42,11 @@
     (bgui/create-screen
       {:page-xml "guis/rework/new/page_solar.xml" :texture-name "windbase"
        :container container :menu menu
-       :histograms [(bgui/hist-buffer (fn [] (double @(:energy container)))
-                                      (fn [] (max 1.0 (double @(:max-energy container)))))]
+       ;; Upstream GuiSolarGen info page: histEnergy (blue, "%.0f IF").
+       :histograms [(bgui/hist-buffer (fn [] (double (or @(:energy container) 0.0)))
+                                      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
+                                      {:label "Energy" :color 0xFF25C4FF
+                                       :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))})]
        :properties {:gen_speed (fn [] (format "%.2fIF/T" (double (or @(:gen-speed container) 0.0))))
                     :status (fn [] (or @(:status container) "STOPPED"))}
        :wireless? true :wireless-role :generator :custom-bind! attach-anim-bind!})))

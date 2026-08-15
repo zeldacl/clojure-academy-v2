@@ -78,12 +78,17 @@
       (bdsl/create-block-spec
         "machine-frame"
         {:registry-name "machine_frame"
-          :physical {:material :stone
-                     :hardness 4.0
-                     :resistance 20.0
+         ;; Upstream is a bare `new Block(Material.ROCK)` (ACBlocks.java) — no
+         ;; setHardness/setResistance/setHarvestLevel, so it inherits the 1.12
+         ;; Block defaults: hardness 2.0, resistance 10.0, pickaxe of ANY tier
+         ;; (harvestLevel -1; ROCK material reports "pickaxe"). Level 0 here =
+         ;; wood tier = any pickaxe, matching that.
+         :physical {:material :stone
+                    :hardness 2.0
+                    :resistance 10.0
                     :requires-tool true
                     :harvest-tool :pickaxe
-                    :harvest-level 1
+                    :harvest-level 0
                     :sounds :stone}
          :rendering {:model-parent "minecraft:block/cube_all"
                      :textures {:all (modid/asset-path "block" "machine_frame")}

@@ -34,7 +34,11 @@
     (bgui/create-screen
       {:page-xml "guis/rework/new/page_interfere.xml" :texture-name "interferer"
        :container container :menu menu
-       :histograms [(bgui/hist-buffer (fn [] (double @(:energy container))) (fn [] (max 1.0 (double @(:max-energy container)))))]
+       ;; Upstream ability interferer info page: histEnergy (blue, "%.0f IF").
+       :histograms [(bgui/hist-buffer (fn [] (double (or @(:energy container) 0.0)))
+                                      (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
+                                      {:label "Energy" :color 0xFF25C4FF
+                                       :desc-fn (fn [] (format "%.0f IF" (double (or @(:energy container) 0.0))))})]
        :properties {:range (fn [] (str (or (safe-val (:range container)) "...")))
                     :active (fn [] (if (safe-val (:active? container)) "ON" "OFF"))}
        :wireless? false :custom-bind! attach-binds!})))
