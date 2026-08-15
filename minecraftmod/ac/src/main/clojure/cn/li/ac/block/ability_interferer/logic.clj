@@ -16,7 +16,6 @@
             [cn.li.ac.wireless.api :as wireless-api]
             [cn.li.mcmod.block.state-schema :as state-schema]
             [cn.li.mcmod.events.world-lifecycle :as world-lifecycle]
-            [cn.li.mcmod.hooks.core :as runtime-hooks]
             [cn.li.mcmod.platform.be :as platform-be]
             [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.position :as pos]
@@ -84,15 +83,27 @@
         r (double range)
         min-x (- cx r) max-x (+ cx r)
         min-y (- cy r) max-y (+ cy r)
-        min-z (- cz r) max-z (+ cz r)]
-    (->> (raw-level-players level)
+        min-z (- cz r) max-z (+ cz r)
+        all (raw-level-players level)]
+    (->> all
          (filter (partial player-in-aabb? min-x max-x min-y max-y min-z max-z))
          vec)))
 
-(defn- apply-interference-effect! [player src-id]
+(defn- session-id-for-level
+	"Server ability-session id for a level — resolves [:server <server-hash>]
+	from the level's MinecraftServer, the SAME key the ability runtime binds
+	around server ticks (lifecycle-core server-owner). The block-entity tick has
+	no player-state ThreadLocal, so the previous
+	require-player-state-server-session-id always threw and interference was
+	never written — skills stayed usable."
+	[level]
+	(when level
+		(try (world/server-session-id level) (catch Exception _ nil))))
+
+(defn- apply-interference-effect! [level player src-id]
 	(when-let [uuid (uuid/player-uuid player)]
 		(try
-			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
+			(let [session-id (session-id-for-level level)
 						state (store/get-player-state session-id uuid)
 						resource-data (some-> state :resource-data (rd/add-interference src-id))]
 				(when resource-data
@@ -106,10 +117,10 @@
 				(log/warn "Failed to add interference for" uuid ":" (ex-message e))
 				false))))
 
-(defn- remove-interference-effect-by-uuid! [uuid src-id]
+(defn- remove-interference-effect-by-uuid! [level uuid src-id]
 	(when (and uuid src-id)
 		(try
-			(let [session-id (runtime-hooks/require-player-state-server-session-id "ability-interferer")
+			(let [session-id (session-id-for-level level)
 						state (store/get-player-state session-id uuid)
 						resource-data (some-> state :resource-data (rd/remove-interference src-id))]
 				(when resource-data
@@ -123,9 +134,9 @@
 				(log/warn "Failed to remove interference for" uuid ":" (ex-message e))
 				false))))
 
-(defn clear-interference-by-uuids! [uuids src-id]
+(defn clear-interference-by-uuids! [level uuids src-id]
 	(doseq [uuid uuids]
-		(remove-interference-effect-by-uuid! uuid src-id)))
+		(remove-interference-effect-by-uuid! level uuid src-id)))
 
 ;; ============================================================================
 ;; Global registry of active interferers (for tile invalidation detection)
@@ -200,6 +211,7 @@
       (while (.hasNext it)
         (let [^ActiveInterferer active (.next it)]
           (clear-interference-by-uuids!
+            level
             (.affectedPlayers active)
             (source-id (.activeLevel active) (.activePos active)))))))
   nil)
@@ -228,7 +240,7 @@
                               (world/block-to-chunk-coord (pos/pos-x block-pos))
                               (world/block-to-chunk-coord (pos/pos-z block-pos)))
                     (log/warn "[Interferer] Chunk unloaded for" src-id "- cleaning up" (.size affected) "players")
-                    (clear-interference-by-uuids! affected src-id)
+                    (clear-interference-by-uuids! level affected src-id)
                     (.remove it))
                   (catch Exception e
                     (log/warn "[Interferer] Error checking chunk for" src-id ":" (ex-message e)))))))))))
@@ -302,7 +314,7 @@
           added (set/difference next prev)]
       ;; Remove interference from players who left range
       (doseq [u removed]
-        (remove-interference-effect-by-uuid! u src-id))
+        (remove-interference-effect-by-uuid! level u src-id))
       ;; Add interference to new players in range
       (when (seq added)
         (let [range (clamp-range (:range new-state (interferer-config/default-range)))
@@ -312,7 +324,7 @@
                   :let [uid (uuid/player-uuid player)]
                   :when (and uid (contains? added uid)
                              (not (contains? whitelist (player-name player))))]
-            (apply-interference-effect! player src-id))))
+            (apply-interference-effect! level player src-id))))
       ;; Update the global registry for tile invalidation tracking
       (if (seq next)
         (if (active-interferer? level src-id)
@@ -388,7 +400,7 @@
 							uuids (set (:affected-player-uuids state []))
 							src-id (source-id world pos)]
 					(when (seq uuids)
-						(clear-interference-by-uuids! uuids src-id))
+						(clear-interference-by-uuids! world uuids src-id))
           ;; Remove from global registry
           (unregister-active-interferer! world src-id))))))
 

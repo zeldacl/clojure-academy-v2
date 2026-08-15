@@ -510,8 +510,22 @@
         (sig/computed-d [cp-ghost-alpha cp-low-mult]
                         (fn [pulse low-mult]
                           (* (double pulse) (double low-mult))))
-        jitter-x (anim/jitter-offset clock 0)
-        jitter-y (anim/jitter-offset clock 1)
+        ;; Upstream CPBar interference jitter: 60 random keyframes (80-400ms,
+        ;; direction (sinθ·n³·9·aspect, cosθ·n³·9)) built once; per frame the
+        ;; offset holds the NEXT keyframe's direction, and the master alpha
+        ;; flickers along a Catmull-Rom curve over the keyframe times.
+        interf-frame (:frame (hud/cpbar-layout (rt/screen-w r)))
+        interf-frames (anim/build-interference-keyframes
+                        (/ (double (:w interf-frame)) (double (:h interf-frame))))
+        interf-alpha-points (anim/build-interference-alpha-points interf-frames)
+        jitter-x (sig/computed-d [clock]
+                   (fn [now-ms] (double (first (anim/interference-offset (double now-ms) interf-frames)))))
+        jitter-y (sig/computed-d [clock]
+                   (fn [now-ms] (double (second (anim/interference-offset (double now-ms) interf-frames)))))
+        ;; Plain signal — updated per frame by apply-jitter! (before the
+        ;; binding flush), 1.0 when not interfered so the bound alphas are
+        ;; unaffected outside interference.
+        jitter-alpha (sig/signal-d 1.0)
         ^INode bg-mask (ui/node r :bg-mask)]
     ;; init-node-props! forces image alpha 0.0 → 1.0 (visibility default);
     ;; the vignette must START invisible — zero it here, the color binding
@@ -527,6 +541,11 @@
     (rt/put-user-signal! r :hl-alpha hl-alpha)
     (rt/put-user-signal! r :jitter-x jitter-x)
     (rt/put-user-signal! r :jitter-y jitter-y)
+    (rt/put-user-signal! r :jitter-alpha jitter-alpha)
+    ;; user-signal must hold a SIGNAL (callers deref it); a raw map breaks @.
+    (rt/put-user-signal! r :interf-jitter-data
+      (sig/signal-o {:frames interf-frames
+                     :alpha-points interf-alpha-points}))
     ;; counts[0]=vm-waves [1]=toasts [2]=debug-lines [3]=coin-qte-dots [4]=charging-arcs
     (let [counts (int-array [-1 -1 -1 -1 -1])]
       (rt/put-user-signal! r :overlay-object-cache (object-array [[] ""]))
@@ -540,9 +559,16 @@
     ;; Ghost bar always tracks the plain current level, pulsing, shown only
     ;; while a hint is active.
     (ui/bind! r :cp-bar :progress cp-predicted-display)
-    (ui/bind! r :cp-bar :alpha cp-low-mult)
+    ;; Bar/ghost alphas carry the interference master-alpha flicker (upstream
+    ;; mAlpha *= alphaCurve.valueAt — the curve value lands in jitter-alpha
+    ;; before the flush, so the multiplied binding renders the flicker).
+    (ui/bind! r :cp-bar :alpha
+      (sig/computed-d [cp-low-mult jitter-alpha]
+        (fn [m a] (* (double m) (double a)))))
     (ui/bind! r :cp-bar-ghost :progress cp-display)
-    (ui/bind! r :cp-bar-ghost :alpha cp-ghost-display-alpha)
+    (ui/bind! r :cp-bar-ghost :alpha
+      (sig/computed-d [cp-ghost-display-alpha jitter-alpha]
+        (fn [g a] (* (double g) (double a)))))
     ;; Normal preview balances at 2 units/second. The overloaded shader always
     ;; draws its complete layer and uses :progress as texture-scroll phase.
     (ui/bind! r :overload-preview :progress ol-smooth)
@@ -778,6 +804,11 @@
     (when-let [icon-src (:skill-icon slot)]
       (ui/set-node-prop! r icon :src icon-src))
     (ui/set-node-prop! r icon :alpha icon-alpha)
+    ;; Upstream KeyHintUI.drawSingle: ShaderMono stays active through the icon
+    ;; draw when !canUseAbility || on cooldown — the icon renders monochrome.
+    ;; No mono shader in the reactive renderer; the 0.7 gray tint is the
+    ;; equivalent desaturating wash.
+    (ui/set-node-prop! r icon :tint (if dim? [178 178 178 255] [255 255 255 255]))
     (update-skill-slot-glow! r icon-glow visual glow this-sin-alpha)
     ;; Cooldown wipe: proportional bottom-up gray overlay on the icon box,
     ;; matching upstream colorRect(iconX, iconY+ICON_SIZE*(1-prog), ICON_SIZE, ICON_SIZE*prog).
@@ -1112,16 +1143,30 @@
   ;; inside CPBar's OWN FrameEvent only — it shakes just the CP bar (+ preset
   ;; hint, activate hint, CP/OL numbers, all part of the same widget), not the
   ;; whole HUD (skill slots, toasts, crosshair etc. stay put upstream too).
+  ;; The master-alpha flicker (mAlpha *= alphaCurve.valueAt) is written into
+  ;; :jitter-alpha before the binding flush, which multiplies the bar/ghost
+  ;; alphas; the background and numbers are unbound, set directly.
   (when-let [^INode jitter-root (ui/node r :cpbar-jitter-group)]
     (let [[cp-dx cp-dy] (gameplay/hud-position :cpbar)
           jx (if interfered? (sig/sget-d (rt/user-signal r :jitter-x)) 0.0)
           jy (if interfered? (sig/sget-d (rt/user-signal r :jitter-y)) 0.0)
           x (+ (double cp-dx) jx)
-          y (+ (double cp-dy) jy)]
+          y (+ (double cp-dy) jy)
+          flicker (if interfered?
+                    (let [now-ms (sig/sget-l (rt/clock-ms-sig r))
+                          {:keys [frames alpha-points]} (sig/sget-o (rt/user-signal r :interf-jitter-data))]
+                      (anim/interference-alpha (double now-ms) frames alpha-points))
+                    1.0)]
       (when (or (not= x (.getX jitter-root)) (not= y (.getY jitter-root)))
         (.setX jitter-root x)
         (.setY jitter-root y)
-        (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY)))))
+        (.setFlag jitter-root node/FLAG-LAYOUT-DIRTY))
+      (when-let [ja (rt/user-signal r :jitter-alpha)]
+        (sig/sset-d! ja (double flicker)))
+      (ui/set-prop! r :cpbar-bg :alpha (* 0.8 (double flicker)))
+      ;; Text nodes have no :alpha prop-writer — modulate the ARGB alpha byte.
+      (ui/set-prop! r :cp-numbers :color
+        (bit-or 0xFFFFFF (bit-shift-left (int (* 255.0 (double flicker))) 24))))))
 
 (defn- apply-screen-size! [r sw sh]
   (doseq [id [:root :bg-mask]]

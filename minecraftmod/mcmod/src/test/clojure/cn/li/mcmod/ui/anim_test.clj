@@ -84,3 +84,36 @@
       ;; 0.5 → gray
       (let [c (anim/sample-color-stops baked 0.5)]
         (is (< 0.4 (aget c 0) 0.6) "midpoint r ≈ 0.5")))))
+
+;; ============================================================================
+;; Interference jitter (upstream CPBar keyframe port)
+;; ============================================================================
+
+(deftest interference-keyframes-shape
+  (let [aspect 6.558
+        kf (anim/build-interference-keyframes aspect)
+        times (mapv :time (:frames kf))]
+    (is (= 60 (count (:frames kf))))
+    (is (pos? (:maxtime kf)))
+    (is (apply < times) "keyframe times strictly increase")
+    (is (< 80 (- (second times) (first times)) 401) "gaps within 80-400ms")
+    (doseq [{:keys [dx dy]} (:frames kf)]
+      (is (<= (Math/abs dx) (* 9.0 aspect)))
+      (is (<= (Math/abs dy) 9.0)))))
+
+(deftest interference-offset-holds-between-keyframes
+  (let [kf (anim/build-interference-keyframes 6.558)
+        t1 (:time (first (:frames kf)))
+        [dx dy] (anim/interference-offset (double (dec t1)) kf)]
+    (is (some? dx))
+    ;; Before the first keyframe the FIRST frame's direction applies
+    (is (= [dx dy] (anim/interference-offset 0.0 kf)))
+    ;; Just past a keyframe the offset must have changed (next frame's)
+    (is (not= [dx dy] (anim/interference-offset (double (inc t1)) kf)))))
+
+(deftest interference-alpha-in-range
+  (let [kf (anim/build-interference-keyframes 6.558)
+        points (anim/build-interference-alpha-points kf)]
+    (doseq [t [0.0 500.0 5000.0 (dec (:maxtime kf))]]
+      (let [a (anim/interference-alpha (double t) kf points)]
+        (is (<= 0.2 a 0.8) (str "alpha " a " at t=" t))))))

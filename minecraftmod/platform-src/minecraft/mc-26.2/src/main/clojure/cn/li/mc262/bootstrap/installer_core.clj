@@ -19,7 +19,7 @@
            [cn.li.mc262.runtime BlockRegistry RuntimeAccess]
            [cn.li.mcver ItemData ResourceLocations]
            [net.minecraft.core BlockPos Holder]
-           [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.server.level ServerPlayer]
            [net.minecraft.world.entity Entity]
@@ -125,6 +125,14 @@
         {:sd-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
          :sd-get-int       (fn [^CompoundTag this key] (NbtAccess/getInt this (str key)))
          :sd-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+         :sd-set-string-list! (fn [^CompoundTag this key strings]
+                              (let [lst (ListTag.)]
+                                (doseq [s strings] (.add lst (StringTag/valueOf (str s))))
+                                (.put this (str key) lst))
+                              this)
+         :sd-get-string-list  (fn [^CompoundTag this key]
+                              (let [lst (.getList this (str key) 8)]
+                                (vec (for [i (range (.size lst))] (.getString lst i)))))
          :sd-get-string    (fn [^CompoundTag this key] (NbtAccess/getString this (str key)))
          :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
          :sd-get-boolean   (fn [^CompoundTag this key] (NbtAccess/getBoolean this (str key)))

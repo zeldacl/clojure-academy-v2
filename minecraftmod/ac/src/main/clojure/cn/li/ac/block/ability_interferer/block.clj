@@ -25,11 +25,17 @@
      :blocks [(bdsl/create-block-spec
                 "ability-interferer"
                 {:registry-name "ability_interferer"
-                  :physical {:material :stone
-                             :hardness 0.0
-                             :resistance 0.0
-                             :requires-tool false
-                             :sounds :stone}
+                 ;; Upstream BlockAbilityInterferer is a bare ACBlockContainer
+                 ;; (Material.ROCK) with no setHardness/setResistance — the 1.12
+                 ;; Block defaults: hardness 2.0, resistance 10.0, pickaxe of
+                 ;; ANY tier (ROCK material reports "pickaxe").
+                 :physical {:material :stone
+                            :hardness 2.0
+                            :resistance 10.0
+                            :requires-tool true
+                            :harvest-tool :pickaxe
+                            :harvest-level 0
+                            :sounds :stone}
                  :rendering {:model-parent "minecraft:block/cube_all"
                              :textures {:all (modid/asset-path "block" "ability_interf_off")}
                              :flat-item-icon? true

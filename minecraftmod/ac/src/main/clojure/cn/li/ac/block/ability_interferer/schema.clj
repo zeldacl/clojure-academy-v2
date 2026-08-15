@@ -58,6 +58,10 @@
     :type :string-list
     :default []
     :persist? true
+    ;; :client-sync? required for the commit :sync-client? gate — without it
+    ;; the field's flag mask lacks client-sync-mask and the manual update-tag
+    ;; push is skipped, so a reopened GUI reads a stale client BE state.
+    :client-sync? true
     :gui-sync? true
     :gui-data-slot? false}
 

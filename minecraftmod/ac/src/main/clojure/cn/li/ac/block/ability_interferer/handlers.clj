@@ -30,10 +30,12 @@
   (let [tile (open-tile payload player)
         requested (:range payload)]
     (if (and tile (number? requested))
-      (let [state' (assoc (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-                          :range (interferer-logic/clamp-range requested))]
-        (machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state state'
-                                           :blockstate-updater interferer-logic/interferer-blockstate-updater)
+      (do
+        (machine-runtime/commit-transform!
+          tile interferer-logic/interferer-default-state
+          (fn [state]
+            (assoc state :range (interferer-logic/clamp-range requested)))
+          :blockstate-updater interferer-logic/interferer-blockstate-updater)
         {:success true})
       {:success false})))
 
@@ -41,13 +43,15 @@
   (let [tile (open-tile payload player)
         new-enabled (boolean (:enabled payload))]
     (if tile
-      (let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-            state' (if new-enabled
-                     (assoc state :enabled true)
-                     (assoc state :enabled false :affected-player-count 0 :affected-player-uuids []))]
-        (machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state state'
-                                           :blockstate-updater interferer-logic/interferer-blockstate-updater
-                                           :after-commit! interferer-logic/interferer-after-commit!)
+      (do
+        (machine-runtime/commit-transform!
+          tile interferer-logic/interferer-default-state
+          (fn [state]
+            (if new-enabled
+              (assoc state :enabled true)
+              (assoc state :enabled false :affected-player-count 0 :affected-player-uuids [])))
+          :blockstate-updater interferer-logic/interferer-blockstate-updater
+          :after-commit! interferer-logic/interferer-after-commit!)
         {:success true})
       {:success false})))
 
@@ -55,11 +59,15 @@
   (let [tile (open-tile payload player)
         names (:whitelist payload)]
     (if (and tile (sequential? names))
-      (let [cleaned (normalize-whitelist names)]
-        (machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state
-                                           (assoc (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-                                                  :whitelist cleaned)
-                                           :blockstate-updater interferer-logic/interferer-blockstate-updater)
+      (do
+        (machine-runtime/commit-transform!
+          tile interferer-logic/interferer-default-state
+          (fn [state] (assoc state :whitelist (normalize-whitelist names)))
+          :blockstate-updater interferer-logic/interferer-blockstate-updater
+          ;; :sync-client? true — the whitelist is not DataSlot-encodable and
+          ;; the vanilla dirty-BE sync may lag a GUI reopen; push the update
+          ;; tag so a reopened GUI reads the fresh list from the client BE.
+          :sync-client? true)
         {:success true})
       {:success false})))
 
@@ -67,11 +75,16 @@
   (let [tile (open-tile payload player)
         player-name (:player-name payload)]
     (if (and tile (not (str/blank? (str player-name))))
-      (let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-            new-whitelist (normalize-whitelist (conj (vec (:whitelist state [])) player-name))]
-        (machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state
-                                           (assoc state :whitelist new-whitelist)
-                                           :blockstate-updater interferer-logic/interferer-blockstate-updater)
+      (let [new-whitelist (normalize-whitelist
+                            (conj (vec (or (:whitelist (or (platform-be/get-custom-state tile)
+                                                           interferer-logic/interferer-default-state))
+                                           []))
+                                  player-name))]
+        (machine-runtime/commit-transform!
+          tile interferer-logic/interferer-default-state
+          (fn [state] (assoc state :whitelist new-whitelist))
+          :blockstate-updater interferer-logic/interferer-blockstate-updater
+          :sync-client? true)
         {:success true})
       {:success false})))
 
@@ -79,11 +92,15 @@
   (let [tile (open-tile payload player)
         player-name (:player-name payload)]
     (if (and tile (not (str/blank? (str player-name))))
-      (let [state (or (platform-be/get-custom-state tile) interferer-logic/interferer-default-state)
-            new-whitelist (normalize-whitelist (remove #(= % player-name) (:whitelist state [])))]
-        (machine-runtime/commit-from-tile! tile interferer-logic/interferer-default-state
-                                           (assoc state :whitelist new-whitelist)
-                                           :blockstate-updater interferer-logic/interferer-blockstate-updater)
+      (do
+        (machine-runtime/commit-transform!
+          tile interferer-logic/interferer-default-state
+          (fn [state]
+            (assoc state :whitelist
+                   (normalize-whitelist
+                     (remove #(= % player-name) (:whitelist state [])))))
+          :blockstate-updater interferer-logic/interferer-blockstate-updater
+          :sync-client? true)
         {:success true})
       {:success false})))
 

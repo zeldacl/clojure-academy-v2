@@ -16,7 +16,7 @@
             [cn.li.mcmod.runtime.install :as install])
   (:import [cn.li.mc1211.runtime BlockRegistry RuntimeAccess]
            [net.minecraft.core BlockPos]
-           [net.minecraft.nbt CompoundTag ListTag]
+           [net.minecraft.nbt CompoundTag ListTag StringTag]
            [net.minecraft.network.chat Component]
            [net.minecraft.resources ResourceLocation]
            [cn.li.mcver ItemData ResourceLocations]
@@ -124,6 +124,14 @@
         {:sd-set-int!      (fn [^CompoundTag this key value] (.putInt this (str key) (int value)) this)
          :sd-get-int       (fn [^CompoundTag this key] (.getInt this (str key)))
          :sd-set-string!   (fn [^CompoundTag this key value] (.putString this (str key) (str value)) this)
+         :sd-set-string-list! (fn [^CompoundTag this key strings]
+                              (let [lst (ListTag.)]
+                                (doseq [s strings] (.add lst (StringTag/valueOf (str s))))
+                                (.put this (str key) lst))
+                              this)
+         :sd-get-string-list  (fn [^CompoundTag this key]
+                              (let [lst (.getList this (str key) 8)]
+                                (vec (for [i (range (.size lst))] (.getString lst i)))))
          :sd-get-string    (fn [^CompoundTag this key] (.getString this (str key)))
          :sd-set-boolean!  (fn [^CompoundTag this key value] (.putBoolean this (str key) (boolean value)) this)
          :sd-get-boolean   (fn [^CompoundTag this key] (.getBoolean this (str key)))

@@ -89,20 +89,86 @@
   (sig/computed-d [clock-ms-sig] flicker-alpha-step))
 
 ;; ============================================================================
-;; jitter-offset
+;; interference jitter — faithful port of upstream CPBar's interference display
+;; (CPBar.java lines ~114-158: 60 random keyframes built once in the
+;; constructor; per frame the offset is the direction of the NEXT keyframe
+;; after the quantized time input, and the master alpha flickers along a
+;; Catmull-Rom curve over the same keyframe times)
 ;; ============================================================================
 
-(defn- jitter-offset-step ^double [^double now-ms ^double axis-seed]
-  (let [tick (quot (long now-ms) 100)
-        seed (unchecked-add-int (unchecked-multiply-int
-                                  (unchecked-add-int tick (int axis-seed)) 1103515245) 12345)
-        norm (double (bit-and seed 0x7FFFFFFF))
-        rnd  (/ norm 2147483647.0)]
-    (* 4.0 (- (* 2.0 rnd) 1.0))))
+(defn build-interference-keyframes
+  "Port of CPBar's interference keyframes: 60 frames, each 80-400ms after the
+  previous; direction = (sin θ · n³ · 9 · aspect, cos θ · n³ · 9) with n
+  uniform [0,1) CUBED (cubic bias toward small offsets) and θ uniform over the
+  full circle. Returns {:frames [{:time :dx :dy} ...] :maxtime}."
+  [^double aspect]
+  (loop [i 0 sum (long 0) frames []]
+    (if (>= i 60)
+      {:frames frames :maxtime sum}
+      (let [thistime (long (+ 80 (rand-int 321))) ;; 80..400 ms
+            theta (* (rand) (* 2 Math/PI))
+            n (rand)
+            offset-norm (* n n n)                ;; n³ cubic bias
+            sum' (long (+ sum thistime))]
+        (recur (inc i) sum'
+               (conj frames
+                     {:time sum'
+                      :dx (* (Math/sin theta) offset-norm 9.0 aspect)
+                      :dy (* (Math/cos theta) offset-norm 9.0)}))))))
 
-(defn jitter-offset
-  [clock-ms-sig ^long axis-seed]
-  (sig/computed-d [clock-ms-sig] (partial jitter-offset-step (double axis-seed))))
+(defn build-interference-alpha-points
+  "Port of CPBar's alphaCurve points: (0, 0.2-0.8) then (cumTime_i, 0.4-0.7)
+  for each keyframe."
+  [keyframes]
+  (into [[0.0 (+ 0.2 (rand 0.6))]]
+        (map (fn [{:keys [time]}] [time (+ 0.4 (rand 0.3))]) (:frames keyframes))))
+
+(defn- quantized-time-input
+  "Upstream: timeInput = (long)(absTime*1000) % maxtime, then /10*10 — the
+  lowered precision produces the jagged effect."
+  [^double now-ms maxtime]
+  (let [ti (mod (long now-ms) (long maxtime))]
+    (* (quot ti 10) 10)))
+
+(defn interference-offset
+  "Position offset at now-ms: the direction of the first keyframe whose time
+  exceeds the quantized time input (upstream int_get) — the offset holds
+  constant between keyframe boundaries. Returns [dx dy]."
+  [^double now-ms keyframes]
+  (let [time-input (quantized-time-input now-ms (:maxtime keyframes))
+        frame (first (drop-while #(<= (:time %) time-input) (:frames keyframes)))]
+    (if frame [(:dx frame) (:dy frame)] [0.0 0.0])))
+
+(defn- catmull-rom-value
+  "Catmull-Rom spline value at t over points [[t a] ...] sorted by t (lambdalib
+  CubicCurve semantics; ends clamped)."
+  [points t]
+  (let [n (count points)
+        t0 (first (first points))
+        tn (first (last points))]
+    (cond
+      (<= t t0) (second (first points))
+      (>= t tn) (second (last points))
+      :else
+      (let [idx (dec (count (take-while #(< (first %) t) points)))
+            p0 (nth points (max 0 (dec idx)))
+            p1 (nth points idx)
+            p2 (nth points (min (dec n) (inc idx)))
+            p3 (nth points (min (dec n) (+ 2 idx)))
+            [t1 a1] p1
+            [t2 a2] p2
+            u (/ (- t t1) (- t2 t1))
+            a0 (second p0)
+            a3 (second p3)]
+        (* 0.5 (+ (* 2 a1)
+                  (* (- a2 a0) u)
+                  (* (- (+ (* 2 a0) (* -5 a1) (* 4 a2)) a3) u u)
+                  (* (- (+ (* -1 a0) (* 3 a1) (* -3 a2)) a3) u u u)))))))
+
+(defn interference-alpha
+  "Master-alpha flicker at now-ms (upstream mAlpha *= alphaCurve.valueAt)."
+  [^double now-ms keyframes alpha-points]
+  (catmull-rom-value alpha-points (quantized-time-input now-ms (:maxtime keyframes))))
 
 ;; ============================================================================
 ;; interp-color-stops (baked)

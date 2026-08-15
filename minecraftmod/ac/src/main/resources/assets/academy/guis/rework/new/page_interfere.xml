@@ -7,12 +7,11 @@
       <image id="btn_down" pos="0.0,-1.0" size="16.0,16.0" align="right,bottom" src="academy:textures/guis/button/button_arrowdownb.png" tint="#B2FFFFFF"/>
       <image id="btn_remove" pos="24.0,0.0" size="12.0,12.0" align="left,top" src="academy:textures/guis/button/button_remove.png" tint="#B2FFFFFF"/>
       <image id="btn_add" pos="4.0,0.0" size="12.0,12.0" align="left,top" src="academy:textures/guis/button/button_add.png" tint="#B2FFFFFF"/>
-      <group id="zone_whitelist" pos="0.0,-3.0" size="140.0,64.0" align="left,bottom">
-        <image id="element" pos="0.0,0.0" size="150.0,16.0" align="center,top" src="academy:textures/guis/element/element_background300x32.png">
-          <image id="element_logo" pos="10.0,0.0" size="12.0,12.0" align="left,center" src="academy:textures/guis/icons/icon_whitelist_single.png"/>
-          <text id="element_name" pos="-10.0,0.0" size="110.0,12.0" align="right,bottom" text="FatWolf" font-size="10.0" color="#FFFFFFFF"/>
-        </image>
-      </group>
+      <!-- Rows are built dynamically by attach-binds! from the container's
+           :whitelist atom (upstream builds an ElementList from tile.whitelist).
+           The zone shows a 4-row window (64px / 16px rows); btn_up/btn_down
+           scroll the window. -->
+      <group id="zone_whitelist" pos="0.0,-3.0" size="140.0,64.0" align="left,bottom"/>
     </group>
     <group id="panel_config" pos="0.0,25.0" size="160.0,32.0" align="center,top">
       <group id="element_switch" pos="0.0,0.0" size="160.0,16.0" align="center,top">

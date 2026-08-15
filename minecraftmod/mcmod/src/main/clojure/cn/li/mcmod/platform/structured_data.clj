@@ -12,7 +12,8 @@
                            :sd-set-boolean! :sd-get-boolean :sd-set-double! :sd-get-double
                            :sd-set-entry! :sd-get-entry :sd-get-structured :sd-get-list
                            :sd-has-key? :sd-set-float! :sd-get-float
-                           :sd-set-long! :sd-get-long :sd-remove-entry!})
+                           :sd-set-long! :sd-get-long :sd-remove-entry!
+                           :sd-set-string-list! :sd-get-string-list})
 (def structured-list-keys #{:sd-append! :sd-list-size :sd-list-get :sd-list-get-structured})
 (def structured-factory-keys #{:create-structured :create-list})
 
@@ -67,6 +68,8 @@
 (defn get-float     [c k]       (call :sd-get-float c k))
 (defn set-long!     [c k v]     (call :sd-set-long! c k v))
 (defn get-long      [c k]       (call :sd-get-long c k))
+(defn set-string-list! [c k vs] (call :sd-set-string-list! c k vs))
+(defn get-string-list  [c k]    (call :sd-get-string-list c k))
 
 ;; Structured list access API
 (defn append!          [lst el] (call :sd-append! lst el))

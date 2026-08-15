@@ -66,7 +66,7 @@
     (sig/sset-d! (:progress signals) (double (or (safe-val (:progress container)) 0.0)))))
 
 (defn- screen-config [r signals container menu properties histograms
-                      current-tab-atom tech-ui custom-bind!]
+                      current-tab-atom tech-ui custom-bind! update-fn]
   {:type :reactive-container-screen
    :runtime r
    :signals signals
@@ -76,7 +76,7 @@
    :histograms histograms
    :size-dx 31   ;; AcademyCraft ContainerUI: xSize += 31 (176+31=207 total)
    :size-dy 21   ;; 187 (screen-root h) - 166 (vanilla default)
-   :update-fn update-signals!
+   :update-fn update-fn
    :current-tab-atom current-tab-atom
    :tech-ui tech-ui
    :custom-bind! custom-bind!})
@@ -168,9 +168,13 @@
    :histograms    - [(hist-buffer ...) ...]
    :properties    - {:key value-fn ...}
    :wireless?     - include wireless tab
-   :wireless-role - :generator or :machine"
+   :wireless-role - :generator or :machine
+   :update-fn     - per-frame update override (default update-signals!) — a
+                    GUI that needs per-frame work (e.g. re-asserting an
+                    editable input's focus) must wrap it here; an orphan
+                    computed signal is never evaluated."
   [{:keys [page-xml texture-name container menu player histograms properties wireless? wireless-role
-            info-area? custom-bind!]}]
+            info-area? custom-bind! update-fn]}]
   (let [r (rt/create-runtime)
         pages (when wireless? (wireless-pages page-xml))
         base-spec (if wireless?
@@ -215,7 +219,8 @@
         _ (when custom-bind! (custom-bind! r container menu player signals))
         _ (when wireless? (rt/put-user-signal! r :wireless-role (sig/signal-o (name wireless-role))))]
     (screen-config r signals container menu properties histograms
-                   current-tab-atom tech-ui custom-bind!)))
+                   current-tab-atom tech-ui custom-bind!
+                   (or update-fn update-signals!))))
 
 ;; ============================================================================
 ;; Open screen (replaces create-screen-fn + registration)

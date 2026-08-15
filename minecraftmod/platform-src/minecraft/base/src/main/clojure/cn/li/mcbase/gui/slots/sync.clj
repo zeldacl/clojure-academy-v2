@@ -27,6 +27,11 @@
         player-inventory (when player (.getInventory player))
         slot-layout (when gui-id (get-slot-layout gui-id))
         player-inventory-mode (keyword (or (:player-inventory-mode slot-layout)
+                                           ;; Per-open container override (e.g.
+                                           ;; ability interferer maps only the
+                                           ;; hotbar, matching upstream's
+                                           ;; ContainAbilityInterferer).
+                                           (:default-player-inventory-mode clj-container)
                                            default-player-inventory-mode
                                            :full))
         tile-inventory (ca/create-tile-inventory-adapter clj-container)
