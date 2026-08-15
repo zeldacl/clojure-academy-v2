@@ -126,7 +126,7 @@
     :provider-id :academy/base
     :ability-id :vec-deviation
     :node-id :damage-reduction
-    :run (fn [request context]
+   :run (fn [request context]
            (let [active? (contains? (get-in (or (:target-state context)
                                                (:state context) {}) [:active-abilities] #{})
                                     :vec-deviation)
@@ -961,6 +961,24 @@
     (if (:cancelled? request)
       0.0
       (double (:base request)))))
+
+(defn process-attack-precheck!
+  "Route attack prechecks through the authoritative DamageRequest pipeline.
+
+   The removed mutable cancel/precheck registries have no replacement hook;
+   combat nodes can cancel through the same deterministic request pipeline."
+  [player-id attacker-id original-damage damage-source]
+  (let [request (combat/process-damage-request
+                 (engine)
+                 {:source (or attacker-id :environment)
+                  :target player-id
+                  :base (double original-damage)
+                  :type (or (:damage-type damage-source) :generic)
+                  :components {:direct (double original-damage)}
+                  :tags #{:combat :attack-precheck}
+                  :metadata {:damage-source damage-source}})]
+    {:cancelled? (boolean (:cancelled? request))
+     :request request}))
 
 (defn install-world-effect-handler!
   "Install AC's ordered WorldEffect interpreter.

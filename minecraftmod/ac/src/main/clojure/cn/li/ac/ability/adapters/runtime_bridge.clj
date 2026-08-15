@@ -1,7 +1,7 @@
 (ns cn.li.ac.ability.adapters.runtime-bridge
   "Installs AC ability runtime hooks into the platform-neutral mcmod bridge."
   (:require [cn.li.ac.ability.adapters.client-effect-hooks :as client-effects]
-            [cn.li.ac.ability.adapters.client-ui-hooks :as client-ui]
+            [cn.li.ac.ability.adapters.client-intent-hooks :as client-ui]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.client.debug-overlay :as debug-overlay]
             [cn.li.ac.ability.client.keybinds :as client-keybinds]

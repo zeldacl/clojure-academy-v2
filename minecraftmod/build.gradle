@@ -1094,6 +1094,40 @@ tasks.register("verifyVfxDirectHostBoundary") {
     }
 }
 
+tasks.register("verifyCombatLegacyRuntimeRemoval") {
+    group = "verification"
+    description = "Ensure only CombatIntent and VFX Core adapters remain on active AC paths."
+    dependsOn "verifyCombatIntentOnlyNetwork"
+    doLast {
+        def bridge = file("ac/src/main/clojure/cn/li/ac/ability/adapters/runtime_bridge.clj").text
+        def activeAdapter = file("ac/src/main/clojure/cn/li/ac/ability/adapters/client_intent_hooks.clj")
+        def legacyAdapter = file("ac/src/main/clojure/cn/li/ac/ability/adapters/client_ui_hooks.clj")
+        if (!bridge.contains("client-intent-hooks") || bridge.contains("client-ui-hooks")) {
+            throw new GradleException("runtime bridge still selects the legacy Context/slot client adapter")
+        }
+        if (!activeAdapter.exists()) {
+            throw new GradleException("CombatIntent client adapter is missing")
+        }
+        if (legacyAdapter.exists()) {
+            throw new GradleException("legacy client UI/Context adapter still exists")
+        }
+        ["MSG-CTX-", "MSG-SLOT-KEY-", "context-manager", "context-dispatcher"].each { token ->
+            if (activeAdapter.text.contains(token)) {
+                throw new GradleException("active CombatIntent adapter contains legacy token ${token}")
+            }
+        }
+        def combatVfx = file("ac/src/main/clojure/cn/li/ac/client/combat_vfx_adapter.clj").text
+        if (!combatVfx.contains("vfx-contract") || combatVfx.contains("presentation")) {
+            throw new GradleException("combat VFX adapter is not a neutral VFX Core boundary")
+        }
+        def clientBootstrap = file("ac/src/main/clojure/cn/li/ac/content/ability_client.clj").text
+        if (!clientBootstrap.contains("vfx/freeze!") || clientBootstrap.contains("fx-registry/freeze")) {
+            throw new GradleException("client VFX bootstrap is not frozen by VFX Core")
+        }
+        logger.lifecycle("[verifyCombatLegacyRuntimeRemoval] ok")
+    }
+}
+
 tasks.register("verifyNeutralSourceAotXor") {
     group = "verification"
     description = "Ensure every neutral Clojure namespace is packaged as source XOR AOT class."
@@ -1589,6 +1623,7 @@ tasks.register("verifyCurrentPlatforms") {
               "verifyCombatSkillCoverage",
               "verifyCombatContentHash",
               "verifyCombatIntentOnlyNetwork",
+              "verifyCombatLegacyRuntimeRemoval",
               "verifyAbilityVfxRegistryCoverage",
               "verifyVfxSingleTickPath",
               "verifyVfxDirectHostBoundary",

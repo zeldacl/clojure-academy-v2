@@ -141,7 +141,6 @@
   (let [uuid (str (or (:player-uuid owner-value) owner-value))]
     (swap! active-slots*
            #(into #{} (remove (fn [entry] (= uuid (second entry))) %)))
-    (managed-screens/reset-managed-screen-state-for-test!)
     (skill-tree-screen/close-screen! owner-value)
     (preset-editor-screen/close-screen! owner-value)
     (reactive-hud/clear-vm-wave-for-owner! [(current-session) :client-ui-hooks uuid])

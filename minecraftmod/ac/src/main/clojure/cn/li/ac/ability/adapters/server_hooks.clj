@@ -383,7 +383,8 @@
 
    :process-damage-interception
    (fn [player-id attacker-id damage damage-source]
-     (damage-runtime/process-damage! player-id attacker-id damage damage-source))
+     (combat-runtime/process-damage-request!
+      player-id attacker-id damage damage-source))
 
    :should-cancel-attack-interception?
    (fn [player-id attacker-id damage damage-source]

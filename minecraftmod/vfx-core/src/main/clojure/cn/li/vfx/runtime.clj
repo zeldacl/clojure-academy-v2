@@ -25,6 +25,7 @@
   ([{:keys [resource-generation max-instances max-batches max-signals max-tombstones]}]
    {:next-id (atom 0) :registry (atom {}) :registry-frozen? (atom false)
     :instances (atom {}) :owner-index (atom {}) :world-index (atom {})
+    :channels (atom {}) :channels-frozen? (atom false)
     :instance-index (atom {}) :event-seq (atom {}) :tombstones (atom {})
     :signals (atom []) :max-signals (long (or max-signals 32768))
     :max-tombstones (long (or max-tombstones 4096))
@@ -34,6 +35,28 @@
     :max-instances (long (or max-instances 8192))
     :max-batches (long (or max-batches 16384))
     :faults (atom [])}))
+
+(defn register-channel!
+  "Register a content event handler in VFX Core before bootstrap freeze."
+  [runtime topic handler]
+  (when @(:channels-frozen? runtime)
+    (throw (ex-info "VFX channel registry is frozen" {:topic topic})))
+  (when-not (and (keyword? topic) (ifn? handler))
+    (throw (ex-info "VFX channel requires keyword and callable handler"
+                    {:topic topic :handler handler})))
+  (swap! (:channels runtime) #(if (contains? % topic) % (assoc % topic handler)))
+  topic)
+
+(defn freeze-channels! [runtime]
+  (reset! (:channels-frozen? runtime) true)
+  (set (keys @(:channels runtime))))
+
+(defn dispatch-channel!
+  "Dispatch a content event through the VFX Core-owned channel table."
+  [runtime ctx-id topic payload]
+  (if-let [handler (get @(:channels runtime) topic)]
+    (boolean (handler ctx-id topic payload))
+    false))
 
 (defn- index-add! [index key id]
   (when (some? key)
