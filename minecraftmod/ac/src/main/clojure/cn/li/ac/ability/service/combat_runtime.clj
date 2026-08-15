@@ -243,6 +243,12 @@
   "Advance sessions, execute their world effects, and publish each result."
   [tick]
   (mapv (fn [result]
+          ;; Session pulses produce authoritative resource/cooldown/skill
+          ;; patches just like start/release intents.  Commit them before any
+          ;; world side effect or client publication so the single AC player
+          ;; store remains the source of truth.
+          (when (= :accepted (:status result))
+            (commit-state-patch! (:owner result) (:state-patch result)))
           (publish-result! (execute-world-effects! (:owner result) result)))
         (combat/tick! (engine) tick)))
 (defn abort-owner! [owner] (combat/abort-owner! (engine) owner))
