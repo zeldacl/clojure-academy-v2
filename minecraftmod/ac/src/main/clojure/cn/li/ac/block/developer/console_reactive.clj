@@ -124,6 +124,18 @@
     (subvec lines (- (count lines) max-lines))
     lines))
 
+(defn- console-lines
+  "Split a console message into line strings the way upstream Console.output()
+  does: \\n is the line delimiter, and a trailing \\n only starts a fresh line
+  that the next output fills — it must not leave an empty line behind (the
+  localized dev_begin/invalid_command strings end with \\n)."
+  [text]
+  (let [parts (str/split (str text) #"\n" -1)]
+    (loop [parts parts]
+      (if (and (seq parts) (= "" (peek parts)))
+        (recur (pop parts))
+        (vec parts)))))
+
 (defn- process-current-task
   "Process current task. Returns updated state.
    Slow-print handles \\n by splitting text into separate console lines,
@@ -261,18 +273,20 @@
 
 (defn exec-cmd
   "Execute a pending command via registered handlers.
-  Returns [new-state action-kw]."
+  Returns [new-state action-kw].
+
+  The typed command was already echoed at Enter (\"OS > learn\"), matching
+  upstream's enqueue-time echo — handlers must NOT print a second prompt line."
   [state]
   (let [cmd (:exec-cmd state)
         base (fn [phase]
                (-> state
-                   (update :lines conj prompt-str)
                    (update :lines clamp-lines)
                    (assoc :phase phase :exec-cmd nil)))]
     (if-let [handler (get @command-registry cmd)]
       (handler state)
       [(-> (base :idle)
-           (update :lines conj (msg :invalid-cmd))
+           (update :lines into (console-lines (msg :invalid-cmd)))
            (update :lines clamp-lines))
        nil])))
 
@@ -289,8 +303,7 @@
     (fn []
       (register-command! "help"
         (fn [state]
-          [(-> (update state :lines conj prompt-str)
-               (update :lines conj (cmd-help (:mode state)))
+          [(-> (update state :lines conj (cmd-help (:mode state)))
                (update :lines clamp-lines)
                (assoc :phase :idle :exec-cmd nil))
            nil]))
@@ -305,16 +318,17 @@
             (do
               ((:on-start-development state))
               [(-> state
-                   (update :lines conj prompt-str)
-                   (update :lines conj (msg :dev-begin))
-                   (update :lines conj (loc :progress "00"))
+                   ;; Upstream enqueue → echo (already done at Enter) →
+                   ;; printTask(dev_begin) then printTask(progress 00). The
+                   ;; live progress renders in the input line during
+                   ;; :developing — no duplicate static "Progress: 00%".
+                   (update :lines into (console-lines (msg :dev-begin)))
                    (update :lines clamp-lines)
                    (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
                :developing])
             ;; No developer device / wrong mode — upstream never registers the
             ;; command in those states, so it falls through to "Invalid command."
-            [(-> (update state :lines conj prompt-str)
-                 (update :lines conj (msg :invalid-cmd))
+            [(-> (update state :lines into (console-lines (msg :invalid-cmd)))
                  (update :lines clamp-lines)
                  (assoc :phase :idle :exec-cmd nil))
              nil])))
@@ -326,22 +340,18 @@
             ;; initReset: refused resets print a specific error and never enter
             ;; the progress loop. Server-side validation stays authoritative.
             (if-let [fail-key (some-> (:reset-precheck state) (#(%)))]
-              [(-> (update state :lines conj prompt-str)
-                   (update :lines conj (loc fail-key))
+              [(-> (update state :lines into (console-lines (loc fail-key)))
                    (update :lines clamp-lines)
                    (assoc :phase :idle :exec-cmd nil))
                nil]
               (do
                 ((:on-start-development state))
                 [(-> state
-                     (update :lines conj prompt-str)
-                     (update :lines conj (msg :reset-begin))
-                     (update :lines conj (loc :progress "00"))
+                     (update :lines into (console-lines (msg :reset-begin)))
                      (update :lines clamp-lines)
                      (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
                  :developing]))
-            [(-> (update state :lines conj prompt-str)
-                 (update :lines conj (msg :invalid-cmd))
+            [(-> (update state :lines into (console-lines (msg :invalid-cmd)))
                  (update :lines clamp-lines)
                  (assoc :phase :idle :exec-cmd nil))
              nil])))))
@@ -415,7 +425,7 @@
 
         (and (>= grace 5) (not is-dev))
         (-> state
-            (update :lines conj (msg :dev-begin))
+            (update :lines into (console-lines (msg :dev-begin)))
             (update :lines conj "ERROR: Development rejected. Check energy / induction factor.")
             (update :lines clamp-history)
             (assoc :phase :idle :dev-grace 0))
@@ -444,11 +454,13 @@
         "Requesting..."
         (loc :progress (format "%02d" (int (* 100.0 (double (:dev-progress state))))))))
     :done
+    ;; The localized *_succ/*_fail strings end with \n (upstream output() uses
+    ;; it as a line delimiter); the input line must not carry the newline.
     (let [succ? (= :success (:dev-result state))
           mode (:mode state)]
-      (if succ?
-        (if (= :reset mode) (loc :reset_succ) (loc :dev_succ))
-        (if (= :reset mode) (loc :reset_fail) (loc :dev_fail))))
+      (first (console-lines (if succ?
+                              (if (= :reset mode) (loc :reset_succ) (loc :dev_succ))
+                              (if (= :reset mode) (loc :reset_fail) (loc :dev_fail))))))
     ""))
 
 (defn- render-console! [^UiRt rt line-nodes state]

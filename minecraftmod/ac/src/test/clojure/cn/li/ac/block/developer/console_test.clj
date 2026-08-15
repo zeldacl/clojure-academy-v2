@@ -2,7 +2,8 @@
   "Tests for the console pure state machine."
   (:require [clojure.test :refer [deftest is testing]]
             [cn.li.ac.block.developer.console-reactive :as console]
-            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]))
+            [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
+            [cn.li.mcmod.i18n :as i18n]))
 
 (def ^:private null-char (char 0))
 
@@ -125,3 +126,55 @@
         (is (nil? action))
         (is (= :idle (:phase s)))
         (is (.contains ^String (last (:lines s)) "invalid_command"))))))
+
+(defn- with-console-translations [f]
+  ;; The default translate-fn returns the key itself; the console loc() also
+  ;; unescapes literal \\n. Stub with the real console strings (trailing \n
+  ;; included) so the line-splitting behavior is actually exercised.
+  (with-redefs [i18n/*translate-fn*
+                (fn [k _args]
+                  (get {"skill_tree.academy.console.dev_begin" "Start stimulation......\\n"
+                        "skill_tree.academy.console.invalid_command" "Invalid command.\\n"}
+                       k k))]
+    (f)))
+
+(deftest learn-command-output-matches-upstream-lines-test
+  ;; Upstream learn: enqueue echoes the typed input ("OS > learn" — already
+  ;; done at Enter in the port), then printTask(dev_begin) and the progress
+  ;; line. The old code printed a SECOND "OS >" prompt and conj'd dev_begin
+  ;; with its trailing \n into a single line, so the console showed an extra
+  ;; prompt and a broken line after learn.
+  (with-fresh-framework
+    (fn []
+      (console/register-builtin-commands!)
+      (with-console-translations
+        (fn []
+          (let [started (atom 0)
+                state (-> (console/init-state :learn "P1" true)
+                          (assoc :phase :idle :input "learn"))
+                after-enter (console/process-key state {:keyCode 257 :typedChar null-char})
+                [s action] (console/exec-cmd
+                             (assoc after-enter :on-start-development (fn [] (swap! started inc))))]
+            (is (= :developing action))
+            (is (= :developing (:phase s)))
+            (is (= 1 @started))
+            ;; The Enter echo ("OS > learn") is the only prompt; dev_begin
+            ;; becomes its own line with no embedded newline and no second
+            ;; "OS >".
+            (is (= ["OS > learn" "Start stimulation......"] (:lines s))
+                "learn output: echo + dev_begin line, no extra prompt, no embedded \\n")))))))
+
+(deftest invalid-command-echo-and-error-preserved-test
+  ;; Unknown commands must keep the Enter echo + "Invalid command." line —
+  ;; no second prompt, no embedded newline (the localized string ends with \n).
+  (with-fresh-framework
+    (fn []
+      (console/register-builtin-commands!)
+      (with-console-translations
+        (fn []
+          (let [state (-> (console/init-state :learn "P1" true)
+                          (assoc :phase :idle :input "bogus"))
+                after-enter (console/process-key state {:keyCode 257 :typedChar null-char})
+                [s _action] (console/exec-cmd after-enter)]
+            (is (= ["OS > bogus" "Invalid command."] (:lines s))
+                "invalid command keeps the echo and the error line, no extra prompt")))))))
