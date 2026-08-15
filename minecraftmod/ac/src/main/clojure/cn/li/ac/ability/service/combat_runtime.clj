@@ -484,6 +484,41 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         :meltdowner
+                         (let [{:keys [world-id target charge-ticks damage beam-radius
+                                       max-distance block-energy reflection]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               reflection (merge {:enabled? true
+                                                  :shot-distance 64.0
+                                                  :damage-multiplier 1.0}
+                                                 (or reflection {}))
+                               plan {:target target
+                                     :session-id (:session-id effect)
+                                     :charge-ticks (long (or charge-ticks 0))
+                                     :damage (double (or damage 0.0))
+                                     :beam-radius (double (or beam-radius 0.0))
+                                     :max-distance (double (or max-distance 0.0))
+                                     :block-energy (double (or block-energy 0.0))
+                                     :reflection reflection}
+                               valid? (and world-id (map? target)
+                                            (<= 20 (:charge-ticks plan) 100)
+                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
+                                            (finite? beam-radius) (<= 0.0 (:beam-radius plan) 8.0)
+                                            (finite? max-distance) (<= 1.0 (:max-distance plan) 128.0)
+                                            (finite? block-energy) (<= 0.0 (:block-energy plan) 1000.0)
+                                            (map? reflection)
+                                            (boolean (:enabled? reflection))
+                                            (finite? (:shot-distance reflection))
+                                            (<= 1.0 (double (:shot-distance reflection)) 128.0)
+                                            (finite? (:damage-multiplier reflection))
+                                            (<= 0.0 (double (:damage-multiplier reflection)) 8.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-meltdowner!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          :teleport-approved
                          (let [{:keys [target destination radius ability-id]} effect
                                destination (or destination target)

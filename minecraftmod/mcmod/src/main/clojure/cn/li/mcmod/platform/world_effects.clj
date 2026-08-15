@@ -82,6 +82,11 @@
   [world-id owner plan]
   (call :execute-mine-ray! world-id owner plan))
 
+(defn execute-meltdowner!
+  "Execute the charged Meltdowner beam behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-meltdowner! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]
