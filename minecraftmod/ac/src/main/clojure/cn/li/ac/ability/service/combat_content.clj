@@ -112,7 +112,7 @@
                        {:op :world-effect :effect-type :mine-detect
                         :scan-ref :scan :blindness-ticks 100}
                        {:op :vfx :effect-id :mine-detect
-                        :event :release :params {:range 30.0}}]}}])
+                        :event :release :params {:range 30.0}}]}}]})
 
 (def ability-ids (set (map :id (:abilities provider))))
 (defonce ^:private registered? (atom false))
