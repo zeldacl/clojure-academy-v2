@@ -107,11 +107,6 @@
   [world-id owner plan]
   (call :execute-storm-wing! world-id owner plan))
 
-(defn execute-electron-missile!
-  "Execute the bounded Electron Missile volley behind a neutral Host Port."
-  [world-id owner plan]
-  (call :execute-electron-missile! world-id owner plan))
-
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))
