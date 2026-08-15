@@ -442,6 +442,27 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         :plasma-cannon
+                         (let [{:keys [world-id query-result charge-ticks
+                                       damage explosion-radius]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :charge-ticks (long (or charge-ticks 0))
+                                     :damage (double (or damage 0.0))
+                                     :explosion-radius (double (or explosion-radius 0.0))}
+                               valid? (and world-id (map? query-result)
+                                            (<= 1 (:charge-ticks plan) 120)
+                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
+                                            (finite? explosion-radius)
+                                            (<= 0.0 (:explosion-radius plan) 32.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-plasma-cannon!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          :teleport-approved
                          (let [{:keys [target destination radius ability-id]} effect
                                destination (or destination target)

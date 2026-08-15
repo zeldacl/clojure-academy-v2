@@ -72,6 +72,11 @@
   [world-id owner plan]
   (call :execute-scatter-bomb! world-id owner plan))
 
+(defn execute-plasma-cannon!
+  "Execute the charged Plasma Cannon impact behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-plasma-cannon! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]
