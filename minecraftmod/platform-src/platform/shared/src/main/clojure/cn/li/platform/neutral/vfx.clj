@@ -7,6 +7,7 @@
   `:stages`/`:payload` values.")
 
 (defonce ^:private frame-sequence* (atom 0))
+(defonce ^:private resource-manager-token* (atom nil))
 (defonce ^:private call-adapter*
   (delay (requiring-resolve
           'cn.li.platform.neutral.client-runtime/call-adapter)))
@@ -54,3 +55,20 @@
 
 (defn reload-resources! [generation]
   (when-let [api (host)] ((:reload-resources! api) generation)))
+
+(defn observe-resource-manager!
+  "Detect a Minecraft resource-manager replacement without exposing the
+   resource manager object across the ABI.  Loader callbacks pass only an
+   identity token; a change invalidates the neutral frame cache and lets AC
+   rebuild/warm its resource snapshot before the next visible frame."
+  [token]
+  (when (some? token)
+    (let [[previous _] (swap-vals! resource-manager-token*
+                                   (fn [current]
+                                     (if (nil? current) token token)))]
+      (when (and (some? previous) (not= previous token))
+        (let [generation (or (when-let [snapshot (:resource-snapshot (host))]
+                               (:generation (snapshot)))
+                             0)]
+          (reload-resources! (inc (long generation)))))))
+  token)

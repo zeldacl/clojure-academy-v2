@@ -12,6 +12,9 @@
 (defonce ^:private handlers* (atom {}))
 (defonce ^:private ^ArrayDeque camera-pitch* (ArrayDeque. 1024))
 (defonce ^:private frozen?* (atom false))
+(def ^:dynamic *sample-state*
+  "Interpolated aggregate state for the descriptor currently being sampled."
+  ::unbound)
 
 (defn runtime []
   (or @runtime*
@@ -87,9 +90,13 @@
                    (apply-tick :hand (:hand h)))))
    :bounds (fn [_ _] nil)
    :sample (fn [{:keys [sink] :as context}]
-             (let [state (:state (:instance context))]
-               (sample-plan! effect-id state context sink)
-               (sample-hand! effect-id state context sink)))})
+             (let [state (:state (:instance context))
+                   sampled-state (if (= ::unbound *sample-state*)
+                                   state
+                                   *sample-state*)]
+               (binding [*sample-state* sampled-state]
+                 (sample-plan! effect-id sampled-state context sink)
+                 (sample-hand! effect-id sampled-state context sink))))})
 
 (defn register-effect!
   "Register one descriptor.  A single Runtime instance owns both level and
@@ -125,8 +132,10 @@
 (defn state-snapshot
   ([effect-id] (state-snapshot effect-id :level))
   ([effect-id kind]
-   (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
-     (handler-state (core/instance-state (runtime) instance-id) kind))))
+   (if (not= ::unbound *sample-state*)
+     (handler-state *sample-state* kind)
+     (when-let [instance-id (core/instance-for-effect (runtime) effect-id)]
+       (handler-state (core/instance-state (runtime) instance-id) kind)))))
 
 (defn update-state!
   [effect-id kind f & args]
@@ -323,25 +332,7 @@
                                (partition 2 1 curve)))]
             (+ y0 (* (/ (- t x0) (- x1 x0)) (- y1 y0))))))
 
-(declare reset-for-test!)
-
-(defn register-level-effect! [effect-id handler]
-  (register-effect! effect-id {:level handler}))
-(defn register-hand-effect! [effect-id handler]
-  (register-effect! effect-id {:hand handler}))
-(defn freeze-level-effect-registry! [] (freeze!))
-(defn freeze-hand-effect-registry! [] (freeze!))
-(defn reset-level-effect-registry-for-test! [] (reset-for-test!))
-(defn reset-hand-effect-registry-for-test! [] (reset-for-test!))
-(defn tick-level-effects! [] (tick!))
-(defn tick-hand-effects! [] (tick!))
 (defn any-level-effect-active? [] (active?))
-(defn level-effect-registry-snapshot []
-  {:registry (into {} (map (fn [[id {:keys [level]}]] [id level]) @handlers*))
-   :order (vec (registered-effects)) :frozen? @frozen?*})
-(defn hand-effect-registry-snapshot []
-  {:registry (into {} (map (fn [[id {:keys [hand]}]] [id hand]) @handlers*))
-   :order (vec (registered-effects)) :frozen? @frozen?*})
 (defn reset-effect-failure-reports-for-test! [] nil)
 
 (defn reset-for-test!

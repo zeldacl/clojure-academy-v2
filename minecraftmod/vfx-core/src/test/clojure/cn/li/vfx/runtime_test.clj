@@ -74,3 +74,46 @@
     (runtime/reload-resources! rt 7)
     (is (= 7 (runtime/resource-generation rt)))
     (is (nil? @(:last-frame rt)))))
+
+(deftest interpolation-and-bounds-culling
+  (let [samples (atom [])
+        rt (runtime/create-runtime)
+        effect {:id :sampled
+                :init (fn [{:keys [params]}] {:value 0 :x (or (:x params) 0)})
+                :update (fn [state _] (update state :value inc))
+                :bounds (fn [{:keys [state]}]
+                          {:center [(:x state) 0 0] :radius 0.0})
+                :sample (fn [{:keys [sink interpolated-state]}]
+                          (swap! samples conj interpolated-state)
+                          ((:emit! sink) {:stage :world-after-translucent
+                                          :primitive :billboard
+                                          :material :test/material
+                                          :count 1
+                                          :payload [interpolated-state]}))}]
+    (runtime/register-effect! rt effect)
+    (runtime/freeze-registry! rt)
+    (runtime/spawn! rt :sampled {:owner :near :params {:x 0}})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    (let [frame (runtime/sample-frame! rt {:frame-id 1 :partial-tick 0.5
+                                           :camera-pos [0 0 0]
+                                           :view-distance 8.0})]
+      (is (= [{:value 0.5 :x 0}] @samples))
+      (is (= 1 (count (get-in frame [:stages :world-after-translucent])))))
+    (reset! samples [])
+    (runtime/spawn! rt :sampled {:owner :far :params {:x 100}})
+    (runtime/tick! rt {:tick-id 2 :delta-seconds 0.05})
+    (runtime/sample-frame! rt {:frame-id 2 :partial-tick 0.5
+                               :camera-pos [0 0 0]
+                               :view-distance 8.0})
+    (is (= 1 (count @samples)))))
+
+(deftest signal-queue-is-bounded
+  (let [rt (runtime/create-runtime {:max-signals 3})]
+    (dotimes [i 10] (runtime/signal! rt {:instance i} :event {:i i}))
+    (is (= 3 (count @(:signals rt))))))
+
+(deftest invalid-context-is-rejected
+  (is (thrown? IllegalArgumentException
+               (contract/tick-context {:tick-id 1 :delta-seconds -1.0})))
+  (is (thrown? IllegalArgumentException
+               (contract/frame-context {:frame-id 1 :partial-tick 2.0}))))

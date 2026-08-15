@@ -4,10 +4,11 @@
 
 (defn create-runtime
   ([] (create-runtime {}))
-  ([{:keys [resource-generation max-instances max-batches]}]
+  ([{:keys [resource-generation max-instances max-batches max-signals]}]
    {:next-id (atom 0) :registry (atom {}) :registry-frozen? (atom false)
     :instances (atom {}) :owner-index (atom {}) :world-index (atom {})
-    :signals (atom []) :last-tick-id (atom nil)
+    :signals (atom []) :max-signals (long (or max-signals 32768))
+    :last-tick-id (atom nil)
     :last-frame-id (atom nil) :last-frame (atom nil)
     :resource-generation (atom (long (or resource-generation 0)))
     :max-instances (long (or max-instances 8192))
@@ -62,7 +63,12 @@
       id)))
 
 (defn signal! [runtime target event payload]
-  (swap! (:signals runtime) conj {:target target :event event :payload payload}) nil)
+  (swap! (:signals runtime)
+         (fn [pending]
+           (if (< (count pending) (:max-signals runtime))
+             (conj pending {:target target :event event :payload payload})
+             pending)))
+  nil)
 (defn destroy! [runtime instance-id]
   (when-let [instance (get @(:instances runtime) instance-id)]
     (swap! (:instances runtime) dissoc instance-id)
@@ -170,6 +176,66 @@
 (defn- priority-rank [priority]
   (case priority :high 0 :normal 1 :low 2 3))
 
+(defn interpolate-value
+  "Interpolate immutable state without allocating platform objects."
+  [previous current t]
+  (cond
+    (and (number? previous) (number? current))
+    (+ (double previous) (* (double t) (- (double current) (double previous))))
+    (and (map? previous) (map? current))
+    (into (empty current)
+          (map (fn [[k value]]
+                 [k (if (contains? previous k)
+                      (interpolate-value (get previous k) value t)
+                      value)]))
+          current)
+    (and (vector? previous) (vector? current)
+         (= (count previous) (count current)))
+    (mapv #(interpolate-value %1 %2 t) previous current)
+    :else current))
+
+(defn- coordinate [value key index]
+  (cond
+    (map? value) (when (number? (get value key)) (double (get value key)))
+    (and (sequential? value) (number? (nth value index nil)))
+    (double (nth value index))
+    :else nil))
+
+(defn- distance-squared [a b]
+  (let [ax (coordinate a :x 0) ay (coordinate a :y 1) az (coordinate a :z 2)
+        bx (coordinate b :x 0) by (coordinate b :y 1) bz (coordinate b :z 2)]
+    (when (every? some? [ax ay az bx by bz])
+      (+ (Math/pow (- ax bx) 2.0)
+         (Math/pow (- ay by) 2.0)
+         (Math/pow (- az bz) 2.0)))))
+
+(defn- invoke-bounds [bounds instance context]
+  (try
+    (bounds (assoc context :instance instance :state (:state instance)))
+    (catch clojure.lang.ArityException _
+      (bounds (:state instance) context))))
+
+(defn- visible-instance? [effect instance context]
+  (let [custom-visible (:visible? effect)
+        custom-result (when custom-visible
+                        (try
+                          (custom-visible (assoc context :instance instance
+                                                 :state (:state instance)))
+                          (catch clojure.lang.ArityException _
+                            (custom-visible (:state instance) context))))
+        bounds-fn (:bounds effect)
+        bounds (when bounds-fn (invoke-bounds bounds-fn instance context))
+        center (:center bounds)
+        radius (double (or (:radius bounds) 0.0))
+        camera (:camera-pos context)
+        max-distance (or (:max-distance bounds) (:max-distance effect)
+                         (:view-distance context))
+        distance2 (when (and center camera) (distance-squared center camera))]
+    (and (not= false custom-result)
+         (or (nil? distance2)
+             (nil? max-distance)
+             (<= distance2 (Math/pow (+ (double max-distance) radius) 2.0))))))
+
 (defn sample-frame! [runtime context]
   (let [{:keys [frame-id] :as context} (contract/frame-context context)]
     (if (= frame-id @(:last-frame-id runtime)) @(:last-frame runtime)
@@ -182,11 +248,21 @@
                     :when (:alive? instance)]
               (let [effect (descriptor runtime (:effect-id instance))]
                 (try
-                  (when (or (nil? (:lod effect))
-                            ((:lod effect) (assoc context :instance instance :state (:state instance))))
-                    ((:sample effect) (assoc context :instance instance :state (:state instance)
+                  (let [sample-context (assoc context
+                                              :instance instance
+                                              :state (:state instance)
                                               :previous-state (:prev-state instance)
-                                              :sink (make-sink buckets batch-count (:max-batches runtime)))))
+                                              :interpolated-state
+                                              (interpolate-value (:prev-state instance)
+                                                                 (:state instance)
+                                                                 (:partial-tick context)))]
+                    (when (and (visible-instance? effect instance sample-context)
+                               (or (nil? (:lod effect))
+                                   ((:lod effect) sample-context)))
+                      ((:sample effect)
+                       (assoc sample-context
+                              :sink (make-sink buckets batch-count
+                                               (:max-batches runtime))))))
                   (catch Throwable throwable (fault! runtime instance throwable :sample)))))
             (let [ordered-buckets (into {}
                                         (map (fn [[stage batches]]

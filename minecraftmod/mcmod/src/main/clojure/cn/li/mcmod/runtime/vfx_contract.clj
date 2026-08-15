@@ -15,14 +15,27 @@
   m)
 
 (defn tick-context [context]
-  (-> context (require-key :tick-id) (require-key :delta-seconds)
-      (assoc :schema-version schema-version)))
+  (let [context (-> context (require-key :tick-id) (require-key :delta-seconds))
+        tick-id (:tick-id context)
+        delta (:delta-seconds context)]
+    (when-not (integer? tick-id)
+      (throw (ex-info "VFX tick-id must be an integer" {:context context})))
+    (when-not (and (number? delta)
+                   (Double/isFinite (double delta))
+                   (<= 0.0 (double delta)))
+      (throw (ex-info "VFX delta-seconds must be a finite non-negative number"
+                      {:context context})))
+    (assoc context :schema-version schema-version)))
 
 (defn frame-context [context]
   (let [context (-> context (require-key :frame-id) (require-key :partial-tick)
                     (assoc :schema-version schema-version))]
     (when-not (number? (:partial-tick context))
       (throw (ex-info "VFX partial-tick must be numeric" {:context context})))
+    (when-not (and (Double/isFinite (double (:partial-tick context)))
+                   (<= 0.0 (double (:partial-tick context)) 1.0))
+      (throw (ex-info "VFX partial-tick must be in [0,1]"
+                      {:context context})))
     context))
 
 (defn batch [{:keys [stage primitive material variant layout-version count sort-mode payload]

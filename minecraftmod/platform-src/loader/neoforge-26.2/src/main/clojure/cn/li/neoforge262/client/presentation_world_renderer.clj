@@ -31,6 +31,11 @@
         ^LocalPlayer player (when minecraft (.player minecraft))
         camera-pos (camera-position-map evt)
         extracted (when player
+                    (vfx/observe-resource-manager!
+                     (try (some-> (clojure.lang.Reflector/invokeInstanceMethod
+                                   minecraft "getResourceManager" (object-array 0))
+                                  System/identityHashCode)
+                          (catch Throwable _ nil)))
                     {:player player
                      :camera-pos camera-pos
                      :tick (.-gameTime render-state)

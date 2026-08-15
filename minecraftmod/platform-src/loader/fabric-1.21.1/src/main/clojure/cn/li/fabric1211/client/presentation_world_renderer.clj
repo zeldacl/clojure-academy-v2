@@ -13,6 +13,10 @@
 (defn- on-after-translucent-render [^WorldRenderContext ctx]
   (try
     (when-let [^Minecraft mc (Minecraft/getInstance)]
+      (vfx/observe-resource-manager!
+       (try (some-> (clojure.lang.Reflector/invokeInstanceMethod mc "getResourceManager" (object-array 0))
+                    System/identityHashCode)
+            (catch Throwable _ nil)))
       (when-let [^LocalPlayer player (.player mc)]
         (let [camera (.camera ctx)
               cam-vec (.getPosition camera)

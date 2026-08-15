@@ -123,8 +123,15 @@
   {:owner-key owner-key
    :ctx-id ctx-id
    :channel channel
+   :effect-id (:effect-id payload)
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
+
+(defn- stable-seed
+  "Return a deterministic, process-independent seed for a generated arc."
+  [& values]
+  (let [hash-code (.hashCode (pr-str values))]
+    (int (bit-and (long hash-code) 0x7fffffff))))
 
 ;; ---------------------------------------------------------------------------
 ;; Caster-hand origin (original LambdaLib2 ViewOptimize.fix)
@@ -188,12 +195,16 @@
 
 (defn- arc-item
   "Precompute the zigzag vertex path once per arc, at enqueue time."
-  [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type hand-origin?]}]
+  [base-meta start end arc-life pattern-key & {:keys [is-aoe? hit-type hand-origin? seed]}]
   (let [pattern-key* (if is-aoe? :aoe pattern-key)
         pattern (arc-patterns/get-pattern pattern-key*)
         start-v3 (rv3/map->v3 start)
         end-v3 (rv3/map->v3 end)
-        seed (rand-int 100000)
+        seed (or seed (stable-seed (:effect-id base-meta)
+                                   (:owner-key base-meta)
+                                   (:ctx-id base-meta)
+                                   (:channel base-meta)
+                                   start end arc-life pattern-key*))
         vertices (arc-patterns/generate-zigzag-segments start-v3 end-v3
                    {:segments (:segments pattern)
                     :amplitude (:amplitude pattern)
@@ -243,13 +254,23 @@
               ;; bolts drawn exactly on top of each other, reading as one.
               ;; Upstream spawns three independent EntityArcs, each picking its
               ;; own template out of the pattern's bank.
-              main-arcs (vec (repeatedly 3 #(arc-item base start end arc-life arc-pattern
-                                                     :hand-origin? (:hand-origin? opts))))
+              main-arcs (vec (map (fn [idx]
+                                    (arc-item base start end arc-life arc-pattern
+                                              :seed (stable-seed (:effect-id base)
+                                                                 (:ctx-id base) :main idx
+                                                                 start end)
+                                              :hand-origin? (:hand-origin? opts)))
+                                  (range 3)))
               aoe-arcs (->> aoe-points
-                            (keep (fn [pt]
+                            (map-indexed vector)
+                            (keep (fn [[idx pt]]
                                     (when (map? pt)
-                                      (let [life (+ 15 (rand-int 11))]
-                                        (arc-item base aoe-start pt life arc-pattern :is-aoe? true)))))
+                                      (let [seed (stable-seed (:effect-id base)
+                                                              (:ctx-id base) :aoe idx
+                                                              aoe-start pt)
+                                            life (+ 15 (mod seed 11))]
+                                        (arc-item base aoe-start pt life arc-pattern
+                                                  :is-aoe? true :seed seed)))))
                             vec)
               store** (update-in store* [:arcs owner-key*] (fnil into []) (into main-arcs aoe-arcs))]
           (play-sound! opts payload)
@@ -333,7 +354,8 @@
   [runtime effect-id store ctx-id channel owner-key payload]
   (when (= runtime :level)
     (enqueue-arc-state! (:arc-opts (effect-entry effect-id))
-                        store ctx-id channel owner-key payload)))
+                        store ctx-id channel owner-key
+                        (assoc (or payload {}) :effect-id effect-id))))
 
 (register-method! effect-tick-state! :default
   [runtime effect-id store]
