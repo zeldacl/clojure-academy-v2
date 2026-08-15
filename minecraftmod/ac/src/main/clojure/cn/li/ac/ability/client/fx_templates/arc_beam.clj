@@ -351,8 +351,19 @@
       (build-arc-plan arc-opts camera-pos hand-center-pos tick))))
 
 (defmethod effect-clear-owner! :default
-  [effect-id store owner-key]
-  (update (ensure-arc-store store) :arcs dissoc owner-key))
+  [_effect-id store _owner-key]
+  ;; One-shot arcs (arc-gen, thunder-bolt) are TTL-lived world visuals: their
+  ;; :instant context terminates on the same tick as perform, so
+  ;; MSG-CTX-TERMINATED reaches clear-effect-owner! immediately — clearing
+  ;; here deleted the arc a frame after it appeared, leaving only the cast
+  ;; sound. The impl skills hit the same trap and each overrides this method
+  ;; (see ray-barrage / mine-detect / railgun-shot: "clearing the queue here
+  ;; deleted every ray a frame after it appeared... They expire on their own
+  ;; ttl instead"). The default arc state only ever holds TTL-bounded items,
+  ;; which expire on their own via tick-arc-state!; channeled effects clear
+  ;; through their :end channel. Effects with context-bound persistent state
+  ;; supply their own defmethod.
+  store)
 
 (defmethod effect-transform-fn :default
   [_effect-id]

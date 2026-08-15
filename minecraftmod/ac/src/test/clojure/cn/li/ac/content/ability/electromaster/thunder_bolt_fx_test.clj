@@ -121,7 +121,10 @@
         (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
       (tb-fx/clear-fx-owner! [:ctx "ctx-a"])
       (let [snapshot (tb-fx/fx-snapshot)]
-        (is (nil? (get (:arcs snapshot) [:ctx "ctx-a"])))
+        (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-a"])))
+            "TTL-lived arcs survive context termination — :instant contexts end
+             on the same tick as perform, so clearing here deleted the bolts a
+             frame after they appeared; they expire on their own ttl instead")
         (is (= 3 (count (get (:arcs snapshot) [:ctx "ctx-b"])))))
       (is (= 2 (count @sounds*))))))
 

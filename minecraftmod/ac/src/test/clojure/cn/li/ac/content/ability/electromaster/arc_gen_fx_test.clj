@@ -148,7 +148,11 @@
       (is (= 1 (count (get (:arcs snapshot) [:ctx "ctx-b"]))))
       (arc-fx/clear-fx-owner! [:ctx "ctx-a"])
       (let [after-clear (arc-fx/fx-snapshot)]
-        (is (nil? (get (:arcs after-clear) [:ctx "ctx-a"])))
+        (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-a"])))
+            "TTL-lived arcs survive context termination — :instant contexts end
+             on the same tick as perform, so clearing here deleted the arc a
+             frame after it appeared (the user saw only the cast sound); arcs
+             expire on their own ttl instead")
         (is (= 1 (count (get (:arcs after-clear) [:ctx "ctx-b"]))))))))
 
 (deftest fx-snapshot-default-without-registered-state-test
