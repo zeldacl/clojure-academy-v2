@@ -371,6 +371,7 @@
     (is (= :accepted (:status result)))
     (is (= :radiation-mark (:type event)))
     (is (= "owner" (:owner event)))
+    (is (= 91 (:intent-id event)))
     (is (= "victim" (:target-id event)))
     (is (= 7 (:tick event)))
     (is (= 1.5 (get-in event [:metadata :rate])))))

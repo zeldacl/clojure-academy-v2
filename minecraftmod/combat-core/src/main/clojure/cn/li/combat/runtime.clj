@@ -335,10 +335,13 @@
           target-id (if (map? target)
                       (or (:entity-id target) (:target-id target) (:uuid target))
                       target)
+          intent-id (or (:intent-id context) (get-in context [:input :intent-id]))
           event (cond-> (assoc event
                                :type (:event-type node)
                                :owner (:owner context)
                                :event-seq (long (or (:event-seq context) 0)))
+                  intent-id (assoc :intent-id intent-id)
+                  (:session-id context) (assoc :session-id (:session-id context))
                   target-id (assoc :target-id target-id)
                   (:tick context) (assoc :tick (long (:tick context))))]
       {:status :continue
