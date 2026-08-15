@@ -3,7 +3,7 @@
 
   Subscribes to ViewportEvent.ComputeFov and adds the per-frame offset
   contributed by the local player's active level effects."
-  (:require [cn.li.platform.neutral.presentation :as presentation]
+  (:require [cn.li.platform.neutral.vfx :as vfx]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.client Minecraft]
@@ -15,7 +15,7 @@
 (defn- on-compute-fov [^ViewportEvent$ComputeFov evt]
   (try
     (when-let [^LocalPlayer player (some-> (Minecraft/getInstance) .player)]
-      (let [offset (double (or (presentation/fov-offset (str (.getUUID player))) 0.0))]
+      (let [offset (double (or (vfx/fov-offset (str (.getUUID player))) 0.0))]
         (when (pos? offset)
           (.setFOV evt (float (+ (.getFOV evt) offset))))))
     (catch Exception e

@@ -822,6 +822,16 @@ tasks.register("verifyVfxDependencyDirection") {
             if (source.text =~ /cn\.li\.(?:vfx|ac\.vfx)\./) {
                 violations << "${source}: platform source statically requires VFX/AC VFX"
             }
+            def normalizedPath = source.path.replace('\\', '/')
+            if (normalizedPath.endsWith('/mcbase/client/effects/hand.clj') &&
+                source.text.contains('cn.li.platform.neutral.presentation')) {
+                violations << "${source}: hand rendering must consume the VFX Frame ABI, not Presentation Host"
+            }
+            if (normalizedPath.contains('/platform-src/loader/') &&
+                normalizedPath.endsWith('/client/fov_renderer.clj') &&
+                source.text.contains('cn.li.platform.neutral.presentation')) {
+                violations << "${source}: FOV rendering must consume the VFX Host ABI"
+            }
         }
         fileTree(file("vfx-core/src/main")) {
             include "**/*.clj"
@@ -954,6 +964,17 @@ tasks.register("verifyNeutralSourceAotXor") {
         }
         if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
         logger.lifecycle("[verifyNeutralSourceAotXor] ok")
+    }
+}
+
+// In diagnostic full-AOT mode the verifier must build the neutral class
+// outputs first; otherwise it would report every source namespace as missing
+// merely because callers invoked the gate in isolation.
+if (rootProject.ext.fullAotEnabled) {
+    tasks.named("verifyNeutralSourceAotXor").configure {
+        dependsOn rootProject.ext.neutralSourceFirstProjects.collect { projectPath ->
+            project(projectPath).tasks.named("classes")
+        }
     }
 }
 
@@ -1208,6 +1229,11 @@ tasks.register("verifyNeutralProviderRuntimeLoad", JavaExec) {
     def neutralProjects = [project(":api"), project(":mcmod"), project(":vfx-core"),
                            project(":presentation-core"),
                            project(":presentation-compiler"), project(":ac")]
+    // The isolated classpath is materialized from project runtime classpaths,
+    // which include sibling jars.  Declare those jar producers explicitly so
+    // Gradle's task validation cannot observe an implicit mcmod/ac artifact
+    // dependency when this gate is part of a larger platform verification.
+    dependsOn neutralProjects.collect { it.tasks.named("jar") }
     // Gradle 9 rejects resolving a child project's Configuration while this
     // JavaExec task's inputs are being snapshotted.  Resolve this deliberately
     // at configuration time instead: it still contains only api/mcmod/ac

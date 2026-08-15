@@ -196,6 +196,8 @@
 
 (defn frame-stage [frame-id stage]
   (core/frame-stage (runtime) frame-id stage))
+(defn latest-frame-stage [stage]
+  (core/latest-frame-stage (runtime) stage))
 
 (defn release-frame! [frame-id]
   (core/release-frame! (runtime) frame-id))
@@ -254,12 +256,6 @@
     (doseq [entry remaining] (.addLast camera-pitch* entry))
     (persistent! out))))
 
-(defn current-hand-transform []
-  (some (fn [[_ {:keys [hand]}]]
-          (when-let [transform-fn (:transform-fn hand)]
-            (transform-fn)))
-        @handlers*))
-
 (defn registered-effects []
   (core/registered-effects (runtime)))
 
@@ -290,13 +286,13 @@
     :tick! tick!
     :sample-frame! sample-frame!
     :frame-stage frame-stage
+    :latest-frame-stage latest-frame-stage
     :release-frame! release-frame!
     :clear-world! clear-world!
     :resource-snapshot resource-snapshot
     :reload-resources! reload-resources!
     :active? active?
     :fov-offset current-fov-offset
-    :hand-transform current-hand-transform
     :drain-camera-pitch-deltas! drain-camera-pitch-deltas!}))
 
 ;; Content effects use these narrow names while their namespaces are migrated

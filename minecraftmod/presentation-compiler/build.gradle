@@ -1,10 +1,21 @@
 plugins { id "java-library"; id "dev.clojurephant.clojure" }
 
+tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach {
+    dependsOn ":presentation-core:classes"
+}
+tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
+    dependsOn ":presentation-core:classes"
+}
+
 java {
     toolchain { languageVersion = JavaLanguageVersion.of(21) }
     withSourcesJar()
 }
-tasks.withType(JavaCompile).configureEach { options.release = 17; options.encoding = "UTF-8" }
+tasks.withType(JavaCompile).configureEach {
+    dependsOn ":presentation-core:compileClojure"
+    options.release = 17
+    options.encoding = "UTF-8"
+}
 dependencies {
     api project(":presentation-core")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"

@@ -5,8 +5,7 @@
    connects the client bridge's opaque AC host API to minecraft/base's lifecycle
    registry and returns opaque frame packets to version-owned callbacks."
   (:require [cn.li.mcbase.presentation.host-lifecycle :as lifecycle]
-            [cn.li.platform.neutral.client-runtime :as client-runtime]
-            [cn.li.platform.neutral.vfx :as vfx]))
+            [cn.li.platform.neutral.client-runtime :as client-runtime]))
 
 (def ^:private host-id :presentation)
 (def ^:private host-kind :unified)
@@ -113,27 +112,6 @@
       (when result
         (submit! (:stage result) (:frame result) backend-context)))
     result))
-
-(defn fov-offset
-  [player-uuid]
-  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
-    ((:fov-offset api) player-uuid)))
-
-(defn tick-effects!
-  [delta-ms]
-  (vfx/tick! {:tick-id (quot (long (System/currentTimeMillis))
-                             (max 1 (long delta-ms)))
-              :delta-seconds (/ (double delta-ms) 1000.0)}))
-
-(defn hand-transform
-  []
-  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
-    ((:hand-transform api))))
-
-(defn drain-camera-pitch-deltas!
-  [owner]
-  (when-let [api (client-runtime/call-adapter :vfx-host-api)]
-    ((:drain-camera-pitch-deltas! api) owner)))
 
 (defn register-backend!
   "Install the version-owned backend callback for this client target.

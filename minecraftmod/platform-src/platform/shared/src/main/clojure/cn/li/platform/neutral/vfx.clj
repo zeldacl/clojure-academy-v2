@@ -25,6 +25,9 @@
 (defn required-anchors []
   (when-let [api (host)] ((:required-anchors api))))
 
+(defn fov-offset [player-uuid]
+  (when-let [api (host)] ((:fov-offset api) player-uuid)))
+
 (defn tick!
   "Advance VFX exactly once for the supplied game tick."
   [context]
@@ -35,6 +38,9 @@
 
 (defn frame-stage [frame-id stage]
   (when-let [api (host)] ((:frame-stage api) frame-id stage)))
+
+(defn latest-stage [stage]
+  (when-let [api (host)] ((:latest-frame-stage api) stage)))
 
 (defn sample-stage!
   "Sample one immutable frame and return its stage batches.
@@ -53,6 +59,9 @@
 (defn clear-world! [world-id]
   (when-let [api (host)] ((:clear-world! api) world-id)))
 
+(defn drain-camera-pitch-deltas! [owner]
+  (when-let [api (host)] ((:drain-camera-pitch-deltas! api) owner)))
+
 (defn reload-resources! [generation]
   (when-let [api (host)] ((:reload-resources! api) generation)))
 
@@ -63,9 +72,7 @@
    rebuild/warm its resource snapshot before the next visible frame."
   [token]
   (when (some? token)
-    (let [[previous _] (swap-vals! resource-manager-token*
-                                   (fn [current]
-                                     (if (nil? current) token token)))]
+    (let [[previous _] (swap-vals! resource-manager-token* (constantly token))]
       (when (and (some? previous) (not= previous token))
         (let [generation (or (when-let [snapshot (:resource-snapshot (host))]
                                (:generation (snapshot)))

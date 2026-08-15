@@ -11,6 +11,7 @@
             [cn.li.ac.client.effect-controller :as vfx-hand]
             [cn.li.ac.client.effect-controller :as vfx-level]
             [cn.li.ac.ability.client.render-util :as ru]
+            [cn.li.vfx.random :as vfx-random]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcmod.math V3]))
@@ -127,12 +128,6 @@
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
 
-(defn- stable-seed
-  "Return a deterministic, process-independent seed for a generated arc."
-  [& values]
-  (let [hash-code (.hashCode (pr-str values))]
-    (int (bit-and (long hash-code) 0x7fffffff))))
-
 ;; ---------------------------------------------------------------------------
 ;; Caster-hand origin (original LambdaLib2 ViewOptimize.fix)
 ;; ---------------------------------------------------------------------------
@@ -200,11 +195,11 @@
         pattern (arc-patterns/get-pattern pattern-key*)
         start-v3 (rv3/map->v3 start)
         end-v3 (rv3/map->v3 end)
-        seed (or seed (stable-seed (:effect-id base-meta)
-                                   (:owner-key base-meta)
-                                   (:ctx-id base-meta)
-                                   (:channel base-meta)
-                                   start end arc-life pattern-key*))
+        seed (or seed (vfx-random/non-negative-seed (:effect-id base-meta)
+                                                    (:owner-key base-meta)
+                                                    (:ctx-id base-meta)
+                                                    (:channel base-meta)
+                                                    start end arc-life pattern-key*))
         vertices (arc-patterns/generate-zigzag-segments start-v3 end-v3
                    {:segments (:segments pattern)
                     :amplitude (:amplitude pattern)
@@ -256,19 +251,19 @@
               ;; own template out of the pattern's bank.
               main-arcs (vec (map (fn [idx]
                                     (arc-item base start end arc-life arc-pattern
-                                              :seed (stable-seed (:effect-id base)
-                                                                 (:ctx-id base) :main idx
-                                                                 start end)
+                                              :seed (vfx-random/non-negative-seed (:effect-id base)
+                                                                                  (:ctx-id base) :main idx
+                                                                                  start end)
                                               :hand-origin? (:hand-origin? opts)))
                                   (range 3)))
               aoe-arcs (->> aoe-points
                             (map-indexed vector)
                             (keep (fn [[idx pt]]
                                     (when (map? pt)
-                                      (let [seed (stable-seed (:effect-id base)
-                                                              (:ctx-id base) :aoe idx
-                                                              aoe-start pt)
-                                            life (+ 15 (mod seed 11))]
+                                      (let [seed (vfx-random/non-negative-seed (:effect-id base)
+                                                                                 (:ctx-id base) :aoe idx
+                                                                                 aoe-start pt)
+                                            life (+ 15 (vfx-random/int-at seed 11))]
                                         (arc-item base aoe-start pt life arc-pattern
                                                   :is-aoe? true :seed seed)))))
                             vec)

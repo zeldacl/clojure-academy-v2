@@ -3,6 +3,13 @@ plugins {
     id "dev.clojurephant.clojure"
 }
 
+tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach {
+    dependsOn ":mcmod:classes"
+}
+tasks.matching { it.name == "compileClojure" || it.name == "compileTestClojure" }.configureEach {
+    dependsOn ":mcmod:classes"
+}
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
@@ -11,6 +18,7 @@ java {
 }
 
 tasks.withType(JavaCompile).configureEach {
+    dependsOn ":mcmod:compileClojure"
     options.release = 17
     options.encoding = "UTF-8"
 }

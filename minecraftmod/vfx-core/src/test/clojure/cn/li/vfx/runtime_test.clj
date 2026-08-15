@@ -58,6 +58,38 @@
       (is (= (runtime/frame-digest a) (runtime/frame-digest b)))
       (is (= contract/schema-version (:schema-version a))))))
 
+(deftest deterministic-replay-includes-payload
+  (let [build-frame (fn []
+                      (let [rt (runtime/create-runtime)]
+                        (runtime/register-effect! rt (test-effect))
+                        (runtime/freeze-registry! rt)
+                        (runtime/spawn! rt :test/effect
+                                        {:owner :owner :params {:value 7} :seed 42})
+                        (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+                        (runtime/sample-frame! rt {:frame-id 9 :partial-tick 0.5})))]
+    (is (= (runtime/frame-digest (build-frame))
+           (runtime/frame-digest (build-frame))))))
+
+(deftest latest-stage-survives-world-release
+  (let [rt (runtime/create-runtime)]
+    (runtime/register-effect! rt
+      {:id :hand
+       :init (fn [_] {})
+       :update (fn [state _] state)
+       :bounds (fn [_ _] nil)
+       :sample (fn [{:keys [sink]}]
+                 ((:emit! sink) {:stage :first-person :primitive :first-person
+                                 :material :hand :count 1 :payload [{:tx 1.0}]}))})
+    (runtime/freeze-registry! rt)
+    (runtime/spawn! rt :hand {:owner :player})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    (runtime/sample-frame! rt {:frame-id 1 :partial-tick 0.0})
+    (runtime/release-frame! rt 1)
+    (is (= [{:stage :first-person :primitive :first-person
+             :material :hand :layout-version 1 :count 1 :sort-mode :stable
+             :schema-version contract/schema-version :payload [{:tx 1.0}]}]
+           (runtime/latest-frame-stage rt :first-person)))))
+
 (deftest abi-rejects-version-mismatch
   (testing "host API cannot silently cross ABI versions"
     (is (thrown-with-msg? clojure.lang.ExceptionInfo

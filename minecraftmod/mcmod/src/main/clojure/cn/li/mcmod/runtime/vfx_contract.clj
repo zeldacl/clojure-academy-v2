@@ -62,9 +62,9 @@
                            [stage (vec batches)])) stages-map)})
 
 (def required-host-operations
-  #{:schema-version :required-anchors :tick! :sample-frame! :frame-stage :release-frame!
+  #{:schema-version :required-anchors :tick! :sample-frame! :frame-stage :latest-frame-stage :release-frame!
     :clear-world! :resource-snapshot :reload-resources!
-    :active? :fov-offset :hand-transform :drain-camera-pitch-deltas!})
+    :active? :fov-offset :drain-camera-pitch-deltas!})
 
 (defn validate-host-api [api]
   (when-not (map? api)

@@ -7,6 +7,7 @@ plugins {
 layout.buildDirectory.set(rootProject.layout.buildDirectory.dir("neutral/${project.name}"))
 tasks.withType(dev.clojurephant.plugin.clojure.tasks.ClojureCheck).configureEach { checkTask ->
     checkTask.internalOutputFile.set(layout.buildDirectory.file("tmp/${checkTask.name}/internal.txt"))
+    checkTask.dependsOn ":mcmod:classes", ":vfx-core:classes"
 }
 
 // Gradle detects that :mcmod:compileClojure output flows into :ac:compileJava classpath
@@ -223,7 +224,7 @@ def copyPresentationRuntimeIntoAc = tasks.register('copyPresentationRuntimeIntoA
 tasks.named('classes').configure {
     dependsOn copyPresentationRuntimeIntoAc
 }
-tasks.matching { it.name in ['checkClojure', 'compileTestClojure'] }.configureEach {
+tasks.matching { it.name in ['checkClojure', 'compileClojure', 'compileTestClojure'] }.configureEach {
     dependsOn copyPresentationRuntimeIntoAc
 }
 

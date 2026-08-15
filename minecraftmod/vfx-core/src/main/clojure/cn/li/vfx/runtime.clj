@@ -2,6 +2,24 @@
   "Pure Clojure VFX lifecycle, update and frame sampling runtime."
   (:require [cn.li.mcmod.runtime.vfx-contract :as contract]))
 
+(defn- canonical-value
+  "Canonicalize only values admitted by the neutral ABI for stable replay."
+  [value]
+  (cond
+    (instance? java.nio.ByteBuffer value)
+    (let [buffer ^java.nio.ByteBuffer (.duplicate ^java.nio.ByteBuffer value)
+          bytes (byte-array (.remaining buffer))]
+      (.get buffer bytes)
+      (vec (map #(bit-and (int %) 0xff) bytes)))
+    (map? value)
+    (into (sorted-map)
+          (map (fn [[key nested]] [key (canonical-value nested)]))
+          value)
+    (vector? value) (mapv canonical-value value)
+    (sequential? value) (mapv canonical-value value)
+    (set? value) (vec (sort-by pr-str (map canonical-value value)))
+    :else value))
+
 (defn create-runtime
   ([] (create-runtime {}))
   ([{:keys [resource-generation max-instances max-batches max-signals]}]
@@ -9,7 +27,7 @@
     :instances (atom {}) :owner-index (atom {}) :world-index (atom {})
     :signals (atom []) :max-signals (long (or max-signals 32768))
     :last-tick-id (atom nil)
-    :last-frame-id (atom nil) :last-frame (atom nil)
+    :last-frame-id (atom nil) :last-frame (atom nil) :latest-frame (atom nil)
     :resource-generation (atom (long (or resource-generation 0)))
     :max-instances (long (or max-instances 8192))
     :max-batches (long (or max-batches 16384))
@@ -270,29 +288,31 @@
                                                                     batches))])
                                              @buckets))
                   frame (contract/frame frame-id @(:resource-generation runtime) ordered-buckets)]
-              (reset! (:last-frame runtime) frame) frame))))))
+              (reset! (:last-frame runtime) frame)
+              (reset! (:latest-frame runtime) frame)
+              frame))))))
 
 (defn frame-digest
   "Stable, platform-neutral digest used by deterministic replay tests.
-   Payload objects are intentionally represented by their printed value; the
-   ABI only permits immutable vectors/sequences or ByteBuffer payloads."
+   Payloads are canonicalized because the ABI admits only immutable values or
+   ByteBuffers; platform objects must never be present at this boundary."
   [frame]
-  (hash (pr-str (into (sorted-map)
-                      (assoc frame :stages
-                             (into (sorted-map)
-                                   (map (fn [[stage batches]]
-                                          [stage (mapv #(dissoc % :payload)
-                                                       batches)])
-                                        (:stages frame))))))))
+  (hash (pr-str (canonical-value frame))))
 
 (defn frame-stage [runtime frame-id stage]
   (let [frame @(:last-frame runtime)]
     (when (and frame (= frame-id (:frame-id frame))) (get-in frame [:stages stage] []))))
+(defn latest-frame-stage
+  "Read a stage from the most recently sampled immutable frame."
+  [runtime stage]
+  (get-in @(:latest-frame runtime) [:stages stage] []))
 (defn release-frame! [runtime frame-id]
   (when (= frame-id @(:last-frame-id runtime)) (reset! (:last-frame runtime) nil)) nil)
 (defn reload-resources! [runtime generation]
   (reset! (:resource-generation runtime) (long generation))
-  (reset! (:last-frame runtime) nil) generation)
+  (reset! (:last-frame runtime) nil)
+  (reset! (:latest-frame runtime) nil)
+  generation)
 (defn resource-generation [runtime]
   @(:resource-generation runtime))
 (defn faults [runtime] @(:faults runtime))
