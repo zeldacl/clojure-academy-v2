@@ -14,6 +14,7 @@
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
 (defonce ^:private engine* (atom nil))
@@ -112,12 +113,57 @@
                          :damage-aoe
                          (let [{:keys [world-id origin radius amount damage-type]} effect
                                {:keys [x y z]} origin]
-                           {:status (if (and world-id origin
+                            {:status (if (and world-id origin
                                               (entity-damage/available?)
                                               (entity-damage/apply-aoe-damage!
                                                world-id x y z (double radius)
                                                (double amount) damage-type false))
                                         :applied :failed)
+                            :effect effect})
+                         :damage-targets
+                         (let [{:keys [world-id targets amount damage-type source]} effect
+                               amount (double amount)
+                               target-ids (->> (or targets [])
+                                               (map #(or (:uuid %)
+                                                         (:entity-id %)
+                                                         (:target-id %)
+                                                         %))
+                                               (filter string?)
+                                               distinct
+                                               sort
+                                               (take 64))
+                               hits (if (and world-id
+                                              (Double/isFinite amount)
+                                              (pos? amount)
+                                              (entity-damage/available?))
+                                      (reduce (fn [n target-id]
+                                                (if (entity-damage/apply-direct-damage!
+                                                     world-id target-id amount damage-type
+                                                     {:attacker-uuid source})
+                                                  (inc n)
+                                                  n))
+                                              0 target-ids)
+                                      0)]
+                           {:status (cond
+                                      (= hits (count target-ids)) :applied
+                                      (pos? hits) :partial
+                                      :else :failed)
+                            :hits hits
+                            :target-count (count target-ids)
+                            :effect effect})
+                         :lightning
+                         (let [{:keys [world-id origin visual-only?]} effect
+                               {:keys [x y z]} (if (map? origin) origin {})
+                               valid? (and world-id
+                                            (every? #(and (number? %) (Double/isFinite (double %)))
+                                                    [x y z])
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/spawn-lightning!
+                                               world-id (double x) (double y) (double z)
+                                               (boolean visual-only?)))
+                                      :applied
+                                      :failed)
                             :effect effect})
                          {:status :unhandled
                           :reason :missing-world-effect-host-port

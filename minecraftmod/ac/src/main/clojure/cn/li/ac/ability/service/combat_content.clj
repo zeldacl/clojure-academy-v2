@@ -4,6 +4,15 @@
    This namespace contains only Clojure data/DSL. It does not reach a
    Minecraft object, packet, presentation host or VFX runtime.")
 
+(defn- scale
+  "Return a bounded skill-exp interpolation expression for Combat Core.
+
+   Keeping the interpolation as data lets the compiler hash and validate it
+   once while the authoritative runtime supplies the owner's immutable exp
+   snapshot at execution time."
+  [min-value max-value]
+  {:op :scale :min (double min-value) :max (double max-value)})
+
 (def provider
   {:provider-id :academy/base
    :revision 1
@@ -112,7 +121,44 @@
                        {:op :world-effect :effect-type :mine-detect
                         :scan-ref :scan :blindness-ticks 100}
                        {:op :vfx :effect-id :mine-detect
-                        :event :release :params {:range 30.0}}]}}]})
+                        :event :release :params {:range 30.0}}]}}
+    {:id :thunder-bolt
+     :revision 1
+     :activation :instant
+     :cost {:cp (scale 280.0 420.0)
+            :overload (scale 50.0 27.0)}
+     :cooldown {:ticks (scale 120.0 50.0)}
+     :program {:op :sequence
+               :steps [{:op :query :query-type :attack
+                        :range 20.0
+                        :aoe-radius 8.0
+                        :result-ref :attack
+                        :result-paths {:target [:target-uuid]
+                                       :impact [:impact]
+                                       :victims [:victims]}
+                        :result-flags {:hit [:target-uuid]}}
+                       {:op :branch
+                        :predicate-ref :hit
+                        :then {:op :damage
+                               :amount (scale 10.0 25.0)
+                               :type :electric
+                               :target-ref :target}
+                        :else {:op :patch :entries []}}
+                       {:op :world-effect
+                        :effect-type :damage-targets
+                        :targets-ref :attack
+                        :targets-path [:victims]
+                        :amount (scale 6.0 15.0)
+                        :damage-type :electric}
+                       {:op :world-effect
+                        :effect-type :lightning
+                        :origin-ref :attack
+                        :origin-path [:impact]
+                        :visual-only? true}
+                       {:op :vfx :effect-id :thunder-bolt-strike
+                        :event :perform
+                        :params {:range 20.0 :aoe-radius 8.0}}]}}
+    ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
 (defonce ^:private registered? (atom false))
