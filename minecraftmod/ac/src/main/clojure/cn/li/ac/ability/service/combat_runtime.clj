@@ -151,7 +151,19 @@
                                 (host-query :light-shield context node)))
               :storm-wing (fn [context node]
                             (when-let [host-query (contract/host-port :query)]
-                              (host-query :storm-wing context node)))}]
+                              (host-query :storm-wing context node)))
+              :mag-manip (fn [context node]
+                           (when-let [host-query (contract/host-port :query)]
+                             (host-query :mag-manip context node)))
+              :mag-movement (fn [context node]
+                              (when-let [host-query (contract/host-port :query)]
+                                (host-query :mag-movement context node)))
+              :vec-accel (fn [context node]
+                           (when-let [host-query (contract/host-port :query)]
+                             (host-query :vec-accel context node)))
+              :flashing (fn [context node]
+                          (when-let [host-query (contract/host-port :query)]
+                            (host-query :flashing context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine

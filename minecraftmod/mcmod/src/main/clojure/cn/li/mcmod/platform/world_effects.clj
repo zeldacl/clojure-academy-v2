@@ -97,6 +97,21 @@
   [world-id owner plan]
   (call :execute-vec-accel! world-id owner plan))
 
+(defn execute-mag-manip!
+  "Execute the approved MagManip capture/hold/throw plan behind a Host Port."
+  [world-id owner plan]
+  (call :execute-mag-manip! world-id owner plan))
+
+(defn execute-mag-movement!
+  "Execute one authoritative magnetic movement step behind a Host Port."
+  [world-id owner plan]
+  (call :execute-mag-movement! world-id owner plan))
+
+(defn execute-flashing!
+  "Execute the approved Flashing movement behind a Host Port."
+  [world-id owner plan]
+  (call :execute-flashing! world-id owner plan))
+
 (defn execute-light-shield!
   "Update the authoritative Light Shield state behind a Host Port."
   [world-id owner plan]
