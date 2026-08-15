@@ -15,6 +15,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
 (defonce ^:private engine* (atom nil))
@@ -129,7 +130,10 @@
                                   (if-let [host-query (contract/host-port :query)]
                                     (host-query :blood-retrograde context node)
                                     ((get-in context [:queries :raycast])
-                                     context (assoc node :query-type :raycast))))}]
+                                     context (assoc node :query-type :raycast))))
+              :saved-location (fn [context node]
+                                (when-let [host-query (contract/host-port :query)]
+                                  (host-query :saved-location context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -370,6 +374,24 @@
                                                world-id owner plan))
                                       :applied
                                       :failed)
+                            :effect effect})
+                         :teleport-approved
+                         (let [{:keys [target destination radius ability-id]} effect
+                               destination (or destination target)
+                               location-id (when (map? destination)
+                                             (or (:location-id destination)
+                                                 (:id destination)
+                                                 (:name destination)))
+                               radius (double (or radius 5.0))
+                               valid? (and (= :location-teleport ability-id)
+                                            (string? location-id)
+                                            (<= 1 (count location-id) 64)
+                                            (<= 0.0 radius 32.0)
+                                            (teleportation/available?))
+                               applied? (when valid?
+                                          (teleportation/teleport-approved-location!
+                                           owner ability-id location-id radius))]
+                           {:status (if applied? :applied :failed)
                             :effect effect})
                          {:status :unhandled
                           :reason :missing-world-effect-host-port

@@ -24,3 +24,12 @@
   [owner world-id x y z radius]
   (call :teleport-with-entities! owner world-id
         (double x) (double y) (double z) (double radius)))
+
+(defn teleport-approved-location!
+  "Teleport to a server-resolved saved location.
+
+   The caller supplies an opaque location id; the loader port resolves the
+   stored destination and performs collision/dimension/entity validation."
+  [owner ability-id location-id radius]
+  (boolean (call :teleport-approved-location!
+                owner ability-id location-id (double radius))))

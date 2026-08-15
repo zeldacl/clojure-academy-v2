@@ -286,6 +286,7 @@
                                  (some? origin) (assoc :origin origin)
                                  (some? scan) (assoc :scan scan)
                                  (some? query-result) (assoc :query-result query-result)
+                                 (:ability-id context) (assoc :ability-id (:ability-id context))
                                  projectile-spec (assoc :projectile-spec projectile-spec)
                                  (:world-id context) (assoc :world-id (:world-id context))
                                  true (dissoc :target-ref :target-path

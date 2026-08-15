@@ -105,11 +105,12 @@
      :cost {:cp 12}
      :cooldown {:ticks 20}
      :program {:op :sequence
-               :steps [{:op :query :query-type :raycast
-                        :distance 24.0 :result-ref :destination}
+               :steps [{:op :query :query-type :saved-location
+                        :result-ref :destination}
                        {:op :require :predicate :destination}
-                       {:op :world-effect :effect-type :teleport
-                        :target-ref :destination}
+                       {:op :world-effect :effect-type :teleport-approved
+                        :target-ref :destination
+                        :radius 5.0}
                        {:op :vfx :effect-id :location-teleport
                         :event :release :params {:strength 1.0}}]}}
     {:id :railgun
