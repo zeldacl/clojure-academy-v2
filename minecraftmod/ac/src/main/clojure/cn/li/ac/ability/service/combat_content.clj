@@ -173,7 +173,27 @@
                                           :target-ref :aim}}
                        {:op :vfx :effect-id :electron-bomb
                         :event :spawn
-                        :params {:settle-ticks 20}}]}}
+                       :params {:settle-ticks 20}}]}}
+    {:id :flesh-ripping
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :cost-phase :release
+     :cost {:cp (scale 130.0 270.0)
+            :overload (scale 60.0 50.0)}
+     :cooldown {:ticks (scale 90.0 40.0)}
+     :program {:op :phase
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :raycast
+                                  :distance (scale 6.0 14.0)
+                                  :result-ref :hit}
+                                 {:op :require :predicate :hit}
+                                 {:op :damage :amount (scale 5.0 12.0)
+                                  :type :teleporter
+                                  :target-ref :hit}
+                                 {:op :vfx :effect-id :flesh-ripping
+                                  :event :perform
+                                  :params {:range-min 6.0 :range-max 14.0}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

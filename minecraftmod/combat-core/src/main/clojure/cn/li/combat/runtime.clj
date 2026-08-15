@@ -131,11 +131,18 @@
                      (some? (get-in context [:refs (:predicate node)])))
                {:status :continue}
                {:status :rejected :feedback [{:reason :required-condition-failed}]})
-    :query (let [query-fn (get (:queries context) (:query-type node))]
+    :query (let [query-fn (get (:queries context) (:query-type node))
+                 query-node (reduce (fn [resolved key]
+                                     (if (contains? #{:distance :range :aoe-radius} key)
+                                       (assoc resolved key (resolve-value (get resolved key)
+                                                                          context))
+                                       resolved))
+                                   node
+                                   [:distance :range :aoe-radius])]
              (if-not (ifn? query-fn)
                {:status :rejected :feedback [{:reason :missing-query-port
                                               :query-type (:query-type node)}]}
-               (let [value (query-fn context node)
+               (let [value (query-fn context query-node)
                      context (cond-> (assoc-in context [:refs (:result-ref node :hit)] value)
                                (map? (:result-paths node))
                                (as-> c (reduce-kv (fn [acc ref path]
