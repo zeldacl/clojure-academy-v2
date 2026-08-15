@@ -344,3 +344,30 @@
                                     {:type :mark :target "victim" :rate 1.75})
     (is (= {"victim" 1.75}
            (get-in (runtime/domain-state engine) [:marks])))))
+
+(deftest domain-event-resolves-target-owner-and-sequence
+  (dsl/defability emits-domain-event
+    {:id :test/emits-domain-event :activation :instant
+     :program (dsl/sequence
+                (dsl/raycast {:distance 8.0 :result-ref :hit})
+                {:op :domain-event :event-type :radiation-mark
+                 :target-ref :hit
+                 :metadata {:duration 60 :rate {:op :scale :min 1.0 :max 2.0}}})})
+  (let [catalog (compiler/compile-all!)
+        engine (runtime/create-engine
+                {:catalog catalog
+                 :now-tick (constantly 7)
+                 :initial-owner-state
+                 (fn [_] {:ability-data {:skill-exps {:test/emits-domain-event 0.5}}})
+                 :query-port {:raycast (fn [_ _] {:uuid "victim"})}})
+        result (runtime/dispatch-intent!
+                engine "owner"
+                {:intent-id 91 :op :start
+                 :ability-id :test/emits-domain-event})
+        event (some #(when (= :radiation-mark (:type %)) %) (:events result))]
+    (is (= :accepted (:status result)))
+    (is (= :radiation-mark (:type event)))
+    (is (= "owner" (:owner event)))
+    (is (= "victim" (:target-id event)))
+    (is (= 7 (:tick event)))
+    (is (= 1.5 (get-in event [:metadata :rate])))))

@@ -326,10 +326,21 @@
                     {:status :continue
                      :world-effects [(contract/world-effect
                                       (assoc effect :type (:effect-type node)))]})
-    :domain-event {:status :continue
-                   :events [(contract/domain-event
-                             (assoc (dissoc node :op :event-type)
-                                    :type (:event-type node)))]}
+    :domain-event
+    (let [event (resolve-data (dissoc node :op :event-type) context)
+          target (when-let [target-ref (:target-ref node)]
+                   (get-in context [:refs target-ref]))
+          target-id (if (map? target)
+                      (or (:entity-id target) (:target-id target) (:uuid target))
+                      target)
+          event (cond-> (assoc event
+                               :type (:event-type node)
+                               :owner (:owner context)
+                               :event-seq (long (or (:event-seq context) 0)))
+                  target-id (assoc :target-id target-id)
+                  (:tick context) (assoc :tick (long (:tick context))))]
+      {:status :continue
+       :events [(contract/domain-event event)]})
     :patch {:status :continue
             :state-patch (mapv (fn [[kind key value]]
                                  [kind key (resolve-value value context)])
