@@ -134,6 +134,9 @@
               :electron-missile (fn [context node]
                                   (when-let [host-query (contract/host-port :query)]
                                     (host-query :electron-missile context node)))
+              :scatter-bomb (fn [context node]
+                              (when-let [host-query (contract/host-port :query)]
+                                (host-query :scatter-bomb context node)))
               :saved-location (fn [context node]
                                 (when-let [host-query (contract/host-port :query)]
                                   (host-query :saved-location context node)))}]
@@ -405,6 +408,36 @@
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-electron-missile!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :scatter-bomb
+                         (let [{:keys [world-id query-result ball-count scatter-range
+                                       scatter-angle-degrees auto-aim-radius damage
+                                       anti-afk-tick anti-afk-damage]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               plan {:query-result query-result
+                                     :session-id (:session-id effect)
+                                     :ball-count (long (or ball-count 0))
+                                     :scatter-range (double (or scatter-range 0.0))
+                                     :scatter-angle-degrees (double (or scatter-angle-degrees 0.0))
+                                     :auto-aim-radius (double (or auto-aim-radius 0.0))
+                                     :damage (double (or damage 0.0))
+                                     :anti-afk-tick (long (or anti-afk-tick 200))
+                                     :anti-afk-damage (double (or anti-afk-damage 6.0))}
+                               valid? (and world-id (map? query-result)
+                                            (<= 0 (:ball-count plan) 7)
+                                            (finite? scatter-range) (<= 1.0 (:scatter-range plan) 64.0)
+                                            (finite? scatter-angle-degrees)
+                                            (<= 0.0 (:scatter-angle-degrees plan) 180.0)
+                                            (finite? auto-aim-radius) (<= 0.0 (:auto-aim-radius plan) 16.0)
+                                            (finite? damage) (<= 0.0 (:damage plan) 1000.0)
+                                            (<= 1 (:anti-afk-tick plan) 400)
+                                            (finite? anti-afk-damage) (<= 0.0 (:anti-afk-damage plan) 100.0)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-scatter-bomb!
                                                world-id owner plan))
                                       :applied
                                       :failed)

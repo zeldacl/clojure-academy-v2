@@ -449,6 +449,41 @@
                                 :params {:max-balls 5
                                          :spawn-interval 10
                                          :fire-interval 8}}]}}}
+    {:id :scatter-bomb
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 200
+     :cost-phase :pulse
+     :cost {:cp (scale 3.0 6.0)}
+     :program {:op :phase
+               :start {:op :sequence
+                       :steps [{:op :patch
+                                :entries [[:resource :overload
+                                           {:op :multiply
+                                            :values [-1.0 (scale 80.0 60.0)]}]]}
+                               {:op :session-patch
+                                :entries [[[:ball-count] 0.0]]}]}
+               :pulse {:op :session-patch
+                       :entries [[[:ball-count]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :scatter-bomb
+                                  :result-ref :scatter}
+                                 {:op :world-effect
+                                  :effect-type :scatter-bomb
+                                  :query-ref :scatter
+                                  :ball-count {:op :clamp :min 0.0 :max 7.0
+                                               :value (session-value [:ball-count])}
+                                  :scatter-range 16.0
+                                  :scatter-angle-degrees 35.0
+                                  :auto-aim-radius 5.0
+                                  :damage (scale 8.0 16.0)
+                                  :anti-afk-tick 200
+                                  :anti-afk-damage 6.0}
+                                 {:op :vfx :effect-id :scatter-bomb
+                                  :event :release
+                                  :params {:max-balls 7}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

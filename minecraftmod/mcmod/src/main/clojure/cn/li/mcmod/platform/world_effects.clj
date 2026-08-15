@@ -67,6 +67,11 @@
   [world-id owner plan]
   (call :execute-electron-missile! world-id owner plan))
 
+(defn execute-scatter-bomb!
+  "Execute the bounded Scatter Bomb release behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-scatter-bomb! world-id owner plan))
+
 (defn execute-electron-missile!
   "Execute the bounded Electron Missile volley behind a neutral Host Port."
   [world-id owner plan]
