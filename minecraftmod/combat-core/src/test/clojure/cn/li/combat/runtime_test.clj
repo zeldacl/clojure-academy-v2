@@ -269,3 +269,20 @@
     (is (= :accepted (:status started)))
     (is (= :accepted (:status released)))
     (is (= :release (get-in released [:vfx-signals 0 :event])))))
+
+(deftest session-max-ticks-aborts-deterministically
+  (dsl/defability bounded-session
+    {:id :test/bounded-session :activation :session :period-ticks 1
+     :max-session-ticks 0
+     :program {:op :phase
+               :abort {:op :vfx :effect-id :test/bounded
+                       :event :abort}}})
+  (let [engine (runtime/create-engine {:catalog (compiler/compile-all!)
+                                       :now-tick (constantly 0)})
+        _ (runtime/dispatch-intent! engine "p"
+                                    {:intent-id 52 :op :start
+                                     :ability-id :test/bounded-session})
+        aborted (first (runtime/tick! engine 1))]
+    (is (= :accepted (:status aborted)))
+    (is (= :abort (get-in aborted [:vfx-signals 0 :event])))
+    (is (empty? (:sessions (runtime/snapshot-owner engine "p"))))))
