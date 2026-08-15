@@ -5,6 +5,9 @@
   entity/lightning/explosion callbacks; this namespace owns the shared
   world-query orchestration and protocol-var installation."
   (:require [cn.li.mcbase.runtime.entity-query-core :as query-core]
+            [cn.li.mcbase.runtime.entity-motion-core :as entity-motion]
+            [cn.li.mcbase.runtime.player-motion-core :as player-motion]
+            [cn.li.mcbase.runtime.teleportation-core :as teleportation]
             [cn.li.mcbase.runtime.multipart-entity :as multipart]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
@@ -31,6 +34,20 @@
   (when server
     (resolve-level-fn server world-id)))
 
+(defn- execute-vec-deviation-adapter!
+  [server-fn world-id plan]
+  (let [entities (:entities (:query-result plan))]
+    (and world-id
+         (sequential? entities)
+         (every? (fn [{:keys [uuid]}]
+                   (when uuid
+                     (when-let [entity (entity-motion/resolve-entity
+                                        (server-fn) world-id uuid)]
+                       (entity-motion/set-velocity-for-entity! entity 0.0 0.0 0.0)
+                       (entity-motion/add-tag-for-entity! entity "ac_vm_deviated")
+                       true)))
+                 entities))))
+
 (defn create-world-effects
   [server-fn {:keys [resolve-level-fn spawn-lightning-fn create-explosion-fn spawn-projectile-fn get-entities-in-aabb-fn resolve-entity-id-fn block-id-fn get-entity-by-uuid-fn]
               :or {resolve-level-fn query-core/resolve-level-strict
@@ -46,7 +63,59 @@
                                 ((:spawn-projectile-in-level! (core))
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))
-        multipart-entity? multipart/multipart?]
+        multipart-entity? multipart/multipart?
+        execute-vec-accel! (fn [world-id owner plan]
+                             (let [q (:query-result plan)
+                                   velocity (:initial-velocity q)]
+                               (when (and world-id (map? q) (map? velocity))
+                                 (let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                   (and (player-motion/set-velocity-for-player!
+                                         player (:x velocity) (:y velocity) (:z velocity))
+                                        (when player (.resetFallDistance player)))))))
+        execute-mag-movement! (fn [world-id owner plan]
+                                (let [q (:query-result plan)
+                                      target (select-keys q [:target-x :target-y :target-z])]
+                                  (when (and world-id
+                                             (every? number? (vals target)))
+                                    (let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                      (when player
+                                        (let [current (or (player-motion/get-velocity-for-player player)
+                                                          {:x 0.0 :y 0.0 :z 0.0})
+                                              dx (- (double (:target-x target)) (.getX player))
+                                              dy (- (double (:target-y target)) (.getY player))
+                                              dz (- (double (:target-z target)) (.getZ player))
+                                          dist (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))
+                                          scale (if (> dist 1.0e-6) dist 1.0)
+                                          a (double (:acceleration plan))]
+                                          (player-motion/set-velocity-for-player!
+                                           player
+                                           (+ (double (:x current)) (* a (/ dx scale)))
+                                           (+ (double (:y current)) (* a (/ dy scale)))
+                                           (+ (double (:z current)) (* a (/ dz scale))))))))))
+        execute-flashing! (fn [world-id owner plan]
+                            (let [q (:query-result plan)
+                                  {:keys [to-x to-y to-z]} q]
+                              (when (and world-id (every? number? [to-x to-y to-z]))
+                                (boolean (teleportation/teleport-player!
+                                          (server-fn) owner world-id to-x to-y to-z)))))
+        execute-mag-manip! (fn [world-id _owner plan]
+                             (let [q (:query-result plan)
+                                   entity-uuid (:entity-uuid q)
+                                   position (:position q)
+                                   target (:throw-target q)]
+                               (when (and world-id entity-uuid (map? position) (map? target)
+                                          (every? number? (map position [:x :y :z]))
+                                           (every? number? (map target [:x :y :z]))))
+                                 (let [dx (- (double (:x target)) (double (:x position)))
+                                       dy (- (double (:y target)) (double (:y position)))
+                                       dz (- (double (:z target)) (double (:z position)))
+                                       len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+                                   (when (pos? len)
+                                     (entity-motion/set-velocity-for-entity!
+                                      (entity-motion/resolve-entity (server-fn) world-id entity-uuid)
+                                      (* (double (:throw-speed plan)) (/ dx len))
+                                      (* (double (:throw-speed plan)) (/ dy len))
+                                       (* (double (:throw-speed plan)) (/ dz len)))))))]
     {:spawn-lightning! (fn spawn-lightning-adapter!
                          ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
                          ([world-id x y z visual-only?]
@@ -146,9 +215,15 @@
                                       (when-let [^Entity entity (get-entity-by-uuid-fn level (str entity-uuid))]
                                         (.discard entity)
                                         true)))
-                                  (catch Exception e
-                                    (log/warn "Failed to discard entity:" (ex-message e))
-                                    false)))}))  ;; close fn, map, let, defn
+                                      (catch Exception e
+                                        (log/warn "Failed to discard entity:" (ex-message e))
+                                    false)))
+     :execute-vec-accel! execute-vec-accel!
+     :execute-mag-movement! execute-mag-movement!
+     :execute-flashing! execute-flashing!
+     :execute-mag-manip! execute-mag-manip!
+     :execute-vec-deviation! (fn [world-id _owner plan]
+                               (execute-vec-deviation-adapter! server-fn world-id plan))}))
 
 (defn install-world-effects!
   [world-effects label]
