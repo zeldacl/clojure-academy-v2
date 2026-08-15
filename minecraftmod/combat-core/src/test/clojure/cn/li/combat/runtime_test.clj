@@ -122,6 +122,28 @@
                                           :ability-id :test/amplified})]
     (is (= 20.0 (get-in result [:world-effects 0 :request :base])))))
 
+(deftest damage-request-exposes-source-and-target-snapshots
+  (let [seen (atom nil)
+        engine (runtime/create-engine
+                {:catalog {:abilities {} :nodes {} :content-hash "test"}
+                 :initial-owner-state
+                 (fn [owner]
+                   {:owner owner
+                    :active-abilities (if (= owner "victim") #{:guard} #{})})
+                 :damage-pipeline
+                 [{:priority 1 :provider-id :test :ability-id :test/guard
+                   :node-id :observe
+                   :run (fn [request context]
+                          (reset! seen context)
+                          request)}]})]
+    (is (= 7.0 (:base (runtime/process-damage-request
+                       engine {:source "attacker" :target "victim"
+                                :base 7.0 :type :generic}))))
+    (is (= "attacker" (:source @seen)))
+    (is (= "victim" (:target @seen)))
+    (is (= #{:guard} (get-in @seen [:target-state :active-abilities])))
+    (is (= #{} (get-in @seen [:source-state :active-abilities])))))
+
 (deftest provider-custom-node-is-compiled-and-linked
   (registry/register-provider!
    {:provider-id :test/provider
@@ -242,6 +264,29 @@
         pulsed (first (runtime/tick! engine 1))]
     (is (empty? (:state-patch started)))
     (is (= [[:resource :overload -4.0]] (:state-patch pulsed)))))
+
+(deftest toggle-start-is-idempotent-and-activation-cost-is-separate
+  (dsl/defability toggle-guard
+    {:id :test/toggle-guard :activation :toggle :period-ticks 1
+     :activation-cost {:overload 8.0}
+     :cost-phase :pulse :cost {:cp 2.0}
+     :program {:op :phase
+               :start {:op :vfx :effect-id :test/guard :event :start}
+               :pulse {:op :vfx :effect-id :test/guard :event :pulse}
+               :abort {:op :vfx :effect-id :test/guard :event :end}}})
+  (let [engine (runtime/create-engine
+                {:catalog (compiler/compile-all!)
+                 :initial-owner-state (fn [_] {:resources {:cp 10.0 :overload 10.0}})})
+        started (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 70 :op :start
+                                           :ability-id :test/toggle-guard})
+        stopped (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 71 :op :start
+                                           :ability-id :test/toggle-guard})]
+    (is (= [[:resource :overload -8.0]] (:state-patch started)))
+    (is (= :abort (get-in stopped [:session-ops 0 :op])))
+    (is (= :end (get-in stopped [:vfx-signals 0 :event])))
+    (is (empty? (:sessions (runtime/snapshot-owner engine "p"))))))
 
 (deftest session-counter-enforces-release-window
   (dsl/defability counted-session

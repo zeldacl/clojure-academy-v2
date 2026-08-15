@@ -28,6 +28,14 @@
     (dispatch-signal! signal))
   result)
 
+(defn clear-owner!
+  "Clear all client VFX instances for an owner through vfx-core's signal ABI."
+  [owner]
+  (dispatch-signal! {:op :clear-owner
+                      :owner owner
+                      :event-seq 0})
+  nil)
+
 (defn reset-for-test! []
   (reset! dispatch* nil)
   (reset! missing-dispatch* 0)

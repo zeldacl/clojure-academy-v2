@@ -28,6 +28,25 @@
    :deadline-queue (atom (sorted-map))
    :last-tick (atom nil)})
 
+(defn process-damage-request
+  "Run a neutral DamageRequest through the compiled deterministic pipeline.
+
+   This is the single entry point for platform damage interception; callers
+   receive data only and decide whether/how to apply the final effect."
+  [engine request]
+  (let [request (damage/damage-request request)
+        source (:source request)
+        target (:target request)
+        source-state ((:owner-state engine) source)
+        target-state (when target ((:owner-state engine) target))]
+    (damage/apply-pipeline (:damage-pipeline engine)
+                           request
+                           {:owner target :source source :target target
+                            :state (or target-state source-state)
+                            :source-state source-state
+                            :target-state target-state
+                            :tick (long ((:now-tick engine)))})))
+
 (defn- ability [engine id]
   (get-in (:catalog engine) [:abilities id]))
 
@@ -323,7 +342,10 @@
   (let [result (run-node engine (:program ability) context)
         cost (if (:skip-cost? context)
                {}
-               (activation-cost ability context))
+               (if (and (= :start (:phase context))
+                        (contains? ability :activation-cost))
+                 (resolve-cost (:activation-cost ability) context)
+                 (activation-cost ability context)))
         result (if (and (seq cost) (not= :rejected (:status result)))
                  (update result :state-patch into (mapv (fn [[resource amount]]
                                                           [:resource resource (- (double amount))]) cost))
@@ -386,6 +408,8 @@
                 (>= (double (or (get-in state [:resources resource]) 0.0))
                     (double amount))) cost)))
 
+(declare abort!)
+
 (defn- start! [engine owner intent]
   (let [ability-id (resolve-ability-id engine owner intent)
         ability (ability engine ability-id)]
@@ -394,12 +418,26 @@
       (= :passive (:activation ability))
       (reject :passive-ability-cannot-start {:ability-id ability-id})
       :else
-      (let [state ((:owner-state engine) owner)
+      (let [existing (some (fn [[session-id session]]
+                             (when (and (= owner (:owner session))
+                                        (= ability-id (:ability-id session)))
+                               [session-id session]))
+                           @(:sessions engine))
+            ;; A toggle is a two-state control: a second start intent closes
+            ;; the existing session rather than allocating a duplicate.
+            toggle-result (when (and existing (= :toggle (:activation ability)))
+                            (abort! engine owner
+                                    (assoc intent :op :abort
+                                           :session-id (first existing))))
+            state ((:owner-state engine) owner)
             tick (long ((:now-tick engine)))
-            cost (resolve-cost (:cost ability)
+            cost (resolve-cost (or (:activation-cost ability)
+                                   (when-not (#{:pulse :release} (:cost-phase ability))
+                                     (:cost ability)))
                                {:ability-id ability-id :state state
                                 :phase :start})]
         (cond
+          toggle-result toggle-result
           (not (resources-available? state cost))
           (reject :insufficient-resource {:ability-id ability-id})
           (not (cooldown-ready? state ability-id tick))

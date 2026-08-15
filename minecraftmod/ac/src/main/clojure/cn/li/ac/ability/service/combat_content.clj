@@ -2,7 +2,8 @@
   "Neutral combat content registration owned by AC's composition root.
 
    This namespace contains only Clojure data/DSL. It does not reach a
-   Minecraft object, packet, presentation host or VFX runtime.")
+   Minecraft object, packet, presentation host or VFX runtime."
+  (:require [cn.li.ac.ability.skill-config :as skill-config]))
 
 (defn- scale
   "Return a bounded skill-exp interpolation expression for Combat Core.

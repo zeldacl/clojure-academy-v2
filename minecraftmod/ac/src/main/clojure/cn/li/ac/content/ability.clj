@@ -99,7 +99,10 @@
 
 (defn- run-namespace-init!
   [ns-sym]
-  (when-let [init-var (ns-resolve ns-sym 'init!)]
+  ;; VecReflection is implemented by Combat Core's damage pipeline. Its old
+  ;; initializer only installs the removed Context-era damage listeners.
+  (when-not (= ns-sym 'cn.li.ac.content.ability.vecmanip.vec-reflection)
+    (when-let [init-var (ns-resolve ns-sym 'init!)]
     (when-let [init-fn (and (bound? init-var) (var-get init-var))]
       (when (ifn? init-fn)
         (try
@@ -110,7 +113,7 @@
               ;; Keep existing handlers and continue rebuilding content registries.
               (log/debug "Skipped duplicate network handler during ability reinit"
                          {:namespace ns-sym :data (ex-data e)})
-              (throw e))))))))
+              (throw e)))))))))
 
 (defn init-ability-content!
   []

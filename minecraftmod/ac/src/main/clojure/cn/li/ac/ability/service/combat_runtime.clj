@@ -72,6 +72,38 @@
                             :y (- (* sin-p speed))
                             :z (* cos-p (/ lz safe-horizontal) speed)}}))))
 
+(defn- vec-deviation-query
+  "Resolve the authoritative projectile scan for one Combat pulse.
+
+   The result is immutable neutral data.  Platform adapters decide how an
+   entity is stopped; no entity object or Context state crosses this boundary.
+   Already-tagged entities and the owner are excluded so repeated deadline
+   pulses do not reapply the same deflection." 
+  [context node]
+  (let [owner (str (:owner context))
+        position (raycast/player-position owner)
+        radius (double (or (:radius node)
+                           (skill-config/tunable-double :vec-deviation
+                                                        :targeting.radius)))]
+    (when (and (map? position)
+               (world-effects/available?)
+               (Double/isFinite radius)
+               (<= 0.0 radius 32.0))
+      (let [entities (world-effects/find-entities-in-radius
+                      (:world-id position)
+                      (double (:x position))
+                      (double (:y position))
+                      (double (:z position)) radius)]
+        {:center (select-keys position [:x :y :z :world-id])
+         :radius radius
+         :entities (->> (or entities [])
+                         (filter map?)
+                         (remove #(= owner (str (or (:uuid %) (:entity-id %)))))
+                         (remove :vec-deviation-marked?)
+                         (remove :ac-vm-deviated?)
+                         (take 64)
+                         vec)}))))
+
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
 
@@ -85,7 +117,8 @@
     :node-id :damage-amplifier
     :run (fn [request context]
            (let [exp (double (ability-model/get-skill-exp
-                              (get-in context [:state :ability-data])
+                              (get-in (or (:source-state context)
+                                           (:state context) {}) [:ability-data])
                               :rad-intensify))
                  multiplier (+ 1.4 (* 0.4 exp))]
              (update request :base #(* (double %) multiplier))))}
@@ -94,11 +127,13 @@
     :ability-id :vec-deviation
     :node-id :damage-reduction
     :run (fn [request context]
-           (let [active? (contains? (get-in context [:state :active-abilities] #{})
+           (let [active? (contains? (get-in (or (:target-state context)
+                                               (:state context) {}) [:active-abilities] #{})
                                     :vec-deviation)
                  base (double (:base request))
                  exp (double (ability-model/get-skill-exp
-                              (get-in context [:state :ability-data])
+                              (get-in (or (:target-state context)
+                                           (:state context) {}) [:ability-data])
                               :vec-deviation))
                  reduction-rate (+ 0.4 (* 0.5 exp))
                  cp-cost (max 0.0 (+ 15.0 (* -3.0 exp)))]
@@ -237,8 +272,9 @@
                           (when-let [host-query (contract/host-port :query)]
                             (host-query :flashing context node)))
               :vec-deviation (fn [context node]
-                               (when-let [host-query (contract/host-port :query)]
-                                 (host-query :vec-deviation context node)))}]
+                               (if-let [host-query (contract/host-port :query)]
+                                 (host-query :vec-deviation context node)
+                                 (vec-deviation-query context node)))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -773,6 +809,22 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         :vec-deviation
+                         (let [{:keys [world-id query-result radius session-id]} effect
+                               radius (double (or radius 5.0))
+                               valid? (and world-id (map? query-result)
+                                            (vector? (:entities query-result))
+                                            (<= 0.0 radius 32.0)
+                                            (world-effects/available?))
+                               plan {:query-result query-result
+                                     :session-id session-id
+                                     :radius radius}]
+                           {:status (if (and valid?
+                                              (world-effects/execute-vec-deviation!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          :teleport-approved
                          (let [{:keys [target destination radius ability-id]} effect
                                destination (or destination target)
@@ -889,6 +941,27 @@
       (commit-state-patch! owner (:state-patch result)))
     result))
 (defn dispatch-domain-event! [event] (combat/dispatch-domain-event! (engine) event))
+
+(defn process-damage-request!
+  "Authoritative damage interception boundary for platform adapters.
+
+   The old mutable damage-handler registry is not consulted. Combat Core
+   returns the transformed neutral request; the platform writes only the
+   resulting numeric amount back to its event."
+  [player-id attacker-id original-damage damage-source]
+  (let [request (combat/process-damage-request
+                 (engine)
+                 {:source (or attacker-id :environment)
+                  :target player-id
+                  :base (double original-damage)
+                  :type (or (:damage-type damage-source) :generic)
+                  :components {:direct (double original-damage)}
+                  :tags #{:combat :intercepted}
+                  :metadata {:damage-source damage-source}})]
+    (if (:cancelled? request)
+      0.0
+      (double (:base request)))))
+
 (defn install-world-effect-handler!
   "Install AC's ordered WorldEffect interpreter.
 
