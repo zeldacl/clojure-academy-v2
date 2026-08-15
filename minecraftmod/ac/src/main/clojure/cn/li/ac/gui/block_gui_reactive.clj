@@ -117,42 +117,46 @@
 ;; it actually refreshes — unlike a bare put-user-signal! computed).
 ;; ============================================================================
 
-(defn- attach-histogram! [ctx container h]
+(defn- histogram-elems
+  "Build the add-histogram! elems for one histogram config."
+  [container h]
   (case (:type h)
     :buffer (let [default-desc (fn [] (format "%.0f" (double ((:value-fn h)))))]
-              (info-area/add-histogram!
-                ctx
-                [{:label (or (:label h) "Value")
-                  :color (or (:color h) 0xFF25C4FF)
-                  :value-fn (:value-fn h)
-                  ;; :max-fn not :max — evaluated per frame like :value-fn, so
-                  ;; a max that syncs in late (DataSlot) still scales the bar
-                  ;; correctly instead of freezing the ratio at attach time.
-                  :max-fn (:max-fn h)
-                  :desc-fn (or (:desc-fn h) default-desc)}]))
+              [{:label (or (:label h) "Value")
+                :color (or (:color h) 0xFF25C4FF)
+                :value-fn (:value-fn h)
+                ;; :max-fn not :max — evaluated per frame like :value-fn, so
+                ;; a max that syncs in late (DataSlot) still scales the bar
+                ;; correctly instead of freezing the ratio at attach time.
+                :max-fn (:max-fn h)
+                :desc-fn (or (:desc-fn h) default-desc)}])
     :energy (let [value-fn (fn [] (double (or @(:energy container) 0.0)))]
-              (info-area/add-histogram!
-                ctx
-                [{:label "Energy"
-                  :color 0xFF25C4FF
-                  :value-fn value-fn
-                  :max-fn (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
-                  :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}]))
+              [{:label "Energy"
+                :color 0xFF25C4FF
+                :value-fn value-fn
+                :max-fn (fn [] (max 1.0 (double (or @(:max-energy container) 1.0))))
+                :desc-fn (fn [] (format "%.0f IF" (double (value-fn))))}])
     :capacity (let [load-fn (fn [] (double (or @(:load container) 0.0)))
                     max-fn (fn [] (max 1.0 (double (or @(:max-capacity container) 1.0))))]
-                (info-area/add-histogram!
-                  ctx
-                  [{:label "Load"
-                    :color 0xFFFF6C00
-                    :value-fn load-fn
-                    :max-fn max-fn
-                    :desc-fn (fn [] (str (long (load-fn)) "/" (long (max-fn))))}]))
-    nil))
+                [{:label "Load"
+                  :color 0xFFFF6C00
+                  :value-fn load-fn
+                  :max-fn max-fn
+                  :desc-fn (fn [] (str (long (load-fn)) "/" (long (max-fn))))}])
+    []))
 
 (defn- attach-histograms-and-properties!
   [r histograms properties container]
   (let [ctx (info-area/clear-area! r)]
-    (doseq [h histograms] (attach-histogram! ctx container h))
+    ;; Upstream TechUI.infoPage.histogram(elems*): ONE 210×210×0.4 frame with
+    ;; bars side by side (bar x = 56 + idx*40), then one property row per elem
+    ;; — the phase generator and imag fusor show TWO bars (energy + liquid)
+    ;; in that single frame. A per-histogram add-histogram! call stacked
+    ;; separate frames vertically and a second frame (88px + rows ≈ 98px)
+    ;; overflowed the 177px info area, clipping the second bar.
+    (info-area/add-histogram!
+      ctx
+      (mapcat (partial histogram-elems container) histograms))
     (when (and (seq histograms) (seq properties)) (info-area/add-sepline! ctx "Info"))
     (doseq [[k f] properties] (info-area/add-property! ctx (name k) f))))
 
