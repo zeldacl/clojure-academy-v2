@@ -73,6 +73,13 @@
                   gui-label-sections)]
     (if key (i18n/translate key) (str label))))
 
+(defn add-blank!
+  "Insert a blank row (upstream InfoPage.blank(n) — e.g. spacing between the
+  INIT password field and the INIT button)."
+  [ctx & [rows]]
+  (advance! ctx (* row-h (double (or rows 1))))
+  nil)
+
 (defn add-sepline!
   [ctx label]
   (let [^UiRt rt (:rt ctx)

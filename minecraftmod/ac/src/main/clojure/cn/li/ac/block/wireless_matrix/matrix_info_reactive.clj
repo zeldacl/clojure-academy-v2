@@ -177,7 +177,7 @@
           max-capacity (max 1.0 (double (:max-capacity data)))]
       (info-area/add-histogram!
         ctx
-        [{:label "Load"
+        [{:label "capacity"
           :color 0xFFFF6C00
           :value-fn load-fn
           :max max-capacity
@@ -188,16 +188,24 @@
       (info-area/add-property! ctx "bandwidth" (str (:bandwidth data) " IF/T"))
       (cond
         (network-initialized? data)
+        ;; Upstream GuiMatrix: owner sees ssid -> change_pass sepline ->
+        ;; password; non-owner sees ssid + password WITHOUT the sepline.
         (do
           (info-area/add-sepline! ctx "wireless_info")
-          (info-area/add-property! ctx "ssid" (:ssid data)
-            :editable? (:editable-ssid? policy)
-            :on-change #(send-change-ssid container %))
-          (info-area/add-sepline! ctx "change_pass")
-          (info-area/add-property! ctx "password" (:password data)
-            :editable? (:editable-password? policy)
-            :masked? true
-            :on-change #(send-change-password container %)))
+          (if (:editable-ssid? policy)
+            (do
+              (info-area/add-property! ctx "ssid" (:ssid data)
+                :editable? true
+                :on-change #(send-change-ssid container %))
+              (info-area/add-sepline! ctx "change_pass")
+              (info-area/add-property! ctx "password" (:password data)
+                :editable? true
+                :masked? true
+                :on-change #(send-change-password container %)))
+            (do
+              (info-area/add-property! ctx "ssid" (:ssid data))
+              (info-area/add-property! ctx "password" (:password data)
+                :masked? true))))
 
         (:show-init? policy)
         (let [_ (info-area/add-sepline! ctx "wireless_init")
@@ -207,6 +215,8 @@
                           :editable? true :masked? true :color-change? false)
               ^INode ssid-n (:value-node ssid-row)
               ^INode pass-n (:value-node pass-row)]
+          ;; Upstream blank(1) between the password field and the INIT button.
+          (info-area/add-blank! ctx)
           (info-area/add-button! ctx "INIT"
             (make-init-button-handler rt container player ssid-n pass-n)))
 
