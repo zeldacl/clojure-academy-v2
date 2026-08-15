@@ -44,13 +44,13 @@
                :steps [{:op :patch :entries [[:resource :cp -1.0]]}
                        {:op :vfx :effect-id :body-intensify
                         :event :active :params {:strength 0.35}}]}}
-    {:id :vector-reflection
+    {:id :vec-reflection
      :revision 1
      :activation :passive
      :program {:op :sequence
                :steps [{:op :require :predicate :damage-event}
                        {:op :domain-event :event-type :reflect-damage
-                        :metadata {:source :vector-reflection}}]}}
+                        :metadata {:source :vec-reflection}}]}}
     {:id :dim-folding-theorem
      :revision 1
      :activation :passive
