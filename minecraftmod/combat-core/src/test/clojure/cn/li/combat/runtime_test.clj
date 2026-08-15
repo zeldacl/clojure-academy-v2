@@ -161,3 +161,28 @@
            (get-in result [:world-effects 1 :targets])))
     (is (= {:x 1 :y 2 :z 3}
            (get-in result [:world-effects 1 :origin])))))
+
+(deftest phase-and-session-state-are-deadline-driven
+  (dsl/defability phased
+    {:id :test/phased :activation :session :period-ticks 2
+     :program {:op :phase
+               :start {:op :session-patch :entries [[[:started?] true]]}
+               :pulse {:op :sequence
+                       :steps [{:op :session-patch :entries [[[:pulsed?] true]]}
+                               {:op :vfx :effect-id :test/pulse :event :pulse}]}
+               :abort {:op :vfx :effect-id :test/pulse :event :abort}}})
+  (let [engine (runtime/create-engine {:catalog (compiler/compile-all!)
+                                       :now-tick (constantly 0)})
+        started (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 45 :op :start
+                                           :ability-id :test/phased})
+        pulsed (first (runtime/tick! engine 2))
+        aborted (runtime/dispatch-intent! engine "p"
+                                          {:intent-id 46 :op :abort
+                                           :session-id ["p" 45]})]
+    (is (= :accepted (:status started)))
+    (is (empty? (:vfx-signals started)))
+    (is (= :pulse (get-in pulsed [:vfx-signals 0 :event])))
+    (is (= :accepted (:status aborted)))
+    (is (= :abort (get-in aborted [:vfx-signals 0 :event])))
+    (is (empty? (:sessions (runtime/snapshot-owner engine "p"))))))

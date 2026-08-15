@@ -5,7 +5,8 @@
            [java.security MessageDigest]))
 
 (def ^:private built-in-ops
-  #{:sequence :repeat :branch :require :query :damage :vfx :world-effect :domain-event :patch})
+  #{:sequence :repeat :branch :require :query :damage :vfx :world-effect
+    :domain-event :patch :phase :session-patch})
 
 (defn- canonical [value]
   (cond
@@ -47,6 +48,12 @@
                   (fail "repeat steps must be a vector" {:path path}))
                 (doseq [[idx child] (map-indexed vector (:steps node))]
                   (walk! child (conj path :steps idx) nodes seen)))
+      :phase (doseq [[phase child] (select-keys node [:start :pulse :release :abort :passive])
+                     :when child]
+               (walk! child (conj path phase) nodes seen))
+      :session-patch (when-not (vector? (:entries node))
+                       (fail "session-patch entries must be a vector"
+                             {:path path :entries (:entries node)}))
       :branch (do (walk! (:then node) (conj path :then) nodes seen)
                   (when (:else node) (walk! (:else node) (conj path :else) nodes seen)))
       :node (do

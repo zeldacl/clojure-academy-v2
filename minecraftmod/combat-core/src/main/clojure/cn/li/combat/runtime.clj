@@ -64,6 +64,17 @@
   [context ref path]
   (get-in (get-in context [:refs ref]) path))
 
+(defn- resolve-session-patch
+  [entries context]
+  (mapv (fn [[path value]]
+          [path (resolve-value value context)]) entries))
+
+(defn- apply-session-patches
+  [state patches]
+  (reduce (fn [acc [path value]]
+            (assoc-in acc path value))
+          (or state {}) patches))
+
 (defn- combine-results [left right]
   (let [result (into {:status (cond
                                 (= :rejected (:status left)) :rejected
@@ -73,7 +84,7 @@
                      (map (fn [key]
                             [key (vec (concat (or (get left key) [])
                                              (or (get right key) [])))])
-                          [:state-patch :world-effects :vfx-signals :events :feedback]))]
+                          [:state-patch :session-patch :world-effects :vfx-signals :events :feedback]))]
     (assoc result :context (or (:context right) (:context left)))))
 
 (defn- run-node [engine node context]
@@ -94,6 +105,9 @@
                                                    context))))
                     {:status :continue :context context}
                     (range (long (:count node))))
+    :phase (if-let [selected (get node (:phase context))]
+             (run-node engine selected context)
+             {:status :continue :context context})
     :branch (if-let [selected (if (or (get-in context [:flags (:predicate node)])
                                       (and (:predicate-ref node)
                                            (some? (get-in context [:refs (:predicate-ref node)]))))
@@ -210,6 +224,8 @@
             :state-patch (mapv (fn [[kind key value]]
                                  [kind key (resolve-value value context)])
                                (:entries node))}
+    :session-patch {:status :continue
+                    :session-patch (resolve-session-patch (:entries node) context)}
     :node (let [descriptor (get-in (:catalog engine) [:nodes (:node-id node)])]
             (if-let [run (:run descriptor)]
               (run context node)
@@ -218,7 +234,9 @@
 
 (defn- execute [engine ability context]
   (let [result (run-node engine (:program ability) context)
-        cost (resolve-cost (:cost ability) context)
+        cost (if (:skip-cost? context)
+               {}
+               (resolve-cost (:cost ability) context))
         result (if (and (seq cost) (not= :rejected (:status result)))
                  (update result :state-patch into (mapv (fn [[resource amount]]
                                                           [:resource resource (- (double amount))]) cost))
@@ -277,6 +295,7 @@
           (let [session-id (or (:session-id intent) [owner (:intent-id intent)])
                 context {:owner owner :session-id session-id :input intent
                          :ability-id ability-id :state state
+                         :session-state {}
                          :tick tick
                          :queries (:query-port engine)
                          :flags (:flags intent) :refs (:refs intent)
@@ -297,7 +316,9 @@
                   (swap! (:sessions engine) assoc session-id
                          {:session-id session-id :owner owner :ability-id ability-id
                           :phase :active :next-deadline deadline
-                          :intent-id (:intent-id intent)})
+                          :intent-id (:intent-id intent)
+                          :state (apply-session-patches {}
+                                                        (:session-patch result))})
                   (swap! (:deadline-queue engine) update deadline
                          (fnil conj #{}) session-id)
                   (update result :session-ops conj
@@ -310,6 +331,7 @@
     (let [ability (ability engine (:ability-id session))
           result (execute engine ability {:owner owner :session-id (:session-id session)
                                           :ability-id (:ability-id session)
+                                          :session-state (:state session)
                                           :tick (long ((:now-tick engine)))
                                           :input intent :phase :release
                                           :state ((:owner-state engine) owner)
@@ -323,10 +345,24 @@
 
 (defn- abort! [engine owner intent]
   (if (contains? @(:sessions engine) (:session-id intent))
-    (do (swap! (:sessions engine) dissoc (:session-id intent))
-        (contract/result {:session-ops [{:op :abort
-                                         :session-id (:session-id intent)
-                                         :owner owner}]}))
+    (let [session (get @(:sessions engine) (:session-id intent))
+          ability (ability engine (:ability-id session))
+          result (execute engine ability {:owner owner
+                                          :session-id (:session-id intent)
+                                          :ability-id (:ability-id session)
+                                          :session-state (:state session)
+                                          :tick (long ((:now-tick engine)))
+                                          :phase :abort
+                                          :skip-cost? true
+                                          :input intent
+                                          :state ((:owner-state engine) owner)
+                                          :queries (:query-port engine)
+                                          :flags (:flags intent)
+                                          :refs (:refs intent)
+                                          :event-seq (long (or (:event-seq intent) 1))})]
+      (swap! (:sessions engine) dissoc (:session-id intent))
+      (update result :session-ops conj
+              {:op :abort :session-id (:session-id intent) :owner owner}))
     (reject :unknown-session {:session-id (:session-id intent)})))
 
 (defn dispatch-intent! [engine owner raw-intent]
@@ -350,13 +386,21 @@
                 (let [ability (ability engine (:ability-id session))
                       result (execute engine ability {:owner (:owner session)
                                                       :session-id session-id
+                                                      :session-state (:state session)
                                                       :tick tick
                                                       :phase :pulse
                                                       :state ((:owner-state engine) (:owner session))
                                                       :queries (:query-port engine)
                                                       :event-seq tick})
                       next-tick (+ tick (long (or (:period-ticks ability) 1)))]
-                  (swap! (:sessions engine) assoc-in [session-id :next-deadline] next-tick)
+                  (swap! (:sessions engine)
+                         (fn [sessions]
+                           (-> sessions
+                               (assoc-in [session-id :next-deadline] next-tick)
+                               (assoc-in [session-id :state]
+                                         (apply-session-patches
+                                          (:state session)
+                                          (:session-patch result))))))
                   (swap! (:deadline-queue engine) update next-tick (fnil conj #{}) session-id)
                   result)
                 (reject :unknown-session {:session-id session-id}))) due))))
