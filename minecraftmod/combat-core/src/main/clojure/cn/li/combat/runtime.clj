@@ -255,23 +255,30 @@
                           (mapv (fn [[resource amount]]
                                   [:resource resource (double amount)])
                                 (get-in request [:metadata :resource-cost]))))))
-    :vfx {:status :continue
-          ;; A combat output is authoritative creation-or-update.  Using
-          ;; :spawn keeps the first confirmed signal from being dropped when
-          ;; the client has no local instance yet; vfx-core makes repeated
-          ;; stable-key spawns idempotent and sequence-checked.
-          :vfx-signals [(contract/signal {:op :spawn
-                                           :effect-id (:effect-id node)
-                                           :instance-key (or (:instance-key node)
-                                                             [:combat (:session-id context) (:effect-id node)])
-                                           :owner (:owner context)
-                                           :world-id (:world-id context)
-                                           :event-seq (long (or (:event-seq context) 0))
-                                           :seed (long (or (:seed context) 0))
-                                           :event (:event node)
-                                           :params (if-let [params-ref (:params-ref node)]
-                                                     (get-in context [:refs params-ref])
-                                                     (:params node))})]}
+    :vfx (let [intent-id (or (:intent-id context)
+                             (get-in context [:input :intent-id]))
+               activation-key (or (:session-id context)
+                                  [:intent (or intent-id (:event-seq context) 0)])
+               params (if-let [params-ref (:params-ref node)]
+                        (get-in context [:refs params-ref])
+                        (:params node))]
+          {:status :continue
+           ;; A combat output is authoritative creation-or-update.  Using
+           ;; :spawn keeps the first confirmed signal from being dropped when
+           ;; the client has no local instance yet; vfx-core makes repeated
+           ;; stable-key spawns idempotent and sequence-checked.
+           :vfx-signals [(contract/signal {:op :spawn
+                                            :effect-id (:effect-id node)
+                                            :instance-key (or (:instance-key node)
+                                                              [:combat (:owner context)
+                                                               activation-key
+                                                               (:effect-id node)])
+                                            :owner (:owner context)
+                                            :world-id (:world-id context)
+                                            :event-seq (long (or (:event-seq context) 0))
+                                            :seed (long (or (:seed context) 0))
+                                            :event (:event node)
+                                            :params params})]})
     :world-effect (let [effect (resolve-data (dissoc node :op :effect-type) context)
                         target (when-let [target-ref (:target-ref node)]
                                  (get-in context [:refs target-ref]))
@@ -336,11 +343,17 @@
                       (or (:entity-id target) (:target-id target) (:uuid target))
                       target)
           intent-id (or (:intent-id context) (get-in context [:input :intent-id]))
+          event-id (or (:event-id event)
+                       [:combat (:owner context) (:ability-id context)
+                        (or (:session-id context) [:intent intent-id])
+                        (long (or (:event-seq context) 0))
+                        (:event-type node) target-id])
           event (cond-> (assoc event
                                :type (:event-type node)
                                :owner (:owner context)
                                :combat-domain? true
-                               :event-seq (long (or (:event-seq context) 0)))
+                               :event-seq (long (or (:event-seq context) 0))
+                               :event-id event-id)
                   intent-id (assoc :intent-id intent-id)
                   (:session-id context) (assoc :session-id (:session-id context))
                   target-id (assoc :target-id target-id)

@@ -23,6 +23,8 @@
     (is (= 1 (count (:world-effects result))))
     (is (= :test/arc (get-in result [:vfx-signals 0 :effect-id])))
     (is (= :spawn (get-in result [:vfx-signals 0 :op])))
+    (is (= [:combat "p1" ["p1" 1] :test/arc]
+           (get-in result [:vfx-signals 0 :instance-key])))
     (is (= [[:resource :cp -3.0]] (:state-patch result)))))
 
 (deftest duplicate-intent-is-rejected
@@ -373,6 +375,9 @@
     (is (true? (:combat-domain? event)))
     (is (= "owner" (:owner event)))
     (is (= 91 (:intent-id event)))
+    (is (= [:combat "owner" :test/emits-domain-event ["owner" 91]
+            0 :radiation-mark "victim"]
+           (:event-id event)))
     (is (= "victim" (:target-id event)))
     (is (= 7 (:tick event)))
     (is (= 1.5 (get-in event [:metadata :rate])))))
