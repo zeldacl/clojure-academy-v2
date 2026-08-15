@@ -66,6 +66,20 @@
   (into {} (map (fn [[resource amount]]
                   [resource (double (resolve-value amount context))]) cost)))
 
+(declare resolve-data)
+
+(defn- resolve-data
+  "Resolve data-only expressions recursively without invoking host code."
+  [value context]
+  (cond
+    (and (map? value) (:op value)) (resolve-value value context)
+    (map? value) (reduce-kv (fn [m key nested]
+                              (assoc m key (resolve-data nested context)))
+                            {} value)
+    (vector? value) (mapv #(resolve-data % context) value)
+    (seq? value) (mapv #(resolve-data % context) value)
+    :else value))
+
 (defn- activation-cost
   "Resolve only the cost due at the current lifecycle phase.
 
@@ -227,7 +241,7 @@
                                            :params (if-let [params-ref (:params-ref node)]
                                                      (get-in context [:refs params-ref])
                                                      (:params node))})]}
-    :world-effect (let [effect (dissoc node :op :effect-type)
+    :world-effect (let [effect (resolve-data (dissoc node :op :effect-type) context)
                         target (when-let [target-ref (:target-ref node)]
                                  (get-in context [:refs target-ref]))
                         target (if (and (:target-ref node) (:target-path node))

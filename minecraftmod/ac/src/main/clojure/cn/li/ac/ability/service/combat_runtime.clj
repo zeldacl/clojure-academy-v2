@@ -107,7 +107,12 @@
                                                      (:impact attack-data)
                                                      3.0
                                                      #{owner})]
-                                        (assoc attack-data :victims victims))))}]
+                                        (assoc attack-data :victims victims))))
+              :groundshock (fn [context node]
+                             (if-let [host-query (contract/host-port :query)]
+                               (host-query :groundshock context node)
+                               (when-let [block-scan (get-in context [:queries :block-scan])]
+                                 (block-scan context (assoc node :query-type :block-scan))))) }]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -267,6 +272,40 @@
                                plan (assoc effect :ray-count (long (or ray-count 1)))]
                            {:status (if (and valid?
                                               (world-effects/execute-directed-blastwave!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :groundshock
+                         (let [{:keys [world-id query-result amount max-iterations
+                                       init-energy entity-search-radius launch-scale
+                                       launch-random-base launch-random-span breaking]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               {:keys [drop-rate ground-break-probability]} breaking
+                               valid? (and world-id (map? query-result)
+                                            (finite? amount) (pos? (double amount))
+                                            (<= (double amount) 1000.0)
+                                            (finite? max-iterations)
+                                            (<= 1.0 (double max-iterations) 64.0)
+                                            (finite? init-energy)
+                                            (<= 0.0 (double init-energy) 1000.0)
+                                            (finite? entity-search-radius)
+                                            (<= 0.0 (double entity-search-radius) 16.0)
+                                            (finite? launch-scale)
+                                            (<= 0.0 (double launch-scale) 4.0)
+                                            (finite? launch-random-base)
+                                            (<= 0.0 (double launch-random-base) 4.0)
+                                            (finite? launch-random-span)
+                                            (<= 0.0 (double launch-random-span) 4.0)
+                                            (vector? drop-rate)
+                                            (= 2 (count drop-rate))
+                                            (every? #(and (finite? %) (<= 0.0 (double %) 1.0)) drop-rate)
+                                            (finite? ground-break-probability)
+                                            (<= 0.0 (double ground-break-probability) 1.0)
+                                            (world-effects/available?))
+                               plan (assoc effect :max-iterations (long max-iterations))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-groundshock!
                                                world-id owner plan))
                                       :applied
                                       :failed)

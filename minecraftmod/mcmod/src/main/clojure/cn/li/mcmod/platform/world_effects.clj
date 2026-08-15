@@ -47,6 +47,11 @@
   [world-id owner plan]
   (call :execute-directed-blastwave! world-id owner plan))
 
+(defn execute-groundshock!
+  "Execute the bounded ground propagation/launch plan behind a Host Port."
+  [world-id owner plan]
+  (call :execute-groundshock! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))
