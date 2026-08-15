@@ -1012,13 +1012,29 @@ tasks.register("verifyCombatNoPrivateRuntime") {
     group = "verification"
     doLast {
         def bad = fileTree(file("combat-core/src/main")) { include "**/*.clj" }.files.findAll {
-            it.text =~ /context-registry|context-dispatcher|AbilityContentProvider|ServiceLoader/
+            it.text =~ /context-registry|context-dispatcher|AbilityContentProvider|ServiceLoader|requiring-resolve|load-string|eval\s*\(/ 
         }
         if (!bad.isEmpty()) throw new GradleException("Combat Core contains removed private runtime/SPI references: ${bad}")
         logger.lifecycle("[verifyCombatNoPrivateRuntime] ok")
     }
 }
-tasks.register("verifyCombatProviderClosure") { group = "verification"; dependsOn "verifyCombatDependencyDirection" }
+tasks.register("verifyCombatProviderClosure") {
+    group = "verification"
+    description = "Ensure Combat Core does not dynamically resolve nodes or providers."
+    dependsOn "verifyCombatDependencyDirection"
+    doLast {
+        def violations = []
+        fileTree(file("combat-core/src/main")) {
+            include "**/*.clj"; include "**/*.cljc"
+        }.files.each { File source ->
+            if (source.text =~ /requiring-resolve|load-string|eval\s*\(/) {
+                violations << "${source}: Combat Core must use compile-time linked functions"
+            }
+        }
+        if (!violations.isEmpty()) throw new GradleException(violations.join("\n"))
+        logger.lifecycle("[verifyCombatProviderClosure] ok")
+    }
+}
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
     description = "Require every controllable AC defskill to have a Combat Core definition."

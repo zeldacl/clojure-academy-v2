@@ -83,7 +83,8 @@
 (defn compile-all! []
   (let [compiled (into {} (map (fn [[id ability]] [id (compile-ability ability)])
                                (registry/abilities)))
-        catalog {:schema-version 1
+    catalog {:schema-version 1
+                 :nodes (registry/nodes)
                  :abilities compiled
                  :providers (registry/providers)}]
     (assoc catalog :content-hash (content-hash catalog))))

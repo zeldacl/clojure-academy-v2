@@ -83,6 +83,15 @@
                (contract/intent {:intent-id 1 :op :start :owner "p"
                                  :slot -1}))))
 
+(deftest vfx-contract-normalizes-seed-and-rejects-bad-sequence
+  (is (= 0 (:seed (contract/signal {:op :spawn :effect-id :e
+                                    :instance-key [:i] :owner "p"
+                                    :event-seq 1}))))
+  (is (thrown? clojure.lang.ExceptionInfo
+               (contract/signal {:op :spawn :effect-id :e
+                                 :instance-key [:i] :owner "p"
+                                 :event-seq "1"}))))
+
 (deftest damage-pipeline-is-deterministically-applied
   (dsl/defability amplified
     {:id :test/amplified :activation :instant
