@@ -324,7 +324,7 @@
                 context {:owner owner :session-id session-id :input intent
                          :ability-id ability-id :state state
                          :session-state {}
-                         :tick tick
+                         :tick tick :phase :start
                          :queries (:query-port engine)
                          :flags (:flags intent) :refs (:refs intent)
                          :event-seq 0}

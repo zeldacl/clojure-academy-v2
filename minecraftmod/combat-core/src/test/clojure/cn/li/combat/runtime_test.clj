@@ -205,7 +205,7 @@
     {:id :test/pulse-cost :activation :session :period-ticks 1
      :cost-phase :pulse :cost {:cp 2}
      :program {:op :phase
-               :start {:op :patch :entries []}
+               :start {:op :session-patch :entries [[[:started?] true]]}
                :pulse {:op :patch :entries []}
                :release {:op :patch :entries []}}})
   (let [engine (runtime/create-engine
@@ -214,9 +214,13 @@
         started (runtime/dispatch-intent! engine "p"
                                           {:intent-id 47 :op :start
                                            :ability-id :test/pulse-cost})
+        started-state (runtime/snapshot-owner engine "p")
         pulsed (first (runtime/tick! engine 1))
         released (runtime/dispatch-intent! engine "p"
                                            {:intent-id 48 :op :release})]
     (is (empty? (:state-patch started)))
+    (is (= [[[:started?] true]] (:session-patch started)))
+    (is (= true (get-in started-state
+                        [:sessions 0 :state :started?])))
     (is (= [[:resource :cp -2.0]] (:state-patch pulsed)))
     (is (empty? (:state-patch released)))))
