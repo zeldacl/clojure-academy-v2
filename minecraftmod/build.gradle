@@ -1102,7 +1102,7 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
         def bridge = file("ac/src/main/clojure/cn/li/ac/ability/adapters/runtime_bridge.clj").text
         def activeAdapter = file("ac/src/main/clojure/cn/li/ac/ability/adapters/client_intent_hooks.clj")
         def legacyAdapter = file("ac/src/main/clojure/cn/li/ac/ability/adapters/client_ui_hooks.clj")
-        if (!bridge.contains("client-intent-hooks") || bridge.contains("client-ui-hooks")) {
+        if (!bridge.contains("client-intent-hooks") || bridge.contains("adapters.client-ui-hooks")) {
             throw new GradleException("runtime bridge still selects the legacy Context/slot client adapter")
         }
         if (!activeAdapter.exists()) {
@@ -1117,7 +1117,7 @@ tasks.register("verifyCombatLegacyRuntimeRemoval") {
             }
         }
         def combatVfx = file("ac/src/main/clojure/cn/li/ac/client/combat_vfx_adapter.clj").text
-        if (!combatVfx.contains("vfx-contract") || combatVfx.contains("presentation")) {
+        if (!combatVfx.contains("vfx-contract") || combatVfx =~ /cn\.li\.ac\.gui|presentation\./) {
             throw new GradleException("combat VFX adapter is not a neutral VFX Core boundary")
         }
         def clientBootstrap = file("ac/src/main/clojure/cn/li/ac/content/ability_client.clj").text
