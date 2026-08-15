@@ -61,6 +61,7 @@
    :dev-progress 0.0
    :dev-result nil
    :dev-grace 0
+   :was-developing? false   ;; true once the server actually starts the dev
    :cursor-visible true
    :cursor-timer 0.0
    :exec-cmd nil
@@ -324,7 +325,7 @@
                    ;; :developing — no duplicate static "Progress: 00%".
                    (update :lines into (console-lines (msg :dev-begin)))
                    (update :lines clamp-lines)
-                   (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+                   (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0 :was-developing? false))
                :developing])
             ;; No developer device / wrong mode — upstream never registers the
             ;; command in those states, so it falls through to "Invalid command."
@@ -349,7 +350,7 @@
                 [(-> state
                      (update :lines into (console-lines (msg :reset-begin)))
                      (update :lines clamp-lines)
-                     (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0))
+                     (assoc :phase :developing :exec-cmd nil :dev-progress 0.0 :done-timer 0.0 :was-developing? false))
                  :developing]))
             [(-> (update state :lines into (console-lines (msg :invalid-cmd)))
                  (update :lines clamp-lines)
@@ -418,24 +419,31 @@
           prog (double (or (some-> container :development-progress deref) 0.0))
           is-dev (boolean (some-> container :is-developing deref))
           dev-complete (boolean (some-> container :development-complete? deref))
-          grace (int (:dev-grace state 0))]
+          grace (int (:dev-grace state 0))
+          was-dev (boolean (:was-developing? state))]
       (cond
         (< grace 5)
         (assoc state :dev-grace (inc grace) :dev-progress prog)
 
-        (and (>= grace 5) (not is-dev))
-        (-> state
-            (update :lines into (console-lines (msg :dev-begin)))
-            (update :lines conj "ERROR: Development rejected. Check energy / induction factor.")
-            (update :lines clamp-history)
-            (assoc :phase :idle :dev-grace 0))
+        is-dev
+        ;; Developing — keep grace ≥ 5 so the progress line renders steadily.
+        ;; The old code reset grace to 0 every tick here, flashing
+        ;; "Requesting..." (grace < 5) against "Progress: NN%" (grace == 5).
+        (assoc state :dev-progress prog :was-developing? true)
 
-        (not is-dev)
+        was-dev
+        ;; Development ran and has now ended — done. (The old branch order
+        ;; let the rejected case shadow this, so completion never showed.)
         (assoc state :phase :done :dev-progress prog :dev-grace 0
                :dev-result (if dev-complete :success :failure))
 
         :else
-        (assoc state :dev-progress prog :dev-grace 0)))
+        ;; Never started within the grace window — the server rejected it.
+        (-> state
+            (update :lines into (console-lines (msg :dev-begin)))
+            (update :lines conj "ERROR: Development rejected. Check energy / induction factor.")
+            (update :lines clamp-history)
+            (assoc :phase :idle :dev-grace 0 :was-developing? false))))
     :done
     ;; Upstream pauses 0.5s after printing the result, then rebuilds.
     (let [dt (+ (:done-timer state 0.0) dt-sec)]

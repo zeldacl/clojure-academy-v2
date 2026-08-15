@@ -132,10 +132,14 @@
   ;; unescapes literal \\n. Stub with the real console strings (trailing \n
   ;; included) so the line-splitting behavior is actually exercised.
   (with-redefs [i18n/*translate-fn*
+                ;; loc() does its own format with the fmt-args, so the stub
+                ;; returns the raw template (%% preserved for loc's format).
                 (fn [k _args]
-                  (get {"skill_tree.academy.console.dev_begin" "Start stimulation......\\n"
-                        "skill_tree.academy.console.invalid_command" "Invalid command.\\n"}
-                       k k))]
+                  (case k
+                    "skill_tree.academy.console.dev_begin" "Start stimulation......\\n"
+                    "skill_tree.academy.console.invalid_command" "Invalid command.\\n"
+                    "skill_tree.academy.console.progress" "Progress: %s%%"
+                    k))]
     (f)))
 
 (deftest learn-command-output-matches-upstream-lines-test
@@ -163,6 +167,68 @@
             ;; "OS >".
             (is (= ["OS > learn" "Start stimulation......"] (:lines s))
                 "learn output: echo + dev_begin line, no extra prompt, no embedded \\n")))))))
+
+(defn- dev-container
+  [& {:keys [progress is-dev complete?]
+      :or {progress 0.0 is-dev false complete? false}}]
+  {:development-progress (atom progress)
+   :is-developing (atom is-dev)
+   :development-complete? (atom complete?)})
+
+(defn- tick-developing [state]
+  ((resolve 'cn.li.ac.block.developer.console-reactive/tick-console-state)
+   state 0.05))
+
+(defn- input-line [state]
+  ((resolve 'cn.li.ac.block.developer.console-reactive/input-line-text) state))
+
+(deftest developing-progress-line-does-not-flash-test
+  ;; The old :else branch reset :dev-grace to 0 every tick while developing,
+  ;; so grace oscillated 0..5 and the input line flashed "Requesting..."
+  ;; against "Progress: NN%". Grace must stay ≥ 5 once the server starts.
+  (with-console-translations
+    (fn []
+      (let [container (dev-container :progress 0.12 :is-dev true)
+            s0 (-> (console/init-state :learn "P1" true)
+                   (assoc :phase :developing :dev-grace 4 :container container))
+            s1 (tick-developing s0)
+            s2 (tick-developing s1)
+            s3 (tick-developing s2)]
+        (is (>= (int (:dev-grace s3)) 5)
+            "grace stays ≥ 5 while developing — no reset to 0")
+        (is (= "Progress: 12%" (input-line s3))
+            "input line shows the progress, not Requesting...")))))
+
+(deftest developing-completion-reaches-done-test
+  ;; The old branch order let the rejected case shadow the done case, so a
+  ;; finished development never showed dev_succ/dev_fail.
+  (let [container (dev-container :complete? true)
+        s0 (-> (console/init-state :learn "P1" true)
+               (assoc :phase :developing :dev-grace 5
+                      :was-developing? true :container container))
+        s1 (tick-developing s0)]
+    (is (= :done (:phase s1)))
+    (is (= :success (:dev-result s1)))))
+
+(deftest developing-midway-failure-reaches-done-failure-test
+  (let [container (dev-container)
+        s0 (-> (console/init-state :learn "P1" true)
+               (assoc :phase :developing :dev-grace 5
+                      :was-developing? true :container container))
+        s1 (tick-developing s0)]
+    (is (= :done (:phase s1)))
+    (is (= :failure (:dev-result s1)))))
+
+(deftest developing-never-started-shows-rejection-test
+  ;; Grace window expires without the server starting the dev → the rejection
+  ;; error (kept, per the learn-flow requirement), back to :idle.
+  (let [container (dev-container)
+        s0 (-> (console/init-state :learn "P1" true)
+               (assoc :phase :developing :dev-grace 5 :container container))
+        s1 (tick-developing s0)]
+    (is (= :idle (:phase s1)))
+    (is (some #(.contains ^String % "Development rejected") (:lines s1))
+        "rejection error line is preserved")))
 
 (deftest invalid-command-echo-and-error-preserved-test
   ;; Unknown commands must keep the Enter echo + "Invalid command." line —
