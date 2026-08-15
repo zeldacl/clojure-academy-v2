@@ -14,11 +14,9 @@
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
             [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
             [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
@@ -36,15 +34,6 @@
 (def ^:private fn-held-portable-dev-energy :ability/held-portable-dev-energy)
 (def ^:private fn-pull-portable-dev-energy :ability/pull-portable-dev-energy!)
 (def ^:private fn-resolve-awaken-category :ability/resolve-awaken-category!)
-
-(defn- unique-context-by-id
-  [ctx-id]
-  (let [matches (->> (ctx/snapshot-context-registry)
-                     vals
-                     (filter #(= ctx-id (:id %)))
-                     vec)]
-    (when (= 1 (count matches))
-      (first matches))))
 
 (defn- runtime-get-player-state
   [player-uuid]
@@ -294,7 +283,7 @@
      ;; Global work is driven once per server tick, before the player phase.
      (combat-runtime/tick! tick-id)
      (md-damage/tick-marks!)
-     (ctx-mgr/tick-context-manager!))
+     nil)
 
    :on-player-tick!
    (fn [player-uuid player]
@@ -302,7 +291,6 @@
      (ps-tick/server-tick-player-in-session! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                              player-uuid
                                              nil)
-     (ctx-mgr/tick-player-contexts! player-uuid player)
      (delayed-projectiles/tick-player! player-uuid))
 
    :on-server-tick-end!
@@ -363,23 +351,23 @@
      (evt/subscribe-ability-event! evt/EVT-ACHIEVEMENT-TRIGGER handler))
 
    :register-context-route-fns!
-   (fn [fns-map]
-     (ctx/register-route-fns! fns-map))
+   ;; Context network routes were removed from AC.  Keep the neutral hook key
+   ;; as an inert seam for platform bootstrap code that still advertises the
+   ;; generic network surface; no AC context route is installed.
+   (fn [_fns-map] nil)
 
    :register-context-send-fns!
    (fn [fns-map]
-     (ctx-mgr/register-send-fns! fns-map)
      (when-let [to-client (:to-client fns-map)]
        (combat-runtime/install-result-sink!
         (fn [owner result]
           (to-client owner ability-messages/MSG-COMBAT-RESULT result)))))
 
    :get-context-player-uuid
-   (fn [ctx-id]
-     (when-let [ctx-map (or (when-let [owner (ctx/context-owner)]
-                               (ctx/get-context owner ctx-id))
-                            (unique-context-by-id ctx-id))]
-       (:player-uuid ctx-map)))
+   ;; Context ids are no longer authoritative combat handles.  Returning nil
+   ;; prevents platform network code from routing stale context packets into
+   ;; AC while preserving the neutral hook shape for non-AC callers.
+   (fn [_ctx-id] nil)
 
    :register-damage-handler!
    (fn [handler-id handler-fn priority]
