@@ -37,7 +37,8 @@
   (let [engine (runtime/create-engine {:catalog (compiler/compile-all!) :now-tick (constantly 10)})]
     (is (= :accepted (:status (runtime/dispatch-intent! engine "p" {:intent-id 1 :op :start :ability-id :test/charging}))))
     (is (= 1 (count (runtime/tick! engine 12))))
-    (is (= 1 (count (:sessions (runtime/snapshot-owner engine "p")))))))
+    (is (= 1 (count (:sessions (runtime/snapshot-owner engine "p")))))
+    (is (= "p" (:owner (first (runtime/tick! engine 14)))))))
 
 (deftest query-result-flows-to-following-nodes
   (dsl/defability query-strike
