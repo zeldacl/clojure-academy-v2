@@ -122,8 +122,8 @@
         (register-declared-skills! skill-namespaces)
         (doseq [ns-sym skill-namespaces]
           (run-namespace-init! ns-sym)))
-      ;; Third-party skills, via ServiceLoader — must run before the freeze
-      ;; calls below (registry/skill.clj rejects registration once frozen).
+      ;; Legacy AC skill metadata is initialized before its registry freezes.
+      ;; Combat Core content is registered separately by its composition root.
       (md-damage/init!)
       (tp-passive/register-passive-hooks!)
       ;; Register generic item actions (not skill-specific)
