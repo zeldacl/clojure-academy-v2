@@ -57,6 +57,11 @@
   [world-id owner plan]
   (call :execute-thunder-clap! world-id owner plan))
 
+(defn execute-blood-retrograde!
+  "Execute the close-range blood damage/effect plan behind a Host Port."
+  [world-id owner plan]
+  (call :execute-blood-retrograde! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))

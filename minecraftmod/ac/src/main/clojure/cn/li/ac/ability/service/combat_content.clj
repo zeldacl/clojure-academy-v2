@@ -387,6 +387,36 @@
                                   :event :perform
                                   :params {:min-charge-ticks 40
                                            :max-charge-ticks 60}}]}}}
+    {:id :blood-retrograde
+     :revision 1
+     :activation :session
+     :period-ticks 1
+     :max-session-ticks 30
+     :cost-phase :release
+     :cost {:cp (scale 280.0 350.0)
+            :overload (scale 55.0 40.0)}
+     :cooldown {:ticks (scale 90.0 40.0)}
+     :program {:op :phase
+               :start {:op :session-patch
+                       :entries [[[:charge-ticks] 0.0]]}
+               :pulse {:op :session-patch
+                       :entries [[[:charge-ticks]
+                                  {:op :increment :amount 1.0}]]}
+               :release {:op :sequence
+                         :steps [{:op :query :query-type :blood-retrograde
+                                  :distance 2.0 :result-ref :hit}
+                                 {:op :require :predicate :hit}
+                                 {:op :world-effect
+                                  :effect-type :blood-retrograde
+                                  :query-ref :hit
+                                  :amount (scale 30.0 60.0)
+                                  :max-charge-ticks 30.0
+                                  :entity-search-radius 4.0
+                                  :spray-angles [0.0 30.0 45.0 60.0 80.0
+                                                 -30.0 -45.0 -60.0 -80.0]}
+                                 {:op :vfx :effect-id :blood-retrograde
+                                  :event :perform
+                                  :params {:max-charge-ticks 30}}]}}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

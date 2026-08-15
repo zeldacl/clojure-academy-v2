@@ -124,7 +124,12 @@
                                                (:impact attack-data)
                                                (double (or (:aoe-radius node) 15.0))
                                                #{owner})]
-                                  (assoc attack-data :victims victims))))}]
+                                  (assoc attack-data :victims victims))))
+              :blood-retrograde (fn [context node]
+                                  (if-let [host-query (contract/host-port :query)]
+                                    (host-query :blood-retrograde context node)
+                                    ((get-in context [:queries :raycast])
+                                     context (assoc node :query-type :raycast))))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -339,6 +344,29 @@
                                plan (assoc effect :charge-ticks (long charge-ticks))]
                            {:status (if (and valid?
                                               (world-effects/execute-thunder-clap!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :blood-retrograde
+                         (let [{:keys [world-id query-result amount max-charge-ticks
+                                       entity-search-radius spray-angles]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               valid? (and world-id (map? query-result)
+                                            (finite? amount) (pos? (double amount))
+                                            (<= (double amount) 1000.0)
+                                            (finite? max-charge-ticks)
+                                            (<= 1.0 (double max-charge-ticks) 64.0)
+                                            (finite? entity-search-radius)
+                                            (<= 0.0 (double entity-search-radius) 16.0)
+                                            (vector? spray-angles)
+                                            (<= 1 (count spray-angles) 16)
+                                            (every? #(and (finite? %) (<= -180.0 (double %) 180.0))
+                                                    spray-angles)
+                                            (world-effects/available?))
+                               plan (assoc effect :max-charge-ticks (long max-charge-ticks))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-blood-retrograde!
                                                world-id owner plan))
                                       :applied
                                       :failed)
