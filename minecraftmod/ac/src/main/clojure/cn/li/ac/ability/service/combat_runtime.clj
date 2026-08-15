@@ -10,6 +10,7 @@
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill-query]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
+            [cn.li.ac.ability.skill-config :as skill-config]
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -23,6 +24,53 @@
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
 (declare owner-state resolve-slot)
+
+(defn- vec-accel-query
+  "Resolve the source VecAccel release query from neutral raycast ports.
+
+   The calculation is intentionally kept at the AC composition boundary: the
+   engine receives only an immutable launch plan, while platform code applies
+   the resulting velocity.  Constants and interpolation match the authoritative
+   VecAccel content configuration (20-tick charge, sine speed curve and the
+   -0.174533 radian pitch offset)."
+  [context node]
+  (let [owner (str (:owner context))
+        max-charge (max 1 (long (or (:max-charge-ticks node) 20)))
+        charge-ticks (-> (get-in context [:session-state :charge-ticks] 0.0)
+                         double Math/round long (max 0) (min max-charge))
+        exp (double (ability-model/get-skill-exp
+                     (get-in context [:state :ability-data]) :vec-accel))
+        look (raycast/player-look-vector owner)
+        position (raycast/player-position owner)
+        ground? (when (and position (raycast/available?))
+                  (some? (raycast/raycast-blocks
+                          (or (:world-id position) "minecraft:overworld")
+                          (double (:x position)) (double (:y position)) (double (:z position))
+                          0.0 -1.0 0.0
+                          (skill-config/tunable-double :vec-accel
+                                                        :targeting.ground-check-distance))))
+        can-perform? (or (> exp (skill-config/tunable-double
+                                 :vec-accel :targeting.groundless-exp-threshold))
+                         ground?)]
+    (when (and (map? look) can-perform?)
+      (let [lx (double (:x look)) ly (double (:y look)) lz (double (:z look))
+            horizontal (Math/sqrt (+ (* lx lx) (* lz lz)))
+            safe-horizontal (if (pos? horizontal) horizontal 1.0)
+            pitch (Math/atan2 (- ly) safe-horizontal)
+            pitch (+ pitch (skill-config/tunable-double
+                            :vec-accel :movement.pitch-offset-radians))
+            progress (max 0.0 (min 1.0 (/ (double charge-ticks) (double max-charge))))
+            speed-progress (skill-config/lerp-double :vec-accel
+                                                       :movement.speed-progress progress)
+            speed (* (Math/sin speed-progress)
+                     (skill-config/tunable-double :vec-accel :movement.max-velocity))
+            cos-p (Math/cos pitch)
+            sin-p (Math/sin pitch)]
+        {:charge-ticks charge-ticks
+         :can-perform? true
+         :initial-velocity {:x (* cos-p (/ lx safe-horizontal) speed)
+                            :y (- (* sin-p speed))
+                            :z (* cos-p (/ lz safe-horizontal) speed)}}))))
 
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
@@ -182,8 +230,9 @@
                               (when-let [host-query (contract/host-port :query)]
                                 (host-query :mag-movement context node)))
               :vec-accel (fn [context node]
-                           (when-let [host-query (contract/host-port :query)]
-                             (host-query :vec-accel context node)))
+                           (if-let [host-query (contract/host-port :query)]
+                             (host-query :vec-accel context node)
+                             (vec-accel-query context node)))
               :flashing (fn [context node]
                           (when-let [host-query (contract/host-port :query)]
                             (host-query :flashing context node)))
