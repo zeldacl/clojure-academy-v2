@@ -52,6 +52,11 @@
   [world-id owner plan]
   (call :execute-groundshock! world-id owner plan))
 
+(defn execute-thunder-clap!
+  "Execute the charged lightning/area-damage plan behind a Host Port."
+  [world-id owner plan]
+  (call :execute-thunder-clap! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))

@@ -407,7 +407,8 @@
                          :event-seq 0}
                 result (execute engine ability context)
                 result (if (and (not= :rejected (:status result))
-                                (seq (:cooldown ability)))
+                                (seq (:cooldown ability))
+                                (not= :release (:cooldown-phase ability)))
                          (update result :state-patch conj
                                  [:cooldown ability-id
                                   (+ tick (long (resolve-value
@@ -436,15 +437,25 @@
   (let [session-id (session-id-for-intent engine owner intent)]
     (if-let [session (get @(:sessions engine) session-id)]
     (let [ability (ability engine (:ability-id session))
-          result (execute engine ability {:owner owner :session-id session-id
-                                          :ability-id (:ability-id session)
-                                          :session-state (:state session)
-                                          :tick (long ((:now-tick engine)))
-                                          :input intent :phase :release
-                                          :state ((:owner-state engine) owner)
-                                          :queries (:query-port engine)
-                                          :flags (:flags intent) :refs (:refs intent)
-                                          :event-seq (long (or (:event-seq intent) 1))})]
+          context {:owner owner :session-id session-id
+                   :ability-id (:ability-id session)
+                   :session-state (:state session)
+                   :tick (long ((:now-tick engine)))
+                   :input intent :phase :release
+                   :state ((:owner-state engine) owner)
+                   :queries (:query-port engine)
+                   :flags (:flags intent) :refs (:refs intent)
+                   :event-seq (long (or (:event-seq intent) 1))}
+          result (execute engine ability context)
+          result (if (and (not= :rejected (:status result))
+                          (= :release (:cooldown-phase ability))
+                          (seq (:cooldown ability)))
+                   (update result :state-patch conj
+                           [:cooldown (:ability-id session)
+                            (+ (:tick context)
+                               (long (resolve-value (:ticks (:cooldown ability))
+                                                    context)))])
+                   result)]
       (swap! (:sessions engine) dissoc (:session-id session))
       (update result :session-ops conj
               {:op :release :session-id session-id :owner owner}))

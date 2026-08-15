@@ -112,7 +112,19 @@
                              (if-let [host-query (contract/host-port :query)]
                                (host-query :groundshock context node)
                                (when-let [block-scan (get-in context [:queries :block-scan])]
-                                 (block-scan context (assoc node :query-type :block-scan))))) }]
+                                  (block-scan context (assoc node :query-type :block-scan)))))
+              :thunder-clap (fn [context node]
+                              (if-let [host-query (contract/host-port :query)]
+                                (host-query :thunder-clap context node)
+                                (let [owner (:owner context)
+                                      range (double (or (:range node) 40.0))
+                                      attack-data (attack/resolve-attack-data owner range)
+                                      victims (attack/aoe-victims
+                                               (:world-id attack-data)
+                                               (:impact attack-data)
+                                               (double (or (:aoe-radius node) 15.0))
+                                               #{owner})]
+                                  (assoc attack-data :victims victims))))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -306,6 +318,27 @@
                                plan (assoc effect :max-iterations (long max-iterations))]
                            {:status (if (and valid?
                                               (world-effects/execute-groundshock!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :thunder-clap
+                         (let [{:keys [world-id query-result amount aoe-radius
+                                       charge-ticks cooldown-multiplier]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               valid? (and world-id (map? query-result)
+                                            (finite? amount) (pos? (double amount))
+                                            (<= (double amount) 1000.0)
+                                            (finite? aoe-radius)
+                                            (<= 0.0 (double aoe-radius) 64.0)
+                                            (finite? charge-ticks)
+                                            (<= 40.0 (double charge-ticks) 60.0)
+                                            (finite? cooldown-multiplier)
+                                            (<= 1.0 (double cooldown-multiplier) 1.2)
+                                            (world-effects/available?))
+                               plan (assoc effect :charge-ticks (long charge-ticks))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-thunder-clap!
                                                world-id owner plan))
                                       :applied
                                       :failed)
