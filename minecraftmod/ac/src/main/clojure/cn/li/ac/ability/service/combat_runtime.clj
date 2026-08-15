@@ -157,26 +157,29 @@
       (when (and (vector? slot) (= 2 (count slot)))
         (skill-query/get-skill-by-controllable (first slot) (second slot))))))
 (defn- commit-state-patch! [owner patches]
-  (let [session-id (server-session-id)]
-    (doseq [[kind key amount] patches]
-      (case kind
-        :resource
-        (when (= key :cp)
-          (command-runtime/run-command-in-session!
-            session-id owner {:command :consume-resource :cp (- (double amount))}))
-        :ability-exp
-        (command-runtime/run-command-in-session!
-          session-id owner {:command :add-skill-exp
+  (let [session-id (server-session-id)
+        commands (keep (fn [[kind key amount]]
+                         (case kind
+                           :resource
+                           (when (= key :cp)
+                             {:command :consume-resource
+                              :cp (- (double amount))})
+                           :ability-exp
+                           {:command :add-skill-exp
                             :skill-id key
                             :amount (double amount)
-                            :source :combat-core})
-        :cooldown
-        (let [ticks (max 0 (long (- amount (long ((:now-tick (engine)))))))]
-          (command-runtime/run-command-in-session!
-            session-id owner {:command :set-cooldown
+                            :source :combat-core}
+                           :cooldown
+                           (let [ticks (max 0 (long (- amount
+                                                       (long ((:now-tick (engine)))))))]
+                             {:command :set-cooldown
                               :ctrl-id key
                               :sub-id :main
-                              :ticks ticks}))))))
+                              :ticks ticks})
+                           nil))
+                       patches)]
+    (when (seq commands)
+      (command-runtime/run-commands-in-session! session-id owner commands))))
 
 (defn dispatch-intent! [owner intent]
   (let [result (combat/dispatch-intent! (engine) owner intent)]
