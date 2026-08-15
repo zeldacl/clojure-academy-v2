@@ -59,7 +59,7 @@
                       (<= 0.0 base 9999.0))
                (-> request
                    (assoc :base (* base (- 1.0 reduction-rate)))
-                   (assoc-in [:metadata :resource-cost] {:cp cp-cost})
+                   (assoc-in [:metadata :resource-cost] {:cp (- cp-cost)})
                    (assoc-in [:metadata :vec-deviation]
                              {:reduction-rate reduction-rate
                               :damage-ignore-threshold 9999.0}))
