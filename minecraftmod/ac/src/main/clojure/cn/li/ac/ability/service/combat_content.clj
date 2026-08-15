@@ -226,6 +226,32 @@
                                  {:op :vfx :effect-id :directed-shock
                                   :event :perform
                                   :params {:charge-min-ticks 6}}]}}}
+    ;; Ray Barrage is represented as a bounded server-side ray recipe.  The
+    ;; host owns the exact directional hit test and special-target handling;
+    ;; Combat Core owns the authoritative costs, damage bands, ray count and
+    ;; deterministic VFX signal.
+    {:id :ray-barrage
+     :revision 1
+     :activation :instant
+     :cost {:cp (scale 450.0 380.0)
+            :overload (scale 300.0 140.0)}
+     :cooldown {:ticks (scale 100.0 40.0)}
+     :program {:op :sequence
+               :steps [{:op :query :query-type :ray-barrage
+                        :range 20.0
+                        :result-ref :barrage}
+                       {:op :world-effect
+                        :effect-type :ray-barrage
+                        :query-ref :barrage
+                        :ray-count 5
+                        :range 20.0
+                        :cone-angle-degrees 55.0
+                        :plain-damage (scale 25.0 60.0)
+                        :scattered-damage (scale 10.0 18.0)
+                        :special-target-policy :silbarn}
+                       {:op :vfx :effect-id :ray-barrage
+                        :event :perform
+                        :params {:ray-count 5 :cone-angle-degrees 55.0}}]}}
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))

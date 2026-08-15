@@ -83,7 +83,19 @@
                                          (:impact attack-data)
                                          (double (or (:aoe-radius node) 8.0))
                                          excluded)]
-                            (assoc attack-data :victims victims))))}]
+                            (assoc attack-data :victims victims))))
+              :ray-barrage (fn [context node]
+                             (if-let [host-query (contract/host-port :query)]
+                               (host-query :ray-barrage context node)
+                               (let [owner (:owner context)
+                                     range (double (or (:range node) 20.0))
+                                     attack-data (attack/resolve-attack-data owner range)
+                                     victims (attack/aoe-victims
+                                              (:world-id attack-data)
+                                              (:impact attack-data)
+                                              10.0
+                                              #{owner})]
+                                 (assoc attack-data :victims victims))))}]
          (when-not (registry/frozen?) (registry/freeze!))
          (reset! catalog* catalog)
          (reset! engine* (combat/create-engine
@@ -182,6 +194,33 @@
                            {:status (if (and valid?
                                               (world-effects/spawn-projectile!
                                                world-id (assoc spec :owner owner)))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         :ray-barrage
+                         (let [{:keys [world-id query-result ray-count range
+                                       cone-angle-degrees plain-damage scattered-damage
+                                       special-target-policy]} effect
+                               plan {:query-result query-result
+                                     :ray-count (long (or ray-count 0))
+                                     :range (double (or range 0.0))
+                                     :cone-angle-degrees (double (or cone-angle-degrees 0.0))
+                                     :plain-damage (double (or plain-damage 0.0))
+                                     :scattered-damage (double (or scattered-damage 0.0))
+                                     :special-target-policy special-target-policy}
+                               valid? (and world-id
+                                            (map? query-result)
+                                            (<= 1 (:ray-count plan) 8)
+                                            (pos? (:range plan))
+                                            (<= 0.0 (:cone-angle-degrees plan) 360.0)
+                                            (every? #(and (Double/isFinite %) (pos? %))
+                                                    [(:plain-damage plan)
+                                                     (:scattered-damage plan)])
+                                            (= :silbarn special-target-policy)
+                                            (world-effects/available?))]
+                           {:status (if (and valid?
+                                              (world-effects/execute-ray-barrage!
+                                               world-id owner plan))
                                       :applied
                                       :failed)
                             :effect effect})

@@ -248,6 +248,8 @@
                                  origin)
                         scan (when-let [scan-ref (:scan-ref node)]
                                (get-in context [:refs scan-ref]))
+                        query-result (when-let [query-ref (:query-ref node)]
+                                       (get-in context [:refs query-ref]))
                         projectile-spec (when (map? (:projectile-spec node))
                                           (reduce-kv
                                            (fn [spec key value]
@@ -257,18 +259,24 @@
                                                (assoc spec key (resolve-value value context))))
                                            {}
                                            (:projectile-spec node)))
-                        effect (cond-> (if (contains? effect :amount)
-                                         (update effect :amount resolve-value context)
-                                         effect)
+                        effect (reduce (fn [resolved key]
+                                         (if (contains? resolved key)
+                                           (update resolved key resolve-value context)
+                                           resolved))
+                                       effect
+                                       [:amount :plain-damage :scattered-damage
+                                        :range :cone-angle-degrees])
+                        effect (cond-> effect
                                  (some? target) (assoc :target target)
                                  (some? targets) (assoc :targets targets)
                                  (some? origin) (assoc :origin origin)
                                  (some? scan) (assoc :scan scan)
+                                 (some? query-result) (assoc :query-result query-result)
                                  projectile-spec (assoc :projectile-spec projectile-spec)
                                  (:world-id context) (assoc :world-id (:world-id context))
                                  true (dissoc :target-ref :target-path
                                                :targets-ref :targets-path
-                                               :origin-ref :origin-path :scan-ref
+                                               :origin-ref :origin-path :scan-ref :query-ref
                                                :projectile-spec))]
                     {:status :continue
                      :world-effects [(contract/world-effect

@@ -34,6 +34,14 @@
   [world-id projectile-spec]
   (call :spawn-projectile! world-id projectile-spec))
 
+(defn execute-ray-barrage!
+  "Execute a bounded ray-barrage plan supplied by Combat Core.
+
+   The operation stays opaque to the neutral engine: each loader implements
+   the directional ray test and special-target policy behind this port."
+  [world-id owner plan]
+  (call :execute-ray-barrage! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))
