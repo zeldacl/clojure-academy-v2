@@ -174,11 +174,6 @@
    DragBar range: lower=2, upper=165."
   (let [{:keys [scroll-y max-scroll]} ui-state
         drag-state (atom {:drag-start-y 0.0 :drag-start-scroll 0.0})]
-    ;; dispatch-mouse-press! only arms the drag chain (sets drag-node-idx)
-    ;; when the press bubbles to a :left-click handler — without this no-op
-    ;; the thumb's :drag/:drag-start handlers are unreachable and the bar
-    ;; cannot be dragged.
-    (events/on! rt :scroll-thumb :left-click (fn [_ _ _] nil))
     (events/on! rt :scroll-thumb :drag
       (fn [_ ^INode _node evt]
         (let [{:keys [dy]} evt

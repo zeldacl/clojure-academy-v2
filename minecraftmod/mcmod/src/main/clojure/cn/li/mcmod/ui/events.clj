@@ -181,6 +181,21 @@
   (let [old-idx (rt/focus-idx rt)]
     (when (>= old-idx 0) (gain-focus! rt -1))))
 
+(defn- drag-armed-node-idx
+  "Walk from the hit node up the parent chain (same walk as dispatch-click!)
+  for the first node wiring :drag/:drag-start handlers. A scrollbar thumb
+  registers only drag handlers — no :left-click — so an unhandled press on it
+  must still arm the drag chain (settings/about/tutorial scrollbars were
+  un-draggable without the tutorial's no-op :left-click workaround)."
+  [^UiRt rt ^INode hit]
+  (loop [node hit]
+    (if node
+      (if (or (rt/get-event-handlers rt (.getIdx ^INode node) :drag)
+              (rt/get-event-handlers rt (.getIdx ^INode node) :drag-start))
+        (.getIdx ^INode node)
+        (recur (.getParentNode ^INode node)))
+      -1)))
+
 (defn dispatch-mouse-press! [^UiRt rt mx my button]
   (let [^INode hit (layout/hit-test rt (double mx) (double my))
         hit-idx (if hit (.getIdx hit) -1)
@@ -194,20 +209,34 @@
         (rt/set-dragging?! rt false)
         (gain-focus! rt hit-idx)
         true)
-      (do
-        ;; Visual-only nodes (for example background images) must not claim
-        ;; the click. Clear UI state so the vanilla container can process the
-        ;; same mouse press for an inventory slot.
-        (rt/set-drag-node-idx! rt -1)
-        (rt/set-dragging?! rt false)
-        (if (and hit (text-editable? hit))
-          ;; ...but an editable text field still needs focus to receive
-          ;; typing. Clicking one focuses it (regression from 5d94832ce,
-          ;; which made unhandled clicks clear focus — field clicks have no
-          ;; handler, so the info-area name/password fields died).
-          (gain-focus! rt hit-idx)
-          (gain-focus! rt -1))
-        false))))
+      (if (and hit (text-editable? hit))
+        ;; An editable text field still needs focus to receive typing even
+        ;; when its click has no handler (regression from 5d94832ce, which
+        ;; made unhandled clicks clear focus — field clicks have no handler,
+        ;; so the info-area name/password fields died). Editable wins over
+        ;; drag arming: a field nested under a drag-capable ancestor must
+        ;; focus, not arm the ancestor's drag.
+        (do (gain-focus! rt hit-idx) false)
+        (let [drag-idx (drag-armed-node-idx rt hit)]
+          (if (>= drag-idx 0)
+            ;; Drag-only nodes (scrollbar thumbs): arm the drag chain so the
+            ;; :drag/:drag-start handlers fire on mouse-move. The press is
+            ;; claimed — the vanilla container must not also process it.
+            (do
+              (rt/set-drag-node-idx! rt drag-idx)
+              (rt/set-drag-start-mx! rt (double mx))
+              (rt/set-drag-start-my! rt (double my))
+              (rt/set-drag-start-ms! rt (System/currentTimeMillis))
+              (rt/set-dragging?! rt false)
+              true)
+            (do
+              ;; Visual-only nodes (for example background images) must not
+              ;; claim the click. Clear UI state so the vanilla container can
+              ;; process the same mouse press for an inventory slot.
+              (rt/set-drag-node-idx! rt -1)
+              (rt/set-dragging?! rt false)
+              (gain-focus! rt -1)
+              false)))))))
 
 (defn dispatch-mouse-release! [^UiRt rt mx my button]
   (let [was-dragging? (rt/dragging? rt)]

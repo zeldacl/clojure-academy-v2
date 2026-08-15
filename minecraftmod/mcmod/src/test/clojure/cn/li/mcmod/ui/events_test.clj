@@ -126,6 +126,57 @@
     (events/dispatch-editable-key! rt 0 (char \b))
     (is (= "ab" (text-value (rt/node-by-id rt :field))))))
 
+(defn- thumb-runtime
+  "Runtime with a drag-only thumb (no :left-click handler — the settings/about
+   scrollbar shape): an unhandled press must arm the drag chain anyway."
+  ^UiRt []
+  (let [r (rt/create-runtime)]
+    (rt/build! r {:kind :group
+                  :props {:id :root :x 0.0 :y 0.0 :w 200.0 :h 200.0}
+                  :children [{:kind :image
+                              :props {:id :thumb :x 180.0 :y 20.0 :w 10.0 :h 30.0
+                                      :src "academy:textures/guis/bar.png"}}]})
+    (rt/resize! r 200.0 200.0)
+    (let [drags (atom [])
+          starts (atom 0)]
+      (events/on! r :thumb :drag
+        (fn [_ _ evt] (swap! drags conj (:dy evt))))
+      (events/on! r :thumb :drag-start
+        (fn [_ _ _] (swap! starts inc)))
+      {:rt r :drags drags :starts starts})))
+
+(deftest unhandled-press-arms-drag-only-node-test
+  (let [{:keys [rt drags starts]} (thumb-runtime)
+        _ (layout/ensure-layout! rt)
+        _ (layout/ensure-tape! rt)]
+    ;; Press on the thumb: no :left-click handler anywhere — the old code
+    ;; cleared the drag chain here and the scrollbar could never be dragged.
+    (is (true? (events/dispatch-mouse-press! rt 185.0 35.0 0))
+        "drag-only node claims the press")
+    ;; Small moves stay under the 4px arming threshold.
+    (events/dispatch-mouse-drag! rt 186.0 36.0 0)
+    (is (zero? @starts))
+    ;; Past the threshold the drag arms (:drag-start fires on the arming
+    ;; move; :dy is measured from the press point, not incrementally).
+    (events/dispatch-mouse-drag! rt 185.0 50.0 0)
+    (is (= 1 @starts))
+    (events/dispatch-mouse-drag! rt 185.0 60.0 0)
+    (is (= [25.0] @drags))
+    (events/dispatch-mouse-drag! rt 185.0 70.0 0)
+    (is (= [25.0 35.0] @drags))
+    (events/dispatch-mouse-release! rt 185.0 70.0 0)))
+
+(deftest press-on-visual-only-node-still-passes-through-test
+  (let [{:keys [rt drags starts]} (thumb-runtime)
+        _ (layout/ensure-layout! rt)
+        _ (layout/ensure-tape! rt)]
+    ;; Press beside the thumb — no drag handlers in the chain, so the press
+    ;; stays unclaimed (vanilla inventory-slot click-through preserved).
+    (is (false? (events/dispatch-mouse-press! rt 30.0 30.0 0)))
+    (events/dispatch-mouse-drag! rt 35.0 60.0 0)
+    (is (zero? @starts))
+    (is (empty? @drags))))
+
 (defn- x-offset [rt id]
   (.getDSlot ^INode (rt/node-by-id rt id) 1))
 
