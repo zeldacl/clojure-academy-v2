@@ -388,11 +388,13 @@
 
    :should-cancel-attack-interception?
    (fn [player-id attacker-id damage damage-source]
-     (damage-handler/should-cancel-attack? player-id attacker-id damage damage-source))
+     (:cancelled? (combat-runtime/process-attack-precheck!
+                    player-id attacker-id damage damage-source)))
 
    :run-attack-precheck-side-effects!
-   (fn [player-id attacker-id damage damage-source]
-     (damage-handler/run-attack-precheck-side-effects! player-id attacker-id damage damage-source))
+   ;; Attack prechecks are now a pure Combat Core decision.  There is no
+   ;; second callback phase that could observe or mutate the event.
+   (fn [_player-id _attacker-id _damage _damage-source] false)
 
    :resolve-item-use-action
    (fn [item-id]

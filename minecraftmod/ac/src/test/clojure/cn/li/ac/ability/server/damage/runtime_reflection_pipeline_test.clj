@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [cn.li.ac.ability.adapters.server-hooks :as server-hooks]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.test.support.framework :refer [with-fresh-framework]]
             [cn.li.mcmod.hooks.core :as hooks]))
 
@@ -19,13 +20,24 @@
     (is (true? (hooks/run-attack-precheck-side-effects! "p" "a" 12.0 :magic)))
     (is (= [["p" "a" 12.0 :magic]] @calls))))
 
-(deftest server-hooks-forward-precheck-side-effects-test
+(deftest server-hooks-do-not-run-legacy-precheck-side-effects-test
   (let [calls (atom [])]
     (with-redefs [damage-handler/run-attack-precheck-side-effects!
-                  (fn [player-id attacker-id damage damage-source]
-                    (swap! calls conj [player-id attacker-id damage damage-source])
+                  (fn [& args]
+                    (swap! calls conj args)
                     true)]
       (let [hooks-map (server-hooks/runtime-server-hooks)]
-        (is (true? ((:run-attack-precheck-side-effects! hooks-map)
+        (is (false? ((:run-attack-precheck-side-effects! hooks-map)
+                     "p" "a" 8.0 :src)))
+        (is (empty? @calls))))))
+
+(deftest server-hooks-route-attack-cancel-to-combat-core-test
+  (let [calls (atom [])]
+    (with-redefs [combat-runtime/process-attack-precheck!
+                  (fn [& args]
+                    (swap! calls conj args)
+                    {:cancelled? true})]
+      (let [hooks-map (server-hooks/runtime-server-hooks)]
+        (is (true? ((:should-cancel-attack-interception? hooks-map)
                     "p" "a" 8.0 :src)))
         (is (= [["p" "a" 8.0 :src]] @calls))))))
