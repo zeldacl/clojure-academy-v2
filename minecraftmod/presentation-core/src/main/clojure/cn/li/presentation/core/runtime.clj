@@ -5,10 +5,11 @@
             [cn.li.presentation.core.tree :as tree]
             [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.input :as input])
-  (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext RenderStage
+  (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext
             PresentationInputEvent PresentationInputEvent$Pointer PresentationInputEvent$Pointer$Type
             PresentationInputEvent$Key PresentationInputEvent$CharacterInput PresentationInputEvent$Scroll
             EventResult]
+           [cn.li.mcmod.runtime RenderStage]
            [java.lang AutoCloseable]))
 
 (defn create-runtime

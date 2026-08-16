@@ -1,5 +1,5 @@
 (ns cn.li.presentation.core.frame
-  (:import [cn.li.presentation.core FramePacket RenderCommand$Mesh RenderPass RenderStage]))
+  (:import [cn.li.mcmod.runtime FramePacket RenderCommand$Mesh RenderPass RenderStage]))
 
 (def dirty
   {:structure 1 :measure 2 :layout 4 :paint 8 :transform 16 :semantics 32})

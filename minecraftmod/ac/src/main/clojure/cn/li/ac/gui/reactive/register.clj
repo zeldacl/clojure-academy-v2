@@ -11,7 +11,6 @@
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.client.vfx-host :as vfx-host]
             [cn.li.presentation.core.host :as presentation-host]
-            [cn.li.presentation.core.export :as presentation-export]
             [cn.li.presentation.compiler.core :as presentation-compiler]
             [cn.li.presentation.compiler.render :as presentation-render]
             [cn.li.mcmod.util.log :as log]))
@@ -155,8 +154,7 @@
                  (refresh! width height {}))
                (when-let [refresh! (:refresh! @terminal*)]
                  (refresh!))
-               (some-> (presentation-host/frame! runtime frame-id delta-seconds width height)
-                       presentation-export/neutral-frame))
+               (presentation-host/frame! runtime frame-id delta-seconds width height))
      :mount-combat-hud! (fn [player-uuid width height]
                           (ensure-combat-hud! runtime player-uuid width height))
      :mount-terminal! (fn [owner dispatch-action!]

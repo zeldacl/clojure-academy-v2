@@ -1,6 +1,7 @@
 (ns cn.li.mcmod.presentation-backend-test
   (:require [clojure.test :refer [deftest is]]
-            [cn.li.mcmod.runtime.presentation-backend :as backend]))
+            [cn.li.mcmod.runtime.presentation-backend :as backend])
+  (:import [cn.li.mcmod.runtime RenderCommand RenderStage]))
 
 (deftest opaque-submit-callback-records-frame
   (let [value (backend/create :mc-1-20-1)
@@ -14,13 +15,13 @@
   (is (false? (get-in (backend/create :mc-1-20-1) [:capabilities :instancing?])))
   (is (true? (get-in (backend/create :mc-26-2) [:capabilities :instancing?]))))
 
-(deftest neutral-command-vocabulary-is-explicit
-  (is (= 15 (count backend/command-kinds)))
-  (is (every? backend/command-kind-known?
-             ["quad" "image" "glyph-run" "mesh" "billboard"
-              "particle-batch" "ribbon" "beam" "item-preview"
-              "camera-contribution" "post-process" "order-barrier"]))
-  (is (false? (backend/command-kind-known? "legacy-draw-plan"))))
+(deftest neutral-render-command-vocabulary-is-sealed
+  (is (= 16 (alength (.getPermittedSubclasses RenderCommand)))))
+
+(deftest stage-keyword-maps-to-every-loader-facing-render-stage
+  (is (= RenderStage/HUD (backend/stage->render-stage :hud)))
+  (is (= RenderStage/WORLD_AFTER_TRANSLUCENT (backend/stage->render-stage :world-after-translucent)))
+  (is (thrown? Exception (backend/stage->render-stage :not-a-stage))))
 
 (deftest renderer-receives-opaque-context
   (let [seen (atom nil)

@@ -5,8 +5,8 @@
    IDs from PresentationViewModel and emits immutable RenderCommand records.
    Minecraft APIs and host policy stay outside this namespace."
   (:import [cn.li.presentation.compiler CompiledTemplate TemplateNode]
-           [cn.li.presentation.core BindingTable PresentationViewModel
-            RenderCommand$GlyphRun RenderCommand$Image RenderCommand$Quad]))
+           [cn.li.presentation.core BindingTable PresentationViewModel]
+           [cn.li.mcmod.runtime RenderCommand$GlyphRun RenderCommand$Image RenderCommand$Quad]))
 
 (defn- binding-value [^PresentationViewModel model ^TemplateNode node attr]
   (when-let [id (get (.bindings node) (name attr))]

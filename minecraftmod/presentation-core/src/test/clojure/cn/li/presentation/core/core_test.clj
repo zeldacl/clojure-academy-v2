@@ -9,8 +9,8 @@
             [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.animation :as animation])
   (:import [cn.li.presentation.core FrameContext HostDescriptor HostDescriptor$HostKind
-            HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput
-            RenderCommand$Quad RenderStage]))
+            HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput]
+           [cn.li.mcmod.runtime RenderCommand$Quad RenderStage]))
 
 (deftest input-dispatches-capture-target-bubble-and-pointer-capture
   (let [runtime (input/create)

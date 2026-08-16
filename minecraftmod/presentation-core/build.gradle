@@ -38,8 +38,12 @@ tasks.register("runCoreClojureTests", JavaExec) {
 
 // Core behavior remains Minecraft-free. The only shared compile contract is
 // mcmod's version-neutral domain/data bridge; no loader dependency is allowed.
+// api (not implementation): the frame ABI (RenderCommand/RenderStage/
+// RenderPass/FramePacket) now lives in mcmod and is part of Core's own
+// public surface (PresentationRuntime/RenderBackend), so it must propagate
+// to presentation-compiler, which constructs RenderCommand records directly.
 dependencies {
-    implementation project(":mcmod")
+    api project(":mcmod")
     implementation "org.clojure:clojure:${rootProject.ext.clojureVersions.clojure}"
     testImplementation platform("org.junit:junit-bom:5.10.2")
     testImplementation "org.junit.jupiter:junit-jupiter"

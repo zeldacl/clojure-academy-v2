@@ -4,8 +4,9 @@
   (:require [cn.li.presentation.core.runtime :as runtime])
   (:import [cn.li.presentation.core HostDescriptor HostDescriptor$HostKind
             HostDescriptor$InputPolicy TemplateId PresentationRuntime
-            MountHandle PresentationInputEvent FrameContext FramePacket RenderPass
-            RenderBackend RenderStage]))
+            MountHandle PresentationInputEvent FrameContext
+            RenderBackend]
+           [cn.li.mcmod.runtime FramePacket RenderPass RenderStage]))
 
 (defn create
   ([] (create {}))
@@ -22,7 +23,7 @@
               (runtime/dispatch! state mount event)
               nil)
             (^FramePacket extract [_ ^FrameContext context]
-              (cast cn.li.presentation.core.FramePacket (runtime/extract! state context)))
+              (cast cn.li.mcmod.runtime.FramePacket (runtime/extract! state context)))
             (^void unmount [_ ^MountHandle mount]
               (runtime/unmount! state mount)
               nil))})))
