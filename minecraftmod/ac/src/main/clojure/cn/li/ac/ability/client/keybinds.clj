@@ -496,31 +496,27 @@
       (if (freq-transmitter/overlay-active? player-uuid)
         (freq-transmitter/tick-overlay-input!
           player-uuid
-          (key-state-fn [:raw (gameplay-config/input-key :ability-key-1)]))
+          (key-state-fn [:slot 1]))
         (doseq [idx (range 4)]
           (on-skill-key-event
             idx
-            (key-state-fn [:raw (gameplay-config/input-key
-                                  (keyword (str "ability-key-" idx)))]))))
+            (key-state-fn [:slot idx]))))
       (doseq [idx (range 4)]
         (on-skill-key-event
           idx
-          (key-state-fn [:raw (gameplay-config/input-key
-                                (keyword (str "ability-key-" idx)))])))))
+          (key-state-fn [:slot idx])))))
 
   ;; Poll movement keys (W/A/S/D)
   (doseq [movement-key movement-keys]
     (on-movement-key-event movement-key (key-state-fn [:movement movement-key])))
 
-  ;; Poll GUI keys. :primary = N, :secondary = M (see screen-glfw-keys in the
-  ;; platform key-state-fn). Upstream AcademyCraft: KEY_EDIT_PRESET = N
-  ;; (ClientHandler.java) — preset-editor must be on :primary/N to match.
-  ;; skill-tree has no upstream key at all (upstream only reaches it via the
-  ;; terminal app); it lives on :secondary/M as a rewrite-only convenience
-  ;; that doesn't collide with any upstream binding.
-  (on-gui-key-event :preset-editor
-                    (key-state-fn [:raw (gameplay-config/input-key :edit-preset-key)]))
-  (on-gui-key-event :skill-tree (key-state-fn [:screen :secondary])))
+  ;; Poll GUI keys. :primary = N (edit-preset) — see screen-glfw-keys in the
+  ;; platform key-state-fn; the CURRENT binding (Settings app / config)
+  ;; resolves through the bound-key resolver. Upstream AcademyCraft:
+  ;; KEY_EDIT_PRESET = N (ClientHandler.java) — preset-editor must be on
+  ;; :primary/N to match. The skill-tree viewer is debug-only and has NO key
+  ;; binding (upstream reaches it only via the terminal app).
+  (on-gui-key-event :preset-editor (key-state-fn [:screen :primary])))
 
 (defn reset-all-keys!
   "Reset all key states. Called on disconnect or dimension change."

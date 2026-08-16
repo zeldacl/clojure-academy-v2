@@ -245,13 +245,12 @@
                          :back 83      ;; S
                          :left 65      ;; A
                          :right 68})   ;; D
-;; :primary = N (78), :secondary = M (77) — raw key identity only; which
-;; screen each opens is decided in keybinds.clj/tick-keys!, matching upstream
-;; AcademyCraft's KEY_EDIT_PRESET = N (ClientHandler.java). Upstream has no
-;; binding on M at all; the rewrite-only skill-tree viewer (no upstream
-;; equivalent — upstream reaches it only via the terminal app) uses M so it
-;; doesn't collide with N's upstream-aligned meaning.
-(def screen-glfw-keys {:primary 78 :secondary 77})
+;; :primary = N (78) — raw key identity only; which screen it opens is
+;; decided in keybinds.clj/tick-keys!, matching upstream AcademyCraft's
+;; KEY_EDIT_PRESET = N (ClientHandler.java). The skill-tree viewer is
+;; debug-only with NO key binding (upstream reaches it only via the terminal
+;; app).
+(def screen-glfw-keys {:primary 78})
 
 (defn glfw-key-state-fn
   "key-state-fn callback for keybinds/tick-keys!. Takes [:slot idx],
