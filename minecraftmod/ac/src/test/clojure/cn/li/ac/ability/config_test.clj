@@ -34,6 +34,7 @@
      {:damage-scale 2.5
       :attack-player false
       :destroy-blocks false
+      :worlds-whitelisted-destroying-blocks ["minecraft:the_nether" "-1"]
       :normal-metal-blocks ["custom:metal"]
       :weak-metal-blocks ["custom:weak-metal"]
       :metal-entities ["custom:metal-entity"]
@@ -60,6 +61,7 @@
     (is (= 2.5 (cfg/damage-scale)))
     (is (false? (cfg/attack-player-enabled?)))
     (is (false? (cfg/destroy-blocks-enabled?)))
+    (is (= ["minecraft:the_nether" "-1"] (cfg/whitelisted-destroying-worlds)))
     (is (true? (cfg/is-normal-metal-block? "custom:metal")))
     (is (true? (cfg/is-weak-metal-block? "custom:weak-metal")))
     (is (true? (cfg/is-metal-entity? "custom:metal-entity")))

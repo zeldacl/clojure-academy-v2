@@ -50,18 +50,22 @@
   nil)
 
 (defn destroy-allowed?
-  []
-  (if-let [pred (get-in @(fw/fw-atom) [:platform :block-destroy-gate])]
-    (boolean (pred))
-    true))
+  "Global destroy gate. world-id lets the gate consult the upstream-style
+   dimension whitelist (worldsWhitelistedDestroyingBlocks); the 0-arity form
+   stays permissive-default for callers without a world context."
+  ([] (destroy-allowed? nil))
+  ([world-id]
+   (if-let [pred (get-in @(fw/fw-atom) [:platform :block-destroy-gate])]
+     (boolean (pred world-id))
+     true)))
 
 (defn break-block!
   ([player-id world-id x y z drop?]
-   (when (destroy-allowed?)
+   (when (destroy-allowed? world-id)
      (with-internal-break!
        (fn [] (call :break-block! player-id world-id x y z drop?)))))
   ([player-id world-id x y z drop? fortune-level]
-   (when (destroy-allowed?)
+   (when (destroy-allowed? world-id)
      (with-internal-break!
        (fn [] (call :break-block! player-id world-id x y z drop? fortune-level))))))
 

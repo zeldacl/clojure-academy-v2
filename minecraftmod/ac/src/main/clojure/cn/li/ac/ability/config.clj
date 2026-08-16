@@ -26,6 +26,7 @@
 (def default-values
   {:attack-player true
    :destroy-blocks true
+   :worlds-whitelisted-destroying-blocks []
 
    ;; Defaults intentionally mirror the currently active MagMovement hardcoded
    ;; sets so extracting config does not silently change targeting behavior.
@@ -97,6 +98,12 @@
     :type :boolean
     :default (:destroy-blocks default-values)
     :comment "Whether ability skills may destroy blocks by default."}
+   {:key :worlds-whitelisted-destroying-blocks
+    :path "general.worlds-whitelisted-destroying-blocks"
+    :section :general
+    :type :string-list
+    :default (:worlds-whitelisted-destroying-blocks default-values)
+    :comment "Dimensions where skills may still destroy blocks when the global toggle is off (dimension names like minecraft:overworld, or numeric ids 0/-1/1)."}
 
    {:key :normal-metal-blocks
     :path "targeting.metal.normal-metal-blocks"
@@ -408,6 +415,13 @@
 
 (defn destroy-blocks-enabled? []
   (boolean-value :destroy-blocks))
+
+(defn whitelisted-destroying-worlds
+  "Dimensions exempt from the global destroy toggle (upstream
+   worldsWhitelistedDestroyingBlocks). Entries may be dimension resource paths
+   (minecraft:overworld) or numeric ids (0/-1/1)."
+  []
+  (string-list :worlds-whitelisted-destroying-blocks))
 
 (defn get-normal-metal-blocks []
   (string-list :normal-metal-blocks))
