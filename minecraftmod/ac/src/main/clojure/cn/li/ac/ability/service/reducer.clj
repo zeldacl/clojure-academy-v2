@@ -842,7 +842,7 @@
 
 #_(defn- legacy-cmd-tick-radiation-marks
   [player-state {:keys [player-uuid]}]
-  (let [marks (or (get-in player-state radiation-marks-path) {})
+  (let [marks (or (get-in player-state [:runtime :unused-radiation-legacy]) {})
         next-marks
         (reduce-kv
           (fn [acc target-id mark]
@@ -855,9 +855,9 @@
     ;; Unconditional emit (even when next-marks == marks or empty): this is
     ;; the index's per-tick self-healing channel — any drift from a swallowed
     ;; effect exception is corrected on the very next tick.
-    (ok (assoc-in player-state radiation-marks-path next-marks)
+    (ok (assoc-in player-state [:runtime :unused-radiation-legacy] next-marks)
         []
-        [(radiation-index-effect player-uuid next-marks)])))
+        [])))
 
 (defn- cmd-tick-radiation-marks
   [_player-state _command]

@@ -115,6 +115,10 @@
     :radiation-marks-clear-all
     (assoc state :radiation-marks {})
 
+    :radiation-replace
+    (assoc-in state [:radiation-marks (str (:source-player-id event))]
+              (or (:marks event) {}))
+
     :combat-tick
     (update state :radiation-marks
             #(radiation-marks/tick (or %) (:tick event)))

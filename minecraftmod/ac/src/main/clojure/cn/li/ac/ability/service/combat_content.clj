@@ -943,10 +943,16 @@
                                 :max-active-ticks 180}
                                {:op :vfx :effect-id :light-shield
                                 :event :active :params {:radius 3.0}}]}
-               :release {:op :domain-event
-                         :event-type :light-shield-end}
-               :abort {:op :domain-event
-                       :event-type :light-shield-end}}}
+               :release {:op :sequence
+                         :steps [{:op :domain-event
+                                  :event-type :light-shield-end}
+                                 {:op :vfx :effect-id :light-shield
+                                  :event :end}]}
+               :abort {:op :sequence
+                       :steps [{:op :domain-event
+                                :event-type :light-shield-end}
+                               {:op :vfx :effect-id :light-shield
+                                :event :end}]}}}
     {:id :jet-engine
      :revision 1
      :activation :session
