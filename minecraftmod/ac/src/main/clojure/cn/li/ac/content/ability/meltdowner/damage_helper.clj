@@ -1,210 +1,125 @@
 (ns cn.li.ac.content.ability.meltdowner.damage-helper
-  "Meltdowner damage helper: mark targets and amplify incoming damage while marked."
+  "Combat Core adapter for Meltdowner radiation marks.
+
+   Marks are domain state now. This namespace keeps the content-facing API
+   used by projectile abilities, but only emits Combat Core domain events; it
+   never creates Context state, player commands, or mutable damage handlers."
   (:require [cn.li.ac.ability.service.skill-effects :as skill-effects]
-            [cn.li.ac.ability.service.context-manager :as ctx-mgr]
-            [cn.li.ac.ability.service.player-runtime-commands :as prt-cmd]
-            [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.model.ability :as adata]
-            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.mcmod.hooks.core :as hooks]
             [cn.li.ac.content.ability.meltdowner.rad-intensify :as rad]))
 
-(def ^:private rad-mark-fx-channel :rad-intensify/fx-mark)
+(def ^:private mark-sequence* (atom 0))
 
-(def ^:private last-radiation-tick-id* (atom nil))
+(defn- normalize-id [id]
+  (when (some? id) (str id)))
 
-;; Singleton command constant — reused across all players every tick.
-;; Eliminates O(N) per-player map allocations in tick-marks!.
-(def ^:private tick-radiation-command
-  {:command :tick-radiation-marks})
+(defn- current-server-tick []
+  (long (or (:server-tick-id (hooks/player-state-owner)) 0)))
 
-(defn- normalize-id
-  [id]
-  (when id (str id)))
+(defn- event-id [kind source target tick]
+  [kind source target tick (swap! mark-sequence* inc)])
 
-(defn- current-server-tick-id
-  []
-  (some-> (hooks/player-state-owner) :server-tick-id))
+(defn- learned-rad-intensify? [player-id]
+  (boolean
+   (when-let [state (skill-effects/get-player-state player-id)]
+     (adata/is-learned? (:ability-data state) :rad-intensify))))
 
-(defn clear-all-marks!
-  []
-  (doseq [holder (prt-cmd/radiation-mark-holders)]
-    (prt-cmd/run-for-player!
-     holder
-     {:command :clear-radiation-marks :clear-all? true}))
-  (reset! last-radiation-tick-id* nil)
+(defn clear-all-marks! []
+  (combat-runtime/dispatch-domain-event!
+   {:type :radiation-marks-clear-all
+    :owner :system
+    :event-id (event-id :radiation-marks-clear-all :system :all
+                        (current-server-tick))})
   nil)
 
-(defn on-server-stop!
-  "Drop the whole session's derived radiation-mark index in one shot instead
-   of iterating players (the store's per-player state is already gone by the
-   time this runs, so per-player clear commands would be pure ghost-state
-   recreation)."
-  [session-id]
-  (prt-cmd/clear-radiation-index-session! session-id)
-  (reset! last-radiation-tick-id* nil)
+(defn on-server-stop! [_session-id]
+  (clear-all-marks!)
   nil)
 
 (defn reset-marks-for-test!
-  ([]
-   (reset-marks-for-test! {}))
+  ([] (reset-marks-for-test! {}))
   ([snapshot]
    (clear-all-marks!)
    (doseq [[target-id mark] snapshot]
-     (when-let [source-id (:source-player-id mark)]
-       (prt-cmd/run-for-player!
-        source-id
-        {:command :mark-radiation-target
-         :target-id target-id
-         :mark mark})))
+     (combat-runtime/dispatch-domain-event!
+      (merge mark
+             {:type :radiation-mark
+              :target-id (normalize-id target-id)
+              :event-id (event-id :radiation-mark
+                                  (:source-player-id mark)
+                                  target-id
+                                  (current-server-tick))})))
    nil))
 
-(defn marks-snapshot
-  []
-  (prt-cmd/radiation-marks-snapshot))
+(defn marks-snapshot []
+  (or (:radiation-marks (combat-runtime/domain-state)) {}))
 
 (defn clear-mark!
   ([target-id]
-   (when-let [target-key (normalize-id target-id)]
-     (doseq [source-uuid (prt-cmd/radiation-mark-sources-for-target target-key)]
-       (prt-cmd/run-for-player!
-        source-uuid
-        {:command :clear-radiation-marks :target-id target-key})))
+   (when-let [target (normalize-id target-id)]
+     (combat-runtime/dispatch-domain-event!
+      {:type :radiation-mark-clear
+       :target-id target
+       :event-id (event-id :radiation-mark-clear :system target
+                           (current-server-tick))}))
    nil)
-  ([_source-player-id target-id]
-   (clear-mark! target-id)))
+  ([_source-player-id target-id] (clear-mark! target-id)))
 
-(defn clear-target-mark!
-  [target-id]
-  (clear-mark! target-id)
-  nil)
+(defn clear-target-mark! [target-id] (clear-mark! target-id))
+(defn clear-target-marks! [target-id] (clear-target-mark! target-id))
 
-(defn clear-target-marks!
-  [target-id]
-  (clear-target-mark! target-id))
-
-(defn clear-source-marks!
-  [source-player-id]
+(defn clear-source-marks! [source-player-id]
   (when source-player-id
-    (prt-cmd/run-for-player!
-     source-player-id
-     {:command :clear-radiation-marks :source-player-id source-player-id}))
+    (combat-runtime/dispatch-domain-event!
+     {:type :combat-owner-clear
+      :owner (normalize-id source-player-id)
+      :event-id (event-id :combat-owner-clear source-player-id :all
+                          (current-server-tick))}))
   nil)
 
-(defn clear-expired-marks!
-  []
-  (doseq [holder (prt-cmd/radiation-mark-holders)]
-    (prt-cmd/run-for-player!
-     holder
-     {:command :clear-radiation-marks :clear-expired? true}))
+(defn clear-expired-marks! []
+  ;; Expiration is a normal Combat Core tick, not a second per-player scan.
+  (combat-runtime/dispatch-domain-event!
+   {:type :combat-tick
+    :tick (current-server-tick)
+    :event-id (event-id :combat-tick :system :marks (current-server-tick))})
   nil)
 
-(defn tick-marks!
-  "Drive radiation markers globally once per unique server tick.
-   Optimized: only iterates players who currently hold at least one
-   outgoing mark (via the derived radiation-mark index), instead of every
-   online player — a server with no active marks emits zero commands."
-  []
-  (let [tick-id (current-server-tick-id)]
-    (when (or (nil? tick-id) (not= tick-id @last-radiation-tick-id*))
-      (when tick-id
-        (reset! last-radiation-tick-id* tick-id))
-      (let [session-id (prt-cmd/session-id)]
-        (doseq [holder (prt-cmd/radiation-mark-holders)]
-          (if (store/get-player-state session-id holder)
-            (prt-cmd/run-for-player! holder tick-radiation-command)
-            ;; Ghost index entry (backing player state already gone) — drop
-            ;; it directly. Never use a get-or-create path here, or a
-            ;; departed player's state gets silently resurrected.
-            (prt-cmd/drop-radiation-index-source! holder))))))
-  nil)
-
-(defn- learned-rad-intensify?
-  [player-id]
-  (boolean
-    (when-let [state (skill-effects/get-player-state player-id)]
-      (adata/is-learned? (:ability-data state) :rad-intensify))))
-
-(defn- emit-mark-fx!
-  [source-id {:keys [ctx-id target-pos mark]}]
-  (when (and source-id ctx-id mark)
-    (let [payload (cond-> {:mode :mark
-                           :target-id (:target-id mark)
-                           :ticks-left (long (or (:ticks-left mark) 0))
-                           :rate (double (or (:rate mark) 1.0))
-                           :source-player-id source-id}
-                    (map? target-pos)
-                    (merge {:x (double (or (:x target-pos) 0.0))
-                            :y (double (or (:y target-pos) 0.0))
-                            :z (double (or (:z target-pos) 0.0))}))]
-      (ctx-mgr/push-channel-to-player! source-id ctx-id rad-mark-fx-channel payload)
-      (ctx-mgr/push-channel-to-nearby-players! source-id ctx-id rad-mark-fx-channel payload))))
-
-(defn mark-target!
-  ([attacker-id target-id]
-   (mark-target! attacker-id target-id nil))
-  ([attacker-id target-id {:keys [ctx-id target-pos] :as _fx-context}]
-   (let [source-id (normalize-id attacker-id)
-         marked-target-id (normalize-id target-id)]
-     (when (and source-id marked-target-id (learned-rad-intensify? source-id))
-       ;; Original stores one mark directly on the target entity. A later
-       ;; Meltdowner hit therefore replaces both the previous source/rate and
-       ;; its duration instead of keeping concurrent per-caster marks.
-       ;;
-       ;; Its unusual max(60, getMarkTick(player)) expression reads the
-       ;; ATTACKER's incoming mark duration, not the victim's current mark.
-       (let [source-ticks (long (or (:ticks-left (prt-cmd/radiation-marks-for-target source-id)) 0))
-             mark-ticks (long (max 60 (rad/mark-duration-ticks) source-ticks))
-             mark-rate (rad/rate source-id)
-             mark {:source-player-id source-id
-                   :target-id marked-target-id
-                   :ticks-left mark-ticks
-                   :rate mark-rate
-                   :updated-at-tick (current-server-tick-id)}]
-         (clear-mark! marked-target-id)
-         (prt-cmd/run-for-player!
-          source-id
-          {:command :mark-radiation-target
-           :target-id marked-target-id
-           :mark mark})
-         (emit-mark-fx! source-id {:ctx-id ctx-id
-                                   :target-pos target-pos
-                                   :mark mark}))))))
-
-(defn- active-mark
-  [target-id]
-  (let [target-key (normalize-id target-id)]
-    (when-let [mark (prt-cmd/radiation-marks-for-target target-key)]
-      (if (pos? (long (or (:ticks-left mark) 0)))
-        mark
-        (do
-          (clear-mark! target-id)
-          nil)))))
-
-(defn- damage-handler
-  [player-id attacker-id damage _damage-source]
-  (if-let [{:keys [source-player-id target-id rate]} (active-mark player-id)]
-    (let [mark-rate (double rate)]
-      [(* (double damage) mark-rate)
-       {:handler :meltdowner/rad-intensify
-        :source-player-id source-player-id
-        :target-id target-id
-        :rate mark-rate}])
-    [(double damage) nil]))
+(defn tick-marks! []
+  (clear-expired-marks!))
 
 (defn ensure-damage-handler!
-  []
-  (damage-runtime/register-damage-handler!
-    :meltdowner/rad-intensify
-    damage-handler
-    90))
+  "Compatibility-shaped no-op for content tests during source migration.
 
-(defn init!
+   Damage is already compiled into Combat Core's deterministic pipeline; no
+   mutable registry is installed here."
   []
-  (ensure-damage-handler!)
-  ;; Matches original's Skill.expCustomized: rad-intensify's exp is always
-  ;; the synthetic max-CP-ratio formula, not a stored/accumulated value —
-  ;; wire it into the generic exp accessor so UI display etc. sees the same
-  ;; value the mark-rate calculation uses.
+  nil)
+
+(defn mark-target!
+  ([attacker-id target-id] (mark-target! attacker-id target-id nil))
+  ([attacker-id target-id _fx-context]
+   (let [source (normalize-id attacker-id)
+         target (normalize-id target-id)
+         tick (current-server-tick)]
+     (when (and source target (learned-rad-intensify? source))
+       (let [existing (get (marks-snapshot) target)
+             duration (max 60 (long (or (:ticks-left existing) 0)))
+             rate (double (rad/rate source))]
+         (combat-runtime/dispatch-domain-event!
+          {:type :radiation-mark
+           :source-player-id source
+           :target-id target
+           :duration duration
+           :rate rate
+           :tick tick
+           :event-id (event-id :radiation-mark source target tick)})))))
+   nil))
+
+(defn init! []
+  ;; Keep the content exp accessor, but deliberately do not register a
+  ;; mutable damage handler: damage amplification is a Combat Core provider.
   (skill-effects/register-custom-skill-exp! :rad-intensify rad/skill-exp)
   nil)

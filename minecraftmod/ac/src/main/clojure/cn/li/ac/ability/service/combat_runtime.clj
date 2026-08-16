@@ -42,6 +42,14 @@
              (assoc marks target
                     (radiation-marks/mark (get marks target) event))))
 
+    :radiation-mark-clear
+    (update state :radiation-marks
+            (fn [marks]
+              (dissoc (or marks {}) (str (:target-id event)))))
+
+    :radiation-marks-clear-all
+    (assoc state :radiation-marks {})
+
     :combat-tick
     (update state :radiation-marks
             #(radiation-marks/tick (or %) (:tick event)))
@@ -152,14 +160,25 @@
   [{:priority 100
     :provider-id :academy/base
     :ability-id :rad-intensify
-    :node-id :damage-amplifier
+   :node-id :damage-amplifier
     :run (fn [request context]
-           (let [exp (double (ability-model/get-skill-exp
-                              (get-in (or (:source-state context)
-                                           (:state context) {}) [:ability-data])
-                              :rad-intensify))
-                 multiplier (+ 1.4 (* 0.4 exp))]
-             (update request :base #(* (double %) multiplier))))}
+           (let [target (str (:target request))
+                 mark (get-in context [:domain-state :radiation-marks target])
+                 ticks-left (long (or (:ticks-left mark) 0))
+                 rate (double (or (:rate mark) 1.0))
+                 base (double (:base request))]
+             (if (and mark (pos? ticks-left)
+                      (Double/isFinite base)
+                      (Double/isFinite rate)
+                      (<= 0.0 rate 8.0))
+               (-> request
+                   (assoc :base (* base rate))
+                   (assoc-in [:metadata :radiation-mark]
+                             {:source-player-id (:source-player-id mark)
+                              :target-id target
+                              :rate rate
+                              :ticks-left ticks-left}))
+               request)))}
    {:priority 50
     :provider-id :academy/base
     :ability-id :vec-deviation
@@ -918,6 +937,7 @@
 (defn engine [] (or @engine* (initialize!)))
 (defn catalog [] @catalog*)
 (defn content-hash [] (:content-hash @catalog*))
+(defn domain-state [] (combat/domain-state (engine)))
 (defn register-provider! [provider]
   (registry/register-provider! provider))
 
