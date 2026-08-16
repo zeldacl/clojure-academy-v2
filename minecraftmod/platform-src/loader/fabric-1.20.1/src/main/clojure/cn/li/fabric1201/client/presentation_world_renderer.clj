@@ -2,6 +2,7 @@
   "CLIENT-ONLY world Presentation Runtime submission adapter."
   (:require [cn.li.mc1201.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.vfx :as vfx]
+            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [com.mojang.blaze3d.vertex PoseStack]
@@ -26,30 +27,26 @@
               ^MultiBufferSource$BufferSource buffer-source (or (.consumers ctx)
                                                                  (.bufferSource (.renderBuffers mc)))]
           (when (and pose-stack buffer-source)
-            (let [backend-context
-                  {:draw-mesh!
-                   (fn [_ _ _ _ _ payload]
-                     (geometry/render-presentation-geometry!
-                       {:player player
-                        :pose-stack pose-stack
-                        :buffer-source buffer-source
-                        :camera-pos cam-pos
-                        :tick tick
-                        :plan payload}))}
-                  frame-context (geometry/presentation-frame-context player cam-pos tick)]
-              (let [frame-id (vfx/next-frame-id)
-                    frame (vfx/sample-frame!
-                            (assoc frame-context :frame-id frame-id :partial-tick 0.0))]
-                (try
-                  (doseq [batch (or (vfx/frame-stage frame-id :world-after-translucent) [])
-                          :when (= :mesh (:primitive batch))
-                          plan (or (:payload batch) [])]
-                    (geometry/render-presentation-geometry!
-                      {:player player :pose-stack pose-stack
-                       :buffer-source buffer-source :camera-pos cam-pos
-                       :tick tick :plan plan}))
-                  frame
-                  (finally (vfx/release-frame! frame-id)))))))))
+            (let [frame-context (geometry/presentation-frame-context player cam-pos tick)
+                  ;; Must match the HUD callback's own width/height (see
+                  ;; presentation_hud_renderer.clj): extract! memoizes per
+                  ;; real frame regardless of which stage asks first, so a
+                  ;; mismatched size here would bleed into the HUD's cached
+                  ;; layout.
+                  w (.getGuiScaledWidth (.getWindow mc))
+                  h (.getGuiScaledHeight (.getWindow mc))]
+              (presentation/submit-current-frame!
+                :world-after-translucent 0.0 w h
+                {:presentation-context frame-context
+                 :backend-context
+                 {:draw-batch!
+                  (fn [_g _stage prim _mat _var _cnt payload]
+                    (when (= "mesh" prim)
+                      (doseq [plan (or payload [])]
+                        (geometry/render-presentation-geometry!
+                          {:player player :pose-stack pose-stack
+                           :buffer-source buffer-source :camera-pos cam-pos
+                           :tick tick :plan plan}))))}}))))))
     (catch Exception e
       (log/error "Fabric level effect render failed" e))))
 

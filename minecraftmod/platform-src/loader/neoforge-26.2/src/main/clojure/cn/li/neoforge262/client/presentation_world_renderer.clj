@@ -3,6 +3,7 @@
   this loader extracts immutable state, then submits its custom geometry."
   (:require [cn.li.mc262.client.effects.presentation-world :as geometry]
             [cn.li.platform.neutral.vfx :as vfx]
+            [cn.li.platform.neutral.presentation :as presentation]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.mcmod.util.log :as log])
   (:import [cn.li.mcver ResourceLocations]
@@ -49,20 +50,23 @@
   (let [^LevelRenderState render-state (.getLevelRenderState evt)
         extracted (.getRenderData render-state presentation-context-key)]
     (when extracted
-      (let [{:keys [^LocalPlayer player camera-pos tick presentation-context]} extracted]
-        (let [frame-id (vfx/next-frame-id)
-              frame (vfx/sample-frame!
-                      (assoc presentation-context :frame-id frame-id :partial-tick 0.0))]
-          (try
-            (doseq [batch (or (vfx/frame-stage frame-id :world-after-translucent) [])
-                    :when (= :mesh (:primitive batch))
-                    plan (or (:payload batch) [])]
-              (geometry/render-presentation-geometry!
-                {:player player :camera-pos camera-pos :tick tick :plan plan
-                 :pose-stack (.getPoseStack evt)
-                 :submit-node-collector (.getSubmitNodeCollector evt)}))
-            frame
-            (finally (vfx/release-frame! frame-id))))))))
+      (let [{:keys [^LocalPlayer player camera-pos tick presentation-context]} extracted
+            ^Minecraft mc (Minecraft/getInstance)]
+        (when mc
+          (let [w (.getGuiScaledWidth (.getWindow mc))
+                h (.getGuiScaledHeight (.getWindow mc))]
+            (presentation/submit-current-frame!
+              :world-after-translucent 0.0 w h
+              {:presentation-context presentation-context
+               :backend-context
+               {:draw-batch!
+                (fn [_g _stage prim _mat _var _cnt payload]
+                  (when (= "mesh" prim)
+                    (doseq [plan (or payload [])]
+                      (geometry/render-presentation-geometry!
+                        {:player player :camera-pos camera-pos :tick tick :plan plan
+                         :pose-stack (.getPoseStack evt)
+                         :submit-node-collector (.getSubmitNodeCollector evt)}))))}})))))))
 
 (defn- on-extract-level-render-state [^ExtractLevelRenderStateEvent evt]
   (try

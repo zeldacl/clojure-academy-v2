@@ -10,10 +10,12 @@
             [cn.li.ac.gui.presentation-container :as presentation-container]
             [cn.li.ac.gui.presentation-application :as presentation-application]
             [cn.li.ac.client.vfx-host :as vfx-host]
+            [cn.li.ac.client.effect-controller :as effect-controller]
             [cn.li.presentation.core.host :as presentation-host]
             [cn.li.presentation.compiler.core :as presentation-compiler]
             [cn.li.presentation.compiler.render :as presentation-render]
-            [cn.li.mcmod.util.log :as log]))
+            [cn.li.mcmod.util.log :as log])
+  (:import [cn.li.mcmod.runtime FramePacket RenderPass RenderCommand$Batch RenderStage]))
 
 (defn- presentation-input-event [event]
   (let [{:keys [type]} event]
@@ -123,6 +125,54 @@
         (or (compare-and-set! combat-hud* nil vm)
             @combat-hud*))))
 
+;; Only :world-after-translucent (level effects) and :first-person (hand
+;; effects) are ever emitted by effect-controller's sample-plan!/sample-hand!
+;; today; extend this if a new stage is wired into VFX sampling.
+(def ^:private vfx-stage->render-stage
+  {:world-after-translucent RenderStage/WORLD_AFTER_TRANSLUCENT
+   :first-person RenderStage/FIRST_PERSON})
+
+(defn- batch->render-command [batch]
+  (RenderCommand$Batch.
+    (or (get vfx-stage->render-stage (:stage batch))
+        (throw (ex-info "unmapped VFX stage for Presentation frame merge"
+                        {:stage (:stage batch)})))
+    (name (:primitive batch))
+    (some-> (:material batch) name)
+    (some-> (:variant batch) name)
+    (long (or (:layout-version batch) 1))
+    (long (:count batch))
+    (name (or (:sort-mode batch) :stable))
+    (:payload batch)))
+
+(defn- vfx-render-passes [vfx-context frame-id partial-tick]
+  (let [frame (effect-controller/sample-frame!
+                (merge vfx-context {:frame-id frame-id :partial-tick partial-tick}))]
+    (for [[stage batches] (:stages frame)
+          :when (seq batches)]
+      (RenderPass. (get vfx-stage->render-stage stage) (mapv batch->render-command batches)))))
+
+(defn- merge-vfx-passes
+  "Fold VFX Core's sampled world/first-person batches into the same
+   FramePacket the UI template interpreter produced, so a world-stage loader
+   submits one packet through the unified pipeline instead of maintaining a
+   second submission path through cn.li.platform.neutral.vfx.
+
+   vfx-context is nil for HUD/Screen calls (they never pass a
+   :presentation-context), so this is a no-op for the common case; only a
+   world-stage submit-current-frame! call supplies one."
+  [^FramePacket packet vfx-context frame-id partial-tick]
+  (if-not vfx-context
+    packet
+    (try
+      (let [extra (vfx-render-passes vfx-context frame-id partial-tick)]
+        (if (seq extra)
+          (FramePacket. (.frameId packet) (into (vec (.passes packet)) extra))
+          packet))
+      (catch Throwable throwable
+        (log/error "VFX-to-Presentation frame merge failed" throwable)
+        packet))))
+
 (defn- ensure-terminal! [runtime owner dispatch-action!]
   (or @terminal*
       (let [vm (presentation-terminal/mount-terminal!
@@ -155,6 +205,17 @@
                (when-let [refresh! (:refresh! @terminal*)]
                  (refresh!))
                (presentation-host/frame! runtime frame-id delta-seconds width height))
+     ;; Called for every stage (HUD/Screen/world/...); vfx-context is nil
+     ;; except for a world-stage submit-current-frame! call, so this behaves
+     ;; exactly like :frame! above for HUD/Screen and additionally folds VFX
+     ;; Core's sampled world/first-person batches in for the world stage.
+     :frame-with-context! (fn [frame-id delta-seconds width height vfx-context]
+                            (when-let [refresh! (:refresh! @combat-hud*)]
+                              (refresh! width height {}))
+                            (when-let [refresh! (:refresh! @terminal*)]
+                              (refresh!))
+                            (-> (presentation-host/frame! runtime frame-id delta-seconds width height)
+                                (merge-vfx-passes vfx-context frame-id delta-seconds)))
      :mount-combat-hud! (fn [player-uuid width height]
                           (ensure-combat-hud! runtime player-uuid width height))
      :mount-terminal! (fn [owner dispatch-action!]
@@ -198,8 +259,13 @@
     (bridge/merge-client-bridge!
       {:presentation-runtime presentation-runtime
        :presentation-host-api presentation-host-api
-       ;; VFX Core is installed directly by ac.client.vfx-host during client
-       ;; bootstrap.  Presentation exposes UI only and does not carry a VFX
-       ;; runtime seam.
+       ;; VFX Core's OWN host installation (tick!/fov-offset/hand transforms)
+       ;; is still installed independently by ac.client.vfx-host — this
+       ;; bridge never re-exports that host API key (verifyVfxDirectHostBoundary
+       ;; enforces this). :frame-with-context! above does directly call
+       ;; effect-controller's sample-frame! to fold world/first-person batches
+       ;; into the same FramePacket the UI template interpreter produces, so
+       ;; a world-stage
+       ;; loader has one unified submission path instead of two.
        }))
   (log/info "Presentation Runtime bridge installed"))
