@@ -10,7 +10,35 @@
 (def ^:private host-id :presentation)
 (def ^:private host-kind :unified)
 (defonce ^:private frame-sequence* (atom 0))
+(defonce ^:private last-frame-nanos* (atom 0))
 (defonce ^:private backend* (atom nil))
+
+;; HUD, Screen and (once wired) world/VFX submissions each call
+;; dispatch-current-frame!/submit-current-frame! independently within the
+;; same real render frame. Minting a fresh frame id per *call* defeated
+;; extract!'s per-frame memoization outright — every stage recomputed every
+;; mount's template from scratch. Real render frames are >=1ms apart even
+;; at very high framerates; two stage submissions for the same real frame
+;; land microseconds apart. Coalesce anything inside that window onto one
+;; id instead of requiring every loader call site to share an explicit
+;; "begin frame" token.
+(def frame-coalesce-window-nanos 1000000)
+
+(defn coalesce-frame-id
+  "Pure decision: does `now` (nanoTime) belong to the same real frame as the
+   last call at `last-nanos`? Returns [same-frame? next-last-nanos]."
+  [now last-nanos]
+  (if (< (- now last-nanos) frame-coalesce-window-nanos)
+    [true last-nanos]
+    [false now]))
+
+(defn- current-frame-id! []
+  (let [now (System/nanoTime)
+        [same-frame? next-nanos] (coalesce-frame-id now @last-frame-nanos*)]
+    (reset! last-frame-nanos* next-nanos)
+    (if same-frame?
+      @frame-sequence*
+      (swap! frame-sequence* inc))))
 
 (defn ensure-registered!
   "Register AC's host API once the content bridge has been installed.
@@ -84,7 +112,7 @@
 
 (defn dispatch-current-frame!
   [stage delta-seconds width height]
-  (let [result (dispatch-stage-with-context! stage (swap! frame-sequence* inc)
+  (let [result (dispatch-stage-with-context! stage (current-frame-id!)
                                              delta-seconds width height nil)]
     ;; Backend submission is intentionally an opaque callback.  The neutral
     ;; seam never inspects FramePacket or imports presentation-core; a mapped
@@ -106,7 +134,7 @@
                                  (contains? render-context :backend-context))
                           (:backend-context render-context)
                           render-context)
-        result (dispatch-stage-with-context! stage (swap! frame-sequence* inc)
+        result (dispatch-stage-with-context! stage (current-frame-id!)
                                               delta-seconds width height frame-context)]
     (when-let [submit! (:submit! @backend*)]
       (when result

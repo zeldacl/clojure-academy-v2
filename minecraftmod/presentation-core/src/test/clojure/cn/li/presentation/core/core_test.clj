@@ -68,6 +68,30 @@
     (is (= 9 (.frameId packet)))
     (is (empty? (.passes packet)))))
 
+(deftest extract-memoizes-same-frame-id-until-invalidated
+  (let [render-calls (atom 0)
+        rt (runtime/create-runtime
+             {:template-resolver identity
+              :template-renderer (fn [_template _model _ctx]
+                                   (swap! render-calls inc)
+                                   [(RenderCommand$Quad. 0.0 0.0 8.0 8.0 -1)])})
+        host (HostDescriptor. "hud" HostDescriptor$HostKind/HUD 0 0 nil
+                              HostDescriptor$InputPolicy/PASSTHROUGH)
+        handle (runtime/mount! rt host ::template nil)]
+    ;; mount! already invalidated once; a second call with the same frame id
+    ;; must hit the cache rather than re-run the template for every stage
+    ;; (HUD, Screen, world, ...) that asks for the same real frame.
+    (runtime/extract! rt (FrameContext. 1 0.0 320 180))
+    (is (= 1 @render-calls))
+    (runtime/extract! rt (FrameContext. 1 0.0 320 180))
+    (is (= 1 @render-calls) "same frame id must not re-render")
+    (runtime/extract! rt (FrameContext. 2 0.0 320 180))
+    (is (= 2 @render-calls) "a new frame id must rebuild")
+    (runtime/set-input-handler! rt handle (fn [_] cn.li.presentation.core.EventResult/CONSUME))
+    (runtime/dispatch! rt handle {:type :pointer :event-type :down :x 0.0 :y 0.0 :button 0})
+    (runtime/extract! rt (FrameContext. 2 0.0 320 180))
+    (is (= 3 @render-calls) "a consumed input event must invalidate even the same frame id")))
+
 (deftest keyed-reconcile-reuses-moved-nodes-and-disposes-removed-nodes
   (let [closed (atom [])
         spec (fn [keys]

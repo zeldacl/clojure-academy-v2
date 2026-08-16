@@ -18,7 +18,8 @@
    (let [runtime (atom {:mounts {} :next-id 1 :invalidated? true
                         :input (input/create)
                         :template-resolver (:template-resolver options)
-                        :template-renderer (:template-renderer options)})
+                        :template-renderer (:template-renderer options)
+                        :last-frame-id nil :last-frame nil})
         dirty-state (dirty/create)]
       (swap! runtime assoc :dirty dirty-state)
       (assoc @runtime
@@ -164,7 +165,7 @@
           (swap! (state runtime) assoc :invalidated? true))
         result))))
 
-(defn extract! [runtime ^FrameContext context]
+(defn- extract-uncached [runtime ^FrameContext context]
   (let [snapshot @(state runtime)
         mounts (vals (:mounts snapshot))
         grouped (for [stage frame/stages
@@ -175,8 +176,32 @@
                                        mounts)]
                       :when (seq commands)]
                   [stage commands])]
-    (swap! (state runtime) assoc :invalidated? false)
     (frame/packet (.frameId context) grouped)))
+
+(defn extract!
+  "Extract the FramePacket for one real frame, memoized by :frameId.
+
+   Multiple stages (HUD, Screen, world, ...) each ask for a frame within the
+   same real render frame; recomputing every mount's template on each of
+   those calls is the difference between the documented per-frame CPU/byte
+   budget and blowing through it the moment a container screen is open
+   alongside the HUD. A repeat call with the same frame id and no
+   intervening mutation returns the cached packet; anything that mutates
+   mount state (mount!/unmount!/dispatch! consuming the event/tx flush)
+   clears :invalidated? to true and forces a rebuild even for the same id."
+  [runtime ^FrameContext context]
+  (let [frame-id (.frameId context)
+        snapshot @(state runtime)]
+    (if (and (= frame-id (:last-frame-id snapshot))
+             (not (:invalidated? snapshot))
+             (:last-frame snapshot))
+      (:last-frame snapshot)
+      (let [packet (extract-uncached runtime context)]
+        (swap! (state runtime) assoc
+               :invalidated? false
+               :last-frame-id frame-id
+               :last-frame packet)
+        packet))))
 
 (defn unmount! [runtime handle]
   (when-let [mount (get-in @(state runtime) [:mounts handle])]
