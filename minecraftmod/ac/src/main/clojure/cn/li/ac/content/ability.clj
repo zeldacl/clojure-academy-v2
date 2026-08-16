@@ -112,6 +112,27 @@
   (combat-runtime/initialize!)
   true)
 
+(declare run-namespace-init!)
+
+(def ^:private generic-content-namespaces
+  '[cn.li.ac.content.ability.generic.brain-course
+    cn.li.ac.content.ability.generic.brain-course-advanced
+    cn.li.ac.content.ability.generic.course-chain
+    cn.li.ac.content.ability.generic.mind-course])
+
+(defn- register-generic-content!
+  "Load and register the non-combat course chain explicitly.
+
+  Generic courses are progression metadata, not executable combat skills, so
+  they remain outside Combat Core while retaining their existing registry
+  semantics."
+  []
+  (doseq [ns-sym generic-content-namespaces]
+    (require ns-sym))
+  (register-declared-skills! generic-content-namespaces)
+  (doseq [ns-sym generic-content-namespaces]
+    (run-namespace-init! ns-sym)))
+
 (defn- run-namespace-init!
   [ns-sym]
   ;; Combat Core owns authoritative combat lifecycle and damage semantics.
@@ -140,7 +161,7 @@
       ;; The executable Combat Core catalog is now the completeness gate for
       ;; all 38 configured skills. Legacy namespaces may not add a skill that
       ;; is absent from this catalog.
-      (combat-content/assert-complete-skill-catalog!)
+      (combat-content/assert-complete-composition!)
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (let [skill-namespaces (load-discovered-skill-namespaces!)]
@@ -162,6 +183,27 @@
       (passive/freeze-passive-handler-registry!)
       (lifecycle/freeze-lifecycle-registry!)
       (log/info "Ability content initialized")))
+  nil)
+
+(defn init-combat-ability-content!
+  "Production composition root for the Combat Core migration.
+
+  Registers all executable skills from the frozen Combat Core catalog and
+  keeps only the generic course metadata on the AC side. Legacy skill
+  discovery is deliberately not part of this path."
+  []
+  (install/framework-once! ::combat-ability-content-installed
+    (fn []
+      (combat-content/assert-complete-composition!)
+      (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
+        (category/register-category! (dissoc cat :ac/content-type)))
+      (register-combat-catalog!)
+      (register-generic-content!)
+      (item-actions/register-item-action! "ac:app_skill_tree" :open-skill-tree)
+      (category/freeze-category-registry!)
+      (skill-registry/freeze-skill-registry!)
+      (item-actions/freeze-item-action-registries!)
+      (log/info "Combat Core ability content initialized")))
   nil)
 
 (defn reset-ability-content-for-test!
