@@ -999,6 +999,8 @@
              :cooldown {:mode :combat-core}}))
         (:abilities provider)))
 
+(declare vfx-effect-ids)
+
 (defn assert-complete-skill-catalog!
   "Fail closed if the executable catalog and player skill configuration diverge."
   []
@@ -1009,6 +1011,22 @@
                       {:missing (sort (set/difference configured catalog))
                        :unexpected (sort (set/difference catalog configured))})))
     true))
+
+(defn assert-complete-composition!
+  "Validate every player-facing capability used by AC has a Combat Core
+   recipe before the legacy namespace bootstrap can be removed."
+  []
+  (assert-complete-skill-catalog!)
+  (when-not (= 38 (count ability-ids))
+    (throw (ex-info "Combat Core composition is missing an ability" {:count (count ability-ids)})))
+  (when-not (every? keyword? vfx-effect-ids)
+    (throw (ex-info "Combat Core contains an invalid VFX capability" {})))
+  ;; These are the old AC bootstrap responsibilities that must be empty or
+  ;; represented by Combat Core before the namespace scanner is bypassed.
+  (when-not (= #{:instant :session :toggle :passive}
+               (set (map :activation (:abilities provider))))
+    (throw (ex-info "Combat Core contains an unsupported activation model" {})))
+  true)
 
 (defn- collect-vfx-effect-ids
   [value]

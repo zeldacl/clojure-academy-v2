@@ -16,6 +16,9 @@
       (is (true? (ability-content/register-combat-catalog!)))
       (is @initialized))))
 
+(deftest combat-composition-validation-is-fail-closed
+  (is (true? (content/assert-complete-composition!))))
+
 (deftest vec-deviation-uses-source-toggle-contract
   (registry/reset-for-test!)
   (content/reset-for-test!)
