@@ -5,10 +5,23 @@
    by Combat Core; AC stores only metadata needed by learning, presets and UI."
   (:require [cn.li.ac.ability.registry.registry-core :as registry-core]))
 
+(defn- validate-metadata!
+  [{:keys [id category-id level controllable? pattern ctrl-id name-key description-key icon]
+    :as spec}]
+  (when-not (and (keyword? id) (keyword? category-id) (integer? level)
+                 (boolean? controllable?) (keyword? pattern)
+                 (keyword? ctrl-id) (string? name-key)
+                 (string? description-key) (string? icon))
+    (throw (ex-info "Invalid Combat Core skill metadata"
+                    {:skill-id id :category-id category-id :level level
+                     :controllable? controllable? :pattern pattern})))
+  spec)
+
 (def ^:private ops
   (registry-core/make-registry-ops
    [:registry :combat-catalog]
    {:label "combat-catalog"
+    :validate! validate-metadata!
     :conflict-key-fn (fn [spec]
                        (select-keys spec [:id :category-id :level :ctrl-id :pattern]))}))
 

@@ -12,6 +12,9 @@
   (is (true? (catalog/register-skills!
               [{:id :arc-gen :category-id :electromaster :level 1
                 :controllable? true :ctrl-id :arc-gen :pattern :instant
+                :name-key "ability.skill.electromaster.arc-gen"
+                :description-key "ability.skill.electromaster.arc-gen.desc"
+                :icon "textures/abilities/electromaster/skills/arc-gen.png"
                 :execution :combat-core
                 :combat-ability-id :arc-gen}])))
   (is (= :combat-core (:execution (catalog/get-skill :arc-gen))))
