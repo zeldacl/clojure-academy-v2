@@ -58,7 +58,7 @@
                     {:player player :pose-stack pose-stack :buffer-source buffer-source
                      :camera-pos cam-pos :tick tick :plan plan}))
                 frame
-                (finally (vfx/release-frame! frame-id)))))))))
+                (finally (vfx/release-frame! frame-id))))))))))
 
 (defn- on-render-level-stage [^RenderLevelStageEvent evt]
   (try

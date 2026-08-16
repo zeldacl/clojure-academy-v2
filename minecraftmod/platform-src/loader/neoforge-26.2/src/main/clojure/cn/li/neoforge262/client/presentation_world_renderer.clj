@@ -62,7 +62,7 @@
                  :pose-stack (.getPoseStack evt)
                  :submit-node-collector (.getSubmitNodeCollector evt)}))
             frame
-            (finally (vfx/release-frame! frame-id)))))))
+            (finally (vfx/release-frame! frame-id))))))))
 
 (defn- on-extract-level-render-state [^ExtractLevelRenderStateEvent evt]
   (try
