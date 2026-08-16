@@ -10,6 +10,7 @@ import mezz.jei.api.registration.IRecipeCategoryRegistration;
 import mezz.jei.api.registration.IRecipeRegistration;
 import mezz.jei.api.registration.IRecipeCatalystRegistration;
 import mezz.jei.api.registration.ISubtypeRegistration;
+import mezz.jei.api.registration.IGuiHandlerRegistration;
 import net.minecraft.resources.ResourceLocation;
 
 /**
@@ -67,6 +68,13 @@ public class JEIPluginWrapper implements IModPlugin {
     public void registerRecipeCatalysts(IRecipeCatalystRegistration registration) {
         if (clojurePlugin != null) {
             clojurePlugin.registerRecipeCatalysts(registration);
+        }
+    }
+
+    @Override
+    public void registerGuiHandlers(IGuiHandlerRegistration registration) {
+        if (clojurePlugin != null) {
+            clojurePlugin.registerGuiHandlers(registration);
         }
     }
 }

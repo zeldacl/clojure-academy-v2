@@ -20,12 +20,18 @@
   {:id imag-fusor-category-id
    :title-key "tile.ac_imag_fusor.name"
   :block-id (str modid/MOD-ID ":imag_fusor")
+  ;; Machine GUI container-type — lets the JEI gui handler resolve which
+  ;; category the open screen belongs to.
+  :container-type :imag-fusor
   :background {:texture (modid/asset-path "textures" "guis/nei_fusor.png")
                 :u 0 :v 0
                 :width 120 :height 80}
    :input-slots [(slot-pos 5 36)]
    :output-slots [(slot-pos 93 36)]
    :energy-display {:x 50 :y 10 :width 20 :height 50}
+   ;; GUI click area (relative to the gui origin) that opens this category
+   ;; in JEI — centered on the output slot.
+   :click-area {:x 85 :y 28 :width 24 :height 24}
   :recipe-loader fusor-recipes/recipes-snapshot})
 
 ;; Metal Former category metadata
@@ -33,12 +39,14 @@
   {:id metal-former-category-id
    :title-key "tile.ac_metal_former.name"
   :block-id (str modid/MOD-ID ":metal_former")
+  :container-type :metal-former
   :background {:texture (modid/asset-path "textures" "guis/nei_metalformer.png")
                 :u 0 :v 0
                 :width 94 :height 57}
    :input-slots [(slot-pos 5 23)]
    :output-slots [(slot-pos 71 23)]
    :energy-display {:x 40 :y 10 :width 14 :height 37}
+   :click-area {:x 63 :y 15 :width 24 :height 24}
   :recipe-loader former-recipes/recipes-snapshot})
 
 ;; All categories

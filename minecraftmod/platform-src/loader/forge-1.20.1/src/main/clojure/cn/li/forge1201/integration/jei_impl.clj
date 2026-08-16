@@ -14,21 +14,27 @@
             [cn.li.mcmod.util.log :as log]
             [cn.li.platform.neutral.config :as mod-config])
   (:import [cn.li.mc1201.runtime RuntimeAccess]
+           [cn.li.mc1201.shim DelegatingCGuiContainerScreen]
+           [cn.li.mcbase.gui CMenuBridge]
            [mezz.jei.api IModPlugin]
            [mezz.jei.api.registration IRecipeCategoryRegistration
                                        IRecipeRegistration
                                        IRecipeCatalystRegistration
-                                       ISubtypeRegistration]
+                                       ISubtypeRegistration
+                                       IGuiHandlerRegistration]
            [mezz.jei.api.recipe.category IRecipeCategory]
            [mezz.jei.api.recipe IFocusGroup]
            [mezz.jei.api.gui.builder IRecipeLayoutBuilder]
+           [mezz.jei.api.gui.handlers IGuiContainerHandler
+                                       IGuiClickableArea]
            [mezz.jei.api.helpers IGuiHelper]
            [mezz.jei.api.recipe RecipeIngredientRole]
            [mezz.jei.api.recipe RecipeType]
            [mezz.jei.api.gui.builder IRecipeSlotBuilder]
+           [net.minecraft.client.gui.screens.inventory AbstractContainerScreen]
            [net.minecraft.resources ResourceLocation]
            [net.minecraft.world.item ItemStack]
-           [java.util ArrayList]))
+           [java.util ArrayList Collections List]))
 
 ;; ============================================================================
 ;; Recipe Category Creation (Forge-Specific)
@@ -146,6 +152,49 @@
     (catch Exception e
       (log/error "Failed to register JEI catalysts:" (ex-message e)))))
 
+(defn- recipe-type-for-category
+  "RecipeType for a category metadata map (Clojure recipe maps are
+  java.util.Map instances, matching the category's recipe class)."
+  ^RecipeType [category-meta]
+  (mezz.jei.api.recipe.RecipeType/create
+    (.getNamespace (ResourceLocation. (:id category-meta)))
+    (.getPath (ResourceLocation. (:id category-meta)))
+    java.util.Map))
+
+(defn- create-gui-handler
+  "IGuiContainerHandler for the shared DelegatingCGuiContainerScreen: resolve
+  the open machine from its menu's clj-container :container-type and return
+  that machine's GUI click area, which opens its JEI recipe category."
+  []
+  (reify IGuiContainerHandler
+    (getGuiClickableAreas [_ screen _gui-mouse-x _gui-mouse-y]
+      (let [^AbstractContainerScreen screen screen
+            menu (when (instance? CMenuBridge (.getMenu screen))
+                   (.getMenu screen))
+            clj-container (when menu (.cljContainer ^CMenuBridge menu))
+            container-type (:container-type clj-container)
+            category (some #(when (= container-type (:container-type %)) %)
+                           (integration-hooks/jei-get-all-categories))]
+        (if-let [{:keys [x y width height]} (:click-area category)]
+          (List/of (IGuiClickableArea/createBasic
+                     (int x) (int y) (int width) (int height)
+                     (into-array RecipeType [(recipe-type-for-category category)])))
+          Collections/emptyList)))))
+
+(defn- register-gui-handlers
+  "Register the machine GUI click areas: clicking a machine's output slot
+  area in its GUI opens the matching JEI recipe category (JEI docs:
+  addGuiContainerHandler → getGuiClickableAreas)."
+  [^IGuiHandlerRegistration registration]
+  (try
+    (when (some :click-area (integration-hooks/jei-get-all-categories))
+      (.addGuiContainerHandler registration
+                               DelegatingCGuiContainerScreen
+                               (create-gui-handler))
+      (log/info "Registered JEI gui click areas for machine screens"))
+    (catch Exception e
+      (log/error "Failed to register JEI gui handlers:" (ex-message e)))))
+
 (defn- register-item-subtypes
   "Register subtype handling for items that use NBT/stateful variants in creative tab.
 
@@ -188,6 +237,10 @@
     (registerRecipes [_ registration]
       (log/info "Registering JEI recipes for content descriptors...")
       (register-recipes registration))
+
+    (registerGuiHandlers [_ registration]
+      (log/info "Registering JEI gui handlers for content descriptors...")
+      (register-gui-handlers registration))
 
     (registerItemSubtypes [_ registration]
       (register-item-subtypes registration))
