@@ -1047,10 +1047,23 @@ tasks.register("verifyCombatSkillCoverage") {
             def matcher = source.text =~ /(?s)\(defskill\s+[^\n]+.*?:id\s+(:[A-Za-z0-9!?*-]+)/
             if (matcher.find()) skillIds << matcher.group(1).toString()
         }
+        // The skill-config table is the authoritative player-facing set; do
+        // not let deletion of a legacy namespace make coverage look smaller.
+        def configured = [] as Set
+        def common = file("ac/src/main/clojure/cn/li/ac/ability/skill_config/common.clj")
+        def commonText = common.text
+        def skillTable = commonText.substring(commonText.indexOf("(def skill-definitions"),
+                                               commonText.indexOf("(def all-skill-ids"))
+        (skillTable =~ /\{\s*:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> configured << match[1].toString() }
+        skillIds.addAll(configured)
         def combatContent = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj").text
         def combatIds = [] as Set
         (combatContent =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> combatIds << match[1].toString() }
         def missing = skillIds - combatIds
+        def unexpected = combatIds - skillIds
+        if (!unexpected.isEmpty()) {
+            throw new GradleException("Combat Core contains unconfigured skills: ${unexpected.sort().join(', ')}")
+        }
         if (!missing.isEmpty()) {
             throw new GradleException("Combat Core skill coverage incomplete (${skillIds.size()} skills); missing: ${missing.sort().join(', ')}")
         }
