@@ -6,7 +6,7 @@
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry])
   (:import [net.minecraft.client KeyMapping Minecraft]
-           [com.mojang.blaze3d.platform InputConstants$Type]
+           [com.mojang.blaze3d.platform InputConstants InputConstants$Type]
            [cn.li.mc1201.client KeyMappingAccess]))
 
 ;; ===== KeyMapping Registry =====
@@ -75,16 +75,55 @@
   (when-let [^KeyMapping km (get-key-mapping input-id)]
     (Integer/valueOf (KeyMappingAccess/boundKeyValue km))))
 
+(defn binding-conflict?
+  "True when another registered mapping (vanilla or another mod) shares the
+   bound key — the same conflict the vanilla Options > Controls list marks in
+   red. Unbound mappings can never conflict."
+  [input-id]
+  (when-let [^KeyMapping km (get-key-mapping input-id)]
+    (let [key (KeyMappingAccess/getKey km)]
+      (when-not (.equals key InputConstants/UNKNOWN)
+        (boolean
+          (some (fn [^KeyMapping other]
+                  (and (not (identical? other km))
+                       (.same other key)))
+                (.keyMappings (.options ^Minecraft (Minecraft/getInstance)))))))))
+
+(defn- key-code->input-key
+  "Resolve an AC key-code to an InputConstants.Key. The settings app stores
+   mouse buttons as -100+button (KeyMappingAccess/acKeyCode convention),
+   everything else is a GLFW KEYSYM — vanilla Options > Controls binds
+   keyboard and mouse keys alike."
+  ^InputConstants$Key [key-code]
+  (let [code (int key-code)]
+    (if (< code 0)
+      (.getOrCreate InputConstants$Type/MOUSE (+ 100 code))
+      (.getOrCreate InputConstants$Type/KEYSYM code))))
+
 (defn set-key-mapping-key!
-  "Rebind a registered KeyMapping to a new keyboard key-code and persist via
-   vanilla options.txt — the same path Options > Controls uses. Returns true
-   on success, nil if input-id isn't registered."
+  "Rebind a registered KeyMapping exactly the way vanilla Options > Controls
+   does (KeyBindsScreen): first clear every OTHER mapping bound to the same
+   key — the vanilla conflict policy resets conflicting vanilla/mod keybinds
+   to UNKNOWN — then bind the new key (keyboard KEYSYM or mouse MOUSE), rebuild
+   the lookup (KeyMapping.resetMapping) and persist through options.save().
+   Returns true on success, nil if input-id isn't registered."
   [input-id key-code]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.setKey km (.getOrCreate InputConstants$Type/KEYSYM (int key-code)))
-    (KeyMapping/resetMapping)
-    (.save (.options ^Minecraft (Minecraft/getInstance)))
-    true))
+    (let [key (key-code->input-key key-code)
+          mc (Minecraft/getInstance)
+          options (.options mc)]
+      (when-not (.equals key InputConstants/UNKNOWN)
+        ;; Vanilla KeyBindsScreen conflict resolution: any OTHER mapping
+        ;; (vanilla or another mod) on the same key is unbound, so the new
+        ;; binding is authoritative instead of two mappings fighting.
+        (doseq [^KeyMapping other (.keyMappings options)]
+          (when (and (not (identical? other km))
+                     (.same other key))
+            (.setKey other InputConstants/UNKNOWN))))
+      (.setKey km key)
+      (KeyMapping/resetMapping)
+      (.save options)
+      true)))
 
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.

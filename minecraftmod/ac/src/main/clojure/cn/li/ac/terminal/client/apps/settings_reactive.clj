@@ -46,6 +46,8 @@
 ;; EditKey colors (PropertyElements.EditKey): idle (200,200,200,200), edit (251,133,37,200).
 (def ^:private key-color-idle 0xC8C8C8C8)
 (def ^:private key-color-edit 0xC8FB8525)
+;; Vanilla Options > Controls marks a conflicting binding red.
+(def ^:private key-color-conflict 0xC8FF5555)
 
 (def ^:private props
   ;; :default mirrors AcademyCraft SettingsUI / domain defaults.
@@ -152,6 +154,24 @@
 (defn- binding-editable? [{:keys [source]}]
   (or (= source :settings) (rebind-supported?)))
 
+(defn- binding-conflict?
+  "True when a :bridge row's current KeyMapping shares its key with another
+   vanilla/mod mapping — shown in red like Options > Controls."
+  [{:keys [source input-id]}]
+  (and (= source :bridge)
+       (boolean (bridge/call-adapter :keybind-conflict? input-id))))
+
+(defn- refresh-key-display!
+  "Update a key row's label text and color; conflicting bindings render red
+   (vanilla Options > Controls convention)."
+  [r key-val key-text row]
+  (let [conflict? (binding-conflict? row)
+        n (str (or (current-key-name row) ""))]
+    (sig/sset-o! key-text n)
+    (ui/set-node-prop! r key-val :text n)
+    (ui/set-node-prop! r key-val :color
+                       (if conflict? key-color-conflict key-color-idle))))
+
 (defn- persist-binding! [{:keys [source input-id config-key]} key-code]
   (if (= source :settings)
     (persist! config-common/gameplay-domain config-key (int key-code))
@@ -175,8 +195,7 @@
 (defn- wire-key-binding-item! [r item {:keys [prop-id] :as row}]
   (show-only! item :key-row)
   (let [editable? (binding-editable? row)
-        name0 (str (or (current-key-name row) ""))
-        key-text (sig/signal-o name0)
+        key-text (sig/signal-o (str (or (current-key-name row) "")))
         recording? (atom false)
         ^INode key-val (ui/item-node item :key-value)
         ^INode key-hit (or (ui/item-node item :key-hit) key-val)
@@ -184,13 +203,13 @@
         b (sig/bind! key-text key-val writer (rt/get-dirty-bindings-q r))
         finish! (fn [key-code]
                   (reset! recording? false)
-                  (ui/set-node-prop! r key-val :color key-color-idle)
                   ;; ESC (256) abandons without write — PropertyElements.EditKey.
                   (when-not (= 256 (int key-code))
                     (persist-binding! row key-code))
-                  (let [n (str (or (current-key-name row) ""))]
-                    (sig/sset-o! key-text n)
-                    (ui/set-node-prop! r key-val :text n)))
+                  ;; Re-check conflict after the rebind: the new key may
+                  ;; conflict with a vanilla/mod mapping (or the previous one
+                  ;; may have been freed).
+                  (refresh-key-display! r key-val key-text row))
         cancel! (fn []
                   (when @recording?
                     (finish! 256)))
@@ -215,9 +234,9 @@
         targets (filter some? [key-hit key-val])
         target-idxs (set (map #(.getIdx ^INode %) targets))]
     (ui/set-node-prop! r (ui/item-node item :key-label) :text (prop-label prop-id))
-    ;; Binding does not apply the initial SigO value — write it explicitly.
-    (ui/set-node-prop! r key-val :text name0)
-    (ui/set-node-prop! r key-val :color key-color-idle)
+    ;; Binding does not apply the initial SigO value — write it explicitly
+    ;; (conflict state included).
+    (refresh-key-display! r key-val key-text row)
     (rt/register-binding! r (.getIdx key-val) b)
     (when editable?
       ;; Deepest hit is usually :key-value (child of :key-hit); wire both so

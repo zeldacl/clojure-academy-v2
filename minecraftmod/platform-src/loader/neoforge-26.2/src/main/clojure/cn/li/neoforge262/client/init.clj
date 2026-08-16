@@ -324,7 +324,8 @@
      :keybind-rebind-supported? (constantly true)
      :keybind-get-key-name key-mapping-adapter/get-key-display-name
      :keybind-get-key-code key-mapping-adapter/get-key-code
-     :keybind-set-key! key-mapping-adapter/set-key-mapping-key!})
+     :keybind-set-key! key-mapping-adapter/set-key-mapping-key!
+     :keybind-conflict? key-mapping-adapter/binding-conflict?})
   nil)
 
 (defn- install-client-owner-hooks!
