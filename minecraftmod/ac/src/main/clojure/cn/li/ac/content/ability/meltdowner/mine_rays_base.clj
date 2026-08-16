@@ -140,7 +140,8 @@
                 ;; Matches original's BlockDestroyEvent+harvestLevel gate: a
                 ;; disallowed block is rejected (never tracked), same as a
                 ;; canceled BlockDestroyEvent.
-                (if (or (not (bm/can-break-block? player-id world-id hx hy hz))
+                (if (or (not (skill-effects/skill-destroy-allowed? skill-id))
+                        (not (bm/can-break-block? player-id world-id hx hy hz))
                         (and tool-tier-capped? (bm/requires-high-tier-tool? world-id hx hy hz)))
                   (ctx-skill/replace-skill-state! ctx-id (with-floor (empty-skill-state) ctx-data))
                   (let [raw-hardness (double (or (bm/get-block-hardness world-id hx hy hz)

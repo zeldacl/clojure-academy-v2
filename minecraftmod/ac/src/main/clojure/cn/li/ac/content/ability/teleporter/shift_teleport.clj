@@ -434,7 +434,8 @@
   [player-id player trace]
 
   (let [creative? (boolean (entity/player-creative? player))
-        can-place? (and (bm/destroy-allowed?)
+        can-place? (and (skill-effects/skill-destroy-allowed? shift-teleport-skill-id)
+                        (bm/destroy-allowed?)
                         (not (bm/block-collidable? (:world-id trace)
                                                    (:place-x trace)
                                                    (:place-y trace)

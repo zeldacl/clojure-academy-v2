@@ -282,7 +282,8 @@
               ctx-id {:fired false :mode :capture-failed})
             (ctx/terminate-context! ctx-id nil))))
       (if-let [{:keys [world-id x y z block-id]} (pick-up-target-block player-id)]
-        (let [can-break? (block-manip/can-break-block? player-id world-id x y z)
+        (let [can-break? (and (skill-effects/skill-destroy-allowed? mag-manip-skill-id)
+                               (block-manip/can-break-block? player-id world-id x y z))
               broken? (and can-break?
                            (block-manip/break-block! player-id world-id x y z false))]
           (if broken?

@@ -12,6 +12,7 @@
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
+            [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
 (defn- resolve-session-id
@@ -260,6 +261,14 @@
    player-id
    {:command :clear-railgun-coin-judged-uuid})
   true)
+
+(defn skill-destroy-allowed?
+  "Skill-level destroy gate — upstream Skill.shouldDestroyBlocks()
+   (getOptionalBool(\"destroy_blocks\", true)). The global Settings
+   \"Destroy blocks\" toggle is enforced inside block-manip/break-block!;
+   this is the per-skill config flag on top of it."
+  [skill-id]
+  (boolean (get (skill-registry/get-skill skill-id) :destroy-blocks? true)))
 
 (defn gain-exp!
   "Apply exp gain from :exp-policy {:amount n :rate n} when present.

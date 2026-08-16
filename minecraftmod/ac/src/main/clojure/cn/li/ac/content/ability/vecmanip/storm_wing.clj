@@ -56,6 +56,7 @@
               block-id (block-manip/get-block world-id bx by bz)
               hardness (block-manip/get-block-hardness world-id bx by bz)]
           (when (and block-id
+                     (skill-effects/skill-destroy-allowed? storm-wing-skill-id)
                      (number? hardness)
                      (<= 0.0 (double hardness) max-hardness))
             (block-manip/break-block!

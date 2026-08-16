@@ -313,6 +313,7 @@
                        (railgun-damage player-id target-id raw-damage))
                      :damage-type     :generic
                      :break-blocks?   true
+                     :skill-id        :railgun
                      :block-energy    (cfg-lerp :beam.block-energy exp)
                      :fx-topic        :railgun/fx-shot})
             beam-result (or (:beam-result result) {:performed? false})]

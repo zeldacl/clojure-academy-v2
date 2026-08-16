@@ -10,7 +10,8 @@
   incoming-damage is the (falloff-scaled) damage that candidate would have
   taken had it not reflected — matches cn.li.ac.content.ability.shared.vec-reflection-interaction's
   2-arg (fn [target-player-uuid incoming-damage] ...) contract."
-  (:require [cn.li.ac.ability.effects.geom :as geom]
+  (:require [cn.li.ac.ability.service.skill-effects :as skill-effects]
+            [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.ac.ability.fx :as fx]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -63,8 +64,9 @@
 
 (defn- break-blocks!
   "Advance a cylindrical beam along dir, breaking blocks that can be broken
-  within the available energy budget."
-  [player-id world-id start-pos dir max-distance energy radius step]
+  within the available energy budget. skill-id feeds the skill-level destroy
+  gate (upstream ctx.canBreakBlock → skill.shouldDestroyBlocks)."
+  [skill-id player-id world-id start-pos dir max-distance energy radius step]
   (when (and (block-manip/available?) (pos? (double energy)) (pos? (double max-distance)))
     (let [[right up]      (geom/orthonormal-basis dir)
           processed       (HashSet.)
@@ -124,11 +126,13 @@
                   (zero? (double hardness))
                   (if (nil? (block-manip/get-block world-id bx by bz))
                     (recur (+ travel 1.0) remaining)
-                    (when (block-manip/can-break-block? player-id world-id bx by bz)
+                    (when (and (skill-effects/skill-destroy-allowed? skill-id)
+                               (block-manip/can-break-block? player-id world-id bx by bz))
                       (block-manip/break-block! player-id world-id bx by bz (< (rand) 0.05))
                       (recur (+ travel 1.0) remaining)))
 
-                  (and (<= (double hardness) remaining)
+                  (and (skill-effects/skill-destroy-allowed? skill-id)
+                       (<= (double hardness) remaining)
                        (block-manip/can-break-block? player-id world-id bx by bz))
                   (do
                     (block-manip/break-block!
@@ -138,8 +142,9 @@
                             nx         (+ bx (int ox))
                             ny         (+ by (int oy))
                             nz         (+ bz (int oz))]
-                        (when (block-manip/can-break-block?
-                                player-id world-id nx ny nz)
+                        (when (and (skill-effects/skill-destroy-allowed? skill-id)
+                                   (block-manip/can-break-block?
+                                     player-id world-id nx ny nz))
                           (block-manip/break-block!
                             player-id world-id nx ny nz false))))
                     (recur (+ travel 1.0) (- remaining (double hardness))))
@@ -153,7 +158,8 @@
   This function is the migration target for callers that previously used
   the legacy op-registry dispatch path for :beam."
   [evt {:keys [radius query-radius step max-distance visual-distance
-               damage damage-type block-energy break-blocks? fx-topic trace-pos]}]
+               damage damage-type block-energy break-blocks? fx-topic trace-pos
+               skill-id]}]
   (let [player-id     (:player-id evt)
         world-id      (:world-id evt)
         eye           (or (:eye-pos evt) (geom/eye-pos player-id))
@@ -221,7 +227,7 @@
             visual-dist  (min vd (double (or (:reflection-distance result) vd)))
             end-pos      (geom/v+ eye (geom/v* dir visual-dist))]
         (when (and break-blocks? (pos? benergy))
-          (break-blocks! player-id world-id trace dir block-dist benergy r st))
+          (break-blocks! skill-id player-id world-id trace dir block-dist benergy r st))
         (when fx-topic
           ;; World-space beam (:start/:end are absolute coordinates), matching
           ;; every original caller (Railgun.performServer, Meltdowner's beam

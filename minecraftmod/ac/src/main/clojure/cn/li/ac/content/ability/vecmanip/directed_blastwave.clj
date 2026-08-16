@@ -123,6 +123,7 @@
                             (>= (double hardness) 0.0)
                             (<= (double hardness) (double hard-cap))
                             (some? block-id)
+                            (skill-effects/skill-destroy-allowed? :directed-blastwave)
                             (block-manip/can-break-block? player-id world-id x y z))]
         (when breakable?
           (if full-exp?

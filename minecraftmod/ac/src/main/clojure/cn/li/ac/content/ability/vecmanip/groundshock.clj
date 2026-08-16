@@ -144,6 +144,7 @@
 (defn- break-with-force!
   [player-id world-id x y z drop? energy* block-drop-rate broken-blocks*]
   (when (and (block-manip/available?)
+             (skill-effects/skill-destroy-allowed? :groundshock)
              (block-manip/can-break-block? player-id world-id x y z))
     (let [hardness (block-manip/get-block-hardness world-id x y z)
           block-id (block-manip/get-block world-id x y z)]

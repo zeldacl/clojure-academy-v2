@@ -166,6 +166,7 @@
                      :damage          damage
                      :damage-type     :magic
                      :break-blocks?   true
+                     :skill-id        meltdowner-skill-id
                      :block-energy    (* (time-rate ct) (cfg-lerp :beam.block-energy exp))
                      :fx-topic        :meltdowner/fx-perform
                      :trace-pos       trace-pos})]
