@@ -1,5 +1,6 @@
 (ns cn.li.ac.ability.combat-content-test
   (:require [clojure.test :refer [deftest is]]
+            [cn.li.ac.content.ability :as ability-content]
             [cn.li.ac.ability.service.combat-content :as content]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.combat.registry :as registry]
@@ -7,6 +8,13 @@
             [cn.li.combat.damage :as damage]
             [cn.li.combat.runtime :as runtime]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]))
+
+(deftest combat-catalog-bootstrap-is-complete
+  (let [initialized (atom false)]
+    (with-redefs [cn.li.ac.ability.service.combat-runtime/initialize!
+                  (fn [] (reset! initialized true))]
+      (is (true? (ability-content/register-combat-catalog!)))
+      (is @initialized))))
 
 (deftest vec-deviation-uses-source-toggle-contract
   (registry/reset-for-test!)
@@ -152,6 +160,13 @@
                    :vec-accel :vec-deviation :vec-reflection}]
     (is (= expected content/ability-ids))
     (is (= 38 (count content/ability-ids)))))
+
+(deftest combat-catalog-provides-player-registry-specs
+  (is (true? (content/assert-complete-skill-catalog!)))
+  (let [specs (content/skill-specs)]
+    (is (= 38 (count specs)))
+    (is (= content/ability-ids (set (map :id specs))))
+    (is (every? #(and (:category-id %) (:level %) (:pattern %)) specs))))
 
 (deftest combat-domain-reducer-keeps-radiation-and-shield-state-pure
   (let [marked (combat-runtime/apply-combat-domain-event

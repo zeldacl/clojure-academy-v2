@@ -3,7 +3,8 @@
 
    This namespace contains only Clojure data/DSL. It does not reach a
    Minecraft object, packet, presentation host or VFX runtime."
-  (:require [cn.li.ac.ability.skill-config :as skill-config]))
+  (:require [clojure.set :as set]
+            [cn.li.ac.ability.skill-config :as skill-config]))
 
 (defn- scale
   "Return a bounded skill-exp interpolation expression for Combat Core.
@@ -977,6 +978,37 @@
     ]})
 
 (def ability-ids (set (map :id (:abilities provider))))
+
+(defn skill-specs
+  "Return the player-facing registry metadata derived from the Combat Core
+   catalog.  Skill behavior is never stored in these specs; the catalog is the
+   sole executable source."
+  []
+  (mapv (fn [{:keys [id activation]}]
+          (let [{:keys [category-id level controllable?]} 
+                (get skill-config/skill-definitions-by-id id)]
+            {:id id
+             :category-id category-id
+             :level level
+             :controllable? controllable?
+             :name-key (str "ability.skill." (name category-id) "." (name id))
+             :description-key (str "ability.skill." (name category-id) "." (name id) ".desc")
+             :icon (str "textures/abilities/" (name category-id) "/skills/" (name id) ".png")
+             :ctrl-id id
+             :pattern activation
+             :cooldown {:mode :combat-core}}))
+        (:abilities provider)))
+
+(defn assert-complete-skill-catalog!
+  "Fail closed if the executable catalog and player skill configuration diverge."
+  []
+  (let [configured (set skill-config/all-skill-ids)
+        catalog ability-ids]
+    (when-not (= configured catalog)
+      (throw (ex-info "Combat Core catalog does not cover configured skills"
+                      {:missing (sort (set/difference configured catalog))
+                       :unexpected (sort (set/difference catalog configured))})))
+    true))
 
 (defn- collect-vfx-effect-ids
   [value]
