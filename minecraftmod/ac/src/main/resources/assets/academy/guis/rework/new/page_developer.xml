@@ -31,10 +31,14 @@
           <image id="logo-node" pos="-37.0,0.0" size="12.0,12.0" align="center,center" src="academy:textures/guis/icons/icon_node.png"/>
         </image>
         <text id="text-syncrate" pos="0.0,66.0" size="100.0,12.0" align="center,center" text="Sync Rate:" font-size="12.0" color="#FFFFFFFF"/>
+        <!-- Foreground fill bars are LEFT-aligned so the runtime width
+             binding grows them from the left edge (upstream ProgressBar);
+             center alignment would shrink them symmetrically around the
+             middle. x = (108.5 panel width - 97 bar width) / 2. -->
         <box id="progress-power-back" pos="0.0,55.5" size="97.0,8.0" align="center,center" fill="#33FFFFFF"/>
-        <box id="progress-power" pos="0.0,55.5" size="97.0,8.0" align="center,center" fill="#FFFCC532"/>
+        <box id="progress-power" pos="5.75,55.5" size="97.0,8.0" align="left,center" fill="#FFFCC532"/>
         <box id="progress-syncrate-back" pos="0.0,77.5" size="97.0,8.0" align="center,center" fill="#33FFFFFF"/>
-        <box id="progress-syncrate" pos="0.0,77.5" size="97.0,8.0" align="center,center" fill="#FF32A4FC"/>
+        <box id="progress-syncrate" pos="5.75,77.5" size="97.0,8.0" align="left,center" fill="#FF32A4FC"/>
       </group>
     </group>
   </group>
