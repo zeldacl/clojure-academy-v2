@@ -97,6 +97,21 @@
                [{:command :consume-resource :cp 4.0}]]]
              @commands)))))
 
+(deftest cancelled-live-damage-does-not-commit-state-patch
+  (let [commands (atom [])]
+    (with-redefs [cn.li.combat.runtime/process-damage-request
+                  (fn [_ request]
+                    (assoc request
+                           :cancelled? true
+                           :state-patch [[:resource :cp -4.0]]))
+                  combat-runtime/engine (fn [] {})
+                  command-runtime/run-commands-in-session!
+                  (fn [& args] (swap! commands conj args))]
+      (is (= 0.0
+             (combat-runtime/process-damage-request!
+              "victim" "attacker" 10.0 {:damage-type :generic})))
+      (is (empty? @commands)))))
+
 (deftest vec-deviation-damage-cost-is-capped-by-authoritative-cp
   (let [pipeline (damage/compile-pipeline
                   (#'combat-runtime/academy-damage-pipeline))

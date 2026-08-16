@@ -1025,7 +1025,8 @@
     ;; reduction decision, while AC remains the single writer for player
     ;; resources/cooldowns.  Apply only the neutral patch returned by the
     ;; pipeline; never reconstruct costs in the platform hook.
-    (when (seq (:state-patch request))
+    (when (and (not (:cancelled? request))
+               (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
     (if (:cancelled? request)
       0.0
