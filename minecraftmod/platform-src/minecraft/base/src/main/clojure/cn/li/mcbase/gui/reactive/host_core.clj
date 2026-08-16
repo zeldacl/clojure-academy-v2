@@ -16,7 +16,8 @@
             [cn.li.mcbase.gui.reactive.perf :as perf]
             [cn.li.mcbase.gui.reactive.modal :as modal]
             [cn.li.mcbase.gui.reactive.embed :as embed]
-            [cn.li.mcmod.util.log :as log])
+            [cn.li.mcmod.util.log :as log]
+            [cn.li.mcmod.client.platform-bridge :as client-bridge])
   (:import [cn.li.mcmod.uipojo.runtime UiRt]
            [cn.li.mcver McAccess]
            [net.minecraft.client Minecraft]))
@@ -125,5 +126,10 @@
   ([seams ^UiRt rt title opts]
    (let [^Minecraft mc (Minecraft/getInstance)
          screen (create-reactive-screen* seams rt title opts)]
+     ;; Restore the OS cursor for every reactive screen: the terminal hides
+     ;; it on open (custom reticle), and a child screen opened from it (about
+     ;; app etc.) must not inherit the hidden state. The terminal re-hides
+     ;; right after its own open call.
+     (client-bridge/terminal-cursor-show!)
      (McAccess/setScreen mc screen)
      screen)))
