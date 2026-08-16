@@ -151,7 +151,9 @@
      :keybind-get-key-code       key-mapping-adapter/get-key-code
      :keybind-set-key!           key-mapping-adapter/set-key-mapping-key!
      :keybind-conflict?          key-mapping-adapter/binding-conflict?
-     :close-screen! #(.setScreen (Minecraft/getInstance) nil)
+     :close-screen! (fn [& _]
+                       (when-let [^net.minecraft.client.gui.screens.Screen s (.screen (Minecraft/getInstance))]
+                         (.onClose s)))
      ;; Raw cursor position in physical pixels. The terminal integrates
      ;; deltas from this because the Screen's own mouseX/mouseY are
      ;; GUI-scaled ints, which makes its pointer guiScale times slower.

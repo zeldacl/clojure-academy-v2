@@ -256,8 +256,9 @@
      :screen-active? #(some? (some-> (Minecraft/getInstance) .gui .screen))
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
-     :close-screen! #(when-let [gui (some-> (Minecraft/getInstance) .gui)]
-                       (.setScreen gui nil))
+     :close-screen! (fn [& _]
+                       (when-let [^net.minecraft.client.gui.screens.Screen s (some-> (Minecraft/getInstance) .gui .screen)]
+                         (.onClose s)))
      :get-mouse-pos (fn []
                       (let [^Minecraft mc (Minecraft/getInstance)
                             mh (.mouseHandler mc)]
