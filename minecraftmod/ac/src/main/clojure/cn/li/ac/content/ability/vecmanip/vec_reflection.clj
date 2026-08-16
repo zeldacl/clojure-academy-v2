@@ -682,9 +682,11 @@
             :abort! vec-reflection-on-key-abort}
   :prerequisites [{:skill-id :vec-deviation :min-exp 0.0}])
 
+(defn- retired-registration! [& _] nil)
+
 (defn init!
   []
-  (damage-handler/register-toggle-damage-handler!
+  (retired-registration!
     :vec-reflection-damage
     :vec-reflection
     (fn [player-id attacker-id damage damage-source]
@@ -694,10 +696,10 @@
               [_performed reduced-damage] (reflect-damage player-id target-id damage)]
           [reduced-damage {:handler :vec-reflection}])))
     60)
-  (damage-handler/register-attack-cancel-check!
+  (retired-registration!
     :vec-reflection
     can-cancel-attack?)
-  (damage-handler/register-attack-precheck-side-effect!
+  (retired-registration!
     :vec-reflection
     on-precheck-cancel-side-effect!)
   nil)

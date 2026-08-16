@@ -26,7 +26,34 @@
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
-(declare owner-state resolve-slot)
+(declare owner-state resolve-slot execute-world-effects!)
+
+(defn- valid-reflection-world-effect?
+  [effect]
+  (let [request (:request effect)
+        base (:base request)]
+    (and (= :vec-reflection-damage (:type effect))
+         (= :vec-reflection (:type request))
+         (:source request) (:target request)
+         (not= (str (:source request)) (str (:target request)))
+         (number? base) (Double/isFinite (double base))
+         (pos? (double base)) (<= (double base) 10000.0))))
+
+(defn- execute-reflection-effects!
+  "Narrow damage-boundary interpreter for Combat Core reflection output.
+
+   Only the typed `:vec-reflection` damage effect is admitted here; arbitrary
+   pipeline world effects cannot silently acquire a live damage side effect."
+  [owner result]
+  (let [effects (vec (filter valid-reflection-world-effect?
+                             (:world-effects result)))]
+    (when (= (count effects) (count (:world-effects result)))
+      (execute-world-effects! owner (assoc result :world-effects effects)))))
+
+(defn- reflection-output?
+  [result]
+  (and (seq (:world-effects result))
+       (every? valid-reflection-world-effect? (:world-effects result))))
 
 (defn- horizontal-yaw-degrees [x z]
   (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
@@ -112,6 +139,17 @@
 
     :light-shield-end
     (update state :light-shields dissoc (str (:owner event)))
+
+    :vec-reflection-start
+    (assoc-in state [:vec-reflections (str (:owner event))]
+              {:active? true :depth 0})
+
+    :vec-reflection-tick
+    (update-in state [:vec-reflections (str (:owner event))]
+               #(when % (assoc % :active? true :depth 0)))
+
+    :vec-reflection-end
+    (update state :vec-reflections dissoc (str (:owner event)))
 
     state))
 
@@ -284,6 +322,68 @@
                               :tick (long (:tick context))
                               :event-id [:light-shield-absorb target
                                          (long (:tick context))]})))
+               request)))}
+   {:priority 60
+    :provider-id :academy/base
+    :ability-id :vec-reflection
+    :node-id :damage-reflection
+    :run (fn [request context]
+           (let [target (str (:target request))
+                 source (:source request)
+                 reflection (get-in context [:domain-state :vec-reflections target])
+                 metadata (:metadata request)
+                 base (double (:base request))
+                 source-id (when source (str source))
+                 reflected-source? (or (= :vec-reflection (:type request))
+                                       (= true (:reflection-source? metadata))
+                                       (contains? (:tags request) :vec-reflection))
+                 exp (double (ability-model/get-skill-exp
+                              (get-in (or (:target-state context)
+                                           (:state context) {}) [:ability-data])
+                              :vec-reflection))
+                 multiplier (skill-config/lerp-double
+                             :vec-reflection :combat.damage-multiplier exp)
+                 reflected (double (* base multiplier))
+                 cp-rate (skill-config/lerp-double
+                          :vec-reflection :cost.damage.cp exp)
+                 cp-available (double (or (get-in (:target-state context)
+                                                  [:resources :cp])
+                                          (get-in (:state context) [:resources :cp])
+                                          0.0))
+                 consumption (min cp-available
+                                  (max 0.0 (* base cp-rate)))
+                 min-reflected (skill-config/tunable-double
+                                :vec-reflection :combat.min-reflected-damage)
+                 max-depth (long (or (skill-config/tunable-int
+                                     :vec-reflection :combat.max-reflections)
+                                    6))
+                 depth (long (or (:reflection-depth metadata) 0))
+                 eligible? (and reflection (:active? reflection)
+                                (not reflected-source?) source-id
+                                (Double/isFinite base) (pos? base)
+                                (Double/isFinite reflected)
+                                (>= reflected min-reflected)
+                                (< depth max-depth)
+                                (pos? consumption))]
+             (if eligible?
+               (-> request
+                   (assoc :base (max 0.0 (- base reflected)))
+                   (assoc-in [:metadata :resource-cost] {:cp (- consumption)})
+                   (update :state-patch (fnil conj [])
+                           [:ability-exp :vec-reflection
+                            (* base (skill-config/tunable-double
+                                     :vec-reflection :progression.exp-damage-scale))])
+                   (update :world-effects (fnil conj [])
+                           {:type :vec-reflection-damage
+                            :request {:source target
+                                      :target source-id
+                                      :base reflected
+                                      :type :vec-reflection
+                                      :components {:direct reflected}
+                                      :tags #{:skill :vec-reflection}
+                                      :metadata {:reflection-source? true
+                                                 :reflection-depth (inc depth)
+                                                 :world-id (:world-id metadata)}}}))
                request)))}
    {:priority 50
     :provider-id :academy/base
@@ -464,6 +564,23 @@
                      (if-let [handler (contract/host-port :world-effect)]
                        (handler owner effect)
                        (case (:type effect)
+                         :vec-reflection-damage
+                         (let [{:keys [request]} effect
+                               {:keys [world-id target base source]} request
+                               valid? (and world-id target source
+                                            (not= (str source) (str target))
+                                            (number? base)
+                                            (Double/isFinite (double base))
+                                            (pos? (double base))
+                                            (<= (double base) 10000.0)
+                                            (entity-damage/available?))
+                               applied? (when valid?
+                                          (entity-damage/apply-direct-damage!
+                                           world-id target (double base)
+                                           :vec-reflection
+                                           {:attacker-uuid source}))]
+                           {:status (if applied? :applied :failed)
+                            :effect effect})
                          :damage
                          (let [{:keys [request]} effect
                                {:keys [world-id target base type source]} request]
@@ -1144,10 +1261,18 @@
                  {:source (or attacker-id :environment)
                   :target player-id
                   :base (double original-damage)
-                  :type (or (:damage-type damage-source) :generic)
+                  :type (if (and damage-source (entity-damage/available?)
+                                  (entity-damage/vec-reflection-damage-source?
+                                   damage-source))
+                          :vec-reflection
+                          (or (:damage-type damage-source) :generic))
                   :components {:direct (double original-damage)}
                   :tags #{:combat :intercepted}
                   :metadata {:damage-source damage-source
+                             :world-id (or (:world-id damage-source)
+                                           (some-> (raycast/player-position
+                                                    (str player-id))
+                                                   :world-id))
                              :attacker-front? (attacker-front?
                                                player-id attacker-id damage-source)}})]
     ;; Damage interception is the live boundary: Combat Core owns the
@@ -1157,6 +1282,9 @@
     (when (and (not (:cancelled? request))
                (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
+    (when (and (not (:cancelled? request))
+               (reflection-output? request))
+      (execute-reflection-effects! player-id request))
     (when (and (not (:cancelled? request)) (seq (:events request)))
       (dispatch-result-domain-events! player-id request))
     (if (:cancelled? request)
@@ -1174,14 +1302,38 @@
                  {:source (or attacker-id :environment)
                   :target player-id
                   :base (double original-damage)
-                  :type (or (:damage-type damage-source) :generic)
+                  :type (if (and damage-source (entity-damage/available?)
+                                  (entity-damage/vec-reflection-damage-source?
+                                   damage-source))
+                          :vec-reflection
+                          (or (:damage-type damage-source) :generic))
                   :components {:direct (double original-damage)}
                   :tags #{:combat :attack-precheck}
                   :metadata {:damage-source damage-source
+                             :world-id (or (:world-id damage-source)
+                                           (some-> (raycast/player-position
+                                                    (str player-id))
+                                                   :world-id))
                              :attacker-front? (attacker-front?
                                                player-id attacker-id damage-source)}})]
     {:cancelled? (boolean (:cancelled? request))
      :request request}))
+
+(defn apply-attack-precheck!
+  "Apply validated Combat Core reflection output before native hurt.
+
+   The platform calls this single boundary before cancellation. Ordinary
+   requests stay pure and continue to live damage; reflection output is
+   committed and executed here exactly once."
+  [player-id attacker-id original-damage damage-source]
+  (let [{:keys [request]} (process-attack-precheck!
+                           player-id attacker-id original-damage damage-source)
+        reflection? (reflection-output? request)]
+    (when reflection?
+      (commit-state-patch! player-id (:state-patch request))
+      (execute-reflection-effects! player-id request)
+      (dispatch-result-domain-events! player-id request))
+    (boolean reflection?)))
 
 (defn install-world-effect-handler!
   "Install AC's ordered WorldEffect interpreter.

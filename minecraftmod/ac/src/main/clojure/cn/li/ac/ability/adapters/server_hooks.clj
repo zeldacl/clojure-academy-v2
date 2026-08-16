@@ -393,8 +393,8 @@
 
    :should-cancel-attack-interception?
    (fn [player-id attacker-id damage damage-source]
-     (:cancelled? (combat-runtime/process-attack-precheck!
-                    player-id attacker-id damage damage-source)))
+     (combat-runtime/apply-attack-precheck!
+      player-id attacker-id damage damage-source))
 
    :run-attack-precheck-side-effects!
    ;; Attack prechecks are now a pure Combat Core decision.  There is no

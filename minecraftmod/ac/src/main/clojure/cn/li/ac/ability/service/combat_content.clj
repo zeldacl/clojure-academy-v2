@@ -72,11 +72,23 @@
                         :event :active :params {:strength 0.35}}]}}
     {:id :vec-reflection
      :revision 1
-     :activation :passive
-     :program {:op :sequence
-               :steps [{:op :require :predicate :damage-event}
-                       {:op :domain-event :event-type :reflect-damage
-                        :metadata {:source :vec-reflection}}]}}
+     :activation :toggle
+     :period-ticks 1
+     :max-session-ticks 1200
+     :cost-phase :pulse
+     :cost {:cp (scale 15.0 11.0)}
+     :program {:op :phase
+               :start {:op :domain-event
+                       :event-type :vec-reflection-start}
+               :pulse {:op :sequence
+                       :steps [{:op :domain-event
+                                :event-type :vec-reflection-tick}
+                               {:op :vfx :effect-id :vec-reflection
+                                :event :active :params {}}]}
+               :release {:op :domain-event
+                         :event-type :vec-reflection-end}
+               :abort {:op :domain-event
+                       :event-type :vec-reflection-end}}}
     {:id :dim-folding-theorem
      :revision 1
      :activation :passive
