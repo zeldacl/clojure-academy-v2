@@ -4,7 +4,8 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
-            [cn.li.combat.runtime :as runtime]))
+            [cn.li.combat.runtime :as runtime]
+            [cn.li.ac.ability.service.command-runtime :as command-runtime]))
 
 (deftest vec-deviation-uses-source-toggle-contract
   (registry/reset-for-test!)
@@ -76,6 +77,24 @@
                     (combat-runtime/process-attack-precheck!
                      "victim" "attacker" 4.0 {:damage-type :generic}))))
       (is (= 1 @calls)))))
+
+(deftest live-damage-boundary-commits-combat-state-patch
+  (let [commands (atom [])]
+    (with-redefs [cn.li.combat.runtime/process-damage-request
+                  (fn [_ request]
+                    (assoc request
+                           :base 7.0
+                           :state-patch [[:resource :cp -4.0]]))
+                  combat-runtime/engine (fn [] {})
+                  command-runtime/run-commands-in-session!
+                  (fn [session-id owner commands*]
+                    (swap! commands conj [session-id owner commands*]))]
+      (is (= 7.0
+             (combat-runtime/process-damage-request!
+              "victim" "attacker" 10.0 {:damage-type :generic})))
+      (is (= [[nil "victim"
+               [{:command :consume-resource :cp 4.0}]]]
+             @commands)))))
 
 (deftest combat-catalog-covers-all-authoritative-skill-ids
   ;; Every AC skill has one Combat Core recipe.  This is the replacement

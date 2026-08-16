@@ -174,7 +174,14 @@
                                            (:state context) {}) [:ability-data])
                               :vec-deviation))
                  reduction-rate (+ 0.4 (* 0.5 exp))
-                 cp-cost (max 0.0 (+ 15.0 (* -3.0 exp)))]
+                 cp-limit (max 0.0 (+ 15.0 (* -3.0 exp)))
+                 cp-available (max 0.0
+                                   (double
+                                    (or (get-in (or (:target-state context)
+                                                    (:state context) {})
+                                                [:resources :cp])
+                                        0.0)))
+                 cp-cost (min cp-available cp-limit)]
              (if (and active?
                       (Double/isFinite base)
                       (<= 0.0 base 9999.0))
@@ -1014,6 +1021,12 @@
                   :components {:direct (double original-damage)}
                   :tags #{:combat :intercepted}
                   :metadata {:damage-source damage-source}})]
+    ;; Damage interception is the live boundary: Combat Core owns the
+    ;; reduction decision, while AC remains the single writer for player
+    ;; resources/cooldowns.  Apply only the neutral patch returned by the
+    ;; pipeline; never reconstruct costs in the platform hook.
+    (when (seq (:state-patch request))
+      (commit-state-patch! player-id (:state-patch request)))
     (if (:cancelled? request)
       0.0
       (double (:base request)))))
