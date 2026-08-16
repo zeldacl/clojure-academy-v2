@@ -20,7 +20,7 @@
     (is (= #{:block :item :entity :ability :achievement :system} phases))
     (let [ability-phase (first (filter #(= :ability (:phase %)) plan))]
       (is (some #(= 'cn.li.ac.content.ability %) (:namespaces ability-phase)))
-      (is (some #(= 'cn.li.ac.content.ability/init-combat-ability-content! %) (:init-fns ability-phase)))
+      (is (some #(= 'cn.li.ac.content.ability/init-ability-content! %) (:init-fns ability-phase)))
       (is (some #(= 'cn.li.ac.content.loot/init-loot! %) (:init-fns ability-phase))))
     (let [system-phase (first (filter #(= :system (:phase %)) plan))]
       (is (= '[cn.li.ac.terminal.init/init-terminal!
