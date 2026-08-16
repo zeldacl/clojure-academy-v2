@@ -186,7 +186,7 @@
      :exp-label exp-label
      :level-label level-label
      :cat-prog01 cat-prog01
-     :sync-rate (:bandwidth (developer/developer-spec developer-type) 0.7)  ;; fixed device property
+     :sync-rate (:sync-rate (developer/developer-spec developer-type) 0.7)  ;; fixed device property (upstream syncRate)
      :power01 (bal/clamp01 (/ energy max-energy))}))
 
 (defn- current-ui-model-in-session
