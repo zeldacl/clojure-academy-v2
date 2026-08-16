@@ -399,7 +399,8 @@
 
   (try
     (key-mapping-adapter/register-all-keybindings-from-ac!)
-    (catch Exception e
+    
+    (key-mapping-adapter/install-bound-key-resolver!)(catch Exception e
       (log/error e "Failed to register Forge KeyMappings")
       (log/stacktrace "Failed to register Forge KeyMappings" e)))
 

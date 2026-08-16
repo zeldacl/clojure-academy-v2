@@ -21,6 +21,43 @@
 (def GLFW_KEY_F4 293)
 (def GLFW_KEY_LEFT_ALT 342)
 
+(defn- settings-key-id
+  "Translate the original Settings/KeyManager integer convention to the
+   neutral provider's keyboard-or-mouse key identity."
+  [key-code]
+  (case (int key-code)
+    -100 :mouse-left
+    -99 :mouse-right
+    key-code))
+
+;; ============================================================================
+;; Bound-key resolver — lets polling follow the CURRENT binding instead of a
+;; hardcoded GLFW code, so Settings app rebinds (and vanilla Options > Controls
+;; rebinds of AC KeyMappings) actually take effect on polling platforms (Fabric;
+;; Forge slot/screen keys). Platform loaders install the resolver: [:bridge id]
+;; reads the KeyMapping's current key, [:slot n] / [:screen kw] read the AC
+;; gameplay config.
+;; ============================================================================
+
+(defonce ^:private bound-key-resolver (atom nil))
+
+(defn install-bound-key-resolver!
+  "Install (fn [input-ref] -> GLFW key-code | nil) resolving the current
+   binding for [:bridge input-id] / [:slot idx] / [:screen kw] inputs."
+  [f]
+  (reset! bound-key-resolver f)
+  nil)
+
+(defn- resolve-bound-key-code
+  "Current bound GLFW key-code for an input-ref, or nil when no resolver is
+   installed or the binding is unknown/unbound."
+  [input-ref]
+  (when-let [f @bound-key-resolver]
+    (try
+      (f input-ref)
+      (catch Throwable _
+        nil))))
+
 (defn ^:private is-key-pressed?
   "Query key state through installed KeySchemeProvider SPI."
   [scheme-name key-code]
@@ -92,8 +129,11 @@
    (poll-all-inputs! _minecraft-client player-uuid client-session-id nil))
   ([_minecraft-client player-uuid client-session-id {:keys [suppress-triggers?]}]
    (try
-     ;; Cycle selection / switch preset (C key — upstream KEY_SWITCH_PRESET)
-     (let [key-code GLFW_KEY_C
+     ;; Cycle selection / switch preset (C key — upstream KEY_SWITCH_PRESET).
+     ;; Poll the CURRENT KeyMapping binding, so Settings / Options > Controls
+     ;; rebinds take effect here.
+     (let [key-code (settings-key-id (or (resolve-bound-key-code [:bridge :content/cycle-selection])
+                                             GLFW_KEY_C))
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :cycle-selection false)]
        (when (and (not suppress-triggers?)
@@ -109,7 +149,8 @@
      ;; This is the platform-side timing boundary for the client input chain.
      ;; Only a short release emits the toggle event; a long hold is suppressed
      ;; so the AC business layer never sees a toggle request for that gesture.
-     (let [key-code GLFW_KEY_V
+     (let [key-code (settings-key-id (or (resolve-bound-key-code [:bridge :content/toggle-primary-state])
+                                             GLFW_KEY_V))
            is-pressed (is-key-pressed? :original key-code)]
        (handle-v-toggle-input! v-toggle-state is-pressed
          {:player-uuid player-uuid
@@ -121,7 +162,8 @@
 
      ;; Toggle debug overlay (F4 key — upstream DebugConsole KEY_F4, cycles
      ;; none -> normal -> show-exp -> none on key-down, fires once per press).
-     (let [key-code GLFW_KEY_F4
+     (let [key-code (settings-key-id (or (resolve-bound-key-code [:bridge :content/toggle-debug-overlay])
+                                             GLFW_KEY_F4))
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :toggle-debug-overlay false)]
        (when (and (not suppress-triggers?)
@@ -136,7 +178,8 @@
      ;; Toggle terminal (Left Alt) — Fabric's only dispatch path for this input
      ;; (Forge covers it via the :alternative-scheme KeyMapping event and does
      ;; not call poll-all-inputs!, so there is no double-fire).
-     (let [key-code GLFW_KEY_LEFT_ALT
+     (let [key-code (settings-key-id (or (resolve-bound-key-code [:bridge :content/toggle-terminal])
+                                             GLFW_KEY_LEFT_ALT))
            is-pressed (is-key-pressed? :original key-code)
            was-pressed (get @last-poll-time :toggle-terminal false)]
        (when (and (not suppress-triggers?)
@@ -210,24 +253,26 @@
 ;; doesn't collide with N's upstream-aligned meaning.
 (def screen-glfw-keys {:primary 78 :secondary 77})
 
-(defn- settings-key-id
-  "Translate the original Settings/KeyManager integer convention to the
-   neutral provider's keyboard-or-mouse key identity."
-  [key-code]
-  (case (int key-code)
-    -100 :mouse-left
-    -99 :mouse-right
-    key-code))
-
 (defn glfw-key-state-fn
   "key-state-fn callback for keybinds/tick-keys!. Takes [:slot idx],
    [:movement kw], [:screen kw], or [:raw key-code] and returns boolean key/mouse-button state
-   from GLFW (via the installed KeySchemeProvider SPI)."
+   from GLFW (via the installed KeySchemeProvider SPI).
+
+   Slot and screen keys resolve the CURRENT binding (Settings app / config),
+   so a rebind takes effect immediately; :movement is fixed (WASD) and :raw
+   queries the literal key-code."
   [[kind sub-key]]
   (let [key-code (case kind
-                   :slot (nth slot-glfw-keys sub-key nil)
+                   ;; Config stores mouse buttons as -100/-99 (Settings app
+                   ;; convention) — normalize through settings-key-id so the
+                   ;; provider sees :mouse-left/:mouse-right keywords.
+                   :slot (let [code (or (resolve-bound-key-code [:slot sub-key])
+                                        (nth slot-glfw-keys sub-key nil))]
+                           (if (number? code) (settings-key-id code) code))
                    :movement (get movement-glfw-keys sub-key)
-                   :screen (get screen-glfw-keys sub-key)
+                   :screen (let [code (or (resolve-bound-key-code [:screen sub-key])
+                                          (get screen-glfw-keys sub-key))]
+                             (if (number? code) (settings-key-id code) code))
                    :raw (settings-key-id sub-key)
                    nil)]
     (when key-code

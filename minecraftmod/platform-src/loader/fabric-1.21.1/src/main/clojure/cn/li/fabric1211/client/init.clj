@@ -19,6 +19,7 @@
             [cn.li.fabric1211.client.hand-effect-renderer :as hand-effect-renderer]
             [cn.li.fabric1211.client.level-effect-renderer :as level-effect-renderer]
             [cn.li.fabric1211.client.keyboard-init :as kb-init]
+            [cn.li.mc1211.client.key-mapping-adapter :as key-mapping-adapter]
             [cn.li.fabric1211.client.obj-model-registration :as obj-models]
             [cn.li.mc1211.client.font.msdf-setup :as msdf-setup]
             [cn.li.mc1211.client.player-state-core :as player-state]
@@ -36,7 +37,8 @@
             [cn.li.fabric1211.mod :as mod])
   (:import [cn.li.fabric1211.client FabricClientRenderSetup]
            [cn.li.fabric1211.shim FabricClientHelper]
-           [net.minecraft.client Minecraft]
+           [net.fabricmc.fabric.api.client.keybinding.v1 KeyBindingHelper]
+           [net.minecraft.client KeyMapping Minecraft]
            [net.minecraft.network.chat Component]
            [cn.li.mc1211.client ClientHelper]
            [cn.li.mc1211.client ClientHelper$RendererFactory]
@@ -141,6 +143,14 @@
      :screen-active? #(some? (.screen (Minecraft/getInstance)))
      :singleplayer? #(.hasSingleplayerServer (Minecraft/getInstance))
      :settings-key-name key-scheme-core/key-display-name
+     ;; KeyMapping rebind support (registered via fabric KeyBindingHelper) —
+     ;; the Settings app "keys" rows become editable and write through the
+     ;; same vanilla rebind path Options > Controls uses.
+     :keybind-rebind-supported?  (constantly true)
+     :keybind-get-key-name       key-mapping-adapter/get-key-display-name
+     :keybind-get-key-code       key-mapping-adapter/get-key-code
+     :keybind-set-key!           key-mapping-adapter/set-key-mapping-key!
+     :keybind-conflict?          key-mapping-adapter/binding-conflict?
      :close-screen! #(.setScreen (Minecraft/getInstance) nil)
      ;; Raw cursor position in physical pixels. The terminal integrates
      ;; deltas from this because the Screen's own mouseX/mouseY are
@@ -293,6 +303,17 @@
     ((platform-bootstrap/post-spi-client-init-callback!))
     (catch Exception e
       (log/error e "Failed to run post-SPI content keybinding init")))
+
+  (try
+    ;; Create AC :alternative KeyMappings and register them through Fabric's
+    ;; official KeyBindingHelper (fabric-key-binding-api-v1) — they appear in
+    ;; vanilla Options > Controls and feed the Settings app rebind rows.
+    (key-mapping-adapter/register-all-keybindings-from-ac!)
+    (doseq [^KeyMapping km (key-mapping-adapter/get-all-key-mappings)]
+      (KeyBindingHelper/registerKeyBinding km))
+    (key-mapping-adapter/install-bound-key-resolver!)
+    (catch Exception e
+      (log/error e "Failed to register Fabric KeyMappings")))
 
   (try
     (kb-init/install-keyboard-handler!)

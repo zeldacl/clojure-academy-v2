@@ -8,9 +8,11 @@
    a plain category string; categories are tracked for RegisterKeyMappingsEvent."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.spi.keybinding-registry :as kb-registry]
+            [cn.li.mcmod.config.registry :as config-reg]
+            [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [clojure.string :as str])
   (:import [net.minecraft.client KeyMapping KeyMapping$Category Minecraft]
-           [com.mojang.blaze3d.platform InputConstants InputConstants$Type]
+           [com.mojang.blaze3d.platform InputConstants InputConstants$Key InputConstants$Type]
            [com.mojang.blaze3d.platform InputConstants InputConstants$Type]
            [cn.li.mcver ResourceLocations]))
 
@@ -112,7 +114,7 @@
           (some (fn [^KeyMapping other]
                   (and (not (identical? other km))
                        (.same other key)))
-                (.keyMappings (.options ^Minecraft (Minecraft/getInstance)))))))))
+                (seq (.keyMappings (.options ^Minecraft (Minecraft/getInstance))))))))))
 
 (defn- key-code->input-key
   "Resolve an AC key-code to an InputConstants.Key. The settings app stores
@@ -148,6 +150,34 @@
       (KeyMapping/resetMapping)
       (.save options)
       true)))
+
+;; AC gameplay config domain + Settings-owned key config keys (mirrors
+;; cn.li.ac.config.gameplay — loaders must not import ac directly).
+(def ^:private gameplay-domain :cn.li.ac/gameplay)
+(def ^:private slot-config-keys
+  [:ability-key-0 :ability-key-1 :ability-key-2 :ability-key-3])
+
+(defn install-bound-key-resolver!
+  "Wire the polling bound-key resolver (glfw-polling-core): [:bridge input-id]
+   reads the KeyMapping's CURRENT binding, [:slot n] / [:screen kw] read the
+   AC Settings-owned config keys. Lets GLFW polling follow Settings app /
+   Options > Controls rebinds on platforms without KeyMapping events (Fabric),
+   and fixes slot/screen keys for Forge's polling key-state-fn too."
+  []
+  (glfw-polling/install-bound-key-resolver!
+    (fn [input-ref]
+      (case (first input-ref)
+        :bridge (get-key-code (second input-ref))
+        :slot (config-reg/get-config-value
+                gameplay-domain
+                (nth slot-config-keys (second input-ref) nil))
+        :screen (config-reg/get-config-value
+                  gameplay-domain
+                  (case (second input-ref)
+                    :primary :edit-preset-key
+                    :secondary nil))
+        nil)))
+  nil)
 
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.

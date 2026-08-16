@@ -2,8 +2,11 @@
   "Fabric client keyboard input initialization.
 
    Purpose: Bootstrap AC keybindings and install polling.
-   Fabric has no native keyboard events, so we rely entirely on GLFW polling
-   for both :alternative and :original scheme inputs."
+   Fabric has no KeyMapping event dispatch, so AC input relies on GLFW
+   polling for both :alternative and :original scheme inputs — but the
+   :alternative KeyMappings ARE registered via fabric KeyBindingHelper (they
+   show in vanilla Options > Controls and feed the Settings app rebind rows),
+   and the polling resolves the CURRENT binding so rebinds take effect."
   (:require [cn.li.mcmod.util.log :as log]
             [cn.li.mcmod.runtime.install :as install]
             [cn.li.platform.neutral.hooks :as power-runtime]
