@@ -227,6 +227,35 @@
     (let [hit-outside2 (layout/hit-test r 150.0 130.0)]
       (is (= :root (.getId ^INode hit-outside2)) "超出 panel 边界但仍在 root 内，命中 root"))))
 
+(deftest hit-test-respects-clip-viewport
+  "Scrolled content moved outside its clip=true viewport must NOT answer
+   hit-tests — otherwise rolled-up text swallows clicks on UI declared
+   earlier in the tape (the about app's tab buttons sit above its scroll
+   area; after scrolling, clicks on them landed on the rolled-out text)."
+  (let [r (rt/create-runtime)]
+    (rt/resize! r 400.0 300.0)
+    (rt/build! r (dsl/group {:id :root :w 400 :h 300}
+                   (dsl/box {:id :tab :x 10 :y 10 :w 100 :h 30})
+                   (dsl/group {:id :viewport :x 10 :y 50 :w 200 :h 100 :clip true}
+                     (dsl/text {:id :row :x 0 :y 0 :w 200 :h 20 :text "row"}))))
+    (layout/ensure-layout! r)
+    (layout/ensure-tape! r)
+    ;; row sits inside the viewport — click at its position hits the row.
+    (let [hit (layout/hit-test r 20.0 60.0)]
+      (is (= :row (.getId ^INode hit))))
+    ;; Scroll the row UP out of the viewport (like about's content after
+    ;; set-scroll!): the row's abs position now overlaps the tab area.
+    (let [^INode row (rt/node-by-id r :row)]
+      (.setY row -40.0)
+      (.setFlag row node/FLAG-LAYOUT-DIRTY))
+    (layout/ensure-layout! r)
+    ;; Without clip awareness, the rolled-out row would win the hit at the
+    ;; tab position (tape order: tab ... viewport -> row). It must not.
+    (let [hit (layout/hit-test r 20.0 30.0)]
+      (is (some? hit))
+      (is (= :tab (.getId ^INode hit))
+          "rolled-out row is clipped away; the tab below receives the click"))))
+
 (deftest hit-test-deepest-overlap
   "重叠节点取最深层（painter 序最后）。"
   (let [r (rt/create-runtime)]

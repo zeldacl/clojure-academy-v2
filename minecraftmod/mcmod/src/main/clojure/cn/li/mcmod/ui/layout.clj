@@ -183,17 +183,38 @@
 
 (defn hit-test
   "Iterate cached tape in painter order; return deepest INode containing (mx,my).
+
+   Clip sentinels bracket clipped subtrees: a node that lies OUTSIDE its clip
+   viewport does not hit. Without this, scrolled content (group moved inside
+   a clip=true viewport, e.g. the about app's scroll area) keeps answering
+   hit-tests at its pre-scroll position — once it rolls up over UI declared
+   earlier in the tape (tab buttons, other overlays), clicks on that UI land
+   on the invisible rolled-out text instead. The sentinel is followed by the
+   clipping node itself, whose abs rect is the subtree's clip region.
    Call after ensure-layout! and ensure-tape!."
   [^UiRt rt ^double mx ^double my]
   (let [^"[Ljava.lang.Object;" tape (rt/get-tape-arr rt)
         n (alength tape)]
-    (loop [i 0 best nil]
+    (loop [i 0 best nil clips []]
       (if (< i n)
         (let [entry (aget tape i)]
-          (if (instance? INode entry)
-            (let [^INode nd entry]
-              (if (point-in-node? nd mx my)
-                (recur (unchecked-inc-int i) nd)
-                (recur (unchecked-inc-int i) best)))
-            (recur (unchecked-inc-int i) best)))
+          (cond
+            (identical? entry push-clip-sentinel)
+            ;; The entry right after the sentinel is the clipping node; its
+            ;; abs rect clips every descendant. It also participates in
+            ;; hit-testing itself (the next iteration handles it as a node).
+            (recur (unchecked-inc-int i) best (conj clips (aget tape (inc i))))
+
+            (identical? entry pop-clip-sentinel)
+            (recur (unchecked-inc-int i) best (pop clips))
+
+            (instance? INode entry)
+            (let [^INode nd entry
+                  inside? (and (point-in-node? nd mx my)
+                               (every? (fn [^INode c] (point-in-node? c mx my))
+                                       clips))]
+              (recur (unchecked-inc-int i) (if inside? nd best) clips))
+
+            :else
+            (recur (unchecked-inc-int i) best clips)))
         best))))
