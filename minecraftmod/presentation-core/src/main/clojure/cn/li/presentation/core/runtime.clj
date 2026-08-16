@@ -5,7 +5,7 @@
             [cn.li.presentation.core.tree :as tree]
             [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.input :as input])
-  (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext FramePacket RenderPass RenderStage
+  (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext RenderStage
             PresentationInputEvent PresentationInputEvent$Pointer PresentationInputEvent$Pointer$Type
             PresentationInputEvent$Key PresentationInputEvent$CharacterInput PresentationInputEvent$Scroll
             EventResult]
@@ -38,21 +38,21 @@
                    :height (.height ^FrameContext context)
                    :host (:host mount)})))))
 
-(defn- host-stage [^HostDescriptor host]
+(defn- host-stage ^RenderStage [^HostDescriptor host]
   (case (str (some-> host .kind))
-    "HUD" :hud
-    "WORLD_UI" :world-after-translucent
-    "VFX" :world-after-translucent
-    "FIRST_PERSON" :first-person
-    "CAMERA" :world-after-translucent
-    "POST_PROCESS" :post-process
-    "SCREEN" :screen
-    :hud))
+    "HUD" RenderStage/HUD
+    "WORLD_UI" RenderStage/WORLD_AFTER_TRANSLUCENT
+    "VFX" RenderStage/WORLD_AFTER_TRANSLUCENT
+    "FIRST_PERSON" RenderStage/FIRST_PERSON
+    "CAMERA" RenderStage/WORLD_AFTER_TRANSLUCENT
+    "POST_PROCESS" RenderStage/POST_PROCESS
+    "SCREEN" RenderStage/SCREEN
+    RenderStage/HUD))
 (defn mount! [runtime host template model]
   (let [id (:next-id (swap! (state runtime) update :next-id inc))
         handle (MountHandle. (dec id))]
     (swap! (state runtime) assoc-in [:mounts handle]
-           {:host host :template template :model model :commands (atom {})
+           {:host host :template template :model model
             :handler nil :tree nil :layout nil
             :input-node (str "mount/" (.value handle))})
     (input/register-node! (:input @(state runtime))
@@ -111,13 +111,6 @@
 (defn take-dirty! [runtime]
   (dirty/take! (-> runtime state :dirty)))
 
-(defn emit! [runtime handle stage command]
-  (let [mount (get-in @(state runtime) [:mounts handle])]
-    (when-not mount (throw (ex-info "unknown mount" {:mount handle})))
-    (swap! (:commands mount) update stage (fnil conj []) command)
-    (dirty/mark! (:dirty @(state runtime)) [:paint])
-    (swap! (state runtime) assoc :invalidated? true)))
-
 (defn set-input-handler! [runtime handle handler]
   (swap! (state runtime) assoc-in [:mounts handle :handler] handler)
   nil)
@@ -174,17 +167,15 @@
   (let [snapshot @(state runtime)
         mounts (vals (:mounts snapshot))
         grouped (for [stage frame/stages
-                      :let [commands (mapcat (fn [mount]
-                                               (concat
-                                                 (get @(-> mount :commands) stage [])
-                                                 (when (= stage (host-stage (:host mount)))
-                                                   (render-mount mount context snapshot))))
-                                             mounts)]
+                      :let [commands (mapcat
+                                       (fn [mount]
+                                         (when (= stage (host-stage (:host mount)))
+                                           (render-mount mount context snapshot)))
+                                       mounts)]
                       :when (seq commands)]
                   [stage commands])]
     (swap! (state runtime) assoc :invalidated? false)
-    (let [^FramePacket ui-packet (frame/packet (.frameId context) grouped)]
-      (FramePacket. (.frameId ui-packet) (vec (.passes ui-packet))))))
+    (frame/packet (.frameId context) grouped)))
 
 (defn unmount! [runtime handle]
   (when-let [mount (get-in @(state runtime) [:mounts handle])]

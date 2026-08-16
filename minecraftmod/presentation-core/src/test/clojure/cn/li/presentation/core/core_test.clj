@@ -5,12 +5,12 @@
             [cn.li.presentation.core.dirty :as dirty]
             [cn.li.presentation.core.semantics :as semantics]
             [cn.li.presentation.core.runtime :as runtime]
-            [cn.li.presentation.core.export :as export]
             [cn.li.presentation.core.tree :as tree]
             [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.animation :as animation])
   (:import [cn.li.presentation.core FrameContext HostDescriptor HostDescriptor$HostKind
-            HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput]))
+            HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput
+            RenderCommand$Quad RenderStage]))
 
 (deftest input-dispatches-capture-target-bubble-and-pointer-capture
   (let [runtime (input/create)
@@ -48,12 +48,25 @@
     (semantics/upsert! tree :submit :root :button "Search" nil nil)
     (is (= ["Terminal" "Query: abc" "Search"] (semantics/narration tree)))))
 
-(deftest export-produces-mcmod-neutral-frame
+(deftest extract-emits-commands-for-mounted-host
+  (let [rt (runtime/create-runtime
+             {:template-resolver identity
+              :template-renderer (fn [_template _model _ctx]
+                                   [(RenderCommand$Quad. 0.0 0.0 8.0 8.0 -1)])})
+        host (HostDescriptor. "hud" HostDescriptor$HostKind/HUD 0 0 nil
+                              HostDescriptor$InputPolicy/PASSTHROUGH)
+        _handle (runtime/mount! rt host ::template nil)
+        packet (runtime/extract! rt (FrameContext. 9 0.016 320 180))]
+    (is (= 9 (.frameId packet)))
+    (is (= 1 (count (.passes packet))))
+    (is (= RenderStage/HUD (.stage (first (.passes packet)))))
+    (is (= 1 (count (.commands (first (.passes packet))))))))
+
+(deftest extract-returns-empty-passes-with-no-mounts
   (let [rt (runtime/create-runtime)
-        packet (runtime/extract! rt (FrameContext. 9 0.016 320 180))
-        neutral (export/neutral-frame packet)]
-    (is (= 9 (.frameId neutral)))
-    (is (empty? (.passes neutral)))))
+        packet (runtime/extract! rt (FrameContext. 9 0.016 320 180))]
+    (is (= 9 (.frameId packet)))
+    (is (empty? (.passes packet)))))
 
 (deftest keyed-reconcile-reuses-moved-nodes-and-disposes-removed-nodes
   (let [closed (atom [])
