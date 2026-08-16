@@ -725,15 +725,6 @@
                 (assoc-in [:resource-data :overload-fine] true)))
         (ok player-state))))
 
-  (def ^:private radiation-marks-path [:runtime :meltdowner :radiation-marks])
-
-  (defn- radiation-index-effect
-    "Effect telling the radiation-mark-index shell to fully replace one
-    player's outgoing marks (see service/radiation-mark-index.clj)."
-    [player-uuid marks]
-    {:effect/type :radiation-index-sync
-     :player-uuid (str player-uuid)
-     :marks marks})
 
   (defn- cmd-hydrate-player-state
     "Replace player-state slices from persistence or lifecycle hydration.
@@ -849,7 +840,7 @@
   [player-state {:keys [player-uuid target-id source-player-id clear-all? clear-expired?]}]
   (rejected player-state :combat-domain-state))
 
-#_(defn- cmd-tick-radiation-marks
+#_(defn- legacy-cmd-tick-radiation-marks
   [player-state {:keys [player-uuid]}]
   (let [marks (or (get-in player-state radiation-marks-path) {})
         next-marks
