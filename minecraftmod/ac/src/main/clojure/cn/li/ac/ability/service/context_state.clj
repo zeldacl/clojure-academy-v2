@@ -61,6 +61,10 @@
    (with-context-owner-binding owner
      (fn []
        (when-let [spec (skill/get-skill (:skill-id ctx-map))]
+         (when (= :combat-core (:execution spec))
+           (throw (ex-info "Combat Core skill cannot execute through legacy Context"
+                           {:skill-id (:skill-id spec)
+                            :ctx-id (:id ctx-map)})))
          (let [pattern (:pattern spec)
                action-key (skill-cb/resolve-action-key pattern cb-key)
                callback-fn (when action-key (get-in spec [:actions action-key]))
