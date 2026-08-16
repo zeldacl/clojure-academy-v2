@@ -79,11 +79,17 @@
                        (if-let [m (modal/active-modal rt)]
                          (do (modal/modal-mouse-press! m lx ly button) true)
                          (input/handle-mouse-clicked rt left top mx my button))))
-          removed-cb (fn [_this]
-                       (when on-close (on-close))
-                       (embed/dispose-embedded-runtimes! rt)
-                       (input/handle-removed rt))
-          screen (new-screen! title render-cb key-cb char-cb click-cb removed-cb)]
+          ;; removed() fires on EVERY setScreen() replacement — JEI's
+          ;; RecipesGui swaps this screen out when a recipe is opened and
+          ;; restores it on ESC, so the runtime teardown must NOT run here.
+          ;; Real teardown runs in on-close-cb (Minecraft never calls onClose
+          ;; for a setScreen() replacement).
+          removed-cb (fn [_this] nil)
+          on-close-cb (fn [_this]
+                        (when on-close (on-close))
+                        (embed/dispose-embedded-runtimes! rt)
+                        (input/handle-removed rt))
+          screen (new-screen! title render-cb key-cb char-cb click-cb removed-cb on-close-cb)]
       (decorate-screen!
         screen
         (fn [this mx my button]

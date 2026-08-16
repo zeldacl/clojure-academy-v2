@@ -20,6 +20,7 @@ public class DelegatingScreen extends Screen {
     private IFn charTypedFn;
     private IFn mouseClickedFn;
     private IFn removedFn;
+    private IFn onCloseFn;
 
     private IFn mouseReleasedFn;
     private IFn mouseDraggedFn;
@@ -52,13 +53,14 @@ public class DelegatingScreen extends Screen {
 
     public DelegatingScreen(Component title,
                             IFn renderFn, IFn keyPressedFn, IFn charTypedFn,
-                            IFn mouseClickedFn, IFn removedFn) {
+                            IFn mouseClickedFn, IFn removedFn, IFn onCloseFn) {
         super(title);
         this.renderFn = renderFn;
         this.keyPressedFn = keyPressedFn;
         this.charTypedFn = charTypedFn;
         this.mouseClickedFn = mouseClickedFn;
         this.removedFn = removedFn;
+        this.onCloseFn = onCloseFn;
     }
 
     /** Background path for reactive hosts (26.2: extractBackground). */
@@ -205,5 +207,19 @@ public class DelegatingScreen extends Screen {
             }
         }
         super.removed();
+    }
+
+    /**
+     * Real close only — JEI's RecipesGui replaces this screen via
+     * setScreen() (which calls removed() but leaves state open), then
+     * restores it on ESC; the AC runtime must survive that swap and only be
+     * disposed when the screen is actually closed.
+     */
+    @Override
+    public void onClose() {
+        if (onCloseFn != null) {
+            onCloseFn.invoke(this);
+        }
+        super.onClose();
     }
 }

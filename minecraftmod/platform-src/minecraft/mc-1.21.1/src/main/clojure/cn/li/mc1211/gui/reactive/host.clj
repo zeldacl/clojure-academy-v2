@@ -8,9 +8,9 @@
 
 (def ^:private seams
   {:new-screen!
-   (fn [title render-cb key-cb char-cb click-cb removed-cb]
+   (fn [title render-cb key-cb char-cb click-cb removed-cb on-close-cb]
      (DelegatingScreen. (Component/literal ^String title)
-                        render-cb key-cb char-cb click-cb removed-cb))
+                        render-cb key-cb char-cb click-cb removed-cb on-close-cb))
 
    :render-background!
    (fn [^DelegatingScreen screen ^GuiGraphics gg mx my pt]

@@ -49,7 +49,7 @@
 
    :decorate-screen!
    (fn [^DelegatingCGuiContainerScreen screen render-cb bg-cb labels-cb click-cb
-        release-cb drag-cb move-cb scroll-cb key-cb char-cb removed-cb]
+        release-cb drag-cb move-cb scroll-cb key-cb char-cb removed-cb on-close-cb]
      (doto screen
        (.withRender render-cb)
        (.withRenderLabels labels-cb)
@@ -61,7 +61,8 @@
        (.withMouseScrolled scroll-cb)
        (.withKeyPressed key-cb)
        (.withCharTyped char-cb)
-       (.withRemoved removed-cb)))
+       (.withRemoved removed-cb)
+       (.withOnClose on-close-cb)))
 
    :draw-tape! render/draw-tape!
    :render-embedded-runtime! render/render-embedded-runtime!})

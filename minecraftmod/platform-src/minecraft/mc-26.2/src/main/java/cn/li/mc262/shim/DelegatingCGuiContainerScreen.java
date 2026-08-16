@@ -29,6 +29,7 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     private IFn keyPressedFn;
     private IFn charTypedFn;
     private IFn removedFn;
+    private IFn onCloseFn;
 
     public DelegatingCGuiContainerScreen(T menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -50,6 +51,7 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
     public DelegatingCGuiContainerScreen withKeyPressed(IFn fn) { this.keyPressedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withCharTyped(IFn fn) { this.charTypedFn = fn; return this; }
     public DelegatingCGuiContainerScreen withRemoved(IFn fn) { this.removedFn = fn; return this; }
+    public DelegatingCGuiContainerScreen withOnClose(IFn fn) { this.onCloseFn = fn; return this; }
 
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
@@ -151,5 +153,19 @@ public class DelegatingCGuiContainerScreen<T extends AbstractContainerMenu>
         } else {
             super.removed();
         }
+    }
+
+    /**
+     * Real close only — JEI's RecipesGui replaces this screen via
+     * setScreen() (which calls removed() but leaves the container open), then
+     * restores it on ESC; the AC runtime must survive that swap and only be
+     * disposed when the container is actually closed.
+     */
+    @Override
+    public void onClose() {
+        if (onCloseFn != null) {
+            onCloseFn.invoke(this);
+        }
+        super.onClose();
     }
 }

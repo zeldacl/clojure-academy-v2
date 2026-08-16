@@ -140,6 +140,13 @@
           (do (modal/modal-char! m code-point) true)
           (input/handle-char-typed rt code-point modifiers)))
       (fn [_this]
+        ;; NOT the teardown: Minecraft calls removed() on every setScreen()
+        ;; replacement — JEI's RecipesGui swaps this screen out when a recipe
+        ;; is opened (leaving the container open) and restores it on ESC. The
+        ;; AC runtime must survive that swap. Real teardown runs in the
+        ;; on-close! callback below (JEI never calls onClose).
+        nil)
+      (fn [_this]
         (when-let [tech (:tech-ui screen-data)]
           (tabbed-gui/detach-tab-sync! tech))
         (embed/dispose-embedded-runtimes! rt)
