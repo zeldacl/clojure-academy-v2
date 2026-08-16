@@ -18,6 +18,7 @@
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
+            [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
@@ -26,6 +27,43 @@
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
 (declare owner-state resolve-slot)
+
+(defn- horizontal-yaw-degrees [x z]
+  (- (Math/toDegrees (Math/atan2 (double x) (double z)))))
+
+(defn- attacker-front?
+  "Resolve Light Shield's horizontal-yaw cone at the AC boundary.
+
+   Missing entity geometry fails closed. Platform damage sources may provide
+   an already validated neutral `:attacker-front?` fact for tests or special
+   damage types; ordinary entity damage is resolved through the neutral motion
+   and raycast ports here, before Combat Core sees the request."
+  [player-id attacker-id damage-source]
+  (cond
+    (and (map? damage-source) (contains? damage-source :attacker-front?))
+    (boolean (:attacker-front? damage-source))
+
+    (nil? attacker-id) true
+
+    (not (and (raycast/available?) (motion-effects/entity-motion-available?)))
+    false
+
+    :else
+    (try
+      (let [position (raycast/player-position (str player-id))
+            look (raycast/player-look-vector (str player-id))
+            world-id (:world-id position)
+            attacker-pos (motion-effects/entity-position world-id (str attacker-id))]
+        (boolean
+         (when (and (map? position) (map? look) (map? attacker-pos))
+           (let [dx (- (double (:x attacker-pos)) (double (:x position)))
+                 dz (- (double (:z attacker-pos)) (double (:z position)))
+                 player-yaw (horizontal-yaw-degrees (:x look) (:z look))
+                 target-yaw (horizontal-yaw-degrees dx dz)
+                 diff (mod (Math/abs (double (- target-yaw player-yaw))) 360.0)]
+             (< diff (skill-config/tunable-double
+                      :light-shield :combat.front-cone-degrees))))))
+      (catch Exception _ false))))
 
 (defn apply-combat-domain-event
   "Apply AC-owned combat domain transitions without platform or Context state.
@@ -65,6 +103,12 @@
     :light-shield-tick
     (update-in state [:light-shields (str (:owner event))]
                light-shield-state/tick)
+
+    :light-shield-absorb
+    (update-in state [:light-shields (str (:owner event))]
+               (fn [shield]
+                 (when shield
+                   (assoc shield :last-absorb-tick (long (:tick event))))))
 
     :light-shield-end
     (update state :light-shields dissoc (str (:owner event)))
@@ -178,6 +222,68 @@
                               :target-id target
                               :rate rate
                               :ticks-left ticks-left}))
+               request)))}
+   {:priority 80
+    :provider-id :academy/base
+    :ability-id :light-shield
+    :node-id :damage-absorption
+    :run (fn [request context]
+           (let [target (str (:target request))
+                 shield (get-in context [:domain-state :light-shields target])
+                 metadata (:metadata request)
+                 ticks (long (or (:ticks shield) 0))
+                 last-absorb (long (or (:last-absorb-tick shield) -1))
+                 interval (long (or (skill-config/tunable-int
+                                     :light-shield :combat.absorb-interval-ticks)
+                                    18))
+                 base (double (:base request))
+                 ;; Rear/unknown direction fails closed. The AC boundary must
+                 ;; supply this neutral fact from the authoritative entity
+                 ;; geometry before an absorb can occur.
+                 front? (and (contains? metadata :attacker-front?)
+                             (boolean (:attacker-front? metadata)))
+                 exp (double (ability-model/get-skill-exp
+                              (get-in (or (:target-state context)
+                                           (:state context) {}) [:ability-data])
+                              :light-shield))
+                 overload-cost (skill-config/lerp-double
+                                :light-shield :cost.absorb.cp exp)
+                 cp-cost (skill-config/lerp-double
+                          :light-shield :cost.absorb.overload exp)
+                 cap (skill-config/lerp-double
+                      :light-shield :combat.absorb-damage exp)
+                 resources (or (:resources (:target-state context))
+                               (:resources (:state context)) {})
+                 enough? (and (>= (double (or (:overload resources) 0.0))
+                                 cp-cost)
+                             (>= (double (or (:cp resources) 0.0))
+                                 overload-cost))
+                 eligible? (and shield
+                                (light-shield-state/eligible-absorb?
+                                 {:ticks ticks
+                                  :last-absorb-tick last-absorb
+                                  :interval interval
+                                  :front? front?
+                                  :damage base})
+                                enough?
+                                (Double/isFinite cap)
+                                (<= 0.0 cap 100.0))]
+             (if eligible?
+               (let [absorbed (min base cap)
+                     next-base (- base absorbed)]
+                 (-> request
+                     (assoc :base next-base)
+                     (assoc-in [:metadata :resource-cost]
+                               {:overload (- cp-cost)
+                                :cp (- overload-cost)})
+                     (update :state-patch (fnil conj [])
+                             [:ability-exp :light-shield 0.001])
+                     (update :events (fnil conj [])
+                             {:type :light-shield-absorb
+                              :owner target
+                              :tick (long (:tick context))
+                              :event-id [:light-shield-absorb target
+                                         (long (:tick context))]})))
                request)))}
    {:priority 50
     :provider-id :academy/base
@@ -1041,7 +1147,9 @@
                   :type (or (:damage-type damage-source) :generic)
                   :components {:direct (double original-damage)}
                   :tags #{:combat :intercepted}
-                  :metadata {:damage-source damage-source}})]
+                  :metadata {:damage-source damage-source
+                             :attacker-front? (attacker-front?
+                                               player-id attacker-id damage-source)}})]
     ;; Damage interception is the live boundary: Combat Core owns the
     ;; reduction decision, while AC remains the single writer for player
     ;; resources/cooldowns.  Apply only the neutral patch returned by the
@@ -1049,6 +1157,8 @@
     (when (and (not (:cancelled? request))
                (seq (:state-patch request)))
       (commit-state-patch! player-id (:state-patch request)))
+    (when (and (not (:cancelled? request)) (seq (:events request)))
+      (dispatch-result-domain-events! player-id request))
     (if (:cancelled? request)
       0.0
       (double (:base request)))))
@@ -1067,7 +1177,9 @@
                   :type (or (:damage-type damage-source) :generic)
                   :components {:direct (double original-damage)}
                   :tags #{:combat :attack-precheck}
-                  :metadata {:damage-source damage-source}})]
+                  :metadata {:damage-source damage-source
+                             :attacker-front? (attacker-front?
+                                               player-id attacker-id damage-source)}})]
     {:cancelled? (boolean (:cancelled? request))
      :request request}))
 

@@ -115,7 +115,7 @@
            :duration duration
            :rate rate
            :tick tick
-           :event-id (event-id :radiation-mark source target tick)})))))
+           :event-id (event-id :radiation-mark source target tick)}))))
    nil))
 
 (defn init! []

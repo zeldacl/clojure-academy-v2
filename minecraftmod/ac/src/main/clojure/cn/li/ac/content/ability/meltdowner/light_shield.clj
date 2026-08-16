@@ -332,11 +332,9 @@
 
 (defn init!
   []
-  (damage-handler/register-toggle-damage-handler!
-    :light-shield-damage
-    :light-shield
-    light-shield-reduce-damage
-    80)
+  ;; Combat Core owns Light Shield activation, ticking, resource payment and
+  ;; damage absorption. The legacy mutable damage registry is intentionally
+  ;; not installed.
   nil)
 
 ;; ---------------------------------------------------------------------------

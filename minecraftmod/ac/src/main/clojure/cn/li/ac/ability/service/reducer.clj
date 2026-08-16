@@ -759,7 +759,7 @@
         (ok hydrated
             []
             (if (contains? cmd :runtime-data)
-              [(radiation-index-effect (:player-uuid cmd) (get-in hydrated radiation-marks-path))]
+              []
               [])))))
 
   (defn- cmd-set-dirty-flag
@@ -843,46 +843,13 @@
 
 (defn- cmd-mark-radiation-target
   [player-state {:keys [player-uuid target-id mark]}]
-  (if (and target-id mark)
-    (let [next-state (assoc-in player-state (conj radiation-marks-path (str target-id)) mark)]
-      (ok next-state
-          []
-          [(radiation-index-effect player-uuid (get-in next-state radiation-marks-path))]))
-    (rejected player-state :invalid-radiation-mark)))
+  (rejected player-state :combat-domain-state))
 
 (defn- cmd-clear-radiation-marks
   [player-state {:keys [player-uuid target-id source-player-id clear-all? clear-expired?]}]
-  (let [marks (or (get-in player-state radiation-marks-path) {})
-        next-marks
-        (cond
-          clear-all?
-          {}
+  (rejected player-state :combat-domain-state))
 
-          clear-expired?
-          (into {}
-                (remove (fn [[_k {:keys [ticks-left]}]]
-                          (not (pos? (long (or ticks-left 0))))))
-                marks)
-
-          target-id
-          (dissoc marks (str target-id))
-
-          source-player-id
-          (let [source-key (str source-player-id)]
-            (into {}
-                  (remove (fn [[_k {:keys [source-player-id]}]]
-                            (= source-key (str source-player-id))))
-                  marks))
-
-          :else
-          marks)]
-    (if (= marks next-marks)
-      (ok player-state)
-      (ok (assoc-in player-state radiation-marks-path next-marks)
-          []
-          [(radiation-index-effect player-uuid next-marks)]))))
-
-(defn- cmd-tick-radiation-marks
+#_(defn- cmd-tick-radiation-marks
   [player-state {:keys [player-uuid]}]
   (let [marks (or (get-in player-state radiation-marks-path) {})
         next-marks
@@ -900,6 +867,10 @@
     (ok (assoc-in player-state radiation-marks-path next-marks)
         []
         [(radiation-index-effect player-uuid next-marks)])))
+
+(defn- cmd-tick-radiation-marks
+  [_player-state _command]
+  (rejected _player-state :combat-domain-state))
 
 (defn- projectile-claims-path
   []
@@ -1042,9 +1013,6 @@
     :context-set-input-state (cmd-context-set-input-state player-state command)
     :set-railgun-coin-judged-uuid (cmd-set-railgun-coin-judged-uuid player-state command)
     :clear-railgun-coin-judged-uuid (cmd-clear-railgun-coin-judged-uuid player-state command)
-    :mark-radiation-target (cmd-mark-radiation-target player-state command)
-    :clear-radiation-marks (cmd-clear-radiation-marks player-state command)
-    :tick-radiation-marks (cmd-tick-radiation-marks player-state command)
     :claim-projectile (cmd-claim-projectile player-state command)
     :replace-projectile-claims (cmd-replace-projectile-claims player-state command)
     :clear-player-projectile-claims (cmd-clear-player-projectile-claims player-state command)
