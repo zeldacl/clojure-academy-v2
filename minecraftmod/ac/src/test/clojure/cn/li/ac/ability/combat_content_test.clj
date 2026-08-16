@@ -4,6 +4,7 @@
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.combat.registry :as registry]
             [cn.li.combat.compiler :as compiler]
+            [cn.li.combat.damage :as damage]
             [cn.li.combat.runtime :as runtime]
             [cn.li.ac.ability.service.command-runtime :as command-runtime]))
 
@@ -95,6 +96,29 @@
       (is (= [[nil "victim"
                [{:command :consume-resource :cp 4.0}]]]
              @commands)))))
+
+(deftest vec-deviation-damage-cost-is-capped-by-authoritative-cp
+  (let [pipeline (damage/compile-pipeline
+                  (#'combat-runtime/academy-damage-pipeline))
+        result (damage/apply-pipeline
+                pipeline
+                {:source "attacker" :target "victim" :base 10.0
+                 :type :generic :components {:direct 10.0}}
+                {:owner "victim"
+                 :source "attacker"
+                 :target "victim"
+                 :state {:resources {:cp 3.0}
+                         :active-abilities #{:vec-deviation}
+                         :ability-data {:skill-exps {:vec-deviation 0.0
+                                                     :rad-intensify 0.0}}}
+                 :target-state {:resources {:cp 3.0}
+                                :active-abilities #{:vec-deviation}
+                                :ability-data {:skill-exps {:vec-deviation 0.0
+                                                            :rad-intensify 0.0}}}
+                 :source-state {:ability-data {:skill-exps {:rad-intensify 0.0}}}
+                 :domain-state {}})]
+    (is (= [[:resource :cp -3.0]] (:state-patch result)))
+    (is (= -3.0 (get-in result [:metadata :resource-cost :cp])))))
 
 (deftest combat-catalog-covers-all-authoritative-skill-ids
   ;; Every AC skill has one Combat Core recipe.  This is the replacement
