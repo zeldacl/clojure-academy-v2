@@ -7,6 +7,8 @@
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
             [cn.li.ac.ability.discovery :as discovery]
             [cn.li.ac.ability.passive :as passive]
+            [cn.li.ac.ability.service.combat-content :as combat-content]
+            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.server.damage.handler :as damage-handler]
@@ -97,6 +99,19 @@
           skill-spec (declared-skill-specs ns-sym)]
     (skill-registry/register-skill! skill-spec)))
 
+(defn register-combat-catalog!
+  "Register the complete player-facing skill catalog from Combat Core.
+
+   This is intentionally separate from the legacy discovery bootstrap so it
+   can be validated in isolation before the old namespace path is removed."
+  []
+  (combat-content/assert-complete-skill-catalog!)
+  (doseq [skill-spec (combat-content/skill-specs)]
+    (skill-registry/register-skill! skill-spec))
+  (combat-content/register! combat-runtime/register-provider!)
+  (combat-runtime/initialize!)
+  true)
+
 (defn- run-namespace-init!
   [ns-sym]
   ;; Combat Core owns authoritative combat lifecycle and damage semantics.
@@ -122,6 +137,10 @@
   []
   (install/framework-once! ::ability-content-installed
     (fn []
+      ;; The executable Combat Core catalog is now the completeness gate for
+      ;; all 38 configured skills. Legacy namespaces may not add a skill that
+      ;; is absent from this catalog.
+      (combat-content/assert-complete-skill-catalog!)
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (let [skill-namespaces (load-discovered-skill-namespaces!)]
