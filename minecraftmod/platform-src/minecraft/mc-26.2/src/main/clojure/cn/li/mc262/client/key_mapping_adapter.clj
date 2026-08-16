@@ -113,7 +113,7 @@
         (boolean
           (some (fn [^KeyMapping other]
                   (and (not (identical? other km))
-                       (.same other key)))
+                       (.same other km)))
                 (seq (.keyMappings (.options ^Minecraft (Minecraft/getInstance))))))))))
 
 (defn- key-code->input-key
@@ -144,7 +144,7 @@
         ;; binding is authoritative instead of two mappings fighting.
         (doseq [^KeyMapping other (.keyMappings options)]
           (when (and (not (identical? other km))
-                     (.same other key))
+                     (.equals key (.getKey other)))
             (.setKey other InputConstants/UNKNOWN))))
       (.setKey km key)
       (KeyMapping/resetMapping)
