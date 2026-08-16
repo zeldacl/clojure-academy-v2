@@ -329,7 +329,8 @@
                             :query-port (merge default-query-port (or query-port {}))
                             :now-tick now-tick
                             :ability-resolver (or ability-resolver resolve-slot)
-                            :domain-event-handler domain-event-handler
+                            :domain-event-handler (or domain-event-handler
+                                                       apply-combat-domain-event)
                             :damage-pipeline (or damage-pipeline
                                                  (academy-damage-pipeline))}))
          (when-not @world-effect-handler*
@@ -1087,6 +1088,19 @@
                         :message (ex-message throwable)})))))
               (:world-effects result))]
     (assoc result :effect-results effect-results)))
+
+(defn finalize-result!
+  "Apply one accepted result at the AC composition boundary.
+
+   World effects execute before explicit domain-event reduction.  Both
+   acknowledgements remain attached to the immutable result for publication
+   and diagnostics."
+  [owner result]
+  (let [result (execute-world-effects! owner result)
+        domain-results (if (= :accepted (:status result))
+                         (dispatch-result-domain-events! owner result)
+                         [])]
+    (assoc result :domain-event-results (vec domain-results))))
 (defn install-result-sink!
   "Install the AC network sink for server-driven session results.
 
@@ -1115,7 +1129,7 @@
           ;; store remains the source of truth.
           (when (= :accepted (:status result))
             (commit-state-patch! (:owner result) (:state-patch result)))
-          (publish-result! (execute-world-effects! (:owner result) result)))
+          (publish-result! (finalize-result! (:owner result) result)))
         (combat/tick! (engine) tick)))
 (defn abort-owner! [owner] (combat/abort-owner! (engine) owner))
 (defn snapshot-owner [owner] (combat/snapshot-owner (engine) owner))

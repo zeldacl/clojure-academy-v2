@@ -119,7 +119,7 @@
         intent (select-keys payload [:schema-version :intent-id :op :slot :client-tick])
         result (combat-runtime/dispatch-intent! owner intent)
         result (if (= :accepted (:status result))
-                 (combat-runtime/execute-world-effects! owner result)
+                 (combat-runtime/finalize-result! owner result)
                  result)]
     (when (= :rejected (:status result))
       (log/debug "Combat intent rejected" {:owner owner :feedback (:feedback result)}))

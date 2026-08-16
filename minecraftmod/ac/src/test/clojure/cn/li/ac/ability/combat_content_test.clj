@@ -190,3 +190,21 @@
                  :target-id "victim"
                  :owner "owner"}]
                @seen))))))
+
+(deftest finalize-result-orders-world-effects-before-domain-events
+  (let [calls (atom [])]
+    (with-redefs [combat-runtime/execute-world-effects!
+                  (fn [owner result]
+                    (swap! calls conj [:world owner])
+                    (assoc result :effect-results [{:status :applied}]))
+                  combat-runtime/dispatch-result-domain-events!
+                  (fn [owner result]
+                    (swap! calls conj [:domain owner (:effect-results result)])
+                    [{:status :accepted}])]
+      (let [result (combat-runtime/finalize-result!
+                    "owner"
+                    {:status :accepted :events [{:type :radiation-mark}]})]
+        (is (= [[:world "owner"]
+                [:domain "owner" [{:status :applied}]]]
+               @calls))
+        (is (= [{:status :accepted}] (:domain-event-results result)))))))
