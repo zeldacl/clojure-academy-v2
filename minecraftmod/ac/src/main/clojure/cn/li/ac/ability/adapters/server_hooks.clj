@@ -12,13 +12,10 @@
             [cn.li.ac.ability.server.network :as network]
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
-            [cn.li.ac.ability.server.damage.handler :as damage-handler]
-            [cn.li.ac.ability.server.damage.runtime :as damage-runtime]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
-            [cn.li.ac.content.ability.meltdowner.damage-helper :as md-damage]
             [cn.li.ac.ability.service.platform-hooks :as platform-hooks]            [cn.li.ac.block.developer.logic :as developer-logic]
             [cn.li.ac.block.developer.session :as dev-session]
             [cn.li.ac.item.developer-portable-energy :as portable-energy]
@@ -78,6 +75,23 @@
   (store/clear-dirty!
    (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
    player-uuid)
+  nil)
+
+(defn- clear-combat-owner!
+  "Clear all Combat Core domain state associated with a player lifecycle.
+
+   Radiation marks are keyed by target for O(1) damage reads, so leaving a
+   player clears both incoming target state and outgoing source state."
+  [player-uuid]
+  (let [tick (long (or (:server-tick-id (runtime-hooks/player-state-owner)) 0))]
+    (combat-runtime/dispatch-domain-event!
+     {:type :radiation-mark-clear
+      :target-id player-uuid
+      :event-id [:lifecycle :radiation-target-clear player-uuid tick]})
+    (combat-runtime/dispatch-domain-event!
+     {:type :combat-owner-clear
+      :owner player-uuid
+      :event-id [:lifecycle :combat-owner-clear player-uuid tick]}))
   nil)
 
 (defn- build-sync-payload-impl
@@ -235,8 +249,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
-     (md-damage/clear-target-mark! player-uuid)
-     (md-damage/clear-source-marks! player-uuid)
+     (clear-combat-owner! player-uuid)
      (store/remove-player-state! (runtime-hooks/require-player-state-session-id "Server hooks runtime state access")
                                   player-uuid))
 
@@ -250,7 +263,10 @@
        ((platform-hooks/get-platform-fn fn-reset-server-runtimes)))
      (delayed-projectiles/clear-all-tasks!)
      (reflection-damage/clear-all-tasks!)
-     (md-damage/on-server-stop! session-id))
+     (combat-runtime/dispatch-domain-event!
+      {:type :radiation-marks-clear-all
+       :owner :system
+       :event-id [:lifecycle :radiation-marks-clear-all session-id]}) )
 
    :on-player-clone!
    (fn [_old-player-uuid _new-player-uuid]
@@ -261,8 +277,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
-     (md-damage/clear-target-mark! player-uuid)
-     (md-damage/clear-source-marks! player-uuid)
+     (clear-combat-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :on-player-dimension-change!
@@ -270,8 +285,7 @@
      (combat-runtime/abort-owner! player-uuid)
      (delayed-projectiles/clear-player-tasks! player-uuid)
      (reflection-damage/clear-player-tasks! player-uuid)
-     (md-damage/clear-target-mark! player-uuid)
-     (md-damage/clear-source-marks! player-uuid)
+     (clear-combat-owner! player-uuid)
      (combat-runtime/abort-owner! player-uuid))
 
    :get-skills-for-category
@@ -282,7 +296,10 @@
    (fn [tick-id]
      ;; Global work is driven once per server tick, before the player phase.
      (combat-runtime/tick! tick-id)
-     (md-damage/tick-marks!)
+     (combat-runtime/dispatch-domain-event!
+      {:type :combat-tick
+       :tick tick-id
+       :event-id [:lifecycle :combat-tick tick-id]})
      nil)
 
    :on-player-tick!
@@ -368,18 +385,6 @@
    ;; prevents platform network code from routing stale context packets into
    ;; AC while preserving the neutral hook shape for non-AC callers.
    (fn [_ctx-id] nil)
-
-   :register-damage-handler!
-   (fn [handler-id handler-fn priority]
-     (damage-runtime/register-damage-handler! handler-id handler-fn priority))
-
-   :unregister-damage-handler!
-   (fn [handler-id]
-     (damage-runtime/unregister-damage-handler! handler-id))
-
-   :get-active-damage-handlers
-   (fn []
-     (damage-runtime/get-active-handlers))
 
    :process-damage-interception
    (fn [player-id attacker-id damage damage-source]
