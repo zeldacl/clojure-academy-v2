@@ -31,24 +31,37 @@
       result
       (recur (get-in nodes [current :parent]) (conj result current)))))
 
-(defn- invoke-handler [runtime node-id phase event]
+(defn- invoke-handler
+  "Invoke one node's handler and return its raw EventResult (nil if the node
+   has no handler). A CAPTURE_POINTER result also claims pointer capture."
+  [runtime node-id phase event]
   (when-let [handler (get-in @(:nodes runtime) [node-id :handler])]
     (let [result (handler phase event)]
-      (cond
-        (= result EventResult/CAPTURE_POINTER)
-        (do (reset! (:pointer-capture runtime) node-id) :capture-pointer)
-        (= result EventResult/CONSUME) :consume
-        :else :pass))))
+      (when (= result EventResult/CAPTURE_POINTER)
+        (reset! (:pointer-capture runtime) node-id))
+      result)))
 
-(defn dispatch! [runtime target event]
+(defn- routed? [result]
+  (and (some? result) (not= result EventResult/PASS)))
+
+(defn dispatch!
+  "Route one event through capture -> target -> bubble and return the
+   EventResult of whichever phase first didn't PASS, or EventResult/PASS if
+   every node in the path passed."
+  [runtime target event]
   (let [nodes @(:nodes runtime)
         target (or @(:pointer-capture runtime) target)
         path (ancestry nodes target)
         capture-path (reverse (rest path))]
-    (or (some #(when (not= :pass (invoke-handler runtime % :capture event)) true) capture-path)
-        (when (not= :pass (invoke-handler runtime target :target event)) true)
-        (some #(when (not= :pass (invoke-handler runtime % :bubble event)) true) (rest path))
-        false)))
+    (or (some #(let [result (invoke-handler runtime % :capture event)]
+                 (when (routed? result) result))
+              capture-path)
+        (let [result (invoke-handler runtime target :target event)]
+          (when (routed? result) result))
+        (some #(let [result (invoke-handler runtime % :bubble event)]
+                 (when (routed? result) result))
+              (rest path))
+        EventResult/PASS)))
 
 (defn release-pointer! [runtime]
   (reset! (:pointer-capture runtime) nil)

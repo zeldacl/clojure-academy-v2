@@ -142,24 +142,19 @@
 
 (defn dispatch! [runtime handle event]
   (when-let [mount (get-in @(state runtime) [:mounts handle])]
-    (let [result* (atom EventResult/PASS)
+    ;; The mount's input node is already registered once, in mount!, with a
+    ;; handler that reads [:mounts handle :handler] fresh from state on every
+    ;; invocation -- it doesn't need (and must not get) a second, per-call
+    ;; registration here. input/dispatch! now returns the real EventResult
+    ;; directly, so there's no need to smuggle it out through a side-channel
+    ;; atom captured by a throwaway re-registered closure either.
+    (let [input-runtime (:input @(state runtime))
           node-id (:input-node mount)
-          input-runtime (:input @(state runtime))
-          event (normalize-input-event event)]
-      (input/register-node! input-runtime node-id nil
-                            (fn [phase e]
-                              (let [result (if (= phase :target)
-                                             (if-let [handler (:handler mount)]
-                                               (handler e)
-                                               EventResult/PASS)
-                                             EventResult/PASS)]
-                                (reset! result* result)
-                                result)))
-      (input/dispatch! input-runtime node-id event)
-      (let [result @result*]
-        (when-not (= result EventResult/PASS)
-          (swap! (state runtime) assoc :invalidated? true))
-        result))))
+          event (normalize-input-event event)
+          result (input/dispatch! input-runtime node-id event)]
+      (when-not (= result EventResult/PASS)
+        (swap! (state runtime) assoc :invalidated? true))
+      result)))
 
 (defn- extract-uncached [runtime ^FrameContext context]
   (let [snapshot @(state runtime)

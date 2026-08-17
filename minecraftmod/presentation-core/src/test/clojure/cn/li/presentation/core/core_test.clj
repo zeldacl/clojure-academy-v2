@@ -19,9 +19,20 @@
                       cn.li.presentation.core.EventResult/PASS))]
     (input/register-node! runtime :root nil handler)
     (input/register-node! runtime :button :root handler)
-    (input/dispatch! runtime :button :click)
+    ;; dispatch! must hand back the real terminal EventResult, not just
+    ;; whether something consumed it -- callers outside presentation-core
+    ;; (native Minecraft input fallback) need to distinguish CONSUME from
+    ;; CAPTURE_POINTER, not just "was it PASS".
+    (is (= cn.li.presentation.core.EventResult/CAPTURE_POINTER
+           (input/dispatch! runtime :button :click)))
     (is (= [:capture :target] @calls))
     (is (= :button (:pointer-capture (input/snapshot runtime))))))
+
+(deftest input-dispatch-returns-pass-when-nothing-handles-it
+  (let [runtime (input/create)]
+    (input/register-node! runtime :orphan nil nil)
+    (is (= cn.li.presentation.core.EventResult/PASS
+           (input/dispatch! runtime :orphan :click)))))
 
 (deftest dynamic-dirty-does-not-mark-layout
   (let [state (dirty/create)]
@@ -72,7 +83,13 @@
     (runtime/set-input-handler! rt handle (fn [_] cn.li.presentation.core.EventResult/CONSUME))
     (runtime/dispatch! rt handle {:type :pointer :event-type :down :x 0.0 :y 0.0 :button 0})
     (runtime/extract! rt (FrameContext. 2 0.0 320 180))
-    (is (= 3 @render-calls) "a consumed input event must invalidate even the same frame id")))
+    (is (= 3 @render-calls) "a consumed input event must invalidate even the same frame id")
+    ;; mount!'s single input-node registration must keep tracking whatever
+    ;; handler is currently set, across any number of dispatch! calls,
+    ;; without dispatch! itself re-registering a node on every call.
+    (runtime/set-input-handler! rt handle (fn [_] cn.li.presentation.core.EventResult/PASS))
+    (is (= cn.li.presentation.core.EventResult/PASS
+           (runtime/dispatch! rt handle {:type :pointer :event-type :down :x 0.0 :y 0.0 :button 0})))))
 
 (deftest keyed-reconcile-reuses-moved-nodes-and-disposes-removed-nodes
   (let [closed (atom [])
