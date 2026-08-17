@@ -338,7 +338,8 @@
                          :steps [{:op :require-session
                                   :path [:charge-ticks] :min 5.0 :max 200.0}
                                  {:op :query :query-type :groundshock
-                                  :range 12.0 :result-ref :ground}
+                                  :result-ref :ground}
+                                 {:op :require :predicate :ground}
                                  {:op :world-effect
                                   :effect-type :groundshock
                                   :query-ref :ground
@@ -350,7 +351,11 @@
                                   :launch-random-base 0.6
                                   :launch-random-span 0.3
                                   :breaking {:ground-break-probability 0.3
-                                             :drop-rate (scale 0.3 1.0)}}
+                                             :drop-rate (scale 0.3 1.0)}
+                                  :energy-cost {:stone 0.4
+                                                :grass-block 0.2
+                                                :farmland 0.1
+                                                :default-block 0.5}}
                                  {:op :vfx :effect-id :groundshock
                                   :event :perform
                                   :params {:charge-min-ticks 5}}]}}}

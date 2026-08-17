@@ -336,6 +336,23 @@
               {:world-id world-id :x bx :y by :z bz
                :block-id block-id :hardness hardness})))))))
 
+(defn- horizontal-look
+  "Flatten owner's look vector to the horizontal plane and normalize; nil
+   when looking straight up/down (degenerate horizontal component). The
+   deleted pre-combat-core groundshock defskill's skill_config/vecmanip.clj
+   entry for targeting.horizontal-look-fallback defaults to false -- i.e.
+   the stock behavior is no fallback, the ability simply doesn't fire when
+   aimed straight up or down. That config path has no combat-core
+   equivalent, so this always uses the (more common) false default rather
+   than guessing which players would have flipped it on."
+  [owner]
+  (when-let [look (when (raycast/available?) (raycast/player-look-vector owner))]
+    (let [x (double (or (:x look) 0.0))
+          z (double (or (:z look) 0.0))
+          len (Math/sqrt (+ (* x x) (* z z)))]
+      (when (> len 1.0e-6)
+        {:x (/ x len) :y 0.0 :z (/ z len)}))))
+
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
 
@@ -626,11 +643,28 @@
                                                      3.0
                                                      #{owner})]
                                         (assoc attack-data :victims victims))))
+              ;; Ground-level start point + flattened look direction only --
+              ;; the actual DDA propagation walk, block breaking and entity
+              ;; sweep all happen in execute-groundshock! (platform-src),
+              ;; matching this file's convention that :world-effect always
+              ;; delegates the real work. Previously delegated to :block-scan
+              ;; (a single raycast hit), which is a different shape entirely
+              ;; and was never actually consumed by an installed executor.
               :groundshock (fn [context node]
                              (if-let [host-query (contract/host-port :query)]
                                (host-query :groundshock context node)
-                               (when-let [block-scan (get-in context [:queries :block-scan])]
-                                  (block-scan context (assoc node :query-type :block-scan)))))
+                               (let [owner (:owner context)
+                                     world-id (geom/world-id-of owner)
+                                     body (geom/body-pos owner)
+                                     look (horizontal-look owner)]
+                                 (when (and world-id body look)
+                                   {:world-id world-id
+                                    :x (double (:x body))
+                                    :y (dec (double (:y body)))
+                                    :z (double (:z body))
+                                    :look-x (:x look)
+                                    :look-y (:y look)
+                                    :look-z (:z look)}))))
               :thunder-clap (fn [context node]
                               (if-let [host-query (contract/host-port :query)]
                                 (host-query :thunder-clap context node)
@@ -1034,12 +1068,24 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         ;; valid?'s drop-rate check was dead code before this
+                         ;; session: it expected a 2-element vector, but
+                         ;; combat-core's :world-effect op runs resolve-data
+                         ;; recursively over the whole node (including nested
+                         ;; map values like :breaking), so content's
+                         ;; :drop-rate (scale 0.3 1.0) always arrives here
+                         ;; already resolved to a plain double -- the vector
+                         ;; shape this checked for can never occur. Since
+                         ;; execute-groundshock! was never installed, this
+                         ;; branch's valid? was never exercised until now.
                          :groundshock
                          (let [{:keys [world-id query-result amount max-iterations
                                        init-energy entity-search-radius launch-scale
-                                       launch-random-base launch-random-span breaking]} effect
+                                       launch-random-base launch-random-span breaking
+                                       energy-cost]} effect
                                finite? #(and (number? %) (Double/isFinite (double %)))
                                {:keys [drop-rate ground-break-probability]} breaking
+                               {:keys [stone grass-block farmland default-block]} energy-cost
                                valid? (and world-id (map? query-result)
                                             (finite? amount) (pos? (double amount))
                                             (<= (double amount) 1000.0)
@@ -1055,11 +1101,13 @@
                                             (<= 0.0 (double launch-random-base) 4.0)
                                             (finite? launch-random-span)
                                             (<= 0.0 (double launch-random-span) 4.0)
-                                            (vector? drop-rate)
-                                            (= 2 (count drop-rate))
-                                            (every? #(and (finite? %) (<= 0.0 (double %) 1.0)) drop-rate)
+                                            (finite? drop-rate)
+                                            (<= 0.0 (double drop-rate) 1.0)
                                             (finite? ground-break-probability)
                                             (<= 0.0 (double ground-break-probability) 1.0)
+                                            (every? finite? [stone grass-block farmland default-block])
+                                            (every? #(<= 0.0 (double %) 10.0)
+                                                    [stone grass-block farmland default-block])
                                             (world-effects/available?))
                                plan (assoc effect :max-iterations (long max-iterations))]
                            {:status (if (and valid?
