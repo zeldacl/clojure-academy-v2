@@ -48,18 +48,28 @@
                         :target-ref :hit}
                        {:op :vfx :effect-id :arc-gen
                         :event :impact :params {:strength 1.0}}]}}
+    ;; Block-charging only -- see combat_runtime.clj's :charge-target/
+    ;; :charge-energy comments. :cost {:cp 2} and :amount 1.0 were
+    ;; placeholders that never matched skill_config/electromaster.clj's
+    ;; recovered schema (effect.charge-amount [15,35], cost.tick.cp [3,7],
+    ;; cost.down.overload [65,48]); :target-ref never matched the
+    ;; :charge-energy case's :query-result read either (needed :query-ref).
     {:id :current-charging
      :revision 1
      :activation :session
      :period-ticks 5
-     :cost {:cp 2}
+     :max-session-ticks 1200
+     :cost-phase :start
+     :cost {:overload (scale 65.0 48.0)}
      :program {:op :sequence
-               :steps [{:op :query :query-type :charge-target
-                        :result-ref :charge-target}
+               :steps [{:op :patch
+                        :entries [[:resource :cp
+                                   {:op :multiply :values [-1.0 (scale 3.0 7.0)]}]]}
+                       {:op :query :query-type :charge-target
+                        :distance 15.0 :result-ref :charge-target}
                        {:op :require :predicate :charge-target}
                        {:op :world-effect :effect-type :charge-energy
-                        :target-ref :charge-target :amount 1.0}
-                       {:op :patch :entries [[:resource :cp -1.0]]}
+                        :query-ref :charge-target :amount (scale 15.0 35.0)}
                        {:op :vfx :effect-id :current-charging
                         :event :pulse :params {:strength 0.6}}]}}
     {:id :body-intensify
@@ -140,17 +150,23 @@
                         :target-ref :hit}
                       {:op :vfx :effect-id :railgun-shot
                         :event :release :params-ref :hit}]}}
+    ;; The deleted defskill never scanned for ore blocks server-side despite
+    ;; the name -- it's an unconditional self-blindness + a client-facing FX
+    ;; event carrying :range/:advanced?, presumably driving purely
+    ;; client-side highlight rendering outside combat-core's authority. The
+    ;; :block-scan query/:require here were never faithful to that; removed
+    ;; along with the placeholder :cost {:cp 1000} (schema: CP lerp(1500,
+    ;; 1000), overload lerp(200,180)) and :cooldown {:ticks 400} (schema:
+    ;; lerp(900,400)).
     {:id :mine-detect
      :revision 1
      :activation :instant
-     :cost {:cp 1000}
-     :cooldown {:ticks 400}
+     :cost {:cp (scale 1500.0 1000.0)
+            :overload (scale 200.0 180.0)}
+     :cooldown {:ticks (scale 900.0 400.0)}
      :program {:op :sequence
-               :steps [{:op :query :query-type :block-scan
-                        :distance 30.0 :result-ref :scan}
-                       {:op :require :predicate :scan}
-                       {:op :world-effect :effect-type :mine-detect
-                        :scan-ref :scan :blindness-ticks 100}
+               :steps [{:op :world-effect :effect-type :mine-detect
+                        :blindness-ticks 100 :blindness-amplifier 0}
                        {:op :vfx :effect-id :mine-detect
                         :event :release :params {:range 30.0}}]}}
     {:id :thunder-bolt

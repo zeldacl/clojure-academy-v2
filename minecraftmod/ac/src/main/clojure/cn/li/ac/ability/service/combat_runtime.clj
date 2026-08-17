@@ -20,6 +20,7 @@
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
+            [cn.li.ac.ability.effects.potion :as potion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
@@ -27,6 +28,9 @@
             [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as mark-teleport-dest]
             [cn.li.ac.content.ability.teleporter.penetrate-dest :as penetrate-dest]
             [cn.li.ac.content.ability.teleporter.flashing-dest :as flashing-dest]
+            [cn.li.ac.energy.operations :as energy]
+            [cn.li.mcmod.framework :as fw]
+            [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
 (defonce ^:private engine* (atom nil))
@@ -440,6 +444,19 @@
                    {:seen #{} :entities []})
            :entities))))
 
+;; :runtime-interop's :get-block-entity-at is a still-installed, still-used
+;; neutral op (cn.li.ac.item.developer-portable-energy calls the same
+;; adapter for its own energy access) -- world-id/x/y/z in, no live level
+;; object required. cn.li.ac.energy.operations (this file's `energy` alias)
+;; is AC-layer, so charge-energy's world-effect case below has to stay in
+;; this file rather than delegating to a platform-src execute-*! like every
+;; other world-effect this session: platform code must never require AC
+;; namespaces, and ac.energy.operations is squarely AC.
+(defn- block-entity-at
+  [world-id x y z]
+  (when-let [fw-atom (fw/fw-atom)]
+    (platform/call-adapter fw-atom :runtime-interop :get-block-entity-at world-id x y z)))
+
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
 
@@ -659,9 +676,31 @@
               :entities (fn [context node]
                           (when-let [host-query (contract/host-port :query)]
                             (host-query :entities context node)))
+              ;; Conservative: block-charging only (current-charging's own
+              ;; ActMoveTo item-charging branch needs a resolved Player
+              ;; object for hand-item access, which query-port fns can't
+              ;; get -- same constraint documented on :shift-teleport/
+              ;; :mag-manip). Raycast reuses the plain block trace, not the
+              ;; deleted version's entity-priority nearestViewHit (an
+              ;; entity blocking the beam without taking the charge itself).
               :charge-target (fn [context node]
-                               (when-let [host-query (contract/host-port :query)]
-                                 (host-query :charge-target context node)))
+                               (if-let [host-query (contract/host-port :query)]
+                                 (host-query :charge-target context node)
+                                 (let [owner (:owner context)
+                                       world-id (geom/world-id-of owner)
+                                       eye (geom/eye-pos owner)
+                                       look (when (raycast/available?)
+                                              (raycast/player-look-vector owner))
+                                       distance (double (or (:distance node) 15.0))]
+                                   (when (and world-id look)
+                                     (when-let [hit (raycast/raycast-blocks
+                                                     world-id (:x eye) (:y eye) (:z eye)
+                                                     (double (or (:x look) 0.0))
+                                                     (double (or (:y look) 0.0))
+                                                     (double (or (:z look) 1.0))
+                                                     distance)]
+                                       {:world-id world-id
+                                        :x (long (:x hit)) :y (long (:y hit)) :z (long (:z hit))})))))
               :block-scan (fn [context node]
                             (if-let [host-query (contract/host-port :query)]
                               (host-query :block-scan context node)
@@ -1264,6 +1303,72 @@
                            {:status (if (and valid?
                                               (world-effects/execute-shift-teleport!
                                                world-id owner effect))
+                                      :applied
+                                      :failed)
+                            :effect effect})
+                         ;; Block-charging only -- see :charge-target's
+                         ;; comment above. Doesn't route through
+                         ;; world-effects/execute-*! (platform-src) like
+                         ;; every other case here: ac.energy.operations is
+                         ;; AC-layer, and platform code must never require
+                         ;; AC namespaces, so this mutation has to happen
+                         ;; right here instead. No multiblock controller
+                         ;; resolution (deleted version's
+                         ;; resolve-energy-target-tile) -- charges whatever
+                         ;; tile is at the hit position directly, so aiming
+                         ;; at a non-controller cell of a multiblock machine
+                         ;; won't charge it. No overload-floor enforcement
+                         ;; or effective/ineffective exp tracking either.
+                         :charge-energy
+                         (let [{:keys [world-id query-result amount]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               valid? (and world-id (map? query-result)
+                                            (every? #(number? (get query-result %)) [:x :y :z])
+                                            (finite? amount) (pos? (double amount))
+                                            (<= (double amount) 1000.0))
+                               tile (when valid?
+                                      (block-entity-at world-id
+                                                        (:x query-result)
+                                                        (:y query-result)
+                                                        (:z query-result)))
+                               charged? (when tile
+                                          (try
+                                            (cond
+                                              (energy/is-node-supported? tile)
+                                              (< (double (energy/charge-node tile (double amount) false))
+                                                 (double amount))
+
+                                              (energy/is-receiver-supported? tile)
+                                              (< (double (energy/charge-receiver tile (double amount)))
+                                                 (double amount))
+
+                                              :else false)
+                                            (catch Exception _ false)))]
+                           {:status (if charged? :applied :failed)
+                            :effect effect})
+                         ;; Unconditional self-effect + a client-facing FX
+                         ;; event -- the deleted version never actually
+                         ;; scanned for ore blocks server-side despite the
+                         ;; skill's name; the block detection/highlight is
+                         ;; presumably client-only rendering driven by the
+                         ;; :range/:advanced? params in the vfx step, outside
+                         ;; combat-core's authority. See combat_content.clj's
+                         ;; :mine-detect entry -- it used to gate on a
+                         ;; :block-scan query result, which the real
+                         ;; mechanic never did.
+                         :mine-detect
+                         (let [{:keys [blindness-ticks blindness-amplifier]} effect
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               valid? (and (finite? blindness-ticks)
+                                            (<= 0.0 (double blindness-ticks) 1000.0)
+                                            (finite? blindness-amplifier)
+                                            (<= 0.0 (double blindness-amplifier) 10.0)
+                                            (potion-effects/available?))]
+                           {:status (if (and valid?
+                                              (potion-effects/apply-effect!
+                                               owner :blindness
+                                               (long blindness-ticks)
+                                               (long blindness-amplifier)))
                                       :applied
                                       :failed)
                             :effect effect})
