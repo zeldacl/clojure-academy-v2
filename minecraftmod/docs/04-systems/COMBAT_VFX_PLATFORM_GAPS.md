@@ -26,24 +26,29 @@
 | `21d7b1187` | `mark-teleport`/`penetrate-teleport`/`flashing`/`location-teleport`/`threatening-teleport` query + world-effect，approval-token 桥接机制（见下方 A 节） |
 | `decc4ec30` | `:mag-manip`/`:mag-movement` query + `:mag-manip` 执行器重写（见下方 B 节） |
 | `32eb35ead` | `:groundshock` query + `execute-groundshock!`（传播算法移植，见下方 C-2 节） |
+| `79a93388f` | `:shift-teleport` 独立 query/effect-type + `execute-shift-teleport!`（A 类最后一个技能，见上方 A 节） |
 
 ## 分类清单
 
-### A. 传送类（2026-08-17/18 追加会话，5/6 已完成）
+### A. 传送类（2026-08-17/18 追加会话，6/6 全部完成）
 
 原受影响技能：`mark-teleport`、`penetrate-teleport`、`shift-teleport`、`threatening-teleport`、`flashing`、`location-teleport`。
 
-**执行前的重要发现**：读技能翻译文本后发现 `shift-teleport`/`threatening-teleport` **根本不是玩家传送**，尽管它们和另外 3 个共用同一个 `:teleport-approved-target` world-effect。`shift-teleport`（"将方块运用坐标移动的方式高速发射出去...因为其运动方式...所以并不会因为其速度与质量而影响破坏力"）是一个**块体弹道+路径伤害**机制。**2026-08-18 更新，撤回"没有可复用逻辑"的结论**：和 B 节 mag-manip、C-2 节 groundshock 同一个模式——`a8c000766` 也删除了一份完整的 `shift-teleport` defskill 实现（`ac/content/ability/teleporter/shift_teleport.clj`，787 行 + 445 行测试，机制是"解析瞄准点、能放置就把手持方块放到命中面，不能放就在目标点掉落一件手持物品，然后沿路径造成护甲加成过的技能伤害"）。**没有实现**——只是确认了它同样是可恢复的，未在本轮花时间移植，留给专门处理 A 类剩余项时用。`threatening-teleport`（"将小质量的物品移动到自己附近的某个位置。有时候，只需要一小块体内的碎片就可以对生物造成巨大伤害"）实质是"瞬间对附近敌人造成伤害"，不是真的移动物体。
+**执行前的重要发现**：读技能翻译文本后发现 `shift-teleport`/`threatening-teleport` **根本不是玩家传送**，尽管它们最初和另外 3 个共用同一个 `:teleport-approved-target` world-effect。`threatening-teleport`（"将小质量的物品移动到自己附近的某个位置。有时候，只需要一小块体内的碎片就可以对生物造成巨大伤害"）实质是"瞬间对附近敌人造成伤害"，不是真的移动物体。`shift-teleport` 的翻译文本（"将方块运用坐标移动的方式高速发射出去...因为其运动方式...所以并不会因为其速度与质量而影响破坏力"）第一次读的时候被理解成"块体弹道+路径伤害"物理机制——**读到 `a8c000766` 删除的旧实现后确认这个理解是错的**：真实机制是纯几何（"raycast 一个落点，能放置就把手持方块放到命中面，不能放就在目标点丢一件手持物品，然后对**视线到落点这条线段**相交的所有实体造成伤害"），不涉及任何物理模拟，翻译文本是"这次攻击不受方块质量/速度影响"的文学化说法，不是字面的抛射体描述。
 
-**已完成（mark-teleport、penetrate-teleport、flashing、location-teleport、threatening-teleport）**：
+**已完成（mark-teleport、penetrate-teleport、flashing、location-teleport、threatening-teleport、shift-teleport）**：
 
 - **`mark-teleport`/`penetrate-teleport`/`flashing`**：复用了已经存在、已经过测试、平台无关的目的地求解代码——`ac/content/ability/teleporter/{mark_teleport_dest,penetrate_dest,flashing_dest}.clj`，三个文件都明确标注是"upstream `MTContext`/`PTContext`/`MainContext` 端口"，不是重新发明的逻辑。`flashing` 只做了前方闪现：`combat_content.clj` 的 query 节点没有传 `:direction` 字段（原版支持 WASD 相对方向闪现），固定用 `:forward`，是一个真实的简化，代码里有注释标注。`penetrate-teleport` 的行进算法在 `:available? false`（还在墙里）时正确返回 nil（视为"无目的地"），不会把玩家传送进方块里。
 - **`location-teleport`**：复用了已经完整、已经在跑的已保存位置基础设施（`location_teleport.clj` 的公共函数 `query-location-teleport`、6 个 loader 都装了的 NBT 存储 `named-position-store`），没有重新实现。**故意没有**调用 `location_teleport.clj` 自己的 `perform-location-teleport!`——那个函数有自己的一套 CP 距离公式和冷却逻辑（服务于 RPC/UI 流程），在 world-effect 里调用会和 combat-core 自己声明的 `:cost` 重复扣费。全仓库没有任何"主/默认保存点"的约定（UI 一直是玩家从列表里选名字），给"没有输入名字的快捷键激活"选了一个确定性的默认值——按名字字母序取最靠前的——这是推断的 UX 选择，不是确认过的设计，已在代码注释标注。
 - **`threatening-teleport`（保守实现）**：改为直接造成伤害（`entity-damage/apply-direct-damage!`），不走传送/approval-token 路径。给 `combat_content.clj` 的 world-effect 步骤加了 `:damage (scale 3.0 6.0)`（跟随全文件已有的 `thunder-clap` 等同款模式）。跳过了 `needle-damage-multiplier`（持"针"类物品的伤害加成）与"碎片"掉落概率机制。
+- **`shift-teleport`（`79a93388f`）**：给了它自己独立的 `:shift-teleport` query-type/effect-type，不再借用 `:teleport-target`/`:teleport-approved-target`（这两个的形状本来就装不下它的落点/放置/线段伤害数据，之前 `:mode :shift` 只是落进 `:teleport-approved-target` 的默认分支后因为不在 `ability-id` 白名单里干净地失败）。
+  - query（`combat_runtime.clj`，纯几何，不碰 Player 对象）：raycast 落点（命中方块用 face-offset 求放置坐标，未命中用光线终点），再对"视线原点→落点"线段做 segment-vs-AABB 扫描（`world-effects/find-entities-in-aabb`，已是中立/uuid 接口）找出所有相交实体。
+  - world-effect `execute-shift-teleport!`（`platform-src`）：用 `query-core/get-player-by-uuid` 解析出真实 `Player` 对象后调用 `mcmod.platform.entity` 的手持物品函数（能不能放置、放置、消耗、丢弃、创造模式复制丢弃），放置或丢弃成功后对扫描到的每个实体造成一次性伤害。**没有**移植旧版的护甲加成/暴击伤害管线（那属于已删除的 Context 伤害系统）和经验获取，直接用 `entity-damage/apply-direct-damage!` 打固定值，和本轮其它技能的简化方式一致。
+  - 顺带修了一个从未被注意到的遗漏：`ac/ability/skill_config/teleporter.clj` 里 shift-teleport 的 schema 声明了 `cost.up.overload [40.0 30.0]`，但 `combat_content.clj` 的 `:cost` 从来只有 `:cp`，没有 `:overload`——已补上 `(scale 40.0 30.0)`。
 
-**approval-token 桥接机制**：`mcmod/platform/teleportation.clj` 新增 `mint-approval-token!`/`redeem-approval-token!`（内存 atom，短 TTL）。不是安全边界——query 和 world-effect 在同一次 intent dispatch 内同步执行，中间不经过真实时间——只是为了让 `teleport-approved-target!` 的既有函数签名（`owner ability-id approval-token mode`）在全部玩家传送 mode 上保持统一。`combat_runtime.clj` 的 `:teleport-approved-target` case 改为按 `mode` 分派：`:threatening` 直接扣血；`:mark`/`:penetrate`/`:flashing` 铸造 token 走真实传送；`:shift-teleport` 落进同一分支但因为不在 `ability-id` 白名单里而干净地失败（不会崩，只是 `:status :failed`）。
+**approval-token 桥接机制**：`mcmod/platform/teleportation.clj` 新增 `mint-approval-token!`/`redeem-approval-token!`（内存 atom，短 TTL）。不是安全边界——query 和 world-effect 在同一次 intent dispatch 内同步执行，中间不经过真实时间——只是为了让 `teleport-approved-target!` 的既有函数签名（`owner ability-id approval-token mode`）在真正的玩家传送 mode 上保持统一。`combat_runtime.clj` 的 `:teleport-approved-target` case 按 `mode` 分派：`:threatening` 直接扣血；`:mark`/`:penetrate`/`:flashing` 铸造 token 走真实传送。`shift-teleport` 有了自己的独立 op 之后，`:teleport-approved-target` 里原来处理它"干净失败"的注释和分支已经删掉——不再需要，因为它已经不会再被送进这个 op。
 
-**仍然推迟（`shift-teleport`）**：核心机制是块体弹道 + 路径伤害。**2026-08-18 更新**：按 C-2 节 groundshock 的路子查过 git 历史，`a8c000766` 确实删除了一份可用的 `shift-teleport` defskill 实现（见上方 A 节开头的更新说明）——所以"没有权威参考实现"这个理由不再成立，真正推迟的原因只剩"本轮没有排这个任务"，不是设计判断阻塞。下次有人接手时可以直接按 groundshock/mag-manip 的路子移植，不需要再重新论证。
+**方法论备注（写给下一个接手的人）**：这一节连续三次证明"这个技能需要设计判断/权威实现"是可以被 git 历史推翻的假阳性（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制）。`a8c000766`（combat-core 迁移提交）删除的旧 defskill 链几乎覆盖了全部 37 个技能，其中很多在删除前是完整、调好参、带测试的实现。**下次遇到"没有可复用逻辑/权威参考实现"这类结论时，先跑一遍 `git log --diff-filter=D -- "*<skill-name>*"` 再相信它**，比先假定"需要设计输入"再去论证要快得多，也更准。
 
 **验证状态**：`:ac:checkClojure`、`:platform:compileClojure`（`forge-1.20.1`/`neoforge-1.21.1`）通过，`verifyCombatSkillCoverage` 报告 38 个技能一致，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——`mark-teleport`/`penetrate-teleport`/`flashing` 的落点几何计算、`location-teleport` 的默认位置选择，这些都需要进游戏确认才能信任。
 
@@ -53,7 +58,9 @@
 
 **mag-movement：直接可做，无新平台面**。`execute-mag-movement!`（platform-src 早已实现且可用）只需要 query 产出 `:target-x`/`:target-y`/`:target-z`。实现：raycast 沿视线方向找 `is-metal-block?` 命中的方块（`raycast/raycast-blocks-matching` + `ability-config/get-normal-metal-blocks`/`get-weak-metal-blocks`），返回命中方块中心点。
 
-**mag-manip：比预想复杂得多**。旧版 `execute-mag-manip!` 读 `:entity-uuid`/`:position`/`:throw-target`，对应旧 defskill 的真实机制：抓取时生成一个**真实物理实体**（`ScriptedBlockBodyEntity`，三个 MC 版本都完整保留，`entity-motion` adapter 也仍在），悬浮跟随视角，松手后靠自己的碰撞造成伤害/放置方块。要接上这套机制需要一个新的 uuid→Player 平台操作——`mcmod.platform.entity` 里所有的生成/手持物品函数（`player-spawn-tracked-entity-by-id!`、`player-get-main-hand-item-id` 等）都要求调用方已经拿到一个 `Player` 对象，而 combat-core 的 query-port 函数手里只有 uuid 字符串；`raycast`/`block-manipulation` 之所以能在 query 侧直接用，是因为它们的平台适配器自己内部做了 `query-core/get-player-by-uuid` 解析，`entity.clj` 没有这一层。工作量接近整个 A 类传送，已和用户确认改用保守简化版：
+**mag-manip：比预想复杂得多**。旧版 `execute-mag-manip!` 读 `:entity-uuid`/`:position`/`:throw-target`，对应旧 defskill 的真实机制：抓取时生成一个**真实物理实体**（`ScriptedBlockBodyEntity`，三个 MC 版本都完整保留，`entity-motion` adapter 也仍在），悬浮跟随视角，松手后靠自己的碰撞造成伤害/放置方块。`mcmod.platform.entity` 里所有的生成/手持物品函数（`player-spawn-tracked-entity-by-id!`、`player-get-main-hand-item-id` 等）都要求调用方已经拿到一个 `Player` 对象，而 combat-core 的 query-port 函数（`combat_runtime.clj`，AC 层）手里只有 uuid 字符串，没有办法解析出 `Player`。
+
+**2026-08-18 更新，修正当时的误判**：当时把这个写成"需要新增 uuid→Player 平台操作，工作量接近整个 A 类"——**这是错的**。`query-core/get-player-by-uuid` 这个解析函数早就存在，而且本轮从 storm-wing 开始就一直在用（`platform-src/.../adapter/world_effects.clj` 里 `execute-storm-wing!`/`execute-mag-movement!`/`execute-light-shield!`/`execute-electron-missile!`/`execute-scatter-bomb!` 全部靠它拿到真 `Player` 对象）。真正的限制窄得多：**这个解析函数只存在于 platform-src，AC 层的 query-port 永远拿不到**——所以像"生成/操作手持物品这种需要 `Player` 对象的逻辑，必须整个放进 world-effect 执行器（platform-src），不能放进 query（AC 层）"。这正是后来实现 shift-teleport（同样需要操作手持物品）时用的办法，且完全不需要新平台设施，见上方 A 节。mag-manip 要走物理实体版本，需要的不是"新平台操作"，是把抓取/悬浮/抛掷的整个流程从 query 挪到 world-effect 里重写——工作量比当时估的小，但仍然比保守版大得多，本轮未重新评估这笔投入是否值得，`execute-mag-manip!` 仍是保守直接伤害版：
 
 **已完成的保守实现**：
 - `:start`（抓取）query：raycast 找视线前方 `grab-range` 内的金属方块，用 `block-manipulation/can-break-block?`/`break-block!` 击碎，把 `{:block-id :world-id}` 存进一个 owner-keyed 原子 `mag-manip-held*`（`combat_runtime.clj`，AC 层）。这是 mine-ray/electron-missile 已经用过的"外部原子桥接跨 tick 状态"技巧，放在 query 侧是因为抓取阶段不需要任何实体生成 API。
@@ -138,11 +145,11 @@
 ## 建议的下手顺序
 
 1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
-2. ~~C 类 4 个技能~~ / ~~C-2 类 6 个技能点（含 groundshock）~~ / ~~D 类 `:knockback`~~ / ~~A 类 5 个技能（mark/penetrate/flashing/location-teleport/threatening-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip/groundshock 的部分数值是推断/移植自旧配置的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
-3. **"需要设计判断"这个分类要重新审视——已经两次被证明是假的**（mag-manip 的金属判定、groundshock 的传播算法都在 git 历史里找到了 combat-core 迁移时删掉的完整实现）。`shift-teleport` 也一样：`a8c000766` 同样删除了它的 defskill 实现（787 行 + 445 行测试，见上方 A 节），**不是设计阻塞，只是本轮没排上**，可以直接照 groundshock/mag-manip 的路子移植，不需要再论证。真正剩下的两类：
-   - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）；mag-manip 若要还原成真实物理实体悬浮/抛掷（而非当前的保守直接伤害版），需要新增 uuid→Player 平台操作，工作量接近整个 A 类，已确认不在本轮做。
-   - **需要设计/游戏手感输入（未在 git 历史查到可恢复实现）**：D 类的 `:charge-energy`/`:mine-detect`。
-   - **可恢复但未做**：A 类 `shift-teleport`（1 个技能）。
+2. ~~C 类 4 个技能~~ / ~~C-2 类 6 个技能点（含 groundshock）~~ / ~~D 类 `:knockback`~~ / ~~A 类全部 6 个技能（含 shift-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip/groundshock/shift-teleport 的部分数值是推断/移植自旧配置的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
+3. **"需要设计判断"这个分类已经连续三次被证明是假阳性**（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制，全都在 git 历史里找到了 `a8c000766`——combat-core 迁移那次提交——删掉的完整实现）。**下次遇到类似结论，先 `git log --diff-filter=D -- "*<skill-name>*"` 查一遍再采信**，不要重复"假设需要设计输入→论证→被推翻"这个循环。真正剩下的：
+   - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
+   - **可恢复但要重写现有实现**：mag-manip 若要从当前的保守直接伤害版还原成真实物理实体悬浮/抛掷，不需要新平台设施（`query-core/get-player-by-uuid` 已经在到处用），但需要把抓取/悬浮/抛掷整个流程从 query 挪到 world-effect 重写，工作量比保守版大不少，本轮未评估是否值得。
+   - **需要设计/游戏手感输入（已查过 git 历史，未找到可恢复实现）**：D 类的 `:charge-energy`/`:mine-detect`。
 4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
