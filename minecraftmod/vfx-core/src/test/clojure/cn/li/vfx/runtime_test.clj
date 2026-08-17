@@ -135,6 +135,26 @@
                           #"schema version mismatch"
                           (contract/validate-host-api {:schema-version 99})))))
 
+(def ^:private minimal-required-host-api
+  (into {:schema-version contract/schema-version}
+        (map (fn [k] [k (fn [& _] nil)]))
+        (disj contract/required-host-operations :schema-version)))
+
+(deftest abi-accepts-a-well-formed-minimal-host-api
+  (testing "a host API with every required op, no optional camera ops, and a
+            non-callable :schema-version value validates cleanly -- :schema-
+            version's own value must not be swept into the ifn? completeness
+            check alongside the real operation keys"
+    (is (= minimal-required-host-api
+           (contract/validate-host-api minimal-required-host-api)))))
+
+(deftest abi-rejects-a-present-but-malformed-optional-operation
+  (testing "an optional op, if present at all, still has to be callable"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"malformed optional"
+                          (contract/validate-host-api
+                           (assoc minimal-required-host-api :fov-offset "not-a-fn"))))))
+
 (deftest resource-reload-invalidates-frame
   (let [rt (runtime/create-runtime)]
     (runtime/register-effect! rt (test-effect))

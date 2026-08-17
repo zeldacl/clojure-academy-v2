@@ -75,9 +75,16 @@
   (assoc value :schema-version schema-version))
 
 (def required-host-operations
+  "Operations every host API must provide: the core tick/sample/frame
+   lifecycle that vfx-core needs regardless of what content it's running."
   #{:schema-version :required-anchors :tick! :sample-frame! :frame-stage :latest-frame-stage :release-frame!
-    :clear-world! :resource-snapshot :reload-resources!
-    :active? :fov-offset :drain-camera-pitch-deltas!})
+    :clear-world! :resource-snapshot :reload-resources!})
+
+(def optional-host-operations
+  "Camera-specific capability, not part of the core lifecycle. A host API
+   without a first-person/camera consumer legitimately has no use for
+   these; only validate their type when the key is actually present."
+  #{:active? :fov-offset :drain-camera-pitch-deltas!})
 
 (defn validate-host-api [api]
   (when-not (map? api)
@@ -85,7 +92,16 @@
   (when-not (= schema-version (:schema-version api))
     (throw (ex-info "VFX ABI schema version mismatch"
                     {:expected schema-version :actual (:schema-version api)})))
-  (let [missing (remove #(ifn? (get api %)) required-host-operations)]
+  ;; :schema-version is itself in required-host-operations (it's a required
+  ;; key) but its value is the integer checked above, never a function --
+  ;; folding it into this ifn? sweep meant every well-formed host API,
+  ;; including AC's own, always failed with {:missing [:schema-version]}.
+  (let [missing (remove #(ifn? (get api %)) (disj required-host-operations :schema-version))]
     (when (seq missing)
       (throw (ex-info "VFX host API is incomplete" {:missing (vec missing)}))))
+  (let [present-optional (filter #(contains? api %) optional-host-operations)
+        malformed (remove #(ifn? (get api %)) present-optional)]
+    (when (seq malformed)
+      (throw (ex-info "VFX host API has a malformed optional operation"
+                      {:malformed (vec malformed)}))))
   api)
