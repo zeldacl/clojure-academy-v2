@@ -25,6 +25,7 @@
 | `9d7c1fa72` | `:knockback` world-effect case 分支 + `execute-knockback!`（`directed-shock`，见下方 D 节） |
 | `21d7b1187` | `mark-teleport`/`penetrate-teleport`/`flashing`/`location-teleport`/`threatening-teleport` query + world-effect，approval-token 桥接机制（见下方 A 节） |
 | `decc4ec30` | `:mag-manip`/`:mag-movement` query + `:mag-manip` 执行器重写（见下方 B 节） |
+| `32eb35ead` | `:groundshock` query + `execute-groundshock!`（传播算法移植，见下方 C-2 节） |
 
 ## 分类清单
 
@@ -32,7 +33,7 @@
 
 原受影响技能：`mark-teleport`、`penetrate-teleport`、`shift-teleport`、`threatening-teleport`、`flashing`、`location-teleport`。
 
-**执行前的重要发现**：读技能翻译文本后发现 `shift-teleport`/`threatening-teleport` **根本不是玩家传送**，尽管它们和另外 3 个共用同一个 `:teleport-approved-target` world-effect。`shift-teleport`（"将方块运用坐标移动的方式高速发射出去...因为其运动方式...所以并不会因为其速度与质量而影响破坏力"）是一个**块体弹道+路径伤害**机制，没有任何弹道/传播算法可复用，和 groundshock 同一复杂度级别。`threatening-teleport`（"将小质量的物品移动到自己附近的某个位置。有时候，只需要一小块体内的碎片就可以对生物造成巨大伤害"）实质是"瞬间对附近敌人造成伤害"，不是真的移动物体。
+**执行前的重要发现**：读技能翻译文本后发现 `shift-teleport`/`threatening-teleport` **根本不是玩家传送**，尽管它们和另外 3 个共用同一个 `:teleport-approved-target` world-effect。`shift-teleport`（"将方块运用坐标移动的方式高速发射出去...因为其运动方式...所以并不会因为其速度与质量而影响破坏力"）是一个**块体弹道+路径伤害**机制。**2026-08-18 更新，撤回"没有可复用逻辑"的结论**：和 B 节 mag-manip、C-2 节 groundshock 同一个模式——`a8c000766` 也删除了一份完整的 `shift-teleport` defskill 实现（`ac/content/ability/teleporter/shift_teleport.clj`，787 行 + 445 行测试，机制是"解析瞄准点、能放置就把手持方块放到命中面，不能放就在目标点掉落一件手持物品，然后沿路径造成护甲加成过的技能伤害"）。**没有实现**——只是确认了它同样是可恢复的，未在本轮花时间移植，留给专门处理 A 类剩余项时用。`threatening-teleport`（"将小质量的物品移动到自己附近的某个位置。有时候，只需要一小块体内的碎片就可以对生物造成巨大伤害"）实质是"瞬间对附近敌人造成伤害"，不是真的移动物体。
 
 **已完成（mark-teleport、penetrate-teleport、flashing、location-teleport、threatening-teleport）**：
 
@@ -42,7 +43,7 @@
 
 **approval-token 桥接机制**：`mcmod/platform/teleportation.clj` 新增 `mint-approval-token!`/`redeem-approval-token!`（内存 atom，短 TTL）。不是安全边界——query 和 world-effect 在同一次 intent dispatch 内同步执行，中间不经过真实时间——只是为了让 `teleport-approved-target!` 的既有函数签名（`owner ability-id approval-token mode`）在全部玩家传送 mode 上保持统一。`combat_runtime.clj` 的 `:teleport-approved-target` case 改为按 `mode` 分派：`:threatening` 直接扣血；`:mark`/`:penetrate`/`:flashing` 铸造 token 走真实传送；`:shift-teleport` 落进同一分支但因为不在 `ability-id` 白名单里而干净地失败（不会崩，只是 `:status :failed`）。
 
-**仍然推迟（`shift-teleport`）**：核心机制是块体弹道 + 路径伤害，没有可复用的传播/弹道算法，也没有权威参考实现——和 C-2 节的 `groundshock` 同一档，需要设计输入，已与用户确认单独推迟。
+**仍然推迟（`shift-teleport`）**：核心机制是块体弹道 + 路径伤害。**2026-08-18 更新**：按 C-2 节 groundshock 的路子查过 git 历史，`a8c000766` 确实删除了一份可用的 `shift-teleport` defskill 实现（见上方 A 节开头的更新说明）——所以"没有权威参考实现"这个理由不再成立，真正推迟的原因只剩"本轮没有排这个任务"，不是设计判断阻塞。下次有人接手时可以直接按 groundshock/mag-manip 的路子移植，不需要再重新论证。
 
 **验证状态**：`:ac:checkClojure`、`:platform:compileClojure`（`forge-1.20.1`/`neoforge-1.21.1`）通过，`verifyCombatSkillCoverage` 报告 38 个技能一致，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——`mark-teleport`/`penetrate-teleport`/`flashing` 的落点几何计算、`location-teleport` 的默认位置选择，这些都需要进游戏确认才能信任。
 
@@ -73,11 +74,11 @@
 - **meltdowner 是保守实现**：只对 raycast 命中的单一目标造成伤害。`beam-radius`/`block-energy`（沿光束熔化方块）和 `:reflection` 字段（Vector-Reflection 被动联动）**故意没有实现**——这块和 B 节的 mag-manip 一样需要设计判断，不是可以照抄平台原语的低风险填空，代码里留了注释指回本文档。
 - **意外发现一个更大范围的既有问题，没有在本次改动范围内修**：`platform-src/minecraft/base/.../DamageSourceAccess.java` 的 `resolveKeyword` 只认识 `:magic`/`:lightning`/`:explosion`/`:generic`/`:skill`/`:vec-reflection` 六个 damage-type 关键字，`combat_content.clj` 里广泛使用的 `:electric`/`:vector`/`:teleporter` 都会落进 `default -> "generic"`。这不是我这次改动引入的——thunder-bolt 等已经"能用"的技能同样受影响（它们的 `:damage`/`:damage-targets` world-effect 最终也调用同一个 `resolveKeyword`）。伤害本身仍然会打（不会报错、不会变成 0），只是没有拿到对应伤害类型的护甲穿透/抗性/免疫特殊处理。新的 4 个执行器延续了这个既有行为（用 `:electric`/`:vector` 标签，和 content 里的现有约定保持一致），没有引入新的不一致，但值得单独排查是否要给 `resolveKeyword` 补齐这几个关键字。
 
-### C-2. 其余 7 个技能：query + world-effect 执行器（2026-08-17 追加会话，5/7 已完成）
+### C-2. 其余 7 个技能：query + world-effect 执行器（2026-08-17/18 追加会话，6/7 已完成）
 
 原受影响技能：`jet-engine`、`light-shield`、`storm-wing`、`electron-missile`、`scatter-bomb`、`groundshock`、`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`（8 个 skill id，7 个技能点，因为 `groundshock` 与 `mine-ray` 三个共用 `:block-scan` query）。这批的 query 侧也没有真实实现，修复需要 query+执行器两层都补，比 C 节工作量更大。
 
-**已完成（mine-ray-basic/expert/luck、storm-wing、light-shield、electron-missile、scatter-bomb，共 5 个技能点 / 7 个 skill id）**：
+**已完成（mine-ray-basic/expert/luck、storm-wing、light-shield、electron-missile、scatter-bomb、groundshock，共 6 个技能点 / 8 个 skill id）**：
 
 - **`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`**：`:block-scan` query 用 `cn.li.mcmod.platform.block-manipulation/find-blocks-in-line`（沿视线找方块，已是完整安装的平台原语，`groundshock` 的方块破坏权限检查也依赖同一个 port）扫描视线上第一个非空气方块。`execute-mine-ray!` 实现渐进式挖掘——`break-speed` 是每 tick 累加进目标方块 `hardness` 的进度量，不是"瞬间达标"阈值（mine-ray-basic 的 0.2-0.4 远低于常见方块硬度），用 owner-keyed 本地 atom 跟踪进度，换目标方块会重置进度。
 - **`storm-wing`**：query 是纯 no-op（`{}`）——世界效果的 `valid?` 只检查 `query-result` 是 map，不读取内容。`execute-storm-wing!` 复用已验证过的移动类原语（`player-motion`），朝视线方向推进（低于 `speed-threshold` 时用 `speed-scale` 加速），并按 `is-on-ground-for-player?` 在贴地/空中悬浮速度间切换。
@@ -85,13 +86,16 @@
   - `light-shield` 只实现 `touch-damage`（对 `touch-radius` 内、`front-cone-degrees` 锥形范围内的敌人造成伤害）；`absorb-damage`（被动伤害吸收）**没有实现**——需要 hook 伤害管线，这个架构在全仓库任何地方都不存在。
   - `electron-missile` 用 owner-keyed 本地 atom 按 `fire-interval` 节流，每次触发对 `seek-range` 内最近目标造成一次瞬间伤害，**没有**实际的追踪弹球实体/视觉。
   - `scatter-bomb` 对 `auto-aim-radius` 内最近的至多 `ball-count` 个目标瞬间造成伤害，**没有**实际的弹丸散射视觉/物理；`anti-afk-tick`/`anti-afk-damage`（防挂机机制）也没有实现，触发时机需要设计输入。
+- **`groundshock`**（`32eb35ead`）：**上一版工单"没有可复用传播算法/权威参考实现"的结论是错的**，和 B 节 mag-manip 同一个模式——`a8c000766`（combat-core 迁移提交）删除了一份完整、带测试的 groundshock defskill 实现（DDA line-plotter 传播 + 能量预算式方块转换/破坏 + 沿视线方向的实体伤害/击飞，是原版 AcademyCraft 算法的移植），连它完整调校过的配置 schema 都原封不动留在 `ac/ability/skill_config/vecmanip.clj` 里没删。`combat_content.clj` 现有的 `:groundshock` world-effect 步骤（`init-energy` [60,120]、`max-iterations` [10,25]、`entity-search-radius` 2.0、`launch-scale` [0.8,1.3] 等）逐字段对得上这份 schema 的默认值——说明当初写 DSL content 的人已经忠实移植过参数，只是从没写执行器去读它们。
+  - query：起点（脚下一格）+ 水平朝向（长度归一化，为 0 时返回 nil——旧代码的"退化时回落到 +Z"由 `targeting.horizontal-look-fallback` 配置项控制，默认值是 `false`，即默认行为其实是"不回落，技能直接不触发"，不是"总是回落"；第一版实现搞反了这个默认值，写执行器之前已核实修正）。
+  - `execute-groundshock!`：完整移植传播循环、plotter/spread 数学（**逐 bug 保留**了原版 `Vec3d.rotateYaw(90)` 传的是 90 弧度而不是 90 度转弧度——这是有记录的上游怪癖，不是笔误）、shock-box 实体重叠判定、按方块类型区分的能量消耗。跳过了旧版"100% 经验时半径内方块全破坏"的 mastery-ring 加成——`combat_content.clj` 的 world-effect 步骤从没把这个机制的调参旋钮暴露进 DSL content，移植也就没有东西可读。
+  - 顺带修了一个无关 bug：`:groundshock` world-effect case 的 `valid?` 校验一直把 `drop-rate` 当 2 元素 vector 检查，但 combat-core 的 `:world-effect` op 会对整个 node（含嵌套 map 值）递归跑 `resolve-data`，所以 content 里 `:breaking {:drop-rate (scale 0.3 1.0)}` 送到这里时早就被解析成标量 double 了，vector 形状永远不可能出现。因为 `execute-groundshock!` 之前从未安装，这条 `valid?` 也从没被真正跑过。已改为校验标量范围，并给 world-effect 步骤加了 `:energy-cost {:stone :grass-block :farmland :default-block}`（取自恢复出来的 schema 默认值），让每种方块的能量消耗调参留在 DSL content 里，不写死在 platform-src。
 
-**仍然推迟（jet-engine、groundshock）**：
+**仍然推迟（jet-engine）**：
 
-- **`jet-engine`**：调查后发现它和上面 5 个不同类——它的 query/require/world-effect 全部只在 session **release 时触发一次**（不是每 tick），且效果本该是"延迟 `trigger-time-ticks` 后才发作、`trigger-lifetime-ticks` 后过期"的定时雷区。**全平台层没有任何延迟调度基础设施**——`ac.ability.service.delayed_projectiles` 是 AC 层的延迟效果系统，但 platform 代码不能依赖 AC（方向反转）。写"瞬间伤害版本"会丢失延迟这个定义性特征，等于换了一个技能而不是简化——已与用户确认，不写这个版本，等平台层有通用延迟调度设施后再做。
-- **`groundshock`**：核心机制是"从冲击点向外传播 N 次迭代的地面冲击波"（`max-iterations`/`init-energy`/`launch-scale` 等参数）。传播的具体算法、范围、形态属于技能手感设计决策，没有可复用原语，也没有权威参考实现可核实——已与用户确认单独推迟。
+- **`jet-engine`**：调查后发现它和上面几个不同类——它的 query/require/world-effect 全部只在 session **release 时触发一次**（不是每 tick），且效果本该是"延迟 `trigger-time-ticks` 后才发作、`trigger-lifetime-ticks` 后过期"的定时雷区。**全平台层没有任何延迟调度基础设施**——`ac.ability.service.delayed_projectiles` 是 AC 层的延迟效果系统，但 platform 代码不能依赖 AC（方向反转）。写"瞬间伤害版本"会丢失延迟这个定义性特征，等于换了一个技能而不是简化——已与用户确认，不写这个版本，等平台层有通用延迟调度设施后再做。
 
-**要做的事（仅剩 jet-engine、groundshock）**：需要先有平台层通用延迟调度设施（jet-engine）和明确的传播算法设计输入（groundshock），才能继续实现对应的 query + `execute-jet-engine!`/`execute-groundshock!`。`combat_runtime.clj` 里两者的 `valid?` 已经写好，能看出各自执行器该接收什么形状的 `plan`。
+**要做的事（仅剩 jet-engine）**：需要先有平台层通用延迟调度设施，才能继续实现对应的 query + `execute-jet-engine!`。`combat_runtime.clj` 里它的 `valid?` 已经写好，能看出执行器该接收什么形状的 `plan`。
 
 **验证状态**：以上全部改动已跑 `:ac:checkClojure` 通过，`:platform:compileClojure` 在 `forge-1.20.1`/`neoforge-1.21.1` 两个目标上编译通过，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——编译通过只说明代码类型正确、能加载，不代表游戏里数值平衡或手感符合预期，尤其是 light-shield/electron-missile/scatter-bomb 三个保守实现版本的行为已经偏离技能原本设计。
 
@@ -134,10 +138,11 @@
 ## 建议的下手顺序
 
 1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
-2. ~~C 类 4 个技能~~ / ~~C-2 类 5 个技能点~~ / ~~D 类 `:knockback`~~ / ~~A 类 5 个技能（mark/penetrate/flashing/location-teleport/threatening-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip 的伤害数值是推断的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
-3. **剩下能不靠设计判断直接做的都做完了**。剩余项分两类：
+2. ~~C 类 4 个技能~~ / ~~C-2 类 6 个技能点（含 groundshock）~~ / ~~D 类 `:knockback`~~ / ~~A 类 5 个技能（mark/penetrate/flashing/location-teleport/threatening-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip/groundshock 的部分数值是推断/移植自旧配置的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
+3. **"需要设计判断"这个分类要重新审视——已经两次被证明是假的**（mag-manip 的金属判定、groundshock 的传播算法都在 git 历史里找到了 combat-core 迁移时删掉的完整实现）。`shift-teleport` 也一样：`a8c000766` 同样删除了它的 defskill 实现（787 行 + 445 行测试，见上方 A 节），**不是设计阻塞，只是本轮没排上**，可以直接照 groundshock/mag-manip 的路子移植，不需要再论证。真正剩下的两类：
    - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）；mag-manip 若要还原成真实物理实体悬浮/抛掷（而非当前的保守直接伤害版），需要新增 uuid→Player 平台操作，工作量接近整个 A 类，已确认不在本轮做。
-   - **需要设计/游戏手感输入**：C-2 类的 `groundshock`（传播算法）、D 类的 `:charge-energy`/`:mine-detect`、A 类的 `shift-teleport`（方块投射物物理，1 个技能）。
+   - **需要设计/游戏手感输入（未在 git 历史查到可恢复实现）**：D 类的 `:charge-energy`/`:mine-detect`。
+   - **可恢复但未做**：A 类 `shift-teleport`（1 个技能）。
 4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
