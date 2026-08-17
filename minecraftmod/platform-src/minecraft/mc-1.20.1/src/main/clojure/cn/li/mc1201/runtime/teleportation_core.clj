@@ -8,4 +8,6 @@
 (def reset-fall-damage! shared/reset-fall-damage!)
 (def get-player-position shared/get-player-position)
 (def get-player-dimension shared/get-player-dimension)
+(def teleport-approved-location! shared/teleport-approved-location!)
+(def teleport-approved-target! shared/teleport-approved-target!)
 (def create-teleportation shared/create-teleportation)

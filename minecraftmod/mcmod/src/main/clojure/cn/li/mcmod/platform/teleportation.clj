@@ -15,6 +15,44 @@
                       {:operation kind :installed (keys ops)})))
     (apply f args)))
 
+;; Bridges a server-computed destination from a combat-core world-effect
+;; case (AC layer, mints the token right after resolving/validating a
+;; target) to the platform teleport-approved-target! implementation below
+;; (which redeems it). Both sides already depend on this neutral namespace,
+;; so it's the natural shared home -- no new module needed. Tokens are only
+;; ever minted and redeemed within the same synchronous intent dispatch (no
+;; real time passes between a combat-core query and its own world-effect
+;; step), so a short in-memory TTL is a safety margin, not a real
+;; requirement; it exists so a redemption bug can't leak entries forever
+;; rather than to bridge an actual asynchronous gap.
+(defonce ^:private approval-tokens* (atom {}))
+(def ^:private token-ttl-ms 10000)
+
+(defn- prune-expired [tokens now]
+  (into {} (filter (fn [[_ v]] (> (long (:expires-at v)) now))) tokens))
+
+(defn mint-approval-token!
+  "Store `data` under a fresh opaque token, redeemable exactly once via
+   redeem-approval-token! within token-ttl-ms."
+  [data]
+  (let [token (str (java.util.UUID/randomUUID))
+        now (System/currentTimeMillis)]
+    (swap! approval-tokens*
+           (fn [tokens]
+             (assoc (prune-expired tokens now) token
+                    {:data data :expires-at (+ now token-ttl-ms)})))
+    token))
+
+(defn redeem-approval-token!
+  "Consume and return the data behind `token`, or nil if unknown/expired/
+   already redeemed."
+  [token]
+  (let [now (System/currentTimeMillis)
+        [old _] (swap-vals! approval-tokens* dissoc token)
+        entry (get old token)]
+    (when (and entry (> (long (:expires-at entry)) now))
+      (:data entry))))
+
 (defn teleport-player!
   [owner world-id x y z]
   (boolean (call :teleport-player! owner world-id

@@ -22,6 +22,10 @@
             [cn.li.mcmod.platform.teleportation :as teleportation]
             [cn.li.ac.ability.effects.geom :as geom]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
+            [cn.li.ac.content.ability.teleporter.location-teleport :as location-teleport]
+            [cn.li.ac.content.ability.teleporter.mark-teleport-dest :as mark-teleport-dest]
+            [cn.li.ac.content.ability.teleporter.penetrate-dest :as penetrate-dest]
+            [cn.li.ac.content.ability.teleporter.flashing-dest :as flashing-dest]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
 (defonce ^:private engine* (atom nil))
@@ -241,6 +245,43 @@
                          (remove :ac-vm-deviated?)
                          (take 64)
                          vec)}))))
+
+(defn- skill-exp-of
+  "Mirror combat-core runtime's own private skill-exp lookup (same paths)
+   for query implementations that need an ability's exp level directly --
+   e.g. to scale a *-dest.clj destination solver's own max-distance."
+  [context ability-id]
+  (double (or (get-in context [:state :ability-data :skill-exps ability-id])
+              (get-in context [:state :skill-exp ability-id])
+              0.0)))
+
+(defn- resolve-scale
+  "Resolve a raw {:op :scale :min :max} node field against exp. Only
+   :distance/:range/:aoe-radius node keys are auto-resolved by combat-core's
+   own :query op before a query-port fn ever sees `node` -- other keys like
+   :max-range arrive as this unresolved expression."
+  [expr exp]
+  (if (and (map? expr) (= :scale (:op expr)))
+    (let [lo (double (:min expr)) hi (double (:max expr))]
+      (+ lo (* (- hi lo) (max 0.0 (min 1.0 (double exp))))))
+    (double (or expr 0.0))))
+
+(defn- nearest-entity-in-range
+  [world-id origin radius excluded]
+  (when (world-effects/available?)
+    (let [candidates (->> (world-effects/find-entities-in-radius
+                            world-id (double (:x origin)) (double (:y origin)) (double (:z origin))
+                            (double radius))
+                           (filter map?)
+                           (remove #(contains? excluded (str (or (:uuid %) (:entity-id %))))))]
+      (when (seq candidates)
+        (apply min-key
+               (fn [{:keys [x y z]}]
+                 (let [dx (- (double (or x 0.0)) (double (:x origin)))
+                       dy (- (double (or y 0.0)) (double (:y origin)))
+                       dz (- (double (or z 0.0)) (double (:z origin)))]
+                   (+ (* dx dx) (* dy dy) (* dz dz))))
+               candidates)))))
 
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
@@ -570,11 +611,103 @@
                                 ;; bomb! does its own targeting.
                                 {}))
               :saved-location (fn [context node]
-                                (when-let [host-query (contract/host-port :query)]
-                                  (host-query :saved-location context node)))
-              :teleport-target (fn [context node]
-                                 (when-let [host-query (contract/host-port :query)]
-                                   (host-query :teleport-target context node)))
+                                (if-let [host-query (contract/host-port :query)]
+                                  (host-query :saved-location context node)
+                                  ;; No "home"/primary-location convention
+                                  ;; exists anywhere in this codebase (the
+                                  ;; RPC-driven UI in location_teleport.clj
+                                  ;; always teleports by an explicit name the
+                                  ;; player picked). For a hotbar-slot
+                                  ;; activation with no name input, fall back
+                                  ;; to the alphabetically-first saved name --
+                                  ;; deterministic and simple, but an inferred
+                                  ;; UX choice, not a confirmed design. Revisit
+                                  ;; if it turns out players expect something
+                                  ;; else (most-recently-saved, a reserved
+                                  ;; "home" name, ...).
+                                  (let [owner (:owner context)
+                                        locations (:locations
+                                                   (location-teleport/query-location-teleport (str owner)))
+                                        location-name (->> locations (map :name) sort first)]
+                                    (when location-name {:location-id location-name}))))
+              :teleport-target
+              (fn [context node]
+                (if-let [host-query (contract/host-port :query)]
+                  (host-query :teleport-target context node)
+                  (let [owner (:owner context)
+                        world-id (geom/world-id-of owner)
+                        exp (skill-exp-of context (:ability-id context))
+                        cp (double (or (get-in context [:state :resources :cp]) 0.0))
+                        hold-ticks (double (or (get-in context [:session-state :hold-ticks]) 0.0))
+                        head-blocked? (fn [x y z]
+                                        (block-manipulation/block-collidable?
+                                         world-id x (inc (long y)) z))]
+                    (case (:mode node)
+                      :mark
+                      (let [eye (geom/eye-pos owner)
+                            look (when (raycast/available?) (raycast/player-look-vector owner))
+                            dist (mark-teleport-dest/max-distance exp cp hold-ticks)
+                            hit (when (and look (raycast/available?))
+                                  (raycast/raycast-from-player owner dist true))
+                            dest (when look
+                                   (mark-teleport-dest/destination
+                                    {:hit hit :head-blocked? head-blocked?
+                                     :x (:x eye) :eye-y (:y eye) :z (:z eye)
+                                     :look-vec look :dist dist}))]
+                        (when (and dest
+                                   (>= (mark-teleport-dest/distance-from
+                                        (:x eye) (:y eye) (:z eye) dest)
+                                       (mark-teleport-dest/min-distance)))
+                          {:x (:target-x dest) :y (:target-y dest) :z (:target-z dest)}))
+
+                      :penetrate
+                      (let [eye (geom/eye-pos owner)
+                            look (when (raycast/available?) (raycast/player-look-vector owner))
+                            dist (penetrate-dest/clamp-distance-by-cp
+                                  (penetrate-dest/max-distance exp) cp exp)
+                            collidable? (fn [x y z] (block-manipulation/block-collidable? world-id x y z))
+                            result (when look
+                                     (penetrate-dest/destination
+                                      {:x (:x eye) :y (:y eye) :z (:z eye)
+                                       :look-vec look :distance dist :collidable? collidable?}))]
+                        ;; :available? false means the march ended still
+                        ;; inside the wall it was penetrating -- teleporting
+                        ;; there would bury the player in a block, so this
+                        ;; must read as "no destination", not "destination
+                        ;; found, deal with it later".
+                        (when (and result (:available? result))
+                          {:x (:x result) :y (:y result) :z (:z result)}))
+
+                      :flashing
+                      (let [body (geom/body-pos owner)
+                            eye (geom/eye-pos owner)
+                            look (when (raycast/available?) (raycast/player-look-vector owner))
+                            dist (flashing-dest/blink-distance exp)
+                            raycast-fn (fn [sx sy sz dx dy dz max-dist]
+                                         (when (raycast/available?)
+                                           (raycast/raycast-combined world-id sx sy sz dx dy dz max-dist)))
+                            dest (when look
+                                   (flashing-dest/destination
+                                    {:x (:x body) :y (:y body) :z (:z body) :eye-y (:y eye)
+                                     :look-vec look :direction :forward :dist dist
+                                     :raycast raycast-fn :head-blocked? head-blocked?}))]
+                        (when dest
+                          {:x (:to-x dest) :y (:to-y dest) :z (:to-z dest)}))
+
+                      :threatening
+                      (let [range (resolve-scale (:max-range node) exp)
+                            eye (geom/eye-pos owner)
+                            target (nearest-entity-in-range world-id eye range #{(str owner)})]
+                        (when target
+                          {:entity-uuid (:uuid target)}))
+
+                      ;; :shift -- launching a block as a coordinate-shifted
+                      ;; projectile that damages anything on its path is a
+                      ;; different mechanic entirely (not a player or entity
+                      ;; teleport), with no marching/damage algorithm ported
+                      ;; anywhere in this codebase to build on. Deferred; see
+                      ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md A section.
+                      nil))))
               :jet-engine (fn [context node]
                             (when-let [host-query (contract/host-port :query)]
                               (host-query :jet-engine context node)))
@@ -1196,24 +1329,61 @@
                            {:status (if applied? :applied :failed)
                             :effect effect})
                          :teleport-approved-target
-                         (let [{:keys [target destination ability-id mode]} effect
-                               destination (or destination target)
-                               approval-token (when (map? destination)
-                                                (or (:approval-token destination)
-                                                    (:teleport-token destination)))
-                               valid? (and (string? approval-token)
-                                           (<= 1 (count approval-token) 128)
-                                           (#{:mark-teleport :penetrate-teleport
-                                              :shift-teleport :threatening-teleport
-                                              :flashing}
-                                            ability-id)
-                                           (#{:mark :penetrate :shift :threatening :flashing} mode)
-                                           (teleportation/available?))
-                               applied? (when valid?
-                                          (teleportation/teleport-approved-target!
-                                           owner ability-id approval-token mode))]
-                           {:status (if applied? :applied :failed)
-                            :effect effect})
+                         (let [{:keys [world-id target destination ability-id mode damage]} effect
+                               destination (or destination target)]
+                           (case mode
+                             ;; threatening-teleport is not a player teleport
+                             ;; ("teleport a small fragment into the target" --
+                             ;; see docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+                             ;; A section): it moves a target entity's fate,
+                             ;; not the caster's position, so it applies
+                             ;; damage directly instead of minting a token and
+                             ;; calling teleport-approved-target!.
+                             :threatening
+                             (let [target-uuid (when (map? destination)
+                                                  (or (:uuid destination)
+                                                      (:entity-uuid destination)
+                                                      (:target-uuid destination)))
+                                   finite? #(and (number? %) (Double/isFinite (double %)))
+                                   valid? (and (= :threatening-teleport ability-id)
+                                                world-id target-uuid
+                                                (finite? damage) (pos? (double damage))
+                                                (<= (double damage) 1000.0)
+                                                (entity-damage/available?))
+                                   applied? (when valid?
+                                              (entity-damage/apply-direct-damage!
+                                               world-id target-uuid (double damage) :vector
+                                               {:attacker-uuid owner}))]
+                               {:status (if applied? :applied :failed)
+                                :effect effect})
+                             ;; :mark / :penetrate / :flashing -- a genuine
+                             ;; player teleport. The destination is always
+                             ;; server-computed (raycast/eye-position/
+                             ;; collision checks in the query, never trusts
+                             ;; client input), so the token here isn't a
+                             ;; security boundary -- it's just filling the
+                             ;; existing teleport-approved-target! contract
+                             ;; shape (owner ability-id approval-token mode)
+                             ;; uniformly across every mode. :shift-teleport
+                             ;; falls through to this branch too and fails
+                             ;; cleanly (not in the ability-id allowlist) --
+                             ;; it needs a real block-projectile/path-damage
+                             ;; design, not a token; see the gaps doc.
+                             (let [valid-dest? (and (map? destination)
+                                                     (every? #(number? (get destination %)) [:x :y :z]))
+                                   valid? (and world-id valid-dest?
+                                                (#{:mark-teleport :penetrate-teleport :flashing} ability-id)
+                                                (#{:mark :penetrate :flashing} mode)
+                                                (teleportation/available?))
+                                   token (when valid?
+                                           (teleportation/mint-approval-token!
+                                            {:world-id world-id
+                                             :x (:x destination) :y (:y destination) :z (:z destination)}))
+                                   applied? (when token
+                                              (teleportation/teleport-approved-target!
+                                               owner ability-id token mode))]
+                               {:status (if applied? :applied :failed)
+                                :effect effect})))
                          :knockback
                          (let [{:keys [world-id target movement]} effect
                                {:keys [impulse knockback-y-adjust knockback-scale]} movement

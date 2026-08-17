@@ -699,7 +699,8 @@
                                  {:op :world-effect
                                   :effect-type :teleport-approved-target
                                   :target-ref :destination
-                                  :mode :threatening}
+                                  :mode :threatening
+                                  :damage (scale 3.0 6.0)}
                                  {:op :vfx :effect-id :threatening-teleport
                                  :event :release :params {:max-range 15.0}}]}}}
     {:id :mag-manip
