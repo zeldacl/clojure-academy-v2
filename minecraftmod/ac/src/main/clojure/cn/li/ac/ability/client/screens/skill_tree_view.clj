@@ -34,6 +34,15 @@
 (defn- st-key [suffix]
   (str "skill_tree." modid/MOD-ID "." suffix))
 
+(defn skill-exp-percent-text
+  "Percentage text for a skill's exp fraction, one decimal (\"0.5\", \"35.0\").
+   Upstream's `(levelProgress*100).toInt` truncates, so a freshly-gained exp of
+   0.5% (a few skill uses at 0.001-0.008 per use) read as \"0\" while the node
+   ring already showed the arc — one decimal keeps the popup honest with the
+   ring, matching the debug overlay's skill-status lines."
+  [exp]
+  (format "%.1f" (* 100.0 (double (or exp 0.0)))))
+
 (defn parallax-offset
   "Node parallax shift (±5px at the edges) from the pointer position — the tree
    nodes are drawn at (x - pdx, y - pdy). Public so the developer panel can shift
@@ -248,7 +257,8 @@
       (if learned
         (do
           (ctext (+ cy 35.0) 220 8.0 0xFFa1e1ff
-                 (str (i18n/translate (st-key "skill_exp")) " " (int (* 100.0 (or exp 0.0))) "%"))
+                 (str (i18n/translate (st-key "skill_exp")) " "
+                      (skill-exp-percent-text exp) "%"))
           (when skill-description
             (doseq [[i line] (map-indexed vector (wrap-text skill-description 200.0 9.0 42))]
               (ctext (+ cy 44.0 (* (double i) 10.0)) 260 9.0 0xFFDDDDDD line))))

@@ -3,6 +3,7 @@
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.client.managed-screens :as managed-screens]
             [cn.li.ac.ability.client.screens.skill-tree :as screen]
+            [cn.li.ac.ability.client.screens.skill-tree-view :as view]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.registry.skill-query :as skill]
@@ -65,6 +66,15 @@
         (is (= "Brain Course" (:skill-name node)))
         (is (= "Undergo focused neural training to raise your maximum CP by 1000."
                (:skill-description node)))))))
+
+(deftest skill-exp-percent-text-shows-sub-percent-exp-test
+  "The skill detail popup's exp line must not truncate: exp gains are
+   0.001-0.008 per use, so a few uses put exp at 0.5% — upstream's int
+   truncation printed 0% while the node ring already showed the arc."
+  (is (= "0.5" (view/skill-exp-percent-text 0.005)))
+  (is (= "35.0" (view/skill-exp-percent-text 0.35)))
+  (is (= "100.0" (view/skill-exp-percent-text 1.0)))
+  (is (= "0.0" (view/skill-exp-percent-text nil))))
 
 (deftest screen-owner-requires-explicit-session-and-player-test
   (runtime-hooks/with-client-ctx-fn {:session-id nil} (fn [] (is (thrown-with-msg? clojure.lang.ExceptionInfo
