@@ -25,6 +25,27 @@
       (runtime/tick! rt {:tick-id 2 :delta-seconds 0.05})
       (is (empty? @(:instances rt))))))
 
+(deftest update-throw-records-exactly-one-fault-and-cleans-up
+  (let [rt (runtime/create-runtime)
+        effect {:id :throwing/effect
+                :init (fn [_] {})
+                :update (fn [_ _] (throw (ex-info "boom" {})))
+                :bounds (fn [_ _] nil)
+                :sample (fn [_] nil)}]
+    (runtime/register-effect! rt effect)
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :throwing/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {}})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    ;; A throwing update must be recorded once, not once per swap! retry
+    ;; attempt, and the faulted instance must be fully removed (including
+    ;; the stable-key index) exactly like a normal nil-returning end.
+    (is (= 1 (count (runtime/faults rt))))
+    (is (= :throwing/effect (:effect-id (first (runtime/faults rt)))))
+    (is (empty? @(:instances rt)))
+    (is (nil? (runtime/instance-for-key rt [:session 1 :main])))))
+
 (deftest ended-instance-releases-stable-key
   (let [rt (runtime/create-runtime)
         effect (assoc (test-effect)

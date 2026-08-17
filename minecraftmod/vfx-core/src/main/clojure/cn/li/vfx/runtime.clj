@@ -246,34 +246,55 @@
   (swap! (:faults runtime) conj {:instance-id (:id instance) :effect-id (:effect-id instance)
                                   :phase phase :error throwable}) nil)
 
-(defn- tick-instance [runtime context events [id instance]]
+(defn- tick-instance
+  "Pure per-instance transition: returns the next [id instance] pair, or a
+   [::removed instance] / [::faulted instance throwable] marker. Must not
+   touch any atom other than the ones a caller-supplied local collector
+   passes in -- this runs inside tick!'s swap! update fn, which Clojure may
+   invoke more than once per call if the atom is contended, and calling
+   fault!/other swap!s from inside that fn would record/mutate once per
+   retry instead of once per committed tick."
+  [runtime context events [id instance]]
   (let [effect (descriptor runtime (:effect-id instance))]
     (try
       (let [state ((:update effect) (:state instance)
                    (assoc context :instance instance :events (get events id [])))]
-        (when (some? state)
+        (if (some? state)
           [id (assoc instance :prev-state (:state instance)
                      :state state
                      :age-seconds (+ (:age-seconds instance)
-                                     (double (:delta-seconds context))))]))
+                                     (double (:delta-seconds context))))]
+          [::removed instance]))
       (catch Throwable throwable
-        (fault! runtime instance throwable :update)
-        nil))))
+        [::faulted instance throwable]))))
 
 (defn tick! [runtime context]
   (let [{:keys [tick-id delta-seconds] :as context} (contract/tick-context context)]
     (when-not (= tick-id @(:last-tick-id runtime))
       (reset! (:last-tick-id runtime) tick-id)
-      (let [events (consume-signals! runtime)]
-        (let [removed (atom [])]
-          (swap! (:instances runtime)
-                 (fn [instances]
-                   (reduce-kv (fn [result id instance]
-                                (if-let [updated (tick-instance runtime context events [id instance])]
-                                  (assoc result (first updated) (second updated))
-                                  (do (swap! removed conj instance) result)))
-                              {} instances)))
-          (doseq [instance @removed]
+      (let [events (consume-signals! runtime)
+            ;; Captures the outcome of whichever swap! attempt actually wins
+            ;; the CAS. A losing retry's reset! here is simply overwritten by
+            ;; the next attempt before this atom is ever read, so no
+            ;; double-counting reaches faults/index cleanup below even though
+            ;; the update fn itself may run more than once.
+            outcome (atom nil)]
+        (swap! (:instances runtime)
+               (fn [instances]
+                 (let [removed (atom []) faulted (atom [])
+                       next-instances
+                       (reduce-kv
+                        (fn [result id instance]
+                          (let [[tag a b] (tick-instance runtime context events [id instance])]
+                            (case tag
+                              ::removed (do (swap! removed conj a) result)
+                              ::faulted (do (swap! removed conj a) (swap! faulted conj [a b]) result)
+                              (assoc result tag a))))
+                        {} instances)]
+                   (reset! outcome {:removed @removed :faulted @faulted})
+                   next-instances)))
+        (let [{:keys [removed faulted]} @outcome]
+          (doseq [instance removed]
             (index-remove! (:owner-index runtime) (:owner instance) (:id instance))
             (index-remove! (:world-index runtime) (:world-id instance) (:id instance))
             ;; A descriptor returning nil is a normal lifetime transition.
@@ -281,8 +302,10 @@
             ;; remains permanently occupied and a later spawn is discarded.
             (when-let [instance-key (:instance-key instance)]
               (swap! (:instance-index runtime) dissoc instance-key)
-              (swap! (:event-seq runtime) dissoc instance-key)))))
-    nil)))
+              (swap! (:event-seq runtime) dissoc instance-key)))
+          (doseq [[instance throwable] faulted]
+            (fault! runtime instance throwable :update)))))
+    nil))
 
 (defn- make-sink [buckets batch-count max-batches]
   {:emit! (fn [{:keys [stage] :as value}]
