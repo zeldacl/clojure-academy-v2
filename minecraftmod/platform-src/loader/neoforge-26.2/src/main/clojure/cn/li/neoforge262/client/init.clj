@@ -44,7 +44,7 @@
             [cn.li.platform.neutral.client-runtime :as render-init]
             [cn.li.platform.neutral.client-runtime :as tesr-api]
             [cn.li.neoforgebase.registry.state :as registry-state])
-  (:import [net.minecraft.client Minecraft KeyMapping KeyMapping$Category]
+  (:import [net.minecraft.client Minecraft]
            [cn.li.mcver McAccess]
            [net.minecraft.client.renderer.block FluidModel$Unbaked]
            [net.minecraft.client.resources.model.sprite Material]
@@ -54,7 +54,7 @@
            [net.minecraft.world.entity.player Player]
            [net.minecraft.world.level.material FluidState]
            [net.neoforged.neoforge.common NeoForge]
-           [net.neoforged.neoforge.client.event RegisterFluidModelsEvent RegisterKeyMappingsEvent ClientTickEvent$Post]
+           [net.neoforged.neoforge.client.event RegisterFluidModelsEvent ClientTickEvent$Post]
            [net.neoforged.neoforge.client.fluid FluidTintSource]
            [net.neoforged.neoforge.client.event EntityRenderersEvent$RegisterRenderers]
            [net.neoforged.bus.api EventPriority]
@@ -376,7 +376,7 @@
 
   (try
     (key-mapping-adapter/register-all-keybindings-from-ac!)
-    
+    (key-mapping-adapter/register-into-system-menu!)
     (key-mapping-adapter/install-bound-key-resolver!)(catch Exception e
       (log/error e "Failed to register Forge KeyMappings")
       (log/stacktrace "Failed to register Forge KeyMappings" e)))
@@ -386,16 +386,6 @@
     (catch Exception e
       (log/error e "Failed to install Forge keyboard event handler")
       (log/stacktrace "Failed to install Forge keyboard event handler" e))))
-
-(defn register-key-mappings!
-  "Register runtime KeyMapping instances and their categories to NeoForge."
-  [^RegisterKeyMappingsEvent event]
-  (doseq [^KeyMapping$Category cat (key-mapping-adapter/get-all-key-categories)]
-    (.registerCategory event cat))
-  (let [all-keys (key-mapping-adapter/get-all-key-mappings)]
-    (doseq [^KeyMapping key all-keys]
-      (.register event key))
-    (log/info "Registered runtime key mappings:" (count all-keys))))
 
 (defn init-client
   "Initialize client-side systems for NeoForge 26.2 (non-render subset)."

@@ -6,10 +6,7 @@
 
 (deftest lifecycle-listener-functions-exist
   (testing "client hooks registration exists"
-    (is (fn? listeners/register-client-hooks!)))
-  
-  (testing "key mappings registration exists"
-    (is (fn? listeners/register-client-key-mappings!))))
+    (is (fn? listeners/register-client-hooks!))))
 
 (deftest listener-registration-callability
   (testing "client hooks can be registered without errors"

@@ -11,9 +11,8 @@
             [cn.li.mcmod.config.registry :as config-reg]
             [cn.li.mcbase.glfw-polling-core :as glfw-polling]
             [clojure.string :as str])
-  (:import [net.minecraft.client KeyMapping KeyMapping$Category Minecraft]
+  (:import [net.minecraft.client KeyMapping KeyMapping$Category Minecraft Options]
            [com.mojang.blaze3d.platform InputConstants InputConstants$Key InputConstants$Type]
-           [com.mojang.blaze3d.platform InputConstants InputConstants$Type]
            [cn.li.mcver ResourceLocations]))
 
 (def ^:private registered-key-mappings (atom {}))
@@ -75,11 +74,6 @@
   "Get all registered KeyMappings (used by polling for active keys)"
   []
   (vals @registered-key-mappings))
-
-(defn get-all-key-categories
-  "Categories created for registered KeyMappings (for RegisterKeyMappingsEvent)."
-  []
-  (vals @registered-categories))
 
 (defn get-key-mappings-by-input-id
   "Get registered KeyMappings map keyed by input-id.
@@ -178,6 +172,22 @@
                     :secondary nil))
         nil)))
   nil)
+
+(defn register-into-system-menu!
+  "Append AC KeyMappings to Options.keyMappings so they show up in the
+   vanilla Options > Controls key-bind screen under their own category.
+
+   The mod-bus RegisterKeyMappingsEvent fires during Minecraft construction —
+   before content keybinding config is registered — so the event handler sees
+   no mappings. Registration therefore happens here, once the mappings exist,
+   using the same append the event's register() performs."
+  []
+  (let [^Options options (.options ^Minecraft (Minecraft/getInstance))
+        kms (get-all-key-mappings)]
+    (when (seq kms)
+      (set! (.-keyMappings options)
+            (into-array KeyMapping (concat (.-keyMappings options) kms))))
+    (log/info "Registered AC keybindings into Options > Controls:" (count kms))))
 
 (defn register-all-keybindings-from-ac!
   "Bootstrap function: Register all :alternative scheme keybindings from content modules.

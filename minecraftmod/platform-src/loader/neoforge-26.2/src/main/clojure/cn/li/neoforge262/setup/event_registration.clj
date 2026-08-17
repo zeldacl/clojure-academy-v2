@@ -4,8 +4,7 @@
 	Consumes declarative manifest entries and binds them to ModEventBus / Forge EVENT_BUS."
 	(:require [cn.li.neoforgebase.integration.side :as side]
 						[cn.li.neoforgebase.setup.consumer-support :as consumer-support]
-						[cn.li.neoforge262.setup.event-registration-manifest :as manifest]
-						[cn.li.neoforge262.setup.lifecycle-listeners :as lifecycle-listeners])
+						[cn.li.neoforge262.setup.event-registration-manifest :as manifest])
 	(:import [net.neoforged.neoforge.common NeoForge]
 					 [net.neoforged.bus.api IEventBus]
 					 [cn.li.neoforge262.client ModClientRenderSetup]))
@@ -20,7 +19,6 @@
 	(doseq [spec (manifest/lifecycle-listener-specs opts)]
 		(bind-listener-spec! mod-bus spec))
 	(when (side/client-side?)
-		(lifecycle-listeners/register-client-key-mappings! mod-bus)
 		(ModClientRenderSetup/register mod-bus))
 	nil)
 

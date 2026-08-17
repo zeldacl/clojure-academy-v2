@@ -11,6 +11,11 @@
    :en_us
    {
     "ability.academy.level0" "Level 0"
+    "keybind.category.content" "Ability"
+    "key.content.cycle.selection" "Switch Preset"
+    "key.content.toggle.primary" "Toggle Ability Mode"
+    "key.content.toggle.debug.overlay" "Toggle Debug Info"
+    "key.content.toggle.terminal" "Toggle Terminal"
     "ability.academy.level1" "Level 1"
     "ability.academy.level2" "Level 2"
     "ability.academy.level3" "Level 3"
@@ -246,6 +251,11 @@
    :zh_cn
    {
     "ability.academy.level0" "无能力者(LV0)"
+    "keybind.category.content" "能力"
+    "key.content.cycle.selection" "切换预设"
+    "key.content.toggle.primary" "切换能力模式"
+    "key.content.toggle.debug.overlay" "切换调试信息"
+    "key.content.toggle.terminal" "打开/关闭终端"
     "ability.academy.level1" "低能力者(LV1)"
     "ability.academy.level2" "异能力者(LV2)"
     "ability.academy.level3" "强能力者(LV3)"
@@ -481,6 +491,11 @@
    :zh_tw
    {
     "ability.academy.level0" "無能力者(LV0)"
+    "keybind.category.content" "能力"
+    "key.content.cycle.selection" "切換預設"
+    "key.content.toggle.primary" "切換能力模式"
+    "key.content.toggle.debug.overlay" "切換除錯資訊"
+    "key.content.toggle.terminal" "開啟/關閉終端"
     "ability.academy.level1" "低能力者(LV1)"
     "ability.academy.level2" "異能力者(LV2)"
     "ability.academy.level3" "強能力者(LV3)"
@@ -712,6 +727,11 @@
    :ja_jp
    {
     "ability.academy.level0" "無能力者"
+    "keybind.category.content" "能力"
+    "key.content.cycle.selection" "プリセット切替"
+    "key.content.toggle.primary" "能力モード切替"
+    "key.content.toggle.debug.overlay" "デバッグ情報切替"
+    "key.content.toggle.terminal" "ターミナル開閉"
     "ability.academy.level1" "低能力者"
     "ability.academy.level2" "異能力者"
     "ability.academy.level3" "強能力者"
@@ -940,6 +960,11 @@
    :ko_kr
    {
     "ability.academy.level0" "0단계"
+    "keybind.category.content" "능력"
+    "key.content.cycle.selection" "프리셋 전환"
+    "key.content.toggle.primary" "능력 모드 전환"
+    "key.content.toggle.debug.overlay" "디버그 정보 전환"
+    "key.content.toggle.terminal" "터미널 열기/닫기"
     "ability.academy.level1" "1단계"
     "ability.academy.level2" "2단계"
     "ability.academy.level3" "3단계"
@@ -1171,6 +1196,11 @@
    :ru_ru
    {
     "ability.academy.level0" "Уровень 0"
+    "keybind.category.content" "Способность"
+    "key.content.cycle.selection" "Переключить пресет"
+    "key.content.toggle.primary" "Переключить режим способности"
+    "key.content.toggle.debug.overlay" "Переключить отладочную информацию"
+    "key.content.toggle.terminal" "Открыть/закрыть терминал"
     "ability.academy.level1" "Уровень 1"
     "ability.academy.level2" "Уровень 2"
     "ability.academy.level3" "Уровень 3"

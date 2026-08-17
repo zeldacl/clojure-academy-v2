@@ -60,9 +60,7 @@
            [net.minecraft.world.entity.player Player]
            [net.minecraftforge.common MinecraftForge]
            [net.minecraftforge.client.event EntityRenderersEvent$RegisterRenderers]
-           [net.minecraftforge.client.event RegisterKeyMappingsEvent]
            [net.minecraftforge.event TickEvent$ClientTickEvent TickEvent$Phase]
-           [net.minecraft.client KeyMapping]
            [cn.li.mc1201.client.render ScriptedBlockEntityBerProvider]
            [cn.li.mc1201.client.render ModRenderTypes]
            [com.mojang.blaze3d.platform Window]))
@@ -402,7 +400,7 @@
 
   (try
     (key-mapping-adapter/register-all-keybindings-from-ac!)
-    
+    (key-mapping-adapter/register-into-system-menu!)
     (key-mapping-adapter/install-bound-key-resolver!)(catch Exception e
       (log/error e "Failed to register Forge KeyMappings")
       (log/stacktrace "Failed to register Forge KeyMappings" e)))
@@ -412,14 +410,6 @@
     (catch Exception e
       (log/error e "Failed to install Forge keyboard event handler")
       (log/stacktrace "Failed to install Forge keyboard event handler" e))))
-
-(defn register-key-mappings!
-  "Register all runtime KeyMapping instances to Forge input system."
-  [^RegisterKeyMappingsEvent event]
-  (let [all-keys (key-mapping-adapter/get-all-key-mappings)]
-    (doseq [^KeyMapping key all-keys]
-      (.register event key))
-    (log/info "Registered runtime key mappings:" (count all-keys))))
 
 (defn init-client
   "Initialize client-side systems for Forge 1.20.1.

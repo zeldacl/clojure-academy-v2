@@ -59,9 +59,7 @@
            [net.minecraft.world.entity.player Player]
            [net.neoforged.neoforge.common NeoForge]
            [net.neoforged.neoforge.client.event EntityRenderersEvent$RegisterRenderers]
-           [net.neoforged.neoforge.client.event RegisterKeyMappingsEvent]
            [net.neoforged.neoforge.client.event ClientTickEvent$Post]
-           [net.minecraft.client KeyMapping]
            [cn.li.mc1211.client.render ScriptedBlockEntityBerProvider]
            [cn.li.mc1211.client.render ModRenderTypes]
            [cn.li.neoforge1211.bridge ClientTimeInterop]
@@ -401,7 +399,7 @@
 
   (try
     (key-mapping-adapter/register-all-keybindings-from-ac!)
-    
+    (key-mapping-adapter/register-into-system-menu!)
     (key-mapping-adapter/install-bound-key-resolver!)(catch Exception e
       (log/error e "Failed to register Forge KeyMappings")
       (log/stacktrace "Failed to register Forge KeyMappings" e)))
@@ -411,14 +409,6 @@
     (catch Exception e
       (log/error e "Failed to install Forge keyboard event handler")
       (log/stacktrace "Failed to install Forge keyboard event handler" e))))
-
-(defn register-key-mappings!
-  "Register all runtime KeyMapping instances to Forge input system."
-  [^RegisterKeyMappingsEvent event]
-  (let [all-keys (key-mapping-adapter/get-all-key-mappings)]
-    (doseq [^KeyMapping key all-keys]
-      (.register event key))
-    (log/info "Registered runtime key mappings:" (count all-keys))))
 
 (defn init-client
   "Initialize client-side systems for NeoForge 1.21.1.
