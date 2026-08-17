@@ -89,7 +89,10 @@
     (is (= :accepted (:status result)))
     (is (= "target-1"
            (get-in result [:world-effects 0 :request :target])))
-    (is (= :query (get-in result [:events 0 :type])))))
+    (is (= :query (get-in result [:events 0 :type])))
+    ;; A query that actually found something must not carry the
+    ;; :query-returned-nil diagnostic feedback.
+    (is (empty? (:feedback result)))))
 
 (deftest required-query-miss-does-not-consume-resource
   (dsl/defability query-miss
@@ -106,8 +109,11 @@
                                           :ability-id :test/query-miss})]
     (is (= :rejected (:status result)))
     (is (empty? (:state-patch result)))
-    (is (= :required-condition-failed
-           (get-in result [:feedback 0 :reason])))))
+    ;; The query step now also reports :query-returned-nil ahead of the
+    ;; :require step's own rejection, so a query port that's missing/broken
+    ;; is distinguishable from a query that legitimately found no target.
+    (is (= [:query-returned-nil :required-condition-failed]
+           (mapv :reason (:feedback result))))))
 
 (deftest intent-contract-rejects-invalid-client-envelope
   (is (thrown? clojure.lang.ExceptionInfo

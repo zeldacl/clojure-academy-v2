@@ -222,11 +222,21 @@
                  (let [context (cond-> context
                                  (and (map? value) (:world-id value))
                                  (assoc :world-id (:world-id value)))]
-                 {:status :continue
-                :context context
-                :events [{:type :query
-                          :query-type (:query-type node)
-                           :result value}]}))))
+                 (cond-> {:status :continue
+                          :context context
+                          :events [{:type :query
+                                    :query-type (:query-type node)
+                                    :result value}]}
+                   ;; A nil result is a legitimate outcome (no target found)
+                   ;; and must not reject here -- the ability's own :require
+                   ;; step still does that. This feedback only distinguishes
+                   ;; "query ran and found nothing" from a downstream
+                   ;; :required-condition-failed, which looks identical to a
+                   ;; missing/broken query implementation without it.
+                   (nil? value)
+                   (update :feedback (fnil conj [])
+                           {:reason :query-returned-nil
+                            :query-type (:query-type node)}))))))
     :damage (let [target (or (:target node)
                              (get-in context [:refs (:target-ref node)])
                              (get-in context [:refs :target]))
