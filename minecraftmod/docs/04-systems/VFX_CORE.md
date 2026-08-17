@@ -35,6 +35,10 @@
 - 特效在远处不渲染 → 先看 descriptor 的 `:bounds` 是不是返回了 `nil`（等价于永不可见，不是"总是可见"）。
 - VFX 信号送不到客户端 → 先确认信号走的是哪条路径（combat-core 直投 vs channel），两条路径的失败模式不同，见上方"运行时流程"。
 
+## 未完成的通用化迁移
+
+`实例模型` 一节描述的 aggregate/per-instance 双跑修复是一个务实的桥接，不是终态——`effect_controller.clj:239-271` 的 `dispatch-signal!` 仍然绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派，把三种真正的生命周期形态（一次性战斗特效、长驻机器特效、单例相机/后处理特效）压扁成一种 aggregate 逃生口。这项迁移涉及 `arc_beam.clj` + `arc_beam/impl/*` 约 6000 行客户端内容改造，需要进游戏做视觉验证，未在 2026-08-17 的执行会话中完成。清单与理由见 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) 的 E 节。
+
 ## 变更风险
 
 - vfx-core 不得直接依赖 presentation-core（`verifyVfxDependencyDirection`）；两者的唯一交汇点是 AC 侧的 `register.clj`/`effect_controller.clj`，把 vfx-core 采样出的 batch 转成 `RenderCommand$Batch` 并入 Presentation 帧。

@@ -9,6 +9,7 @@
 | 能力系统（Ability） | [ABILITY_SYSTEM_MAINTENANCE.md](ABILITY_SYSTEM_MAINTENANCE.md)（**reducer-only** 唯一写路径） | `ac/ability`、`ac/content/ability`、`mcmod/ability`、`forge1201/ability` |
 | 战斗核心（Combat Core） | [COMBAT_CORE.md](COMBAT_CORE.md) | `:combat-core`、`ac/ability/service/combat_content.clj`、`ac/ability/service/combat_runtime.clj` |
 | 特效核心（VFX Core） | [VFX_CORE.md](VFX_CORE.md) | `:vfx-core`、`ac/client/effect_controller.clj`、`ac/ability/client/fx_spec.clj` |
+| Combat/VFX 平台缺口工单 | [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)（未完成工作清单，非架构文档） | 同上两行 |
 | UI 系统（GUI/CGUI，legacy） | [UI_SYSTEM_MAINTENANCE.md](UI_SYSTEM_MAINTENANCE.md) | `ac/gui`、`mcmod/gui`、`forge1201/gui` |
 | Presentation Runtime | [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md) | `:presentation-core`、`:presentation-compiler`、`ac/gui/reactive/register.clj` |
 | 无线系统（Wireless） | [WIRELESS_SYSTEM_MAINTENANCE.md](WIRELESS_SYSTEM_MAINTENANCE.md) | `ac/wireless` |

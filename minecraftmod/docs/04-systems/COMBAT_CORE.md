@@ -31,11 +31,13 @@
 
 ## 已知限制（重要，排障先看这里）
 
-**`:query-port` 目前只安装了 `:raycast` 一种 query 的真实实现。** combat-core 本身定义了约 17 种 query 类型（teleport-target、mag-manip、jet-engine 等），但 `combat_runtime.clj` 里对应的 host-port 实现大多缺失——这些 query 在执行时静默返回 `nil`，使用它们的技能会在结算阶段变成无实际效果的空操作，**且不会抛异常或记日志**，因为 `:query` op 对 `nil` 结果的默认行为是"继续但拿不到数据"。
+> 2026-08-17 更新：本节曾经的表述（"只装了 `:raycast`"、"mine-ray 端到端验证过"）已被逐条核实推翻。完整、按技能分类的当前缺口清单见 **[COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md)**，本节只保留排障判断依据。
 
-排障判断依据：如果一个已迁移到 combat-core 的技能施放后完全没有效果（伤害、位移、特效都没有），先检查它的 op 序列里是否有 `:query`，再检查 `combat_runtime.clj` 的 `:query-port` 实现是否真的覆盖了那个 query 类型。这是一项独立于 VFX/渲染管线的、更大范围的未完成迁移，不在任何一次 Presentation/VFX/Combat-Core 重构 commit 的范围内单独解决过。
+**`:query-port` 与 world-effect 执行器都可能缺失，且缺失方式不同、不能只查一处。** `default-query-port`（`combat_runtime.clj`）里 9 种 query 有真实本地实现（`:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave`/`:groundshock`/`:thunder-clap`/`:blood-retrograde`/`:vec-accel`/`:vec-deviation`），其余约 13 种恒返回 `nil`。world-effect 侧（`mcbase/adapter/world_effects.clj` 的 `create-world-effects`）只真正安装了 4 个执行器（`execute-vec-accel!`/`execute-mag-movement!`/`execute-mag-manip!`/`execute-vec-deviation!`），其余约 11 个调用即抛异常（被 try/catch 兜成 `:status :failed`）。**两层要分别检查**——一个技能的 query 工作正常不代表它的 world-effect 也工作（例如 `directed-shock` 的 `:raycast` 查询正常、伤害正常命中，但 `:knockback` world-effect 完全没有处理分支）。
 
-Railgun 与 mine-ray（basic/expert/luck）是当前唯一端到端验证过（`:query-port` 实现 + VFX 信号 + 客户端渲染全链路跑通）的技能。
+排障判断依据：如果一个已迁移到 combat-core 的技能施放后完全没有效果（伤害、位移、特效都没有），无论哪种情况都**不会抛异常或记可见错误**——query 返回 nil 被 `:require` 拒绝成普通"没瞄准目标"（这个已经在 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) 相关的执行会话里补了 `:query-returned-nil` 诊断 feedback，见 commit `d72b1695f`），world-effect 缺失则被 `execute-world-effects!` 的 try/catch 降级为 `:status :failed`。先检查它的 op 序列里的 `:query-type`，再检查 `:world-effect` 的 `:effect-type`，分别对照 `default-query-port` 和 `create-world-effects` 是否真的覆盖了这两个值。
+
+只有 `:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave` 类查询 + `:damage`（走独立的伤害管线，不经过 `world-effects/execute-*!`）组合出的技能（如 railgun、thunder-bolt、electron-bomb、flesh-ripping、directed-shock 的伤害部分）是当前可信的端到端正常路径。
 
 ## 排障手册
 
