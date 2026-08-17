@@ -94,10 +94,24 @@
 (defn compile-all! []
   (let [compiled (into {} (map (fn [[id ability]] [id (compile-ability ability)])
                                (registry/abilities)))
-    catalog {:schema-version 1
+        catalog {:schema-version 1
                  :nodes (registry/nodes)
                  :abilities compiled
-                 :providers (registry/providers)}]
-    (assoc catalog :content-hash (content-hash catalog))))
+                 :providers (registry/providers)}
+        ;; registry/nodes descriptors carry a :run IFn. canonical's fallback
+        ;; for IFn values is (str (class value)), and the class name of a
+        ;; provider-supplied fn literal is compiler/session-dependent
+        ;; (differs between AOT and dynamic compilation, and across
+        ;; recompiles) -- hashing it directly would make client/server
+        ;; content-hash comparison spuriously fail the moment any provider
+        ;; registers a custom node. Hash node identity instead of the raw
+        ;; descriptor; the real descriptor (with :run) still lives in the
+        ;; returned catalog for the runtime to execute.
+        hashable-catalog (update catalog :nodes
+                                 (fn [nodes]
+                                   (into {} (map (fn [[id node]]
+                                                   [id (select-keys node [:id :revision :provider-id])]))
+                                         nodes)))]
+    (assoc catalog :content-hash (content-hash hashable-catalog))))
 
 (defn compiled-catalog [catalog] (:abilities catalog))

@@ -59,6 +59,20 @@
     (is (= 1 (count (:sessions (runtime/snapshot-owner engine "p")))))
     (is (= "p" (:owner (first (runtime/tick! engine 14)))))))
 
+(deftest deadline-skip-does-not-strand-session
+  (dsl/defability charging-skip
+    {:id :test/charging-skip :activation :session :period-ticks 2
+     :program (dsl/vfx :test/charge-skip {:event :pulse})})
+  (let [engine (runtime/create-engine {:catalog (compiler/compile-all!) :now-tick (constantly 10)})]
+    (is (= :accepted (:status (runtime/dispatch-intent!
+                               engine "p" {:intent-id 1 :op :start :ability-id :test/charging-skip}))))
+    ;; The session's deadline is scheduled for tick 12. Jump straight to
+    ;; tick 15 without ever calling tick! for 12/13/14 -- a missed or
+    ;; paused server tick must not strand the session in the deadline
+    ;; queue forever.
+    (is (= 1 (count (runtime/tick! engine 15))))
+    (is (= 1 (count (:sessions (runtime/snapshot-owner engine "p")))))))
+
 (deftest query-result-flows-to-following-nodes
   (dsl/defability query-strike
     {:id :test/query-strike :activation :instant
@@ -182,6 +196,21 @@
                                           :ability-id :test/custom})]
     (is (= :accepted (:status result)))
     (is (= [[:ability-exp :test/custom 0.25]] (:state-patch result)))))
+
+(deftest content-hash-is-stable-across-recompiled-node-functions
+  (registry/register-node! {:id :test/hash-node :revision 1
+                            :run (fn [_ _] {:status :continue})})
+  (let [hash-1 (:content-hash (compiler/compile-all!))]
+    (registry/reset-for-test!)
+    ;; A different fn literal (different class, different body) registered
+    ;; under the identical node id/revision must still hash the same --
+    ;; content-hash compares client vs. server compiled catalogs, and node
+    ;; :run fn class names are compiler/session-dependent even when the
+    ;; node's declared identity hasn't changed.
+    (registry/register-node! {:id :test/hash-node :revision 1
+                              :run (fn [_ _] {:status :continue :extra true})})
+    (let [hash-2 (:content-hash (compiler/compile-all!))]
+      (is (= hash-1 hash-2)))))
 
 (deftest data-expression-and-query-paths-stay-neutral
   (dsl/defability scaled-strike

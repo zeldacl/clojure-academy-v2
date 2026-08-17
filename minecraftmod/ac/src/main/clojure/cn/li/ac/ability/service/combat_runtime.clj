@@ -26,6 +26,10 @@
 (defonce ^:private catalog* (atom nil))
 (defonce ^:private world-effect-handler* (atom nil))
 (defonce ^:private result-sink* (atom nil))
+;; The authoritative source for `:now-tick` when a caller does not supply one.
+;; `tick!` below updates this from the real server tick every call; intents
+;; dispatched between full tick-loop passes read the last observed value.
+(defonce ^:private last-known-tick* (atom 0))
 (declare owner-state resolve-slot execute-world-effects!)
 
 (defn- valid-reflection-world-effect?
@@ -566,7 +570,13 @@
                            {:catalog catalog
                             :initial-owner-state (or owner-state-fn owner-state)
                             :query-port (merge default-query-port (or query-port {}))
-                            :now-tick now-tick
+                            ;; Explicit `(or now-tick ...)`: create-engine's :or
+                            ;; default only fires when the key is absent, and
+                            ;; this map always includes :now-tick (possibly
+                            ;; nil when initialize! is called with {}), so an
+                            ;; unguarded pass-through here silently binds the
+                            ;; engine's now-tick to nil.
+                            :now-tick (or now-tick (fn [] @last-known-tick*))
                             :ability-resolver (or ability-resolver resolve-slot)
                             :domain-event-handler (or domain-event-handler
                                                        apply-combat-domain-event)
@@ -1420,6 +1430,7 @@
 (defn tick!
   "Advance sessions, execute their world effects, and publish each result."
   [tick]
+  (reset! last-known-tick* (long tick))
   (mapv (fn [result]
           ;; Session pulses produce authoritative resource/cooldown/skill
           ;; patches just like start/release intents.  Commit them before any
@@ -1437,4 +1448,5 @@
   (reset! catalog* nil)
   (reset! world-effect-handler* nil)
   (reset! result-sink* nil)
+  (reset! last-known-tick* 0)
   nil)

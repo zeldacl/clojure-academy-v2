@@ -580,8 +580,16 @@
 (defn tick! [engine tick]
   (when-not (= tick @(:last-tick engine))
     (reset! (:last-tick engine) tick)
-    (let [due (get @(:deadline-queue engine) tick #{})]
-      (swap! (:deadline-queue engine) dissoc tick)
+    ;; :deadline-queue is a sorted-map; take every entry whose deadline is
+    ;; <= the current tick, not just an exact match. A server tick skip (a
+    ;; missed call, a paused world, ...) would otherwise strand any session
+    ;; whose deadline fell inside the gap forever, since its key would never
+    ;; be looked up again.
+    (let [due-entries (subseq @(:deadline-queue engine) <= tick)
+          due (into #{} (mapcat val) due-entries)]
+      (when (seq due-entries)
+        (swap! (:deadline-queue engine)
+               (fn [queue] (apply dissoc queue (map key due-entries)))))
       (mapv
        (fn [session-id]
          (if-let [session (get @(:sessions engine) session-id)]
