@@ -12,7 +12,7 @@ public record HostDescriptor(String id, HostKind kind, int width, int height,
         if (width < 0 || height < 0) throw new IllegalArgumentException("negative host dimensions");
     }
 
-    public enum HostKind { HUD, WORLD_UI, VFX, FIRST_PERSON, CAMERA, POST_PROCESS, SCREEN }
+    public enum HostKind { HUD, WORLD_UI, SCREEN }
     public enum InputPolicy { PASSTHROUGH, CAPTURE }
     public record SafeInsets(int left, int top, int right, int bottom) {
         public static final SafeInsets ZERO = new SafeInsets(0, 0, 0, 0);

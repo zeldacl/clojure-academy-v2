@@ -44,10 +44,6 @@
   (case (str (some-> host .kind))
     "HUD" RenderStage/HUD
     "WORLD_UI" RenderStage/WORLD_AFTER_TRANSLUCENT
-    "VFX" RenderStage/WORLD_AFTER_TRANSLUCENT
-    "FIRST_PERSON" RenderStage/FIRST_PERSON
-    "CAMERA" RenderStage/WORLD_AFTER_TRANSLUCENT
-    "POST_PROCESS" RenderStage/POST_PROCESS
     "SCREEN" RenderStage/SCREEN
     RenderStage/HUD))
 (defn mount! [runtime host template model]

@@ -5,7 +5,7 @@
    It must not import Forge, Fabric or NeoForge; those adapters stay in
    minecraft/base and loader modules." )
 
-(def host-kinds #{:hud :world-ui :vfx :first-person :camera :post-process :screen})
+(def host-kinds #{:hud :world-ui :screen})
 
 (defn host-descriptor [id kind width height input-policy]
   (when-not (contains? host-kinds kind)
