@@ -133,7 +133,13 @@
         (if-let [m (modal/active-modal rt)]
           (do (modal/modal-key! m key-code scan-code modifiers) true)
           (if (= (long key-code) 256)
-            (do (close-screen! this) true)
+            ;; ESC first goes to the UI's own :key handlers (the developer
+            ;; skill-detail / level-up popups listen on :dev-cover's focus, so
+            ;; ESC closes the popup); only close the whole screen when nothing
+            ;; inside consumed it.
+            (if (events/dispatch-key! rt key-code scan-code modifiers 0)
+              true
+              (do (close-screen! this) true))
             (input/handle-key-pressed rt key-code scan-code modifiers))))
       (fn [_this code-point modifiers]
         (if-let [m (modal/active-modal rt)]

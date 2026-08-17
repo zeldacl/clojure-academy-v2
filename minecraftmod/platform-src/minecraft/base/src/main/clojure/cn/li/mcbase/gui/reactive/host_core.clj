@@ -11,6 +11,7 @@
   Frame order: on-pre-render before layout/tape (terminal fit-scale)."
   (:require [cn.li.platform.neutral.ui :as rt]
             [cn.li.platform.neutral.ui :as layout]
+            [cn.li.platform.neutral.ui :as events]
             [cn.li.mcbase.gui.reactive.clock :as clock]
             [cn.li.mcbase.gui.reactive.input :as input]
             [cn.li.mcbase.gui.reactive.perf :as perf]
@@ -59,7 +60,13 @@
                      (= (long key-code) 256)
                      (if-let [m (modal/active-modal rt)]
                        (do (modal/modal-key! m key-code scan-code modifiers) true)
-                       (do (close-screen! this) true))
+                       ;; ESC first goes to the UI's own :key handlers (the
+                       ;; skill-tree viewer's detail popup listens on
+                       ;; :dev-cover's focus, so ESC closes the popup); only
+                       ;; close the whole screen when nothing inside consumed it.
+                       (if (events/dispatch-key! rt key-code scan-code modifiers 0)
+                         true
+                         (do (close-screen! this) true)))
 
                      (and on-key-pressed
                           (boolean (on-key-pressed this key-code scan-code modifiers)))

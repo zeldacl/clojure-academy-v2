@@ -130,14 +130,20 @@
             (invoke-handlers! :mouse-scroll handlers rt node evt))
           (recur (.getParentNode ^INode node)))))))
 
-(defn dispatch-key! [^UiRt rt key-code scan-code modifiers action]
+(defn dispatch-key!
+  "Dispatch a key press to the focus node's :key handlers (if any).
+   Returns true when a :key handler was invoked, nil otherwise — hosts use
+   this to decide whether the key was consumed by the UI (e.g. ESC closing a
+   skill detail popup) before falling back to closing the whole screen."
+  [^UiRt rt key-code scan-code modifiers action]
   (let [focus-idx (rt/focus-idx rt)]
     (when (>= focus-idx 0)
       (when-let [handlers (rt/get-event-handlers rt focus-idx :key)]
         (when-let [^INode node (rt/node-by-idx rt focus-idx)]
           (let [evt {:key-code key-code :scan-code scan-code :modifiers modifiers
                      :action action :node-idx focus-idx}]
-            (invoke-handlers! :key handlers rt node evt)))))))
+            (invoke-handlers! :key handlers rt node evt)
+            true))))))
 
 (defn dispatch-char! [^UiRt rt code-point]
   (let [focus-idx (rt/focus-idx rt)]
