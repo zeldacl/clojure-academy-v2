@@ -19,7 +19,9 @@
 | `db831d963` | mcmod `validate-host-api` 恒拒绝任何合法 host-api（`:schema-version` 被塞进自己的 `ifn?` 完整性检查）；VFX ABI 拆分必需/可选操作 |
 | `0532dbf7a` | presentation-core 删除死的 `VFX/CAMERA/FIRST_PERSON/POST_PROCESS` HostKind |
 | `b72f0555c` | presentation-core `input/dispatch!` 改为返回真实 EventResult，删除冗余重注册 |
-| （见下方 C 节） | `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`/`execute-meltdowner!` 四个 world-effect 执行器 |
+| `9b8077266` | `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`/`execute-meltdowner!` 四个 world-effect 执行器（见下方 C 节） |
+| `b55116f6f` | `:block-scan` query + `execute-mine-ray!`（mine-ray-basic/expert/luck 三个 skill id）、`:storm-wing` query + `execute-storm-wing!`（见下方 C-2 节） |
+| `626be7705` | `:light-shield`/`:electron-missile`/`:scatter-bomb` query + 三个保守简化执行器（见下方 C-2 节） |
 
 ## 分类清单
 
@@ -67,13 +69,27 @@
 - **meltdowner 是保守实现**：只对 raycast 命中的单一目标造成伤害。`beam-radius`/`block-energy`（沿光束熔化方块）和 `:reflection` 字段（Vector-Reflection 被动联动）**故意没有实现**——这块和 B 节的 mag-manip 一样需要设计判断，不是可以照抄平台原语的低风险填空，代码里留了注释指回本文档。
 - **意外发现一个更大范围的既有问题，没有在本次改动范围内修**：`platform-src/minecraft/base/.../DamageSourceAccess.java` 的 `resolveKeyword` 只认识 `:magic`/`:lightning`/`:explosion`/`:generic`/`:skill`/`:vec-reflection` 六个 damage-type 关键字，`combat_content.clj` 里广泛使用的 `:electric`/`:vector`/`:teleporter` 都会落进 `default -> "generic"`。这不是我这次改动引入的——thunder-bolt 等已经"能用"的技能同样受影响（它们的 `:damage`/`:damage-targets` world-effect 最终也调用同一个 `resolveKeyword`）。伤害本身仍然会打（不会报错、不会变成 0），只是没有拿到对应伤害类型的护甲穿透/抗性/免疫特殊处理。新的 4 个执行器延续了这个既有行为（用 `:electric`/`:vector` 标签，和 content 里的现有约定保持一致），没有引入新的不一致，但值得单独排查是否要给 `resolveKeyword` 补齐这几个关键字。
 
-### C-2. 其余 7 个技能：world-effect 执行器仍然缺失
+### C-2. 其余 7 个技能：query + world-effect 执行器（2026-08-17 追加会话，5/7 已完成）
 
-**受影响技能**：`jet-engine`、`light-shield`、`storm-wing`、`electron-missile`、`scatter-bomb`、`groundshock`、`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`（`groundshock` 的 query 走 `:block-scan` 的 fallback，`mine-ray` 三个也走 `:block-scan`，所以实际是 7 个技能点、8 个 skill id）。这 7 个的 **query 侧也没有真实实现**（都是 `when-let` 恒返回 nil），所以修复它们需要 query+执行器两层都补，比上面已完成的 4 个工作量更大。
+原受影响技能：`jet-engine`、`light-shield`、`storm-wing`、`electron-missile`、`scatter-bomb`、`groundshock`、`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`（8 个 skill id，7 个技能点，因为 `groundshock` 与 `mine-ray` 三个共用 `:block-scan` query）。这批的 query 侧也没有真实实现，修复需要 query+执行器两层都补，比 C 节工作量更大。
 
-**要做的事**：给 `execute-groundshock!`、`execute-electron-missile!`、`execute-scatter-bomb!`、`execute-mine-ray!`、`execute-jet-engine!`、`execute-light-shield!`、`execute-storm-wing!` 逐个写 Minecraft 实体/方块/物理交互代码，参考本次新增的 `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`（AOE 伤害类）或已有的 `execute-mag-manip!`/`execute-mag-movement!`（速度/位移类）实现风格。每个技能的参数校验（`combat_runtime.clj` 里对应 `:type effect` 分支的 `valid?` 判断）已经写好，能看出每个执行器该接收什么形状的 `plan`。同时还需要在 `default-query-port` 里补上对应的 query 实现（`:groundshock`/`:block-scan`、`:electron-missile`、`:scatter-bomb`、`:jet-engine`、`:light-shield`、`:storm-wing`）。
+**已完成（mine-ray-basic/expert/luck、storm-wing、light-shield、electron-missile、scatter-bomb，共 5 个技能点 / 7 个 skill id）**：
 
-**风险**：7 个技能，工作量大，每个都 touch 真实 MC API，需要逐个进游戏验证战斗表现（编译通过不代表游戏里数值/手感正确）。建议分批做，一个技能一个提交，方便单独回滚。
+- **`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`**：`:block-scan` query 用 `cn.li.mcmod.platform.block-manipulation/find-blocks-in-line`（沿视线找方块，已是完整安装的平台原语，`groundshock` 的方块破坏权限检查也依赖同一个 port）扫描视线上第一个非空气方块。`execute-mine-ray!` 实现渐进式挖掘——`break-speed` 是每 tick 累加进目标方块 `hardness` 的进度量，不是"瞬间达标"阈值（mine-ray-basic 的 0.2-0.4 远低于常见方块硬度），用 owner-keyed 本地 atom 跟踪进度，换目标方块会重置进度。
+- **`storm-wing`**：query 是纯 no-op（`{}`）——世界效果的 `valid?` 只检查 `query-result` 是 map，不读取内容。`execute-storm-wing!` 复用已验证过的移动类原语（`player-motion`），朝视线方向推进（低于 `speed-threshold` 时用 `speed-scale` 加速），并按 `is-on-ground-for-player?` 在贴地/空中悬浮速度间切换。
+- **`light-shield`/`electron-missile`/`scatter-bomb`（保守实现，已与用户确认范围）**：这三个的核心机制（伤害吸收、追踪弹幕、散射弹丸）都没有现成原语可复用，只实现了各自 `valid?` 已经校验过的"对附近/锁定目标造成伤害"核心部分：
+  - `light-shield` 只实现 `touch-damage`（对 `touch-radius` 内、`front-cone-degrees` 锥形范围内的敌人造成伤害）；`absorb-damage`（被动伤害吸收）**没有实现**——需要 hook 伤害管线，这个架构在全仓库任何地方都不存在。
+  - `electron-missile` 用 owner-keyed 本地 atom 按 `fire-interval` 节流，每次触发对 `seek-range` 内最近目标造成一次瞬间伤害，**没有**实际的追踪弹球实体/视觉。
+  - `scatter-bomb` 对 `auto-aim-radius` 内最近的至多 `ball-count` 个目标瞬间造成伤害，**没有**实际的弹丸散射视觉/物理；`anti-afk-tick`/`anti-afk-damage`（防挂机机制）也没有实现，触发时机需要设计输入。
+
+**仍然推迟（jet-engine、groundshock）**：
+
+- **`jet-engine`**：调查后发现它和上面 5 个不同类——它的 query/require/world-effect 全部只在 session **release 时触发一次**（不是每 tick），且效果本该是"延迟 `trigger-time-ticks` 后才发作、`trigger-lifetime-ticks` 后过期"的定时雷区。**全平台层没有任何延迟调度基础设施**——`ac.ability.service.delayed_projectiles` 是 AC 层的延迟效果系统，但 platform 代码不能依赖 AC（方向反转）。写"瞬间伤害版本"会丢失延迟这个定义性特征，等于换了一个技能而不是简化——已与用户确认，不写这个版本，等平台层有通用延迟调度设施后再做。
+- **`groundshock`**：核心机制是"从冲击点向外传播 N 次迭代的地面冲击波"（`max-iterations`/`init-energy`/`launch-scale` 等参数）。传播的具体算法、范围、形态属于技能手感设计决策，没有可复用原语，也没有权威参考实现可核实——已与用户确认单独推迟。
+
+**要做的事（仅剩 jet-engine、groundshock）**：需要先有平台层通用延迟调度设施（jet-engine）和明确的传播算法设计输入（groundshock），才能继续实现对应的 query + `execute-jet-engine!`/`execute-groundshock!`。`combat_runtime.clj` 里两者的 `valid?` 已经写好，能看出各自执行器该接收什么形状的 `plan`。
+
+**验证状态**：以上全部改动已跑 `:ac:checkClojure` 通过，`:platform:compileClojure` 在 `forge-1.20.1`/`neoforge-1.21.1` 两个目标上编译通过，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——编译通过只说明代码类型正确、能加载，不代表游戏里数值平衡或手感符合预期，尤其是 light-shield/electron-missile/scatter-bomb 三个保守实现版本的行为已经偏离技能原本设计。
 
 ### D. 3 个 world-effect 类型：连处理分支都没有
 
@@ -112,12 +128,12 @@
 
 ## 建议的下手顺序
 
-1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式重复了三次以后才逐渐收敛出的准确清单——不要重复这个摸索过程，直接从上面 A、B、C-2、D 四类清单开始。
-2. ~~C 类里的 thunder-clap/blood-retrograde/plasma-cannon/meltdowner 4 个技能最快能做~~ **已完成**，见上方 C 节（仍需进游戏验证）。
-3. **C-2 类的 7 个技能**（jet-engine 等）是现在优先级最高的剩余项——不需要设计判断，只是工作量大，可以参照 C 节新增的 4 个执行器风格继续做。
-4. **D 类的 `:knockback`**（directed-shock）大概率可以复用已有的实体速度设置原语，是 D 类三者里最快能做的。
-5. **A 类（传送）、B 类（mag 系列）需要先做设计判断**，不建议在没有设计输入的情况下直接开始写代码。
-6. **E、F 类是大迁移，建议单独排期**，不要和 A/B/C-2/D 的小修小补混在一个提交序列里。
+1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
+2. ~~C 类里的 thunder-clap/blood-retrograde/plasma-cannon/meltdowner 4 个技能~~ / ~~C-2 类里的 mine-ray-basic/expert/luck、storm-wing、light-shield、electron-missile、scatter-bomb 5 个技能点~~ **均已完成**，见上方 C 节、C-2 节（light-shield/electron-missile/scatter-bomb 是保守简化版本，均仍需进游戏验证）。
+3. **剩下最高优先级：D 类的 `:knockback`**（directed-shock）大概率可以复用已有的实体速度设置原语（`entity-motion`/`player-motion`），是当前所有剩余项里最快能做的。
+4. **C-2 类的 jet-engine、groundshock 需要新基础设施/设计输入才能继续**：jet-engine 等平台层通用延迟调度设施，groundshock 等传播算法设计输入——不建议直接开始写代码。
+5. **A 类（传送）、B 类（mag 系列）同样需要先做设计判断**，不建议在没有设计输入的情况下直接开始写代码。
+6. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
 
