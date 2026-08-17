@@ -37,7 +37,7 @@
 
 排障判断依据：如果一个已迁移到 combat-core 的技能施放后完全没有效果（伤害、位移、特效都没有），无论哪种情况都**不会抛异常或记可见错误**——query 返回 nil 被 `:require` 拒绝成普通"没瞄准目标"（这个已经在 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) 相关的执行会话里补了 `:query-returned-nil` 诊断 feedback，见 commit `d72b1695f`），world-effect 缺失则被 `execute-world-effects!` 的 try/catch 降级为 `:status :failed`。先检查它的 op 序列里的 `:query-type`，再检查 `:world-effect` 的 `:effect-type`，分别对照 `default-query-port` 和 `create-world-effects` 是否真的覆盖了这两个值。
 
-只有 `:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave` 类查询 + `:damage`（走独立的伤害管线，不经过 `world-effects/execute-*!`）组合出的技能（如 railgun、thunder-bolt、electron-bomb、flesh-ripping、directed-shock 的伤害部分）是当前可信的端到端正常路径。
+只有 `:raycast`/`:attack`/`:ray-barrage`/`:directed-blastwave` 类查询 + `:damage`（走独立的伤害管线，不经过 `world-effects/execute-*!`）组合出的技能（如 railgun、thunder-bolt、electron-bomb、flesh-ripping、directed-shock 的伤害部分）是当前可信的端到端正常路径。`thunder-clap`/`blood-retrograde`/`plasma-cannon`/`meltdowner` 的 world-effect 执行器已在 2026-08-17 补齐（见 [COMBAT_VFX_PLATFORM_GAPS.md](COMBAT_VFX_PLATFORM_GAPS.md) C 节），编译通过但**尚未进游戏验证**，先按"可能有效但未证实"对待，不要当成和 railgun 同等级别的已验证路径。
 
 ## 排障手册
 

@@ -19,6 +19,7 @@
 | `db831d963` | mcmod `validate-host-api` 恒拒绝任何合法 host-api（`:schema-version` 被塞进自己的 `ifn?` 完整性检查）；VFX ABI 拆分必需/可选操作 |
 | `0532dbf7a` | presentation-core 删除死的 `VFX/CAMERA/FIRST_PERSON/POST_PROCESS` HostKind |
 | `b72f0555c` | presentation-core `input/dispatch!` 改为返回真实 EventResult，删除冗余重注册 |
+| （见下方 C 节） | `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`/`execute-meltdowner!` 四个 world-effect 执行器 |
 
 ## 分类清单
 
@@ -57,19 +58,22 @@
 
 **要做的事**：需要先有人（游戏设计/内容作者）回答"什么算金属"，才能实现 query。不是纯粹的代码填空。
 
-### C. 7 个技能：world-effect 执行器整体缺失
+### C. world-effect 执行器缺失
 
-**受影响技能**：`jet-engine`、`light-shield`、`storm-wing`、`electron-missile`、`scatter-bomb`、`groundshock`、`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`（`groundshock` 的 query 走 `:block-scan` 的 fallback，`mine-ray` 三个也走 `:block-scan`，所以实际是 7 个技能点、8 个 skill id）。
+**已完成（thunder-clap/blood-retrograde/plasma-cannon/meltdowner，2026-08-17 追加会话）**：`platform-src/minecraft/base/.../adapter/world_effects.clj` 的 `create-world-effects` 新增了 `execute-thunder-clap!`、`execute-blood-retrograde!`、`execute-plasma-cannon!`、`execute-meltdowner!` 四个执行器。全部复用已安装、已验证的 `cn.li.mcmod.platform.entity-damage/apply-direct-damage!`，没有引入新的 Minecraft 实体/物理原语。已在 `forge-1.20.1` 与 `neoforge-1.21.1` 两个平台目标上跑 `:platform:compileClojure` 编译通过（`fabric-26.2` 因为预先存在、与本次改动无关的 Fabric Loom 插件版本不匹配未能编译，环境问题，不是代码问题）；**仍未进游戏验证实际战斗表现**。
 
-**现状核实**：`platform-src/minecraft/base/.../adapter/world_effects.clj` 的 `create-world-effects` 是全仓库唯一被安装的 world-effects 实现（6 个 loader 逐一核对过，全部只是薄封装同一个工厂函数）。它只真正实现了 4 个执行器：`execute-vec-accel!`、`execute-mag-movement!`、`execute-mag-manip!`、`execute-vec-deviation!`。
+实现细节与已知简化：
+- **owner 排除是自己写的，不是白拿来的**：`entity-damage/apply-aoe-damage!` 这个已安装的平台原语**没有 owner 排除参数**，直接用会连施法者自己一起打。新增了 `aoe-victims!`/`apply-aoe-damage-excluding-owner!` 两个本地 helper，逻辑镜像 `ac.ability.util.attack/aoe-victims`（owner 排除 + 球形距离过滤），但不能直接 `require` 那个 AC 层命名空间（platform 依赖 AC 是方向反转），所以是重新写的等价实现，不是简单复用。
+- **meltdowner 是保守实现**：只对 raycast 命中的单一目标造成伤害。`beam-radius`/`block-energy`（沿光束熔化方块）和 `:reflection` 字段（Vector-Reflection 被动联动）**故意没有实现**——这块和 B 节的 mag-manip 一样需要设计判断，不是可以照抄平台原语的低风险填空，代码里留了注释指回本文档。
+- **意外发现一个更大范围的既有问题，没有在本次改动范围内修**：`platform-src/minecraft/base/.../DamageSourceAccess.java` 的 `resolveKeyword` 只认识 `:magic`/`:lightning`/`:explosion`/`:generic`/`:skill`/`:vec-reflection` 六个 damage-type 关键字，`combat_content.clj` 里广泛使用的 `:electric`/`:vector`/`:teleporter` 都会落进 `default -> "generic"`。这不是我这次改动引入的——thunder-bolt 等已经"能用"的技能同样受影响（它们的 `:damage`/`:damage-targets` world-effect 最终也调用同一个 `resolveKeyword`）。伤害本身仍然会打（不会报错、不会变成 0），只是没有拿到对应伤害类型的护甲穿透/抗性/免疫特殊处理。新的 4 个执行器延续了这个既有行为（用 `:electric`/`:vector` 标签，和 content 里的现有约定保持一致），没有引入新的不一致，但值得单独排查是否要给 `resolveKeyword` 补齐这几个关键字。
 
-`mcmod/platform/world_effects.clj` 这个中立契约声明了共 16 个 `execute-*` 函数，其余 11 个从未安装：`execute-groundshock!`、`execute-thunder-clap!`、`execute-blood-retrograde!`、`execute-electron-missile!`、`execute-scatter-bomb!`、`execute-plasma-cannon!`、`execute-mine-ray!`、`execute-meltdowner!`、`execute-jet-engine!`、`execute-light-shield!`、`execute-storm-wing!`。调用即抛 `"Required world-effects operation is not installed"`，被 try/catch 兜成 `:status :failed`。
+### C-2. 其余 7 个技能：world-effect 执行器仍然缺失
 
-**注意**：`thunder-clap`/`blood-retrograde`/`plasma-cannon`/`meltdowner` 这 4 个的 **query 侧已经工作**（`default-query-port` 里有真实本地 fallback），只缺执行器——意味着这 4 个技能修起来比另外 7 个更省事（不需要再设计 query，只需要写执行器）。**建议先做这 4 个**，再做需要 query+执行器都补的另外 7 个。
+**受影响技能**：`jet-engine`、`light-shield`、`storm-wing`、`electron-missile`、`scatter-bomb`、`groundshock`、`mine-ray-basic`/`mine-ray-expert`/`mine-ray-luck`（`groundshock` 的 query 走 `:block-scan` 的 fallback，`mine-ray` 三个也走 `:block-scan`，所以实际是 7 个技能点、8 个 skill id）。这 7 个的 **query 侧也没有真实实现**（都是 `when-let` 恒返回 nil），所以修复它们需要 query+执行器两层都补，比上面已完成的 4 个工作量更大。
 
-**要做的事**：给这 11 个执行器逐个写 Minecraft 实体/方块/物理交互代码，参考 `execute-mag-manip!`/`execute-mag-movement!` 已有实现的风格（读 `plan[:query-result]`，调用 `entity-motion`/`player-motion`/`query-core` 等 `mcbase` 已有的实体操作原语）。每个技能的参数校验（`combat_runtime.clj` 里对应 `:type effect` 分支的 `valid?` 判断）已经写好，能看出每个执行器该接收什么形状的 `plan`。
+**要做的事**：给 `execute-groundshock!`、`execute-electron-missile!`、`execute-scatter-bomb!`、`execute-mine-ray!`、`execute-jet-engine!`、`execute-light-shield!`、`execute-storm-wing!` 逐个写 Minecraft 实体/方块/物理交互代码，参考本次新增的 `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`（AOE 伤害类）或已有的 `execute-mag-manip!`/`execute-mag-movement!`（速度/位移类）实现风格。每个技能的参数校验（`combat_runtime.clj` 里对应 `:type effect` 分支的 `valid?` 判断）已经写好，能看出每个执行器该接收什么形状的 `plan`。同时还需要在 `default-query-port` 里补上对应的 query 实现（`:groundshock`/`:block-scan`、`:electron-missile`、`:scatter-bomb`、`:jet-engine`、`:light-shield`、`:storm-wing`）。
 
-**风险**：11 个技能，工作量大，每个都 touch 真实 MC API，需要逐个进游戏验证。建议分批做，一个技能一个提交，方便单独回滚。
+**风险**：7 个技能，工作量大，每个都 touch 真实 MC API，需要逐个进游戏验证战斗表现（编译通过不代表游戏里数值/手感正确）。建议分批做，一个技能一个提交，方便单独回滚。
 
 ### D. 3 个 world-effect 类型：连处理分支都没有
 
@@ -108,11 +112,12 @@
 
 ## 建议的下手顺序
 
-1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式重复了三次以后才逐渐收敛出的准确清单——不要重复这个摸索过程，直接从上面 A-D 四类清单开始。
-2. **C 类里的 thunder-clap/blood-retrograde/plasma-cannon/meltdowner 4 个技能最快能做**（只缺执行器，query 已工作），优先级最高。
-3. **D 类的 `:knockback`**（directed-shock）大概率可以复用已有的实体速度设置原语，是三者里最快能做的。
-4. **A 类（传送）、B 类（mag 系列）需要先做设计判断**，不建议在没有设计输入的情况下直接开始写代码。
-5. **E、F 类是大迁移，建议单独排期**，不要和 A-D 的小修小补混在一个提交序列里。
+1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式重复了三次以后才逐渐收敛出的准确清单——不要重复这个摸索过程，直接从上面 A、B、C-2、D 四类清单开始。
+2. ~~C 类里的 thunder-clap/blood-retrograde/plasma-cannon/meltdowner 4 个技能最快能做~~ **已完成**，见上方 C 节（仍需进游戏验证）。
+3. **C-2 类的 7 个技能**（jet-engine 等）是现在优先级最高的剩余项——不需要设计判断，只是工作量大，可以参照 C 节新增的 4 个执行器风格继续做。
+4. **D 类的 `:knockback`**（directed-shock）大概率可以复用已有的实体速度设置原语，是 D 类三者里最快能做的。
+5. **A 类（传送）、B 类（mag 系列）需要先做设计判断**，不建议在没有设计输入的情况下直接开始写代码。
+6. **E、F 类是大迁移，建议单独排期**，不要和 A/B/C-2/D 的小修小补混在一个提交序列里。
 
 ## 验证方式
 

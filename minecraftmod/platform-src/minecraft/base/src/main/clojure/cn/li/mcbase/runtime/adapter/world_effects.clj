@@ -11,6 +11,7 @@
             [cn.li.mcbase.runtime.multipart-entity :as multipart]
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
+            [cn.li.mcmod.platform.entity-damage :as entity-damage]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -33,6 +34,16 @@
 (defn- resolve-level [server resolve-level-fn world-id]
   (when server
     (resolve-level-fn server world-id)))
+
+(defn- point-of
+  "Defensively read an {:x :y :z} point off either a normalized :impact map
+   (ac.ability.util.attack's shape) or a raw raycast hit map (:hit-x/:hit-y/
+   :hit-z). Checks :hit-x before :x, matching ac.ability.util.attack/
+   block-impact-point's established precedent for the same data."
+  [m]
+  {:x (double (or (:hit-x m) (:x m) 0.0))
+   :y (double (or (:hit-y m) (:y m) 0.0))
+   :z (double (or (:hit-z m) (:z m) 0.0))})
 
 (defn- execute-vec-deviation-adapter!
   [server-fn world-id plan]
@@ -64,6 +75,80 @@
                                   level projectile-spec resolve-entity-id-fn get-entity-by-uuid-fn)))
         get-entities-in-aabb (or get-entities-in-aabb-fn (fn [_level _aabb] []))
         multipart-entity? multipart/multipart?
+        find-entities-in-radius! (fn [world-id x y z radius]
+                                   (try
+                                     (when-let [^MinecraftServer server (server-fn)]
+                                       (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
+                                         ((:entities-in-radius (core))
+                                           level
+                                           x y z radius
+                                           get-entities-in-aabb
+                                           resolve-entity-id-fn
+                                           multipart-entity?)))
+                                     (catch Exception e
+                                       (log/warn "Failed to find entities:" (ex-message e))
+                                       [])))
+        ;; apply-aoe-damage! (mcmod.platform.entity-damage) has no
+        ;; owner-exclusion parameter at all -- calling it directly for a
+        ;; player-cast AOE would also damage the caster. Owner exclusion and
+        ;; the spherical distance check mirror ac.ability.util.attack/
+        ;; aoe-victims, which this namespace cannot require (platform code
+        ;; must not depend on AC).
+        aoe-victims! (fn [world-id owner x y z radius]
+                       (let [radius (double radius)
+                             radius-sq (* radius radius)]
+                         (->> (find-entities-in-radius! world-id x y z radius)
+                              (remove #(= (str owner) (str (:uuid %))))
+                              (filter (fn [{ex :x ey :y ez :z}]
+                                        (let [dx (- (double (or ex 0.0)) x)
+                                              dy (- (double (or ey 0.0)) y)
+                                              dz (- (double (or ez 0.0)) z)]
+                                          (<= (+ (* dx dx) (* dy dy) (* dz dz)) radius-sq)))))))
+        apply-aoe-damage-excluding-owner! (fn [world-id owner x y z radius damage source-type]
+                                            (try
+                                              (let [victims (aoe-victims! world-id owner x y z radius)]
+                                                (doseq [{:keys [uuid]} victims]
+                                                  (entity-damage/apply-direct-damage!
+                                                   world-id uuid (double damage) source-type
+                                                   {:attacker-uuid owner}))
+                                                true)
+                                              (catch Exception e
+                                                (log/warn "Failed to apply AOE damage:" (ex-message e))
+                                                false)))
+        execute-thunder-clap! (fn [world-id owner plan]
+                                (let [{:keys [query-result amount aoe-radius]} plan
+                                      point (point-of (:impact query-result))]
+                                  (apply-aoe-damage-excluding-owner!
+                                   world-id owner (:x point) (:y point) (:z point)
+                                   aoe-radius amount :electric)))
+        execute-blood-retrograde! (fn [world-id owner plan]
+                                    (let [{:keys [query-result amount entity-search-radius]} plan
+                                          point (point-of query-result)]
+                                      (apply-aoe-damage-excluding-owner!
+                                       world-id owner (:x point) (:y point) (:z point)
+                                       entity-search-radius amount :vector)))
+        execute-plasma-cannon! (fn [world-id owner plan]
+                                 (let [{:keys [query-result damage explosion-radius]} plan
+                                       point (point-of (:impact query-result))]
+                                   (apply-aoe-damage-excluding-owner!
+                                    world-id owner (:x point) (:y point) (:z point)
+                                    explosion-radius damage :electric)))
+        ;; Only the raycast-hit target takes damage. beam-radius/block-energy
+        ;; (block melting along the beam path) and the :reflection field
+        ;; (Vector-Reflection passive integration) are deliberately not
+        ;; implemented here -- see docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md.
+        execute-meltdowner! (fn [world-id owner plan]
+                             (let [{:keys [target damage]} plan
+                                   entity-uuid (or (:uuid target) (:entity-uuid target) (:entity-id target))]
+                               (try
+                                 (boolean
+                                  (and entity-uuid
+                                       (entity-damage/apply-direct-damage!
+                                        world-id entity-uuid (double damage) :electric
+                                        {:attacker-uuid owner})))
+                                 (catch Exception e
+                                   (log/warn "Failed to apply meltdowner damage:" (ex-message e))
+                                   false))))
         execute-vec-accel! (fn [world-id owner plan]
                              (let [q (:query-result plan)
                                    velocity (:initial-velocity q)]
@@ -157,19 +242,7 @@
                             (catch Exception e
                               (log/warn "Failed to spawn projectile:" (ex-message e))
                               {:success? false})))
-     :find-entities-in-radius (fn [world-id x y z radius]
-                                (try
-                                  (when-let [^MinecraftServer server (server-fn)]
-                                    (when-let [^ServerLevel level (resolve-level server resolve-level-fn world-id)]
-                                      ((:entities-in-radius (core))
-                                        level
-                                        x y z radius
-                                        get-entities-in-aabb
-                                        resolve-entity-id-fn
-                                        multipart-entity?)))
-                                  (catch Exception e
-                                    (log/warn "Failed to find entities:" (ex-message e))
-                                    [])))
+     :find-entities-in-radius find-entities-in-radius!
      :find-entities-in-aabb (fn [world-id min-x min-y min-z max-x max-y max-z]
                               (try
                                 (when-let [^MinecraftServer server (server-fn)]
@@ -222,6 +295,10 @@
      :execute-mag-movement! execute-mag-movement!
      :execute-flashing! execute-flashing!
      :execute-mag-manip! execute-mag-manip!
+     :execute-thunder-clap! execute-thunder-clap!
+     :execute-blood-retrograde! execute-blood-retrograde!
+     :execute-plasma-cannon! execute-plasma-cannon!
+     :execute-meltdowner! execute-meltdowner!
      :execute-vec-deviation! (fn [world-id _owner plan]
                                (execute-vec-deviation-adapter! server-fn world-id plan))}))
 
