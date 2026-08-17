@@ -6,8 +6,9 @@
 
 编写或修改 `mcmod` / `ac` / 平台 Clojure 时，优先打开正文中的：
 
-- [Clojure 设计与实现原则（强制）](docs/dev/AGENT_AND_TOOLING.md#clojure-设计与实现原则强制)（10 条）
-- [P.I.C.A.S.O.（毕加索原则）](docs/dev/AGENT_AND_TOOLING.md#fp-通用原则--picaso毕加索原则)
-- [S.I.D.E.（边际原则）](docs/dev/AGENT_AND_TOOLING.md#clojure-专属原则--side边际原则)
+- [Architecture rules](docs/dev/AGENT_AND_TOOLING.md#architecture-rules)（模块边界、依赖方向、target 目录约束）
+- [Required gate](docs/dev/AGENT_AND_TOOLING.md#required-gate)（`verifyCurrentPlatforms` 聚合的强制校验清单）
+
+> 曾经指向 `AGENT_AND_TOOLING.md` 内「Clojure 设计与实现原则（10 条）」「P.I.C.A.S.O.」「S.I.D.E.」三个小节的链接已失效——`AGENT_AND_TOOLING.md` 正文中从未写入过这三节内容。在有人补写正文前，不要引用这三个名字；上面两条是当前正文里实际存在、可核实的章节。
 
 相关：`[PROJECT_LAYOUT.md](docs/01-overview/PROJECT_LAYOUT.md)`、`[TOP_LEVEL_STATE_GOVERNANCE.md](docs/dev/TOP_LEVEL_STATE_GOVERNANCE.md)`

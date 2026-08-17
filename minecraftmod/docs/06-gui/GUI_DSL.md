@@ -10,9 +10,15 @@
 | `cn.li.mcmod.gui.registry` | GUI metadata、screen factory 与 handler registry。 |
 | `cn.li.mcmod.gui.handler` | 平台 GUI handler 协议。 |
 | `cn.li.mcmod.gui.slot-schema` | Slot layout、quick move 与 validator 描述。 |
-| `cn.li.mcmod.gui.xml-parser` | Runtime XML widget 读取。 |
 
 `mcmod` 不引用 Minecraft / Loader API。
+
+> `cn.li.mcmod.gui.xml-parser` 已不存在（文件已删除）——`ac/src` 下不再有任何
+> `guis/**/*.xml`，XML GUI 已被 Presentation Runtime（`.ui.edn` 模板，见
+> [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)）
+> 取代。本文档其余部分描述的是仍然存在的 `mcmod/gui` spec/registry/slot-schema
+> 系统（machine_container 等仍在用它承载 Menu/Slot 权威），未随本轮重构逐条复核，
+> 如发现与代码不符请对照 `mcmod/src/main/clojure/cn/li/mcmod/gui/` 实际文件更新。
 
 ## ac ownership
 

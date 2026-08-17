@@ -33,9 +33,16 @@ platform-builds/
 | 工程 | 职责 |
 |------|------|
 | `:api` | 对外 Java API 与互操作接口 |
-| `:mcmod` | DSL、协议、生命周期、平台抽象和不依赖 Minecraft 类的运行契约 |
-| `:ac` | AcademyCraft 内容与领域逻辑 |
+| `:mcmod` | DSL、协议、生命周期、平台抽象和不依赖 Minecraft 类的运行契约；也是 sealed `RenderCommand`/`RenderStage`/`RenderPass`/`FramePacket` 帧 ABI 的唯一持有者（`cn.li.mcmod.runtime`），presentation-core 与 vfx-core 都只依赖 `:mcmod`，互不依赖 |
+| `:presentation-core` | 帧管线 + Host 生命周期：模板挂载、输入分发、per-frame 提取与记忆化、脏位失效、（未接入生产的）保留树/布局引擎 |
+| `:presentation-compiler` | `.ui.edn` → `CompiledTemplate` 编译器 + 纯 Clojure 渲染解释器（`render.clj`），产出 `RenderCommand` |
+| `:vfx-core` | 特效实例生命周期运行时：per-instance `spawn!`/`signal!`/`destroy!`，`instance-key` 幂等、`event-seq` 排序、tombstone 防复活、seed 确定性 |
+| `:combat-core` | 纯数据技能程序引擎：`:sequence`/`:query`/`:damage`/`:vfx`/`:world-effect`/`:domain-event` op 编译与执行，永不认识 Minecraft/渲染/VFX 运行时 |
+| `:ac` | AcademyCraft 内容与领域逻辑；组合 combat-core（技能数据）+ vfx-core（客户端特效）+ presentation-core（HUD/GUI 呈现） |
 | `:platform` | 唯一平台工程；通过 `scripts/target-gradle.ps1 <target-id>` 选择具体目标 |
+| `:tools:target-launcher` | 目标构建的辅助启动器工程，非运行时代码 |
+
+`combat-core` 与 `vfx-core` 的设计与边界见 [COMBAT_CORE.md](../04-systems/COMBAT_CORE.md)、[VFX_CORE.md](../04-systems/VFX_CORE.md)；Presentation 帧管线见 [PRESENTATION_RUNTIME_NEXT_PLAN_CN.md](../02-architecture/PRESENTATION_RUNTIME_NEXT_PLAN_CN.md)。
 
 ## 平台源码组件
 
