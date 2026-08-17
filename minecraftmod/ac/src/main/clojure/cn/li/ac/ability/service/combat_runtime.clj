@@ -555,11 +555,20 @@
                                     ((get-in context [:queries :raycast])
                                      context (assoc node :query-type :raycast))))
               :electron-missile (fn [context node]
-                                  (when-let [host-query (contract/host-port :query)]
-                                    (host-query :electron-missile context node)))
+                                  (if-let [host-query (contract/host-port :query)]
+                                    (host-query :electron-missile context node)
+                                    ;; execute-electron-missile! does its own
+                                    ;; fresh nearest-target search every fire;
+                                    ;; :require never gates on this step's
+                                    ;; result (see combat_content.clj), so a
+                                    ;; non-nil map is all :world-effect needs.
+                                    {}))
               :scatter-bomb (fn [context node]
-                              (when-let [host-query (contract/host-port :query)]
-                                (host-query :scatter-bomb context node)))
+                              (if-let [host-query (contract/host-port :query)]
+                                (host-query :scatter-bomb context node)
+                                ;; Same as electron-missile -- execute-scatter-
+                                ;; bomb! does its own targeting.
+                                {}))
               :saved-location (fn [context node]
                                 (when-let [host-query (contract/host-port :query)]
                                   (host-query :saved-location context node)))
@@ -570,8 +579,12 @@
                             (when-let [host-query (contract/host-port :query)]
                               (host-query :jet-engine context node)))
               :light-shield (fn [context node]
-                              (when-let [host-query (contract/host-port :query)]
-                                (host-query :light-shield context node)))
+                              (if-let [host-query (contract/host-port :query)]
+                                (host-query :light-shield context node)
+                                ;; execute-light-shield! finds nearby entities
+                                ;; itself; :require never gates on this step's
+                                ;; result.
+                                {}))
               :mag-manip (fn [context node]
                            (when-let [host-query (contract/host-port :query)]
                              (host-query :mag-manip context node)))

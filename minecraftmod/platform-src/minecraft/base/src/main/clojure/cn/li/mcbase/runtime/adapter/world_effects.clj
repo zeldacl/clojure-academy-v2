@@ -47,6 +47,29 @@
    :y (double (or (:hit-y m) (:y m) 0.0))
    :z (double (or (:hit-z m) (:z m) 0.0))})
 
+(defn- sort-by-distance
+  "Order entity maps ({:x :y :z ...}) nearest-first to origin."
+  [origin entities]
+  (sort-by (fn [{:keys [x y z]}]
+             (let [dx (- (double (or x 0.0)) (double (:x origin)))
+                   dy (- (double (or y 0.0)) (double (:y origin)))
+                   dz (- (double (or z 0.0)) (double (:z origin)))]
+               (+ (* dx dx) (* dy dy) (* dz dz))))
+           entities))
+
+(defn- within-cone?
+  "True when entity is within half-angle-degrees of dir (a unit vector) as
+   seen from origin. A zero-length offset (entity exactly at origin) always
+   passes -- there is no meaningful direction to test."
+  [origin dir-x dir-y dir-z half-angle-degrees {:keys [x y z]}]
+  (let [dx (- (double (or x 0.0)) (double (:x origin)))
+        dy (- (double (or y 0.0)) (double (:y origin)))
+        dz (- (double (or z 0.0)) (double (:z origin)))
+        len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
+    (or (zero? len)
+        (>= (/ (+ (* dx dir-x) (* dy dir-y) (* dz dir-z)) len)
+            (Math/cos (Math/toRadians (double half-angle-degrees)))))))
+
 (defn- execute-vec-deviation-adapter!
   [server-fn world-id plan]
   (let [entities (:entities (:query-result plan))]
@@ -217,6 +240,88 @@
                                (catch Exception e
                                  (log/warn "Failed to apply storm-wing:" (ex-message e))
                                  false)))
+        ;; Conservative implementations (2026-08-17 追加会话, see
+        ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md 节 C-2): each only
+        ;; implements the well-defined "deal damage to nearby/targeted
+        ;; entities" core the skill's own valid? already validates. Visual
+        ;; behavior (traveling missiles, scatter spread) and light-shield's
+        ;; damage-absorption (needs a damage-pipeline interception hook that
+        ;; doesn't exist anywhere in this codebase) are deliberately not
+        ;; implemented -- see the doc for why those need design input this
+        ;; session has no authority to invent.
+        execute-light-shield! (fn [world-id owner plan]
+                                (try
+                                  (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                    (let [{:keys [touch-damage touch-radius front-cone-degrees]} plan
+                                          origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
+                                          look (when (raycast/available?)
+                                                 (raycast/player-look-vector owner))
+                                          lx (double (or (:x look) 0.0))
+                                          ly (double (or (:y look) 0.0))
+                                          lz (double (or (:z look) 1.0))
+                                          victims (aoe-victims! world-id owner
+                                                                 (:x origin) (:y origin) (:z origin)
+                                                                 touch-radius)
+                                          targets (filter #(within-cone? origin lx ly lz
+                                                                          (/ (double front-cone-degrees) 2.0) %)
+                                                           victims)]
+                                      (doseq [{:keys [uuid]} targets]
+                                        (entity-damage/apply-direct-damage!
+                                         world-id uuid (double touch-damage) :generic
+                                         {:attacker-uuid owner}))
+                                      true))
+                                  (catch Exception e
+                                    (log/warn "Failed to apply light-shield touch damage:" (ex-message e))
+                                    false)))
+        ;; Owner-keyed fire-interval throttle. combat-core drives this once
+        ;; per real tick (:pulse, :period-ticks 1); electron-missile's own
+        ;; fire-interval/spawn-interval describe a slower cadence than that,
+        ;; so the executor counts ticks itself and only actually fires when
+        ;; the interval elapses -- an instant hit on the nearest target in
+        ;; range rather than a traveling homing projectile.
+        electron-missile-state (atom {})
+        execute-electron-missile! (fn [world-id owner plan]
+                                   (try
+                                     (let [{:keys [damage seek-range fire-interval]} plan
+                                           fire-interval (long (max 1 (long (or fire-interval 8))))
+                                           elapsed (inc (long (or (:ticks (get @electron-missile-state owner)) 0)))]
+                                       (if (< elapsed fire-interval)
+                                         (do (swap! electron-missile-state assoc owner {:ticks elapsed})
+                                             true)
+                                         (do (swap! electron-missile-state assoc owner {:ticks 0})
+                                             (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                               (let [origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
+                                                     target (first (sort-by-distance
+                                                                    origin
+                                                                    (aoe-victims! world-id owner
+                                                                                  (:x origin) (:y origin) (:z origin)
+                                                                                  seek-range)))]
+                                                 (when target
+                                                   (entity-damage/apply-direct-damage!
+                                                    world-id (:uuid target) (double damage) :electric
+                                                    {:attacker-uuid owner}))))
+                                             true)))
+                                     (catch Exception e
+                                       (log/warn "Failed to apply electron-missile:" (ex-message e))
+                                       false)))
+        execute-scatter-bomb! (fn [world-id owner plan]
+                                (try
+                                  (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                    (let [{:keys [ball-count auto-aim-radius damage]} plan
+                                          origin {:x (.getX player) :y (.getY player) :z (.getZ player)}
+                                          targets (->> (aoe-victims! world-id owner
+                                                                      (:x origin) (:y origin) (:z origin)
+                                                                      auto-aim-radius)
+                                                       (sort-by-distance origin)
+                                                       (take (long (or ball-count 0))))]
+                                      (doseq [{:keys [uuid]} targets]
+                                        (entity-damage/apply-direct-damage!
+                                         world-id uuid (double damage) :electric
+                                         {:attacker-uuid owner}))
+                                      true))
+                                  (catch Exception e
+                                    (log/warn "Failed to apply scatter-bomb:" (ex-message e))
+                                    false)))
         execute-vec-accel! (fn [world-id owner plan]
                              (let [q (:query-result plan)
                                    velocity (:initial-velocity q)]
@@ -369,6 +474,9 @@
      :execute-meltdowner! execute-meltdowner!
      :execute-mine-ray! execute-mine-ray!
      :execute-storm-wing! execute-storm-wing!
+     :execute-light-shield! execute-light-shield!
+     :execute-electron-missile! execute-electron-missile!
+     :execute-scatter-bomb! execute-scatter-bomb!
      :execute-vec-deviation! (fn [world-id _owner plan]
                                (execute-vec-deviation-adapter! server-fn world-id plan))}))
 
