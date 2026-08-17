@@ -104,7 +104,10 @@
                                     (int (get @bindings (clojure.core/name attr)))]) binding-refs))
                    (or node-actions {})
                    (into {} (remove (comp nil? val)
-                                    (select-keys m [:label :rgba :x :y :w :h]))))))
+                                    (select-keys m [:label :rgba :x :y :w :h
+                                                    :width :height :min-width :min-height
+                                                    :max-width :max-height :aspect-ratio
+                                                    :direction :gap]))))))
 
 (defn- sha256 [value]
   (let [digest (.digest (MessageDigest/getInstance "SHA-256") (.getBytes (pr-str value) StandardCharsets/UTF_8))]

@@ -6,25 +6,6 @@
 
 (def stages (vec (RenderStage/values)))
 
-(defn mailbox []
-  {:latest (atom nil)
-   :previous (atom nil)
-   :published (atom 0)
-   :consumed (atom 0)})
-(defn publish! [mailbox frame]
-  (when-not frame (throw (NullPointerException. "frame")))
-  (let [old @(:latest mailbox)]
-    (reset! (:latest mailbox) frame)
-    (when old (reset! (:previous mailbox) old)))
-  (swap! (:published mailbox) inc)
-  mailbox)
-(defn poll-latest! [mailbox]
-  (let [frame @(:latest mailbox)]
-    (reset! (:latest mailbox) nil)
-    (reset! (:previous mailbox) nil)
-    (when frame (swap! (:consumed mailbox) inc))
-    frame))
-
 (defn frame-graph
   ([] (into {}
             (map-indexed (fn [idx stage]

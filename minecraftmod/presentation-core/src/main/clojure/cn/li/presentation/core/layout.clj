@@ -41,9 +41,12 @@
 
 (declare layout-node)
 
-(defn- layout-children [node width height]
+(defn- layout-flex-children
+  "Linear main-axis distribution: fixed/fraction/content children first,
+   :fill children split the remainder evenly."
+  [node width height default-direction]
   (let [props (:props node)
-        direction (or (:direction props) (if (= (:type node) :row) :row :column))
+        direction (or (:direction props) default-direction)
         children (:children node)
         gap (max 0.0 (finite (:gap props) 0.0))
         horizontal (= direction :row)
@@ -54,7 +57,13 @@
                                       (when (and spec (not= spec :fill))
                                         (resolve-size spec total-main 0.0))))
                                   children))
-        fill-count (count (filter #(#{:fill nil} (child-main-size % (if horizontal :width :height))) children))
+        ;; A set used as a predicate can't tell "nil is a member" from "not
+        ;; found" — (#{:fill nil} nil) returns nil either way — so an unset
+        ;; (nil) child spec was silently excluded from fill-count here.
+        fill-count (count (filter (fn [child]
+                                     (let [spec (child-main-size child (if horizontal :width :height))]
+                                       (or (nil? spec) (= spec :fill))))
+                                   children))
         remaining (max 0.0 (- total-main (* gap (max 0 (dec (count children)))) fixed))]
     (loop [remaining-children children
            offset 0.0
@@ -73,6 +82,36 @@
                  (+ offset main gap)
                  (conj result laid)))
         result))))
+
+(defn- layout-grid-children
+  "Even 2D grid: columns = ceil(sqrt n), rows = ceil(n / columns). Each cell
+   still resolves its child's own width/height/fill against the cell size."
+  [children width height]
+  (let [n (max 1 (count children))
+        columns (max 1 (int (Math/ceil (Math/sqrt n))))
+        rows (max 1 (int (Math/ceil (/ n (double columns)))))
+        cell-w (/ (double width) columns)
+        cell-h (/ (double height) rows)]
+    (vec (map-indexed
+          (fn [idx child]
+            (let [col (mod idx columns) row (quot idx columns)]
+              (layout-node child (* col cell-w) (* row cell-h) cell-w cell-h)))
+          children))))
+
+(defn- layout-stack-children
+  "Overlay: every child gets the full parent rect (scroll/portal act the
+   same way here — clipping and scroll offset are a backend/render concern,
+   not a layout one)."
+  [children width height]
+  (mapv #(layout-node % 0.0 0.0 width height true) children))
+
+(defn- layout-children [node width height]
+  (let [children (:children node)]
+    (case (:type node)
+      :grid (layout-grid-children children width height)
+      (:stack :scroll :portal) (layout-stack-children children width height)
+      :flex (layout-flex-children node width height :row)
+      (layout-flex-children node width height :column))))
 
 (defn layout-node
   "Layout a retained node inside x/y/available width/height."

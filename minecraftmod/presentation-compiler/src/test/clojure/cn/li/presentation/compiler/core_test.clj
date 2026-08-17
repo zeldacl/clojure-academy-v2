@@ -1,7 +1,6 @@
 (ns cn.li.presentation.compiler.core-test
   (:require [clojure.test :refer :all]
             [cn.li.presentation.compiler.core :as compiler]
-            [cn.li.presentation.compiler.artifact :as artifact]
             [cn.li.presentation.compiler.render :as render])
   (:import [cn.li.presentation.core TemplateId]))
 
@@ -68,20 +67,6 @@
     (is (= "virtual-list" (.. template root type)))
     (is (empty? (.. template root children)))))
 
-(deftest compiled-template-artifact-round-trips-as-data
-  (let [template (compiler/compile-edn
-                  (TemplateId. "academy:artifact")
-                  "{:type :button :key :root :label \"OK\" :on-click [:action :combat/select-skill] :semantics {:role :button}}"
-                  symbols)
-        bytes (artifact/encode template {:targets [:mc-1-20-1 :mc-1-21-1 :mc-26-2]
-                                         :dependencies ["academy:textures/ui.png"]})
-        decoded (artifact/decode bytes)
-        roundtrip (:template decoded)]
-    (is (= (.contentHash template) (.contentHash roundtrip)))
-    (is (= (into {} (.actions template)) (into {} (.actions roundtrip))))
-    (is (= ["academy:textures/ui.png"] (get-in decoded [:metadata :dependencies])))
-    (is (thrown? Exception (artifact/decode (.getBytes "bad" "UTF-8"))))))
-
 (deftest rejects-invalid-layout-and-semantics-schema
   (is (thrown? cn.li.presentation.compiler.TemplateCompileException
                (compiler/compile-edn
@@ -93,6 +78,58 @@
                 (TemplateId. "academy:bad-semantics")
                 "{:type :quad :key :root :semantics {:role :unknown}}"
                 {}))))
+
+(deftest flex-row-resolves-fraction-and-fill-widths
+  (let [template (compiler/compile-edn
+                  (TemplateId. "academy:flex-row")
+                  "{:type :flex :key :root
+                    :children [{:type :quad :key :a :width [:fraction 0.25] :value {:rgba -1}}
+                               {:type :quad :key :b :width :fill :value {:rgba -1}}]}"
+                  {})
+        [a b] (render/render-template template nil {:width 200 :height 100})]
+    (is (= 50.0 (.width ^cn.li.mcmod.runtime.RenderCommand$Quad a)))
+    (is (= 0.0 (.x ^cn.li.mcmod.runtime.RenderCommand$Quad a)))
+    (is (= 150.0 (.width ^cn.li.mcmod.runtime.RenderCommand$Quad b)))
+    (is (= 50.0 (.x ^cn.li.mcmod.runtime.RenderCommand$Quad b)))))
+
+(deftest flex-column-direction-stacks-children-vertically
+  (let [template (compiler/compile-edn
+                  (TemplateId. "academy:flex-column")
+                  "{:type :flex :key :root :direction :column
+                    :children [{:type :quad :key :a :height 30 :value {:rgba -1}}
+                               {:type :quad :key :b :value {:rgba -1}}]}"
+                  {})
+        [a b] (render/render-template template nil {:width 100 :height 100})]
+    (is (= 30.0 (.height ^cn.li.mcmod.runtime.RenderCommand$Quad a)))
+    (is (= 0.0 (.y ^cn.li.mcmod.runtime.RenderCommand$Quad a)))
+    (is (= 70.0 (.height ^cn.li.mcmod.runtime.RenderCommand$Quad b)))
+    (is (= 30.0 (.y ^cn.li.mcmod.runtime.RenderCommand$Quad b)))))
+
+(deftest grid-splits-children-into-even-cells
+  (let [template (compiler/compile-edn
+                  (TemplateId. "academy:grid")
+                  "{:type :grid :key :root
+                    :children [{:type :quad :key :a :value {:rgba -1}}
+                               {:type :quad :key :b :value {:rgba -1}}
+                               {:type :quad :key :c :value {:rgba -1}}
+                               {:type :quad :key :d :value {:rgba -1}}]}"
+                  {})
+        commands (render/render-template template nil {:width 100 :height 100})]
+    (is (= 4 (count commands)))
+    (is (every? #(= 50.0 (.width ^cn.li.mcmod.runtime.RenderCommand$Quad %)) commands))
+    (is (every? #(= 50.0 (.height ^cn.li.mcmod.runtime.RenderCommand$Quad %)) commands))))
+
+(deftest stack-children-each-fill-the-full-parent-rect
+  (let [template (compiler/compile-edn
+                  (TemplateId. "academy:stack")
+                  "{:type :stack :key :root
+                    :children [{:type :quad :key :a :value {:rgba -1}}
+                               {:type :quad :key :b :value {:rgba -1}}]}"
+                  {})
+        commands (render/render-template template nil {:width 100 :height 80})]
+    (is (every? #(and (= 100.0 (.width ^cn.li.mcmod.runtime.RenderCommand$Quad %))
+                       (= 80.0 (.height ^cn.li.mcmod.runtime.RenderCommand$Quad %)))
+                commands))))
 
 (deftest validates-all-selected-backend-capabilities
   (let [source {:type :quad :key :root

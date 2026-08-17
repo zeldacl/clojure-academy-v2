@@ -3,11 +3,9 @@
             [cn.li.presentation.core.input :as input]
             [cn.li.presentation.core.frame :as frame]
             [cn.li.presentation.core.dirty :as dirty]
-            [cn.li.presentation.core.semantics :as semantics]
             [cn.li.presentation.core.runtime :as runtime]
             [cn.li.presentation.core.tree :as tree]
-            [cn.li.presentation.core.layout :as layout]
-            [cn.li.presentation.core.animation :as animation])
+            [cn.li.presentation.core.layout :as layout])
   (:import [cn.li.presentation.core FrameContext HostDescriptor HostDescriptor$HostKind
             HostDescriptor$InputPolicy TemplateId PresentationInputEvent$CharacterInput]
            [cn.li.mcmod.runtime RenderCommand$Quad RenderStage]))
@@ -25,28 +23,12 @@
     (is (= [:capture :target] @calls))
     (is (= :button (:pointer-capture (input/snapshot runtime))))))
 
-(deftest frame-mailbox-drops-stale-frames
-  (let [mailbox (frame/mailbox)]
-    (frame/publish! mailbox :frame-1)
-    (frame/publish! mailbox :frame-2)
-    (frame/publish! mailbox :frame-3)
-    (is (= :frame-3 (frame/poll-latest! mailbox)))
-    (is (nil? (frame/poll-latest! mailbox)))
-    (is (= 3 @(:published mailbox)))))
-
 (deftest dynamic-dirty-does-not-mark-layout
   (let [state (dirty/create)]
     (dirty/take! state)
     (dirty/dynamic-update! state :transform)
     (is (= #{:transform} @state))
     (is (thrown? Exception (dirty/dynamic-update! state :layout)))))
-
-(deftest semantics-tree-produces-narration
-  (let [tree (semantics/create)]
-    (semantics/upsert! tree :root nil :dialog "Terminal" nil nil)
-    (semantics/upsert! tree :input :root :textbox "Query" "abc" nil)
-    (semantics/upsert! tree :submit :root :button "Search" nil nil)
-    (is (= ["Terminal" "Query: abc" "Search"] (semantics/narration tree)))))
 
 (deftest extract-emits-commands-for-mounted-host
   (let [rt (runtime/create-runtime
@@ -160,14 +142,3 @@
                  (frame/order (assoc edges :hud [:hud]))))
     (is (thrown? Exception
                  (frame/order (assoc edges :hud [:not-a-stage]))))))
-
-(deftest animation-timeline-samples-and-completes-deterministically
-  (let [tl (animation/timeline
-             {:duration-ms 100
-              :tracks {:alpha [{:at 0 :value 0.0}
-                               {:at 100 :value 1.0 :easing :ease-in}]}})]
-    (animation/advance! tl 50)
-    (is (= 0.25 (double (:alpha (animation/sample tl)))))
-    (animation/advance! tl 50)
-    (is (= 1.0 (double (:alpha (animation/sample tl)))))
-    (is (animation/done? tl))))

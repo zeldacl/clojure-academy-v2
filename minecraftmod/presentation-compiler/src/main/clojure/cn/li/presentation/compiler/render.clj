@@ -3,7 +3,12 @@
 
    This is deliberately a small render-IR producer: it reads numeric binding
    IDs from PresentationViewModel and emits immutable RenderCommand records.
-   Minecraft APIs and host policy stay outside this namespace."
+   Minecraft APIs and host policy stay outside this namespace.
+
+   Geometry comes from cn.li.presentation.core.layout, not from ad hoc
+   per-node-type math here — width/height/min-*/max-*/aspect-ratio/direction/
+   gap declared in a .ui.edn template are real layout inputs, not decoration."
+  (:require [cn.li.presentation.core.layout :as layout])
   (:import [cn.li.presentation.compiler CompiledTemplate TemplateNode]
            [cn.li.presentation.core BindingTable PresentationViewModel]
            [cn.li.mcmod.runtime RenderCommand$GlyphRun RenderCommand$Image RenderCommand$Quad]))
@@ -30,34 +35,29 @@
      :rgba (int (or (:rgba value) (:color value) -1))}
     (assoc default :rgba (int (or (:rgba default) -1)))))
 
+(defn- template-node->layout-tree
+  "Bridge a compiled TemplateNode tree into the plain map shape
+   cn.li.presentation.core.layout expects. Node props already use keyword
+   keys (compile-node selects them straight off the source EDN map), so no
+   re-keying is needed — only the Java children list needs converting."
+  [^TemplateNode node]
+  {:type (keyword (.type node))
+   :props (into {} (.props node))
+   :children (mapv template-node->layout-tree (.children node))})
+
 (declare render-node)
 
-(defn- render-children [^TemplateNode node model x y width height]
-  (let [children (vec (.children node))
-        count* (max 1 (count children))]
-    (case (.type node)
-      "flex" (mapcat (fn [[idx child]]
-                       (render-node child model
-                                    (+ x (* width (/ idx count*)))
-                                    y (/ width count*) height))
-                     (map-indexed vector children))
-      "grid" (let [columns (max 1 (int (Math/ceil (Math/sqrt count*))))
-                   rows (max 1 (int (Math/ceil (/ count* columns))))]
-               (mapcat (fn [[idx child]]
-                         (let [col (mod idx columns) row (quot idx columns)]
-                           (render-node child model
-                                        (+ x (* width (/ col columns)))
-                                        (+ y (* height (/ row rows)))
-                                        (/ width columns) (/ height rows))))
-                       (map-indexed vector children)))
-      (mapcat #(render-node % model x y width height) children))))
+(defn- render-children [^TemplateNode node laid-out model]
+  (mapcat (fn [child child-laid] (render-node child child-laid model))
+          (.children node) (:children laid-out)))
 
-(defn render-node [^TemplateNode node model x y width height]
-  (let [value (binding-value model node :value)
+(defn render-node [^TemplateNode node laid-out model]
+  (let [{:keys [x y width height]} (:layout laid-out)
+        value (binding-value model node :value)
         type (.type node)]
     (case type
       ("stack" "flex" "grid" "scroll" "portal")
-      (render-children node model x y width height)
+      (render-children node laid-out model)
 
       "virtual-list"
       (let [items (vec (or (binding-value model node :items) value []))
@@ -153,15 +153,18 @@
                               (unchecked-int 0xAA000000))]
         [])
 
-      (render-children node model x y width height))))
+      (render-children node laid-out model))))
 
 (defn render-template
   "Render a compiled template into painter-order commands.
 
    `context` is a map with `:width` and `:height`; no mutable UI state is
    created here, which keeps the hot path suitable for later instance-buffer
-   specialization."
+   specialization. Layout runs once per call over the whole tree; render-node
+   then just reads each node's resolved rect off the parallel laid-out tree."
   [^CompiledTemplate template ^PresentationViewModel model context]
   (let [width (double (max 1 (or (:width context) 1)))
-        height (double (max 1 (or (:height context) 1)))]
-    (vec (render-node (.root template) model 0.0 0.0 width height))))
+        height (double (max 1 (or (:height context) 1)))
+        root (.root template)
+        laid-out (layout/layout (template-node->layout-tree root) width height)]
+    (vec (render-node root laid-out model))))

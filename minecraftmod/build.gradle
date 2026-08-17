@@ -81,7 +81,7 @@ allprojects {
 // cross-module AOT ordering after all projects are evaluated so Gradle 8's
 // implicit-output validation cannot race presentation-core and its consumers.
 gradle.projectsEvaluated {
-    [":presentation-compiler", ":presentation-devtools"].each { consumerPath ->
+    [":presentation-compiler"].each { consumerPath ->
         def consumer = findProject(consumerPath)
         def core = findProject(":presentation-core")
         if (consumer != null && core != null &&
@@ -709,8 +709,7 @@ tasks.register("verifyPresentationJavaPurity") {
     description = "Ensure Presentation Java contracts stay free of Minecraft APIs and logic modules stay in Clojure."
     doLast {
         def roots = [file("presentation-core/src/main/java"),
-                     file("presentation-compiler/src/main/java"),
-                     file("presentation-devtools/src/main/java")]
+                     file("presentation-compiler/src/main/java")]
         def violations = []
         roots.findAll { it.directory }.each { File root ->
             fileTree(root) { include "**/*.java" }.files.each { File source ->
@@ -757,8 +756,7 @@ tasks.register("verifyPresentationDependencyDirection") {
             def path = rootDir.toPath().relativize(buildFile.toPath()).toString().replace('\\', '/')
             def mentionsCore = buildFile.text =~ /project\([\"']:?presentation-core[\"']\)/
             if (mentionsCore && path != "build.gradle" && !(path in ["ac/build.gradle", "presentation-core/build.gradle",
-                                           "presentation-compiler/build.gradle",
-                                           "presentation-devtools/build.gradle"])) {
+                                           "presentation-compiler/build.gradle"])) {
                 violations << "${buildFile}: forbidden direct dependency on presentation-core (platform/base must use mcmod contract)"
             }
         }
@@ -1291,8 +1289,7 @@ tasks.register("verifyPresentationAtomicSwitch") {
                      file("platform-src/minecraft"),
                      file("platform-src/loader"),
                      file("presentation-core/src/main"),
-                     file("presentation-compiler/src/main"),
-                     file("presentation-devtools/src/main")].findAll { it.directory }
+                     file("presentation-compiler/src/main")].findAll { it.directory }
         def forbidden = [
             ~/script-render-(runtime|executor|compiler)/,
             ~/script_render_(runtime|executor|compiler|registry)/,
