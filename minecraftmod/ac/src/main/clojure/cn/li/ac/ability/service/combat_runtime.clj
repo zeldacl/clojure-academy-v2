@@ -14,6 +14,7 @@
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
             [cn.li.ac.ability.service.light-shield-state :as light-shield-state]
+            [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
@@ -282,6 +283,58 @@
                        dz (- (double (or z 0.0)) (double (:z origin)))]
                    (+ (* dx dx) (* dy dy) (* dz dz))))
                candidates)))))
+
+(defn- accepted-metal-block-ids
+  "Union of the configured normal + weak metal block ids (targeting.metal.*),
+   the same allow-list the pre-combat-core MagManip/MagMovement defskills
+   used via ability-config/is-metal-block?. Weak metal is accepted
+   unconditionally (no exp gate) -- see targeting.weak-metal-exp-threshold's
+   own comment in skill_config/electromaster.clj: the original effective
+   check already accepted weak metal at every exp level."
+  []
+  (vec (distinct (concat (ability-config/get-normal-metal-blocks)
+                         (ability-config/get-weak-metal-blocks)))))
+
+;; MagManip's grab->throw span crosses two independent query dispatches
+;; (:start and :release, separately invoked as the player holds a key across
+;; up to 200 ticks) with no combat-core session-patch primitive able to carry
+;; a query result between them (:session-patch entries only resolve scale/
+;; session/literal expressions, never a prior step's :refs). This owner-keyed
+;; atom is the same technique already used for mine-ray/electron-missile's
+;; multi-tick state, just kept on the AC/query side instead of the platform/
+;; world-effect side since grabbing needs no Minecraft entity API.
+(defonce ^:private mag-manip-held* (atom {}))
+
+(defn- raycast-metal-block
+  "Raycast for the first metal block (per accepted-metal-block-ids) along
+   owner's look vector within `range`. Returns {:world-id :x :y :z :block-id
+   :hardness} or nil."
+  [owner range]
+  (when (raycast/available?)
+    (let [world-id (geom/world-id-of owner)
+          eye (geom/eye-pos owner)
+          look (raycast/player-look-vector owner)
+          accepted (accepted-metal-block-ids)]
+      (when (and look (seq accepted))
+        (when-let [hit (raycast/raycast-blocks-matching
+                        world-id (:x eye) (:y eye) (:z eye)
+                        (double (or (:x look) 0.0))
+                        (double (or (:y look) 0.0))
+                        (double (or (:z look) 1.0))
+                        (double range)
+                        accepted)]
+          (let [bx (long (or (:x hit) 0))
+                by (long (or (:y hit) 0))
+                bz (long (or (:z hit) 0))
+                block-id (or (:block-id hit)
+                             (block-manipulation/get-block world-id bx by bz))
+                hardness (block-manipulation/get-block-hardness world-id bx by bz)]
+            (when (and (string? block-id)
+                       (ability-config/is-metal-block? block-id)
+                       (number? hardness)
+                       (not (neg? (double hardness))))
+              {:world-id world-id :x bx :y by :z bz
+               :block-id block-id :hardness hardness})))))))
 
 (defn- academy-damage-pipeline
   "Pure AC-owned damage transforms contributed by passive Combat abilities.
@@ -718,12 +771,70 @@
                                 ;; itself; :require never gates on this step's
                                 ;; result.
                                 {}))
-              :mag-manip (fn [context node]
-                           (when-let [host-query (contract/host-port :query)]
-                             (host-query :mag-manip context node)))
-              :mag-movement (fn [context node]
-                              (when-let [host-query (contract/host-port :query)]
-                                (host-query :mag-movement context node)))
+              ;; Conservative reimplementation: the pre-combat-core MagManip
+              ;; defskill (deleted in a8c000766) spawned a real physics block
+              ;; entity that homed toward the crosshair while held and dealt
+              ;; damage/placed itself via its own collision. That entity type
+              ;; (ScriptedBlockBodyEntity) still exists per MC version, but
+              ;; wiring it up needs a new uuid->Player platform op (spawning
+              ;; and hand-item ops only accept an already-resolved Player,
+              ;; which query-port fns never have -- only a uuid). Deferred;
+              ;; see docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md B section.
+              ;; This version keeps only what :require already validates:
+              ;; grab a metal block in range, and on release deal direct
+              ;; damage to whatever entity is under the crosshair -- no
+              ;; hold-visual, no homing, no thrown-block flight/placement.
+              :mag-manip
+              (fn [context node]
+                (if-let [host-query (contract/host-port :query)]
+                  (host-query :mag-manip context node)
+                  (let [owner (:owner context)
+                        owner-key (str owner)]
+                    (case (:phase context)
+                      :start
+                      (when-let [hit (raycast-metal-block
+                                      owner (double (or (:grab-range node) 10.0)))]
+                        (when (block-manipulation/can-break-block?
+                               owner (:world-id hit) (:x hit) (:y hit) (:z hit))
+                          (block-manipulation/break-block!
+                           owner (:world-id hit) (:x hit) (:y hit) (:z hit) false)
+                          (swap! mag-manip-held* assoc owner-key
+                                 {:world-id (:world-id hit) :block-id (:block-id hit)})
+                          hit))
+
+                      :release
+                      (when-let [held (get @mag-manip-held* owner-key)]
+                        (swap! mag-manip-held* dissoc owner-key)
+                        (let [world-id (:world-id held)
+                              eye (geom/eye-pos owner)
+                              look (when (raycast/available?)
+                                     (raycast/player-look-vector owner))
+                              range (double (or (:throw-range node) 20.0))
+                              hit (when look
+                                    (raycast/raycast-combined
+                                     world-id (:x eye) (:y eye) (:z eye)
+                                     (double (or (:x look) 0.0))
+                                     (double (or (:y look) 0.0))
+                                     (double (or (:z look) 1.0))
+                                     range))
+                              target-uuid (when (= :entity (:hit-type hit))
+                                            (:uuid hit))]
+                          {:block-id (:block-id held) :target-uuid target-uuid}))
+
+                      nil))))
+              ;; execute-mag-movement! already reads :target-x/:target-y/
+              ;; :target-z off the query result and pulls the player toward
+              ;; it every pulse -- only targeting was missing.
+              :mag-movement
+              (fn [context node]
+                (if-let [host-query (contract/host-port :query)]
+                  (host-query :mag-movement context node)
+                  (let [owner (:owner context)
+                        range (double (or (:range node) 25.0))]
+                    (when-let [hit (raycast-metal-block owner range)]
+                      {:target-x (+ 0.5 (double (:x hit)))
+                       :target-y (+ 0.5 (double (:y hit)))
+                       :target-z (+ 0.5 (double (:z hit)))}))))
               :vec-accel (fn [context node]
                            (if-let [host-query (contract/host-port :query)]
                              (host-query :vec-accel context node)
@@ -1217,31 +1328,26 @@
                                       :applied
                                       :failed)
                             :effect effect})
+                         ;; Conservative: query-result is {:block-id
+                         ;; :target-uuid} from the release-phase query above,
+                         ;; not the entity-uuid/position/throw-target fields
+                         ;; the old physics-body executor read. See that
+                         ;; query's comment and COMBAT_VFX_PLATFORM_GAPS.md B
+                         ;; section for why the full mechanic is deferred.
                          :mag-manip
-                         (let [{:keys [world-id query-result mode hold-ticks
-                                       throw-speed max-hold-distance throw-range
-                                       target-policy physics collision-authoritative?]} effect
+                         (let [{:keys [world-id query-result mode throw-range damage]} effect
                                finite? #(and (number? %) (Double/isFinite (double %)))
                                plan {:query-result query-result
                                      :session-id (:session-id effect)
                                      :mode mode
-                                     :hold-ticks (long (or hold-ticks 0))
-                                     :throw-speed throw-speed
-                                     :max-hold-distance max-hold-distance
                                      :throw-range throw-range
-                                     :target-policy target-policy
-                                     :physics physics
-                                     :collision-authoritative? collision-authoritative?}
+                                     :damage (double (or damage 0.0))}
                                valid? (and world-id (map? query-result)
                                             (= :throw mode)
-                                            (<= 0 (:hold-ticks plan) 200)
-                                            (finite? throw-speed)
-                                            (<= 0.5 (double throw-speed) 1.0)
-                                            (= 5.0 (double max-hold-distance))
-                                            (= 20.0 (double throw-range))
-                                            (= :metal-block-or-hand target-policy)
-                                            (= :tracked-block-body physics)
-                                            (= true collision-authoritative?)
+                                            (finite? throw-range)
+                                            (<= 1.0 (double throw-range) 64.0)
+                                            (finite? damage)
+                                            (<= 0.0 (:damage plan) 1000.0)
                                             (world-effects/available?))]
                            {:status (if (and valid?
                                               (world-effects/execute-mag-manip!

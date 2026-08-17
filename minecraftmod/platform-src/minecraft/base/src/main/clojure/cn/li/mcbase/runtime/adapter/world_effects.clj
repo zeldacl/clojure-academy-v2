@@ -388,24 +388,26 @@
                               (when (and world-id (every? number? [to-x to-y to-z]))
                                 (boolean (teleportation/teleport-player!
                                           (server-fn) owner world-id to-x to-y to-z)))))
-        execute-mag-manip! (fn [world-id _owner plan]
+        ;; Conservative: the grabbed block is broken at grab-time (query
+        ;; side) and simply consumed on release -- no thrown physics entity,
+        ;; no homing, no landing placement. Only a target-uuid under the
+        ;; crosshair at release-time takes damage; a whiff still consumes
+        ;; the hold (matches the old defskill's ActNothing no-rollback
+        ;; fallback: a miss doesn't return the block to the player either).
+        ;; See docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md B section.
+        execute-mag-manip! (fn [world-id owner plan]
                              (let [q (:query-result plan)
-                                   entity-uuid (:entity-uuid q)
-                                   position (:position q)
-                                   target (:throw-target q)]
-                               (when (and world-id entity-uuid (map? position) (map? target)
-                                          (every? number? (map position [:x :y :z]))
-                                           (every? number? (map target [:x :y :z]))))
-                                 (let [dx (- (double (:x target)) (double (:x position)))
-                                       dy (- (double (:y target)) (double (:y position)))
-                                       dz (- (double (:z target)) (double (:z position)))
-                                       len (Math/sqrt (+ (* dx dx) (* dy dy) (* dz dz)))]
-                                   (when (pos? len)
-                                     (entity-motion/set-velocity-for-entity!
-                                      (entity-motion/resolve-entity (server-fn) world-id entity-uuid)
-                                      (* (double (:throw-speed plan)) (/ dx len))
-                                      (* (double (:throw-speed plan)) (/ dy len))
-                                       (* (double (:throw-speed plan)) (/ dz len)))))))]
+                                   target-uuid (:target-uuid q)
+                                   damage (double (or (:damage plan) 0.0))]
+                               (try
+                                 (boolean
+                                  (and world-id target-uuid (pos? damage)
+                                       (entity-damage/apply-direct-damage!
+                                        world-id target-uuid damage :magic
+                                        {:attacker-uuid owner})))
+                                 (catch Exception e
+                                   (log/warn "Failed to apply mag-manip damage:" (ex-message e))
+                                   false))))]
     {:spawn-lightning! (fn spawn-lightning-adapter!
                          ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
                          ([world-id x y z visual-only?]

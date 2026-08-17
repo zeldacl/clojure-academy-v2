@@ -713,11 +713,15 @@
             :overload (scale 35.0 20.0)}
      :cooldown-phase :release
      :cooldown {:ticks (scale 60.0 40.0)}
+     ;; Conservative implementation: grabs a metal block in front of the
+     ;; caster and, on release, deals direct damage to whatever entity is
+     ;; under the crosshair within throw-range. No hold-visual/homing, no
+     ;; thrown-block flight physics or landing placement -- see
+     ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md B section.
      :program {:op :phase
                :start {:op :sequence
                        :steps [{:op :query :query-type :mag-manip
                                 :grab-range 10.0
-                                :target-policy :metal-block-or-hand
                                 :result-ref :held}
                                {:op :require :predicate :held}]}
                :pulse {:op :session-patch
@@ -726,20 +730,14 @@
                :release {:op :sequence
                          :steps [{:op :query :query-type :mag-manip
                                   :throw-range 20.0
-                                  :target-policy :metal-block-or-hand
                                   :result-ref :held}
                                  {:op :require :predicate :held}
                                  {:op :world-effect
                                   :effect-type :mag-manip
                                   :query-ref :held
                                   :mode :throw
-                                  :hold-ticks (session-value [:hold-ticks])
-                                  :throw-speed (scale 0.5 1.0)
-                                  :max-hold-distance 5.0
                                   :throw-range 20.0
-                                  :target-policy :metal-block-or-hand
-                                  :physics :tracked-block-body
-                                  :collision-authoritative? true}
+                                  :damage (scale 16.0 40.0)}
                                  {:op :vfx :effect-id :mag-manip
                                   :event :throw
                                   :params {:throw-range 20.0}}]}}}
