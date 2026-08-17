@@ -7,7 +7,7 @@
            [java.nio.charset StandardCharsets]))
 
 (def containers #{:stack :flex :grid :scroll :portal})
-(def leaves #{:progress :text :textbox :image :skill-wheel :quad :mesh :billboard :modal :button :virtual-list})
+(def leaves #{:progress :text :textbox :image :skill-wheel :quad :mesh :billboard :modal :button :virtual-list :composite-list})
 (def semantic-roles #{:generic :progress :button :textbox :dialog :list :list-item
                       :image :slot :heading})
 

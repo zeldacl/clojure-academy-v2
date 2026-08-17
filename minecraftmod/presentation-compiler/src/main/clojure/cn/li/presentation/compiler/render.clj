@@ -135,16 +135,26 @@
 
       "skill-wheel"
       (let [items (vec (or (binding-value model node :items) value []))
+            selected (binding-value model node :selected)
             n (max 1 (count items))]
         (mapcat (fn [[idx item]]
                   (let [angle (* 2.0 Math/PI (/ idx n))
                         cx (+ x (* 0.5 width) (* 0.35 width (Math/cos angle)))
                         cy (+ y (* 0.5 height) (* 0.35 height (Math/sin angle)))
-                        label (if (map? item) (or (:label item) (:skill-id item)) item)]
-                    [(RenderCommand$Quad. (float (- cx 12.0)) (float (- cy 12.0)) 24.0 24.0
-                                           (unchecked-int 0xCC406080))
-                     (RenderCommand$GlyphRun. 0 (str label) (float (- cx 8.0)) (float (+ cy 14.0))
-                                                (unchecked-int 0xFFFFFFFF))]))
+                        label (if (map? item) (or (:label item) (:skill-id item)) item)
+                        remaining (double (or (:cooldown-remaining item) 0.0))
+                        total (double (or (:cooldown-total item) 0.0))
+                        on-cooldown? (and (pos? total) (pos? remaining))
+                        cd-ratio (if on-cooldown? (min 1.0 (/ remaining total)) 0.0)]
+                    (cond-> [(RenderCommand$Quad. (float (- cx 12.0)) (float (- cy 12.0)) 24.0 24.0
+                                                   (unchecked-int (if (= idx selected) 0xCC5C8CC0 0xCC406080)))]
+                      on-cooldown?
+                      (conj (RenderCommand$Quad. (float (- cx 12.0)) (float (- cy 12.0))
+                                                 24.0 (float (* 24.0 cd-ratio))
+                                                 (unchecked-int 0x99000000)))
+                      true
+                      (conj (RenderCommand$GlyphRun. 0 (str label) (float (- cx 8.0)) (float (+ cy 14.0))
+                                                     (unchecked-int 0xFFFFFFFF))))))
                 (map-indexed vector items)))
 
       "modal"
@@ -152,6 +162,29 @@
         [(RenderCommand$Quad. (float x) (float y) (float width) (float height)
                               (unchecked-int 0xAA000000))]
         [])
+
+      "composite-list"
+      ;; A flat overlay: each item is a self-positioned primitive
+      ;; ({:kind :quad|:image|:text, :x :y :w :h/:src/:text, :rgba}), already
+      ;; screen-placed by whoever built the binding — unlike every other node
+      ;; type here, items are not relative to this node's laid-out x/y/width/
+      ;; height. This is deliberate: reactive_hud-style overlays (toasts,
+      ;; particle bursts, HUD readouts) are absolutely positioned by their own
+      ;; domain-specific layout math (see cn.li.ac.ability.client.hud), which
+      ;; the presentation layout engine has no vocabulary for.
+      (let [items (vec (or (binding-value model node :items) value []))]
+        (keep (fn [{:keys [kind x y w h src text rgba]}]
+                (case kind
+                  :quad (RenderCommand$Quad. (float (or x 0.0)) (float (or y 0.0))
+                                             (float (or w 1.0)) (float (or h 1.0))
+                                             (unchecked-int (or rgba -1)))
+                  :image (RenderCommand$Image. 0 (float (or x 0.0)) (float (or y 0.0))
+                                               (float (or w 1.0)) (float (or h 1.0))
+                                               (unchecked-int (or rgba -1)))
+                  :text (RenderCommand$GlyphRun. 0 (str (or text "")) (float (or x 0.0)) (float (or y 0.0))
+                                                 (unchecked-int (or rgba -1)))
+                  nil))
+              items))
 
       (render-children node laid-out model))))
 

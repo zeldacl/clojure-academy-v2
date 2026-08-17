@@ -50,6 +50,14 @@
    "academy:wireless_matrix" "wireless_matrix.ui.edn"
    "academy:wireless_node" "wireless_node.ui.edn"})
 
+(defn- qualified-name
+  "Match presentation-compiler.core/ref-name: a namespaced keyword's string
+   form is \"ns/name\", not just (name kw) — actions here are namespaced
+   (:combat/select-skill etc.) and (name kw) silently drops the namespace,
+   which the compiler's own symbol lookup does NOT drop."
+  [kw]
+  (if-let [ns (namespace kw)] (str ns "/" (name kw)) (name kw)))
+
 (defn- symbols-for
   "Derive a compiler symbol table straight from a ViewModel's own
    `binding-ids` (keyword -> id) and `action-ids` (id -> keyword) maps,
@@ -57,8 +65,8 @@
    numerically in sync by hand. A name/number typo in either now fails at
    compile-edn time (unknown binding/action) instead of silently drifting."
   [binding-ids action-ids]
-  {:binding (into {} (map (fn [[k v]] [(name k) v])) binding-ids)
-   :action (into {} (map (fn [[id k]] [(name k) id])) action-ids)})
+  {:binding (into {} (map (fn [[k v]] [(qualified-name k) v])) binding-ids)
+   :action (into {} (map (fn [[id k]] [(qualified-name k) id])) action-ids)})
 
 (def ^:private template-symbols
   {"academy:combat_hud" (symbols-for presentation-hud/binding-ids presentation-hud/action-ids)

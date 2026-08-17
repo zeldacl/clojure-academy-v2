@@ -1,14 +1,38 @@
 {:type :stack
  :key :combat/root
+ :width :fill
+ :height :fill
  :children
- [{:type :progress
+ [{:type :quad
+   :key :combat/background-mask
+   :width :fill
+   :height :fill
+   :value [:bind :background-mask]}
+  {:type :progress
    :key :combat/cp
    :value [:bind :cp-ratio]
    :semantics {:role :progress}}
+  {:type :composite-list
+   :key :combat/cp-glow
+   :items [:bind :cp-full-glow]}
   {:type :progress
    :key :combat/overload
    :value [:bind :overload-ratio]
    :semantics {:role :progress}}
+  {:type :composite-list
+   :key :combat/overload-pulse
+   :items [:bind :overload-pulse]}
+  {:type :quad
+   :key :combat/charging-dim
+   :width :fill
+   :height :fill
+   :value [:bind :charging]}
+  {:type :composite-list
+   :key :combat/charging-arcs
+   :items [:bind :charging-arcs]}
+  {:type :composite-list
+   :key :combat/vm-waves
+   :items [:bind :vm-waves]}
   {:type :skill-wheel
    :key :combat/skills
    :items [:bind :skills]
@@ -16,4 +40,36 @@
    :on-select [:action :combat/select-skill]}
   {:type :quad
    :key :combat/crosshair
-   :value [:bind :crosshair]}]}
+   :value [:bind :crosshair]}
+  {:type :composite-list
+   :key :combat/movement-hints
+   :items [:bind :movement-hints]}
+  {:type :composite-list
+   :key :combat/activation-indicator
+   :items [:bind :activation-indicator]}
+  {:type :composite-list
+   :key :combat/preset-indicators
+   :items [:bind :preset-indicators]}
+  {:type :composite-list
+   :key :combat/numbers-texts
+   :items [:bind :numbers-texts]}
+  {:type :composite-list
+   :key :combat/coin-qte
+   :items [:bind :coin-qte]}
+  {:type :composite-list
+   :key :combat/interfered
+   :items [:bind :interfered]}
+  {:type :composite-list
+   :key :combat/toasts
+   :items [:bind :toasts]}
+  {:type :composite-list
+   :key :combat/tutorial-notification
+   :items [:bind :tutorial-notification]}
+  {:type :composite-list
+   :key :combat/debug-lines
+   :items [:bind :debug-lines]}
+  {:type :quad
+   :key :combat/screen-flash
+   :width :fill
+   :height :fill
+   :value [:bind :screen-flash-alpha]}]}
