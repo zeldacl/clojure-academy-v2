@@ -28,6 +28,7 @@
 | `32eb35ead` | `:groundshock` query + `execute-groundshock!`（传播算法移植，见下方 C-2 节） |
 | `79a93388f` | `:shift-teleport` 独立 query/effect-type + `execute-shift-teleport!`（A 类最后一个技能，见上方 A 节） |
 | `c2e374266` | `:charge-target`/`:charge-energy`（current-charging 方块充能路径）+ `:mine-detect`（无条件自我致盲，去掉误加的 block-scan gate），D 类全部完成，见上方 D 节 |
+| `b284185a2` | 删除死代码 channel/topic 总线（vfx-core `register-channel!`/`dispatch-channel!`/`freeze-channels!` 及封装），E 类 P1.3 完成，见下方 E 节 |
 
 ## 分类清单
 
@@ -124,16 +125,17 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3，~6000 行内容迁移）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 有意推迟）
 
-不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj:239-271` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
+不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
-**要做的事**（详见执行计划文档，未随此工单复制全文）：
-1. 把 `:transient`/`:persistent`/`:singleton` 三种生命周期形态提升为 vfx-core 的一等概念。
-2. 拆掉 `effect_controller/dispatch-signal!` 的旁路——需要同步把 `ac/ability/client/fx_templates/arc_beam.clj` + `arc_beam/impl/*`（约 6000 行）里 owner-keyed 的内部 map 拆成真正的 per-instance 状态。
-3. 删除 `register-channel!`/`dispatch-channel!` 第二条投递路径。
+**2026-08-18 更新，执行前重新核实**：读 `dispatch-signal!` 现在的代码才发现，这个"旁路"**不是一处被忽视的技术债**——函数上有一段详细注释，解释了为什么当前 content 的状态结构（owner-keyed map 塞在一个共享聚合实例里）下，真的走 vfx-core 自己的按 key 分派反而会让不同玩家各自独立的 `event-seq` 计数器互相冲突。这是一个当前确实生效、有理有据的权衡，不是一个可以直接删掉的错误。真要修（P1.1+P1.2），意味着要把 `ac/ability/client/fx_templates/arc_beam.clj` + 全部 28 个 `arc_beam/impl/*` 文件（6105 行）里的 owner-keyed 内部 map 重写成真正的 per-instance 状态——工作量和风险都远超本工单其它任何一项，而且视觉效果只能进游戏肉眼验证，本环境没有可运行的游戏客户端。**已和用户确认，本轮不做这部分**，见下方"仍然推迟"。
 
-**为什么推迟**：这是对**当前正在工作的客户端特效表现**的迁移，视觉效果对不对只能进游戏肉眼验证，本环境没有可运行的游戏客户端。工作量（~6000 行）和风险都明显大于本工单其他条目。
+**已完成（`b284185a2`）——P1.3，删除死代码 channel 总线**：`register-channel!`/`dispatch-channel!`/`freeze-channels!`（vfx-core `runtime.clj`）连同 `effect_controller.clj`/`fx_spec.clj` 的封装一起删掉了。核实过：全仓库没有任何技能内容真正给 `:channels` 塞过一个带 `:topic` 的条目——`arc_beam.clj` 的 `build-spec` 虽然总会构造一个 `:channels` 键，但 28 个 impl 文件没有一个覆盖过它，恒为空。combat 信号本来就直接走 `dispatch-signal!`，这条 channel/topic 总线就是当初想替代 `dispatch-signal!` 旁路、但从没被任何内容真正用起来的第二条路径。纯删除，`arc_beam.clj` 不用改（`fx_spec.clj` 的 `register!` 现在只是容忍并忽略传入的 `:channels`，不再处理）。
+
+**验证时顺带发现一个无关的既有问题**：`cn.li.ac.ability.client.fx-registry` 被 39 个测试文件 `:require`，但整个仓库找不到这个命名空间的主源文件——`:ac:runAcClojureTestsFast` 一上来就在第一个测试命名空间加载时报 `FileNotFoundException`。核实过这个失败在本次改动前后完全一样，不是这次改动引入的，和这里删除的 channel 总线也没有关系（`fx-registry` 是另一层更上层的、从未见过主实现的注册表抽象）。没有深入排查——不在这次任务范围内，但因为同属客户端 FX 区域，留给下一个接手 E 类剩余部分的人。
+
+**仍然推迟（P1.1 生命周期形态 + P1.2 拆真正的旁路）**：需要设计/验证输入，不是纯代码填空——工作量、风险、"只能进游戏验证"三条都成立，已与用户确认单独排期，不和本工单其余条目混在一个提交序列里。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2/P2.6）
 
@@ -153,7 +155,7 @@
 3. **"需要设计判断"这个分类已经连续四次被证明是假阳性**（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制、current-charging/mine-detect 的机制，全都在 git 历史里找到了 `a8c000766`——combat-core 迁移那次提交——删掉的完整实现）。**下次遇到类似结论，先 `git log --diff-filter=D -- "*<skill-name>*"` 查一遍再采信**，不要重复"假设需要设计输入→论证→被推翻"这个循环。全部 37 个技能到这里已经过了一遍——本工单列出过的技能里，唯二没有在 git 历史查到可恢复实现、货真价实需要设计输入的只剩：
    - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
    - **可恢复但要重写现有实现（不是设计阻塞，是工作量问题）**：mag-manip 若要从当前的保守直接伤害版还原成真实物理实体悬浮/抛掷，current-charging 若要补上手持物品充能分支，都不需要新平台设施（`query-core/get-player-by-uuid` 已经在到处用），但需要把对应逻辑从 query 挪到 world-effect（platform-src）重写，本轮未评估是否值得。
-4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
+4. **E 类里唯一安全、体量小的部分（死代码 channel 总线）已经删了**，见上方 E 节。E 类剩下的部分（P1.1 生命周期形态 + P1.2 拆 `dispatch-signal!` 真正的旁路，要重写 `arc_beam.clj` 全家 6105 行）和 **F 类是同一档：大迁移，风险高，只能进游戏验证，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
 
