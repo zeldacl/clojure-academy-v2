@@ -709,7 +709,14 @@ tasks.register("verifyPresentationJavaPurity") {
     description = "Ensure Presentation Java contracts stay free of Minecraft APIs and logic modules stay in Clojure."
     doLast {
         def roots = [file("presentation-core/src/main/java"),
-                     file("presentation-compiler/src/main/java")]
+                     file("presentation-compiler/src/main/java"),
+                     // The sealed RenderCommand/RenderStage/RenderPass/FramePacket ABI moved
+                     // into mcmod/runtime (Step 2) — it left presentation-core's own purity
+                     // scan without ever being covered by a purity scan at all. Scoped to
+                     // just this package, not all of mcmod/src/main/java, which also holds
+                     // unrelated math/energy Java that is not part of the presentation ABI
+                     // and is allowed to look like ordinary mcmod Java.
+                     file("mcmod/src/main/java/cn/li/mcmod/runtime")]
         def violations = []
         roots.findAll { it.directory }.each { File root ->
             fileTree(root) { include "**/*.java" }.files.each { File source ->
@@ -973,10 +980,19 @@ tasks.register("verifyPresentationContainsNoVfxRuntime") {
     description = "Ensure Presentation Core is limited to UI/HUD and does not own skill VFX runtime."
     doLast {
         def violations = []
+        // Capability-based, not vocabulary-based: the old /:vfx/ pattern
+        // forbade the literal keyword :vfx anywhere, including inside a
+        // plain-English comment, and forced runtime.clj's host-stage to
+        // compare against a stringified "VFX" rather than the real
+        // HostKind/VFX enum constant to dodge its own gate (see Step 1).
+        // What must actually never appear here is vfx-core's own instance
+        // lifecycle vocabulary (its own runtime.clj keys/fns, see
+        // vfx-core/.../runtime.clj) — not the word "vfx" as English text.
+        def vfxRuntimeVocabulary = ~/spawn-effect!|tick-effects!|:instances\b|:event-seq\b|:tombstones\b|\bspawn!|\bdestroy!/
         fileTree(file("presentation-core/src/main")) {
             include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
         }.files.each { File source ->
-            if (source.name == "effects.clj" || source.text =~ /spawn-effect!|tick-effects!|HostKind\/VFX|:vfx/) {
+            if (source.name == "effects.clj" || source.text =~ vfxRuntimeVocabulary) {
                 violations << "${source}: Presentation Core still contains skill VFX runtime"
             }
         }
@@ -1003,8 +1019,16 @@ tasks.register("verifyCombatClojureOwnership") {
 }
 tasks.register("verifyCombatNoPlatformNamespaces") {
     group = "verification"
+    // Intentionally a thin named checkpoint, not a second copy of the check:
+    // verifyCombatDependencyDirection (see above) already scans
+    // combat-core/src/main for cn.li.(ac|platform|mc*|forge|fabric|
+    // neoforge|vfx|presentation). namespace references as part of its own
+    // doLast — duplicating that regex here would just be a second copy that
+    // could silently drift out of sync with the first. dependsOn makes this
+    // task name a meaningful, separately-runnable CI target for that same
+    // invariant instead of a no-op that only prints "ok".
     dependsOn "verifyCombatDependencyDirection"
-    doLast { logger.lifecycle("[verifyCombatNoPlatformNamespaces] ok") }
+    doLast { logger.lifecycle("[verifyCombatNoPlatformNamespaces] ok (enforced by verifyCombatDependencyDirection)") }
 }
 tasks.register("verifyCombatNoPrivateRuntime") {
     group = "verification"
@@ -1069,7 +1093,40 @@ tasks.register("verifyCombatSkillCoverage") {
     }
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
-tasks.register("verifyAbilityVfxRegistryCoverage") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
+
+tasks.register("verifyAbilityVfxRegistryCoverage") {
+    group = "verification"
+    description = "Every :effect-id combat_content.clj emits via a :vfx op must be registered client-side."
+    dependsOn ":vfx-core:runVfxClojureTests"
+    doLast {
+        def emitted = [] as Set
+        def emittedPattern = ~/:op\s+:vfx\s+:effect-id\s+(:[a-z0-9-]+)/
+        def contentFile = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj")
+        emittedPattern.matcher(contentFile.text).each { m -> emitted << m[1] }
+
+        def registered = [] as Set
+        def arcBeamPattern = ~/def-arc-beam-fx\s+(:[a-z0-9-]+)/
+        // Direct fx-spec/register! call sites bind the id to a
+        // `(def ^:private foo-effect-id :foo)` local first, then pass the
+        // symbol as :id — the literal keyword lives on the def line, not at
+        // the register! call site.
+        def directDefPattern = ~/\(def\s+(?:\^\S+\s+)*[a-zA-Z][a-zA-Z0-9-]*effect-id\s+(:[a-z0-9-]+)/
+        fileTree("ac/src/main/clojure/cn/li/ac/content") { include "**/*.clj" }.files.each { File f ->
+            def text = f.text
+            arcBeamPattern.matcher(text).each { m -> registered << m[1] }
+            directDefPattern.matcher(text).each { m -> registered << m[1] }
+        }
+
+        def missing = emitted - registered
+        if (!missing.isEmpty()) {
+            throw new GradleException(
+                "combat_content.clj emits VFX effect-id(s) with no client-side registration: " +
+                missing.sort().join(", "))
+        }
+        logger.lifecycle("[verifyAbilityVfxRegistryCoverage] ok (${emitted.size()} ids)")
+    }
+}
+
 tasks.register("verifyVfxSingleTickPath") { group = "verification"; dependsOn ":vfx-core:runVfxClojureTests" }
 
 tasks.register("verifyCombatIntentOnlyNetwork") {
