@@ -350,20 +350,17 @@
          (Math/pow (- ay by) 2.0)
          (Math/pow (- az bz) 2.0)))))
 
+;; :bounds and :visible? are always called as (fn [state context]). A prior
+;; version tried a (fn [sample-context]) shape first and caught
+;; ArityException to fall back to this one, which also silently swallowed a
+;; real ArityException raised from inside a correctly-2-arg descriptor.
 (defn- invoke-bounds [bounds instance context]
-  (try
-    (bounds (assoc context :instance instance :state (:state instance)))
-    (catch clojure.lang.ArityException _
-      (bounds (:state instance) context))))
+  (bounds (:state instance) context))
 
 (defn- visible-instance? [effect instance context]
   (let [custom-visible (:visible? effect)
         custom-result (when custom-visible
-                        (try
-                          (custom-visible (assoc context :instance instance
-                                                 :state (:state instance)))
-                          (catch clojure.lang.ArityException _
-                            (custom-visible (:state instance) context))))
+                        (custom-visible (:state instance) context))
         bounds-fn (:bounds effect)
         bounds (when bounds-fn (invoke-bounds bounds-fn instance context))
         center (:center bounds)

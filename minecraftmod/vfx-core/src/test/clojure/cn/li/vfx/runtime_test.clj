@@ -152,7 +152,7 @@
         effect {:id :sampled
                 :init (fn [{:keys [params]}] {:value 0 :x (or (:x params) 0)})
                 :update (fn [state _] (update state :value inc))
-                :bounds (fn [{:keys [state]}]
+                :bounds (fn [state _context]
                           {:center [(:x state) 0 0] :radius 0.0})
                 :sample (fn [{:keys [sink interpolated-state]}]
                           (swap! samples conj interpolated-state)
