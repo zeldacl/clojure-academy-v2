@@ -91,10 +91,14 @@
     (KeyMappingAccess/boundKeyDisplayString km)))
 
 (defn get-key-code
-  "Current GLFW key code for a registered KeyMapping, or nil."
+  "Current key code for a registered KeyMapping in AC convention
+   (-100+button for mouse, GLFW KEYSYM otherwise), or nil. The polling path
+   feeds this to settings-key-id, which routes negative codes to GLFW mouse
+   queries — a bare InputConstants.Key value (0 for mouse buttons) would be
+   looked up as a GLFW key and never match."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (Integer/valueOf (KeyMappingAccess/boundKeyValue km))))
+    (Integer/valueOf (KeyMappingAccess/acKeyCode km))))
 
 (defn binding-conflict?
   "True when another registered mapping (vanilla or another mod) shares the

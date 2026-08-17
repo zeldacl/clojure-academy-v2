@@ -90,12 +90,19 @@
     (.getString (.getTranslatedKeyMessage km))))
 
 (defn get-key-code
-  "Current GLFW key code for a registered KeyMapping, or nil.
-   Reads the LIVE binding (saveString round-trip) — getDefaultKey would
-   return the default instead of the rebound key."
+  "Current key code for a registered KeyMapping in AC convention
+   (-100+button for mouse, GLFW KEYSYM otherwise), or nil. Reads the LIVE
+   binding (saveString round-trip) — getDefaultKey would return the default
+   instead of the rebound key. The polling path feeds this to
+   settings-key-id, which routes negative codes to GLFW mouse queries — a
+   bare InputConstants.Key value (0 for mouse buttons) would be looked up as
+   a GLFW key and never match."
   [input-id]
   (when-let [^KeyMapping km (get-key-mapping input-id)]
-    (.getValue (InputConstants/getKey (.saveString km)))))
+    (let [^InputConstants$Key key (InputConstants/getKey (.saveString km))]
+      (if (= (.getType key) InputConstants$Type/MOUSE)
+        (+ -100 (.getValue key))
+        (.getValue key)))))
 
 (defn binding-conflict?
   "True when another registered mapping (vanilla or another mod) shares the

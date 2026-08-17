@@ -11,7 +11,8 @@
    :en_us
    {
     "ability.academy.level0" "Level 0"
-    "keybind.category.content" "Ability"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "Switch Preset"
     "key.content.toggle.primary" "Toggle Ability Mode"
     "key.content.toggle.debug.overlay" "Toggle Debug Info"
@@ -256,7 +257,8 @@
    :zh_cn
    {
     "ability.academy.level0" "无能力者(LV0)"
-    "keybind.category.content" "能力"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "切换预设"
     "key.content.toggle.primary" "切换能力模式"
     "key.content.toggle.debug.overlay" "切换调试信息"
@@ -501,7 +503,8 @@
    :zh_tw
    {
     "ability.academy.level0" "無能力者(LV0)"
-    "keybind.category.content" "能力"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "切換預設"
     "key.content.toggle.primary" "切換能力模式"
     "key.content.toggle.debug.overlay" "切換除錯資訊"
@@ -742,7 +745,8 @@
    :ja_jp
    {
     "ability.academy.level0" "無能力者"
-    "keybind.category.content" "能力"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "プリセット切替"
     "key.content.toggle.primary" "能力モード切替"
     "key.content.toggle.debug.overlay" "デバッグ情報切替"
@@ -980,7 +984,8 @@
    :ko_kr
    {
     "ability.academy.level0" "0단계"
-    "keybind.category.content" "능력"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "프리셋 전환"
     "key.content.toggle.primary" "능력 모드 전환"
     "key.content.toggle.debug.overlay" "디버그 정보 전환"
@@ -1221,7 +1226,8 @@
    :ru_ru
    {
     "ability.academy.level0" "Уровень 0"
-    "keybind.category.content" "Способность"
+    "keybind.category.content" "AcademyCraft"
+    "key.category.academy.keybind_category_content" "AcademyCraft"
     "key.content.cycle.selection" "Переключить пресет"
     "key.content.toggle.primary" "Переключить режим способности"
     "key.content.toggle.debug.overlay" "Переключить отладочную информацию"

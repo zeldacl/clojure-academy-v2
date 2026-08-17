@@ -16,7 +16,6 @@
             [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.preset :as preset-data]
             [cn.li.ac.ability.registry.skill-query :as skill]
-            [cn.li.ac.config.gameplay :as gameplay-config]
             [cn.li.ac.terminal.client.apps.freq-transmitter-reactive :as freq-transmitter]
             [cn.li.mcmod.client.platform-bridge :as client-bridge]
             [cn.li.mcmod.hooks.core :as runtime-hooks]
@@ -464,7 +463,11 @@
      (into (into []
                  (keep (fn [idx]
                          (when (get-delegate-for-key idx)
-                           (gameplay-config/input-key
+                           ;; Live KeyMapping binding in AC convention (mouse
+                           ;; buttons -100+value) — the config value is only
+                           ;; the initial seed and goes stale on rebind.
+                           (client-bridge/call-adapter
+                             :keybind-get-key-code
                              (keyword (str "ability-key-" idx)))))
                        (range 4)))
            (when (flashing-active? player-uuid)
