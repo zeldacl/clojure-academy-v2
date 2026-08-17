@@ -23,26 +23,27 @@
 | `b55116f6f` | `:block-scan` query + `execute-mine-ray!`（mine-ray-basic/expert/luck 三个 skill id）、`:storm-wing` query + `execute-storm-wing!`（见下方 C-2 节） |
 | `626be7705` | `:light-shield`/`:electron-missile`/`:scatter-bomb` query + 三个保守简化执行器（见下方 C-2 节） |
 | `9d7c1fa72` | `:knockback` world-effect case 分支 + `execute-knockback!`（`directed-shock`，见下方 D 节） |
+| `21d7b1187` | `mark-teleport`/`penetrate-teleport`/`flashing`/`location-teleport`/`threatening-teleport` query + world-effect，approval-token 桥接机制（见下方 A 节） |
 
 ## 分类清单
 
-### A. 传送类：approval-token 平台能力整个不存在（6 个技能）
+### A. 传送类（2026-08-17/18 追加会话，5/6 已完成）
 
-**受影响技能**：`mark-teleport`、`penetrate-teleport`、`shift-teleport`、`threatening-teleport`、`flashing`、`location-teleport`。
+原受影响技能：`mark-teleport`、`penetrate-teleport`、`shift-teleport`、`threatening-teleport`、`flashing`、`location-teleport`。
 
-**现状**：`combat_content.clj` 里这 6 个技能的 `:release` 阶段都会产出 `:teleport-approved-target`（前 5 个）或 `:teleport-approved`（`location-teleport`）world-effect。`combat_runtime.clj:1142-1181` 已经写好了这两个 world-effect 的处理分支，调用 `cn.li.mcmod.platform.teleportation/teleport-approved-target!` / `teleport-approved-location!`。
+**执行前的重要发现**：读技能翻译文本后发现 `shift-teleport`/`threatening-teleport` **根本不是玩家传送**，尽管它们和另外 3 个共用同一个 `:teleport-approved-target` world-effect。`shift-teleport`（"将方块运用坐标移动的方式高速发射出去...因为其运动方式...所以并不会因为其速度与质量而影响破坏力"）是一个**块体弹道+路径伤害**机制，没有任何弹道/传播算法可复用，和 groundshock 同一复杂度级别。`threatening-teleport`（"将小质量的物品移动到自己附近的某个位置。有时候，只需要一小块体内的碎片就可以对生物造成巨大伤害"）实质是"瞬间对附近敌人造成伤害"，不是真的移动物体。
 
-**缺口**：这两个平台操作**在全仓库任何 loader 里都未安装**。`platform-src/minecraft/base/src/main/clojure/cn/li/mcbase/runtime/teleportation_core.clj` 的 `create-teleportation` 工厂函数只导出 `:teleport-player!`、`:teleport-with-entities!`、`:reset-fall-damage!`、`:get-player-position`、`:get-player-dimension` 五个 key，没有 `:teleport-approved-target!`/`:teleport-approved-location!`。调用即抛 `"Required teleportation operation is not installed"`（被 `execute-world-effects!` 的 try/catch 兜住，降级为 `:status :failed`，服务端不崩，但玩家资源已经先扣了，技能悄无声息地失效）。
+**已完成（mark-teleport、penetrate-teleport、flashing、location-teleport、threatening-teleport）**：
 
-**query 侧同样缺失**：`combat_runtime.clj` 的 `default-query-port` 里 `:teleport-target`（5 种 `:mode`：`:mark`/`:penetrate`/`:shift`/`:threatening`/`:flashing`）和 `:saved-location` 都是 `(when-let [host-query (contract/host-port :query)] ...)`，host-port 从未安装，恒返回 nil。
+- **`mark-teleport`/`penetrate-teleport`/`flashing`**：复用了已经存在、已经过测试、平台无关的目的地求解代码——`ac/content/ability/teleporter/{mark_teleport_dest,penetrate_dest,flashing_dest}.clj`，三个文件都明确标注是"upstream `MTContext`/`PTContext`/`MainContext` 端口"，不是重新发明的逻辑。`flashing` 只做了前方闪现：`combat_content.clj` 的 query 节点没有传 `:direction` 字段（原版支持 WASD 相对方向闪现），固定用 `:forward`，是一个真实的简化，代码里有注释标注。`penetrate-teleport` 的行进算法在 `:available? false`（还在墙里）时正确返回 nil（视为"无目的地"），不会把玩家传送进方块里。
+- **`location-teleport`**：复用了已经完整、已经在跑的已保存位置基础设施（`location_teleport.clj` 的公共函数 `query-location-teleport`、6 个 loader 都装了的 NBT 存储 `named-position-store`），没有重新实现。**故意没有**调用 `location_teleport.clj` 自己的 `perform-location-teleport!`——那个函数有自己的一套 CP 距离公式和冷却逻辑（服务于 RPC/UI 流程），在 world-effect 里调用会和 combat-core 自己声明的 `:cost` 重复扣费。全仓库没有任何"主/默认保存点"的约定（UI 一直是玩家从列表里选名字），给"没有输入名字的快捷键激活"选了一个确定性的默认值——按名字字母序取最靠前的——这是推断的 UX 选择，不是确认过的设计，已在代码注释标注。
+- **`threatening-teleport`（保守实现）**：改为直接造成伤害（`entity-damage/apply-direct-damage!`），不走传送/approval-token 路径。给 `combat_content.clj` 的 world-effect 步骤加了 `:damage (scale 3.0 6.0)`（跟随全文件已有的 `thunder-clap` 等同款模式）。跳过了 `needle-damage-multiplier`（持"针"类物品的伤害加成）与"碎片"掉落概率机制。
 
-**要做的事**：
-1. 设计一个"approval-token"机制：query 阶段算出候选目的地后签发一个 opaque token（可以是一个本地 map 存储 `token -> {:world-id .. :x .. :y .. :z ..}`，短 TTL），返回给 combat-core 的 `:destination` ref；world-effect 阶段凭 token 兑现，做碰撞/维度合法性校验后真正传送。这个设计不需要凭空发明——`teleport_approved_location!`/`teleport_approved_target!` 的函数签名（`owner ability-id approval-token mode`）已经暗示了这个模式，只是从未实现。
-2. 在 `mcbase/runtime/teleportation_core.clj` 新增 `teleport-approved-target!`/`teleport-approved-location!`，可以复用已经验证过的 `teleport-player!`（内部用 `TeleportAccess/teleportPreservingRotation`，已处理乘客/维度切换）。
-3. 同步 3 个 MC 版本的转发文件（`platform-src/minecraft/mc-1.20.1/.../teleportation_core.clj`、`mc-1.21.1`、`mc-26.2`——目前都是对 `mcbase` 同名函数的 `def` 别名，加新 key 后同步加别名即可，机械操作）。
-4. `combat_runtime.clj` 的 `default-query-port` 补齐 `:teleport-target`（5 种 mode 的候选目标搜索逻辑）与 `:saved-location`（读已保存位置）。
+**approval-token 桥接机制**：`mcmod/platform/teleportation.clj` 新增 `mint-approval-token!`/`redeem-approval-token!`（内存 atom，短 TTL）。不是安全边界——query 和 world-effect 在同一次 intent dispatch 内同步执行，中间不经过真实时间——只是为了让 `teleport-approved-target!` 的既有函数签名（`owner ability-id approval-token mode`）在全部玩家传送 mode 上保持统一。`combat_runtime.clj` 的 `:teleport-approved-target` case 改为按 `mode` 分派：`:threatening` 直接扣血；`:mark`/`:penetrate`/`:flashing` 铸造 token 走真实传送；`:shift-teleport` 落进同一分支但因为不在 `ability-id` 白名单里而干净地失败（不会崩，只是 `:status :failed`）。
 
-**风险**：touch 真实 Minecraft 实体/维度 API，需要进游戏验证碰撞检测、跨维度传送边界情况；不是纯逻辑改动。
+**仍然推迟（`shift-teleport`）**：核心机制是块体弹道 + 路径伤害，没有可复用的传播/弹道算法，也没有权威参考实现——和 C-2 节的 `groundshock` 同一档，需要设计输入，已与用户确认单独推迟。
+
+**验证状态**：`:ac:checkClojure`、`:platform:compileClojure`（`forge-1.20.1`/`neoforge-1.21.1`）通过，`verifyCombatSkillCoverage` 报告 38 个技能一致，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——`mark-teleport`/`penetrate-teleport`/`flashing` 的落点几何计算、`location-teleport` 的默认位置选择，这些都需要进游戏确认才能信任。
 
 ### B. mag-manip / mag-movement：目标检测逻辑未定义（2 个技能）
 
@@ -131,10 +132,10 @@
 ## 建议的下手顺序
 
 1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
-2. ~~C 类 4 个技能~~ / ~~C-2 类 5 个技能点~~ / ~~D 类 `:knockback`~~ **均已完成**，见上方 C、C-2、D 节（light-shield/electron-missile/scatter-bomb 是保守简化版本，`:knockback` 的推力方向/公式是推断的，均仍需进游戏验证）。
+2. ~~C 类 4 个技能~~ / ~~C-2 类 5 个技能点~~ / ~~D 类 `:knockback`~~ / ~~A 类 5 个技能（mark/penetrate/flashing/location-teleport/threatening-teleport）~~ **均已完成**，见上方 C、C-2、D、A 节（light-shield/electron-missile/scatter-bomb 是保守简化版本，`:knockback` 的推力方向/公式是推断的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
 3. **剩下能不靠设计判断直接做的都做完了**。剩余项分两类：
    - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
-   - **需要设计/游戏手感输入**：C-2 类的 `groundshock`（传播算法）、D 类的 `:charge-energy`/`:mine-detect`、A 类（传送 approval-token，6 个技能）、B 类（mag-manip/mag-movement，"什么算金属"）。
+   - **需要设计/游戏手感输入**：C-2 类的 `groundshock`（传播算法）、D 类的 `:charge-energy`/`:mine-detect`、A 类的 `shift-teleport`（方块投射物物理，1 个技能）、B 类（mag-manip/mag-movement，"什么算金属"）。
 4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
