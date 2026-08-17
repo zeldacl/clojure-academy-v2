@@ -50,45 +50,23 @@
    "academy:wireless_matrix" "wireless_matrix.ui.edn"
    "academy:wireless_node" "wireless_node.ui.edn"})
 
+(defn- symbols-for
+  "Derive a compiler symbol table straight from a ViewModel's own
+   `binding-ids` (keyword -> id) and `action-ids` (id -> keyword) maps,
+   instead of hand-copying a second literal table here that has to be kept
+   numerically in sync by hand. A name/number typo in either now fails at
+   compile-edn time (unknown binding/action) instead of silently drifting."
+  [binding-ids action-ids]
+  {:binding (into {} (map (fn [[k v]] [(name k) v])) binding-ids)
+   :action (into {} (map (fn [[id k]] [(name k) id])) action-ids)})
+
 (def ^:private template-symbols
-  {"academy:combat_hud"
-   {:binding {"cp-ratio" 0 "overload-ratio" 1 "skills" 2
-              "selected-skill" 3 "cooldowns" 4 "crosshair" 5
-              "screen-flash-alpha" 6}
-    :action {"combat/select-skill" 0 "combat/toggle-skill-wheel" 1}}
-   "academy:terminal"
-   {:binding {"installed?" 0 "apps" 1 "page" 2 "loading?" 3
-              "query" 4 "modal" 5}
-    :action {"terminal/set-page" 0 "terminal/query" 1
-             "terminal/install-app" 2 "terminal/uninstall-app" 3
-             "terminal/submit-query" 4 "terminal/close-modal" 5}}
-   "academy:application"
-    {:binding {"title" 0 "lines" 1 "status" 2 "scroll" 3 "modal" 4
-              "button-left" 5 "button-right" 6 "input" 7}
-    :action {"application/left" 0 "application/right" 1
-             "application/activate" 2 "application/delete" 3}}
-   "academy:machine_container"
-   {:binding {"slots" 0 "anchors" 1 "energy-ratio" 2 "progress-ratio" 3 "machine-state" 4
-              "button-left" 5 "button-right" 6 "network-state" 7
-              "network-owner" 8 "network-range" 9 "network-bandwidth" 10
-              "network-load" 11 "network-ssid" 12 "network-password" 13
-              "node-name" 14}
-    :action {"container/click-slot" 0 "container/quick-move" 1
-             "container/button" 2}}
-   "academy:wireless_matrix"
-   {:binding {"slots" 0 "anchors" 1 "energy-ratio" 2 "progress-ratio" 3
-              "machine-state" 4 "button-left" 5 "button-right" 6
-              "network-state" 7 "network-owner" 8 "network-range" 9
-              "network-bandwidth" 10 "network-load" 11 "network-ssid" 12
-              "network-password" 13}
-    :action {"container/click-slot" 0 "container/quick-move" 1 "container/button" 2}}
-   "academy:wireless_node"
-   {:binding {"slots" 0 "anchors" 1 "energy-ratio" 2 "progress-ratio" 3
-              "machine-state" 4 "button-left" 5 "button-right" 6
-              "network-state" 7 "network-owner" 8 "network-range" 9
-              "network-bandwidth" 10 "network-load" 11 "network-ssid" 12
-              "network-password" 13 "node-name" 14}
-    :action {"container/click-slot" 0 "container/quick-move" 1 "container/button" 2}}})
+  {"academy:combat_hud" (symbols-for presentation-hud/binding-ids presentation-hud/action-ids)
+   "academy:terminal" (symbols-for presentation-terminal/binding-ids presentation-terminal/action-ids)
+   "academy:application" (symbols-for presentation-application/binding-ids presentation-application/action-ids)
+   "academy:machine_container" (symbols-for presentation-container/binding-ids presentation-container/action-ids)
+   "academy:wireless_matrix" (symbols-for presentation-container/binding-ids presentation-container/action-ids)
+   "academy:wireless_node" (symbols-for presentation-container/binding-ids presentation-container/action-ids)})
 
 (defn- resolve-template [template-id]
   (let [id (if (instance? cn.li.presentation.core.TemplateId template-id)
@@ -121,7 +99,11 @@
   (or @combat-hud*
       (let [vm (presentation-hud/mount-combat-hud!
                  runtime player-uuid width height {}
-                 (fn [_action _payload] nil))]
+                 ;; combat-view-model already owns :selected-skill/:skill-wheel-open?
+                 ;; (updates its own snapshot atom on dispatch); this callback is a
+                 ;; pure observer hook for any future cross-module side effect.
+                 (fn [action payload]
+                   (log/debug "Combat HUD action " action " " payload)))]
         (or (compare-and-set! combat-hud* nil vm)
             @combat-hud*))))
 
