@@ -2,8 +2,10 @@
   "Pure Clojure layout engine for retained presentation nodes.
 
    The engine intentionally returns immutable layout maps; render backends
-   consume the result but never decide geometry."
-  (:require [cn.li.presentation.core.tree :as tree]))
+   consume the result but never decide geometry. Nodes are plain maps
+   ({:type :props :children}) -- no dependency on cn.li.presentation.core.tree's
+   RNode; presentation-compiler/render.clj feeds this engine directly off
+   compiled TemplateNodes via that same shape.")
 
 (defn- finite [value fallback]
   (if (and (number? value) (Double/isFinite (double value)))

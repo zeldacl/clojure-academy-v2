@@ -1,9 +1,6 @@
 (ns cn.li.presentation.core.runtime
   (:require [cn.li.presentation.core.transaction :as tx]
             [cn.li.presentation.core.frame :as frame]
-            [cn.li.presentation.core.dirty :as dirty]
-            [cn.li.presentation.core.tree :as tree]
-            [cn.li.presentation.core.layout :as layout]
             [cn.li.presentation.core.input :as input])
   (:import [cn.li.presentation.core HostDescriptor MountHandle FrameContext
             PresentationInputEvent PresentationInputEvent$Pointer PresentationInputEvent$Pointer$Type
@@ -19,13 +16,10 @@
                         :input (input/create)
                         :template-resolver (:template-resolver options)
                         :template-renderer (:template-renderer options)
-                        :last-frame-id nil :last-frame nil})
-        dirty-state (dirty/create)]
-      (swap! runtime assoc :dirty dirty-state)
+                        :last-frame-id nil :last-frame nil})]
       (assoc @runtime
              :state runtime
-             :tx (tx/scheduler #(do (dirty/mark! dirty-state [:structure :paint])
-                                    (swap! runtime assoc :invalidated? true)))))))
+             :tx (tx/scheduler #(swap! runtime assoc :invalidated? true))))))
 
 (defn- state [runtime] (:state runtime))
 
@@ -62,52 +56,7 @@
     (swap! (state runtime) assoc :invalidated? true)
     handle))
 
-(defn mount-tree!
-  "Mount a retained Clojure component tree alongside a template/model host."
-  [runtime host template model spec]
-  (let [handle (mount! runtime host template model)]
-    (swap! (state runtime) assoc-in [:mounts handle :tree] (tree/node spec))
-    (dirty/mark! (:dirty @(state runtime)) [:structure :measure :layout :paint])
-    handle))
-
-(defn retained-tree [runtime handle]
-  (get-in @(state runtime) [:mounts handle :tree]))
-
-(defn reconcile-tree! [runtime handle spec]
-  (let [mount (get-in @(state runtime) [:mounts handle])]
-    (when-not mount (throw (ex-info "unknown mount" {:mount handle})))
-    (let [old (:tree mount)
-          result (tree/reconcile old spec)
-          next-node (:node result)
-          changed? (not (identical? old next-node))
-          structure? (or (:created? result)
-                         (not= (tree/structure-signature old)
-                               (tree/structure-signature next-node)))]
-      (swap! (state runtime) assoc-in [:mounts handle :tree] next-node)
-      (when changed?
-        (dirty/mark! (:dirty @(state runtime))
-                     (if structure?
-                       [:structure :measure :layout :paint]
-                       [:paint])))
-      next-node)))
-
-(defn layout-tree! [runtime handle width height]
-  (let [mount (get-in @(state runtime) [:mounts handle])]
-    (when-not mount (throw (ex-info "unknown mount" {:mount handle})))
-    (let [root (some-> (:tree mount) (layout/layout width height))]
-      (swap! (state runtime) assoc-in [:mounts handle :tree] root)
-      (swap! (state runtime) assoc-in [:mounts handle :layout]
-             (some-> root :layout))
-      (dirty/mark! (:dirty @(state runtime)) [:layout :paint])
-      root)))
-
 (defn transact! [runtime mutation!] (tx/transact! (:tx runtime) mutation!))
-
-(defn dirty-flags [runtime]
-  @(-> runtime state :dirty))
-
-(defn take-dirty! [runtime]
-  (dirty/take! (-> runtime state :dirty)))
 
 (defn set-input-handler! [runtime handle handler]
   (swap! (state runtime) assoc-in [:mounts handle :handler] handler)

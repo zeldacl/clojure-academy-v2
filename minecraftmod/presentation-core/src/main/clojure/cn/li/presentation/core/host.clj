@@ -38,22 +38,6 @@
     (runtime/mount! (or (:state runtime) runtime)
                     host (TemplateId. template) model)))
 
-(defn mount-tree-host! [runtime id kind template model spec]
-  (let [kind (case kind
-               :hud HostDescriptor$HostKind/HUD
-               :world-ui HostDescriptor$HostKind/WORLD_UI
-               :screen HostDescriptor$HostKind/SCREEN
-               (throw (ex-info "unknown presentation host" {:kind kind})))
-        host (HostDescriptor. (name id) kind 0 0 nil HostDescriptor$InputPolicy/PASSTHROUGH)]
-    (runtime/mount-tree! (or (:state runtime) runtime)
-                          host (TemplateId. template) model spec)))
-
-(defn reconcile-tree! [runtime mount spec]
-  (runtime/reconcile-tree! (or (:state runtime) runtime) mount spec))
-
-(defn layout-tree! [runtime mount width height]
-  (runtime/layout-tree! (or (:state runtime) runtime) mount width height))
-
 (defn set-input-handler! [runtime mount handler]
   (runtime/set-input-handler! (or (:state runtime) runtime) mount handler))
 
