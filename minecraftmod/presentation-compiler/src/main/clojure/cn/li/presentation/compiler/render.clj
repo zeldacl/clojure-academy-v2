@@ -45,6 +45,29 @@
    :props (into {} (.props node))
    :children (mapv template-node->layout-tree (.children node))})
 
+;; layout/layout's output is a pure function of (template, width, height) --
+;; it never reads binding values (those only affect what render-node draws
+;; at an already-resolved rect). CompiledTemplate instances are resolved
+;; once and reused for the template's lifetime (see
+;; ac.gui.reactive.register/resolve-template's template-cache*), so a
+;; per-template-identity cache here means a cooldown/CP tick that only
+;; changes a bound value never re-triggers layout, matching the documented
+;; static-HUD performance budget (see
+;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md F section). Keyed by the
+;; CompiledTemplate object itself (no equals/hashCode override, so this is
+;; identity keying); the live template set is small and effectively
+;; permanent for the app's lifetime, so this never needs eviction.
+(defonce ^:private layout-cache* (atom {}))
+
+(defn- cached-layout-tree
+  [^CompiledTemplate template width height]
+  (let [cached (get @layout-cache* template)]
+    (if (and cached (= width (:width cached)) (= height (:height cached)))
+      (:tree cached)
+      (let [tree (layout/layout (template-node->layout-tree (.root template)) width height)]
+        (swap! layout-cache* assoc template {:width width :height height :tree tree})
+        tree))))
+
 (declare render-node)
 
 (defn- render-children [^TemplateNode node laid-out model]
@@ -193,11 +216,12 @@
 
    `context` is a map with `:width` and `:height`; no mutable UI state is
    created here, which keeps the hot path suitable for later instance-buffer
-   specialization. Layout runs once per call over the whole tree; render-node
-   then just reads each node's resolved rect off the parallel laid-out tree."
+   specialization. Layout is cached per (template, width, height) --
+   render-node then just reads each node's resolved rect off the parallel
+   laid-out tree, so a binding-only change (no resize) never re-runs
+   layout."
   [^CompiledTemplate template ^PresentationViewModel model context]
   (let [width (double (max 1 (or (:width context) 1)))
         height (double (max 1 (or (:height context) 1)))
-        root (.root template)
-        laid-out (layout/layout (template-node->layout-tree root) width height)]
-    (vec (render-node root laid-out model))))
+        laid-out (cached-layout-tree template width height)]
+    (vec (render-node (.root template) laid-out model))))
