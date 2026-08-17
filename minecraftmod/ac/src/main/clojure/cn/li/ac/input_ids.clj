@@ -32,12 +32,21 @@
 ;; These will be called when corresponding keys are pressed.
 ;; Context structure: {:player-uuid string, :client-session-id string, :logical-side :client}
 
+(defn- content-key-allowed?
+  "Upstream isPlayerInGame guard (lambda KeyManager.tick): content keys fire
+   only while in game — no GUI open — except the terminal's own screen, where
+   Alt must still close it (upstream TerminalUI is a non-foreground auxgui so
+   keys keep working there)."
+  []
+  (or (not (client-bridge/screen-active?))
+      (terminal-actions/terminal-screen-open?)))
+
 (defn- on-cycle-selection
   "Handle cycle selection (C key press, upstream KEY_SWITCH_PRESET) — switch
    to next preset."
   [{:keys [player-uuid]}]
   (log/debug "Cycle selection — switching preset" {:uuid player-uuid})
-  (when player-uuid
+  (when (and (content-key-allowed?) player-uuid)
     (keybinds/switch-preset! player-uuid)))
 
 (defn- on-toggle-primary-state
@@ -48,7 +57,7 @@
    consumes the already-filtered event and executes the business action."
   [{:keys [player-uuid]}]
   (log/debug "Toggle primary state — toggling ability mode" {:uuid player-uuid})
-  (when player-uuid
+  (when (and (content-key-allowed?) player-uuid)
     (keybinds/trigger-mode-switch! player-uuid)))
 
 (defn- on-toggle-debug-overlay
@@ -56,18 +65,21 @@
    DebugConsole (ACKeyManager.addKeyHandler(\"debug_console\", KEY_F4, ...)) —
    cycles the debug info overlay through none -> normal -> show-exp -> none."
   [_context]
-  (runtime-hooks/toggle-debug-overlay-state!))
+  (when (content-key-allowed?)
+    (runtime-hooks/toggle-debug-overlay-state!)))
 
 (defn- on-toggle-terminal
   "Handle terminal toggle (Left Alt / GLFW_KEY_LEFT_ALT).
    Matching original AcademyCraft TerminalUI.keyHandler (KEY_LMENU)."
   [_context]
   (log/info "[AC-Terminal] toggle key pressed")
-  (if-let [player (client-bridge/get-client-player)]
-    (do
-      (log/info "[AC-Terminal] got player, toggling terminal")
-      (terminal-actions/toggle-terminal! player))
-    (log/warn "[AC-Terminal] get-client-player returned nil — bridge not installed?")))
+  (if (content-key-allowed?)
+    (if-let [player (client-bridge/get-client-player)]
+      (do
+        (log/info "[AC-Terminal] got player, toggling terminal")
+        (terminal-actions/toggle-terminal! player))
+      (log/warn "[AC-Terminal] get-client-player returned nil — bridge not installed?"))
+    (log/info "[AC-Terminal] toggle suppressed — GUI open (upstream isPlayerInGame)")))
 
 ;; ==== Input ID Configuration Registry ====
 
@@ -77,12 +89,14 @@
     ;; ===== :alternative scheme (fully configurable) =====
     ;; These shortcuts are configured by AC. Platforms create KeyMappings from :key-mapping.
     ;;
-    ;; Ability slot keys (upstream default: mouse-left/mouse-right/R/F) are
-    ;; NOT registered here — upstream itself doesn't put them in vanilla's
-    ;; Options→Controls screen either (ClientHandler.keyIDsInit is configured
-    ;; through AC's own SettingsUI, not a Minecraft KeyMapping); they are
-    ;; polled directly per-frame by keybinds/tick-keys! (see slot-glfw-keys in
-    ;; the platform key-state-fn), same as :screen and :movement keys below.
+    ;; Ability slot keys (upstream default: mouse-left/mouse-right/R/F) and
+    ;; the preset-editor key are NOT registered here: the platform key-mapping
+    ;; adapters create vanilla KeyMappings for the :ability-key-* /
+    ;; :edit-preset-key config keys (seeded from the config values), so they
+    ;; appear in Options > Controls and the Settings app shares the same
+    ;; KeyMapping instances. Input dispatch stays polled per-frame by
+    ;; keybinds/tick-keys! (slot-glfw-keys in the platform key-state-fn),
+    ;; reading the live KeyMapping binding.
 
     :content/cycle-selection
     {:input-id :content/cycle-selection

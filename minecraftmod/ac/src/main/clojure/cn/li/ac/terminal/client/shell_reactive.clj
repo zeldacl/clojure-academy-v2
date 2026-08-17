@@ -465,13 +465,15 @@
               (log/info "[AC-Terminal] not installed — use terminal installer item first")))))
       false)))
 
-(defn- terminal-session-open?
+(defn terminal-session-open?
   "Terminal (or one of its child screens, e.g. an app) is currently on
    screen. ui-open? alone sticks true after a child screen (the about app,
    itself a standalone screen that replaced the terminal) is closed with ESC:
    the whole screen stack goes down without the terminal's on-close ever
    running, so the flag stays set — with no screen up, the next toggle must
-   OPEN again."
+   OPEN again. Also used by the input-id handlers to exempt the terminal
+   screen from the ingame-only key guard (upstream TerminalUI is a
+   non-foreground auxgui that does not block key listening)."
   []
   (and (term-rt/ui-open?)
        (bridge/screen-active?)))

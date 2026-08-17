@@ -13,10 +13,21 @@
             [clojure.string :as str])
   (:import [net.minecraft.client KeyMapping KeyMapping$Category Minecraft Options]
            [com.mojang.blaze3d.platform InputConstants InputConstants$Key InputConstants$Type]
+           [net.neoforged.neoforge.client.settings IKeyConflictContext KeyConflictContext]
            [cn.li.mcver ResourceLocations]))
 
 (def ^:private registered-key-mappings (atom {}))
 (def ^:private registered-categories (atom {}))
+
+(defn- key-code->input-key
+  "Resolve an AC key-code to an InputConstants.Key. The settings app stores
+   mouse buttons as -100+button (acKeyCode convention), everything else is a
+   GLFW KEYSYM — vanilla Options > Controls binds keyboard and mouse alike."
+  ^InputConstants$Key [key-code]
+  (let [code (int key-code)]
+    (if (< code 0)
+      (.getOrCreate InputConstants$Type/MOUSE (+ 100 code))
+      (.getOrCreate InputConstants$Type/KEYSYM code))))
 
 (defn- category-id-of
   [category]
@@ -48,10 +59,17 @@
    - category: string (legacy translation-style category id)
 
    Returns: KeyMapping object"
-  [input-id key-code translation-key category]
+  [input-id key-code ^String translation-key ^String category]
   (try
+    ;; IN_GAME context: these bindings are gameplay keys — vanilla key
+    ;; processing and other mods' conflict checks treat them as ingame-only
+    ;; (upstream AcademyCraft aborts all keys while a GUI is open).
+    ;; key-code->input-key maps negative codes (mouse buttons, Settings app
+    ;; convention) to InputConstants.Type.MOUSE instead of KEYSYM.
     (let [cat (resolve-category category)
-          key-mapping (KeyMapping. translation-key (int key-code) cat)]
+          ^IKeyConflictContext ctx KeyConflictContext/IN_GAME
+          key-mapping (KeyMapping. translation-key ctx
+                                   (key-code->input-key key-code) cat)]
       (swap! registered-key-mappings assoc input-id key-mapping)
       (log/debug "Registered KeyMapping"
                  {:input-id input-id
@@ -110,16 +128,6 @@
                        (.same other km)))
                 (seq (.keyMappings (.options ^Minecraft (Minecraft/getInstance))))))))))
 
-(defn- key-code->input-key
-  "Resolve an AC key-code to an InputConstants.Key. The settings app stores
-   mouse buttons as -100+button (acKeyCode convention), everything else is a
-   GLFW KEYSYM — vanilla Options > Controls binds keyboard and mouse alike."
-  ^InputConstants$Key [key-code]
-  (let [code (int key-code)]
-    (if (< code 0)
-      (.getOrCreate InputConstants$Type/MOUSE (+ 100 code))
-      (.getOrCreate InputConstants$Type/KEYSYM code))))
-
 (defn set-key-mapping-key!
   "Rebind a registered KeyMapping exactly the way vanilla Options > Controls
    does (KeyBindsScreen): first clear every OTHER mapping bound to the same
@@ -145,31 +153,36 @@
       (.save options)
       true)))
 
-;; AC gameplay config domain + Settings-owned key config keys (mirrors
-;; cn.li.ac.config.gameplay — loaders must not import ac directly).
+;; AC gameplay config domain + the config-owned keys (ability slots + preset
+;; editor) that get vanilla KeyMappings too, so they appear in Options >
+;; Controls next to the content keys. The config values are only the initial
+;; binding; once the KeyMapping exists it is authoritative (options.txt
+;; persists, the Settings app rebinds, polling reads the live binding).
 (def ^:private gameplay-domain :cn.li.ac/gameplay)
 (def ^:private slot-config-keys
   [:ability-key-0 :ability-key-1 :ability-key-2 :ability-key-3])
+(def ^:private config-key-rows
+  [{:config-key :ability-key-0 :translation-key "key.content.ability.slot.0"}
+   {:config-key :ability-key-1 :translation-key "key.content.ability.slot.1"}
+   {:config-key :ability-key-2 :translation-key "key.content.ability.slot.2"}
+   {:config-key :ability-key-3 :translation-key "key.content.ability.slot.3"}
+   {:config-key :edit-preset-key :translation-key "key.content.edit.preset"}])
 
 (defn install-bound-key-resolver!
-  "Wire the polling bound-key resolver (glfw-polling-core): [:bridge input-id]
-   reads the KeyMapping's CURRENT binding, [:slot n] / [:screen kw] read the
-   AC Settings-owned config keys. Lets GLFW polling follow Settings app /
-   Options > Controls rebinds on platforms without KeyMapping events (Fabric),
-   and fixes slot/screen keys for Forge's polling key-state-fn too."
+  "Wire the polling bound-key resolver (glfw-polling-core): [:bridge input-id],
+   [:slot n] and [:screen kw] all read the KeyMapping's CURRENT binding, so
+   GLFW polling follows Settings app / Options > Controls rebinds on
+   platforms without KeyMapping events (Fabric), and fixes slot/screen keys
+   for Forge's polling key-state-fn too."
   []
   (glfw-polling/install-bound-key-resolver!
     (fn [input-ref]
       (case (first input-ref)
         :bridge (get-key-code (second input-ref))
-        :slot (config-reg/get-config-value
-                gameplay-domain
-                (nth slot-config-keys (second input-ref) nil))
-        :screen (config-reg/get-config-value
-                  gameplay-domain
-                  (case (second input-ref)
-                    :primary :edit-preset-key
-                    :secondary nil))
+        :slot (get-key-code (nth slot-config-keys (second input-ref) nil))
+        :screen (get-key-code (case (second input-ref)
+                                :primary :edit-preset-key
+                                :secondary nil))
         nil)))
   nil)
 
@@ -208,6 +221,14 @@
           (let [{:keys [input-id key-mapping]} config
                 {:keys [key translation-key category]} key-mapping]
             (register-alternative-key-mapping! input-id key translation-key category)))))
+    ;; Config-owned keys (ability slots + preset editor) become KeyMappings
+    ;; too, seeded from the config values so existing rebinds carry over.
+    (doseq [{:keys [config-key translation-key]} config-key-rows]
+      (register-alternative-key-mapping!
+        config-key
+        (config-reg/get-config-value gameplay-domain config-key)
+        translation-key
+        "keybind.category.content"))
 
     (log/info "Registered all AC alternative keybindings")
     nil

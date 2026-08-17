@@ -57,12 +57,16 @@
    {:key :use-mouse-wheel :prop-id "useMouseWheel" :category "generic" :get gameplay-config/use-mouse-wheel-enabled? :domain config-common/gameplay-domain :sp-only? false :default false}])
 
 (def ^:private upstream-key-rows
-  [{:source :settings :config-key :ability-key-0 :prop-id "ability_0" :default-code -100}
-   {:source :settings :config-key :ability-key-1 :prop-id "ability_1" :default-code -99}
-   {:source :settings :config-key :ability-key-2 :prop-id "ability_2" :default-code 82}
-   {:source :settings :config-key :ability-key-3 :prop-id "ability_3" :default-code 70}
+  ;; All rows are :bridge — every AC binding is a vanilla KeyMapping, so the
+  ;; Settings app and Options > Controls share the same instance and a rebind
+  ;; on either side shows up on the other. :config-key? rows are the
+  ;; config-seeded slots (ability keys + preset editor).
+  [{:source :bridge :input-id :ability-key-0 :prop-id "ability_0" :default-code -100 :config-key? true}
+   {:source :bridge :input-id :ability-key-1 :prop-id "ability_1" :default-code -99 :config-key? true}
+   {:source :bridge :input-id :ability-key-2 :prop-id "ability_2" :default-code 82 :config-key? true}
+   {:source :bridge :input-id :ability-key-3 :prop-id "ability_3" :default-code 70 :config-key? true}
    {:source :bridge :input-id :content/cycle-selection :prop-id "switch_preset" :default-code 67}
-   {:source :settings :config-key :edit-preset-key :prop-id "edit_preset" :default-code 78}
+   {:source :bridge :input-id :edit-preset-key :prop-id "edit_preset" :default-code 78 :config-key? true}
    {:source :bridge :input-id :content/toggle-primary-state :prop-id "ability_activation" :default-code 86}
    {:source :bridge :input-id :content/toggle-debug-overlay :prop-id "debug_console" :default-code 293}
    {:source :bridge :input-id :content/toggle-terminal :prop-id "open_data_terminal" :default-code 342}])
@@ -138,28 +142,21 @@
       (get glfw-key-names key-code)
       (str "KEY_" key-code)))
 
-(defn- current-key-code [{:keys [source input-id config-key default-code]}]
-  (if (= source :settings)
-    (or (try (gameplay-config/input-key config-key) (catch Throwable _ nil))
-        default-code)
-    (or (bridge/call-adapter :keybind-get-key-code input-id) default-code)))
+(defn- current-key-code [{:keys [input-id default-code]}]
+  (or (bridge/call-adapter :keybind-get-key-code input-id) default-code))
 
-(defn- current-key-name [{:keys [source input-id] :as row}]
-  (let [code (current-key-code row)]
-    (if (= source :bridge)
-      (or (bridge/call-adapter :keybind-get-key-name input-id)
-          (default-key-name code))
-      (default-key-name code))))
+(defn- current-key-name [{:keys [input-id] :as row}]
+  (or (bridge/call-adapter :keybind-get-key-name input-id)
+      (default-key-name (current-key-code row))))
 
-(defn- binding-editable? [{:keys [source]}]
-  (or (= source :settings) (rebind-supported?)))
+(defn- binding-editable? [_]
+  (rebind-supported?))
 
 (defn- binding-conflict?
-  "True when a :bridge row's current KeyMapping shares its key with another
+  "True when the row's current KeyMapping shares its key with another
    vanilla/mod mapping — shown in red like Options > Controls."
-  [{:keys [source input-id]}]
-  (and (= source :bridge)
-       (boolean (bridge/call-adapter :keybind-conflict? input-id))))
+  [{:keys [input-id]}]
+  (boolean (bridge/call-adapter :keybind-conflict? input-id)))
 
 (defn- refresh-key-display!
   "Update a key row's label text and color; conflicting bindings render red
@@ -172,15 +169,13 @@
     (ui/set-node-prop! r key-val :color
                        (if conflict? key-color-conflict key-color-idle))))
 
-(defn- persist-binding! [{:keys [source input-id config-key]} key-code]
-  (if (= source :settings)
-    (persist! config-common/gameplay-domain config-key (int key-code))
-    (bridge/call-adapter :keybind-set-key! input-id (int key-code))))
+(defn- persist-binding! [{:keys [input-id]} key-code]
+  (bridge/call-adapter :keybind-set-key! input-id (int key-code)))
 
 (defn- visible-key-rows []
   (let [registered (kb-registry/get-all-keybinding-configs)]
-    (filter (fn [{:keys [source input-id]}]
-              (or (= source :settings) (contains? registered input-id)))
+    (filter (fn [{:keys [input-id config-key?]}]
+              (or config-key? (contains? registered input-id)))
             upstream-key-rows)))
 
 (defn- reset-all-to-defaults!

@@ -23,3 +23,9 @@
 (defn toggle-terminal!
   [player]
   (shell-reactive/toggle! player))
+
+(defn terminal-screen-open?
+  "True while the terminal UI is open on screen (see shell-reactive/
+   terminal-session-open?)."
+  []
+  (shell-reactive/terminal-session-open?))
