@@ -39,7 +39,7 @@
                   cn.li.ac.content.effects
                   cn.li.ac.content.particles
                   cn.li.ac.content.loot]
-    :init-fns '[cn.li.ac.content.ability/init-ability-content!
+    :init-fns '[cn.li.ac.content.ability/init-combat-ability-content!
                 cn.li.ac.content.effects/init-effects!
                 cn.li.ac.content.particles/init-particles!
                 cn.li.ac.content.loot/init-loot!]}

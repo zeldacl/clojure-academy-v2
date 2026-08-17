@@ -1002,7 +1002,10 @@
              :icon (str "textures/abilities/" (name category-id) "/skills/" (name id) ".png")
              :ctrl-id id
              :pattern activation
-             :cooldown {:mode :combat-core}}))
+             :cooldown {:mode :combat-core}
+             ;; Tells the legacy Context fail-closed guard (context_state.clj)
+             ;; that this skill has no legacy execution path to fall back to.
+             :execution :combat-core}))
         (:abilities provider)))
 
 (declare vfx-effect-ids)
@@ -1023,8 +1026,6 @@
    recipe before the legacy namespace bootstrap can be removed."
   []
   (assert-complete-skill-catalog!)
-  (when-not (= 38 (count ability-ids))
-    (throw (ex-info "Combat Core composition is missing an ability" {:count (count ability-ids)})))
   (when-not (every? keyword? vfx-effect-ids)
     (throw (ex-info "Combat Core contains an invalid VFX capability" {})))
   ;; These are the old AC bootstrap responsibilities that must be empty or

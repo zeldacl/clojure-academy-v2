@@ -1,5 +1,7 @@
 (ns cn.li.ac.content.ability.teleporter.location-teleport
-  "LocationTeleport skill - teleport to saved locations.
+  "LocationTeleport saved-location server logic: query/save/delete/perform,
+  exposed to the client only through the MSG-REQ-SAVED-POS-* RPC handlers
+  registered by init!.
 
   Original-aligned mechanics:
   - CP consume: lerp(200,150,exp) * dim-penalty(2x cross-dim) * max(8, sqrt(min(800, distance)))
@@ -9,12 +11,14 @@
   - Cooldown: lerp(30,20,exp)
   - Exp gain: 0.015 (dist<200) or 0.03 (dist>=200)
   - Location name max length: 16
-  - UI opened from key-down; actual add/remove/perform via RPC requests
+
+  Skill declaration and the :instant activation shortcut are native to
+  combat_content.clj; this namespace is not Context/defskill glue — it is
+  the live implementation the RPC handlers call into.
 
   No Minecraft imports."
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  (:require [cn.li.ac.ability.dsl :refer [def-skill-config-ops]]
             [cn.li.ac.achievement.dispatcher :as ach-dispatcher]
-            [cn.li.ac.ability.service.context-dispatcher :as ctx]
             [cn.li.ac.ability.model.resource :as rdata]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.uuid :as uuid]
@@ -26,8 +30,7 @@
             [cn.li.mcmod.network.server :as net-srv]
             [cn.li.ac.ability.messages :as catalog]
             [clojure.string :as str]
-            [cn.li.mcmod.util.log :as log]
-            [cn.li.ac.content.ability.teleporter.tp-skill-helper :as helper]))
+            [cn.li.mcmod.util.log :as log]))
 
 (def-skill-config-ops :location-teleport)
 (def ^:private location-teleport-skill-id :location-teleport)
@@ -290,51 +293,6 @@
      (catch Exception e
        (log/warn "LocationTeleport perform failed:" (ex-message e))
        {:success? false :error :perform-failed}))))
-
-(defn location-teleport-on-key-down
-  "Open LocationTeleport UI with current locations and perform stats."
-  [ctx-id player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage player-ref]
-  (try
-    (let [payload (query-location-teleport player-id player-ref)]
-      (ctx/ctx-send-to-client! ctx-id :location-teleport/ui-open payload))
-    (catch Exception e
-      (log/warn "LocationTeleport key-down failed:" (ex-message e)))))
-
-(defn location-teleport-on-key-tick
-  "No-op: interaction is handled by dedicated location teleport GUI RPC actions."
-  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  nil)
-
-(defn location-teleport-on-key-up
-  "No-op: perform is handled by GUI perform request for original behavior alignment."
-  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  nil)
-
-(defn location-teleport-on-key-abort
-  "No-op: UI lifecycle is client-managed and independent from key abort."
-  [_ctx-id _player-id _skill-id _exp _cost-ok? _hold-ticks _cost-stage _player-ref]
-  nil)
-
-(defskill location-teleport
-  :id :location-teleport
-  :category-id :teleporter
-  :name-key "ability.skill.teleporter.location_teleport"
-  :description-key "ability.skill.teleporter.location_teleport.desc"
-  :icon "textures/abilities/teleporter/skills/location_teleport.png"
-  :ui-position [118 50]
-  :ctrl-id :location-teleport
-  :cp-consume-speed 0.0
-  :overload-consume-speed 0.0
-  :cooldown-ticks (fn [_player-id _skill-id exp]
-                    (compute-cooldown (double (or exp 0.0))))
-  :pattern :release-cast
-  :cooldown {:mode :manual}
-  :actions {:down! location-teleport-on-key-down
-            :tick! location-teleport-on-key-tick
-            :up! location-teleport-on-key-up
-            :abort! location-teleport-on-key-abort}
-  :prerequisites [{:skill-id :penetrate-teleport :min-exp 0.8}
-                  {:skill-id :mark-teleport :min-exp 0.8}])
 
 (def ^:private teleporter-handler-contract
   {:owner-spec :server :payload-routing :none})

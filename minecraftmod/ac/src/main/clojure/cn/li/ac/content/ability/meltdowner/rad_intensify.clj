@@ -1,7 +1,10 @@
 (ns cn.li.ac.content.ability.meltdowner.rad-intensify
-  "Meltdowner passive: radiation intensify.
-  Custom exp is derived from max-cp ratio; damage rate lerps from 1.4 to 1.8."
-  (:require [cn.li.ac.ability.dsl :refer [defskill def-skill-config-ops]]
+  "Meltdowner radiation-intensify config/exp helpers.
+
+  Skill declaration and execution are native to combat_content.clj; this
+  namespace only keeps the exp/rate math that meltdowner/damage_helper.clj's
+  Combat Core domain-event bridge (mark-target!, init!) still calls."
+  (:require [cn.li.ac.ability.dsl :refer [def-skill-config-ops]]
             [cn.li.ac.ability.config :as cfg]
             [cn.li.ac.ability.service.skill-effects :as skill-effects]
             [cn.li.ac.ability.util.balance :as bal]))
@@ -26,14 +29,3 @@
 
 (defn mark-duration-ticks []
   (max 1 (long (cfg-int :effect.mark-duration-ticks))))
-
-(defskill rad-intensify
-  :id :rad-intensify
-  :category-id :meltdowner
-  :name-key "ability.skill.meltdowner.rad_intensify"
-  :description-key "ability.skill.meltdowner.rad_intensify.desc"
-  :icon "textures/abilities/meltdowner/skills/rad_intensify.png"
-  :ui-position [35 75]
-  :ctrl-id :rad-intensify
-  :pattern :passive
-  :prerequisites [{:skill-id :electron-bomb :min-exp 0.5}])
