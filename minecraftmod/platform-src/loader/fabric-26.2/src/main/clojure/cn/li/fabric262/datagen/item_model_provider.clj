@@ -37,22 +37,12 @@
 (defn- model-ref [model-name]
   {:type "minecraft:model" :model (str modid/mod-id ":item/" model-name)})
 
-(defn- flat-item-model [{:keys [model-name json]}]
-  (let [overrides (:overrides json)]
-    (if (seq overrides)
-      {:type "minecraft:range_dispatch"
-       :property (str modid/mod-id ":energy")
-       :fallback (model-ref model-name)
-       :entries (->> overrides
-                     (map (fn [{:keys [predicate model]}]
-                            {:threshold (double (or (get predicate (str modid/mod-id ":energy")) 0.0))
-                             :model (model-ref (last (str/split (str model) #"/")))}))
-                     (sort-by :threshold) vec)}
-      (model-ref model-name))))
-
-(defn- item-definition [spec obj-bases]
+(defn- item-definition [spec obj-bases specs-by-name]
   (let [name (str (:model-name spec))
-        flat (flat-item-model spec)]
+        ;; Overrides become nested range_dispatch trees keyed on their
+        ;; predicate property (energy tiers: academy:energy; matter unit:
+        ;; minecraft:damage → academy:frame animation chain).
+        flat (item-model-core/item-model-tree specs-by-name name)]
     {:model (if (contains? obj-bases name)
               {:type "minecraft:select"
                :property "minecraft:display_context"
@@ -77,6 +67,7 @@
     (reify DataProvider
       (^CompletableFuture run [_ ^CachedOutput cached]
         (let [{:keys [all-item-count energy-tier-count simple-count models]} (item-model-core/gather-model-specs)
+              specs-by-name (into {} (map (fn [s] [(str (:model-name s)) s])) models)
               auxiliary (auxiliary-model-names models)
               obj-bases (into #{} (keep (fn [{:keys [model-name obj-model]}]
                                           (when (and obj-model (str/ends-with? (str model-name) "_3d"))
@@ -93,7 +84,7 @@
                   :when (not (contains? auxiliary (str model-name)))]
             (let [target-path (.json ^PackOutput$PathProvider item-path-provider
                                      (Identifier/fromNamespaceAndPath mod-id model-name))
-                  json-tree (.toJsonTree gson (gson-util/normalize-json (item-definition spec obj-bases)))]
+                  json-tree (.toJsonTree gson (gson-util/normalize-json (item-definition spec obj-bases specs-by-name)))]
               (swap! writes conj
                      (DataProvider/saveStable cached ^JsonElement json-tree ^java.nio.file.Path target-path))))
           (println (str "[item-model-provider/fabric] summary: items=" all-item-count

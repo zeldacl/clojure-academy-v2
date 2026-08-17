@@ -1,14 +1,18 @@
 (ns cn.li.mc1201.client.energy-item-model-properties
-  "Registers item model predicates for :item-model-energy-levels items.
+  "Registers item model predicates for :item-model-energy-levels items and
+   :item-model-damage-frame items.
 
-  Predicate id is `<modid>:energy` (see datagen item_model_provider)."
+  Predicate ids are `<modid>:energy` and `<modid>:frame` (see datagen
+  item_model_provider)."
   (:require [cn.li.platform.neutral.config :as modid]
             [cn.li.platform.registry.metadata :as registry-metadata]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.resources ResourceLocation]
            [net.minecraft.client.renderer.item ItemProperties]
            [net.minecraft.world.item Item]
-           [cn.li.mc1201.client.render.item EnergyItemPropertyFunction]
+           [cn.li.mc1201.client.render.item EnergyItemPropertyFunction
+            FrameItemPropertyFunction
+            MatterKindItemPropertyFunction]
            [cn.li.mc1201.runtime ItemRegistry]))
 
 (defn- resolve-item
@@ -25,4 +29,15 @@
       (when (get-in (registry-metadata/get-item-spec item-id) [:properties :item-model-energy-levels])
         (when-let [item (resolve-item item-id)]
           (ItemProperties/register item pred-rl EnergyItemPropertyFunction/INSTANCE)
-          (log/info "Item model energy predicate registered" {:item-id item-id}))))))
+          (log/info "Item model energy predicate registered" {:item-id item-id})))))
+  ;; Matter-unit variant + frame predicates (:item-model-damage-frame,
+  ;; upstream ItemMatterUnit: per-damage models + `frame` override for the
+  ;; flowing-liquid animation).
+  (let [kind-rl (ResourceLocation. (str modid/mod-id) "matter_kind")
+        frame-rl (ResourceLocation. (str modid/mod-id) "frame")]
+    (doseq [item-id (registry-metadata/get-all-item-ids)]
+      (when (get-in (registry-metadata/get-item-spec item-id) [:properties :item-model-damage-frame])
+        (when-let [item (resolve-item item-id)]
+          (ItemProperties/register item kind-rl MatterKindItemPropertyFunction/INSTANCE)
+          (ItemProperties/register item frame-rl FrameItemPropertyFunction/INSTANCE)
+          (log/info "Item model matter_kind + frame predicates registered" {:item-id item-id}))))))

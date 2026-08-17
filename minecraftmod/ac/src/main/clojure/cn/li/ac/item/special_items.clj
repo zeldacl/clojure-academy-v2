@@ -246,7 +246,21 @@
          ;; No static tooltip: upstream ItemMatterUnit has none, and the
          ;; empty/filled states are told apart by their hover names (lang
          ;; keys item.<modid>.matter_unit_none / _phase_liquid).
+         ;; Item model: custom academy:matter_kind predicate reads ItemStack
+         ;; damage (0 = empty, 1 = imag phase liquid) — the filled model
+         ;; carries the 4-frame flowing-liquid animation (academy:frame),
+         ;; exactly like upstream's per-damage ModelLoader registration
+         ;; (ACItems.java:270-271).
          :properties {:model-texture "matter_unit"
+                      :item-model-damage-frame
+                      {:texture-empty "matter_unit"
+                       :texture-filled "matter_unit_phase_liquid_0"
+                       :frames ["matter_unit_phase_liquid_1"
+                                "matter_unit_phase_liquid_2"
+                                "matter_unit_phase_liquid_3"]
+                       :frame-predicate "academy:frame"
+                       :damage-predicate "academy:matter_kind"
+                       :damage-threshold 1.0}
                       :filled-variant {:nbt {"matterKind" "phase-liquid"}
                                        :damage 1
                                        :label "phase-liquid"}}

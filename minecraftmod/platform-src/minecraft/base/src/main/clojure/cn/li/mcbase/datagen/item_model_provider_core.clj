@@ -26,6 +26,59 @@
                   :textures {:layer0 (texture-path model-texture)}}
            (map? display) (assoc :display display))})
 
+(defn- damage-frame-model-entries
+  "Model specs for a damage-variant item with a frame animation on the filled
+   variant (upstream ItemMatterUnit, ACItems.java): damage 0 → empty-unit
+   model, damage 1 → filled model driven by the custom `frame` property
+   (frame = time*4 mod 4, a 4-frame flowing-liquid animation).
+
+   The variant predicate is the custom `<modid>:matter_kind` (reads
+   ItemStack damage directly) — NOT the vanilla `minecraft:damage` predicate,
+   which divides by maxDamage and is unusable on stackable items (matter
+   units stack to 16, so they carry no durability). Upstream keys its
+   per-damage models off the same damage field.
+
+   Overrides are emitted in ASCENDING threshold order — vanilla's
+   ItemOverrides.resolve walks the array backwards, and the Forge datagen
+   builder reverses on write, so ascending survives both loaders to the same
+   'largest threshold first' match.
+
+   Returns the animation frames first, then the filled model, then the base
+   model LAST — the Forge/NeoForge datagen builders construct
+   ModelFile$ExistingModelFile for every override target and the model file
+   must already be written, so every referenced model precedes its referrer
+   (same ordering as energy-tier-model-entries)."
+  [item-id props]
+  (let [mod-id (str modid/mod-id)
+        tex (fn [t] (if (str/includes? (str t) ":") (str t) (str mod-id ":item/" t)))
+        {:keys [texture-empty texture-filled frames frame-predicate damage-predicate damage-threshold]} props
+        frame-names (vec (or frames []))
+        base-name (str item-id)
+        filled-name (or (when (seq texture-filled)
+                          (last (str/split (str texture-filled) #"/")))
+                        (str base-name "_filled"))
+        model-rl (fn [t] (str mod-id ":item/" (last (str/split (str t) #"/"))))
+        frame-overrides (mapv (fn [idx frame-tex]
+                                {:predicate {(str frame-predicate) (double (inc idx))}
+                                 :model (model-rl frame-tex)})
+                              (range (count frame-names)) frame-names)]
+    (concat
+      (mapv (fn [frame-tex]
+              {:model-name (last (str/split (str frame-tex) #"/"))
+               :json {:parent "item/generated"
+                      :textures {:layer0 (tex frame-tex)}}})
+            frame-names)
+      [{:model-name filled-name
+        :json (cond-> {:parent "item/generated"
+                       :textures {:layer0 (tex texture-filled)}}
+                (seq frame-overrides) (assoc :overrides frame-overrides))}
+       {:model-name base-name
+        :json {:parent "item/generated"
+               :textures {:layer0 (tex texture-empty)}
+               :overrides [{:predicate {(str (or damage-predicate "academy:matter_kind"))
+                                        (double (or damage-threshold 1.0))}
+                            :model (model-rl filled-name)}]}}])))
+
 (defn- energy-tier-model-entries
   [item-id {:keys [texture-empty texture-half texture-full]}]
   (let [{:keys [base empty-texture half-texture full-texture half-model full-model]}
@@ -65,22 +118,60 @@
                                                (str modid/mod-id ":item/" still-texture))}}})))))
         (registry-metadata/get-all-fluid-ids)))
 
+(defn item-model-tree
+  "Recursively build a 1.21.4+ item-model tree for a model spec: each override
+   list (single predicate id) becomes a nested minecraft:range_dispatch keyed
+   on that property; a model with no overrides is a plain model reference.
+   Shared by the 26.2 providers — covers energy tiers (one property) and the
+   matter-unit damage+frame chain (nested: damage dispatch → filled model →
+   frame dispatch → per-frame models)."
+
+  [specs-by-name model-name]
+  (let [spec (get specs-by-name model-name)
+        overrides (seq (:overrides (:json spec)))]
+    (if overrides
+      (let [by-prop (group-by (fn [o] (str (ffirst (:predicate o)))) overrides)]
+        (reduce-kv
+          (fn [fallback pred-id entries]
+            {:type "minecraft:range_dispatch"
+             :property pred-id
+             :fallback fallback
+             :entries (->> entries
+                           (map (fn [{:keys [predicate model]}]
+                                  (let [[_ thr] (first predicate)
+                                        target (some-> model str (str/split #"/") last)]
+                                    {:threshold (double thr)
+                                     :model (if (and target (get specs-by-name target))
+                                              (item-model-tree specs-by-name target)
+                                              {:type "minecraft:model" :model (str model)})})))
+                           (sort-by :threshold)
+                           vec)})
+          {:type "minecraft:model"
+           :model (str (str modid/mod-id) ":item/" model-name)}
+          by-prop))
+      {:type "minecraft:model"
+       :model (str (str modid/mod-id) ":item/" model-name)})))
+
 (defn gather-model-specs
   []
   (let [all-item-names (item-dsl/list-items)
         energy-tier-items (filter #(item-model-patterns/energy-tier-item? (item-dsl/get-item %))
                                   all-item-names)
+        damage-frame-items (filter #(item-model-patterns/damage-frame-variant? (item-dsl/get-item %))
+                                   all-item-names)
         obj-3d-items (filter #(item-model-patterns/obj-3d-item? (item-dsl/get-item %))
                               all-item-names)
         simple-items (keep (fn [item-name]
                              (let [item-spec (item-dsl/get-item item-name)]
                                (when-not (or (item-model-patterns/energy-tier-item? item-spec)
+                                            (item-model-patterns/damage-frame-variant? item-spec)
                                             (item-model-patterns/obj-3d-item? item-spec))
                                  (item-model-patterns/simple-model-spec item-name item-spec))))
                            all-item-names)
         bucket-entries (fluid-bucket-model-entries)]
     {:all-item-count (count all-item-names)
      :energy-tier-count (count energy-tier-items)
+     :damage-frame-count (count damage-frame-items)
      :obj-3d-count (count obj-3d-items)
      :simple-count (count simple-items)
      :bucket-count (count bucket-entries)
@@ -91,6 +182,12 @@
                                                     (get-in (item-dsl/get-item item-name)
                                                             [:properties :item-model-energy-levels])))
                        energy-tier-items)
+               (mapcat (fn [item-name]
+                         (damage-frame-model-entries
+                           item-name
+                           (get-in (item-dsl/get-item item-name)
+                                   [:properties :item-model-damage-frame])))
+                       damage-frame-items)
                (map (fn [item-name]
                       (let [item-spec (item-dsl/get-item item-name)]
                         (item-model-patterns/obj-3d-model-spec

@@ -8,6 +8,8 @@ import cn.li.mc262.client.render.PlasmaRenderTypes;
 import cn.li.mc262.client.render.ReactivePreviewPipRenderer;
 import cn.li.mc262.client.render.ReactivePreviewRenderState;
 import cn.li.mc262.client.render.item.EnergyItemPropertyFunction;
+import cn.li.mc262.client.render.item.FrameItemPropertyFunction;
+import cn.li.mc262.client.render.item.MatterKindItemPropertyFunction;
 import cn.li.mcver.ResourceLocations;
 import net.minecraft.core.Holder;
 import net.minecraft.core.particles.ParticleType;
@@ -101,6 +103,10 @@ public final class ModClientRenderSetup {
 
     private static void onRegisterRangeProperties(RegisterRangeSelectItemModelPropertyEvent event) {
         event.register(ResourceLocations.of("academy", "energy"), EnergyItemPropertyFunction.CODEC);
+        // Matter-unit variant + frame animation (upstream ItemMatterUnit:
+        // per-damage models + `frame` override for the flowing-liquid).
+        event.register(ResourceLocations.of("academy", "matter_kind"), MatterKindItemPropertyFunction.CODEC);
+        event.register(ResourceLocations.of("academy", "frame"), FrameItemPropertyFunction.CODEC);
     }
 
     private static void onRegisterRenderPipelines(RegisterRenderPipelinesEvent event) {

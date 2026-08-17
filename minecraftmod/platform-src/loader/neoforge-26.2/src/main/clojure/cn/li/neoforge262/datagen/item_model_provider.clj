@@ -96,31 +96,18 @@
                     (subs name 0 (- (count name) 3))))))
         models))
 
-(defn- flat-item-model
-  "Inner item-model tree for GUI / non-3D contexts (range_dispatch or plain)."
-  [{:keys [model-name json]}]
-  (let [overrides (:overrides json)]
-    (if (seq overrides)
-      {:type "minecraft:range_dispatch"
-       :property (str modid/mod-id ":energy")
-       :fallback (model-ref model-name)
-       :entries (->> overrides
-                     (map (fn [{:keys [predicate model]}]
-                            {:threshold (double (or (get predicate (str modid/mod-id ":energy")) 0.0))
-                             :model {:type "minecraft:model" :model (str model)}}))
-                     (sort-by :threshold)
-                     vec)}
-      (model-ref model-name))))
-
 (defn- item-definition
   "Item definition for a registry item.
 
-   When a `_3d` OBJ companion exists, wrap with display_context select:
-   GUI flat (energy tiers if any), all other contexts use the OBJ model.
-   Matches former ObjCompositeBakedModel behavior without runtime baking."
-  [spec obj-3d-bases]
+   Overrides become nested range_dispatch trees keyed on their predicate
+   property (energy tiers: academy:energy; matter unit: minecraft:damage →
+   academy:frame animation chain). When a `_3d` OBJ companion exists, wrap
+   with display_context select: GUI flat, all other contexts use the OBJ
+   model. Matches former ObjCompositeBakedModel behavior without runtime
+   baking."
+  [spec obj-3d-bases specs-by-name]
   (let [name (str (:model-name spec))
-        flat (flat-item-model spec)]
+        flat (item-model-core/item-model-tree specs-by-name name)]
     (if (contains? obj-3d-bases name)
       {:model
        {:type "minecraft:select"
@@ -162,6 +149,7 @@
       (run [_ output]
         (let [{:keys [models all-item-count energy-tier-count obj-3d-count simple-count bucket-count]}
               (item-model-core/gather-model-specs)
+              specs-by-name (into {} (map (fn [s] [(str (:model-name s)) s])) models)
               auxiliary (auxiliary-model-names models)
               obj-bases (obj-3d-basenames models)
               futures
@@ -177,7 +165,7 @@
                           (save-json! output
                                       (.json item-paths
                                              (ResourceLocations/of (str modid/mod-id) (str model-name)))
-                                      (item-definition spec obj-bases))))
+                                      (item-definition spec obj-bases specs-by-name))))
                       models))]
           (println (str "[item-model-provider] summary: items=" all-item-count
                         ", energy-tier=" energy-tier-count

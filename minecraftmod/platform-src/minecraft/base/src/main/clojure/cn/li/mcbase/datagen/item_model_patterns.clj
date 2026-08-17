@@ -43,6 +43,12 @@
       (map? (get-in item-spec [:properties :item-model-display]))
       (assoc :display (get-in item-spec [:properties :item-model-display])))))
 
+(defn damage-frame-variant?
+  "Predicate: does an item spec request a damage-variant model with a frame
+   animation on the filled variant (upstream ItemMatterUnit)?"
+  [item-spec]
+  (boolean (get-in item-spec [:properties :item-model-damage-frame])))
+
 (defn energy-tier-item?
   "Predicate: does an item spec request energy-tier models?"
   [item-spec]
