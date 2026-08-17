@@ -322,6 +322,38 @@
                                   (catch Exception e
                                     (log/warn "Failed to apply scatter-bomb:" (ex-message e))
                                     false)))
+        ;; directed-shock ("Directed Shock" / 定向冲力): "seize the counter-
+        ;; force from a punch and redirect it into the target, making the
+        ;; punch more powerful" -- a forward push along the caster's look
+        ;; direction, not a pull. knockback-scale's sign (-0.7 in content)
+        ;; only makes sense combined with the *existing* velocity term below,
+        ;; matching this file's other velocity executors (vec-accel,
+        ;; mag-movement, storm-wing): damp/invert whatever momentum the
+        ;; target already has, then add a fresh directional impulse. This
+        ;; formula is inferred from the field names and the flavor text, not
+        ;; verified against a reference implementation -- if in-game testing
+        ;; shows this pulling instead of pushing, start here.
+        execute-knockback! (fn [world-id owner plan]
+                            (try
+                              (let [{:keys [target impulse knockback-y-adjust knockback-scale]} plan
+                                    entity (entity-motion/resolve-entity (server-fn) world-id target)
+                                    current (or (entity-motion/get-velocity-for-entity entity)
+                                                {:x 0.0 :y 0.0 :z 0.0})
+                                    look (when (raycast/available?)
+                                           (raycast/player-look-vector owner))
+                                    lx (double (or (:x look) 0.0))
+                                    lz (double (or (:z look) 1.0))]
+                                (boolean
+                                 (and entity
+                                      (entity-motion/set-velocity-for-entity!
+                                       entity
+                                       (+ (* (double (:x current)) knockback-scale) (* lx impulse))
+                                       (+ (* (double (:y current)) knockback-scale)
+                                          (* impulse knockback-y-adjust))
+                                       (+ (* (double (:z current)) knockback-scale) (* lz impulse))))))
+                              (catch Exception e
+                                (log/warn "Failed to apply knockback:" (ex-message e))
+                                false)))
         execute-vec-accel! (fn [world-id owner plan]
                              (let [q (:query-result plan)
                                    velocity (:initial-velocity q)]
@@ -477,6 +509,7 @@
      :execute-light-shield! execute-light-shield!
      :execute-electron-missile! execute-electron-missile!
      :execute-scatter-bomb! execute-scatter-bomb!
+     :execute-knockback! execute-knockback!
      :execute-vec-deviation! (fn [world-id _owner plan]
                                (execute-vec-deviation-adapter! server-fn world-id plan))}))
 

@@ -127,6 +127,12 @@
   [world-id owner plan]
   (call :execute-storm-wing! world-id owner plan))
 
+(defn execute-knockback!
+  "Apply a directional velocity impulse to a target entity behind a neutral
+   Host Port (e.g. Directed Shock)."
+  [world-id owner plan]
+  (call :execute-knockback! world-id owner plan))
+
 (defn find-entities-in-radius
   [world-id x y z radius]
   (call :find-entities-in-radius world-id x y z radius))

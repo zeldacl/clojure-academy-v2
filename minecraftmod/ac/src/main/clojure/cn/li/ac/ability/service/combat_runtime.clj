@@ -1214,6 +1214,25 @@
                                            owner ability-id approval-token mode))]
                            {:status (if applied? :applied :failed)
                             :effect effect})
+                         :knockback
+                         (let [{:keys [world-id target movement]} effect
+                               {:keys [impulse knockback-y-adjust knockback-scale]} movement
+                               finite? #(and (number? %) (Double/isFinite (double %)))
+                               valid? (and world-id target
+                                            (finite? impulse) (<= 0.0 (double impulse) 4.0)
+                                            (finite? knockback-y-adjust) (<= -2.0 (double knockback-y-adjust) 2.0)
+                                            (finite? knockback-scale) (<= -2.0 (double knockback-scale) 2.0)
+                                            (world-effects/available?))
+                               plan {:target target
+                                     :impulse (double (or impulse 0.0))
+                                     :knockback-y-adjust (double (or knockback-y-adjust 0.0))
+                                     :knockback-scale (double (or knockback-scale 1.0))}]
+                           {:status (if (and valid?
+                                              (world-effects/execute-knockback!
+                                               world-id owner plan))
+                                      :applied
+                                      :failed)
+                            :effect effect})
                          {:status :unhandled
                           :reason :missing-world-effect-host-port
                           :effect effect}))))
