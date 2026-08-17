@@ -27,6 +27,7 @@
 | `decc4ec30` | `:mag-manip`/`:mag-movement` query + `:mag-manip` 执行器重写（见下方 B 节） |
 | `32eb35ead` | `:groundshock` query + `execute-groundshock!`（传播算法移植，见下方 C-2 节） |
 | `79a93388f` | `:shift-teleport` 独立 query/effect-type + `execute-shift-teleport!`（A 类最后一个技能，见上方 A 节） |
+| `c2e374266` | `:charge-target`/`:charge-energy`（current-charging 方块充能路径）+ `:mine-detect`（无条件自我致盲，去掉误加的 block-scan gate），D 类全部完成，见上方 D 节 |
 
 ## 分类清单
 
@@ -106,19 +107,22 @@
 
 **验证状态**：以上全部改动已跑 `:ac:checkClojure` 通过，`:platform:compileClojure` 在 `forge-1.20.1`/`neoforge-1.21.1` 两个目标上编译通过，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——编译通过只说明代码类型正确、能加载，不代表游戏里数值平衡或手感符合预期，尤其是 light-shield/electron-missile/scatter-bomb 三个保守实现版本的行为已经偏离技能原本设计。
 
-### D. 3 个 world-effect 类型：连处理分支都没有（1/3 已完成）
+### D. 3 个 world-effect 类型：连处理分支都没有（2026-08-17/18 追加会话，3/3 全部完成）
 
 原受影响技能：`current-charging`（`:charge-energy`）、`mine-detect`（`:mine-detect`）、`directed-shock`（`:knockback`）。三者共同点：`combat_runtime.clj` 里 `(case (:type effect) ...)` 完全没有对应 case，全部落进兜底分支 `{:status :unhandled :reason :missing-world-effect-host-port}`。
 
-**已完成（`:knockback`，2026-08-17 追加会话）**：`directed-shock` 的 query 本来就工作正常（`:raycast`），伤害会正常命中，只是击退效果之前被静默吞掉——这种"技能好像有效但缺一部分"的情况最容易被误判为"没问题"。已加 `combat_runtime.clj` 的 `:knockback` case 分支 + `mcbase/adapter/world_effects.clj` 的 `execute-knockback!` + `mcmod/platform/world_effects.clj` 的中立契约函数（`:knockback` 不在原本 16 个 `execute-*` 声明里，是新增的）。
+**已完成（`:knockback`）**：`directed-shock` 的 query 本来就工作正常（`:raycast`），伤害会正常命中，只是击退效果之前被静默吞掉——这种"技能好像有效但缺一部分"的情况最容易被误判为"没问题"。已加 `combat_runtime.clj` 的 `:knockback` case 分支 + `mcbase/adapter/world_effects.clj` 的 `execute-knockback!` + `mcmod/platform/world_effects.clj` 的中立契约函数（`:knockback` 不在原本 16 个 `execute-*` 声明里，是新增的）。
 
 **方向/公式是推断的，不是参照实现验证过的**：技能翻译文本（"将挥拳时产生的反作用力夺取并叠加到正前方的冲击力上"）确认这是"沿施法者朝向方向把目标推开"，不是拉扯——尽管 content 里 `knockback-scale` 是负数（`-0.7`）。把 `knockback-scale` 解读为"对目标现有速度的阻尼/反转系数"（而不是对 `impulse` 本身的乘数——那样负数会导致推力变成拉力，跟翻译文本矛盾），沿用同文件里 `vec-accel`/`mag-movement`/`storm-wing` 已经在用的"现有速度 + 新增量"公式形状。**如果进游戏测试发现效果是"拉过来"而不是"推开"，先查这个公式。**
 
-**仍然缺失（`:charge-energy`、`:mine-detect`）——不是平台代码缺口，是设计判断**：
-- `:charge-energy`（`current-charging` 技能用）：应该接入 AC 已有的 `ac.energy.*` 机器能量系统，还是独立实现一套？`ac.energy.*` 目前服务的是方块机器间能量传输，"玩家技能给某个目标充能"是否复用同一套抽象需要设计决定。
-- `:mine-detect`（`mine-detect` 技能用）：方块扫描结果要以什么格式反馈给客户端（高亮方块？小地图标记？纯文字提示？）——这是 UI/UX 设计问题，不是纯逻辑填空。
+**已完成（`:mine-detect`/`:charge-energy`，`c2e374266`）——第四次证明"需要设计判断"是假阳性**：`a8c000766` 同样删除了 `current_charging.clj`（406 行 + 438 行测试）和 `mine_detect.clj`（93 行 + 78 行测试）两份完整实现。
 
-**要做的事**：先由懂游戏设计的人拍板上述两个问题，再实现 `combat_runtime.clj` 里对应的 case 分支。
+- **`mine-detect`**：上一版工单问"方块扫描结果要以什么格式反馈给客户端"——**这个问题本身不成立**。读旧实现发现真实机制根本不扫描方块：无条件对自己上失明 debuff，然后发一个带 `:range`/`:advanced?` 参数的 FX 事件，方块高亮显示大概率是纯客户端渲染逻辑，不在 combat-core 权限范围内。`combat_content.clj` 原来的 `:mine-detect` 条目加了一个 `:block-scan` query + `:require`，这个 gate 和真实机制对不上——按原机制，技能应该无条件生效，不该因为准星没对着方块就打不出来。已删掉这个 query/require，world-effect 直接无条件上 debuff。`cn.li.ac.ability.effects.potion`（uuid 接口，不需要 Player 对象）本来就装好了，`:mine-detect` 的 world-effect case 完全写在 `combat_runtime.clj` 里，**没有改动任何 platform-src 代码**。
+- **`current-charging`**：机制比 mine-detect 复杂得多（持续引导，充能手持物品**或**瞄准的能量方块/机器），但依赖链完整存活——`cn.li.ac.energy.operations`（`is-node-supported?`/`charge-node`/`is-receiver-supported?`/`charge-receiver`）从没被删；`:runtime-interop` 适配器的 `:get-block-entity-at` 操作（uuid/world-id 接口，不需要真实 level 对象）也还装着，而且**现在还有一个活跃调用者**——`ac/item/developer_portable_energy.clj` 用一模一样的 `fw`/`platform` call-adapter 手法访问能量，证明这条路子不是孤儿代码，是仍在用的正规写法。只实现了**方块充能路径**：`:charge-target` query 用普通 raycast 找方块（不是旧版的"实体优先"raycast——一个离得更近的实体会挡住光束但不会被这个技能充能）；`:charge-energy` world-effect 解析出方块实体后调 `energy/charge-node`/`energy/charge-receiver`。**跳过**：手持物品充能分支（需要解析出真实 `Player` 对象才能读取手持物品，这个限制和 shift-teleport/mag-manip 是同一条——要做的话得整个挪到 platform-src 的 world-effect 执行器里，这次没做）、multiblock controller 解析（旧版的 `resolve-energy-target-tile`/`target-structure-bounds`——现在瞄准 multiblock 机器的非控制器格子不会充上能）、overload-floor 强制、有效/无效经验区分追踪。
+  - **值得注意**：`:charge-energy` 的 world-effect case 是本轮**唯一一个没有委托给 platform-src `execute-*!` 的**——`ac.energy.operations` 是 AC 层代码，platform 代码不能依赖 AC，所以这个变更只能直接写在 `combat_runtime.clj` 里。
+  - 顺带修了两个从未被跑到的 bug：`:target-ref` 从来对不上 world-effect case 读的 `:query-result`（应该是 `:query-ref`）；`:cost {:cp 2}`/`:amount 1.0` 是占位数字，从没对上 `skill_config/electromaster.clj` 里恢复出的 schema（`cost.tick.cp` [3,7]、`cost.down.overload` [65,48]、`effect.charge-amount` [15,35]）。改成了 `:cost-phase :start` 一次性收取 overload、`:patch` 每次 phase 调用扣一次按 exp 缩放的 CP，在 combat-core 单一 `:cost` 字段的形状里尽量还原 schema 的 down/tick 两段式。
+
+**方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
 ### E. vfx-core 通用化剩余部分（P1.1-P1.3，~6000 行内容迁移）
 
@@ -145,11 +149,10 @@
 ## 建议的下手顺序
 
 1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
-2. ~~C 类 4 个技能~~ / ~~C-2 类 6 个技能点（含 groundshock）~~ / ~~D 类 `:knockback`~~ / ~~A 类全部 6 个技能（含 shift-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip/groundshock/shift-teleport 的部分数值是推断/移植自旧配置的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
-3. **"需要设计判断"这个分类已经连续三次被证明是假阳性**（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制，全都在 git 历史里找到了 `a8c000766`——combat-core 迁移那次提交——删掉的完整实现）。**下次遇到类似结论，先 `git log --diff-filter=D -- "*<skill-name>*"` 查一遍再采信**，不要重复"假设需要设计输入→论证→被推翻"这个循环。真正剩下的：
+2. ~~C 类 4 个技能~~ / ~~C-2 类 6 个技能点（含 groundshock）~~ / ~~D 类全部 3 个 world-effect 类型~~ / ~~A 类全部 6 个技能（含 shift-teleport）~~ / ~~B 类 2 个技能（mag-manip/mag-movement）~~ **均已完成**，见上方 C、C-2、D、A、B 节（light-shield/electron-missile/scatter-bomb/mag-manip/current-charging 是保守简化版本，`:knockback` 的推力方向/公式、mag-manip/groundshock/shift-teleport/current-charging 的部分数值是推断/移植自旧配置的，approval-token 桥接机制是本轮新增的平台基础设施，均仍需进游戏验证）。
+3. **"需要设计判断"这个分类已经连续四次被证明是假阳性**（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制、current-charging/mine-detect 的机制，全都在 git 历史里找到了 `a8c000766`——combat-core 迁移那次提交——删掉的完整实现）。**下次遇到类似结论，先 `git log --diff-filter=D -- "*<skill-name>*"` 查一遍再采信**，不要重复"假设需要设计输入→论证→被推翻"这个循环。全部 37 个技能到这里已经过了一遍——本工单列出过的技能里，唯二没有在 git 历史查到可恢复实现、货真价实需要设计输入的只剩：
    - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
-   - **可恢复但要重写现有实现**：mag-manip 若要从当前的保守直接伤害版还原成真实物理实体悬浮/抛掷，不需要新平台设施（`query-core/get-player-by-uuid` 已经在到处用），但需要把抓取/悬浮/抛掷整个流程从 query 挪到 world-effect 重写，工作量比保守版大不少，本轮未评估是否值得。
-   - **需要设计/游戏手感输入（已查过 git 历史，未找到可恢复实现）**：D 类的 `:charge-energy`/`:mine-detect`。
+   - **可恢复但要重写现有实现（不是设计阻塞，是工作量问题）**：mag-manip 若要从当前的保守直接伤害版还原成真实物理实体悬浮/抛掷，current-charging 若要补上手持物品充能分支，都不需要新平台设施（`query-core/get-player-by-uuid` 已经在到处用），但需要把对应逻辑从 query 挪到 world-effect（platform-src）重写，本轮未评估是否值得。
 4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
