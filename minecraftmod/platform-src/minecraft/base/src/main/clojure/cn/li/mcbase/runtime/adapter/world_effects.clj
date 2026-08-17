@@ -12,6 +12,8 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
+            [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log])
   (:import [net.minecraft.server MinecraftServer]
            [net.minecraft.server.level ServerLevel]
@@ -149,6 +151,72 @@
                                  (catch Exception e
                                    (log/warn "Failed to apply meltdowner damage:" (ex-message e))
                                    false))))
+        ;; Owner-keyed mining progress. combat-core drives this executor once
+        ;; per real tick (:period-ticks 1) with a freshly re-scanned block
+        ;; position each time; break-speed is a fraction of the target
+        ;; block's hardness gained per tick, not an instant-break threshold
+        ;; (mine-ray-basic's 0.2-0.4 is well under most block hardness
+        ;; values). Aiming at a different block resets progress -- there is
+        ;; no partial credit carried between targets, matching vanilla
+        ;; mining's own behavior when you stop hitting a block.
+        mine-progress-atom (atom {})
+        execute-mine-ray! (fn [world-id owner plan]
+                            (try
+                              (let [{:keys [scan fortune]} plan
+                                    {:keys [x y z hardness]} scan
+                                    break-speed (double (:break-speed plan))
+                                    hardness (double (or hardness 1.0))
+                                    pos-key [world-id x y z]
+                                    prior (get @mine-progress-atom owner)
+                                    progress (+ break-speed
+                                                (if (= (:pos prior) pos-key)
+                                                  (double (or (:progress prior) 0.0))
+                                                  0.0))]
+                                (if (>= progress hardness)
+                                  (do (swap! mine-progress-atom dissoc owner)
+                                      (boolean (block-manipulation/break-block!
+                                                owner world-id x y z true (long (or fortune 0)))))
+                                  (do (swap! mine-progress-atom assoc owner
+                                             {:pos pos-key :progress progress})
+                                      true)))
+                              (catch Exception e
+                                (log/warn "Failed to apply mine-ray:" (ex-message e))
+                                false)))
+        ;; storm-wing is personal flight: thrust in the caster's look
+        ;; direction, boosted by speed-scale while below speed-threshold
+        ;; (a "kick to get moving, then cruise" feel common to flight
+        ;; abilities), plus a hover assist that differs near ground vs.
+        ;; airborne so the ability can both lift off and sustain altitude.
+        execute-storm-wing! (fn [world-id owner plan]
+                             (try
+                               (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                 (let [{:keys [hover-near-ground-velocity hover-air-velocity
+                                               acceleration speed-scale speed-threshold]} plan
+                                       on-ground? (player-motion/is-on-ground-for-player? player)
+                                       current (or (player-motion/get-velocity-for-player player)
+                                                   {:x 0.0 :y 0.0 :z 0.0})
+                                       look (when (raycast/available?)
+                                              (raycast/player-look-vector owner))
+                                       lx (double (or (:x look) 0.0))
+                                       ly (double (or (:y look) 0.0))
+                                       lz (double (or (:z look) 1.0))
+                                       horizontal-speed (Math/sqrt (+ (Math/pow (double (:x current)) 2)
+                                                                       (Math/pow (double (:z current)) 2)))
+                                       boosted? (< horizontal-speed (double speed-threshold))
+                                       thrust (* (double acceleration)
+                                                 (if boosted? (double speed-scale) 1.0))
+                                       vy (if on-ground?
+                                            (double hover-near-ground-velocity)
+                                            (max (double (:y current)) (double hover-air-velocity)))]
+                                   (boolean
+                                    (player-motion/set-velocity-for-player!
+                                     player
+                                     (+ (double (:x current)) (* thrust lx))
+                                     (+ vy (* thrust ly 0.2))
+                                     (+ (double (:z current)) (* thrust lz))))))
+                               (catch Exception e
+                                 (log/warn "Failed to apply storm-wing:" (ex-message e))
+                                 false)))
         execute-vec-accel! (fn [world-id owner plan]
                              (let [q (:query-result plan)
                                    velocity (:initial-velocity q)]
@@ -299,6 +367,8 @@
      :execute-blood-retrograde! execute-blood-retrograde!
      :execute-plasma-cannon! execute-plasma-cannon!
      :execute-meltdowner! execute-meltdowner!
+     :execute-mine-ray! execute-mine-ray!
+     :execute-storm-wing! execute-storm-wing!
      :execute-vec-deviation! (fn [world-id _owner plan]
                                (execute-vec-deviation-adapter! server-fn world-id plan))}))
 

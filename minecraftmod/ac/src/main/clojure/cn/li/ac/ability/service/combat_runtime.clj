@@ -20,6 +20,8 @@
             [cn.li.mcmod.platform.world-effects :as world-effects]
             [cn.li.ac.ability.effects.motion :as motion-effects]
             [cn.li.mcmod.platform.teleportation :as teleportation]
+            [cn.li.ac.ability.effects.geom :as geom]
+            [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
             [cn.li.mcmod.runtime.combat-contract :as contract]))
 
 (defonce ^:private engine* (atom nil))
@@ -463,8 +465,34 @@
                                (when-let [host-query (contract/host-port :query)]
                                  (host-query :charge-target context node)))
               :block-scan (fn [context node]
-                            (when-let [host-query (contract/host-port :query)]
-                              (host-query :block-scan context node)))
+                            (if-let [host-query (contract/host-port :query)]
+                              (host-query :block-scan context node)
+                              (let [owner (:owner context)
+                                    world-id (geom/world-id-of owner)
+                                    eye (geom/eye-pos owner)
+                                    look (when (raycast/available?)
+                                           (raycast/player-look-vector owner))
+                                    distance (double (or (:distance node) 10.0))]
+                                (when (and look (block-manipulation/available?))
+                                  (when-let [hit (first (block-manipulation/find-blocks-in-line
+                                                         world-id (:x eye) (:y eye) (:z eye)
+                                                         (double (or (:x look) 0.0))
+                                                         (double (or (:y look) 0.0))
+                                                         (double (or (:z look) 1.0))
+                                                         distance))]
+                                    (assoc hit :world-id world-id))))))
+              :storm-wing (fn [context node]
+                            (if-let [host-query (contract/host-port :query)]
+                              (host-query :storm-wing context node)
+                              ;; execute-storm-wing! only requires query-result
+                              ;; to be a non-nil map (see combat_runtime.clj's
+                              ;; :storm-wing world-effect valid? check, which
+                              ;; never reads any field out of it) and reads
+                              ;; on-ground status itself, directly, since
+                              ;; that's a live entity property the platform
+                              ;; layer already has a primitive for -- no query
+                              ;; round-trip needed.
+                              {}))
               :attack (fn [context node]
                         (if-let [host-query (contract/host-port :query)]
                           (host-query :attack context node)
@@ -544,9 +572,6 @@
               :light-shield (fn [context node]
                               (when-let [host-query (contract/host-port :query)]
                                 (host-query :light-shield context node)))
-              :storm-wing (fn [context node]
-                            (when-let [host-query (contract/host-port :query)]
-                              (host-query :storm-wing context node)))
               :mag-manip (fn [context node]
                            (when-let [host-query (contract/host-port :query)]
                              (host-query :mag-manip context node)))
