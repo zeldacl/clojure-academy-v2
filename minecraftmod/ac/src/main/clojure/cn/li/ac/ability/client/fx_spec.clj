@@ -1,8 +1,8 @@
 (ns cn.li.ac.ability.client.fx-spec
   "Declarative client-side ability FX registration.
 
-  Skills register level/hand runtimes and channel handlers through `register!`
-  instead of hand-written `fx-registry` case blocks."
+  Skills register level/hand runtimes through `register!` instead of
+  hand-written `fx-registry` case blocks."
   (:require [cn.li.ac.client.effect-controller :as vfx]))
 
 (def ^:private meta-keys
@@ -29,22 +29,6 @@
   [payload]
   (select-keys (or payload {}) meta-keys))
 
-(defn- merge-payload
-  [mode payload* custom level-extra hand-extra]
-  ;; :mode is merged LAST so the channel-spec mode stays authoritative — a
-  ;; server payload carrying its own :mode (e.g. electron-bomb's
-  ;; {:mode :perform} settle payload) must not override the channel's
-  ;; :spawn/:beam/:end routing.
-  (merge (select-meta payload*)
-         custom
-         payload*
-         level-extra
-         hand-extra
-         (when mode {:mode mode})))
-
-(defn- normalize-targets [targets]
-  (vec (or targets [:level])))
-
 (defn- register-runtime!
   [effect-id {:keys [level hand]}]
   (vfx/register-effect!
@@ -57,54 +41,24 @@
                                 :transform-fn :clear-owner-fn]))})
   nil)
 
-(defn- channel-handler
-  [effect-id channel-spec]
-  (let [{:keys [mode targets payload handler level-payload hand-payload immediate-fn]}
-        channel-spec
-        targets* (normalize-targets targets)]
-    (fn [ctx-id channel payload]
-      (if handler
-        (handler ctx-id channel payload)
-        (let [payload* (or payload {})
-              mode* (or mode (:mode payload*))
-              owner-key (default-owner-key ctx-id payload*)
-              custom (when (fn? payload) (payload ctx-id channel payload*))
-              level-extra (when (fn? level-payload) (level-payload ctx-id channel payload*))
-              hand-extra (when (fn? hand-payload) (hand-payload ctx-id channel payload*))
-              merged (merge-payload mode* payload* custom level-extra hand-extra)
-              hand-merged (merge (select-meta payload*)
-                                 (when mode* {:mode mode*})
-                                 custom
-                                 payload*
-                                 hand-extra)]
-          (doseq [target targets*]
-            (case target
-              :immediate (when immediate-fn (immediate-fn ctx-id channel payload*))
-              :level (vfx/enqueue!
-                       effect-id :level ctx-id channel merged :owner-key owner-key)
-              :hand (vfx/enqueue!
-                      effect-id :hand ctx-id channel
-                      (dissoc hand-merged :affected-blocks :broken-blocks)
-                      :owner-key owner-key)
-              nil)))))))
-
 (defn register!
   "Register one ability FX spec.
 
   `spec` keys:
-    :id       effect keyword
-    :level    optional level runtime map
-    :hand     optional hand runtime map
-    :channels map of channel-key -> {:topic kw :mode kw :targets [...] ...}"
-  [{:keys [id level hand channels]}]
-  (when-not (and (keyword? id) (map? channels))
-    (throw (IllegalArgumentException. "register-fx-spec!: id must be keyword, channels must be map")))
+    :id    effect keyword
+    :level optional level runtime map
+    :hand  optional hand runtime map
+
+  A :channels key is tolerated (arc_beam.clj's build-spec still constructs
+  one) but ignored -- the channel/topic transport it used to feed
+  (vfx/register-channel!/dispatch-channel!) was removed as dead code: no
+  content ever populated :channels with a real :topic (combat signals reach
+  content through effect_controller.clj's dispatch-signal! directly).
+  See docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section."
+  [{:keys [id level hand]}]
+  (when-not (keyword? id)
+    (throw (IllegalArgumentException. "register-fx-spec!: id must be keyword")))
   (register-runtime! id {:level level :hand hand})
-  (doseq [[_channel-key channel-spec] channels]
-    (when-let [topic (:topic channel-spec)]
-      (vfx/register-channel!
-       topic
-       (channel-handler id channel-spec))))
   nil)
 
 ;; ---------------------------------------------------------------------------

@@ -230,18 +230,6 @@
     (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
     (is (= [:accepted] (mapv :event (first @seen))))))
 
-(deftest channels-are-owned-by-vfx-core
-  (let [rt (runtime/create-runtime)
-        seen (atom nil)]
-    (runtime/register-channel! rt :combat/impact
-                               (fn [ctx-id topic payload]
-                                 (reset! seen [ctx-id topic payload])
-                                 true))
-    (runtime/freeze-channels! rt)
-    (is (true? (runtime/dispatch-channel! rt :session-1 :combat/impact {:x 1})))
-    (is (= [:session-1 :combat/impact {:x 1}] @seen))
-    (is (false? (runtime/dispatch-channel! rt :combat/unknown :topic {})))))
-
 (deftest invalid-context-is-rejected
   (is (thrown? clojure.lang.ExceptionInfo
                (contract/tick-context {:tick-id 1 :delta-seconds -1.0})))

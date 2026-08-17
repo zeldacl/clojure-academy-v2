@@ -136,15 +136,6 @@
       (core/ensure-instance! rt effect-id {:owner ::aggregate})))
   nil)
 
-(defn register-channel!
-  "Register a content event in VFX Core's channel table."
-  [topic handler]
-  (core/register-channel! (runtime) topic handler))
-
-(defn dispatch-channel!
-  [ctx-id topic payload]
-  (core/dispatch-channel! (runtime) ctx-id topic payload))
-
 (defn warmup!
   "Eagerly invoke the Presentation Runtime once while the client bootstrap is
   still outside gameplay.  This loads all effect namespaces and surfaces
@@ -157,7 +148,6 @@
 
 (defn freeze! []
   (core/freeze-registry! (runtime))
-  (core/freeze-channels! (runtime))
   (reset! frozen?* true)
   nil)
 
