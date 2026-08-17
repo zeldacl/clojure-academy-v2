@@ -52,6 +52,12 @@
   [world-id owner plan]
   (call :execute-groundshock! world-id owner plan))
 
+(defn execute-shift-teleport!
+  "Place/drop the caster's held item at a raycasted point and damage
+   whatever intersects the caster->point line, behind a neutral Host Port."
+  [world-id owner plan]
+  (call :execute-shift-teleport! world-id owner plan))
+
 (defn execute-thunder-clap!
   "Execute the charged lightning/area-damage plan behind a Host Port."
   [world-id owner plan]

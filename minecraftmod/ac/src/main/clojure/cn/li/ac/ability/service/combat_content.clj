@@ -667,19 +667,29 @@
                                   :mode :penetrate}
                                  {:op :vfx :effect-id :penetrate-teleport
                                   :event :release :params {:max-range 32.0}}]}}}
+    ;; Not a player teleport -- place/drop the held item at a raycasted
+    ;; point, then damage whatever intersects the line from caster to that
+    ;; point. Own :shift-teleport query-type/effect-type; previously
+    ;; borrowed :teleport-target/:teleport-approved-target with :mode :shift,
+    ;; which never matched either op's real shape (see
+    ;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md A section). Also added the
+    ;; :overload cost that skill_config/teleporter.clj's recovered schema
+    ;; declares (cost.up.overload [40.0 30.0]) but this content never had.
     {:id :shift-teleport
      :revision 1
      :activation :instant
-     :cost {:cp (scale 260.0 320.0)}
+     :cost {:cp (scale 260.0 320.0)
+            :overload (scale 40.0 30.0)}
      :cooldown {:ticks (scale 100.0 60.0)}
      :program {:op :sequence
-               :steps [{:op :query :query-type :teleport-target
-                        :mode :shift :max-range (scale 25.0 35.0)
+               :steps [{:op :query :query-type :shift-teleport
+                        :max-range (scale 25.0 35.0)
                         :result-ref :destination}
                        {:op :require :predicate :destination}
                        {:op :world-effect
-                        :effect-type :teleport-approved-target
-                        :target-ref :destination :mode :shift}
+                        :effect-type :shift-teleport
+                        :query-ref :destination
+                        :damage (scale 15.0 35.0)}
                        {:op :vfx :effect-id :shift-teleport
                         :event :release :params {:max-range 35.0}}]}}
     {:id :threatening-teleport

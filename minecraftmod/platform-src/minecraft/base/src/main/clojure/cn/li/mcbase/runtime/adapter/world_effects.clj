@@ -12,6 +12,7 @@
             [cn.li.mcmod.framework :as fw]
             [cn.li.mcmod.framework.platform :as platform]
             [cn.li.mcmod.platform.entity-damage :as entity-damage]
+            [cn.li.mcmod.platform.entity :as entity]
             [cn.li.mcmod.platform.block-manipulation :as block-manipulation]
             [cn.li.mcmod.platform.raycast :as raycast]
             [cn.li.mcmod.util.log :as log])
@@ -649,7 +650,58 @@
                                         (recur (inc iter) next-plotter)))))
                                 (catch Exception e
                                   (log/warn "Failed to apply groundshock:" (ex-message e))
-                                  false)))]
+                                  false)))
+        ;; shift-teleport isn't a player teleport -- place/drop the held item
+        ;; at the query's raycasted point, then damage whatever it found
+        ;; intersecting the caster->point line. The hand-item mutation
+        ;; (main-hand placeable check, place-at-hit, consume/drop) needs a
+        ;; resolved Player object, which query-port fns in combat_runtime.clj
+        ;; never have -- only a uuid. query-core/get-player-by-uuid is
+        ;; platform-src-only (tied to MinecraftServer), so that resolution,
+        ;; and everything downstream of it, has to live here rather than in
+        ;; the query. If nothing is placed/dropped (no placeable/droppable
+        ;; item in hand), the cast still consumes its already-charged cost --
+        ;; matches every other executor in this file that can silently no-op
+        ;; after :require already let the cost deduction through.
+        execute-shift-teleport! (fn [world-id owner plan]
+                                 (try
+                                   (when-let [player (query-core/get-player-by-uuid (server-fn) owner)]
+                                     (when (entity/player-main-hand-placeable-block? player)
+                                       (let [{:keys [query-result damage]} plan
+                                             {:keys [hit-block-x hit-block-y hit-block-z
+                                                     place-x place-y place-z face
+                                                     drop-x drop-y drop-z target-entities]} query-result
+                                             creative? (boolean (entity/player-creative? player))
+                                             can-place? (and (block-manipulation/available?)
+                                                              (not (block-manipulation/block-collidable?
+                                                                    world-id place-x place-y place-z))
+                                                              (block-manipulation/can-break-block?
+                                                               owner world-id hit-block-x hit-block-y hit-block-z))
+                                             place-result (when can-place?
+                                                            (entity/player-place-main-hand-block-at-hit!
+                                                             player world-id place-x place-y place-z face))
+                                             dropped? (boolean
+                                                       (when-not can-place?
+                                                         (if creative?
+                                                           (entity/player-spawn-main-hand-item-copy-at!
+                                                            player 1 drop-x drop-y drop-z)
+                                                           (entity/player-drop-main-hand-item-at!
+                                                            player 1 drop-x drop-y drop-z))))
+                                             consumed? (boolean
+                                                        (or creative?
+                                                            (if can-place?
+                                                              (entity/player-consume-main-hand-item! player 1)
+                                                              dropped?)))]
+                                         (when consumed?
+                                           (doseq [{:keys [uuid]} target-entities]
+                                             (when uuid
+                                               (entity-damage/apply-direct-damage!
+                                                world-id uuid (double damage) :magic
+                                                {:attacker-uuid owner}))))
+                                         (boolean (or (:placed? place-result) dropped?)))))
+                                   (catch Exception e
+                                     (log/warn "Failed to apply shift-teleport:" (ex-message e))
+                                     false)))]
     {:spawn-lightning! (fn spawn-lightning-adapter!
                          ([world-id x y z] (spawn-lightning-adapter! world-id x y z false))
                          ([world-id x y z visual-only?]
@@ -755,6 +807,7 @@
      :execute-scatter-bomb! execute-scatter-bomb!
      :execute-knockback! execute-knockback!
      :execute-groundshock! execute-groundshock!
+     :execute-shift-teleport! execute-shift-teleport!
      :execute-vec-deviation! (fn [world-id _owner plan]
                                (execute-vec-deviation-adapter! server-fn world-id plan))}))
 
