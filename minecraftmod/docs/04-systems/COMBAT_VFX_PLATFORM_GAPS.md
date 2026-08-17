@@ -29,6 +29,7 @@
 | `79a93388f` | `:shift-teleport` 独立 query/effect-type + `execute-shift-teleport!`（A 类最后一个技能，见上方 A 节） |
 | `c2e374266` | `:charge-target`/`:charge-energy`（current-charging 方块充能路径）+ `:mine-detect`（无条件自我致盲，去掉误加的 block-scan gate），D 类全部完成，见上方 D 节 |
 | `b284185a2` | 删除死代码 channel/topic 总线（vfx-core `register-channel!`/`dispatch-channel!`/`freeze-channels!` 及封装），E 类 P1.3 完成，见下方 E 节 |
+| `c38f125bb` | `presentation-compiler/render.clj` 按 `(template, width, height)` 缓存 layout 结果，绑定值变化不再触发重新布局，F 类对症修复，见下方 F 节 |
 
 ## 分类清单
 
@@ -137,16 +138,17 @@
 
 **仍然推迟（P1.1 生命周期形态 + P1.2 拆真正的旁路）**：需要设计/验证输入，不是纯代码填空——工作量、风险、"只能进游戏验证"三条都成立，已与用户确认单独排期，不和本工单其余条目混在一个提交序列里。
 
-### F. presentation-core 剩余部分（P2.1/P2.2/P2.6）
+### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位；P2.6 未动）
 
 **现状**：`presentation-core` 有一套完整但**从未接入真实渲染路径**的保留模式基础设施（`core/tree.clj` keyed reconcile、`core/dirty.clj` 六标志、`core/frame.clj` 的 frame-graph）——已核实这些只被 presentation-core 自己的测试调用，`ac/src`、`platform-src`、`mcmod/src` 里零调用者。真实渲染路径是 `runtime/extract!` → `render-mount` → `presentation-compiler/render.clj`，每帧从 `TemplateNode` 全量重算布局，只用一个粗粒度的 `:invalidated?` 布尔做失效判断，不读 dirty 六标志。
 
-**要做的事**：
-1. 把 `extract!` 改为真正走 `reconcile → dirty → layout cache → paint`，只在 `:measure`/`:layout` 脏时才重算布局。
-2. `presentation-compiler/render.clj` 改为消费已经 laid-out 的保留节点，而不是自己每帧调 `core.layout` 重算。
-3. `presentation_hud.clj` 的 `:composite-list` 扁平化（把布局职责挪回 AC 代码里做）改为在 `ac/src/main/resources/assets/academy/presentation/combat_hud.ui.edn` 里用真实模板节点表达。
+**2026-08-18 更新，执行前重新核实：P2.1/P2.2 原方案目标选错了对象**。`core/tree.clj` 那套保留模式是围绕一种 `spec`/`RNode` 节点表示设计的（`tree/node`/`tree/reconcile`），而真实渲染路径用的是完全不同的数据模型——`presentation-compiler` 编译出的 `CompiledTemplate`/`TemplateNode`。两者除了都最终喂给共用的 `core/layout.clj` 之外没有交集。"把 `extract!` 接入 `reconcile → dirty → layout cache`"字面上做不到，因为要接的这套机制根本不认识 `TemplateNode`。
 
-**为什么推迟**：这三项全部会改变**战斗 HUD（游戏里最高频可见的界面）的实际渲染输出**，正确性只能通过进游戏截图比对验证，本环境无法验证。
+**已完成（`c38f125bb`）——按实际性能缺口重新定位的修复**：真正查到的问题比原方案窄得多——`layout/layout` 的输出**只是 `(template, width, height)` 的纯函数，完全不读绑定值**，但 `render-template` 每次调用都无条件对整棵 `TemplateNode` 树重新跑一遍。冷却/CP 每 tick 变化只改绑定值，不该触发重新布局，但 `runtime.clj` 的事务调度器不分青红皂白，任何变化都统一标记整帧失效，等于每次数值一变就重新布局整棵树。已在 `presentation-compiler/render.clj` 里按 `CompiledTemplate` 对象身份（确认它没有覆写 `equals`/`hashCode`，普通 map 当 key 天然是身份比较）+ `width`/`height` 缓存布局结果——`ac/gui/reactive/register.clj` 的 `resolve-template` 本来就把每个模板 id 解析成一个稳定复用的 `CompiledTemplate` 实例（`template-cache*`），缓存不需要淘汰策略。改动只涉及 `render.clj` 一个文件，没有碰 `core/tree.clj`/`core/dirty.clj`/`runtime.clj`。
+
+**仍然确认为死代码，但本轮没删**：`core/tree.clj`、`core/dirty.clj`、`frame.clj` 的 `frame-graph`/`order`、`runtime.clj` 的 `mount-tree!`/`reconcile-tree!`/`layout-tree!`——依然零外部调用者，删除本身风险很低（跟 E 节删 channel 总线同一档），但已和用户确认这次不做，只做了对症的性能修复。
+
+**未动（P2.6）**：`presentation_hud.clj` 的 `:composite-list` 扁平化（把布局职责挪回 AC 代码里做）改为在 `ac/src/main/resources/assets/academy/presentation/combat_hud.ui.edn` 里用真实模板节点表达——这项会改变**战斗 HUD（游戏里最高频可见的界面）的实际渲染输出**，正确性只能通过进游戏截图比对验证，本环境无法验证，本轮未动。
 
 ## 建议的下手顺序
 
@@ -155,7 +157,7 @@
 3. **"需要设计判断"这个分类已经连续四次被证明是假阳性**（mag-manip 的金属判定、groundshock 的传播算法、shift-teleport 的整个机制、current-charging/mine-detect 的机制，全都在 git 历史里找到了 `a8c000766`——combat-core 迁移那次提交——删掉的完整实现）。**下次遇到类似结论，先 `git log --diff-filter=D -- "*<skill-name>*"` 查一遍再采信**，不要重复"假设需要设计输入→论证→被推翻"这个循环。全部 37 个技能到这里已经过了一遍——本工单列出过的技能里，唯二没有在 git 历史查到可恢复实现、货真价实需要设计输入的只剩：
    - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
    - **可恢复但要重写现有实现（不是设计阻塞，是工作量问题）**：mag-manip 若要从当前的保守直接伤害版还原成真实物理实体悬浮/抛掷，current-charging 若要补上手持物品充能分支，都不需要新平台设施（`query-core/get-player-by-uuid` 已经在到处用），但需要把对应逻辑从 query 挪到 world-effect（platform-src）重写，本轮未评估是否值得。
-4. **E 类里唯一安全、体量小的部分（死代码 channel 总线）已经删了**，见上方 E 节。E 类剩下的部分（P1.1 生命周期形态 + P1.2 拆 `dispatch-signal!` 真正的旁路，要重写 `arc_beam.clj` 全家 6105 行）和 **F 类是同一档：大迁移，风险高，只能进游戏验证，建议单独排期**，不要和小修小补混在一个提交序列里。
+4. **E 类里安全、体量小的部分（死代码 channel 总线）已经删了；F 类里对症、体量小的部分（layout 结果缓存）已经修了**，见上方 E、F 节。两节剩下的都是同一档：E 剩 P1.1 生命周期形态 + P1.2 拆 `dispatch-signal!` 真正的旁路（要重写 `arc_beam.clj` 全家 6105 行），F 剩 P2.6（`presentation_hud.clj` 的 `:composite-list` 扁平化改真实模板节点，会改变战斗 HUD 实际渲染输出）——都是大改动、高风险、只能进游戏验证，建议单独排期，不要和小修小补混在一个提交序列里。顺带一提：F 类还确认了 `core/tree.clj`/`core/dirty.clj`/`frame.clj` 的 `frame-graph` 也是零调用者的死代码，跟 E 类的 channel 总线同一档，删除本身风险低，但本轮没做——纯粹是没排上，不是设计或风险问题。
 
 ## 验证方式
 
