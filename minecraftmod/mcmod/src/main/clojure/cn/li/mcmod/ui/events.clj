@@ -12,14 +12,18 @@
 (defn- invoke-handlers!
   "Run each handler, logging (not silently swallowing) any exception a
    handler throws — without this, a broken click/scroll/key handler just
-   looks like the input had no effect at all, with no trace of why."
+   looks like the input had no effect at all, with no trace of why.
+   Returns the handlers' return values — :key dispatch treats a truthy
+   return as \"consumed\", so a handler can decline a key (ESC) it does not
+   handle instead of swallowing it from the host."
   [event-key handlers rt node evt]
-  (doseq [f handlers]
-    (try
-      (f rt node evt)
-      (catch Throwable e
-        (log/stacktrace (str "UI event handler threw (" event-key ")") e))))
-  true)
+  (let [results (transient [])]
+    (doseq [f handlers]
+      (try
+        (conj! results (f rt node evt))
+        (catch Throwable e
+          (log/stacktrace (str "UI event handler threw (" event-key ")") e))))
+    (persistent! results)))
 
 (defn on! [^UiRt rt id event-key f]
   (if-let [^INode node (rt/node-by-id rt id)]
@@ -132,18 +136,21 @@
 
 (defn dispatch-key!
   "Dispatch a key press to the focus node's :key handlers (if any).
-   Returns true when a :key handler was invoked, nil otherwise — hosts use
-   this to decide whether the key was consumed by the UI (e.g. ESC closing a
-   skill detail popup) before falling back to closing the whole screen."
+   Returns a truthy value when a handler consumed the key (returned truthy),
+   nil otherwise — hosts use this to decide whether the key was handled by
+   the UI (e.g. ESC closing a skill detail popup) before falling back to
+   closing the whole screen. Handlers that do not handle the key (the
+   developer console's command input, which ESC is not) must return nil so
+   the host still closes the screen."
   [^UiRt rt key-code scan-code modifiers action]
   (let [focus-idx (rt/focus-idx rt)]
     (when (>= focus-idx 0)
       (when-let [handlers (rt/get-event-handlers rt focus-idx :key)]
         (when-let [^INode node (rt/node-by-idx rt focus-idx)]
           (let [evt {:key-code key-code :scan-code scan-code :modifiers modifiers
-                     :action action :node-idx focus-idx}]
-            (invoke-handlers! :key handlers rt node evt)
-            true))))))
+                     :action action :node-idx focus-idx}
+                results (invoke-handlers! :key handlers rt node evt)]
+            (some identity results)))))))
 
 (defn dispatch-char! [^UiRt rt code-point]
   (let [focus-idx (rt/focus-idx rt)]

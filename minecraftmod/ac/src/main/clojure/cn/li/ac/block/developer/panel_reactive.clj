@@ -601,7 +601,9 @@
       (fn [_ _ evt]
         (when (and (not (rt/user-signal rt :cover-closing?))
                    (= (long (:key-code evt 0)) 256))
-          (on-outside-close!))))
+          (on-outside-close!)
+          ;; truthy = consumed: the host must not close the whole screen.
+          true)))
     (events/gain-focus! rt (.getIdx cover))))
 
 (defn- open-skill-detail-overlay! [^UiRt rt container player skill-id dev-type]

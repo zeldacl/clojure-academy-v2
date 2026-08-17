@@ -83,16 +83,17 @@
     (is (= (str (char 0xD83D) (char 0xDE00)) @captured))))
 
 (deftest dispatch-key-returns-true-when-focus-node-has-key-handler-test
-  "dispatch-key! must report whether a :key handler was invoked — hosts rely
-   on it to let a focused popup consume ESC (closing only the popup) instead
-   of the host closing the whole screen."
+  "dispatch-key! must report whether a :key handler consumed the key (returned
+   truthy) — hosts rely on it to let a focused popup consume ESC (closing only
+   the popup) instead of the host closing the whole screen."
   (let [rt (char-runtime)
         keys (atom [])
         cover (.getIdx (rt/node-by-id rt :root))]
     (events/on! rt :root :key
       (fn [_ _ evt] (swap! keys conj (:key-code evt))))
     (events/gain-focus! rt cover)
-    (is (true? (events/dispatch-key! rt 256 0 0 0)))
+    (is (not (nil? (events/dispatch-key! rt 256 0 0 0)))
+        "consumed key returns a truthy value")
     (is (= [256] @keys))))
 
 (deftest dispatch-key-returns-nil-without-focused-key-handler-test
@@ -102,6 +103,17 @@
     ;; Focus on a node with no :key handler — nothing invoked.
     (events/gain-focus! rt (.getIdx (rt/node-by-id rt :root)))
     (is (nil? (events/dispatch-key! rt 256 0 0 0)))))
+
+(deftest dispatch-key-returns-nil-when-handler-declines-test
+  "A :key handler that returns nil does not consume the key — the developer
+   console's command input declines ESC, so the host still closes the UI."
+  (let [rt (char-runtime)
+        calls (atom 0)]
+    (events/on! rt :root :key
+      (fn [_ _ _] (swap! calls inc) nil))
+    (events/gain-focus! rt (.getIdx (rt/node-by-id rt :root)))
+    (is (nil? (events/dispatch-key! rt 256 0 0 0)))
+    (is (= 1 @calls) "handler still ran; only its return value decides consumption")))
 
 (deftest dispatch-char-unfocused-is-noop-test
   (let [rt (char-runtime)

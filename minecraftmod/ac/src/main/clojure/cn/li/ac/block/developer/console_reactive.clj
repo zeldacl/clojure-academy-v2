@@ -534,7 +534,14 @@
       (rt/register-binding! rt (.getIdx root) b))
     (events/on! rt console-id :key
       (fn [_ _ evt]
-        (swap! state-a process-key {:keyCode (:key-code evt) :typedChar (char 0)})))
+        (let [kc (long (:key-code evt 0))]
+          (if (= kc 256)
+            ;; ESC is not a console command key — decline it (nil) so the
+            ;; host's ESC fallback closes the developer UI; process-key's
+            ;; :else branch would swallow it otherwise.
+            nil
+            (do (swap! state-a process-key {:keyCode kc :typedChar (char 0)})
+                true)))))
     (events/on! rt console-id :change-content
       (fn [_ _ evt]
         (let [ch (first (:char evt))]
