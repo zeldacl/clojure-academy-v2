@@ -41,6 +41,24 @@
                        (tick-state-fn (handler-state state kind)))
     state))
 
+(defn- apply-enqueue [state kind handler owner-key payload]
+  (if-let [enqueue-state-fn (:enqueue-state-fn handler)]
+    (set-handler-state state kind
+                       (enqueue-state-fn (handler-state state kind) nil nil owner-key payload))
+    state))
+
+(defn- apply-events
+  "Deliver every VFX Core signal (combat-core :spawn/:signal, or anything
+   else that reaches this instance via vfx-core's stable-key signal path)
+   queued for this tick to the content's own enqueue-state-fn, the same
+   state-machine entry point content used to reach only through the now-dead
+   channel/topic transport. :mode is set from the signal's :event so content
+   code keeps its existing (case mode ...) dispatch unchanged."
+  [state kind handler owner-key events]
+  (reduce (fn [s {:keys [event payload]}]
+            (apply-enqueue s kind handler owner-key (assoc payload :mode event)))
+          state events))
+
 (defn- sample-plan! [effect-id state context sink]
   (when-let [{:keys [build-plan-fn]} (:level (effect-handlers effect-id))]
     (when build-plan-fn
@@ -83,9 +101,13 @@
            (let [h (effect-handlers effect-id)]
              {:level (initial-value (:initial-state (:level h)))
               :hand (initial-value (:initial-state (:hand h)))}))
-   :update (fn [state _context]
-             (let [h (effect-handlers effect-id)]
+   :update (fn [state context]
+             (let [h (effect-handlers effect-id)
+                   owner-key (:owner (:instance context))
+                   events (:events context)]
                (-> state
+                   (apply-events :level (:level h) owner-key events)
+                   (apply-events :hand (:hand h) owner-key events)
                    (apply-tick :level (:level h))
                    (apply-tick :hand (:hand h)))))
    :bounds (fn [_ _] nil)
@@ -212,10 +234,43 @@
 (defn release-frame! [frame-id]
   (core/release-frame! (runtime) frame-id))
 
+(defonce ^:private unmapped-signal-count* (atom 0))
+
 (defn dispatch-signal!
-  "Apply one stable-key combat VFX signal directly to vfx-core."
+  "Apply one combat VFX signal to the shared aggregate instance for its
+   effect-id, bypassing vfx-core's stable-key spawn/event-seq/tombstone path
+   for :spawn/:signal.
+
+   Combat Core's own instance-key is per-owner-per-activation ([:combat
+   owner activation-key effect-id] — see combat-core/runtime.clj's :vfx op),
+   which is right for COMBAT's OWN idempotency, but content's per-owner
+   state (arc_beam.clj's owner-keyed maps inside a single effect's state)
+   lives in exactly ONE shared vfx-core instance per effect-id (see
+   register-effect! below). Routing every signal through vfx-core's own
+   dispatch-signal! would either (a) spawn a second, duplicate instance per
+   activation that the content-facing snapshot/update API can never resolve
+   back to (instance-for-effect just returns whichever instance the hash
+   map iterates to first), or, if remapped onto one shared instance-key to
+   avoid that, (b) collide every player's independent per-session
+   event-seq counter onto one shared \"current\" value, silently dropping
+   a second player's cast as stale.
+
+   MSG-COMBAT-RESULT (the only source of these signals) is a reliable,
+   ordered push, not a lossy/replayable transport, so re-deriving a second
+   idempotency layer here isn't needed: :spawn/:signal go straight to the
+   existing aggregate instance's own signal queue every time."
   [signal]
-  (core/dispatch-signal! (runtime) signal))
+  (let [signal (contract/signal signal)]
+    (case (:op signal)
+      (:spawn :signal)
+      (if-let [instance-id (core/instance-for-effect (runtime) (:effect-id signal))]
+        (core/signal! (runtime) {:instance instance-id} (:event signal) (:params signal))
+        (do (swap! unmapped-signal-count* inc)
+            (log/warn "VFX signal for an unregistered effect-id" {:effect-id (:effect-id signal)})))
+      (core/dispatch-signal! (runtime) signal)))
+  nil)
+
+(defn unmapped-signal-count [] @unmapped-signal-count*)
 
 (defn clear-world! [world-id]
   ;; AC keeps one aggregate instance per descriptor.  Strip only payloads
@@ -351,5 +406,6 @@
   (reset! runtime* nil)
   (reset! handlers* {})
   (reset! frozen?* false)
+  (reset! unmapped-signal-count* 0)
   (.clear camera-pitch*)
   nil)

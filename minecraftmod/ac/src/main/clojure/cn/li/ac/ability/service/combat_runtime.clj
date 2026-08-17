@@ -441,7 +441,17 @@
                                    position (raycast/player-position owner)]
                                (cond-> hit
                                  (and (map? position) (:world-id position))
-                                 (assoc :world-id (:world-id position)))))))
+                                 (assoc :world-id (:world-id position))
+                                 ;; Caster origin (eye position), so a :vfx step
+                                 ;; can draw a beam from :eye-x/:eye-y/:eye-z to
+                                 ;; the existing hit-x/hit-y/hit-z without a
+                                 ;; second query — player-position already
+                                 ;; fetches this for :world-id above, it was
+                                 ;; just discarded.
+                                 (map? position)
+                                 (assoc :eye-x (:x position)
+                                        :eye-y (:eye-y position)
+                                        :eye-z (:z position)))))))
               :entities (fn [context node]
                           (when-let [host-query (contract/host-port :query)]
                             (host-query :entities context node)))

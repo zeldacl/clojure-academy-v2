@@ -10,7 +10,6 @@
 [cn.li.ac.ability.model.ability :as adata]
             [cn.li.ac.ability.service.command-runtime :as command-rt]
             [cn.li.ac.ability.config :as cfg]
-            [cn.li.ac.ability.fx :as fx]
             [cn.li.ac.ability.rules.cooldown-rules :as cd-rules]
             [cn.li.mcmod.hooks.core :as runtime-hooks]))
 
@@ -42,7 +41,6 @@
          clear-railgun-coin-judged!
          clear-railgun-coin-judged-in-session!
          gain-exp!
-         emit-fx!
          get-player-state
          get-player-state-in-session!
          player-path
@@ -280,20 +278,6 @@
             rate (* base-rate skill-rate)
             value (resolve-val amount evt)]
         (add-skill-exp! (:player-id evt) skill-id value rate)))))
-
-(defn emit-fx!
-  "Emit fx stage for a context event.
-
-  By default this reaches only the context owner (fx/send!'s :client
-  default). Pass broadcast? true to also fan out to nearby players
-  (fx/send-local-and-nearby!) for effects that should be publicly visible,
-  not just to the caster."
-  ([spec evt stage] (emit-fx! spec evt stage false))
-  ([spec evt stage broadcast?]
-   (when-let [entry (get-in spec [:fx stage])]
-     (if broadcast?
-       (fx/send-local-and-nearby! (:ctx-id evt) entry evt nil)
-       (fx/send! (:ctx-id evt) entry evt)))))
 
 (defn get-player-state
   "Return full player state map or nil when absent."

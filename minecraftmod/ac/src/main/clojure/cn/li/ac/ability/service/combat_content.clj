@@ -138,8 +138,8 @@
                        {:op :require :predicate :hit}
                        {:op :damage :amount 28.0 :type :electric
                         :target-ref :hit}
-                      {:op :vfx :effect-id :railgun
-                        :event :release :params {:strength 1.0}}]}}
+                      {:op :vfx :effect-id :railgun-shot
+                        :event :release :params-ref :hit}]}}
     {:id :mine-detect
      :revision 1
      :activation :instant
@@ -576,8 +576,8 @@
                        {:op :world-effect :effect-type :mine-ray
                         :scan-ref :scan :range 10.0
                         :break-speed (scale 0.2 0.4) :fortune 0}
-                       {:op :vfx :effect-id :mine-ray-basic
-                        :event :pulse :params {:range 10.0}}]}}
+                       {:op :vfx :effect-id :mine-ray
+                        :event :pulse :params {:range 10.0 :variant :basic}}]}}
     {:id :mine-ray-expert
      :revision 1
      :activation :session
@@ -593,8 +593,8 @@
                        {:op :world-effect :effect-type :mine-ray
                         :scan-ref :scan :range 20.0
                         :break-speed (scale 0.5 1.0) :fortune 0}
-                       {:op :vfx :effect-id :mine-ray-expert
-                        :event :pulse :params {:range 20.0}}]}}
+                       {:op :vfx :effect-id :mine-ray
+                        :event :pulse :params {:range 20.0 :variant :expert}}]}}
     {:id :mine-ray-luck
      :revision 1
      :activation :session
@@ -610,8 +610,8 @@
                        {:op :world-effect :effect-type :mine-ray
                         :scan-ref :scan :range 20.0
                         :break-speed (scale 0.5 1.0) :fortune 3}
-                       {:op :vfx :effect-id :mine-ray-luck
-                       :event :pulse :params {:range 20.0 :fortune 3}}]}}
+                       {:op :vfx :effect-id :mine-ray
+                       :event :pulse :params {:range 20.0 :fortune 3 :variant :luck}}]}}
     {:id :mark-teleport
      :revision 1
      :activation :session

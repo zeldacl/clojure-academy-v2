@@ -98,13 +98,28 @@
         (recur (+ cursor 1.0 (rand))
                (conj placements (new-sub-arc cursor)))))))
 
+(defn- beam-endpoints
+  "Combat Core's :raycast query result carries flat eye-*/hit-* scalars (see
+  combat_runtime.clj's :raycast query-port handler), not nested {:x :y :z}
+  maps — construct the V3 pair the beam renderer needs directly from those,
+  falling back to legacy nested :start/:end maps if a caller ever supplies
+  them instead."
+  [{:keys [start end eye-x eye-y eye-z hit-x hit-y hit-z]}]
+  (cond
+    (and start end) [(vec3/map->v3 start) (vec3/map->v3 end)]
+    (and eye-x eye-y eye-z hit-x hit-y hit-z)
+    [(vec3/v3 eye-x eye-y eye-z) (vec3/v3 hit-x hit-y hit-z)]
+    :else nil))
+
 (defn- enqueue-state!
   "Charge events keep a self-contained one-shot arc-burst state. A live
   :charging entry also keeps level-effect rendering active before a beam exists."
   [store ctx-id channel owner-key payload]
   (let [store* (ensure-store store)
         owner-key* (or owner-key [:ctx ctx-id])
-        {:keys [mode start end hit-distance source-player-id world-id]} (or payload {})
+        {:keys [mode distance source-player-id world-id]} (or payload {})
+        hit-distance distance
+        [start end] (beam-endpoints payload)
         base-meta {:owner-key owner-key*
                    :ctx-id ctx-id
                    :channel channel
@@ -128,16 +143,13 @@
       (if (and start end)
         (update-in store* [:beam-effects owner-key*] (fnil conj [])
                    (merge base-meta
-                          {:start (vec3/map->v3 start)
-                           :end (vec3/map->v3 end)
+                          {:start start
+                           :end end
                            :mode (or mode :block-hit)
                            :hit-distance (double (or hit-distance 18.0))
                            :ttl beam-life-ticks
                            :max-ttl beam-life-ticks
-                           :arc-placements
-                           (arc-placements
-                             (vec3/map->v3 start)
-                             (vec3/map->v3 end))
+                           :arc-placements (arc-placements start end)
                            :wiggle-seed (* 2.0 Math/PI (rand))}))  ;; random phase [0, 2π)
         store*))))
 
