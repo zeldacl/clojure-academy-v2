@@ -22,6 +22,7 @@
 | `9b8077266` | `execute-thunder-clap!`/`execute-blood-retrograde!`/`execute-plasma-cannon!`/`execute-meltdowner!` 四个 world-effect 执行器（见下方 C 节） |
 | `b55116f6f` | `:block-scan` query + `execute-mine-ray!`（mine-ray-basic/expert/luck 三个 skill id）、`:storm-wing` query + `execute-storm-wing!`（见下方 C-2 节） |
 | `626be7705` | `:light-shield`/`:electron-missile`/`:scatter-bomb` query + 三个保守简化执行器（见下方 C-2 节） |
+| `9d7c1fa72` | `:knockback` world-effect case 分支 + `execute-knockback!`（`directed-shock`，见下方 D 节） |
 
 ## 分类清单
 
@@ -91,18 +92,19 @@
 
 **验证状态**：以上全部改动已跑 `:ac:checkClojure` 通过，`:platform:compileClojure` 在 `forge-1.20.1`/`neoforge-1.21.1` 两个目标上编译通过，`combat-core`/`vfx-core` 测试套件不受影响。**均未进游戏验证**——编译通过只说明代码类型正确、能加载，不代表游戏里数值平衡或手感符合预期，尤其是 light-shield/electron-missile/scatter-bomb 三个保守实现版本的行为已经偏离技能原本设计。
 
-### D. 3 个 world-effect 类型：连处理分支都没有
+### D. 3 个 world-effect 类型：连处理分支都没有（1/3 已完成）
 
-**受影响技能**：`current-charging`（`:charge-energy`）、`mine-detect`（`:mine-detect`）、`directed-shock`（`:knockback`——**这个技能的 query 本身工作正常**，伤害会正常命中，只是击退效果被静默吞掉，容易被误判为"技能没问题"）。
+原受影响技能：`current-charging`（`:charge-energy`）、`mine-detect`（`:mine-detect`）、`directed-shock`（`:knockback`）。三者共同点：`combat_runtime.clj` 里 `(case (:type effect) ...)` 完全没有对应 case，全部落进兜底分支 `{:status :unhandled :reason :missing-world-effect-host-port}`。
 
-**现状**：`combat_runtime.clj` 里 `(case (:type effect) ...)` 的 world-effect 处理分支**完全没有** `:charge-energy`/`:mine-detect`/`:knockback` 三个 case，全部落进最后的兜底分支 `{:status :unhandled :reason :missing-world-effect-host-port :effect effect}`。
+**已完成（`:knockback`，2026-08-17 追加会话）**：`directed-shock` 的 query 本来就工作正常（`:raycast`），伤害会正常命中，只是击退效果之前被静默吞掉——这种"技能好像有效但缺一部分"的情况最容易被误判为"没问题"。已加 `combat_runtime.clj` 的 `:knockback` case 分支 + `mcbase/adapter/world_effects.clj` 的 `execute-knockback!` + `mcmod/platform/world_effects.clj` 的中立契约函数（`:knockback` 不在原本 16 个 `execute-*` 声明里，是新增的）。
 
-**这三个不是平台代码缺口，是设计判断**：
+**方向/公式是推断的，不是参照实现验证过的**：技能翻译文本（"将挥拳时产生的反作用力夺取并叠加到正前方的冲击力上"）确认这是"沿施法者朝向方向把目标推开"，不是拉扯——尽管 content 里 `knockback-scale` 是负数（`-0.7`）。把 `knockback-scale` 解读为"对目标现有速度的阻尼/反转系数"（而不是对 `impulse` 本身的乘数——那样负数会导致推力变成拉力，跟翻译文本矛盾），沿用同文件里 `vec-accel`/`mag-movement`/`storm-wing` 已经在用的"现有速度 + 新增量"公式形状。**如果进游戏测试发现效果是"拉过来"而不是"推开"，先查这个公式。**
+
+**仍然缺失（`:charge-energy`、`:mine-detect`）——不是平台代码缺口，是设计判断**：
 - `:charge-energy`（`current-charging` 技能用）：应该接入 AC 已有的 `ac.energy.*` 机器能量系统，还是独立实现一套？`ac.energy.*` 目前服务的是方块机器间能量传输，"玩家技能给某个目标充能"是否复用同一套抽象需要设计决定。
 - `:mine-detect`（`mine-detect` 技能用）：方块扫描结果要以什么格式反馈给客户端（高亮方块？小地图标记？纯文字提示？）——这是 UI/UX 设计问题，不是纯逻辑填空。
-- `:knockback`（`directed-shock` 技能用）：应该调用哪个已有的击退原语？`entity-motion`/`player-motion` 里可能已有速度设置的函数可以复用，需要先确认。
 
-**要做的事**：先由懂游戏设计的人拍板上述三个问题，再实现 `combat_runtime.clj` 里对应的 case 分支（`:knockback` 大概率可以复用 `execute-mag-manip!` 同款的速度设置原语，是三者里最快能做的）。
+**要做的事**：先由懂游戏设计的人拍板上述两个问题，再实现 `combat_runtime.clj` 里对应的 case 分支。
 
 ### E. vfx-core 通用化剩余部分（P1.1-P1.3，~6000 行内容迁移）
 
@@ -129,11 +131,11 @@
 ## 建议的下手顺序
 
 1. **先做全量审计，不要分批摸索**：对全部 37 个技能逐条核实 query 侧 + world-effect 侧 + 所需的目标检测/物理原语是否真实存在于平台代码里。本轮工单里的每一条分类，都是"以为已经 wired，深入一层才发现没有"这个模式反复出现以后才逐渐收敛出的准确清单——不要重复这个摸索过程。
-2. ~~C 类里的 thunder-clap/blood-retrograde/plasma-cannon/meltdowner 4 个技能~~ / ~~C-2 类里的 mine-ray-basic/expert/luck、storm-wing、light-shield、electron-missile、scatter-bomb 5 个技能点~~ **均已完成**，见上方 C 节、C-2 节（light-shield/electron-missile/scatter-bomb 是保守简化版本，均仍需进游戏验证）。
-3. **剩下最高优先级：D 类的 `:knockback`**（directed-shock）大概率可以复用已有的实体速度设置原语（`entity-motion`/`player-motion`），是当前所有剩余项里最快能做的。
-4. **C-2 类的 jet-engine、groundshock 需要新基础设施/设计输入才能继续**：jet-engine 等平台层通用延迟调度设施，groundshock 等传播算法设计输入——不建议直接开始写代码。
-5. **A 类（传送）、B 类（mag 系列）同样需要先做设计判断**，不建议在没有设计输入的情况下直接开始写代码。
-6. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
+2. ~~C 类 4 个技能~~ / ~~C-2 类 5 个技能点~~ / ~~D 类 `:knockback`~~ **均已完成**，见上方 C、C-2、D 节（light-shield/electron-missile/scatter-bomb 是保守简化版本，`:knockback` 的推力方向/公式是推断的，均仍需进游戏验证）。
+3. **剩下能不靠设计判断直接做的都做完了**。剩余项分两类：
+   - **需要新基础设施**：C-2 类的 `jet-engine`（平台层通用延迟调度设施）。
+   - **需要设计/游戏手感输入**：C-2 类的 `groundshock`（传播算法）、D 类的 `:charge-energy`/`:mine-detect`、A 类（传送 approval-token，6 个技能）、B 类（mag-manip/mag-movement，"什么算金属"）。
+4. **E、F 类是大迁移，建议单独排期**，不要和小修小补混在一个提交序列里。
 
 ## 验证方式
 
