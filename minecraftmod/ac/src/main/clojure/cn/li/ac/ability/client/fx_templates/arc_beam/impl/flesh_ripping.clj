@@ -82,12 +82,27 @@
     (corner-tick-ops (- px (* 0.5 width)) py (- pz (* 0.5 width))
                      width height color)))
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:fx-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :fx-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that its :start/:update branches (and most of
+;; :perform) never match a real event today. combat_content.clj's
+;; :flesh-ripping skill sends exactly ONE :vfx step, ever: :event :perform
+;; from its :release phase, with :params {:range-min 6.0 :range-max 14.0}
+;; -- no :start/:update/:end, and none of the :hit?/:target-x/:target-y/
+;; :target-z/:target-uuid/:entity-x/:entity-y/:entity-z/:target-width/
+;; :target-height fields this file's branches read (including the ones the
+;; :perform branch itself reads). In production today the marker box never
+;; renders and the blood-splash/sound cue in :perform never fires either
+;; (both gated on fields that are always nil here) -- migrated structurally
+;; only.
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-particles/current-effect-owner)
+        base-meta {:queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -98,25 +113,22 @@
                :z (double (or (:target-z p) 0.0))})]
     (case (:mode payload)
       :start
-      (update state* :fx-state assoc owner-key*
-              (merge base-meta {:active? true :ttl 0
-                                :aim (aim payload)
-                                :hit? (boolean (:hit? payload))
-                                :target-uuid (:target-uuid payload)
-                                :target-width (double (or (:target-width payload) 0.6))
-                                :target-height (double (or (:target-height payload) 1.8))}))
+      (merge state* base-meta {:active? true :ttl 0
+                               :aim (aim payload)
+                               :hit? (boolean (:hit? payload))
+                               :target-uuid (:target-uuid payload)
+                               :target-width (double (or (:target-width payload) 0.6))
+                               :target-height (double (or (:target-height payload) 1.8))})
 
       :update
-      (update state* :fx-state update owner-key*
-              (fn [st]
-                (assoc (merge base-meta (or st {:active? true :ttl 0}))
-                       :active? true
-                       :ttl 0
-                       :aim (aim payload)
-                       :hit? (boolean (:hit? payload))
-                       :target-uuid (:target-uuid payload)
-                       :target-width (double (or (:target-width payload) 0.6))
-                       :target-height (double (or (:target-height payload) 1.8)))))
+      (assoc (merge base-meta (or state* {:active? true :ttl 0}))
+             :active? true
+             :ttl 0
+             :aim (aim payload)
+             :hit? (boolean (:hit? payload))
+             :target-uuid (:target-uuid payload)
+             :target-width (double (or (:target-width payload) 0.6))
+             :target-height (double (or (:target-height payload) 1.8)))
 
       :perform
       (do
@@ -137,43 +149,36 @@
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id (modid/namespaced-path "tp.guts") :volume 0.6 :pitch 1.0})
         ;; Upstream c_endEffect kills the marker on MSG_EFFECT_END.
-        (update state* :fx-state dissoc owner-key*))
+        (assoc state* :active? false))
 
       :end
-      (update state* :fx-state dissoc owner-key*)
+      (assoc state* :active? false)
 
       state*)))
 
-(defn- tick-state! [state]
-  (let [state* (or state {:fx-state {}})]
-    (update state* :fx-state
-            (fn [states]
-              (reduce-kv
-                (fn [acc owner-key st]
-                  (let [next-st (update st :ttl (fnil inc 0))]
-                    (if (> (long (:ttl next-st)) stale-owner-ttl-ticks)
-                      acc
-                      (assoc acc owner-key next-st))))
-                {}
-                states)))))
+(defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Unconditional TTL safety net (runs regardless of :active?)
+   preserved exactly as it was before this migration -- was already the
+   sole source of \"end\" behavior since :end never actually fires."
+  [state]
+  (let [next-state (update (or state {}) :ttl (fnil inc 0))]
+    (when (<= (long (:ttl next-state)) stale-owner-ttl-ticks)
+      next-state)))
 
 (defn- build-plan [_camera-pos _hand-center-pos tick]
-  (let [states (vals (:fx-state (vfx-level/effect-state-snapshot :flesh-ripping)))
-        marker-ops
-        (vec
-         (mapcat (fn [st]
-                   (when (and (:active? st) (:aim st))
-                     (marker-ops st tick)))
-                 states))]
-    (when (seq marker-ops)
-      {:ops marker-ops})))
+  (let [st (vfx-level/effect-state-snapshot :flesh-ripping)
+        ops (when (and (:active? st) (:aim st))
+              (marker-ops st tick))]
+    (when (seq ops)
+      {:ops (vec ops)})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flesh-ripping :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flesh-ripping :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:flesh-ripping :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:flesh-ripping :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :flesh-ripping
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :flesh-ripping [_ store owner-key]
-  (update store :fx-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

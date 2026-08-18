@@ -6,8 +6,9 @@
   (arc-beam/build-spec
     {:effect-id :groundshock
      :runtime :both
-     :level-initial-state (fn [] {})
-     :hand-initial-state (fn [] {:hand-state {}})
+     :lifecycle :transient
+     :level-initial-state (fn [] nil)
+     :hand-initial-state (fn [] {})
      :channels {:start {:topic :groundshock/fx-start :mode :start :targets [:hand]}
                 :update {:topic :groundshock/fx-update :mode :update :targets [:hand]
                          :hand-payload (fn [_ _ p]

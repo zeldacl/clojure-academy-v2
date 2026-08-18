@@ -20,29 +20,44 @@
 
 (def ^:private mark-color {:r 255 :g 255 :b 255 :a 255})
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:effect-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today.
+;; combat_content.clj's :mark-teleport skill (see
+;; ability/service/combat_content.clj) sends exactly ONE :vfx step, ever:
+;; :event :release from its :release phase, with :params {:max-range 60.0}
+;; -- no :start, no :update, no :perform, no :end, and no :target/:dist/
+;; :distance/:source-player-id/:world-id anywhere in what actually reaches
+;; this file. Every case branch below (:start/:update/:perform/:end) was
+;; built for a design this content has never sent; :release itself falls
+;; through to the trailing `state*` no-op default, same as every other
+;; unmatched mode. In production today this marker never becomes active,
+;; never renders, and never plays its :perform sound -- migrated
+;; structurally only; not something this migration is scoped to fix (same
+;; class of gap as light_shield's, see that file's migration commit).
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [mode target distance source-player-id world-id]} payload
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-sounds/current-effect-owner)
+        base-meta {:queue-owner (client-sounds/current-effect-owner)
                    :ctx-id ctx-id :channel channel
                    :source-player-id source-player-id :world-id world-id}]
     (case mode
       :start
-      (assoc-in state* [:effect-state owner-key*]
-                (merge base-meta {:active? true :target target
-                                  :dist (double (or (:dist payload) 0.0))
-                                  :distance (double (or distance 0.0))
-                                  :ticks 0
-                                  :ambient-particles []}))
+      (merge state* base-meta {:active? true :target target
+                               :dist (double (or (:dist payload) 0.0))
+                               :distance (double (or distance 0.0))
+                               :ticks 0
+                               :ambient-particles []})
 
       :update
-      (assoc-in state* [:effect-state owner-key*]
-                (merge base-meta (get-in state* [:effect-state owner-key*])
-                       {:active? true :target target
-                        :dist (double (or (:dist payload) 0.0))
-                        :distance (double (or distance 0.0))}))
+      (merge state* base-meta
+             {:active? true :target target
+              :dist (double (or (:dist payload) 0.0))
+              :distance (double (or distance 0.0))})
 
       :perform
       (do
@@ -58,23 +73,21 @@
                                  :y (double (:y target))
                                  :z (double (:z target)))))
         ;; Upstream l_end kills EntityTPMarking on MSG_TERMINATED.
-        (update state* :effect-state dissoc owner-key*))
+        (assoc state* :active? false))
 
       :end
-      (update state* :effect-state dissoc owner-key*)
+      (assoc state* :active? false)
 
       state*)))
 
-(defn- tick-state! [state]
-  (let [state* (or state {:effect-state {}})]
-    (update state* :effect-state
-            (fn [states]
-              (reduce-kv (fn [acc k st]
-                           (if (:active? st)
-                             (assoc acc k (tp-mark/tick-marker! st))
-                             acc))
-                         {}
-                         states)))))
+(defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Only reachable while :active?, matching the pre-migration
+   per-owner active flag."
+  [state]
+  (let [state* (or state {})]
+    (when (:active? state*)
+      (tp-mark/tick-marker! state*))))
 
 (defn- look-vec
   "Entity.getLookAngle from yaw/pitch, both radians (xRot is positive looking
@@ -122,24 +135,25 @@
         (:target mk))))
 
 (defn- build-plan [camera-pos hand-center-pos _tick]
-  (let [store (vfx-level/effect-state-snapshot :mark-teleport)
+  (let [mk (vfx-level/effect-state-snapshot :mark-teleport)
         cam (rv3/map->v3 camera-pos)
         yaw-rad (:player-yaw-rad hand-center-pos)
-        ops (vec (mapcat (fn [mk]
-                           (when (:active? mk)
-                             (when-let [target (live-target mk hand-center-pos)]
-                               (into (tp-mark/humanoid-ops yaw-rad target (:ticks mk) mark-color)
-                                     (bp/particle-ops cam (:ambient-particles mk))))))
-                         (vals (:effect-state store))))]
+        ops (when (:active? mk)
+              (when-let [target (live-target mk hand-center-pos)]
+                (into (tp-mark/humanoid-ops yaw-rad target (:ticks mk) mark-color)
+                      (bp/particle-ops cam (:ambient-particles mk)))))]
     (when (seq ops)
-      {:ops ops})))
+      {:ops (vec ops)})))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mark-teleport :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mark-teleport :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mark-teleport :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mark-teleport :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mark-teleport
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mark-teleport [_ store owner-key]
-  (update store :effect-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- :clear-owner-fn has no live
+;; caller for any effect (see the vfx-core destroy! commit); vfx-core's real
+;; destroy!/clear-owner! now reach this instance correctly via instance
+;; identity, and there is no side-effecting resource here (no loop sound) to
+;; release on teardown, so no :destroy-fn is needed either.

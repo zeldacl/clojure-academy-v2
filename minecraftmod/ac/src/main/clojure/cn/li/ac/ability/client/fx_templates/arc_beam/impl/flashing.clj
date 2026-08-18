@@ -18,69 +18,76 @@
             [cn.li.ac.ability.client.fx-templates.arc-beam.impl.tp-mark :as tp-mark]
             [cn.li.ac.content.ability.teleporter.flashing-dest :as fdest]))
 
-(defn- enqueue-state! [state ctx-id channel owner-key payload]
-  (let [state* (or state {:fx-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :fx-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today --
+;; same finding as mark_teleport.clj/penetrate_teleport.clj (shared trigger
+;; shape). combat_content.clj's :flashing skill sends exactly ONE :vfx step,
+;; ever: :event :release from its :release phase, with
+;; :params {:blink-distance ...} -- no :state-start/:preview-start/
+;; :preview-update/:preview-end/:perform/:state-end, and none of the
+;; :to-x/:to-y/:to-z/:direction/:distance/:from-x/:from-y/:from-z fields
+;; this file's branches read. :release itself falls through to the trailing
+;; `state*` no-op default. In production today the preview marker never
+;; renders and the portal-particle burst never fires -- migrated
+;; structurally only.
+(defn- enqueue-state! [state ctx-id channel _owner-key payload]
+  (let [state* (or state {})
         {:keys [source-player-id world-id]} payload
-        base-meta {:owner-key owner-key* :queue-owner (client-particles/current-effect-owner)
+        base-meta {:queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id :channel channel :source-player-id source-player-id :world-id world-id}]
     (case (:mode payload)
       ;; The visible marking is rendered by build-plan at :preview (upstream
       ;; EntityTPMarking at getDest). The scripted entity_tp_marking is NOT
       ;; spawned — it follows the player and renders at their head instead.
       :state-start
-      (update state* :fx-state assoc owner-key*
-              (merge base-meta {:preview nil :burst []}))
+      (merge state* base-meta {:preview nil :burst (or (:burst state*) [])})
       :preview-start
-      (update state* :fx-state update owner-key*
-              (fn [st]
-                (assoc (merge base-meta (or st {:burst []}))
-                       :direction (:direction payload)
-                       :dist (double (or (:distance payload) 0.0))
-                       :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})))
+      (assoc (merge base-meta (or state* {:burst []}))
+             :direction (:direction payload)
+             :dist (double (or (:distance payload) 0.0))
+             :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})
       :preview-update
-      (update state* :fx-state update owner-key*
-              (fn [st]
-                (assoc (merge base-meta (or st {:burst []}))
-                       :direction (:direction payload)
-                       :dist (double (or (:distance payload) 0.0))
-                       :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})))
+      (assoc (merge base-meta (or state* {:burst []}))
+             :direction (:direction payload)
+             :dist (double (or (:distance payload) 0.0))
+             :preview {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)})
       :preview-end
-      (update state* :fx-state update owner-key* (fn [st] (assoc (merge base-meta (or st {:burst []})) :preview nil)))
+      (assoc (merge base-meta (or state* {:burst []})) :preview nil)
       :perform
       (do
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id (modid/namespaced-path "tp.tp_flashing") :volume 1.0 :pitch 1.0})
-        (update state* :fx-state update owner-key*
-                (fn [st] (update (merge base-meta (or st {:preview nil :burst []})) :burst (fnil conj [])
-                                 {:ttl 8 :from {:x (:from-x payload) :y (:from-y payload) :z (:from-z payload)}
-                                  :to {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)}}))))
+        (update (merge base-meta (or state* {:preview nil :burst []})) :burst (fnil conj [])
+                {:ttl 8 :from {:x (:from-x payload) :y (:from-y payload) :z (:from-z payload)}
+                 :to {:x (:to-x payload) :y (:to-y payload) :z (:to-z payload)}}))
       :state-end
-      (update state* :fx-state dissoc owner-key*)
+      (assoc state* :preview nil :burst [])
       state*)))
 
-(defn- tick-state! [state]
-  (let [state* (or state {:fx-state {}})]
-    (update state* :fx-state
-            (fn [states]
-              (persistent!
-               (reduce-kv
-                (fn [acc owner-key st]
-                  (doseq [b (:burst st)]
-                    (let [{fx :x fy :y fz :z} (:from b) {tx :x ty :y tz :z} (:to b)]
-                      (when (pos? (long (:ttl b)))
-                        (client-particles/queue-particle-effect! (:queue-owner st)
-                          {:type :particle :particle-type :portal :x (double fx) :y (double fy) :z (double fz)
-                           :count 2 :speed 0.05 :offset-x 0.35 :offset-y 0.5 :offset-z 0.35})
-                        (client-particles/queue-particle-effect! (:queue-owner st)
-                          {:type :particle :particle-type :portal :x (double tx) :y (double ty) :z (double tz)
-                           :count 2 :speed 0.05 :offset-x 0.35 :offset-y 0.5 :offset-z 0.35}))))
-                  (assoc! acc owner-key
-                          (assoc st :burst (store-tick/tick-ttl-vec (:burst st)))))
-                (transient {})
-                states))))))
-
-(defn- preview-to-payload [_ctx-id _channel p] {:to-x (:to-x p) :to-y (:to-y p) :to-z (:to-z p)})
+(defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while a preview is set or a burst is still
+   animating, mirroring vec_deviation's tick-state!."
+  [state]
+  (let [state* (or state {})
+        burst (:burst state*)]
+    (doseq [b burst]
+      (let [{fx :x fy :y fz :z} (:from b) {tx :x ty :y tz :z} (:to b)]
+        (when (pos? (long (or (:ttl b) 0)))
+          (client-particles/queue-particle-effect! (:queue-owner state*)
+            {:type :particle :particle-type :portal :x (double fx) :y (double fy) :z (double fz)
+             :count 2 :speed 0.05 :offset-x 0.35 :offset-y 0.5 :offset-z 0.35})
+          (client-particles/queue-particle-effect! (:queue-owner state*)
+            {:type :particle :particle-type :portal :x (double tx) :y (double ty) :z (double tz)
+             :count 2 :speed 0.05 :offset-x 0.35 :offset-y 0.5 :offset-z 0.35}))))
+    (let [next-burst (store-tick/tick-ttl-vec burst)]
+      (when (or (:preview state*) (seq next-burst))
+        (assoc state* :burst next-burst)))))
 
 ;; Upstream Flashing spawns an EntityTPMarking (the same humanoid as
 ;; penetrate/mark teleport) at getDest and moves it there every tick while a
@@ -130,23 +137,21 @@
         (:preview st))))
 
 (defn- build-plan [_camera-pos hand-center-pos tick]
-  (let [yaw-rad (:player-yaw-rad hand-center-pos)
-        ops (vec
-             (mapcat (fn [st]
-                       (when (:preview st)
-                         (when-let [preview (live-preview st hand-center-pos)]
-                           (tp-mark/humanoid-ops yaw-rad preview (long tick) color-marking))))
-                     (vals (:fx-state (vfx-level/effect-state-snapshot :flashing)))))]
+  (let [st (vfx-level/effect-state-snapshot :flashing)
+        yaw-rad (:player-yaw-rad hand-center-pos)
+        ops (when (:preview st)
+              (when-let [preview (live-preview st hand-center-pos)]
+                (tp-mark/humanoid-ops yaw-rad preview (long tick) color-marking)))]
     (when (seq ops)
-      {:ops ops})))
+      {:ops (vec ops)})))
 
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :flashing
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flashing :level] [_ _] {:fx-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:flashing :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:flashing :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:flashing :level] [_ _ store] (tick-state! store))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :flashing [_ store owner-key]
-  (update store :fx-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

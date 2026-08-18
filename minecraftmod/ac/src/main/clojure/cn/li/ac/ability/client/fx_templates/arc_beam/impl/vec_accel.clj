@@ -18,14 +18,6 @@
 
 (def ^:private sound-id (modid/namespaced-path "vecmanip.vec_accel"))
 
-
-
-
-
-
-
-
-
 (defn- integrate-trajectory-positions
 	"Physics integration (drag 0.98/step, gravity -1.9*dt) is purely a function
 	of init-vel — it does not depend on camera-pos/look-dir, so it is
@@ -70,52 +62,66 @@
 					 :start-offset (start-offset look-dir-v)
 					 :trajectory-positions (integrate-trajectory-positions init-vel-v))))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that its :start/:update/:end branches never match a
+;; real event today. combat_content.clj's :vec-accel skill sends exactly
+;; ONE :vfx step, ever: :event :perform from its :release phase, with
+;; :params {:max-charge-ticks 20} -- no :start/:update/:end, and none of
+;; the :charge-ticks/:can-perform?/:look-dir/:init-vel fields the :start/
+;; :update branches read (or the :performed? field :end reads). In
+;; production today the trajectory line never precomputes and never
+;; renders -- only the :perform branch's sound cue fires -- migrated
+;; structurally only.
 (defn- enqueue-state!
-	[store ctx-id channel owner-key payload]
-	(let [store* (or store {:effect-state {}})
-				owner-key* (or owner-key [:ctx ctx-id])
+	[store ctx-id channel _owner-key payload]
+	(let [store* (or store {})
 				{:keys [mode charge-ticks can-perform? look-dir init-vel source-player-id world-id]} (or payload {})
-				base-meta {:owner-key owner-key*
-									 :ctx-id ctx-id
+				base-meta {:ctx-id ctx-id
 									 :channel channel
 									 :source-player-id source-player-id
 									 :world-id world-id}]
 		(case mode
 			:start
-			(assoc-in store* [:effect-state owner-key*]
-								(precompute-trajectory
-									(merge base-meta
-												 {:active? true :charge-ticks 0
-													:can-perform? false
-													:look-dir {:x 0.0 :y 0.0 :z 1.0}
-													:init-vel {:x 0.0 :y 0.0 :z 1.0}})))
+			(precompute-trajectory
+				(merge base-meta
+							 {:active? true :charge-ticks 0
+								:can-perform? false
+								:look-dir {:x 0.0 :y 0.0 :z 1.0}
+								:init-vel {:x 0.0 :y 0.0 :z 1.0}}))
 			:update
-			(update-in store* [:effect-state owner-key*]
-				(fn [st]
-					(precompute-trajectory
-						(assoc (merge base-meta (or st {:active? true}))
-									 :owner-key owner-key*
-									 :ctx-id ctx-id
-									 :channel channel
-									 :source-player-id source-player-id
-									 :world-id world-id
-									 :active? true
-									 :charge-ticks (long (or charge-ticks 0))
-									 :can-perform? (boolean can-perform?)
-									 :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
-									 :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0})))))
+			(precompute-trajectory
+				(assoc (merge base-meta (or store* {:active? true}))
+							 :ctx-id ctx-id
+							 :channel channel
+							 :source-player-id source-player-id
+							 :world-id world-id
+							 :active? true
+							 :charge-ticks (long (or charge-ticks 0))
+							 :can-perform? (boolean can-perform?)
+							 :look-dir (or look-dir {:x 0.0 :y 0.0 :z 1.0})
+							 :init-vel (or init-vel {:x 0.0 :y 0.0 :z 1.0})))
 			:perform
 			(do
 				(client-sounds/queue-current-sound-effect!
 					{:type :sound :sound-id sound-id :volume 0.35 :pitch 1.0})
 				store*)
 			:end
-			(update store* :effect-state dissoc owner-key*)
+			(assoc store* :active? false)
 			store*)))
 
 (defn- tick-state!
+	"Preserved exactly as it was before this migration: an unconditional
+   no-op that never signals natural end (matching the pre-migration
+   :singleton aggregate, which likewise only ever cleared an owner's entry
+   via :end -- and :end never actually fires, see enqueue-state! above).
+   Lives until the owner disconnects, same as before."
 	[store]
-	(or store {:effect-state {}}))
+	(or store {}))
 
 (defn- trajectory-ops
 	[^V3 camera-pos effect]
@@ -163,17 +169,17 @@
 	(if-not (:first-person? hand-center-pos true)
 		nil
 		(let [^V3 cam-v (vec3/map->v3 camera-pos)
-					ops (mapcat #(trajectory-ops cam-v %)
-											(filter #(get % :active?) (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-accel)))))]
+					effect (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :vec-accel)
+					ops (when (:active? effect) (trajectory-ops cam-v effect))]
 			(when (seq ops)
 				{:ops (vec ops)}))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:vec-accel :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:vec-accel :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:vec-accel :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:vec-accel :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :vec-accel
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :vec-accel [_ store owner-key]
-  (update store :effect-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

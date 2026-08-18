@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :mark-teleport
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :mark-teleport/fx-start :mode :start}
                 :update {:topic :mark-teleport/fx-update :mode :update
                          :level-payload (fn [_ _ p] {:target (:target p)

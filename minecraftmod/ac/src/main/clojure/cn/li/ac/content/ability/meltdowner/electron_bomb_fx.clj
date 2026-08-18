@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :electron-bomb
-     :initial-state (fn [] {:effect-state {} :beams {}})
+     :lifecycle :transient
+     :initial-state (fn [] {:beams []})
      :channels {:spawn {:topic :electron-bomb/fx-spawn :mode :spawn
 											 :level-payload (fn [_ _ p]
 																				{:x (:x p) :y (:y p) :z (:z p)

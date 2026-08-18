@@ -6,7 +6,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :vec-accel
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :vec-accel/fx-start :mode :start}
 								:update {:topic :vec-accel/fx-update :mode :update
 												 :level-payload (fn [_ _ p]

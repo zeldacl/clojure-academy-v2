@@ -34,13 +34,36 @@
   ^double [^double from ^double to]
   (+ from (rand (- to from))))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state/:beams
+;; owner-map wrapping (owner isolation comes from instance identity itself).
+;;
+;; combat_content.clj's :electron-bomb skill sends exactly ONE :vfx step
+;; through the live combat signal path: :event :spawn from its one-shot
+;; :instant program, :params {:settle-ticks 20} -- the :spawn branch below
+;; (cast-cue sound + active? true) is the only branch that has ever fired
+;; through THAT path. :beam is sent by a SEPARATE, older transport:
+;; delayed_projectiles.clj's run-electron-bomb-beam! (the server-side
+;; settle callback, 20 ticks later) calls ctx-mgr/push-channel-to-player!/
+;; push-channel-to-nearby-players!, which sends a real MSG-CTX-CHANNEL
+;; network packet -- but grepping the whole tree turns up no client-side
+;; handler for that message id anywhere outside context_manager.clj's own
+;; sender and test files. Nothing on the client ever routes an incoming
+;; MSG-CTX-CHANNEL into enqueue-state!, so the settlement ray this file
+;; exists to draw has never actually reached the client either, by a
+;; different mechanism than the now-deleted vfx-core channel/topic bus (see
+;; docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section P1.3) but the same
+;; class of gap. :end is stranger still: not even declared as a live
+;; channel anywhere -- electron_bomb_fx.clj's :channels lists it, but
+;; nothing ever pushes :electron-bomb/fx-end. In production today this
+;; effect plays its spawn sound and nothing else -- migrated structurally
+;; only, case dispatch preserved exactly.
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (or store {:effect-state {} :beams {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {:beams []})
         {:keys [mode start end source-player-id world-id]} (or payload {})
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-particles/current-effect-owner)
+        base-meta {:queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -54,18 +77,17 @@
       (do
         (client-sounds/queue-sound-effect! (:queue-owner base-meta)
           {:type :sound :sound-id (modid/namespaced-path "md.eb_spawn") :volume 0.6 :pitch 1.2})
-        (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta {:active? true})))
+        (merge store* base-meta {:active? true}))
 
       :beam
       (let [store* (if (and start end)
-                     (update-in store* [:beams owner-key*] (fnil conj [])
-                                (merge base-meta
-                                       {:start (vec3/map->v3 start)
-                                        :end (vec3/map->v3 end)
-                                        :ttl ray-life-ticks
-                                        :max-ttl ray-life-ticks
-                                        :wiggle-seed (* 2.0 Math/PI (rand))}))
+                     (update store* :beams (fnil conj [])
+                             (merge base-meta
+                                    {:start (vec3/map->v3 start)
+                                     :end (vec3/map->v3 end)
+                                     :ttl ray-life-ticks
+                                     :max-ttl ray-life-ticks
+                                     :wiggle-seed (* 2.0 Math/PI (rand))}))
                      store*)]
         (when (and start end)
           ;; EntityMdRaySmall.onFirstUpdate: md.ray_small at 0.8, at the ray.
@@ -77,12 +99,10 @@
              :x (double (or (:x start) 0.0))
              :y (double (or (:y start) 0.0))
              :z (double (or (:z start) 0.0))}))
-        (update store* :effect-state dissoc owner-key*))
+        (assoc store* :active? false))
 
       :end
-      (-> store*
-          (update :effect-state dissoc owner-key*)
-          (update :beams dissoc owner-key*))
+      (assoc store* :active? false :beams [])
 
       store*)))
 
@@ -107,12 +127,18 @@
          :offset-z (ranged -0.015 0.015)}))))
 
 (defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Stay alive while either the spawn cue is still \"active\"
+   (no :beam/:end reached it yet) or a beam is still animating, mirroring
+   vec_deviation's tick-state!."
   [store]
-  (let [store* (or store {:effect-state {} :beams {}})]
-    (doseq [[_owner beams] (:beams store*)
-            beam beams]
+  (let [store* (or store {:beams []})
+        beams (:beams store*)]
+    (doseq [beam beams]
       (emit-ray-trail! beam))
-    (update store* :beams store-tick/tick-ttl-items-by-owner)))
+    (let [next-beams (store-tick/tick-ttl-vec beams)]
+      (when (or (:active? store*) (seq next-beams))
+        (assoc store* :beams next-beams)))))
 
 (defn- beam-ops
   "One EntityMdRaySmall: the glow boards plus the two cylinders. The port drew
@@ -151,20 +177,16 @@
   (let [{:keys [beams]} (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :electron-bomb)]
     (when (seq beams)
       (let [cam-v (vec3/map->v3 camera-pos)
-            ops (vec (mapcat (fn [[_owner-key xs]] (beam-ops cam-v xs)) beams))]
+            ops (vec (beam-ops cam-v beams))]
         (when (seq ops)
           {:ops ops})))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:electron-bomb :level] [_ _] {:effect-state {} :beams {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:electron-bomb :level] [_ _] {:beams []})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:electron-bomb :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:electron-bomb :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :electron-bomb
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :electron-bomb [_ store owner-key]
-  ;; The ball state is context-bound; the settlement beam is upstream's
-  ;; EntityMdRaySmall — a world entity with its own 14-tick life. This skill is
-  ;; :instant, so the context is usually gone before the delayed beam even
-  ;; arrives. See railgun_shot.clj's clear-owner.
-  (update store :effect-state dissoc owner-key))
+;; No effect-clear-owner! override anymore -- no live caller, no
+;; side-effecting resource here (see mark_teleport.clj's migration commit).

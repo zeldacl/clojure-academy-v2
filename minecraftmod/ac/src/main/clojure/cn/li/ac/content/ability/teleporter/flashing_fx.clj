@@ -13,7 +13,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :flashing
-     :initial-state (fn [] {:fx-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:state-start {:topic :flashing/fx-state-start :mode :state-start}
                 :preview-start {:topic :flashing/fx-preview-start :mode :preview-start :level-payload preview-to-payload}
                 :preview-update {:topic :flashing/fx-preview-update :mode :preview-update :level-payload preview-to-payload}

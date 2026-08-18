@@ -17,7 +17,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :flesh-ripping
-     :initial-state (fn [] {:fx-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :flesh-ripping/fx-start :mode :start :level-payload flesh-target-payload}
                 :update {:topic :flesh-ripping/fx-update :mode :update :level-payload flesh-target-payload}
                 :perform {:topic :flesh-ripping/fx-perform :mode :perform :level-payload flesh-target-payload}

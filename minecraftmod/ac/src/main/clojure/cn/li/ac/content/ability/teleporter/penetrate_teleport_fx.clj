@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :penetrate-teleport
-     :initial-state (fn [] {:fx-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :penetrate-teleport/fx-start :mode :start}
                 :update {:topic :penetrate-teleport/fx-update :mode :update}
                 :perform {:topic :penetrate-teleport/fx-perform :mode :perform}
