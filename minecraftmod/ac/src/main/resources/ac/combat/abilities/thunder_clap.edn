@@ -47,24 +47,22 @@
      :include-entities? false
      :include-blocks? true
      :result :aim-hit}
-    {:component :txn/atomic
-     :guards [{:component :guard/resource
-               :cost {:overload {:expr :math/lerp
-                                  :args [{:ref [:param :cost-down-overload 0]}
-                                         {:ref [:param :cost-down-overload 1]}
-                                         {:ref [:context :skill-exp]}]}}}]
+    {:component :txn/guarded-owner-patch
+     :cost {:overload {:expr :math/lerp
+                       :args [{:ref [:param :cost-down-overload 0]}
+                              {:ref [:param :cost-down-overload 1]}
+                              {:ref [:context :skill-exp]}]}}
      :reservations []
+     :entries [{:path [:resources :overload]
+                :mode :increment
+                :value {:expr :math/mul
+                        :args [-1.0
+                               {:expr :math/lerp
+                                :args [{:ref [:param :cost-down-overload 0]}
+                                       {:ref [:param :cost-down-overload 1]}
+                                       {:ref [:context :skill-exp]}]}]}}]
      :body {:component :flow/sequence
-            :steps [{:component :owner/patch
-                     :entries [{:path [:resources :overload]
-                                :mode :increment
-                                :value {:expr :math/mul
-                                        :args [-1.0
-                                               {:expr :math/lerp
-                                                :args [{:ref [:param :cost-down-overload 0]}
-                                                       {:ref [:param :cost-down-overload 1]}
-                                                       {:ref [:context :skill-exp]}]}]}}]}
-                    {:component :effect/vfx
+            :steps [{:component :effect/vfx
                      :effect-id :thunder-clap
                      :operation :spawn
                      :instance-key [:activation :thunder-clap]
@@ -83,23 +81,20 @@
           :args [{:ref [:context :hold-ticks]}
                  {:ref [:param :charge-max]}]}
    :then {:component :flow/sequence
-          :steps [{:component :data/bind
-                   :to :overcharge-ratio
-                   :value {:expr :math/clamp
-                           :args [{:expr :math/div
-                                   :args [{:expr :math/sub
-                                           :args [{:ref [:context :hold-ticks]}
-                                                  {:ref [:param :charge-min]}]}
-                                          {:ref [:param :charge-max]}]}
-                                  0.0 1.0]}}
-                  {:component :target/raycast
+          :steps [{:component :target/raycast
                    :origin {:ref [:context :eye-pos]}
                    :direction {:ref [:context :look]}
                    :distance {:ref [:param :targeting-range]}
                    :include-entities? false
                    :include-blocks? true
                    :result :aim-hit}
-                  {:component :combat/area-damage
+                  {:component :combat/charged-area-damage
+                   :current-ticks {:ref [:context :hold-ticks]}
+                   :minimum-ticks {:ref [:param :charge-min]}
+                   :maximum-ticks {:ref [:param :charge-max]}
+                   :ratio-slot :overcharge-ratio
+                   :ratio-min 0.0
+                   :ratio-max 1.0
                    :center {:ref [:slot :aim-hit :position]}
                    :radius {:expr :math/lerp
                             :args [{:ref [:param :aoe-radius 0]}
@@ -182,22 +177,21 @@
                    :when {:expr :math/lte
                           :args [{:ref [:context :hold-ticks]}
                                  {:ref [:param :charge-min]}]}
-                   :then {:component :txn/atomic
-                          :guards [{:component :guard/resource
-                                    :cost {:cp {:expr :math/lerp
-                                                :args [{:ref [:param :cost-tick-cp 0]}
-                                                       {:ref [:param :cost-tick-cp 1]}
-                                                       {:ref [:context :skill-exp]}]}}}]
+                   :then {:component :txn/guarded-owner-patch
+                          :cost {:cp {:expr :math/lerp
+                                      :args [{:ref [:param :cost-tick-cp 0]}
+                                             {:ref [:param :cost-tick-cp 1]}
+                                             {:ref [:context :skill-exp]}]}}
                           :reservations []
-                          :body {:component :owner/patch
-                                 :entries [{:path [:resources :cp]
-                                            :mode :increment
-                                             :value {:expr :math/mul
-                                                     :args [-1.0
-                                                            {:expr :math/lerp
-                                                             :args [{:ref [:param :cost-tick-cp 0]}
-                                                                    {:ref [:param :cost-tick-cp 1]}
-                                                                    {:ref [:context :skill-exp]}]}]}}]}
+                          :entries [{:path [:resources :cp]
+                                     :mode :increment
+                                     :value {:expr :math/mul
+                                             :args [-1.0
+                                                    {:expr :math/lerp
+                                                     :args [{:ref [:param :cost-tick-cp 0]}
+                                                            {:ref [:param :cost-tick-cp 1]}
+                                                            {:ref [:context :skill-exp]}]}]}}]
+                          :body {:component :flow/sequence :steps []}
                           :on-success {:component :flow/finish :outcome :continue}
                           :on-fail {:component :flow/sequence
                                     :steps [{:component :effect/vfx
@@ -222,16 +216,13 @@
                    :args [{:ref [:context :hold-ticks]}
                           {:ref [:param :charge-min]}]}
             :then {:component :flow/sequence
-                   :steps [{:component :data/bind
-                            :to :overcharge-ratio
-                            :value {:expr :math/clamp
-                                    :args [{:expr :math/div
-                                            :args [{:expr :math/sub
-                                                    :args [{:ref [:context :hold-ticks]}
-                                                           {:ref [:param :charge-min]}]}
-                                                   {:ref [:param :charge-max]}]}
-                                           0.0 1.0]}}
-                           {:component :combat/area-damage
+                   :steps [{:component :combat/charged-area-damage
+                            :current-ticks {:ref [:context :hold-ticks]}
+                            :minimum-ticks {:ref [:param :charge-min]}
+                            :maximum-ticks {:ref [:param :charge-max]}
+                            :ratio-slot :overcharge-ratio
+                            :ratio-min 0.0
+                            :ratio-max 1.0
                             :center {:ref [:slot :aim-hit :position]}
                             :radius {:expr :math/lerp
                                      :args [{:ref [:param :aoe-radius 0]}

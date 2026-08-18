@@ -1,0 +1,19 @@
+{:schema-version 1
+ :kind :composite
+ :id :txn/guarded-owner-patch
+ :revision 1
+ :inputs
+ {:cost {:type :object}
+  :reservations {:type :object}
+  :entries {:type :object}
+  :body {:type :node}
+  :on-success {:type :node}
+  :on-fail {:type :node}}
+ :body
+ {:component :txn/atomic
+  :guards [{:component :guard/resource
+            :cost {:ref [:input :cost]}}]
+  :reservations {:ref [:input :reservations]}
+  :body {:ref [:input :body]}
+  :on-success {:ref [:input :on-success]}
+  :on-fail {:ref [:input :on-fail]}}}

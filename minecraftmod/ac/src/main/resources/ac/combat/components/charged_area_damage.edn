@@ -1,0 +1,40 @@
+{:schema-version 1
+ :kind :composite
+ :id :combat/charged-area-damage
+ :revision 1
+ :inputs
+ {:current-ticks {:type :object}
+  :minimum-ticks {:type :object}
+  :maximum-ticks {:type :object}
+  :ratio-slot {:type :keyword}
+  :ratio-min {:type :object}
+  :ratio-max {:type :object}
+  :center {:type :object}
+  :radius {:type :object}
+  :filter {:type :object}
+  :projection {:type :object}
+  :limit {:type :object}
+  :damage {:type :object}
+  :damage-type {:type :keyword}
+  :on-impact {:type :node}}
+ :body
+ {:component :flow/sequence
+  :steps [{:component :data/bind
+           :to {:ref [:input :ratio-slot]}
+           :value {:expr :math/clamp
+                   :args [{:expr :math/div
+                           :args [{:expr :math/sub
+                                   :args [{:ref [:input :current-ticks]}
+                                          {:ref [:input :minimum-ticks]}]}
+                                  {:ref [:input :maximum-ticks]}]}
+                          {:ref [:input :ratio-min]}
+                          {:ref [:input :ratio-max]}]}}
+          {:component :combat/area-damage
+           :center {:ref [:input :center]}
+           :radius {:ref [:input :radius]}
+           :filter {:ref [:input :filter]}
+           :projection {:ref [:input :projection]}
+           :limit {:ref [:input :limit]}
+           :damage {:ref [:input :damage]}
+           :damage-type {:ref [:input :damage-type]}
+           :on-impact {:ref [:input :on-impact]}}]}}
