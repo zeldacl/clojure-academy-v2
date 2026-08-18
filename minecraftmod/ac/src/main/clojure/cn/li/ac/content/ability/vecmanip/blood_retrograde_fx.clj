@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :blood-retrograde
-     :initial-state (fn [] {:effect-state {} :splashes {} :sprays {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :blood-retrograde/fx-start :mode :start}
 								:update {:topic :blood-retrograde/fx-update :mode :update
 												 :level-payload (fn [_ _ p]
