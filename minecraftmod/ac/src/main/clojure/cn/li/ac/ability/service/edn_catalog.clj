@@ -25,12 +25,19 @@
                     index (:external-triggers ability)))
           {} abilities))
 
+(defn- load-combat-document [resource]
+  (let [document (safe-edn/read-resource! resource)]
+    (if (= :ability (:kind document))
+      (skill-config/overlay-edn-parameters document)
+      document)))
+
 (defn initialize! []
   (let [migration (safe-edn/read-resource! "ac/ability/migration_status.edn")
         combat (combat-recipe/load-catalog!
                  {:manifest-resource "ac/combat/manifest.edn"
                   :composites-manifest-resource
-                  "ac/combat/components_manifest.edn"})
+                  "ac/combat/components_manifest.edn"
+                  :document-loader load-combat-document})
         vfx (vfx-recipe/load-catalog!
               {:manifest-resource "ac/vfx/manifest.edn"
                :composites-manifest-resource

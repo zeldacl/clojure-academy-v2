@@ -3,45 +3,25 @@
  :id :railgun
  :revision 2
  :activation :session
- :parameters {:beam-damage {:source :config
-                            :path [:railgun :beam.damage]
-                            :type [:tuple :double 2]
+ :parameters {:beam-damage {:type [:tuple :double 2]
                             :snapshot :activation}
-              :beam-radius {:source :config
-                            :path [:railgun :beam.radius]
-                            :type :double
+              :beam-radius {:type :double
                             :snapshot :activation}
-              :beam-query-radius {:source :config
-                                  :path [:railgun :beam.query-radius]
-                                  :type :double
+              :beam-query-radius {:type :double
                                   :snapshot :activation}
-              :beam-step {:source :config
-                          :path [:railgun :beam.step]
-                          :type :double
+              :beam-step {:type :double
                           :snapshot :activation}
-              :beam-block-energy {:source :config
-                                  :path [:railgun :beam.block-energy]
-                                  :type [:tuple :double 2]
+              :beam-block-energy {:type [:tuple :double 2]
                                   :snapshot :activation}
-              :beam-visual-distance {:source :config
-                                     :path [:railgun :beam.visual-distance]
-                                     :type :double
+              :beam-visual-distance {:type :double
                                      :snapshot :activation}
-              :max-distance {:source :config
-                             :path [:railgun :beam.max-distance]
-                             :type :double
+              :max-distance {:type :double
                              :snapshot :activation}
-              :charge-ticks {:source :config
-                             :path [:railgun :charge.item-charge-ticks]
-                             :type :long
+              :charge-ticks {:type :long
                              :snapshot :activation}
-              :cost-down-cp {:source :config
-                             :path [:railgun :cost.down.cp]
-                             :type [:tuple :double 2]
+              :cost-down-cp {:type [:tuple :double 2]
                              :snapshot :activation}
-              :cost-down-overload {:source :config
-                                   :path [:railgun :cost.down.overload]
-                                   :type [:tuple :double 2]
+              :cost-down-overload {:type [:tuple :double 2]
                                    :snapshot :activation}}
  :external-triggers [{:source :item/use
                       :filter {:item-ids ["ac:coin" "academy:coin"]

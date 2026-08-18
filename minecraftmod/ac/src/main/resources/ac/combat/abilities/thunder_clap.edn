@@ -4,28 +4,16 @@
  :revision 1
  :activation :session
  :parameters
- {:targeting-range {:source :config :path [:thunder-clap :targeting.range]
-                    :type :double :snapshot :activation}
-  :charge-min {:source :config :path [:thunder-clap :charge.min-ticks]
-               :type :long :snapshot :activation}
-  :charge-max {:source :config :path [:thunder-clap :charge.max-ticks]
-               :type :long :snapshot :activation}
-  :cost-down-overload {:source :config :path [:thunder-clap :cost.down.overload]
-                       :type [:tuple :double 2] :snapshot :activation}
-  :cost-tick-cp {:source :config :path [:thunder-clap :cost.tick.cp]
-                 :type [:tuple :double 2] :snapshot :activation}
-  :damage {:source :config :path [:thunder-clap :combat.damage]
-           :type [:tuple :double 2] :snapshot :activation}
-  :overcharge-multiplier {:source :config
-                          :path [:thunder-clap :combat.overcharge-multiplier]
-                          :type [:tuple :double 2] :snapshot :activation}
-  :aoe-radius {:source :config :path [:thunder-clap :combat.aoe-radius]
-               :type [:tuple :double 2] :snapshot :activation}
-  :cooldown-per-hold {:source :config
-                      :path [:thunder-clap :cooldown.ticks-per-hold]
-                      :type [:tuple :double 2] :snapshot :activation}
-  :exp-use {:source :config :path [:thunder-clap :progression.exp-use]
-            :type :double :snapshot :activation}}
+ {:targeting-range {:type :double :snapshot :activation}
+  :charge-min {:type :long :snapshot :activation}
+  :charge-max {:type :long :snapshot :activation}
+  :cost-down-overload {:type [:tuple :double 2] :snapshot :activation}
+  :cost-tick-cp {:type [:tuple :double 2] :snapshot :activation}
+  :damage {:type [:tuple :double 2] :snapshot :activation}
+  :overcharge-multiplier {:type [:tuple :double 2] :snapshot :activation}
+  :aoe-radius {:type [:tuple :double 2] :snapshot :activation}
+  :cooldown-per-hold {:type [:tuple :double 2] :snapshot :activation}
+  :exp-use {:type :double :snapshot :activation}}
  :external-triggers []
  :reactions []
  :vfx-contracts

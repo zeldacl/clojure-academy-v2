@@ -81,6 +81,89 @@
   [skill-id field-id]
   (keyword (str (name skill-id) "." (name field-id))))
 
+;; Combat EDN declares parameter names and types only.  These bindings live on
+;; the AC/config side so the data document never reaches backwards into the
+;; config registry.  The values are materialized once while the catalog is
+;; loaded, before combat-core compiles the program.
+(def edn-parameter-bindings
+  {:railgun
+   {:beam-damage :beam.damage
+    :beam-radius :beam.radius
+    :beam-query-radius :beam.query-radius
+    :beam-step :beam.step
+    :beam-block-energy :beam.block-energy
+    :beam-visual-distance :beam.visual-distance
+    :max-distance :beam.max-distance
+    :charge-ticks :charge.item-charge-ticks
+    :cost-down-cp :cost.down.cp
+    :cost-down-overload :cost.down.overload}
+   :arc-gen
+   {:damage :combat.damage
+    :max-distance :targeting.range
+    :ignite-probability :effect.ignite-probability
+    :fishing-probability :effect.fishing-probability
+    :fishing-exp-threshold :effect.fishing-exp-threshold
+    :creeper-charge-chance :effect.creeper-charge-chance
+    :cost-cp :cost.down.cp
+    :cost-overload :cost.down.overload
+    :cooldown-ticks :cooldown.ticks
+    :exp-entity :progression.exp-entity
+    :exp-block :progression.exp-block}
+   :thunder-clap
+   {:targeting-range :targeting.range
+    :charge-min :charge.min-ticks
+    :charge-max :charge.max-ticks
+    :cost-down-overload :cost.down.overload
+    :cost-tick-cp :cost.tick.cp
+    :damage :combat.damage
+    :overcharge-multiplier :combat.overcharge-multiplier
+    :aoe-radius :combat.aoe-radius
+    :cooldown-per-hold :cooldown.ticks-per-hold
+    :exp-use :progression.exp-use}})
+
+(declare tunable-double tunable-int tunable-double-list)
+
+(defn- read-edn-parameter
+  [skill-id parameter-id field-id type]
+  (case type
+    :double (tunable-double skill-id field-id)
+    :long (tunable-int skill-id field-id)
+    [:tuple :double 2] (tunable-double-list skill-id field-id)
+    (throw (ex-info "unsupported EDN parameter type"
+                    {:ability-id skill-id
+                     :parameter parameter-id
+                     :field-id field-id
+                     :type type}))))
+
+(defn overlay-edn-parameters
+  "Materialize config values into an ability before combat-core compilation.
+
+  EDN remains a pure declarative program: it has no config paths or config
+  readers.  A missing binding is rejected so a migrated ability cannot compile
+  with a silently invented parameter value."
+  [{:keys [id parameters] :as ability}]
+  (let [bindings (get edn-parameter-bindings id)]
+    (when-not (map? parameters)
+      (throw (ex-info "ability parameters must be a map" {:ability-id id})))
+    (when-not (map? bindings)
+      (throw (ex-info "missing EDN parameter bindings"
+                      {:ability-id id})))
+    (when-not (= (set (keys parameters)) (set (keys bindings)))
+      (throw (ex-info "EDN parameter binding mismatch"
+                      {:ability-id id
+                       :declared (set (keys parameters))
+                       :bound (set (keys bindings))})))
+    (assoc ability :parameters
+           (reduce-kv
+             (fn [result parameter-id declaration]
+               (let [field-id (get bindings parameter-id)
+                     type (:type declaration)]
+                 (assoc result parameter-id
+                        (assoc declaration
+                               :value (read-edn-parameter id parameter-id field-id type)))))
+             {}
+             parameters))))
+
 (defn- skill-field-default
   [skill-def {:keys [id spec-key default]}]
   (get skill-def (or spec-key id) default))

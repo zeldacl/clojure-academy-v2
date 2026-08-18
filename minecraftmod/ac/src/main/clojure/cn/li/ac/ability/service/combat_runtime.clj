@@ -1913,30 +1913,21 @@
       (some-> (resolve-slot owner intent) :id)))
 
 (defn- parameter-snapshot
-  "Resolve EDN parameter declarations once at activation time.
+  "Read immutable parameter values materialized during catalog loading.
 
-  The compiled core only sees this immutable map; it never reads live AC
-  configuration.  Unknown declarations are rejected rather than silently
-  falling back to a descriptor-shaped value that could make arithmetic
-  nondeterministic."
+  Combat-core never reads live AC configuration and the EDN document never
+  contains config paths. The catalog loader owns the one-way config overlay;
+  activation only snapshots those already-resolved values."
   [ability-id ability intent]
   (if (contains? intent :parameter-snapshot)
     (:parameter-snapshot intent)
     (into {}
-          (map (fn [[parameter-id {:keys [path type]}]]
-                 (let [field-id (last path)
-                       value (case type
-                               [:tuple :double 2]
-                               (skill-config/tunable-double-list ability-id field-id)
-                               :double
-                               (skill-config/tunable-double ability-id field-id)
-                               :long
-                               (skill-config/tunable-int ability-id field-id)
-                               (throw (ex-info "unsupported EDN parameter type"
-                                               {:ability-id ability-id
-                                                :parameter parameter-id
-                                                :type type})))]
-                   [parameter-id value]))
+          (map (fn [[parameter-id declaration]]
+                 (when-not (contains? declaration :value)
+                   (throw (ex-info "EDN parameter was not materialized"
+                                   {:ability-id ability-id
+                                    :parameter parameter-id})))
+                 [parameter-id (:value declaration)])
                (:parameters ability)))))
 
 (defn- activation-context

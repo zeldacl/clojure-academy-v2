@@ -14,6 +14,10 @@
     (is (not (catalog/available? :thunder-bolt)))
     (is (= :pending (catalog/migration-status :thunder-bolt)))
     (is (= :railgun (get-in state [:combat :abilities :railgun :id])))
+    (let [parameters (get-in state [:combat :abilities :railgun :parameters])]
+      (is (every? #(contains? % :value) (vals parameters)))
+      (is (not-any? #(contains? % :source) (vals parameters)))
+      (is (not-any? #(contains? % :path) (vals parameters))))
     (is (contains? (get-in state [:combat :composites]) :combat/impact-strike))
     (is (contains? (get-in state [:combat :composites]) :combat/area-damage))
     (is (contains? (get-in state [:combat :composites]) :combat/charged-area-damage))

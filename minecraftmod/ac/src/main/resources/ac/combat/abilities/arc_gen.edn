@@ -4,32 +4,17 @@
  :revision 1
  :activation :instant
  :parameters
- {:damage {:source :config :path [:arc-gen :combat.damage]
-           :type [:tuple :double 2] :snapshot :activation}
-  :max-distance {:source :config :path [:arc-gen :targeting.range]
-                 :type [:tuple :double 2] :snapshot :activation}
-  :ignite-probability {:source :config
-                       :path [:arc-gen :effect.ignite-probability]
-                       :type [:tuple :double 2] :snapshot :activation}
-  :fishing-probability {:source :config
-                        :path [:arc-gen :effect.fishing-probability]
-                        :type :double :snapshot :activation}
-  :fishing-exp-threshold {:source :config
-                          :path [:arc-gen :effect.fishing-exp-threshold]
-                          :type :double :snapshot :activation}
-  :creeper-charge-chance {:source :config
-                          :path [:arc-gen :effect.creeper-charge-chance]
-                          :type :double :snapshot :activation}
-  :cost-cp {:source :config :path [:arc-gen :cost.down.cp]
-            :type [:tuple :double 2] :snapshot :activation}
-  :cost-overload {:source :config :path [:arc-gen :cost.down.overload]
-                  :type [:tuple :double 2] :snapshot :activation}
-  :cooldown-ticks {:source :config :path [:arc-gen :cooldown.ticks]
-                   :type [:tuple :double 2] :snapshot :activation}
-  :exp-entity {:source :config :path [:arc-gen :progression.exp-entity]
-               :type [:tuple :double 2] :snapshot :activation}
-  :exp-block {:source :config :path [:arc-gen :progression.exp-block]
-              :type [:tuple :double 2] :snapshot :activation}}
+ {:damage {:type [:tuple :double 2] :snapshot :activation}
+  :max-distance {:type [:tuple :double 2] :snapshot :activation}
+  :ignite-probability {:type [:tuple :double 2] :snapshot :activation}
+  :fishing-probability {:type :double :snapshot :activation}
+  :fishing-exp-threshold {:type :double :snapshot :activation}
+  :creeper-charge-chance {:type :double :snapshot :activation}
+  :cost-cp {:type [:tuple :double 2] :snapshot :activation}
+  :cost-overload {:type [:tuple :double 2] :snapshot :activation}
+  :cooldown-ticks {:type [:tuple :double 2] :snapshot :activation}
+  :exp-entity {:type [:tuple :double 2] :snapshot :activation}
+  :exp-block {:type [:tuple :double 2] :snapshot :activation}}
  :external-triggers []
  :reactions []
  :vfx-contracts

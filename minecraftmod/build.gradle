@@ -1984,6 +1984,28 @@ tasks.register("verifyEdnNodeCoverage") {
     }
 }
 
+tasks.register("verifyEdnNoConfigBackReferences") {
+    group = "verification"
+    description = "Require migrated skill EDN to be config-independent declarations."
+    doLast {
+        def roots = [file("ac/src/main/resources/ac/combat/abilities"),
+                     file("ac/src/main/resources/ac/vfx/effects")]
+        def violations = []
+        roots.each { root ->
+            fileTree(root).matching { include "*.edn" }.files.each { source ->
+                def body = source.text
+                if (body =~ /:source\s+:config|:path\s+\[:(?:railgun|arc-gen|thunder-clap)\b/) {
+                    violations << source
+                }
+            }
+        }
+        if (!violations.isEmpty()) {
+            throw new GradleException("Skill/effect EDN must not read config paths: ${violations.join(', ')}")
+        }
+        logger.lifecycle("[verifyEdnNoConfigBackReferences] ok")
+    }
+}
+
 tasks.register("verifyCoreNoReflectionOrBoxing") {
     group = "verification"
     description = "Run the strict Clojure checks for effect-runtime namespaces."
@@ -2008,6 +2030,7 @@ tasks.named("lintClojureNative").configure {
     dependsOn tasks.named("verifyEffectRuntimeJavaCarriers")
     dependsOn tasks.named("verifyCoreNoSkillKnowledge")
     dependsOn tasks.named("verifyEdnNodeCoverage")
+    dependsOn tasks.named("verifyEdnNoConfigBackReferences")
 }
 
 gradle.projectsEvaluated {
