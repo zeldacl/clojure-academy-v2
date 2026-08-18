@@ -17,10 +17,10 @@
 
 (use-fixtures :each reset-discovery-state!)
 
-(deftest fallback-electromaster-fx-includes-arc-gen-fx-test
+(deftest fallback-electromaster-fx-excludes-migrated-arc-gen-test
   (with-redefs [scanner/discover-ability-providers (fn [] [])]
     (let [fx-ns (set (discovery/discovered-fx-namespaces))]
-      (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx))
+      (is (not (contains? fx-ns 'cn.li.ac.content.ability.electromaster.arc-gen-fx)))
       (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.mag-manip-fx))
       (is (contains? fx-ns 'cn.li.ac.content.ability.electromaster.body-intensify-fx)))))
 

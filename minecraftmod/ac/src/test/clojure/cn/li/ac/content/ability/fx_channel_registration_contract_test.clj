@@ -3,8 +3,7 @@
             [cn.li.ac.ability.client.fx-spec :as fx-spec]))
 
 (def ^:private fx-init-symbols
-  '[cn.li.ac.content.ability.electromaster.arc-gen-fx/init!
-    cn.li.ac.content.ability.electromaster.body-intensify-fx/init!
+  '[cn.li.ac.content.ability.electromaster.body-intensify-fx/init!
     cn.li.ac.content.ability.electromaster.current-charging-fx/init!
     cn.li.ac.content.ability.electromaster.mag-manip-fx/init!
     cn.li.ac.content.ability.electromaster.mag-movement-fx/init!
@@ -40,7 +39,7 @@
     cn.li.ac.content.ability.vecmanip.vec-reflection-fx/init!])
 
 (deftest all-content-ability-fx-inits-register-via-fx-spec-test
-  (is (= 35 (count fx-init-symbols)))
+  (is (= 34 (count fx-init-symbols)))
   (doseq [init-sym fx-init-symbols]
     (let [register-calls* (atom [])]
       (with-redefs [fx-spec/register! (fn [spec] (swap! register-calls* conj spec))]
