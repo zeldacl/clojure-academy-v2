@@ -31,6 +31,8 @@
 | `b284185a2` | 删除死代码 channel/topic 总线（vfx-core `register-channel!`/`dispatch-channel!`/`freeze-channels!` 及封装），E 类 P1.3 完成，见下方 E 节 |
 | `c38f125bb` | `presentation-compiler/render.clj` 按 `(template, width, height)` 缓存 layout 结果，绑定值变化不再触发重新布局，F 类对症修复，见下方 F 节 |
 | `61b87f4f1` | 删除确认死代码 `core/tree.clj`/`core/dirty.clj`/`frame.clj` 的 `frame-graph`/`host.clj` 的 tree 封装，F 类死代码清理完成，见下方 F 节 |
+| `07229a522` | P1.1/P1.2 迁移 Batch 0：`:lifecycle` 分派基础设施（vfx-core + `effect_controller.clj`），零行为变化，见下方 E 节 |
+| `e7c7113e6` | P1.1/P1.2 迁移 Batch 1：`vec_deviation`/`mag_movement`/`light_shield` 3/26 个效果迁移到真实 per-instance 状态，新增 vfx-core `:destroy` 钩子，见下方 E 节 |
 
 ## 分类清单
 
@@ -127,7 +129,7 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 有意推迟）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，3/26 效果已迁移）
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
@@ -137,7 +139,15 @@
 
 **验证时顺带发现一个无关的既有问题**：`cn.li.ac.ability.client.fx-registry` 被 39 个测试文件 `:require`，但整个仓库找不到这个命名空间的主源文件——`:ac:runAcClojureTestsFast` 一上来就在第一个测试命名空间加载时报 `FileNotFoundException`。核实过这个失败在本次改动前后完全一样，不是这次改动引入的，和这里删除的 channel 总线也没有关系（`fx-registry` 是另一层更上层的、从未见过主实现的注册表抽象）。没有深入排查——不在这次任务范围内，但因为同属客户端 FX 区域，留给下一个接手 E 类剩余部分的人。
 
-**仍然推迟（P1.1 生命周期形态 + P1.2 拆真正的旁路）**：需要设计/验证输入，不是纯代码填空——工作量、风险、"只能进游戏验证"三条都成立，已与用户确认单独排期，不和本工单其余条目混在一个提交序列里。
+**2026-08-18 追加会话：与用户确认后启动 P1.1+P1.2 全部 26 个效果的迁移**，分批执行、每批独立验证+提交（详细设计见 `C:\Users\lxy\.claude\plans\ui-presentation-vfx-core-combat-core-ps-fancy-panda.md`，本仓库外的计划文档）。核心机制：`register-effect!`（vfx-core `runtime.clj` 与 `effect_controller.clj` 两处）新增 `:lifecycle`（`:transient`/`:persistent`/`:singleton`，缺省 `:singleton` 保持旧行为不变），`dispatch-signal!` 按声明的 lifecycle 分派——`:singleton` 效果继续走旧的聚合实例旁路，`:transient` 效果改走 vfx-core 真正的 `core/dispatch-signal!`（`instance-key`/`event-seq`/tombstone 全部生效）。这个设计让 26 个效果可以逐个独立切换，不需要一次性 big-bang。
+
+**已完成（`07229a522`）——Batch 0，基础设施**：vfx-core `register-effect!` 加 `:lifecycle` 校验；`effect_controller.clj` 的 `register-effect!`/`dispatch-signal!` 按上述设计改写；审计过全部 `register-effect!`/`fx-spec/register!` 调用点，确认没有遗漏非战斗类效果。零行为变化（这批不改任何 impl 文件的渲染逻辑），`:vfx-core:runVfxClojureTests`/`:ac:checkClojure` 通过。
+
+**已完成（`e7c7113e6`）——Batch 1，3/26 个效果（`vec_deviation`/`mag_movement`/`light_shield`）**：每个效果的 `initial-state` 从旧的 `{owner-key -> state}` 聚合 map 拍平成单个 vfx-core 实例自己的一份状态（owner 隔离改由实例身份本身提供，不再靠手搓 owner-key map）；`tick-state-fn` 返回 `nil` 让实例自然结束（vfx-core `tick!` 的既有约定），取代旧的 `effect-clear-owner!` 手动摘除 owner-key 的做法。**新增 vfx-core 引擎能力**：descriptor 可选的 `:destroy` 钩子（`run-destroy-hook!`，`vfx-core/runtime.clj`），在实例被销毁的全部路径（显式 `:destroy` 信号、`clear-owner!`、`clear-world!`、`tick!` 里 `:update` 自然返回 `nil` 结束）统一触发一次；`arc_beam.clj` 新增 `effect-destroy!`/`dispatch-destroy!`，镜像既有 `effect-clear-owner!`/`dispatch-clear-owner!` 的 multimethod-dispatch 写法（含 `:default` 空实现），`build-spec` 现在无条件挂 `:destroy-fn`。这顺带修好了一个真实的既有生产缺陷：`effect_controller.clj` 自己的 `clear-owner!` 从没有任何调用方，真正生效的断线清理路径（`combat_vfx_adapter.clj` → vfx-core 自己的 `clear-owner!`）对聚合实例（`:owner ::aggregate`）在 owner-index 里天生找不到对应条目——`mag_movement`/`light_shield` 的循环音效过去在玩家断线后永远不会停；迁移到 `:transient` 之后实例按真实 owner 索引，这条路径现在能正确找到并销毁实例、触发 `:destroy-fn` 停音效。
+
+调查中发现 `light_shield` 的既有缺口比预想更深：不只是事件名对不上（`combat_content.clj` 实际发 `:active` 不是 `:tick`），`:active` 事件的 `:params` 从来只带 `{:radius 3.0}`，从没带过 `:pos`——原本带 `:pos` 的路径是已删除的死 channel/topic 总线（`light_shield_fx.clj` 的 `:channels`），从没在存活的 `:vfx` 信号路径上补过等价物。这是 `C-2.3`"仅 touch-damage 部分的保守实现"里已知的既有缺口（护盾的视觉/音效从没真正接完）——本次迁移只做了状态形状的拍平，原样保留了 `:start`/`:tick` 两个从未真正触发过的死分支及其行为，没有尝试"顺手"把它们接活，因为要接活需要一个这条管线现在根本没有的实时位置数据源，是一个真正的设计任务，不是生命周期拍平能顺带解决的。
+
+**待办（Batch 2-7，23/26 个效果）**：`mark_teleport`/`penetrate_teleport`/`flashing`/`groundshock`（双轨道）/`electron_bomb`/`flesh_ripping`/`vec_accel`（Batch 2）；`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport`（Batch 3）；`directed_shock`/`mag_manip`（Batch 4，hand-only）；`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap`（Batch 5，高复杂度）；`plasma_cannon`/`current_charging`（Batch 6，最高复杂度）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位并完成；死代码已删；P2.6 未动）
 
