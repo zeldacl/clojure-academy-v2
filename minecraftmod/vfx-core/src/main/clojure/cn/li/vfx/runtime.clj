@@ -45,7 +45,19 @@
                              (let [next (disj (or ids #{}) id)]
                                (when (seq next) next))))))
 
-(defn register-effect! [runtime {:keys [id init update sample bounds priority] :as descriptor}]
+(def lifecycles
+  "Valid values for a descriptor's :lifecycle. :transient -- one instance per
+   activation, spawned/destroyed via dispatch-signal!'s stable-key path
+   (combat casts). :persistent -- keyed by world-id + position/BE identity,
+   ends via destroy!/clear-world! (machine/block-attached effects). :singleton
+   -- one instance per effect-id via ensure-instance!/instance-for-effect, no
+   owner dimension (the effect_controller.clj aggregate-instance escape
+   hatch; also the correct shape for true per-game-instance effects like
+   camera/FOV)."
+  #{:transient :persistent :singleton})
+
+(defn register-effect! [runtime {:keys [id init update sample bounds priority lifecycle]
+                                  :or {lifecycle :singleton} :as descriptor}]
   (when @(:registry-frozen? runtime)
     (throw (ex-info "VFX registry is frozen" {:id id})))
   (when-not (keyword? id)
@@ -55,7 +67,10 @@
   (doseq [[k f] [[:init init] [:update update] [:sample sample] [:bounds bounds]]]
     (when-not (ifn? f)
       (throw (ex-info "VFX effect callback is required" {:id id :callback k}))))
-  (swap! (:registry runtime) assoc id (assoc descriptor :priority (or priority :normal)))
+  (when-not (contains? lifecycles lifecycle)
+    (throw (ex-info "unknown VFX effect lifecycle" {:id id :lifecycle lifecycle})))
+  (swap! (:registry runtime) assoc id (assoc descriptor :priority (or priority :normal)
+                                              :lifecycle lifecycle))
   id)
 
 (defn freeze-registry! [runtime]
@@ -64,6 +79,11 @@
 
 (defn registered-effects [runtime]
   (set (keys @(:registry runtime))))
+
+(defn effect-lifecycle
+  "The declared :lifecycle of a registered effect, or nil if unregistered."
+  [runtime effect-id]
+  (get-in @(:registry runtime) [effect-id :lifecycle]))
 
 (defn- descriptor [runtime effect-id]
   (or (get @(:registry runtime) effect-id)

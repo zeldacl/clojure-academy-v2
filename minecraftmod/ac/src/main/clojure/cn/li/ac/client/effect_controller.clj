@@ -122,17 +122,26 @@
 
 (defn register-effect!
   "Register one descriptor.  A single Runtime instance owns both level and
-   first-person state so a skill can never advance twice in one tick."
-  [effect-id {:keys [level hand] :as descriptor-map}]
+   first-person state so a skill can never advance twice in one tick.
+
+   :lifecycle defaults to :singleton (the aggregate-instance shape every
+   effect used unconditionally before per-effect migration started -- see
+   docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section). Only :singleton
+   effects get an aggregate instance eagerly created here; :transient
+   effects spawn/destroy their own real per-owner vfx-core instances via
+   dispatch-signal! below, on demand."
+  [effect-id {:keys [level hand lifecycle] :or {lifecycle :singleton} :as descriptor-map}]
   (when @frozen?*
     (throw (ex-info "VFX registry is frozen" {:effect-id effect-id})))
   (swap! handlers* update effect-id
          (fn [current]
            {:level (or level (:level current))
-            :hand (or hand (:hand current))}))
+            :hand (or hand (:hand current))
+            :lifecycle lifecycle}))
   (let [rt (runtime)]
-    (when-not (core/instance-for-effect rt effect-id)
-      (core/register-effect! rt (descriptor effect-id))
+    (when-not (contains? (core/registered-effects rt) effect-id)
+      (core/register-effect! rt (assoc (descriptor effect-id) :lifecycle lifecycle)))
+    (when (= :singleton lifecycle)
       (core/ensure-instance! rt effect-id {:owner ::aggregate})))
   nil)
 
@@ -227,37 +236,48 @@
 (defonce ^:private unmapped-signal-count* (atom 0))
 
 (defn dispatch-signal!
-  "Apply one combat VFX signal to the shared aggregate instance for its
-   effect-id, bypassing vfx-core's stable-key spawn/event-seq/tombstone path
-   for :spawn/:signal.
+  "Route one combat VFX signal to its effect's registered vfx-core instance,
+   branching on the effect's declared :lifecycle (register-effect! above).
 
-   Combat Core's own instance-key is per-owner-per-activation ([:combat
-   owner activation-key effect-id] — see combat-core/runtime.clj's :vfx op),
-   which is right for COMBAT's OWN idempotency, but content's per-owner
-   state (arc_beam.clj's owner-keyed maps inside a single effect's state)
-   lives in exactly ONE shared vfx-core instance per effect-id (see
-   register-effect! below). Routing every signal through vfx-core's own
-   dispatch-signal! would either (a) spawn a second, duplicate instance per
-   activation that the content-facing snapshot/update API can never resolve
-   back to (instance-for-effect just returns whichever instance the hash
-   map iterates to first), or, if remapped onto one shared instance-key to
+   :singleton effects (not yet migrated to real per-owner instances -- see
+   docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section) still bypass
+   vfx-core's stable-key spawn/event-seq/tombstone path for :spawn/:signal,
+   going straight into the one shared aggregate instance: Combat Core's own
+   instance-key is per-owner-per-activation ([:combat owner activation-key
+   effect-id] — see combat-core/runtime.clj's :vfx op), which is right for
+   COMBAT's OWN idempotency, but a :singleton effect's per-owner state
+   (arc_beam.clj's owner-keyed maps inside a single effect's state) lives in
+   exactly ONE shared vfx-core instance per effect-id. Routing every signal
+   for a still-:singleton effect through vfx-core's own dispatch-signal!
+   would either (a) spawn a second, duplicate instance per activation that
+   the content-facing snapshot/update API can never resolve back to
+   (instance-for-effect just returns whichever instance the hash map
+   iterates to first), or, if remapped onto one shared instance-key to
    avoid that, (b) collide every player's independent per-session
-   event-seq counter onto one shared \"current\" value, silently dropping
-   a second player's cast as stale.
+   event-seq counter onto one shared \"current\" value, silently dropping a
+   second player's cast as stale. MSG-COMBAT-RESULT (the only source of
+   these signals) is a reliable, ordered push, not a lossy/replayable
+   transport, so re-deriving a second idempotency layer here isn't needed
+   for :singleton effects: :spawn/:signal go straight to the existing
+   aggregate instance's own signal queue every time.
 
-   MSG-COMBAT-RESULT (the only source of these signals) is a reliable,
-   ordered push, not a lossy/replayable transport, so re-deriving a second
-   idempotency layer here isn't needed: :spawn/:signal go straight to the
-   existing aggregate instance's own signal queue every time."
+   :transient effects (migrated) use vfx-core's real dispatch-signal!
+   unconditionally, passing the full signal straight through -- the
+   per-owner-per-activation :instance-key combat-core already stamps on
+   every signal is exactly the stable key vfx-core's own spawn/event-seq/
+   tombstone rules are built to consume; no bypass needed."
   [signal]
-  (let [signal (contract/signal signal)]
-    (case (:op signal)
-      (:spawn :signal)
-      (if-let [instance-id (core/instance-for-effect (runtime) (:effect-id signal))]
-        (core/signal! (runtime) {:instance instance-id} (:event signal) (:params signal))
-        (do (swap! unmapped-signal-count* inc)
-            (log/warn "VFX signal for an unregistered effect-id" {:effect-id (:effect-id signal)})))
-      (core/dispatch-signal! (runtime) signal)))
+  (let [signal (contract/signal signal)
+        lifecycle (core/effect-lifecycle (runtime) (:effect-id signal))]
+    (if (= :transient lifecycle)
+      (core/dispatch-signal! (runtime) signal)
+      (case (:op signal)
+        (:spawn :signal)
+        (if-let [instance-id (core/instance-for-effect (runtime) (:effect-id signal))]
+          (core/signal! (runtime) {:instance instance-id} (:event signal) (:params signal))
+          (do (swap! unmapped-signal-count* inc)
+              (log/warn "VFX signal for an unregistered effect-id" {:effect-id (:effect-id signal)})))
+        (core/dispatch-signal! (runtime) signal))))
   nil)
 
 (defn unmapped-signal-count [] @unmapped-signal-count*)
