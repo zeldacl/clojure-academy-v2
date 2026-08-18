@@ -35,6 +35,7 @@
 | `e7c7113e6` | P1.1/P1.2 迁移 Batch 1：`vec_deviation`/`mag_movement`/`light_shield` 3/26 个效果迁移到真实 per-instance 状态，新增 vfx-core `:destroy` 钩子，见下方 E 节 |
 | `a019151cd` | 修复 effect_controller.clj `:transient` 实例从不自然结束的 bug（影响已迁移的 Batch 0/1），见下方 E 节 |
 | `6148ef128` | P1.1/P1.2 迁移 Batch 2：`mark_teleport`/`penetrate_teleport`/`flashing`/`groundshock`/`electron_bomb`/`flesh_ripping`/`vec_accel` 7/26 个效果，发现其中 6 个的触发事件与 combat_content.clj 实际 wiring 存在系统性错位，见下方 E 节 |
+| `592e904ea` | P1.1/P1.2 迁移 Batch 3：`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport` 5/26 个效果，触发事件错位问题在这批同样复现（`ray_barrage` 甚至是这次迁移开始前就已经死的），见下方 E 节 |
 
 ## 分类清单
 
@@ -131,7 +132,7 @@
 
 **方法论备注**：这是本轮第四次"需要设计判断"被 git 历史推翻（mag-manip、groundshock、shift-teleport、这次的 current-charging/mine-detect）。到这个次数，"需要设计判断"基本可以当作"没查过删除历史"的同义词了。
 
-### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，5/26 效果已迁移）
+### E. vfx-core 通用化剩余部分（P1.1-P1.3；P1.3 已完成，P1.1/P1.2 进行中，10/26 效果已迁移）
 
 不是缺陷修复，是架构迁移——[VFX_CORE.md](VFX_CORE.md) 里已经记录了根因：vfx-core 按「一次施法 = 一个 instance」设计，AC 内容按「一个 effect-id = 一个 aggregate 实例，owner 维度塞在实例内部 map 里」写，`ac/client/effect_controller.clj` 的 `dispatch-signal!` 直接绕开 vfx-core 自己的 `instance-key`/`event-seq`/tombstone 分派机制。
 
@@ -157,7 +158,9 @@
 
 **重大发现（对着 `combat_content.clj` 逐个核对 7 个效果的真实触发事件，跟 Batch 1 揪出 light_shield 的手法一样，这次是执行前系统性做了一遍）**：7 个效果里 6 个的 case 分支在生产环境里大部分或全部是死的——不是这次迁移引入的，是 `combat_content.clj` 对这些技能的 `:vfx` 步骤实际只发送一个终点事件（`:release`、`:perform`，或 `:spawn`）、带着极少的 `:params`，从来不发这些文件当初设计时假设的 `:start`/`:update` 连续追踪序列，很多时候连那一个真正会触发的事件都缺目标/位置数据。具体：`mark_teleport`/`penetrate_teleport`/`flashing` 三个（A 类传送技能共享的触发形状）只发一次 `:release`，`:params` 只有一个 `:max-range`/`:blink-distance` 数字，标记人形渲染整条链路是死的；`vec_accel`/`flesh_ripping` 只发一次 `:perform`，参数同样不含渲染需要的字段（`vec_accel` 的弹道线渲染死，`flesh_ripping` 的准星标记死，虽然音效/粒子的触发条件本身也读不到数据所以同样不响）；`electron_bomb` 的 `:spawn` 事件是活的（放一个施法音效），但它的 `:beam`（结算射线）走的是另一条更老的传输——`delayed_projectiles.clj` 的 `push-channel-to-player!`，发的是真实的 `MSG-CTX-CHANNEL` 网络包，跟 E 类 P1.3 删掉的 vfx-core 内部 channel/topic 总线是两回事——但翻遍整个仓库找不到任何客户端代码接收这个消息 id，所以同样到不了客户端；`groundshock` 是唯一有一部分真正工作的（`:hand` 轨道的第一人称后坐力/相机震动，靠 `update`-on-missing-key 的自愈写法，`:perform` 单独一个事件就能正确工作，不需要这次迁移改），`:level` 轨道的方块碎裂粒子理论上会响但 `:affected-blocks` 参数从来没被真正传过，所以视觉上也是空的。全部按 light_shield 的先例处理：只拍平状态形状，case 分支原样保留（包括死分支），在文件顶部写清楚哪些事件/字段今天真的会到、哪些不会，不在这次迁移里顺手"修好"——这类修复需要改 `combat_content.clj` 的 `:vfx` 步骤定义（把目标/位置数据接进 `:params`），是一个真正的设计任务，超出"把 owner-map 拍平成 per-instance 状态"这一件事的范围。
 
-**待办（Batch 3-7，19/26 个效果）**：`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport`（Batch 3——鉴于 Batch 2 的发现，这 5 个大概率也要先对着 `combat_content.clj` 核实一遍真实触发事件，不能假设 impl 文件的 case 分支还对得上）；`directed_shock`/`mag_manip`（Batch 4，hand-only）；`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap`（Batch 5，高复杂度）；`plasma_cannon`/`current_charging`（Batch 6，最高复杂度）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
+**已完成（`592e904ea`）——Batch 3，5/26 个效果（`blood_retrograde`/`ray_barrage`/`directed_blastwave`/`threatening_teleport`/`shift_teleport`）**：执行前先对着 `combat_content.clj` 核实了全部 5 个效果的真实触发事件（Batch 2 的发现提示这会复现，果然复现了）——`threatening_teleport`/`shift_teleport` 只发一次 `:release`（A 类传送技能共享的触发形状，跟 `mark_teleport`/`penetrate_teleport`/`flashing` 一样），两个文件的 case 分支都是按 `:start`/`:update`/`:perform`/`:end` 写的，没有 `:release` 分支，全部落到默认空分支，标记框和传送尾迹粒子在生产环境里从没渲染过。`blood_retrograde`/`directed_blastwave` 只发一次 `:perform`，但 `:params` 里没有各自 `:perform` 分支需要读的字段——`blood_retrograde` 的音效/溅血/喷溅队列因此是空操作，但 `:active?` 还是会被设成 `true` 且从不复位（`:end` 不发），导致 `build-plan` 的步行速度覆盖从第一次施法后**永久生效**（原样保留，写进了代码注释，没有改）；`directed_blastwave` 的音效仍然会无条件播放，但因为 `:pos` 恒为 nil，声音的坐标钉死在世界原点，冲击波纹和蓄力光环视觉都不渲染。`ray_barrage` 是这批里唯一一个"这次迁移之前就已经死了"的样本：它的 case 分支键是 `:preray`/`:barrage`，但 `combat_content.clj` 只发 `:perform`，两个分支都对不上——这个错位比 P1.1/P1.2 这次会话本身还要早。全部按既有先例处理：只拍平状态形状，case 分支原样保留，每个文件顶部写清楚哪些事件/字段今天真的会到。`directed_blastwave` 的 build-plan 保留了 mag_movement 式的"只画自己这份实例"过滤，但这次审查时改正了一处翻译问题：过滤只应该套在蓄力光环上（需要本地 `hand-center-pos`），冲击波纹本身是世界坐标、所有玩家都该看到，不应该被这个过滤一起挡掉。
+
+**待办（Batch 4-7，16/26 个效果）**：`directed_shock`/`mag_manip`（Batch 4，hand-only，鉴于连续两批都发现触发事件对不上，这两个文件开始前同样要先核实）；`meltdowner`/`mine_detect`/`jet_engine`/`railgun_shot`/`thunder_clap`（Batch 5，高复杂度）；`plasma_cannon`/`current_charging`（Batch 6，最高复杂度）；收尾审计（Batch 7）。`rad_intensify_mark`/`teleporter_crit` 的触发机制完全依赖已删除的死 channel 总线，在能进游戏验证或设计出新触发机制之前，迁移它们没有意义——已从 Batch 1 移出，未排期。
 
 ### F. presentation-core 剩余部分（P2.1/P2.2 有意重新定位并完成；死代码已删；P2.6 未动）
 
