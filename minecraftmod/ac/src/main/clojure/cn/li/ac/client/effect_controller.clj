@@ -94,7 +94,7 @@
         (catch Throwable throwable
           (log/error "VFX hand sample failed" throwable))))))
 
-(defn- descriptor [effect-id]
+(defn- descriptor [effect-id lifecycle]
   {:id effect-id
    :priority :normal
    :init (fn [_]
@@ -104,12 +104,34 @@
    :update (fn [state context]
              (let [h (effect-handlers effect-id)
                    owner-key (:owner (:instance context))
-                   events (:events context)]
-               (-> state
-                   (apply-events :level (:level h) owner-key events)
-                   (apply-events :hand (:hand h) owner-key events)
-                   (apply-tick :level (:level h))
-                   (apply-tick :hand (:hand h)))))
+                   events (:events context)
+                   next-state (-> state
+                                  (apply-events :level (:level h) owner-key events)
+                                  (apply-events :hand (:hand h) owner-key events)
+                                  (apply-tick :level (:level h))
+                                  (apply-tick :hand (:hand h)))]
+               ;; :transient effects get one real vfx-core instance per
+               ;; activation (register-effect!'s docstring below); unlike
+               ;; :singleton's one eternal aggregate instance, each of these
+               ;; has to actually be able to end. vfx-core's tick! only
+               ;; tears an instance down when THIS :update function returns
+               ;; nil for the WHOLE instance (see runtime.clj's tick-instance
+               ;; docstring) -- apply-tick/apply-events above only ever
+               ;; dissoc a :level/:hand KEY out of this map when a per-track
+               ;; tick-state-fn returns nil, never the map itself, so
+               ;; next-state is always a (possibly empty) map and this
+               ;; function would otherwise never signal a natural end. A
+               ;; :transient instance whose last live track just went nil
+               ;; would then sit forever as {} or {:hand nil}, still ticked
+               ;; and sampled every frame for nothing, until the owner
+               ;; disconnects -- one leaked instance per past activation,
+               ;; bounded only by create-runtime's :max-instances (silent
+               ;; VFX spawn failures once every past cast has piled one up).
+               (if (and (= :transient lifecycle)
+                        (nil? (:level next-state))
+                        (nil? (:hand next-state)))
+                 nil
+                 next-state)))
    :bounds (fn [_ _] nil)
    :sample (fn [{:keys [sink] :as context}]
              (let [state (:state (:instance context))
@@ -153,7 +175,7 @@
             :lifecycle lifecycle}))
   (let [rt (runtime)]
     (when-not (contains? (core/registered-effects rt) effect-id)
-      (core/register-effect! rt (assoc (descriptor effect-id) :lifecycle lifecycle)))
+      (core/register-effect! rt (assoc (descriptor effect-id lifecycle) :lifecycle lifecycle)))
     (when (= :singleton lifecycle)
       (core/ensure-instance! rt effect-id {:owner ::aggregate})))
   nil)
