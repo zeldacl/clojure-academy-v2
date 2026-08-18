@@ -16,7 +16,6 @@
   []
   (max 1 (int (or (skill-config/tunable-int :current-charging :charge.visual-max-ticks) 40))))
 
-
 (def ^:private default-state
   {:active? false
    :blending? false
@@ -37,36 +36,6 @@
   :ending-at-ms 0
   :updated-at-ms 0})
 
-(defn- current-store []
-  (let [store (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :current-charging)]
-    (if (contains? store :states)
-      store
-      {:states {}})))
-
-(defn- state-for-selector [store selector]
-  (let [states (:states store)]
-    (or (cond
-          (vector? selector)
-          (get states selector)
-
-          (some? selector)
-          (some (fn [[_ st]]
-                  (when (and (:source-player-id st)
-                             (= (str selector) (str (:source-player-id st))))
-                    st))
-                states)
-
-          :else
-          (or (some (fn [[_ st]]
-                      (when (:active? st) st))
-                    states)
-              (some (fn [[_ st]]
-                      (when (:blending? st) st))
-                    states)))
-        default-state)))
-
-
-
 (defn- now-ms []
   ;; Use game-time so charge animations pause with the game.
   (client-bridge/game-time-ms))
@@ -76,132 +45,138 @@
         ratio (/ (double ticks) (double (visual-max-ticks)))]
     (max 0.0 (min 1.0 ratio))))
 
-(defn- resolve-owner-key [ctx-id _channel explicit-owner-key payload]
-  (or explicit-owner-key
-      (when-let [source-player-id (:source-player-id payload)]
-        [:source-player source-player-id])
-      [:ctx ctx-id]))
-
 (def ^:private charge-loop-sound (modid/namespaced-path "em.charge_loop"))
 
-(defn- base-meta [owner-key ctx-id channel payload]
-  {:owner-key owner-key
-   :ctx-id ctx-id
+(defn- base-meta [ctx-id channel payload]
+  {:ctx-id ctx-id
    :channel channel
    :source-player-id (:source-player-id payload)
    :world-id (:world-id payload)})
 
-;; Runs synchronously inside the :current-charging fx-spec's dispatch
-;; doseq (fx_spec.clj channel-handler), which processes :targets in
-;; declared order ([:hand :level] here) with no per-target exception
-;; isolation — an uncaught throw here would abort that doseq before the
-;; :level track (the one build-plan reads for the beam/ring) ever gets its
-;; state update for this tick. Client-effect side calls must never be
-;; allowed to break the render-state pipeline, so every path is guarded.
-
-(defn- start-loop-sound-at! [owner-key pos]
-  (try
-    (let [{:keys [x y z]} (or pos {:x 0.0 :y 0.0 :z 0.0})]
-      (client-bridge/run-client-effect! :mcmod/start-loop-sound
-        {:key (str owner-key)
-         :sound-id charge-loop-sound
-         :volume 0.3
-         :pitch 1.0
-         :x (double (or x 0.0))
-         :y (double (or y 0.0))
-         :z (double (or z 0.0))}))
-    (catch Throwable e
-      (log/warn "current-charging: start-loop-sound-at! failed" e))))
-
-(defn- update-loop-sound-position! [owner-key pos]
-  (when pos
-    (try
-      (let [{:keys [x y z]} pos]
-        (client-bridge/run-client-effect! :mcmod/update-loop-sound-position
-          {:key (str owner-key)
-           :x (double (or x 0.0))
-           :y (double (or y 0.0))
-           :z (double (or z 0.0))}))
-      (catch Throwable e
-        (log/warn "current-charging: update-loop-sound-position! failed" e)))))
-
-(defn- stop-loop-sound! [owner-key]
-  (try
-    (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str owner-key)})
-    (catch Throwable e
-      (log/warn "current-charging: stop-loop-sound! failed" e))))
-
-(defn- enqueue-state! [store ctx-id channel owner-key payload]
-  (let [store* (if (contains? (or store {}) :states)
-                 (or store {:states {}})
-                 {:states {}})
-        {:keys [mode] :as payload*} (or payload {})
-        owner-key* (resolve-owner-key ctx-id channel owner-key payload*)]
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :states owner-map
+;; wrapping. `owner-key` below is no longer a synthetic key this file
+;; invents (resolve-owner-key, since deleted, used to build one out of
+;; :source-player-id/ctx-id for exactly this purpose) -- it is now the real
+;; owner descriptor.clj's :update passes through from vfx-core's own
+;; instance.
+;;
+;; The try/catch wrapping below no longer guards what its comment used to
+;; say: that reasoning was about fx_spec.clj's old :channels doseq handler
+;; running multiple :targets in one un-isolated loop, and that handler was
+;; deleted as dead code in E section P1.3 -- nothing here runs inside it
+;; any more. The guards stay for a different, and for :transient effects
+;; arguably bigger, reason: an uncaught throw from enqueue-state! propagates
+;; up through descriptor's :update and into vfx-core's tick-instance, which
+;; catches it, but tick!'s handling of a caught throw (:fault) is the SAME
+;; index cleanup as a normal ::removed instance (see runtime.clj's tick!) --
+;; an uncaught exception here would silently destroy this entire vfx-core
+;; instance, not just skip one tick's worth of one track's update the way
+;; the old shared-doseq framing implied. Client-effect side calls must
+;; never be allowed to take the instance down with them, so every path
+;; stays guarded.
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today.
+;; combat_content.clj's :current-charging skill sends exactly ONE :vfx
+;; step, repeated every :period-ticks 5 for as long as the session holds:
+;; :event :pulse, with :params {:strength 0.6} -- not :start/:update/:end,
+;; and none of the :is-item/:target/:caster-pos/:charge-ticks/:block-pos
+;; fields these branches read. In production today the charge loop sound
+;; never starts, :active? never becomes true, and none of the beam/ring
+;; visuals below ever render. Migrated structurally only.
+(defn- enqueue-state! [state ctx-id channel owner-key payload]
+  (let [state* (or state {})
+        {:keys [mode] :as payload*} (or payload {})]
     (case mode
       :start
       (let [ts (now-ms)
-            meta (base-meta owner-key* ctx-id channel payload*)
+            meta (base-meta ctx-id channel payload*)
             item? (boolean (:is-item payload*))
             arc-type (if item? :thin :normal)]
-        (start-loop-sound-at! owner-key* (:caster-pos payload*))
-        (assoc-in store* [:states owner-key*]
-                  (merge default-state
-                         meta
-                         {:active? true
-                          :blending? false
-                          :is-item item?
-                          :good? false
-                          :charge-ticks 0
-                          :charge-ratio 0.0
-                          :target (:target payload*)
-                          :caster-pos (:caster-pos payload*)
-                          :block-pos nil
-                          :block-bounds nil
-                          :charged 0.0
-                          :visual-ticks 0
-                          ;; EntityArc starts with show=true and template 0.
-                          :beam-visible? true
-                          :beam-shape-id 0
-                          :surround-state
-                          (academy-arc/initial-surround-state arc-type ts)
-                          :started-at-ms ts
-                          :ending-at-ms 0
-                          :updated-at-ms ts})))
+        (client-bridge/run-client-effect! :mcmod/start-loop-sound
+          (try
+            (let [{:keys [x y z]} (or (:caster-pos payload*) {:x 0.0 :y 0.0 :z 0.0})]
+              {:key (str owner-key)
+               :sound-id charge-loop-sound
+               :volume 0.3
+               :pitch 1.0
+               :x (double (or x 0.0))
+               :y (double (or y 0.0))
+               :z (double (or z 0.0))})
+            (catch Throwable e
+              (log/warn "current-charging: start-loop-sound failed" e)
+              nil)))
+        (merge default-state
+               meta
+               {:owner-key owner-key
+                :active? true
+                :blending? false
+                :is-item item?
+                :good? false
+                :charge-ticks 0
+                :charge-ratio 0.0
+                :target (:target payload*)
+                :caster-pos (:caster-pos payload*)
+                :block-pos nil
+                :block-bounds nil
+                :charged 0.0
+                :visual-ticks 0
+                ;; EntityArc starts with show=true and template 0.
+                :beam-visible? true
+                :beam-shape-id 0
+                :surround-state
+                (academy-arc/initial-surround-state arc-type ts)
+                :started-at-ms ts
+                :ending-at-ms 0
+                :updated-at-ms ts}))
 
       :update
       (do
-        (update-loop-sound-position! owner-key* (:caster-pos payload*))
+        (when-let [pos (:caster-pos payload*)]
+          (try
+            (let [{:keys [x y z]} pos]
+              (client-bridge/run-client-effect! :mcmod/update-loop-sound-position
+                {:key (str owner-key)
+                 :x (double (or x 0.0))
+                 :y (double (or y 0.0))
+                 :z (double (or z 0.0))}))
+            (catch Throwable e
+              (log/warn "current-charging: update-loop-sound-position failed" e))))
         (let [ts (now-ms)]
-          (update-in store* [:states owner-key*]
-                     (fn [state]
-                       (-> (merge default-state state (base-meta owner-key* ctx-id channel payload*))
-                           (merge {:active? true
-                                   :blending? false
-                                   :updated-at-ms ts})
-                           (cond-> (contains? payload* :is-item)
-                             (assoc :is-item (boolean (:is-item payload*))))
-                           (cond-> (contains? payload* :good?)
-                             (assoc :good? (boolean (:good? payload*))))
-                           (cond-> (contains? payload* :charge-ticks)
-                             (assoc :charge-ticks (max 0 (long (:charge-ticks payload*)))
-                                    :charge-ratio (normalize-ratio (:charge-ticks payload*))))
-                           (cond-> (contains? payload* :target)
-                             (assoc :target (:target payload*)))
-                           (cond-> (contains? payload* :caster-pos)
-                             (assoc :caster-pos (:caster-pos payload*)))
-                           (cond-> (contains? payload* :block-pos)
-                             (assoc :block-pos (:block-pos payload*)))
-                           (cond-> (contains? payload* :block-bounds)
-                             (assoc :block-bounds (:block-bounds payload*)))
-                           (cond-> (contains? payload* :charged)
-                             (assoc :charged (double (:charged payload*)))))))))
+          (-> (merge default-state state* (base-meta ctx-id channel payload*))
+              (merge {:owner-key owner-key
+                      :active? true
+                      :blending? false
+                      :updated-at-ms ts})
+              (cond-> (contains? payload* :is-item)
+                (assoc :is-item (boolean (:is-item payload*))))
+              (cond-> (contains? payload* :good?)
+                (assoc :good? (boolean (:good? payload*))))
+              (cond-> (contains? payload* :charge-ticks)
+                (assoc :charge-ticks (max 0 (long (:charge-ticks payload*)))
+                       :charge-ratio (normalize-ratio (:charge-ticks payload*))))
+              (cond-> (contains? payload* :target)
+                (assoc :target (:target payload*)))
+              (cond-> (contains? payload* :caster-pos)
+                (assoc :caster-pos (:caster-pos payload*)))
+              (cond-> (contains? payload* :block-pos)
+                (assoc :block-pos (:block-pos payload*)))
+              (cond-> (contains? payload* :block-bounds)
+                (assoc :block-bounds (:block-bounds payload*)))
+              (cond-> (contains? payload* :charged)
+                (assoc :charged (double (:charged payload*)))))))
 
       :end
       (do
-        (stop-loop-sound! owner-key*)
-        (update store* :states dissoc owner-key*))
+        (try
+          (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str owner-key)})
+          (catch Throwable e
+            (log/warn "current-charging: stop-loop-sound failed" e)))
+        {})
 
-      store*)))
+      state*)))
 
 (defn- visual-roll
   [salt visual-tick stream]
@@ -247,18 +222,13 @@
               visual-tick)))))
 
 (defn- tick-state!
+  "Preserved exactly as it was before this migration: never signals a
+   natural end (the original never dropped an owner via tick alone, only
+   via :end's dissoc -- and :end never actually fires, see enqueue-state!
+   above). Animation still advances locally every client tick regardless;
+   it must not freeze on the last received server charge-ticks value."
   [store]
-  ;; Held FX live until the explicit end packet, exactly like the original
-  ;; long-lived entities. Animation still advances locally every client tick;
-  ;; it must not freeze on the last received server charge-ticks value.
-  (if (contains? (or store {}) :states)
-    (update store :states
-            (fn [states]
-              (into {}
-                    (map (fn [[owner-key state]]
-                           [owner-key (advance-visual-state state)]))
-                    states)))
-    {:states {}}))
+  (advance-visual-state (or store {})))
 
 ;; A perfectly straight billboard beam is geometrically invisible whenever
 ;; the camera looks straight down its own axis — exactly this skill's
@@ -608,89 +578,86 @@
 
 (defn- build-plan
   [camera-pos hand-center-pos _tick]
-  (let [store (:states (vfx-level/effect-state-snapshot :current-charging))
-        active-states (filter :active? (vals (or store {})))
-        cam-v (rv3/map->v3 camera-pos)
-        ops (vec
-              (mapcat
-                (fn [st]
-                  (let [own? (own-state? st hand-center-pos)
-                        ;; Beam vertex math still keys off the pure eye
-                        ;; position (matching the server's actual raycast
-                        ;; origin) — using hand-center-pos directly here
-                        ;; instead skews the whole path, not just its render
-                        ;; origin. The *visual* caster-side offset original
-                        ;; applies (LambdaLib2 ViewOptimize.fix, "the beam
-                        ;; must start from the hand") is a separate, purely
-                        ;; cosmetic rigid shift applied to the WHOLE arc
-                        ;; below via :origin-offset — original moves both
-                        ;; ends by the same amount rather than pinning the
-                        ;; far end to the exact target, so this is faithful,
-                        ;; not an approximation.
-                        caster-pos (:caster-pos st)
-                        target (:target st)
-                        block-pos (:block-pos st)
-                        block-bounds (:block-bounds st)
-                        item? (boolean (:is-item st))
-                        good? (boolean (:good? st))
-                        cast-salt (long (or (:started-at-ms st) 0))
-                        surround-state (:surround-state st)
-                        beam-ops (when (and (not item?)
-                                            (map? caster-pos)
-                                            (map? target)
-                                            (:beam-visible? st))
-                                   (academy-arc/entity-arc-ops
-                                    cam-v
-                                    (rv3/map->v3 caster-pos)
-                                    (rv3/map->v3 target)
-                                    (int (or (:beam-shape-id st) 0))
-                                    (arc-beam/local-frame-offset
-                                     caster-pos target
-                                     (if own?
-                                       arc-beam/first-person-view-offset
-                                       arc-beam/third-person-view-offset))))
-                        ;; Matches original: the surround sparks only ever
-                        ;; appear around the TARGET block once it's a valid
-                        ;; energy receiver (block mode) — never around the
-                        ;; caster in block mode.
-                        ring-ops (when (and (not item?) good?
-                                            (sequential? block-pos)
-                                            (= 3 (count block-pos))
-                                            (map? surround-state))
-                                   (academy-arc/surround-arc-ops
-                                    cam-v
-                                    (target-body block-pos block-bounds)
-                                    :normal
-                                    surround-state
-                                    cast-salt))
-                        ;; Item mode has no beam/target at all — original
-                        ;; wraps the surround sparks around the PLAYER
-                        ;; instead (new EntitySurroundArc(player)).
-                        item-ring-ops
-                        (when (and item?
-                                   (map? caster-pos)
-                                   (map? surround-state))
-                          (academy-arc/surround-arc-ops
-                           cam-v
-                           (item-body own? hand-center-pos caster-pos)
-                           :thin
-                           surround-state
-                           cast-salt))]
-                    (concat beam-ops ring-ops item-ring-ops)))
-                active-states))]
-    (when (seq ops)
-      {:ops ops})))
+  (let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :current-charging)
+        cam-v (rv3/map->v3 camera-pos)]
+    (when (:active? state)
+      (let [own? (own-state? state hand-center-pos)
+            ;; Beam vertex math still keys off the pure eye position
+            ;; (matching the server's actual raycast origin) — using
+            ;; hand-center-pos directly here instead skews the whole path,
+            ;; not just its render origin. The *visual* caster-side offset
+            ;; original applies (LambdaLib2 ViewOptimize.fix, "the beam
+            ;; must start from the hand") is a separate, purely cosmetic
+            ;; rigid shift applied to the WHOLE arc below via
+            ;; :origin-offset — original moves both ends by the same
+            ;; amount rather than pinning the far end to the exact target,
+            ;; so this is faithful, not an approximation.
+            caster-pos (:caster-pos state)
+            target (:target state)
+            block-pos (:block-pos state)
+            block-bounds (:block-bounds state)
+            item? (boolean (:is-item state))
+            good? (boolean (:good? state))
+            cast-salt (long (or (:started-at-ms state) 0))
+            surround-state (:surround-state state)
+            beam-ops (when (and (not item?)
+                                (map? caster-pos)
+                                (map? target)
+                                (:beam-visible? state))
+                       (academy-arc/entity-arc-ops
+                        cam-v
+                        (rv3/map->v3 caster-pos)
+                        (rv3/map->v3 target)
+                        (int (or (:beam-shape-id state) 0))
+                        (arc-beam/local-frame-offset
+                         caster-pos target
+                         (if own?
+                           arc-beam/first-person-view-offset
+                           arc-beam/third-person-view-offset))))
+            ;; Matches original: the surround sparks only ever appear
+            ;; around the TARGET block once it's a valid energy receiver
+            ;; (block mode) — never around the caster in block mode.
+            ring-ops (when (and (not item?) good?
+                                (sequential? block-pos)
+                                (= 3 (count block-pos))
+                                (map? surround-state))
+                       (academy-arc/surround-arc-ops
+                        cam-v
+                        (target-body block-pos block-bounds)
+                        :normal
+                        surround-state
+                        cast-salt))
+            ;; Item mode has no beam/target at all — original wraps the
+            ;; surround sparks around the PLAYER instead
+            ;; (new EntitySurroundArc(player)).
+            item-ring-ops
+            (when (and item?
+                       (map? caster-pos)
+                       (map? surround-state))
+              (academy-arc/surround-arc-ops
+               cam-v
+               (item-body own? hand-center-pos caster-pos)
+               :thin
+               surround-state
+               cast-salt))
+            ops (concat beam-ops ring-ops item-ring-ops)]
+        (when (seq ops)
+          {:ops (vec ops)})))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-initial-state [:current-charging :level] [_ _] {:states {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-initial-state [:current-charging :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-enqueue-state! [:current-charging :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-tick-state! [:current-charging :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-build-plan :current-charging
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-clear-owner! :current-charging [_ store owner-key]
-  (when (contains? (or (:states store) {}) owner-key)
-    (stop-loop-sound! owner-key))
-  (assoc (or store {:states {}})
-         :states
-         (dissoc (or (:states store) {}) owner-key)))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! arc-beam/effect-destroy! :current-charging
+  [_ state]
+  (when (:active? state)
+    (try
+      (client-bridge/run-client-effect! :mcmod/stop-loop-sound {:key (str (:owner-key state))})
+      (catch Throwable e
+        (log/warn "current-charging: stop-loop-sound failed" e)))))
+;; No effect-clear-owner! override anymore -- superseded by :destroy-fn
+;; above (build-spec wires it unconditionally via dispatch-destroy!), which
+;; vfx-core's real destroy!/clear-owner! now reach correctly per instance.

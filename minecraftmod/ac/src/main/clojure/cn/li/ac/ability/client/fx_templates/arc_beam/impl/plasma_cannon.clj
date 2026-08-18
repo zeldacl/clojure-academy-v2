@@ -276,15 +276,30 @@
 																									 tornado-params
 																									 (:tornado st)))))))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) now, so
+;; state is this cast's own map directly -- no more :effect-state owner-map
+;; wrapping (owner isolation comes from instance identity itself).
+;;
+;; This case dispatch is preserved EXACTLY as it was before this migration,
+;; including the fact that none of its branches match a real event today.
+;; combat_content.clj's :plasma-cannon skill sends exactly ONE :vfx step,
+;; ever: :event :release from its :release phase, with
+;; :params {:max-charge-ticks 120} -- no :start/:update/:perform/:end, and
+;; none of the :charge-pos/:destination/:pos/:tornado-base fields these
+;; branches read. In production today the charge loop sound never starts,
+;; the plasma body / charge tornado never spawn, and the dead-reckoning
+;; flight simulation below never has anything to simulate -- this is a much
+;; simpler finding than the original migration plan expected: it anticipated
+;; needing to carefully preserve a live client-side prediction/reconciliation
+;; system, but that system has no live input to run on. Migrated structurally
+;; only.
 (defn- enqueue-state!
 	[store ctx-id channel owner-key payload]
-	(let [store* (or store {:effect-state {}})
-				owner-key* (or owner-key [:ctx ctx-id])
+	(let [store* (or store {})
 				{:keys [mode charge-ticks fully-charged? release-ready? charge-pos tornado-base
 								flight-ticks state destination pos performed? source-player-id world-id]} (or payload {})
-				base-meta {:owner-key owner-key*
-									 :queue-owner (client-particles/current-effect-owner)
-									 :ctx-id ctx-id
+				base-meta {:ctx-id ctx-id
 									 :channel channel
 									 :source-player-id source-player-id
 									 :world-id world-id}]
@@ -302,27 +317,25 @@
 				  :volume 1.0
 				  :pitch 1.0
 				  :loop? false})
-				(assoc-in store* [:effect-state owner-key*]
-									(merge base-meta
-												 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
-												:flight-ticks 0 :state :charging :destination nil
-												:performed? false :terminated? false
-												;; PlasmaBodyEffect: fixed ball cluster, alpha ramping from 0.
-												:balls (new-balls)
-												:plasma-alpha 0.0
-												;; Original c_begin also spawns the Tornado entity, seated on
-												;; the ground under the charge position and fading in from 0.
-												:tornado (tornado/new-column tornado-params)
-												:tornado-base (or tornado-base (tornado-base-fallback charge-pos))
-												:tornado-dead-ticks 0})))
+				(merge store* base-meta
+							 {:active? true :charge-ticks 0 :charge-pos (:charge-pos payload)
+								:flight-ticks 0 :state :charging :destination nil
+								:performed? false :terminated? false
+								;; PlasmaBodyEffect: fixed ball cluster, alpha ramping from 0.
+								:balls (new-balls)
+								:plasma-alpha 0.0
+								;; Original c_begin also spawns the Tornado entity, seated on
+								;; the ground under the charge position and fading in from 0.
+								:tornado (tornado/new-column tornado-params)
+								:tornado-base (or tornado-base (tornado-base-fallback charge-pos))
+								:tornado-dead-ticks 0}))
 			:update
-			(let [prev-st (or (get-in store* [:effect-state owner-key*]) {})
-						;; Only overwrite what this payload actually carries. The 5-tick
+			(let [;; Only overwrite what this payload actually carries. The 5-tick
 						;; flight sync sends :charge-pos and :flight-ticks alone, so
 						;; defaulting the rest reset :state to :charging — which switched
 						;; off the client's own tryMove and left the body jumping five
 						;; blocks per sync instead of gliding one per tick.
-						synced (cond-> prev-st
+						synced (cond-> store*
 										 (some? charge-ticks) (assoc :charge-ticks (long charge-ticks))
 										 (some? flight-ticks) (assoc :flight-ticks (long flight-ticks))
 										 (some? state) (assoc :state state)
@@ -332,32 +345,26 @@
 						;; describe this update when the sync is reconciled against the
 						;; client's prediction.
 						synced (if (map? charge-pos) (reconcile-sync synced charge-pos) synced)
-						updated (assoc-in store* [:effect-state owner-key*]
-												(assoc (merge base-meta synced)
-													 :owner-key owner-key*
-													 :ctx-id ctx-id
-													 :channel channel
-													 :source-player-id source-player-id
-													 :world-id world-id
+						updated (assoc (merge base-meta synced)
 													 :active? true
-													 :state (or (:state synced) :charging)))]
+													 :state (or (:state synced) :charging))]
 					;; Original plays the charged cue from l_tick under `if (isLocal)`
 					;; — the caster hears it, bystanders do not.
 					(when (and (boolean fully-charged?)
 										 (local-player? source-player-id))
-						(client-sounds/queue-sound-effect! (:queue-owner base-meta)
+						(client-sounds/queue-sound-effect! (client-particles/current-effect-owner)
 							{:type :sound :sound-id charged-sound :volume 0.5 :pitch 1.0}))
 					updated)
 			:perform
 			(do
 				(when (map? pos)
 					(let [tx (double (:x pos)) ty (double (:y pos)) tz (double (:z pos))]
-						(client-particles/queue-particle-effect! (:queue-owner base-meta)
+						(client-particles/queue-particle-effect! (client-particles/current-effect-owner)
 							{:type :particle :particle-type :explosion-large
 							 :x tx :y ty :z tz :count 1 :speed 0.0
 							 :offset-x 0.0 :offset-y 0.0 :offset-z 0.0})
 						(dotimes [_ 12]
-							(client-particles/queue-particle-effect! (:queue-owner base-meta)
+							(client-particles/queue-particle-effect! (client-particles/current-effect-owner)
 								{:type :particle :particle-type :smoke-large
 								 :x (+ tx (- (* (rand) 10.0) 5.0))
 								 :y (+ ty (- (* (rand) 5.0) 2.5))
@@ -378,35 +385,34 @@
 				;; and only then setDead, the tornado fades for 20 ticks and is
 				;; removed at 30. Keep the state (and keep it :active? so it goes on
 				;; ticking) and let tick-state! drop it once both have played out.
-				(if-let [st (get-in store* [:effect-state owner-key*])]
-					(assoc-in store* [:effect-state owner-key*]
-										(assoc st :terminated? true :performed? (boolean performed?)))
+				(if (seq store*)
+					(assoc store* :terminated? true :performed? (boolean performed?))
 					store*))
 			store*)))
 
 (defn- tick-state!
+	"Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Mirrors the pre-migration store-tick/map-active-states
+   exactly: only :active? states advance at all, and an active state that
+   has now finished? (both halves played out their fade) also ends."
 	[store]
-	(let [store* (or store {:effect-state {}})]
-		(update store* :effect-state
-			(fn [states]
-				(store-tick/map-active-states
-				 states
-				 (fn [_owner-key st]
-					 (let [ticks (inc (long (or (:ticks st) 0)))
-								 st (-> (assoc st :ticks ticks)
-												advance-flight
-												tick-plasma-alpha
-												(tick-tornado ticks))]
-						 ;; The charge sound is one FollowEntitySound started on :start
-						 ;; and stopped on :end — no re-queue.
-						 (let [cp (:charge-pos st)]
-							 (when (and cp (= :go (:state st)) (not (:terminated? st)))
-								 (client-particles/queue-particle-effect! (:queue-owner st)
-									 {:type :particle :particle-type :flame
-										:x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
-										:count 4 :speed 0.2
-										:offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
-						 (when-not (finished? st) st))))))))
+	(let [store* (or store {})]
+		(when (:active? store*)
+			(let [ticks (inc (long (or (:ticks store*) 0)))
+						st (-> (assoc store* :ticks ticks)
+									 advance-flight
+									 tick-plasma-alpha
+									 (tick-tornado ticks))]
+				;; The charge sound is one FollowEntitySound started on :start
+				;; and stopped on :end — no re-queue.
+				(let [cp (:charge-pos st)]
+					(when (and cp (= :go (:state st)) (not (:terminated? st)))
+						(client-particles/queue-particle-effect! (client-particles/current-effect-owner)
+							{:type :particle :particle-type :flame
+							 :x (double (:x cp)) :y (double (:y cp)) :z (double (:z cp))
+							 :count 4 :speed 0.2
+							 :offset-x 0.5 :offset-y 0.5 :offset-z 0.5})))
+				(when-not (finished? st) st)))))
 
 (defn- tornado-ops
 	"The charge tornado's ring quads. TornadoEntityRenderer only translates to
@@ -435,30 +441,10 @@
 
 (defn- build-plan
 	[_camera-pos _hand-center-pos _tick]
-	(let [state (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)))
-				ops (mapcat (fn [st] (concat (tornado-ops st) (plasma-state-ops st))) state)]
+	(let [state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)
+				ops (concat (tornado-ops state) (plasma-state-ops state))]
 		(when (seq ops)
 			{:ops (vec ops)})))
-
-
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:plasma-cannon :level] [_ _] {:effect-state {}})
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:plasma-cannon :level]
-  [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:plasma-cannon :level] [_ _ store] (tick-state! store))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :plasma-cannon
-  [_effect-id camera-pos hand-center-pos tick & _more]
-  (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :plasma-cannon [_ store owner-key]
-  (client-bridge/run-client-effect!
-   :mcmod/stop-loop-sound
-   {:key (loop-sound-key (second owner-key))})
-  ;; Context termination is exactly upstream's TERMINATED signal, not a reason
-  ;; to delete the visuals: both entities outlive it while they fade. Mark and
-  ;; let tick-state! drop the entry once they are done (:end does the same, and
-  ;; whichever arrives first wins).
-  (if-let [st (get-in store [:effect-state owner-key])]
-    (assoc-in store [:effect-state owner-key] (assoc st :terminated? true))
-    store))
 
 ;; ---------------------------------------------------------------------------
 ;; Slot delegate state (upstream PlasmaCannonContext.getState)
@@ -467,12 +453,37 @@
 (defn charge-visual-state
   "CHARGE until the charge completes, ACTIVE from then on (including flight) —
   upstream's IStateProvider.getState. nil when this player has no plasma cannon
-  context, so the slot falls back to :idle."
+  context, so the slot falls back to :idle.
+
+  vfx-core :transient migration: this has no production caller today (grepped
+  the whole tree), but is genuinely unit-tested for owner-scoped behavior, so
+  it is migrated for correctness rather than dropped. Was an owner-map scan
+  under :singleton; instance-for-owner replaces that with an exact per-owner
+  lookup, now that :transient gives every caster their own real instance."
   [player-uuid]
   (when player-uuid
-    (let [states (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :plasma-cannon)))]
-      (when-let [st (first (filter (fn [st]
-                                     (and (not (:terminated? st))
-                                          (= (str (:source-player-id st)) (str player-uuid))))
-                                   states))]
+    (let [st (vfx-level/instance-for-owner :plasma-cannon (str player-uuid) :level)]
+      (when (and st (not (:terminated? st)))
         (if (or (:release-ready? st) (= :go (:state st))) :active :charge)))))
+
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:plasma-cannon :level] [_ _] {})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:plasma-cannon :level]
+  [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:plasma-cannon :level] [_ _ store] (tick-state! store))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :plasma-cannon
+  [_effect-id camera-pos hand-center-pos tick & _more]
+  (build-plan camera-pos hand-center-pos tick))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-destroy! :plasma-cannon
+  [_ state]
+  ;; Context termination is exactly upstream's TERMINATED signal, not a
+  ;; reason to delete the visuals -- but an INSTANCE actually being torn
+  ;; down (disconnect, world unload) is different from that: nothing will
+  ;; ever tick this state again to fade it out itself, so release the loop
+  ;; sound directly here if it might still be playing.
+  (when (:active? state)
+    (client-bridge/run-client-effect!
+     :mcmod/stop-loop-sound
+     {:key (loop-sound-key (:ctx-id state))})))
+;; No effect-clear-owner! override anymore -- superseded by :destroy-fn
+;; above (build-spec wires it unconditionally via dispatch-destroy!), which
+;; vfx-core's real destroy!/clear-owner! now reach correctly per instance.

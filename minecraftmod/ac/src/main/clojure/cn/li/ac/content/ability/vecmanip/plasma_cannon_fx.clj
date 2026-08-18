@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :plasma-cannon
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :plasma-cannon/fx-start :mode :start
 												:level-payload (fn [_ _ p]
 													{:charge-pos (:charge-pos p)
