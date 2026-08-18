@@ -56,7 +56,7 @@
    camera/FOV)."
   #{:transient :persistent :singleton})
 
-(defn register-effect! [runtime {:keys [id init update sample bounds priority lifecycle]
+(defn register-effect! [runtime {:keys [id init update sample bounds priority lifecycle destroy]
                                   :or {lifecycle :singleton} :as descriptor}]
   (when @(:registry-frozen? runtime)
     (throw (ex-info "VFX registry is frozen" {:id id})))
@@ -67,6 +67,8 @@
   (doseq [[k f] [[:init init] [:update update] [:sample sample] [:bounds bounds]]]
     (when-not (ifn? f)
       (throw (ex-info "VFX effect callback is required" {:id id :callback k}))))
+  (when (and (some? destroy) (not (ifn? destroy)))
+    (throw (ex-info "VFX effect :destroy must be callable when present" {:id id})))
   (when-not (contains? lifecycles lifecycle)
     (throw (ex-info "unknown VFX effect lifecycle" {:id id :lifecycle lifecycle})))
   (swap! (:registry runtime) assoc id (assoc descriptor :priority (or priority :normal)
@@ -125,7 +127,7 @@
                  (dissoc next (first (keys next)))
                  next))))))
 
-(declare destroy! clear-owner!)
+(declare destroy! clear-owner! fault!)
 
 (defn dispatch-signal!
   "Apply a stable-key VFX signal exactly once.
@@ -175,8 +177,29 @@
       (do (clear-owner! runtime owner)
           nil))))
 
-(defn destroy! [runtime instance-id]
+(defn- run-destroy-hook!
+  "Best-effort call to a descriptor's optional :destroy callback for one
+   instance being torn down. Exceptions are swallowed (recorded via fault!)
+   rather than left to interrupt whichever caller (destroy!, clear-owner!,
+   clear-world!, or tick!'s natural-end path) is mid-cleanup -- a
+   descriptor's own state-map removal must not be skippable by a bug in its
+   cleanup code."
+  [runtime instance]
+  (when-let [effect (get @(:registry runtime) (:effect-id instance))]
+    (when-let [destroy-fn (:destroy effect)]
+      (try
+        (destroy-fn (:state instance) {:instance instance})
+        (catch Throwable throwable
+          (fault! runtime instance throwable :destroy))))))
+
+(defn destroy!
+  "Remove one instance and run its descriptor's :destroy hook, if any (see
+   register-effect!'s docstring -- this is the only place a :transient
+   effect can release a resource that isn't self-expiring via :update
+   returning nil, e.g. a looping sound started on spawn)."
+  [runtime instance-id]
   (when-let [instance (get @(:instances runtime) instance-id)]
+    (run-destroy-hook! runtime instance)
     (swap! (:instances runtime) dissoc instance-id)
     (index-remove! (:owner-index runtime) (:owner instance) instance-id)
     (index-remove! (:world-index runtime) (:world-id instance) instance-id)
@@ -292,6 +315,13 @@
                    next-instances)))
         (let [{:keys [removed faulted]} @outcome]
           (doseq [instance removed]
+            ;; Same cleanup contract as destroy! below -- a descriptor
+            ;; ending itself by returning nil from :update is just as much
+            ;; a teardown as an explicit :destroy signal or clear-owner!/
+            ;; clear-world!, and needs the same chance to release a
+            ;; resource :update itself never would (e.g. a loop sound
+            ;; started on spawn).
+            (run-destroy-hook! runtime instance)
             (index-remove! (:owner-index runtime) (:owner instance) (:id instance))
             (index-remove! (:world-index runtime) (:world-id instance) (:id instance))
             ;; A descriptor returning nil is a normal lifetime transition.

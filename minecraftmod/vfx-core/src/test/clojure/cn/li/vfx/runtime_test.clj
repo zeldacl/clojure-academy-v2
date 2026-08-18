@@ -235,3 +235,68 @@
                (contract/tick-context {:tick-id 1 :delta-seconds -1.0})))
   (is (thrown? clojure.lang.ExceptionInfo
                (contract/frame-context {:frame-id 1 :partial-tick 2.0}))))
+
+(defn- destroy-hook-effect [calls*]
+  {:id :destroy-hook/effect
+   :lifecycle :transient
+   :init (fn [{:keys [params]}] {:ended? false :value (long (or (:value params) 0))})
+   :update (fn [state {:keys [events]}]
+             (if (some #(= :end (:event %)) events)
+               nil
+               (update state :value inc)))
+   :bounds (fn [_ _] nil)
+   :sample (fn [_] nil)
+   :destroy (fn [state _context] (swap! calls* conj state))})
+
+(deftest destroy-hook-runs-on-explicit-destroy-signal
+  (let [rt (runtime/create-runtime) calls* (atom [])]
+    (runtime/register-effect! rt (destroy-hook-effect calls*))
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :destroy-hook/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {:value 5}})
+    (runtime/dispatch-signal! rt {:op :destroy :effect-id :destroy-hook/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 2})
+    (is (= [{:ended? false :value 5}] @calls*))))
+
+(deftest destroy-hook-runs-when-update-ends-instance-naturally
+  (let [rt (runtime/create-runtime) calls* (atom [])]
+    (runtime/register-effect! rt (destroy-hook-effect calls*))
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :destroy-hook/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {:value 7}})
+    (runtime/dispatch-signal! rt {:op :signal :effect-id :destroy-hook/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 2 :event :end :params {}})
+    (runtime/tick! rt {:tick-id 1 :delta-seconds 0.05})
+    (is (= [{:ended? false :value 7}] @calls*))
+    (is (empty? @(:instances rt)))))
+
+(deftest destroy-hook-runs-on-clear-owner
+  (let [rt (runtime/create-runtime) calls* (atom [])]
+    (runtime/register-effect! rt (destroy-hook-effect calls*))
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :destroy-hook/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {:value 1}})
+    (runtime/clear-owner! rt :owner)
+    (is (= [{:ended? false :value 1}] @calls*))))
+
+(deftest destroy-hook-exception-does-not-block-index-cleanup
+  (let [rt (runtime/create-runtime)
+        effect (assoc (destroy-hook-effect (atom []))
+                      :id :destroy-hook-throws/effect
+                      :destroy (fn [_ _] (throw (ex-info "boom" {}))))]
+    (runtime/register-effect! rt effect)
+    (runtime/freeze-registry! rt)
+    (runtime/dispatch-signal! rt {:op :spawn :effect-id :destroy-hook-throws/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 1 :params {}})
+    (runtime/dispatch-signal! rt {:op :destroy :effect-id :destroy-hook-throws/effect
+                                   :instance-key [:session 1 :main]
+                                   :owner :owner :event-seq 2})
+    (is (empty? @(:instances rt)))
+    (is (nil? (runtime/instance-for-key rt [:session 1 :main])))
+    (is (= 1 (count (runtime/faults rt))))))

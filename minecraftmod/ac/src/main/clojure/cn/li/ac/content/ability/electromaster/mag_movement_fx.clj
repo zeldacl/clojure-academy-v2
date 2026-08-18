@@ -6,7 +6,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :mag-movement
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :mag-movement/fx-start :mode :start}
                 :update {:topic :mag-movement/fx-update :mode :update}
                 :end {:topic :mag-movement/fx-end :mode :end}}}))

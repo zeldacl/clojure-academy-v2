@@ -30,24 +30,29 @@
   (select-keys (or payload {}) meta-keys))
 
 (defn- register-runtime!
-  [effect-id {:keys [level hand]}]
+  [effect-id {:keys [level hand lifecycle]}]
   (vfx/register-effect!
     effect-id
-    {:level (when level
-              (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn
-                                  :build-plan-fn :empty-state? :fov-offset-fn :clear-owner-fn]))
-     :hand (when hand
-             (select-keys hand [:initial-state :enqueue-state-fn :tick-state-fn
-                                :transform-fn :clear-owner-fn]))})
+    (cond-> {:level (when level
+                      (select-keys level [:initial-state :enqueue-state-fn :tick-state-fn
+                                          :build-plan-fn :empty-state? :fov-offset-fn
+                                          :clear-owner-fn :destroy-fn]))
+             :hand (when hand
+                     (select-keys hand [:initial-state :enqueue-state-fn :tick-state-fn
+                                        :transform-fn :clear-owner-fn :destroy-fn]))}
+      lifecycle (assoc :lifecycle lifecycle)))
   nil)
 
 (defn register!
   "Register one ability FX spec.
 
   `spec` keys:
-    :id    effect keyword
-    :level optional level runtime map
-    :hand  optional hand runtime map
+    :id        effect keyword
+    :level     optional level runtime map
+    :hand      optional hand runtime map
+    :lifecycle optional, forwarded to vfx/register-effect! (defaults to
+               :singleton there when absent -- see
+               docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section)
 
   A :channels key is tolerated (arc_beam.clj's build-spec still constructs
   one) but ignored -- the channel/topic transport it used to feed
@@ -55,10 +60,10 @@
   content ever populated :channels with a real :topic (combat signals reach
   content through effect_controller.clj's dispatch-signal! directly).
   See docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md E section."
-  [{:keys [id level hand]}]
+  [{:keys [id level hand lifecycle]}]
   (when-not (keyword? id)
     (throw (IllegalArgumentException. "register-fx-spec!: id must be keyword")))
-  (register-runtime! id {:level level :hand hand})
+  (register-runtime! id {:level level :hand hand :lifecycle lifecycle})
   nil)
 
 ;; ---------------------------------------------------------------------------

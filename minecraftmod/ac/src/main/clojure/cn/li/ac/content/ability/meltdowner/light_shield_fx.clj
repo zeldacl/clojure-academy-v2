@@ -9,7 +9,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :light-shield
-     :initial-state (fn [] {:effect-state {}})
+     :lifecycle :transient
+     :initial-state (fn [] {})
      :channels {:start {:topic :light-shield/fx-start :mode :start}
                 ;; Carries the caster's lookingPos(player, 1) each server tick;
                 ;; the channel particles are world-space and have nowhere else

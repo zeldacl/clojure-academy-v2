@@ -118,7 +118,20 @@
                                    *sample-state*)]
                (binding [*sample-state* sampled-state]
                  (sample-plan! effect-id sampled-state context sink)
-                 (sample-hand! effect-id sampled-state context sink))))})
+                 (sample-hand! effect-id sampled-state context sink))))
+   ;; Only meaningful for :transient effects (real per-instance vfx-core
+   ;; teardown -- see core/destroy!'s docstring for why this exists at all:
+   ;; a :singleton effect's cleanup still goes through clear-owner! below,
+   ;; unchanged). Content opts in per-track by including :destroy-fn in its
+   ;; :level/:hand map passed to register-effect! -- same shape as the
+   ;; existing :clear-owner-fn, just called once for the whole instance
+   ;; instead of per owner-key inside a shared aggregate's state map.
+   :destroy (fn [state _context]
+              (let [h (effect-handlers effect-id)]
+                (when-let [destroy-fn (:destroy-fn (:level h))]
+                  (destroy-fn (:level state)))
+                (when-let [destroy-fn (:destroy-fn (:hand h))]
+                  (destroy-fn (:hand state)))))})
 
 (defn register-effect!
   "Register one descriptor.  A single Runtime instance owns both level and

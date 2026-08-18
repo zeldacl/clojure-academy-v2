@@ -5,7 +5,8 @@
 (def ^:private spec
   (arc-beam/build-spec
     {:effect-id :vec-deviation
-     :initial-state (fn [] {:effect-state {} :wave-effects {}})
+     :lifecycle :transient
+     :initial-state (fn [] {:active? false :ticks 0 :waves []})
      :channels {:start {:topic :vec-deviation/fx-start :mode :start}
                 :end {:topic :vec-deviation/fx-end :mode :end}
                 :stop-entity {:topic :vec-deviation/fx-stop-entity :mode :stop-entity

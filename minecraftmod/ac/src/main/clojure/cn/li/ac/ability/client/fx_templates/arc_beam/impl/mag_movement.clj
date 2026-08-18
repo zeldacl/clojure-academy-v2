@@ -1,6 +1,5 @@
 (ns cn.li.ac.ability.client.fx-templates.arc-beam.impl.mag-movement
   (:require [cn.li.ac.ability.client.arc-patterns :as arc-patterns]
-            [cn.li.ac.ability.client.fx-templates.store-tick :as store-tick]
             [cn.li.ac.ability.client.effects.particles :as client-particles]
             [cn.li.ac.ability.client.render-util :as ru]
             [cn.li.ac.config.modid :as modid]
@@ -33,15 +32,25 @@
      {:key (loop-sound-key ctx-id)})
     (catch Throwable _ nil)))
 
+;; vfx-core :transient migration (docs/04-systems/COMBAT_VFX_PLATFORM_GAPS.md
+;; E section): one real vfx-core instance per (owner, activation) -- state is
+;; this cast's own map directly, no owner-key wrapping. combat_content.clj's
+;; :mag-movement only ever sends :vfx :event :update, every pulse, for as
+;; long as the toggle is held -- no :start (the :update handler below
+;; already self-initializes on the first call, matching that reality) and,
+;; notably, no :end/:abort :vfx step exists at all for this ability. That
+;; means :active? never actually flips false today (:end is dead code, same
+;; as before this migration) and the instance stays alive until the owner
+;; disconnects (clear-owner!) -- not something this migration changes, just
+;; carrying forward the pre-existing gap. What the migration does fix: the
+;; loop sound now reliably stops on that eventual disconnect-triggered
+;; teardown too, via :destroy-fn below, where before clear-owner-fn had no
+;; live caller at all (see the vfx-core destroy! commit for why).
 (defn- enqueue-state!
-  [store ctx-id channel owner-key payload]
-  (let [store* (if (contains? (or store {}) :effect-state)
-                 (or store {:effect-state {}})
-                 {:effect-state {}})
-        owner-key* (or owner-key [:ctx ctx-id])
+  [store ctx-id channel _owner-key payload]
+  (let [store* (or store {})
         {:keys [mode target source-player-id world-id]} (or payload {})
-        base-meta {:owner-key owner-key*
-                   :queue-owner (client-particles/current-effect-owner)
+        base-meta {:queue-owner (client-particles/current-effect-owner)
                    :ctx-id ctx-id
                    :channel channel
                    :source-player-id source-player-id
@@ -50,33 +59,39 @@
       :start
       (do
         (start-loop-sound! ctx-id source-player-id)
-        (assoc-in store* [:effect-state owner-key*]
-                  (merge base-meta {:active? true :target target :ticks 0})))
+        (merge store* base-meta {:active? true :target target :ticks 0}))
       :update
-      (update-in store* [:effect-state owner-key*]
-                 (fn [st]
-                   (if (:active? st)
-                     (merge st base-meta {:target target})
-                     (merge base-meta {:active? true :target target :ticks 0}))))
+      (if (:active? store*)
+        (merge store* base-meta {:target target})
+        (do
+          (start-loop-sound! ctx-id source-player-id)
+          (merge store* base-meta {:active? true :target target :ticks 0})))
       :end
       (do
         (stop-loop-sound! ctx-id)
-        (update store* :effect-state dissoc owner-key*))
+        (assoc store* :active? false))
       store*)))
 
 (defn- tick-state!
+  "Returning nil ends the instance -- see vfx-core/runtime.clj's
+   tick-instance. Only reachable once :active? goes false, which (per the
+   comment above) never actually happens via current combat-core content."
   [store]
-  (let [store* (if (contains? (or store {}) :effect-state)
-                 (or store {:effect-state {}})
-                 {:effect-state {}})]
-    (update store* :effect-state
-      (fn [states]
-        (store-tick/map-active-states
-         states
-         (fn [_owner-key st]
-           ;; The charge loop is one continuous FollowEntitySound started on
-           ;; :start and stopped on :end — not a re-queued one-shot.
-           (assoc st :ticks (inc (long (or (:ticks st) 0))))))))))
+  (let [state* (or store {})]
+    (when (:active? state*)
+      ;; The charge loop is one continuous FollowEntitySound started on
+      ;; :start/the first :update and stopped on :end — not a re-queued
+      ;; one-shot.
+      (assoc state* :ticks (inc (long (or (:ticks state*) 0)))))))
+
+(defn- destroy-fx!
+  "vfx-core's :destroy hook: release the loop sound on any teardown path
+   (explicit :destroy signal, clear-owner!/clear-world!, or :update itself
+   returning nil) that isn't the normal :end case above, which already
+   stopped it."
+  [state]
+  (when (:active? state)
+    (stop-loop-sound! (:ctx-id state))))
 
 (def ^:private mag-movement-pattern
   (arc-patterns/get-pattern :thin-continuous))
@@ -89,14 +104,18 @@
   hoisted out of the segment loop, matching build-arc-plan's per-call cost
   shape in arc_beam.clj."
   [camera-pos hand-center-pos tick]
-  (let [mag-move (some (fn [st]
-                         (when (and (:active? st)
-                                    (or (nil? (:source-player-id st))
-                                        (nil? (:player-uuid hand-center-pos))
-                                        (= (str (:source-player-id st))
-                                           (str (:player-uuid hand-center-pos)))))
-                           st))
-                       (vals (:effect-state (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mag-movement))))]
+  ;; One vfx-core instance now exists per active caster; this still only
+  ;; draws the LOCAL player's own beam, because hand-center-pos is only ever
+  ;; the local viewer's own hand position -- there is no remote-player hand
+  ;; endpoint to draw a beam from, so any other player's mag-movement
+  ;; instance must be skipped here on every sample, not just once globally.
+  (let [mag-move (cn.li.ac.ability.client.fx-templates.arc-beam/snapshot :mag-movement)
+        mag-move (when (and (:active? mag-move)
+                             (or (nil? (:source-player-id mag-move))
+                                 (nil? (:player-uuid hand-center-pos))
+                                 (= (str (:source-player-id mag-move))
+                                    (str (:player-uuid hand-center-pos)))))
+                   mag-move)]
     (when (and hand-center-pos
                (:active? mag-move)
                (map? (:target mag-move)))
@@ -116,15 +135,16 @@
                                        :wiggle-phase (arc-patterns/wiggle-phase)
                                        :effective-wiggle (arc-patterns/effective-wiggle-amount mag-movement-pattern 0.5)}))}))))
 
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-movement :level] [_ _] {:effect-state {}})
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-initial-state [:mag-movement :level] [_ _] {})
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-enqueue-state! [:mag-movement :level]
   [_ _ store ctx-id channel owner-key payload] (enqueue-state! store ctx-id channel owner-key payload))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-tick-state! [:mag-movement :level] [_ _ store] (tick-state! store))
 (cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-build-plan :mag-movement
   [_effect-id camera-pos hand-center-pos tick & _more]
   (build-plan camera-pos hand-center-pos tick))
-(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-clear-owner! :mag-movement [_ store owner-key]
-  ;; Externally aborted contexts never get :end — stop the loop here too, or it
-  ;; plays forever.
-  (stop-loop-sound! (second owner-key))
-  (update store :effect-state dissoc owner-key))
+(cn.li.ac.ability.client.fx-templates.arc-beam/register-method! cn.li.ac.ability.client.fx-templates.arc-beam/effect-destroy! :mag-movement [_ state] (destroy-fx! state))
+;; No effect-clear-owner! override anymore -- superseded by :destroy-fn
+;; above (build-spec wires it unconditionally via dispatch-destroy!), which
+;; vfx-core's real destroy!/clear-owner! now reach correctly per instance.
+;; :clear-owner-fn itself has no live caller for any effect (see the
+;; vfx-core destroy! commit).

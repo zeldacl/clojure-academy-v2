@@ -90,6 +90,8 @@
          (into [effect-id camera-pos hand-center-pos tick] rest)))
 (defn effect-clear-owner! [effect-id store owner-key]
   (dispatch-method :effect-clear-owner! effect-id [effect-id store owner-key]))
+(defn effect-destroy! [effect-id state]
+  (dispatch-method :effect-destroy! effect-id [effect-id state]))
 (defn effect-transform-fn [effect-id]
   (dispatch-method :effect-transform-fn effect-id [effect-id]))
 
@@ -367,6 +369,10 @@
   [effect-id store owner-key]
   (update (ensure-arc-store store) :arcs dissoc owner-key))
 
+(register-method! effect-destroy! :default
+  [_effect-id _state]
+  nil)
+
 (register-method! effect-transform-fn :default
   [_effect-id]
   nil)
@@ -386,6 +392,10 @@
 (defn- dispatch-clear-owner!
   [effect-id store owner-key]
   (effect-clear-owner! effect-id store owner-key))
+
+(defn- dispatch-destroy!
+  [effect-id state]
+  (effect-destroy! effect-id state))
 
 ;; ---------------------------------------------------------------------------
 ;; Channel normalization
@@ -524,6 +534,7 @@
   [opts]
   (let [effect-id (:effect-id opts)
         runtime (or (:runtime opts) :level)
+        lifecycle (:lifecycle opts)
         arc-opts (when (some opts [:sound-id :sound-source :sound-volume :sound-pitch :arc-life :arc-pattern
                                    :aoe-points? :hand-origin?])
                    (merge {:effect-id effect-id :arc-pattern :weak :arc-life 10}
@@ -536,6 +547,7 @@
     (when-not (keyword? effect-id)
       (throw (IllegalArgumentException. "build-spec requires :effect-id keyword")))
     (-> (cond-> {:id effect-id :channels channels}
+          lifecycle (assoc :lifecycle lifecycle)
           (not= runtime :none)
           (as-> spec spec
                 (if (contains? #{:level :both} runtime)
@@ -544,7 +556,33 @@
                                                :tick-state-fn #(dispatch-tick! :level effect-id %1)
                                                :build-plan-fn (fn [cam pos tick query-fn]
                                                                (effect-build-plan effect-id cam pos tick query-fn))
-                                               :clear-owner-fn #(dispatch-clear-owner! effect-id %1 %2)}
+                                               :clear-owner-fn #(dispatch-clear-owner! effect-id %1 %2)
+                                               ;; :destroy-fn is the :transient-
+                                               ;; lifecycle analog of :clear-owner-fn
+                                               ;; above -- called once when vfx-core
+                                               ;; tears down this instance (see
+                                               ;; effect_controller.clj's descriptor
+                                               ;; :destroy and vfx-core/runtime.clj's
+                                               ;; destroy! docstring), not per
+                                               ;; owner-key inside a shared
+                                               ;; aggregate's state map. Wired
+                                               ;; unconditionally via the same
+                                               ;; dispatch-*!-over-method-registry*
+                                               ;; idiom as :clear-owner-fn -- impl
+                                               ;; files register-method! their own
+                                               ;; effect-destroy! only if they have
+                                               ;; a resource to release (there's a
+                                               ;; no-op :default). :clear-owner-fn
+                                               ;; stays wired too (harmless for
+                                               ;; :transient effects: effect_controller
+                                               ;; .clj's own clear-owner! has no live
+                                               ;; caller today -- the real disconnect
+                                               ;; path is combat_vfx_adapter/clear-
+                                               ;; owner! -> vfx-core's own owner-
+                                               ;; indexed clear-owner!, which
+                                               ;; :destroy-fn now correctly reaches
+                                               ;; for :transient effects).
+                                               :destroy-fn #(dispatch-destroy! effect-id %1)}
                                         (:fov-offset-fn opts)
                                         (assoc :fov-offset-fn (:fov-offset-fn opts)))]
                     (assoc spec :level level-handler))
