@@ -204,12 +204,15 @@
                                     {:manifest-id id :document-id (:id composite)}))
                             (when-not (and (= :composite (:kind composite))
                                            (keyword? (:id composite))
+                                           (integer? (:revision composite))
                                            (map? (:inputs composite))
                                            (map? (:body composite)))
                               (fail "invalid combat composite document"
                                     {:id id :document composite}))
                             composite))
                         (:documents manifest))]
+    (when-not (= (count documents) (count (set (map :id documents))))
+      (fail "duplicate combat composite id" {:ids (map :id documents)}))
     {:schema-version 1
      :manifest manifest
      :composites (into {} (map (juxt :id identity) documents))
