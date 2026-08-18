@@ -1,12 +1,11 @@
 (ns cn.li.ac.content.ability
   "Ability content bootstrap.
 
-  Categories are declared here. Executable skills are Combat Core's frozen
-  catalog (see combat_content.clj); only the generic, non-combat progression
-  course chain is still declared/discovered as content namespaces here."
+  Categories are declared here. Executable skills come only from the
+  authoritative EDN catalog; the legacy provider is retained as metadata for
+  migration/UI discovery and is never installed as an execution provider."
   (:require [cn.li.ac.ability.dsl :refer [defcategory]]
-            [cn.li.ac.ability.service.combat-content :as combat-content]
-            [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
+            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.ability.registry.category :as category]
             [cn.li.ac.ability.registry.skill :as skill-registry]
             [cn.li.ac.ability.item-actions :as item-actions]
@@ -84,16 +83,16 @@
     (skill-registry/register-skill! skill-spec)))
 
 (defn register-combat-catalog!
-  "Register the complete player-facing skill catalog from Combat Core.
+  "Register player-facing metadata and initialize the authoritative EDN catalog.
 
-   This is intentionally separate from the legacy discovery bootstrap so it
-   can be validated in isolation before the old namespace path is removed."
+   Pending skills remain metadata-only and are rejected by the server gate."
   []
-  (combat-content/assert-complete-skill-catalog!)
-  (doseq [skill-spec (combat-content/skill-specs)]
+  (edn-catalog/initialize!)
+  (doseq [skill-spec (edn-catalog/migrated-skill-specs)]
+    ;; Only migrated entries enter the executable skill registry.  Pending
+    ;; entries are represented by edn-catalog/ui-state and never receive a
+    ;; legacy callback or fallback registration.
     (skill-registry/register-skill! skill-spec))
-  (combat-content/register! combat-runtime/register-provider!)
-  (combat-runtime/initialize!)
   true)
 
 (declare run-namespace-init!)
@@ -135,14 +134,12 @@
 (defn init-combat-ability-content!
   "Production composition root for ability content.
 
-  Registers all executable skills from the frozen Combat Core catalog and
-  keeps only the generic course metadata on the AC side. Legacy skill
-  discovery/Context execution has been removed entirely — this is the only
-  composition root."
+  Registers player-facing metadata, then installs only migrated EDN abilities.
+  Pending skills remain visible but disabled and are rejected at the server
+  boundary; legacy Context execution is not installed."
   []
   (install/framework-once! ::combat-ability-content-installed
     (fn []
-      (combat-content/assert-complete-composition!)
       (doseq [cat [electromaster meltdowner-category teleporter vecmanip]]
         (category/register-category! (dissoc cat :ac/content-type)))
       (register-combat-catalog!)

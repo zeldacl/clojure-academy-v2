@@ -13,6 +13,7 @@
             [cn.li.ac.ability.messages :as ability-messages]
             [cn.li.ac.ability.server.damage.entity :as entity-damage-runtime]
             [cn.li.ac.ability.service.combat-runtime :as combat-runtime]
+            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.ability.service.delayed-projectiles :as delayed-projectiles]
             [cn.li.ac.ability.service.reflection-damage :as reflection-damage]
             [cn.li.ac.gui.registry-verify :as gui-registry-verify]
@@ -407,13 +408,20 @@
 
    :on-runtime-item-action!
    (fn [action player-uuid payload]
+     (when-let [trigger (:edn-trigger payload)]
+       (let [result (combat-runtime/dispatch-trigger! player-uuid trigger payload)]
+         (when (= :accepted (:status result))
+           (combat-runtime/finalize-result! player-uuid result))))
      (item-actions/on-item-action! action player-uuid payload))
 
    :build-item-use-plan
-   (fn [_player-uuid item-id _activated? _side]
-     (when-let [action (item-actions/resolve-item-action item-id)]
-       (let [railgun-coin? (= action :railgun-coin-throw)
+   (fn [_player-uuid item-id activated? _side]
+    (when-let [action (item-actions/resolve-item-action item-id)]
+      (let [railgun-coin? (= action :railgun-coin-throw)
              entity-spawn (item-actions/get-item-entity-spawn item-id)
+             trigger (edn-catalog/resolve-trigger
+                       :item/use
+                       {:item-id item-id :ability-mode? (boolean activated?)})
              domain-payload (if railgun-coin?
                               {:timestamp-ms (System/currentTimeMillis)}
                               {})
@@ -422,7 +430,9 @@
              ;; spawns, dispatches the domain action (CoinThrowEvent analog)
              ;; and notifies the client QTE.
              server-actions (cond-> [{:kind :consume-item :count 1 :unless-instabuild? true}
-                                     {:kind :domain-action :action action :payload domain-payload}]
+                                     {:kind :domain-action :action action
+                                      :payload (assoc domain-payload
+                                                      :edn-trigger trigger)}]
                               entity-spawn (conj {:kind :spawn-scripted-effect
                                                   :entity-id (:entity-id entity-spawn)
                                                   :unique-per-owner?

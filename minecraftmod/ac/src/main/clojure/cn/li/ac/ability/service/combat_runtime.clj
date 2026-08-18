@@ -14,6 +14,10 @@
             [cn.li.ac.ability.model.ability :as ability-model]
             [cn.li.ac.ability.service.radiation-marks :as radiation-marks]
             [cn.li.ac.ability.service.light-shield-state :as light-shield-state]
+            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
+            [cn.li.ac.ability.service.edn-execution :as edn-execution]
+            [cn.li.ac.ability.service.edn-sessions :as edn-sessions]
+            [cn.li.mcmod.runtime.capabilities :as capabilities]
             [cn.li.ac.ability.config :as ability-config]
             [cn.li.ac.ability.util.attack :as attack]
             [cn.li.mcmod.platform.raycast :as raycast]
@@ -41,7 +45,7 @@
 ;; `tick!` below updates this from the real server tick every call; intents
 ;; dispatched between full tick-loop passes read the last observed value.
 (defonce ^:private last-known-tick* (atom 0))
-(declare owner-state resolve-slot execute-world-effects!)
+(declare owner-state resolve-slot execute-world-effects! finalize-result! publish-result!)
 
 (defn- valid-reflection-world-effect?
   [effect]
@@ -1833,10 +1837,8 @@
         cooldown-data (:cooldown-data state)]
     {:resources {:cp (double (or (:cur-cp resource-data) 0.0))
                  :overload (double (or (:cur-overload resource-data) 0.0))}
-     :active-abilities (if-let [engine @engine*]
-                         (->> (:sessions (combat/snapshot-owner engine (str owner)))
-                              (map :ability-id)
-                              set)
+     :active-abilities (if-let [session (edn-sessions/session (str owner))]
+                         #{(:ability-id session)}
                          #{})
      :cooldowns (into {}
                      (map (fn [[[ctrl-id _sub-id] value]]
@@ -1872,8 +1874,7 @@
                             :amount (double amount)
                             :source :combat-core}
                            :cooldown
-                           (let [ticks (max 0 (long (- amount
-                                                       (long ((:now-tick (engine)))))))]
+                           (let [ticks (max 0 (long (- amount @last-known-tick*)))]
                              {:command :set-cooldown
                               :ctrl-id key
                               :sub-id :main
@@ -1883,11 +1884,76 @@
     (when (seq commands)
       (command-runtime/run-commands-in-session! session-id owner commands))))
 
+(defn- edn-ability-id [owner intent]
+  (or (:ability-id intent)
+      (:ability intent)
+      (some-> (resolve-slot owner intent) :id)))
+
+(defn- execute-edn-intent!
+  "Execute a normalized EDN intent against the AC-owned session index." 
+  [owner intent]
+  (let [ability-id (edn-ability-id owner intent)
+        op (or (:action intent) (:op intent) :start)
+        normalized (assoc intent :action op :ability-id ability-id)]
+    (when (= :start op)
+      (edn-sessions/start! owner ability-id normalized))
+    (let [session-context (edn-sessions/context-for owner normalized)
+          execution-intent (merge normalized
+                                  (select-keys session-context
+                                               [:context :parameter-snapshot
+                                                :activation-seed]))
+          result (edn-execution/execute! ability-id owner execution-intent)]
+      (when (and (#{:release :abort} op)
+                 (or (= :accepted (:status result))
+                     (= :rejected (:status result))))
+        (edn-sessions/remove! owner))
+      result)))
+
 (defn dispatch-intent! [owner intent]
-  (let [result (combat/dispatch-intent! (engine) owner intent)]
-    (when (= :accepted (:status result))
-      (commit-state-patch! owner (:state-patch result)))
-    result))
+  ;; The migration table is authoritative at the server boundary.  Pending
+  ;; skills never reach the legacy engine and therefore have no compatibility
+  ;; fallback; once their EDN catalog entry is migrated this gate naturally
+  ;; opens without changing the core runtime.
+  (let [;; Slot resolution is server-owned preset data, never a client
+        ;; ability/event mapping.  The resolved id is then checked against the
+        ;; migrated EDN catalog before execution.
+        ability-id (edn-ability-id owner intent)]
+    (if-not (edn-catalog/available? ability-id)
+       {:schema-version 2
+        :status :rejected
+        :reason :ability-not-migrated
+        :feedback [{:type :ability-not-migrated
+                    :ability-id ability-id
+                    :status (edn-catalog/migration-status ability-id)}]}
+      (execute-edn-intent! owner intent))))
+
+(defn dispatch-trigger!
+  "Dispatch a server-resolved external trigger from the EDN trigger index.
+
+  The trigger map is produced by `edn-catalog/resolve-trigger`; clients never
+  provide ability/event mappings." 
+  [owner trigger context]
+  (when (and (map? trigger) (:ability trigger) (:event trigger))
+    ;; An external event is a terminal interruption for the owner session.
+    ;; Run the generic EDN abort phase first so session-scoped VFX and other
+    ;; cleanup actions are finalized through the same commit boundary.
+    (when-let [session (edn-sessions/session owner)]
+      (let [abort-result (execute-edn-intent!
+                          owner
+                          {:op :abort
+                           :action :abort
+                           :ability-id (:ability-id session)
+                           :context (:context session)
+                           :parameter-snapshot (:parameter-snapshot session)
+                           :activation-seed (:activation-seed session)})]
+        (when (= :accepted (:status abort-result))
+          (publish-result! (finalize-result! owner abort-result)))))
+    (dispatch-intent! owner
+                      {:op :event
+                       :action :event
+                       :ability-id (:ability trigger)
+                       :event (:event trigger)
+                       :context context})))
 (defn dispatch-domain-event! [event] (combat/dispatch-domain-event! (engine) event))
 
 (defn dispatch-result-domain-events!
@@ -2037,7 +2103,15 @@
    acknowledgements remain attached to the immutable result for publication
    and diagnostics."
   [owner result]
-  (let [result (execute-world-effects! owner result)
+  (let [result (if (and (= 2 (:schema-version result))
+                        (= :accepted (:status result)))
+                 (assoc result
+                        :action-results
+                        (edn-execution/commit-actions!
+                          owner (:actions result)
+                          (:actions (capabilities/snapshot))))
+                 result)
+        result (execute-world-effects! owner result)
         domain-results (if (= :accepted (:status result))
                          (dispatch-result-domain-events! owner result)
                          [])]
@@ -2064,17 +2138,28 @@
   "Advance sessions, execute their world effects, and publish each result."
   [tick]
   (reset! last-known-tick* (long tick))
-  (mapv (fn [result]
-          ;; Session pulses produce authoritative resource/cooldown/skill
-          ;; patches just like start/release intents.  Commit them before any
-          ;; world side effect or client publication so the single AC player
-          ;; store remains the source of truth.
-          (when (= :accepted (:status result))
-            (commit-state-patch! (:owner result) (:state-patch result)))
-          (publish-result! (finalize-result! (:owner result) result)))
-        (combat/tick! (engine) tick)))
-(defn abort-owner! [owner] (combat/abort-owner! (engine) owner))
-(defn snapshot-owner [owner] (combat/snapshot-owner (engine) owner))
+  (let [edn-results
+        (mapv (fn [[owner session]]
+                (execute-edn-intent!
+                 owner
+                 {:op :pulse
+                  :action :pulse
+                  :ability-id (:ability-id session)
+                  :server-tick (long tick)}))
+              (edn-sessions/tick! tick))
+        ]
+    (mapv (fn [result]
+            ;; Session pulses produce authoritative patches before effects
+            ;; and publication, exactly like start/release intents.
+            (when (= :accepted (:status result))
+              (commit-state-patch! (:owner result) (:state-patch result)))
+            (publish-result! (finalize-result! (:owner result) result)))
+          edn-results)))
+(defn abort-owner! [owner]
+  (edn-sessions/remove! owner)
+  nil)
+(defn snapshot-owner [owner]
+  {:edn-session (edn-sessions/session owner)})
 
 (defn reset-for-test! []
   (reset! engine* nil)
@@ -2082,4 +2167,5 @@
   (reset! world-effect-handler* nil)
   (reset! result-sink* nil)
   (reset! last-known-tick* 0)
+  (edn-sessions/reset-for-test!)
   nil)

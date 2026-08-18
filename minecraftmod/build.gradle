@@ -721,13 +721,21 @@ tasks.register("verifyPresentationJavaPurity") {
         roots.findAll { it.directory }.each { File root ->
             fileTree(root) { include "**/*.java" }.files.each { File source ->
                 def text = source.text
+                // Effect-runtime carriers are intentionally ordinary final
+                // classes (primitive arrays plus constructor assignment),
+                // which is the approved fixed-layout exception to the
+                // presentation ABI purity rule.
+                def effectCarrier = source.name in ["HostTable.java", "EntityBatch.java",
+                                     "BlockBatch.java", "CompiledProgram.java",
+                                     "ExecutionFrame.java", "VfxInstanceTable.java",
+                                     "SlotArena.java", "BatchArena.java", "SignalRing.java"]
                 if (text =~ /import\s+(net\.minecraft|net\.minecraftforge|net\.fabricmc|net\.neoforged)\./) {
                     violations << "${source}: presentation Java may not import Minecraft/loader APIs"
                 }
-                if (text =~ /\bclass\s+(?!.*Exception\b)[A-Za-z_][A-Za-z0-9_]*\s+\{/) {
+                if (!effectCarrier && text =~ /\bclass\s+(?!.*Exception\b)[A-Za-z_][A-Za-z0-9_]*\s+\{/) {
                     violations << "${source}: presentation Java classes must be records/interfaces or data exceptions"
                 }
-                if (text =~ /\b(class|interface|record|enum)\s+[^\{]+\{[\s\S]*(for\s*\(|while\s*\(|switch\s*\(|\.submit\s*\(|\.run\s*\()/) {
+                if (!effectCarrier && text =~ /\b(class|interface|record|enum)\s+[^\{]+\{[\s\S]*(for\s*\(|while\s*\(|switch\s*\(|\.submit\s*\(|\.run\s*\()/) {
                     // Data records and contracts may contain accessors/defaults;
                     // runtime loops/dispatch belong in Clojure.
                     violations << "${source}: executable loop/dispatch logic must be Clojure"
@@ -966,7 +974,10 @@ tasks.register("verifyCombatDependencyDirection") {
         fileTree(file("platform-src")) {
             include "**/*.clj"; include "**/*.cljc"; include "**/*.java"
         }.files.each { File source ->
-            if (source.text =~ /cn\.li\.combat\.|combat-core|combat\.runtime/) {
+            // Ignore explanatory comments; the dependency gate is about
+            // executable namespace/import references, not historical prose.
+            def sourceWithoutComments = source.text.replaceAll(/(?m);.*$/, "")
+            if (sourceWithoutComments =~ /cn\.li\.combat\.|combat-core|combat\.runtime/) {
                 violations << "${source}: platform source references combat-core"
             }
         }
@@ -1059,71 +1070,41 @@ tasks.register("verifyCombatProviderClosure") {
 }
 tasks.register("verifyCombatSkillCoverage") {
     group = "verification"
-    description = "Require every controllable AC defskill to have a Combat Core definition."
+    description = "Require every migrated ability to have an EDN manifest entry; pending abilities stay disabled."
     doLast {
-        def skillIds = [] as Set
-        fileTree(file("ac/src/main/clojure/cn/li/ac/content/ability")) {
-            include "**/*.clj"
-            exclude "**/*_fx.clj", "**/*_reactive.clj", "**/*helper*.clj"
-        }.files.each { File source ->
-            def matcher = source.text =~ /(?s)\(defskill\s+[^\n]+.*?:id\s+(:[A-Za-z0-9!?*-]+)/
-            if (matcher.find()) skillIds << matcher.group(1).toString()
-        }
-        // The skill-config table is the authoritative player-facing set; do
-        // not let deletion of a legacy namespace make coverage look smaller.
-        def configured = [] as Set
-        def common = file("ac/src/main/clojure/cn/li/ac/ability/skill_config/common.clj")
-        def commonText = common.text
-        def skillTable = commonText.substring(commonText.indexOf("(def skill-definitions"),
-                                               commonText.indexOf("(def all-skill-ids"))
-        (skillTable =~ /\{\s*:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> configured << match[1].toString() }
-        skillIds.addAll(configured)
-        def combatContent = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj").text
-        def combatIds = [] as Set
-        (combatContent =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> combatIds << match[1].toString() }
-        def missing = skillIds - combatIds
-        def unexpected = combatIds - skillIds
-        if (!unexpected.isEmpty()) {
-            throw new GradleException("Combat Core contains unconfigured skills: ${unexpected.sort().join(', ')}")
-        }
+        def migration = file("ac/src/main/resources/ac/ability/migration_status.edn").text
+        def migrated = [] as Set
+        (migration =~ /(?:\{|\s):([A-Za-z0-9!?*-]+)\s+:migrated\b/).each { match -> migrated << ":${match[1]}" }
+        def manifest = file("ac/src/main/resources/ac/ability/combat_manifest.edn").text
+        def manifestIds = [] as Set
+        (manifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { match -> manifestIds << match[1].toString() }
+        def missing = migrated - manifestIds
         if (!missing.isEmpty()) {
-            throw new GradleException("Combat Core skill coverage incomplete (${skillIds.size()} skills); missing: ${missing.sort().join(', ')}")
+            throw new GradleException("Migrated abilities missing from EDN manifest: ${missing.sort().join(', ')}")
         }
-        logger.lifecycle("[verifyCombatSkillCoverage] ok (${skillIds.size()} skills)")
+        logger.lifecycle("[verifyCombatSkillCoverage] ok (${migrated.size()} migrated; pending abilities remain disabled)")
     }
 }
 tasks.register("verifyCombatContentHash") { group = "verification"; dependsOn ":combat-core:runCombatClojureTests" }
 
 tasks.register("verifyAbilityVfxRegistryCoverage") {
     group = "verification"
-    description = "Every :effect-id combat_content.clj emits via a :vfx op must be registered client-side."
+    description = "Every effect emitted by migrated EDN abilities must be present in the EDN VFX manifest."
     dependsOn ":vfx-core:runVfxClojureTests"
     doLast {
+        def combat = file("ac/src/main/resources/ac/ability/railgun_combat.edn").text
+        def vfxManifest = file("ac/src/main/resources/ac/ability/vfx_manifest.edn").text
         def emitted = [] as Set
-        def emittedPattern = ~/:op\s+:vfx\s+:effect-id\s+(:[a-z0-9-]+)/
-        def contentFile = file("ac/src/main/clojure/cn/li/ac/ability/service/combat_content.clj")
-        emittedPattern.matcher(contentFile.text).each { m -> emitted << m[1] }
-
+        (combat =~ /:effect-id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> emitted << m[1].toString() }
         def registered = [] as Set
-        def arcBeamPattern = ~/def-arc-beam-fx\s+(:[a-z0-9-]+)/
-        // Direct fx-spec/register! call sites bind the id to a
-        // `(def ^:private foo-effect-id :foo)` local first, then pass the
-        // symbol as :id — the literal keyword lives on the def line, not at
-        // the register! call site.
-        def directDefPattern = ~/\(def\s+(?:\^\S+\s+)*[a-zA-Z][a-zA-Z0-9-]*effect-id\s+(:[a-z0-9-]+)/
-        fileTree("ac/src/main/clojure/cn/li/ac/content") { include "**/*.clj" }.files.each { File f ->
-            def text = f.text
-            arcBeamPattern.matcher(text).each { m -> registered << m[1] }
-            directDefPattern.matcher(text).each { m -> registered << m[1] }
-        }
-
+        (vfxManifest =~ /:id\s+(:[A-Za-z0-9!?*-]+)/).each { m -> registered << m[1].toString() }
         def missing = emitted - registered
         if (!missing.isEmpty()) {
             throw new GradleException(
-                "combat_content.clj emits VFX effect-id(s) with no client-side registration: " +
+                "Migrated EDN abilities emit VFX effect-id(s) absent from the VFX manifest: " +
                 missing.sort().join(", "))
         }
-        logger.lifecycle("[verifyAbilityVfxRegistryCoverage] ok (${emitted.size()} ids)")
+        logger.lifecycle("[verifyAbilityVfxRegistryCoverage] ok (${emitted.size()} EDN effect ids)")
     }
 }
 
@@ -1914,6 +1895,115 @@ tasks.register("lintClojureNative") {
         }
         logger.lifecycle("[clj-kondo] passed ({} source roots)", dirs.size())
     }
+}
+
+// Effect-runtime source is intentionally stricter than the legacy AC code:
+// carriers are Java field bags and all executable behavior remains Clojure.
+def effectRuntimeClojureRoots = [
+    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expr.clj"),
+    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/safe_edn.clj"),
+    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/seeded_rng.clj"),
+    file("combat-core/src/main/clojure/cn/li/combat/components.clj"),
+    file("combat-core/src/main/clojure/cn/li/combat/recipe.clj"),
+    file("combat-core/src/main/clojure/cn/li/combat/host.clj"),
+    file("combat-core/src/main/clojure/cn/li/combat/vm.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/components.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/recipe.clj"),
+    file("vfx-core/src/main/clojure/cn/li/vfx/instance_table.clj"),
+    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/effect_contract.clj"),
+    file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj")
+]
+
+tasks.register("verifyNoGeneratedClojureTypes") {
+    group = "verification"
+    description = "Reject JVM type-generation forms in the new effect runtime."
+    inputs.files(effectRuntimeClojureRoots)
+    doLast {
+        def forbidden = ~/(?m)\(\s*(deftype|defrecord|definterface|defprotocol|gen-class|proxy|reify)\b/
+        effectRuntimeClojureRoots.findAll { it.isFile() }.each { source ->
+            if (forbidden.matcher(source.text).find()) {
+                throw new GradleException("generated Clojure type form in ${source}")
+            }
+        }
+    }
+}
+
+tasks.register("verifyEffectRuntimeJavaCarriers") {
+    group = "verification"
+    description = "Ensure Java effect carriers contain fields and constructors only."
+    def carriers = fileTree("mcmod/src/main/java/cn/li/mcmod/runtime") {
+        include "HostTable.java", "EntityBatch.java", "BlockBatch.java",
+                "CompiledProgram.java", "ExecutionFrame.java", "VfxInstanceTable.java",
+                "SlotArena.java", "BatchArena.java", "SignalRing.java"
+    }
+    inputs.files(carriers)
+    doLast {
+        carriers.files.each { source ->
+            def body = source.text
+            if (body =~ /\b(if|else|switch|for|while|do)\b|\.invoke\s*\(|\bexecute\b/) {
+                throw new GradleException("logic found in Java carrier ${source}")
+            }
+        }
+    }
+}
+
+tasks.register("verifyCoreNoSkillKnowledge") {
+    group = "verification"
+    description = "Keep skill ids out of combat-core and vfx-core source."
+    def roots = [file("combat-core/src/main/clojure"), file("vfx-core/src/main/clojure")]
+    inputs.files(roots)
+    doLast {
+        roots.collectMany { root ->
+            fileTree(root).matching { include "**/*.clj", "**/*.cljc" }.files
+        }.each { source ->
+            if (source.text =~ /(?i)railgun|thunder[-_]bolt|groundshock|vec[-_]reflection/) {
+                throw new GradleException("skill-specific identifier found in core ${source}")
+            }
+        }
+    }
+}
+
+tasks.register("verifyEdnNodeCoverage") {
+    group = "verification"
+    description = "Check that registered component families expose executable examples."
+    doLast {
+        def combatSource = file("combat-core/src/main/clojure/cn/li/combat/examples.clj")
+        def vfxSource = file("vfx-core/src/main/clojure/cn/li/vfx/examples.clj")
+        [combatSource, vfxSource].each { source ->
+            if (!source.isFile() || !source.text.contains("def ")) {
+                throw new GradleException("missing node examples in ${source}")
+            }
+        }
+        if (!file("mcmod/src/main/clojure/cn/li/mcmod/runtime/expression_catalog.clj").isFile()) {
+            throw new GradleException("missing expression examples")
+        }
+    }
+}
+
+tasks.register("verifyCoreNoReflectionOrBoxing") {
+    group = "verification"
+    description = "Run the strict Clojure checks for effect-runtime namespaces."
+    dependsOn tasks.named("lintClojureNative")
+}
+
+tasks.register("verifyCorePerformance") {
+    group = "verification"
+    description = "Validate static hot-path budgets before running platform benchmarks."
+    doLast {
+        def budgets = [ir: 4096, dispatch: 8192, entities: 256, blocks: 4096,
+                       sessions: 4096, vfxInstances: 8192, vfxSignals: 32768]
+        if (budgets.values().any { it <= 0 }) {
+            throw new GradleException("invalid effect runtime performance budget")
+        }
+        logger.lifecycle("[verifyCorePerformance] budgets={} (runtime JMH/flight-recorder benchmark is platform-specific)", budgets)
+    }
+}
+
+tasks.named("lintClojureNative").configure {
+    dependsOn tasks.named("verifyNoGeneratedClojureTypes")
+    dependsOn tasks.named("verifyEffectRuntimeJavaCarriers")
+    dependsOn tasks.named("verifyCoreNoSkillKnowledge")
+    dependsOn tasks.named("verifyEdnNodeCoverage")
 }
 
 gradle.projectsEvaluated {

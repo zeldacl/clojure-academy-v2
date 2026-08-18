@@ -1,0 +1,42 @@
+(ns cn.li.vfx.examples
+  "Generic examples for every VFX middle-layer component.")
+
+(def ^:private point-example {:vec3 [0.0 0.0 0.0]})
+(def ^:private ring-example {:component :vfx/ring :center point-example
+                             :radius 0.1 :segments 3})
+
+(def vfx-node-examples
+  {:vfx/timeline {:component :vfx/timeline :duration-ticks 1
+                  :children [{:at 0 :node ring-example}]}
+   :vfx/event-switch {:component :vfx/event-switch
+                      :cases {:default ring-example}}
+   :vfx/beam {:component :vfx/beam :start point-example :end point-example
+              :grow-ticks 1 :layers [{:shape :line :width 0.01 :color [255 255 255 255]}]}
+   :vfx/beam-bounds {:component :vfx/beam-bounds :start point-example
+                     :end point-example :radius 0.1}
+   :vfx/arc-field {:component :vfx/arc-field :start point-example :end point-example
+                   :spacing {:min 1.0 :max 1.0} :radius {:min 0.1 :max 0.1}
+                   :count-limit 1 :life-ticks 1 :seed {:ref [:state :seed]}}
+   :vfx/ring ring-example
+   :vfx/billboard-sequence {:component :vfx/billboard-sequence
+                            :anchor point-example :texture-pattern "generic/%d.png"
+                            :frame-count 1 :frame-duration-ms 40 :half-size 0.1}
+   :vfx/emitter {:component :vfx/emitter :anchor point-example :rate-per-tick 1
+                 :limit 1 :particle {:material :additive :life-ticks 1 :speed 0.01}}
+   :vfx/ribbon {:component :vfx/ribbon :points {:ref [:state :trail-points]}
+                :width 0.01 :max-points 1 :color [255 255 255 255]}
+   :vfx/fade {:component :vfx/fade :from-tick 0 :to-tick 1
+              :from-alpha 1.0 :to-alpha 0.0 :child ring-example}
+   :vfx/scale {:component :vfx/scale :from 0.0 :to 1.0
+               :from-tick 0 :to-tick 1 :child ring-example}
+   :vfx/noise {:component :vfx/noise :seed {:ref [:state :seed]}
+               :amplitude 0.1 :frequency 1.0 :target :width :child ring-example}
+   :vfx/attach {:component :vfx/attach :anchor-type :owner
+                :owner {:ref [:input :source-owner]} :offset point-example
+                :child ring-example}
+   :vfx/first-person-transform {:component :vfx/first-person-transform
+                                :offset {:right 0.0 :up 0.0 :forward 0.0}
+                                :child ring-example}
+   :vfx/camera {:component :vfx/camera :operation :pitch-impulse :value 0.0 :duration-ticks 1}
+   :vfx/audio-one-shot {:component :vfx/audio-one-shot :sound-id "generic" :position point-example}
+   :vfx/audio-loop {:component :vfx/audio-loop :sound-id "generic" :instance-key [:effect-instance :generic] :stop-on-destroy? true}})

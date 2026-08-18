@@ -1,0 +1,5 @@
+{:schema-version 1
+ :skills {:railgun :migrated
+          :thunder-bolt :pending
+          :vec-reflection :pending
+          :groundshock :pending}}

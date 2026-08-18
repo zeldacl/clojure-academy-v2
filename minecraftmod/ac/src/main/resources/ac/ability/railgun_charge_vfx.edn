@@ -1,0 +1,17 @@
+{:schema-version 1
+ :kind :vfx-effect
+ :id :railgun-charge
+ :revision 1
+ :lifecycle :session
+ :inputs {:spawn {:source-owner :owner-id
+                  :charge-ticks :long}}
+ :state-slots {:age :double :seed :long}
+ :graph {:component :vfx/timeline
+         :duration-ticks 64
+         :children [{:at 0
+                     :node {:component :vfx/billboard-sequence
+                            :anchor {:ref [:context :owner-hand]}
+                            :texture-pattern "academy:textures/effects/arc_burst/%d.png"
+                            :frame-count 40
+                            :frame-duration-ms 40
+                            :half-size 0.4}}]}}

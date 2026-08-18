@@ -13,7 +13,7 @@
             [cn.li.ac.ability.service.command-runtime :as command-runtime]
             [cn.li.ac.ability.service.runtime-store :as store]
             [cn.li.ac.ability.util.resource-check :as resource-check]
-            [cn.li.ac.ability.service.combat-content :as combat-content]
+            [cn.li.ac.ability.service.edn-catalog :as edn-catalog]
             [cn.li.ac.ability.messages :as messages]
             [cn.li.ac.client.combat-vfx-adapter :as combat-vfx]
             [cn.li.ac.client.toast :as toast]
@@ -58,8 +58,8 @@
     intent-id))
 
 (defn- combat-slot? [player-uuid slot]
-  (contains? combat-content/ability-ids
-            (keybinds/get-skill-id-for-slot-public player-uuid slot)))
+  (let [ability-id (keybinds/get-skill-id-for-slot-public player-uuid slot)]
+    (boolean (and ability-id (edn-catalog/available? ability-id)))))
 
 (defn- runtime-sync-resets-input?
   [old-ability-data new-ability-data]

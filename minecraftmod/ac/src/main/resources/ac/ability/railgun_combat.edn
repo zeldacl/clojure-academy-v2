@@ -1,0 +1,109 @@
+{:schema-version 1
+ :kind :ability
+ :id :railgun
+ :revision 2
+ :activation :session
+ :parameters {:beam-damage {:source :config
+                            :path [:railgun :beam.damage]
+                            :type [:tuple :double 2]
+                            :snapshot :activation}
+              :max-distance {:source :config
+                             :path [:railgun :beam.max-distance]
+                             :type :double
+                             :snapshot :activation}
+              :charge-ticks {:source :config
+                             :path [:railgun :charge.item-charge-ticks]
+                             :type :long
+                             :snapshot :activation}}
+ :external-triggers [{:source :item/use
+                      :filter {:item-ids ["ac:coin" "academy:coin"]
+                               :ability-mode? true}
+                      :dispatch {:ability :railgun :event :coin-thrown}}]
+ :reactions []
+ :vfx-contracts {:beam-fired {:effect-id :railgun-beam
+                              :op :spawn
+                              :payload {:start :vec3
+                                        :end :vec3
+                                        :mode [:enum :main :reflected]
+                                        :life-ticks :long}}
+                 :charge-started {:effect-id :railgun-charge
+                                  :op :spawn
+                                  :payload {:source-owner :owner-id
+                                            :charge-ticks :long}}}
+ :program {:component :flow/phases
+           :start {:component :flow/sequence
+                   :steps [{:component :target/entities
+                            :shape {:type :sphere
+                                    :center {:ref [:context :eye-pos]}
+                                    :radius 4.0}
+                            :filter {:entity-types ["academy:entity_coin_throwing"]}
+                            :projection [:id :age-ms :motion-progress]
+                            :limit 8
+                            :result :coins}
+                           {:component :effect/vfx
+                            :effect-id :railgun-charge
+                            :operation :spawn
+                            :instance-key [:activation :railgun-charge]
+                            :audience {:type :nearby :radius 32.0}
+                            :payload {:source-owner {:ref [:context :owner]}
+                                      :charge-ticks {:ref [:param :charge-ticks]}}}
+                           {:component :flow/finish :outcome :started}]}
+           :pulse {:component :flow/sequence
+                   :steps [{:component :target/raycast
+                            :origin {:ref [:context :eye-pos]}
+                            :direction {:ref [:context :look]}
+                            :distance 50.0
+                            :include-entities? true
+                            :include-blocks? true
+                            :result :aim-hit}
+                           {:component :combat/beam
+                            :origin {:ref [:slot :muzzle]}
+                            :direction {:ref [:context :look]}
+                            :length 50.0
+                            :radius 2.0
+                            :entity-limit 256
+                            :block-policy {:component :block/break-budget
+                                           :blocks {:ref [:slot :blocks]}
+                                           :energy {:ref [:param :block-energy]}
+                                           :limit 4096}
+                            :result :beam-result}
+                           {:component :effect/vfx
+                            :effect-id :railgun-beam
+                            :operation :spawn
+                            :payload {:start {:ref [:slot :beam-result :start]}
+                                      :end {:ref [:slot :beam-result :end]}
+                                      :mode :main
+                                      :life-ticks 50}}
+                           {:component :flow/finish :outcome :continue}]}
+           :release {:component :flow/sequence
+                     :steps [{:component :effect/vfx
+                              :effect-id :railgun-charge
+                              :operation :destroy
+                              :instance-key [:activation :railgun-charge]
+                              :payload {}}
+                             {:component :txn/atomic
+                              :guards [{:component :guard/resource
+                               :cost {:cp 200.0 :overload 180.0}}
+                              {:component :guard/held-item
+                               :source :main-hand
+                               :item-ids ["minecraft:iron_ingot"
+                                          "minecraft:iron_block"]}]
+                              :reservations [{:component :inventory/consume
+                                     :source :main-hand
+                                     :count 1}]
+                              :body {:component :world/sound
+                            :sound-id "academy:em.railgun"
+                            :position {:ref [:context :eye-pos]}}
+                              :on-success {:component :flow/finish
+                                           :outcome :committed}
+                              :on-fail {:component :flow/finish
+                                        :outcome :insufficient-resource}}]}
+           :abort {:component :flow/sequence
+                   :steps [{:component :effect/vfx
+                            :effect-id :railgun-charge
+                            :operation :destroy
+                            :instance-key [:activation :railgun-charge]
+                            :payload {}}
+                           {:component :flow/finish :outcome :aborted}]}
+           :events {:coin-thrown {:component :flow/finish
+                                  :outcome :received}}}}

@@ -1,0 +1,4 @@
+{:schema-version 1
+ :documents [{:kind :ability
+              :id :railgun
+              :resource "ac/ability/railgun_combat.edn"}]}

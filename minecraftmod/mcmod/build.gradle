@@ -44,6 +44,9 @@ def generateModId = tasks.register('generateModId') {
 }
 
 sourceSets.main.java.srcDir(generatedModConfigDir)
+// Neutral runtime carriers are intentionally ordinary Java sources so Clojure
+// can type-hint their fixed arrays without generating JVM types itself.
+sourceSets.main.java.srcDir('src/main/java')
 tasks.named('compileJava').configure { dependsOn generateModId }
 
 // 反射拦截器
@@ -82,6 +85,13 @@ tasks.named('processResources').configure {
 // mcmod Clojure imports local Java SPI/bootstrap classes; compile them first.
 tasks.named('compileClojure').configure {
     onlyIf { rootProject.ext.fullAotEnabled }
+    dependsOn 'compileJava'
+    classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
+}
+
+// checkClojure also imports the neutral Java carriers; make the same output
+// directory visible in the verification classpath even in source-first mode.
+tasks.named('checkClojure').configure {
     dependsOn 'compileJava'
     classpath.from(files(layout.buildDirectory.dir('classes/java/main')))
 }
